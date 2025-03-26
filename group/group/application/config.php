@@ -50,13 +50,16 @@ define('DIR_UPLOAD', DIR_PATH.'upload/');
 //データベースの種類
 define('DB_STORAGE', 'mysql');
 //データベースのホスト名
-define('DB_HOSTNAME', 'mysql653.db.sakura.ne.jp');
+//define('DB_HOSTNAME', 'mysql653.db.sakura.ne.jp');
+define('DB_HOSTNAME', 'localhost');
 //データベース名
 define('DB_DATABASE', 'guis2_db');
 //データベースユーザー名
-define('DB_USERNAME', 'guis2');
+define('DB_USERNAME', 'root');
+// define('DB_USERNAME', 'guis2');
 //データベースパスワード
-define('DB_PASSWORD', 'URtMzWthwqB5');
+// define('DB_PASSWORD', 'URtMzWthwqB5');
+define('DB_PASSWORD', '');
 //テーブル接頭辞
 define('DB_PREFIX', 'groupware_');
 //データベースポート番号
