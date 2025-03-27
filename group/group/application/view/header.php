@@ -2,7 +2,7 @@
 
 <html
   lang="en"
-  class="layout-wide"
+  class="layout-wide layout-navbar-fixed"
   dir="ltr"
   data-skin="default"
   data-assets-path="<?=$root?>assets/"
@@ -30,12 +30,17 @@
     <link rel="stylesheet" href="<?=$root?>assets/css/demo.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/@form-validation/form-validation.css" />
+
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/datatables-bs5/datatables.bootstrap5.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/datatables-buttons-bs5/buttons.bootstrap5.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/select2/select2.css" />
     <!-- Page CSS -->
     <?=$style?>
     <!-- Helpers -->
-    <script src="assets/vendor/js/helpers.js"></script>
-    <script src="assets/vendor/js/template-customizer.js"></script>
-    <script src="assets/js/config.js"></script>
+    <script src="<?=$root?>assets/vendor/js/helpers.js"></script>
+    <script src="<?=$root?>assets/vendor/js/template-customizer.js"></script>
+    <script src="<?=$root?>assets/js/config.js"></script>
 
     <!-- <link href="<?=$root?>css/default.css" rel="stylesheet" type="text/css" />
     <link href="<?=$root?>css/control.css" rel="stylesheet" type="text/css" />

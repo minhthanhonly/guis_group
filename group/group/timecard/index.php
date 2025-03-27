@@ -15,193 +15,359 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
 	$caption = ' - '.$hash['owner']['realname'];
 }
 ?>
-<h1>タイムカード<?=$caption?> - <?=$hash['config']['config_name']?></h1>
-<ul class="operate">
-	<li><a href="csv.php<?=$view->positive(array('year'=>$_GET['year'], 'month'=>$_GET['month']))?>"<?=$attribute?>>CSV出力</a></li>
-<?php
-if ($hash['owner']['userid'] == $_SESSION['userid']) {
-	echo '<li><a href="index.php'.$view->positive(array('year'=>$_GET['year'], 'month'=>$_GET['month'], 'recalculate'=>1)).'">再計算</a></li>';
-}
-if ($view->authorize('administrator', 'manager')) {
-	echo '<li><a href="../administration.php">管理</a></li>';
-}
-/*月判定(先月21日～当月20日まで当月）*/
-/*本日取得*/
-$today = array('year'=>date('Y'), 'month'=>date('n'), 'day'=>date('j'));
-
-$monthcurrent = $_GET['month'];
-if ($monthcurrent > 12) {
-	$_GET['year'] = $_GET['year'] + 1;
-	$_GET['month'] = 1;
-} else {
-	$_GET['year'] = $_GET['year'];
-	$_GET['month'] = $_GET['month'];
-}
-
-?>
-
-</ul>
-<form class="content" method="post" action="">
-	<?=$view->error($hash['error'])?>
-	<table class="timecard" cellspacing="0">
-		<tr><td colspan="9" class="timecardcaption">
-			<select name="year" data-member="<?php echo $hash['owner']['userid'];?>" data-member-current="<?php echo $_SESSION['authority'];?>" onchange="Timecard.redirect(this)"><?=$helper->option(2000, 2030, $_GET['year'])?></select>年&nbsp;
-			<select name="month" data-member="<?php echo $hash['owner']['userid'];?>" data-member-current="<?php echo $_SESSION['authority'];?>" onchange="Timecard.redirect(this)"><?=$helper->option(1, 12, $_GET['month'])?></select>月
-		</td></tr>
-		<tr><th>日付</th><th>出社</th><th>退社</th><th>勤務時間</th><th>時間外</th><th>休憩時間</th><th>休日出勤</th><th>備考</th><th>&nbsp;</th></tr>
-<?php
-/*先月の21日の曜日と最終日を取得する*/
-$timestamp = mktime(0, 0, 0, $_GET['month']-1, 21, $_GET['year']);
-$lastday = date('t', $timestamp);
-$weekday = date('w', $timestamp);
-/*曜日表記セット*/
-$week = array('日', '月', '火', '水', '木', '金', '土');
-
-$num = 0;
-/*DBデータ取得*/
-if (is_array($hash['list']) && count($hash['list']) > 0) {
-	foreach ($hash['list'] as $row) {
-		/*21日*/
-		if($row['timecard_day'] > 20){
-			$num = $row['timecard_day'] - 20;
-		}else{
-			$num = $row['timecard_day'] + ($lastday - 20);
-		}
-		$data[$num] = $row;
-	}
-}
-
-$sum = 0;
-$over_sum=0;
-$dt =0;
-
-$syr = $yr = $_GET['year'];
-$mt = $_GET['month'];
-$smt = $mt - 1;
-
-/*1月(年越し)対応*/
-if(strcmp($mt,'1') == 0){
-	$smt = $mt + 11;
-	$syr = $yr - 1;
-}
-
-for ($i = 1; $i <= $lastday; $i++) {
-	/*21日始まり対応*/
-	if($i <= ($lastday - 20)){
-		$dt = $i+20;
-	}else{
-		$dt = $i - ($lastday - 20);
-		if($dt == 1){
-			$syr = $yr;
-			$smt = $mt;
-		}
-	}
-
-	/*曜日・本日クラスセット*/
-	$class = $calendar->style($syr, $smt, $dt, $weekday, $lastday);
-
-	$type = array('open', 'close', 'interval');
-	foreach ($type as $value) {
-		$key = 'timecard_'.$value;
-		$original = 'timecard_original'.$value;
-
-		if ($data[$i][$key] != $data[$i][$original]){
-			if (strlen($data[$i][$key]) > 0) {
-				$data[$i][$key] = '<span class="timecardupdated">'.$data[$i][$key].'</span>';
-			}
-
-			if ($_GET['original'] == 1) {
-				if ($data[$i][$original]) {
-					$data[$i][$key] = $data[$i][$original].'<br />'.$data[$i][$key];
-				} else {
-					$data[$i][$key] = '-<br />'.$data[$i][$key];
-				}
-			}
-		}
-	}
-
-	if ($smt == $today['month'] && $dt == $today['day'] && $syr == $today['year'] && $hash['owner']['userid'] == $_SESSION['userid']) {
-
-		if (!$data[$i] && !$data[$i]['timecard_open']) {
-			$data[$i]['timecard_open'] = '<input type="submit" name="timecard_open" value="出社" />';
-		} elseif (!$data[$i]['timecard_close']) {
-			$data[$i]['timecard_close'] = '<input type="submit" name="timecard_close" value="退社" />';
-			/*
-			if (strlen($data[$i]['timecard_interval']) <= 0 || preg_match('/.*-[0-9]+:[0-9]+$/', $data[$i]['timecard_interval'])) {
-				$data[$i]['timecard_interval'] .= '&nbsp;<input type="submit" name="timecard_interval" value="外出" />';
-			} else {
-				$data[$i]['timecard_interval'] .= '&nbsp;<input type="submit" name="timecard_interval" value="復帰" />';
-			}*/
-		}
-	}
-	if (strlen($data[$i]['timecard_time']) > 0 && !$calendar->checkHoliday($syr, $smt, $dt, $weekday, $lastday)) {
-		$array = explode(':', $data[$i]['timecard_time']);
-		$sum += intval($array[0]) * 60 + intval($array[1]);
-	}
-	if (strlen($data[$i]['timecard_time']) > 0 && $calendar->checkHoliday($syr, $smt, $dt, $weekday, $lastday)) {
-		$array = explode(':', $data[$i]['timecard_time']);
-		$sumholiday += intval($array[0]) * 60 + intval($array[1]);
-	}
-	if (strlen($data[$i]['timecard_timeover']) > 0 && !$calendar->checkHoliday($syr, $smt, $dt, $weekday, $lastday)) {
-		$array = explode(':', $data[$i]['timecard_timeover']);
-		$over_sum += intval($array[0]) * 60 + intval($array[1]);
-	}
-	/*---- timecard for holidays ---*/
-
-
-	$day_array = explode(':', $data[$i]['timecard_time']);
-
-	$dayminute = intval($day_array[0]) * 60 + intval($day_array[1]);
-
-	/**---close timecard holidays---*/
-	if ($_SESSION['authority'] != 'member') {
-		$edit = '<a href="edit.php?year='.$syr.'&month='.$smt.'&day='.$dt.'&member='.$hash['owner']['userid'].'">編集</a>';
-	} else {
-		$edit = '<span class="unlink">編集</span>';
-	}
-?>
-	<tr<?=$class?>>
-	<td><?=$smt?>/<?=$dt?> (<?=$week[$weekday]?>)</td>
-	<td><?=$data[$i]['timecard_open']?>&nbsp;</td>
-	<td><?=$data[$i]['timecard_close']?>&nbsp;</td>
-<!--<td><?=$data[$i]['timecard_interval']?>&nbsp;</td>-->
-	<td><?php if(!$calendar->checkHoliday($syr, $smt, $dt, $weekday, $lastday))
-	 echo $data[$i]['timecard_time']; ?>&nbsp;</td>
-	<td><?php if(!$calendar->checkHoliday($syr, $smt, $dt, $weekday, $lastday)) echo $data[$i]['timecard_timeover']; ?>&nbsp;</td>
-	<td><?php echo $data[$i]['timecard_timeinterval']?>&nbsp;</td>
-	<td><?php if($calendar->checkHoliday($syr, $smt, $dt, $weekday, $lastday))
-	 echo $data[$i]['timecard_time']; ?>&nbsp;</td> <!--  time holidays -->
-	<td class="memo"><?=$data[$i]['timecard_comment']?></td>
-	<td style="white-space:nowrap;"><?=$edit?></td></tr>
-<?php
-	$weekday = ($weekday + 1) % 7;
-}
-$sum = sprintf('%d:%02d', (($sum - ($sum % 60)) / 60), ($sum % 60));
-$sumholiday = sprintf('%d:%02d', (($sumholiday - ($sumholiday % 60)) / 60), ($sumholiday % 60));
-$over_sum = sprintf('%d:%02d', (($over_sum - ($over_sum % 60)) / 60), ($over_sum % 60));
-?>
-		<tr><td colspan="3" class="timecardtotal">時間合計</td><td class="timecardtotal"><?=$sum?>&nbsp;</td><td class="timecardtotal"><?=$over_sum?>&nbsp;</td><td class="timecardtotal"></td><td class="timecardtotal"><?=$sumholiday?>&nbsp;</td><td class="timecardtotal" colspan="2">&nbsp;</td></tr>
-	</table>
-	<div class="property">
-<?php
-if ($hash['config']['lunchclosehour'] > 0 || $hash['config']['lunchcloseminute'] > 0) {
-	$lunchtime = sprintf('%d:%02d-%d:%02d', $hash['config']['lunchopenhour'], $hash['config']['lunchopenminute'], $hash['config']['lunchclosehour'], $hash['config']['lunchcloseminute']);
-	echo '※休憩時間にはランチタイム（'.$lunchtime.'）が含まれます。<br />';
-}
-?>
+<!-- Content -->
+<div class="container-xxl flex-grow-1 container-p-y">
+	<!-- <div class="row g-6 mb-6">
+		<div class="col-sm-6 col-xl-3">
+			<div class="card">
+			<div class="card-body">
+				<div class="d-flex align-items-start justify-content-between">
+				<div class="content-left">
+					<span class="text-heading">Session</span>
+					<div class="d-flex align-items-center my-1">
+					<h4 class="mb-0 me-2">21,459</h4>
+					<p class="text-success mb-0">(+29%)</p>
+					</div>
+					<small class="mb-0">Total Users</small>
+				</div>
+				<div class="avatar">
+					<span class="avatar-initial rounded bg-label-primary">
+					<i class="icon-base ti tabler-users icon-26px"></i>
+					</span>
+				</div>
+				</div>
+			</div>
+			</div>
+		</div>
+		<div class="col-sm-6 col-xl-3">
+			<div class="card">
+			<div class="card-body">
+				<div class="d-flex align-items-start justify-content-between">
+				<div class="content-left">
+					<span class="text-heading">Paid Users</span>
+					<div class="d-flex align-items-center my-1">
+					<h4 class="mb-0 me-2">4,567</h4>
+					<p class="text-success mb-0">(+18%)</p>
+					</div>
+					<small class="mb-0">Last week analytics </small>
+				</div>
+				<div class="avatar">
+					<span class="avatar-initial rounded bg-label-danger">
+					<i class="icon-base ti tabler-user-plus icon-26px"></i>
+					</span>
+				</div>
+				</div>
+			</div>
+			</div>
+		</div>
+		<div class="col-sm-6 col-xl-3">
+			<div class="card">
+			<div class="card-body">
+				<div class="d-flex align-items-start justify-content-between">
+				<div class="content-left">
+					<span class="text-heading">Active Users</span>
+					<div class="d-flex align-items-center my-1">
+					<h4 class="mb-0 me-2">19,860</h4>
+					<p class="text-danger mb-0">(-14%)</p>
+					</div>
+					<small class="mb-0">Last week analytics</small>
+				</div>
+				<div class="avatar">
+					<span class="avatar-initial rounded bg-label-success">
+					<i class="icon-base ti tabler-user-check icon-26px"></i>
+					</span>
+				</div>
+				</div>
+			</div>
+			</div>
+		</div>
+		<div class="col-sm-6 col-xl-3">
+			<div class="card">
+			<div class="card-body">
+				<div class="d-flex align-items-start justify-content-between">
+				<div class="content-left">
+					<span class="text-heading">Pending Users</span>
+					<div class="d-flex align-items-center my-1">
+					<h4 class="mb-0 me-2">237</h4>
+					<p class="text-success mb-0">(+42%)</p>
+					</div>
+					<small class="mb-0">Last week analytics</small>
+				</div>
+				<div class="avatar">
+					<span class="avatar-initial rounded bg-label-warning">
+					<i class="icon-base ti tabler-user-search icon-26px"></i>
+					</span>
+				</div>
+				</div>
+			</div>
+			</div>
+		</div>
+	</div> -->
+	<!-- Users List Table -->
+	<div class="card">
+		<div class="card-header sticky-element bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
+			<h4 class="card-title mb-0"><span>タイムカード</span></h4>
+			<div class="d-flex justify-content-between align-items-center row pt-4 gap-4 gap-md-0">
+				<div class="col-md-4 user_role"></div>
+				<div class="col-md-4 user_plan"></div>
+				<div class="col-md-4 user_status"></div>
+			</div>
+		</div>
+		<div class="card-datatable">
+		<div class="table-responsive text-nowrap">
+			<table class="table table-sm">
+				<thead>
+				<tr>
+					<th>Project</th>
+					<th>Client</th>
+					<th>Users</th>
+					<th>Status</th>
+					<th>Actions</th>
+				</tr>
+				</thead>
+				<tbody class="table-border-bottom-0">
+				<tr>
+					<td>
+					<i class="icon-base ti tabler-brand-angular icon-md text-danger me-4"></i>
+					<span class="fw-medium">Angular Project</span>
+					</td>
+					<td>Albert Cook</td>
+					<td>
+					<ul class="list-unstyled m-0 avatar-group d-flex align-items-center">
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Lilian Fuller" data-bs-original-title="Lilian Fuller">
+						<img src="../../assets/img/avatars/5.png" alt="Avatar" class="rounded-circle">
+						</li>
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Sophia Wilkerson" data-bs-original-title="Sophia Wilkerson">
+						<img src="../../assets/img/avatars/6.png" alt="Avatar" class="rounded-circle">
+						</li>
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Christina Parker" data-bs-original-title="Christina Parker">
+						<img src="../../assets/img/avatars/7.png" alt="Avatar" class="rounded-circle">
+						</li>
+					</ul>
+					</td>
+					<td><span class="badge bg-label-primary me-1">Active</span></td>
+					<td>
+					<div class="dropdown">
+						<button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown" aria-expanded="false">
+						<i class="icon-base ti tabler-dots-vertical"></i>
+						</button>
+						<div class="dropdown-menu" style="">
+						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-pencil me-1"></i> Edit</a>
+						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-trash me-1"></i> Delete</a>
+						</div>
+					</div>
+					</td>
+				</tr>
+				<tr>
+					<td><i class="icon-base ti tabler-brand-react-native icon-md text-info me-4"></i> <span class="fw-medium">React Project</span></td>
+					<td>Barry Hunter</td>
+					<td>
+					<ul class="list-unstyled m-0 avatar-group d-flex align-items-center">
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Lilian Fuller" data-bs-original-title="Lilian Fuller">
+						<img src="../../assets/img/avatars/5.png" alt="Avatar" class="rounded-circle">
+						</li>
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Sophia Wilkerson" data-bs-original-title="Sophia Wilkerson">
+						<img src="../../assets/img/avatars/6.png" alt="Avatar" class="rounded-circle">
+						</li>
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Christina Parker" data-bs-original-title="Christina Parker">
+						<img src="../../assets/img/avatars/7.png" alt="Avatar" class="rounded-circle">
+						</li>
+					</ul>
+					</td>
+					<td><span class="badge bg-label-success me-1">Completed</span></td>
+					<td>
+					<div class="dropdown">
+						<button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
+						<i class="icon-base ti tabler-dots-vertical"></i>
+						</button>
+						<div class="dropdown-menu">
+						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-pencil me-1"></i> Edit</a>
+						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-trash me-1"></i> Delete</a>
+						</div>
+					</div>
+					</td>
+				</tr>
+				<tr>
+					<td>
+					<i class="icon-base ti tabler-brand-vue icon-md text-success me-4"></i>
+					<span class="fw-medium">VueJs Project</span>
+					</td>
+					<td>Trevor Baker</td>
+					<td>
+					<ul class="list-unstyled m-0 avatar-group d-flex align-items-center">
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Lilian Fuller" data-bs-original-title="Lilian Fuller">
+						<img src="../../assets/img/avatars/5.png" alt="Avatar" class="rounded-circle">
+						</li>
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Sophia Wilkerson" data-bs-original-title="Sophia Wilkerson">
+						<img src="../../assets/img/avatars/6.png" alt="Avatar" class="rounded-circle">
+						</li>
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Christina Parker" data-bs-original-title="Christina Parker">
+						<img src="../../assets/img/avatars/7.png" alt="Avatar" class="rounded-circle">
+						</li>
+					</ul>
+					</td>
+					<td><span class="badge bg-label-info me-1">Scheduled</span></td>
+					<td>
+					<div class="dropdown">
+						<button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
+						<i class="icon-base ti tabler-dots-vertical"></i>
+						</button>
+						<div class="dropdown-menu">
+						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-pencil me-1"></i> Edit</a>
+						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-trash me-1"></i> Delete</a>
+						</div>
+					</div>
+					</td>
+				</tr>
+				<tr>
+					<td>
+					<i class="icon-base ti tabler-brand-bootstrap icon-md text-primary me-4"></i>
+					<span class="fw-medium">Bootstrap Project</span>
+					</td>
+					<td>Jerry Milton</td>
+					<td>
+					<ul class="list-unstyled m-0 avatar-group d-flex align-items-center">
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Lilian Fuller" data-bs-original-title="Lilian Fuller">
+						<img src="../../assets/img/avatars/5.png" alt="Avatar" class="rounded-circle">
+						</li>
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Sophia Wilkerson" data-bs-original-title="Sophia Wilkerson">
+						<img src="../../assets/img/avatars/6.png" alt="Avatar" class="rounded-circle">
+						</li>
+						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Christina Parker" data-bs-original-title="Christina Parker">
+						<img src="../../assets/img/avatars/7.png" alt="Avatar" class="rounded-circle">
+						</li>
+					</ul>
+					</td>
+					<td><span class="badge bg-label-warning me-1">Pending</span></td>
+					<td>
+					<div class="dropdown">
+						<button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
+						<i class="icon-base ti tabler-dots-vertical"></i>
+						</button>
+						<div class="dropdown-menu">
+						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-pencil me-1"></i> Edit</a>
+						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-trash me-1"></i> Delete</a>
+						</div>
+					</div>
+					</td>
+				</tr>
+				</tbody>
+			</table>
+			</div>
+		</div>
+		<!-- Offcanvas to add new user -->
+		<div
+			class="offcanvas offcanvas-end"
+			tabindex="-1"
+			id="offcanvasAddUser"
+			aria-labelledby="offcanvasAddUserLabel">
+			<div class="offcanvas-header border-bottom">
+			<h5 id="offcanvasAddUserLabel" class="offcanvas-title">Add User</h5>
+			<button
+				type="button"
+				class="btn-close text-reset"
+				data-bs-dismiss="offcanvas"
+				aria-label="Close"></button>
+			</div>
+			<div class="offcanvas-body mx-0 flex-grow-0 p-6 h-100">
+			<form class="add-new-user pt-0" id="addNewUserForm" onsubmit="return false">
+				<div class="mb-6 form-control-validation">
+				<label class="form-label" for="add-user-fullname">Full Name</label>
+				<input
+					type="text"
+					class="form-control"
+					id="add-user-fullname"
+					placeholder="John Doe"
+					name="userFullname"
+					aria-label="John Doe" />
+				</div>
+				<div class="mb-6 form-control-validation">
+				<label class="form-label" for="add-user-email">Email</label>
+				<input
+					type="text"
+					id="add-user-email"
+					class="form-control"
+					placeholder="john.doe@example.com"
+					aria-label="john.doe@example.com"
+					name="userEmail" />
+				</div>
+				<div class="mb-6">
+				<label class="form-label" for="add-user-contact">Contact</label>
+				<input
+					type="text"
+					id="add-user-contact"
+					class="form-control phone-mask"
+					placeholder="+1 (609) 988-44-11"
+					aria-label="john.doe@example.com"
+					name="userContact" />
+				</div>
+				<div class="mb-6">
+				<label class="form-label" for="add-user-company">Company</label>
+				<input
+					type="text"
+					id="add-user-company"
+					class="form-control"
+					placeholder="Web Developer"
+					aria-label="jdoe1"
+					name="companyName" />
+				</div>
+				<div class="mb-6">
+				<label class="form-label" for="country">Country</label>
+				<select id="country" class="select2 form-select">
+					<option value="">Select</option>
+					<option value="Australia">Australia</option>
+					<option value="Bangladesh">Bangladesh</option>
+					<option value="Belarus">Belarus</option>
+					<option value="Brazil">Brazil</option>
+					<option value="Canada">Canada</option>
+					<option value="China">China</option>
+					<option value="France">France</option>
+					<option value="Germany">Germany</option>
+					<option value="India">India</option>
+					<option value="Indonesia">Indonesia</option>
+					<option value="Israel">Israel</option>
+					<option value="Italy">Italy</option>
+					<option value="Japan">Japan</option>
+					<option value="Korea">Korea, Republic of</option>
+					<option value="Mexico">Mexico</option>
+					<option value="Philippines">Philippines</option>
+					<option value="Russia">Russian Federation</option>
+					<option value="South Africa">South Africa</option>
+					<option value="Thailand">Thailand</option>
+					<option value="Turkey">Turkey</option>
+					<option value="Ukraine">Ukraine</option>
+					<option value="United Arab Emirates">United Arab Emirates</option>
+					<option value="United Kingdom">United Kingdom</option>
+					<option value="United States">United States</option>
+				</select>
+				</div>
+				<div class="mb-6">
+				<label class="form-label" for="user-role">User Role</label>
+				<select id="user-role" class="form-select">
+					<option value="subscriber">Subscriber</option>
+					<option value="editor">Editor</option>
+					<option value="maintainer">Maintainer</option>
+					<option value="author">Author</option>
+					<option value="admin">Admin</option>
+				</select>
+				</div>
+				<div class="mb-6">
+				<label class="form-label" for="user-plan">Select Plan</label>
+				<select id="user-plan" class="form-select">
+					<option value="basic">Basic</option>
+					<option value="enterprise">Enterprise</option>
+					<option value="company">Company</option>
+					<option value="team">Team</option>
+				</select>
+				</div>
+				<button type="submit" class="btn btn-primary me-3 data-submit">Submit</button>
+				<button type="reset" class="btn btn-label-danger" data-bs-dismiss="offcanvas">Cancel</button>
+			</form>
+			</div>
+		</div>
 	</div>
-	<ul class="operate">
-<?php
-if ($_GET['original'] == 1) {
-
-	echo '<a href="index.php'.$view->parameter(array('year'=>$_GET['year'], 'month'=>$_GET['month'], 'member'=>$_GET['member'])).'">編集前の時刻を表示しない</a>';
-} else {
-	echo '<a href="index.php'.$view->parameter(array('year'=>$_GET['year'], 'month'=>$_GET['month'], 'member'=>$_GET['member'], 'original'=>1)).'">編集前の時刻を表示する</a>';
-}
-?>
-		</li>
-	</ul>
-</form>
+</div>
+<!-- / Content -->
 <?php
 $view->footing();
 ?>

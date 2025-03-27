@@ -9,6 +9,7 @@ class View {
 	public $javascript;
 	public $style;
 	public $directory;
+	public $page;
 	function __construct() {
 		$this->javascript = '';
 		$this->style = '';
@@ -23,6 +24,11 @@ class View {
 		if ($directory == '') {
 			$directory = basename(dirname($_SERVER['SCRIPT_NAME']));
 		}
+		//$this->page = filename($_SERVER['SCRIPT_NAME']);
+
+		$filename = basename($_SERVER['SCRIPT_NAME']);
+		$filename = substr($filename, 0, strpos($filename, '.'));
+		$this->page = $filename;
 		$this->directory = $directory;
 		$current[$directory] = ' class="current"';
 		if (!file_exists('application')) {
@@ -35,12 +41,14 @@ class View {
 			$this->style = '<link rel="stylesheet" href="'.$root.'assets/css/'.$directory.'.css"></link>';
 		}
 		if ($caption) {
-			$caption = 'GUIS HRM | '.$caption;
+			$caption = $caption . ' | GUIS HRM';
 		} else {
 			$caption = 'GUIS HRM';
 		}
+
 		
 		$style = $this->style;
+		$page = $this->page;
 		
 		require_once DIR_VIEW.'header.php';
 		if($directory != 'login')
@@ -65,6 +73,9 @@ class View {
 	}
 	
 	public function footing() {
+		if (!file_exists('application')) {
+			$root = '../';
+		}
 		$javascript = $this->javascript;
 		if($this->directory != 'login')
 			require_once DIR_VIEW.'layout-bottom.php';
