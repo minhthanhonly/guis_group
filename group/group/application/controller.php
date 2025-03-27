@@ -8,16 +8,13 @@
 class Controller {
 	
 	function dispatch() {
-		
 		$this->requiring();
 		$authority = new Authority;
 		$authority->check();
 		return $this->execute();
-
 	}
 
 	function json() {
-		
 		$this->requiring();
 		$authority = new Authority;
 		$authorized = $authority->authorize();
@@ -26,11 +23,22 @@ class Controller {
 		} else {
 			return $this->execute();
 		}
+	}
 
+	function initApi() {
+		$this->requiring();
+		$authority = new Authority;
+		$authorized = $authority->authorize();
+		if ($authorized !== true) {
+			die('認証に失敗しました。ログインし直してください。');
+		}
+	}
+
+	function api($model, $method) {
+		return $this->executeApi($model, $method);
 	}
 	
 	function execute() {
-		
 		if (!file_exists('application')) {
 			$directory = basename(dirname($_SERVER['SCRIPT_NAME']));
 		} else {
@@ -57,6 +65,32 @@ class Controller {
 		}
 		return $hash;
 
+	}
+
+	function executeApi($model, $method) {
+		$modelfile = DIR_MODEL.$model.'.php';
+		$class = ucfirst($model);
+		$hash = array();
+		
+		if (file_exists($modelfile)) {
+			require_once($modelfile);
+			if (class_exists($class)) {
+				$model = new $class;
+				if (method_exists($model, $method)) {
+					$model->connect();
+					$hash = $model->$method();
+					$hash = $model->sanitize($hash);
+					$model->close();
+					if (isset($model->error) && count($model->error) > 0) {
+						$hash['error'] = $model->error;
+					}
+				}
+			}
+		}
+		if(isset($hash['error']) && count($hash['error']) > 0) {
+			return '';
+		}
+		return json_encode($hash);
 	}
 
 	function requiring() {

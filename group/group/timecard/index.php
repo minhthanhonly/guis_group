@@ -107,11 +107,8 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
 	<div class="card">
 		<div class="card-header sticky-element bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
 			<h4 class="card-title mb-0"><span>タイムカード</span></h4>
-			<div class="d-flex justify-content-between align-items-center row pt-4 gap-4 gap-md-0">
-				<div class="col-md-4 user_role"></div>
-				<div class="col-md-4 user_plan"></div>
-				<div class="col-md-4 user_status"></div>
-			</div>
+			
+			<div class="d-md-flex justify-content-between align-items-center dt-layout-end col-md-auto ms-auto d-flex gap-md-0 gap-4 mt-0"><div class="dt-length"><select name="DataTables_Table_0_length" aria-controls="DataTables_Table_0" class="form-select me-md-4 me-0" id="dt-length-0"><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></select><label for="dt-length-0"></label></div><div class="review_filter me-md-4"><select class="form-select w-px-100"><option value=""> All </option><option value="Pending" class="text-capitalize">Pending</option><option value="Published" class="text-capitalize">Published</option></select></div><div class="dt-buttons btn-group flex-wrap mb-0"><div class="btn-group"><button class="btn buttons-collection btn-label-primary dropdown-toggle btn-label-secondary" tabindex="0" aria-controls="DataTables_Table_0" type="button" aria-haspopup="dialog" aria-expanded="false"><span><span class="d-flex align-items-center gap-1"><i class="icon-base ti tabler-upload icon-xs"></i> <span class="d-none d-sm-inline-block">Export</span></span></span></button></div> </div></div>
 		</div>
 		<div class="card-datatable">
 		<div class="table-responsive text-nowrap">
