@@ -71,5 +71,7 @@ define('DB_FILE', DIR_PATH.'database/group.sqlite2');
 //郵便番号データファイル
 define('DB_POSTCODE', DIR_PATH.'database/KEN_ALL.CSV');
 
+define('ROOT', '/');
+
 error_reporting(E_ERROR | E_PARSE);
 ?>

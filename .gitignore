@@ -1,1 +1,12 @@
 group/group/application/database/KEN_ALL.CSV
+node_modules/
+vendor/
+.idea/
+.env
+.env.example
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+

@@ -4,6 +4,7 @@
  * http://limitlink.jp/
  * 文字コード UTF-8
  */
+
 require_once('../application/loader.php');
 $view->heading('タイムカード設定');
 $array = array('0'=>'00', '10'=>'10', '20'=>'20', '30'=>'30', '40'=>'40', '50'=>'50');
@@ -23,11 +24,12 @@ function redirectConfig() {
 	<div style="margin-bottom: 10px;">
 		<input type="hidden" name="type_id" value="<?=$hash['type_id']?>">
 		<select name="list_config" onchange="redirectConfig()">
-			<? foreach ($hash['data']['list_config'] as $key => $value) { ?>
-				<option value="<?=$value["config_type"]?>" 
-				<? if($hash['data']['type_id'] == $value["config_type"]) { ?>selected="selected"<? } ?>
-				><?=$value["config_name"]?></option>
-			<? } ?>
+		<?php foreach ($hash['data']['list_config'] as $key => $value) { ?>
+			<option value="<?php echo $value["config_type"]; ?>" 
+			<?php if ($hash['data']['type_id'] == $value["config_type"]) { ?>selected="selected"<?php } ?>>
+				<?php echo $value["config_name"]; ?>
+			</option>
+		<?php } ?>
 		</select>
 		<input type="button" value="種類を追加する" onclick="location.href='add_config.php'" />
 	</div>

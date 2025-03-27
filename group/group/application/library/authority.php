@@ -79,7 +79,7 @@ class Authority {
 					if (count($data) > 0 && $data['userid'] === $postuserid && $data['password'] === $password) {
 						$authorized = true;
 					} else {
-						$error[] = 'ユーザー名もしくはパスワードが<br />異なります。';
+						$error[] = 'ユーザー名もしくはパスワードが異なります。';
 					}
 				}
 			} else {

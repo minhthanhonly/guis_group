@@ -18,7 +18,7 @@ class Model extends Connection {
 	function connect() {
 		
 		if (!$this->handler) {
-			$this->Connection();
+			parent::__construct();
 			if (!$this->handler) {
 				$this->died('データベースの接続に失敗しました。');
 			} elseif (!$this->table) {

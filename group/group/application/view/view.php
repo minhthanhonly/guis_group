@@ -6,34 +6,49 @@
  */
 
 class View {
-	
-	function heading($caption = '', $directory = '', $onload = '') {
-		$javascript = '';
+	public $javascript;
+	public $style;
+	public $directory;
+	function __construct() {
+		$this->javascript = '';
+		$this->style = '';
+		$this->directory = '';
+		if ($_SESSION['realname']) {
+			$realname = $this->escape($_SESSION['realname']).'さん';
+		}
+	}
+	public function heading($caption = '', $directory = '', $onload = '') {
+		$this->javascript = '';
+		$this->style = '';
 		if ($directory == '') {
 			$directory = basename(dirname($_SERVER['SCRIPT_NAME']));
-		}	
+		}
+		$this->directory = $directory;
 		$current[$directory] = ' class="current"';
 		if (!file_exists('application')) {
 			$root = '../';
 		}
-		if (file_exists($root.'js/'.$directory.'.js')) {
-			 $javascript = '<script type="text/javascript" src="'.$root.'js/'.$directory.'.js"></script>';
+		if (file_exists($root.'assets/js/'.$directory.'.js')) {
+			$this->javascript = '<script type="text/javascript" src="'.$root.'assets/js/'.$directory.'.js"></script>';
+		}
+		if (file_exists($root.'assets/css/'.$directory.'.css')) {
+			$this->style = '<link rel="stylesheet" href="'.$root.'assets/css/'.$directory.'.css"></link>';
 		}
 		if ($caption) {
-			$caption = 'group '.$caption;
+			$caption = 'GUIS HRM | '.$caption;
 		} else {
-			$caption = 'group';
+			$caption = 'GUIS HRM';
 		}
-
-		$javascript .= $javascript;
+		
+		$style = $this->style;
+		
 		require_once DIR_VIEW.'header.php';
 		if($directory != 'login')
-			require_once DIR_VIEW.'control.php';
+			require_once DIR_VIEW.'layout-top.php';
 		
 	}
 	
 	function script() {
-		
 		$argument = func_get_args();
 		if (is_array($argument) && count($argument) > 0) {
 			if (!file_exists('application')) {
@@ -45,11 +60,15 @@ class View {
 		}
 	
 	}
+	public function layout($layout) {
+		require_once(DIR_VIEW.'layout-'.$layout.'.php');
+	}
 	
-	function footing() {
-		
+	public function footing() {
+		$javascript = $this->javascript;
+		if($this->directory != 'login')
+			require_once DIR_VIEW.'layout-bottom.php';
 		require_once(DIR_VIEW.'footer.php');
-	
 	}
 	
 	function error($array, $string = '') {

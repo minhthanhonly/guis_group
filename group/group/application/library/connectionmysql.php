@@ -7,143 +7,107 @@
 
 class Connection {
 
-	var $handler;
-	
-	function Connection() {
-		
-		$this->handler = mysql_connect(DB_HOSTNAME, DB_USERNAME, DB_PASSWORD);
-		if ($this->handler) {
-			$response = mysql_select_db(DB_DATABASE);
-			if (defined('DB_CHARSET') && DB_CHARSET) {
-				if (version_compare(PHP_VERSION, '5.2.3', '>=') && function_exists('mysql_set_charset')) {
-					mysql_set_charset('utf8', $this->handler);
-				} else {
-					mysql_query("SET NAMES utf8", $this->handler);
-				}
-			}
-			return $response;
-		}
-		return $this->handler;
-	
-	}
-	
-	function close() {
-		
-		if ($this->handler) {
-			return mysql_close($this->handler);
-		} else {
-			die('データベースハンドラが見つかりません。');
-		}
-	
-	}
-	
-	function query($query) {
-		
-		if ($this->handler) {
-			return mysql_query($query, $this->handler);
-		} else {
-			die('データベースハンドラが見つかりません。');
-		}
-		
-	}
-	
-	function fetchAll($query) {
-	
-		if ($this->handler) {
-			$response = mysql_query($query, $this->handler);
-			$data = array();
-			if ($response) {
-				while ($row = mysql_fetch_assoc($response)) {
-					$data[] = $row;
-				}
-			}
-			return $data;
-		} else {
-			die('データベースハンドラが見つかりません。');
-		}
-	
-	}
-	
-	function fetchLimit($query, $offset = 0, $limit = 20) {
+    public $handler;
 
-		$query .= sprintf(" LIMIT %d, %d", $offset, $limit);
-		return $this->fetchAll($query);
+    function __construct() {
+        $this->handler = mysqli_connect(DB_HOSTNAME, DB_USERNAME, DB_PASSWORD, DB_DATABASE);
 
-	}
+        if ($this->handler) {
+            if (defined('DB_CHARSET') && DB_CHARSET) {
+                mysqli_set_charset($this->handler, 'utf8');
+            }
+        } else {
+            die('データベース接続に失敗しました: ' . mysqli_connect_error());
+        }
+    }
 
-	function fetchOne($query) {
+    function close() {
+        if ($this->handler) {
+            return mysqli_close($this->handler);
+        } else {
+            die('データベースハンドラが見つかりません。');
+        }
+    }
 
-		if ($this->handler) {
-			$response = mysql_query($query, $this->handler);
-			if ($response) {
-				$data = mysql_fetch_assoc($response);
-			}
-			if (is_array($data)) {
-				return $data;
-			} else {
-				return array();
-			}
-		} else {
-			die('データベースハンドラが見つかりません。');
-		}
-	
-	}
-	
-	function fetchCount($table, $where = "", $field = "*") {
+    function query($query) {
+        if ($this->handler) {
+            $result = mysqli_query($this->handler, $query);
+            if (!$result) {
+                die('クエリエラー: ' . mysqli_error($this->handler));
+            }
+            return $result;
+        } else {
+            die('データベースハンドラが見つかりません。');
+        }
+    }
 
-		if ($this->handler) {
-			$query = sprintf("SELECT COUNT(%s) AS count FROM %s %s", $field, $table, $where);
-			$response = mysql_query($query, $this->handler);
-			if ($response) {
-				$row = mysql_fetch_assoc($response);
-				return $row["count"];
-			} else {
-				return false;
-			}
-		} else {
-			die('データベースハンドラが見つかりません。');
-		}
-		
-	}
-	
-	function insertid() {
-		
-		if ($this->handler) {
-			return mysql_insert_id($this->handler);
-		} else {
-			die('データベースハンドラが見つかりません。');
-		}
-		
-	}
-	
-	function table() {
+    function fetchAll($query) {
+        if ($this->handler) {
+            $response = $this->query($query);
+            $data = array();
+            while ($row = mysqli_fetch_assoc($response)) {
+                $data[] = $row;
+            }
+            return $data;
+        } else {
+            die('データベースハンドラが見つかりません。');
+        }
+    }
 
-		if ($this->handler) {
-			$query = "SHOW TABLES FROM ".DB_DATABASE;
-			$response = mysql_query($query, $this->handler);
-			if ($response) {
-				while ($row = mysql_fetch_assoc($response)) {
-					$array[] = $row["Tables_in_".DB_DATABASE];
-				}
-				return $array;
-			} else {
-				return false;
-			}
-		} else {
-			die('データベースハンドラが見つかりません。');
-		}
+    function fetchLimit($query, $offset = 0, $limit = 20) {
+        $query .= sprintf(" LIMIT %d, %d", $offset, $limit);
+        return $this->fetchAll($query);
+    }
 
-	}
-	
-	function quote($string) {
-	
-		if ($this->handler) {
-			return mysql_real_escape_string($string, $this->handler);
-		} else {
-			die('データベースハンドラが見つかりません。');
-		}
-	
-	}
+    function fetchOne($query) {
+        if ($this->handler) {
+            $response = $this->query($query);
+            $data = mysqli_fetch_assoc($response);
+            return is_array($data) ? $data : array();
+        } else {
+            die('データベースハンドラが見つかりません。');
+        }
+    }
 
+    function fetchCount($table, $where = "", $field = "*") {
+        if ($this->handler) {
+            $query = sprintf("SELECT COUNT(%s) AS count FROM %s %s", $field, $table, $where);
+            $response = $this->query($query);
+            $row = mysqli_fetch_assoc($response);
+            return $row["count"] ?? false;
+        } else {
+            die('データベースハンドラが見つかりません。');
+        }
+    }
+
+    function insertid() {
+        if ($this->handler) {
+            return mysqli_insert_id($this->handler);
+        } else {
+            die('データベースハンドラが見つかりません。');
+        }
+    }
+
+    function table() {
+        if ($this->handler) {
+            $query = "SHOW TABLES FROM " . DB_DATABASE;
+            $response = $this->query($query);
+            $array = array();
+            while ($row = mysqli_fetch_assoc($response)) {
+                $array[] = $row["Tables_in_" . DB_DATABASE];
+            }
+            return $array;
+        } else {
+            die('データベースハンドラが見つかりません。');
+        }
+    }
+
+    function quote($string) {
+        if ($this->handler) {
+            return mysqli_real_escape_string($this->handler, $string);
+        } else {
+            die('データベースハンドラが見つかりません。');
+        }
+    }
 }
 ?>
