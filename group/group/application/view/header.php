@@ -1,7 +1,7 @@
 <!doctype html>
 
 <html
-  lang="en"
+  lang="ja"
   class="layout-wide layout-navbar-fixed"
   dir="ltr"
   data-skin="default"
@@ -35,6 +35,11 @@
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/datatables-buttons-bs5/buttons.bootstrap5.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/select2/select2.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/sweetalert2/sweetalert2.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/tagify/tagify.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/bootstrap-select/bootstrap-select.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/spinkit/spinkit.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/notiflix/notiflix.css" />
     <!-- Page CSS -->
     <?=$style?>
     <!-- Helpers -->

@@ -7,6 +7,7 @@
 <script src="<?=$root?>assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.js"></script>
 <script src="<?=$root?>assets/vendor/libs/hammer/hammer.js"></script>
 <script src="<?=$root?>assets/vendor/js/menu.js"></script>
+<script src="<?=$root?>js/axios.min.js"></script>
 
 <!-- endbuild -->
 
@@ -19,9 +20,14 @@
 <script src="<?=$root?>assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js"></script>
 <script src="<?=$root?>assets/vendor/libs/select2/select2.js"></script>
 <script src="<?=$root?>assets/vendor/libs/cleave-zen/cleave-zen.js"></script>
+<script src="<?=$root?>assets/vendor/libs/tagify/tagify.js"></script>
+<script src="<?=$root?>assets/vendor/libs/bootstrap-select/bootstrap-select.js"></script>
+<script src="<?=$root?>assets/vendor/libs/notiflix/notiflix.js"></script>
+<script src="<?=$root?>assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
 <!-- Main JS -->
 
 <script src="<?=$root?>assets/js/main.js"></script>
+<script src="<?=$root?>assets/js/forms-tagify.js"></script>
 
 <!-- Page JS -->
 <?=$javascript?>

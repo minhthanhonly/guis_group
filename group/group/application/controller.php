@@ -11,6 +11,7 @@ class Controller {
 		$this->requiring();
 		$authority = new Authority;
 		$authority->check();
+		
 		return $this->execute();
 	}
 

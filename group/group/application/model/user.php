@@ -8,10 +8,10 @@
 class User extends ApplicationModel {
 	
 	function User() {
-		
-		if (basename($_SERVER['SCRIPT_NAME']) != 'feed.php') {
+		if (basename($_SERVER['SCRIPT_NAME']) != 'feed.php' && $_SERVER['SCRIPT_NAME'] != '/api/index.php') {
 			$this->authorize('administrator', 'manager');
 		}
+		$this->table = DB_PREFIX.'user';
 		$this->schema = array(
 		'userid'=>array('ユーザーID', 'notnull', 'userid', 'length:100', 'distinct'),
 		'password'=>array('パスワード', 'alphaNumeric', 'length:4:32', 'except'=>array('search', 'update')),
@@ -76,8 +76,11 @@ class User extends ApplicationModel {
 			}
 			$this->where[] = "(user_group = '".intval($_GET['group'])."')";
 		}
+		if ($_GET['type'] == 'active') {
+			$this->where[] = "(user_group <> '5')";
+		}
 		$hash = $this->findLimit('user_order', 0);
-		
+
 		$hash += $this->permitGroup($_GET['group'], 'public');
 		$hash['data']['list_config'] = $config->getListConfigTimecard();
 

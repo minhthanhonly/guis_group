@@ -26,9 +26,9 @@ define('APP_EXTENSION', 'exe');
  * 認証設定
  */
 //有効期限
-define('APP_EXPIRE', '7200');
+define('APP_EXPIRE', '9999999');
 //アイドルタイム
-define('APP_IDLE', '3600');
+define('APP_IDLE', '9999999');
 
 /**
  * パス設定

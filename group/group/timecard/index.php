@@ -104,10 +104,26 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
 		</div>
 	</div> -->
 	<!-- Users List Table -->
-	<div class="card">
+	<div class="card" id="option-block">
 		<div class="card-header sticky-element bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
-			<h4 class="card-title mb-0"><span>タイムカード</span></h4>
-			
+			<div class="col-md-4">
+				<h4 class="card-title mb-0"><span>タイムカード</span></h4>
+			</div>
+			<div class="col-md-6 justify-content-end row">
+				<div class="col-md-6">
+					<label for="selectpickerUser" class="col-md-2 col-form-label">User</label>
+					<div class="col-md-10">
+						<select class="selectpicker w-100 show-tick" id="selectpickerUser" data-current-user="<?=$_SESSION['userid']?>" data-icon-base="icon-base ti" data-tick-icon="tabler-check" data-style="btn-default">
+						</select>
+					</div>
+				</div>
+				<div class="col-md-6">
+					<label for="timecard-month-input" class="col-md-2 col-form-label">Month</label>
+					<div class="col-md-10">
+						<input class="form-control" type="month" value="" id="timecard-month-input" lang="fr-CA">
+					</div>
+				</div>
+			</div>
 		</div>
 		<div class="card-datatable">
 		<div class="table-responsive text-nowrap">

@@ -5,38 +5,42 @@
  * 文字コード UTF-8
  */
 
-class Authority {
-	
-	function Authority() {
-		
-		session_name(APP_TYPE.'sid');
-		if(!isset($_SESSION)) { 
+class Authority
+{
+
+	function Authority()
+	{
+		session_name(APP_TYPE . 'sid');
+		if (!isset($_SESSION)) {
 			session_start();
 		}
 
 	}
 
-	function check() {
-	
-		$authorized = $this->authorize();
-		if ($authorized !== true) {
-			if (basename($_SERVER['SCRIPT_NAME']) != 'login.php') {
-				$_SESSION['referer'] = $_SERVER['REQUEST_URI'];
-				if (!file_exists('login.php')) {
-					$root = '../';
+	function check()
+	{
+		if($this->checkRememberMe() == false) {
+			$authorized = $this->authorize();
+			if ($authorized !== true) {
+				if (basename($_SERVER['SCRIPT_NAME']) != 'login.php') {
+					$_SESSION['referer'] = $_SERVER['REQUEST_URI'];
+					if (!file_exists('login.php')) {
+						$root = '../';
+					}
+					header('Location:' . $root . 'login.php');
+					exit();
 				}
-				header('Location:'.$root.'login.php');
-				exit();
 			}
 		}
 
 	}
 
-	function authorize() {
-	
+	function authorize()
+	{
+
 		$authorized = false;
 		if (isset($_SESSION['authorized'])) {
-			if ($_SESSION['authorized'] === md5(__FILE__.$_SESSION['logintime'])) {
+			if ($_SESSION['authorized'] === md5(__FILE__ . $_SESSION['logintime'])) {
 				if (APP_EXPIRE > 0 && (time() - $_SESSION['logintime']) > APP_EXPIRE) {
 					$_SESSION = array();
 					$_SESSION['status'] = 'expire';
@@ -55,8 +59,9 @@ class Authority {
 
 	}
 
-	function login() {
-	
+	function login()
+	{
+
 		$authorized = false;
 		$error = array();
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -78,6 +83,23 @@ class Authority {
 					$connection->close();
 					if (count($data) > 0 && $data['userid'] === $postuserid && $data['password'] === $password) {
 						$authorized = true;
+
+						// Handle "Remember Me" checkbox
+						if (isset($_POST['remember_me'])) {
+							$token = bin2hex(random_bytes(16)); // Generate a secure token
+							setcookie('remember_me', $token, time() + (30 * 24 * 60 * 60), '/', '', false, true); // Set cookie for 30 days
+
+							// Save the token in the database or another secure storage
+							$connection = new Connection;
+							$query = sprintf(
+								"UPDATE %suser SET remember_token = '%s' WHERE userid = '%s'",
+								DB_PREFIX,
+								$connection->quote($token),
+								$connection->quote($postuserid)
+							);
+							$connection->query($query);
+							$connection->close();
+						}
 					} else {
 						$error[] = 'ユーザー名もしくはパスワードが異なります。';
 					}
@@ -97,13 +119,13 @@ class Authority {
 			session_regenerate_id();
 			$_SESSION['logintime'] = time();
 			$_SESSION['accesstime'] = $_SESSION['logintime'];
-			$_SESSION['authorized'] = md5(__FILE__.$_SESSION['logintime']);
+			$_SESSION['authorized'] = md5(__FILE__ . $_SESSION['logintime']);
 			$_SESSION['userid'] = $data['userid'];
 			$_SESSION['realname'] = $data['realname'];
 			$_SESSION['group'] = $data['user_group'];
 			$_SESSION['authority'] = $data['authority'];
 			if (isset($_SESSION['referer'])) {
-				header('Location: '.$_SESSION['referer']);
+				header('Location: ' . $_SESSION['referer']);
 				unset($_SESSION['referer']);
 			} else {
 				header('Location: index.php');
@@ -115,19 +137,53 @@ class Authority {
 
 	}
 
-	function logout() {
+	function checkRememberMe()
+	{
+		if (isset($_COOKIE['remember_me'])) {
+			$token = $_COOKIE['remember_me'];
+			$connection = new Connection;
+			$query = sprintf(
+				"SELECT userid, realname, user_group, authority FROM %suser WHERE remember_token = '%s'",
+				DB_PREFIX,
+				$connection->quote($token)
+			);
+			$data = $connection->fetchOne($query);
+			$connection->close();
 
+			if (count($data) > 0) {
+				session_regenerate_id();
+				$_SESSION['logintime'] = time();
+				$_SESSION['accesstime'] = $_SESSION['logintime'];
+				$_SESSION['authorized'] = md5(__FILE__ . $_SESSION['logintime']);
+				$_SESSION['userid'] = $data['userid'];
+				$_SESSION['realname'] = $data['realname'];
+				$_SESSION['group'] = $data['user_group'];
+				$_SESSION['authority'] = $data['authority'];
+				return true;
+			}
+		}
+		return false;
+	}
+
+	function logout()
+	{
 		$this->sessionDestroy();
+		// Clear the "Remember Me" cookie
+		if (isset($_COOKIE['remember_me'])) {
+			setcookie('remember_me', '', time() - 3600, '/'); // Expire the cookie
+		}
+
 		if (!file_exists('login.php')) {
 			$root = '../';
 		}
-		header('Location:'.$root.'login.php');
+		header('Location:' . $root . 'login.php');
 		exit();
 
 	}
 
-	function sessionDestroy() {
-	
+	function sessionDestroy()
+	{
+
 		$_SESSION = array();
 		if (isset($_COOKIE[session_name()])) {
 			setcookie(session_name(), '', time() - 42000, '/');

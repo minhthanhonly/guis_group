@@ -11,6 +11,7 @@ class Timecard extends ApplicationModel {
 		$this->holidays = $this->getHolidays();
 		$this->table = DB_PREFIX.'timecard';
 		$this->schema = array(
+			'id'=> array('except'=>array('search')),
 			'timecard_year'=>array(),				/*年*/
 			'timecard_month'=>array(),				/*月*/
 			'timecard_day'=>array(),				/*日*/
@@ -121,6 +122,49 @@ class Timecard extends ApplicationModel {
 		return $hash;
 	}
 
+	function timecardlist() {
+		/*オーナー特定*/
+		$hash = $this->findOwner($_GET['member']);
+		/*リスト取得*/
+		$field = implode(',', $this->schematize());
+		
+		/*1月対応*/
+		$mt = $_GET['month'];
+		$yr = $_GET['year'];
+		if(strcmp($mt,'1') == 0){
+			$mt = $mt + 11;
+			$yr = $yr-1;
+		}else{
+			$mt = $mt - 1;
+		}
+
+		/*20日締め対応*/
+		$query = sprintf("SELECT %s FROM %s WHERE (((timecard_year = %d) AND (timecard_month = %d) AND (timecard_day BETWEEN '21' AND '31')) OR ((timecard_year = %d) AND (timecard_month = %d) AND (timecard_day BETWEEN '01' AND '20')))  AND (owner = '%s') ORDER BY timecard_date", $field, $this->table, $yr, $mt, $_GET['year'], $_GET['month'], $this->quote($hash['owner']['userid']));
+
+		/*$query = sprintf("SELECT %s FROM %s WHERE (timecard_year = %d) AND (timecard_month = %d) AND (owner = '%s') ORDER BY timecard_date", $field, $this->table, $_GET['year'], $_GET['month'], $this->quote($hash['owner']['userid']));*/
+
+		$hash['list'] = $this->fetchAll($query);
+
+		/*再計算時*/
+		if ($_GET['recalculate'] == 1 && $_SERVER['REQUEST_METHOD'] != 'POST') {
+			$hash['list'] = $this->recalculate($hash['list']);
+		}
+
+		for($i = 0; $i < count($hash['list']); $i++){
+			//check holiday
+			if($this->checkHoliday($hash['list'][$i]['timecard_year'], $hash['list'][$i]['timecard_month'], $hash['list'][$i]['timecard_day'], date('w', mktime(0, 0, 0, $hash['list'][$i]['timecard_month'], $hash['list'][$i]['timecard_day'], $hash['list'][$i]['timecard_year'])))){
+				$hash['list'][$i]['holiday'] = 1;
+			}else{
+				$hash['list'][$i]['holiday'] = 0;
+			}
+		}
+
+		$hash['isSameUser'] = $hash['owner']['userid'] == $_SESSION['userid'];
+
+		$hash['config'] = $this->getConfigStatus();
+		return $hash;
+	}
+
 	function getConfigStatus(){
 		$config = new Config($this->handler);
 		if($_GET["member"]){
@@ -135,8 +179,6 @@ class Timecard extends ApplicationModel {
 			return true;
 		} elseif ($weekday == 6) {
 			return true;
-		} else {
-			return false;
 		}
 		return false;
 	}
@@ -747,9 +789,10 @@ class Timecard extends ApplicationModel {
 	}
 
 	function findOwner($owner) {
-
 		if (strlen($owner) > 0) {
-			$this->authorize('administrator', 'manager');
+			if($owner != $_SESSION['userid']){
+				$this->authorize('administrator', 'manager');
+			}
 			$result = $this->fetchOne("SELECT userid, realname, user_group FROM ".DB_PREFIX."user WHERE userid = '".$this->quote($owner)."'");
 			if (count($result) <= 0) {
 				$this->died('選択されたユーザーは存在しません。');

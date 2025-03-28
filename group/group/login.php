@@ -9,7 +9,6 @@ $authority = new Authority;
 $error = $authority->login();
 $view->heading('ログイン', 'login');
 ?>
-
 <div class="authentication-wrapper authentication-cover">
     <!-- Logo -->
 	<a href="index.html" class="app-brand auth-cover-brand">
@@ -74,17 +73,17 @@ $view->heading('ログイン', 'login');
 					<span class="input-group-text cursor-pointer"><i class="icon-base ti tabler-eye-off"></i></span>
 				</div>
 			</div>
-			<!-- <div class="my-8">
+			<div class="my-8">
 				<div class="d-flex justify-content-between">
 					<div class="form-check mb-0 ms-2">
-					<input class="form-check-input" type="checkbox" id="remember-me" />
-					<label class="form-check-label" for="remember-me"> Remember Me </label>
+						<input class="form-check-input" name="remember_me" type="checkbox" id="remember-me" />
+						<label class="form-check-label" for="remember-me"> Remember Me </label>
 					</div>
-					<a href="auth-forgot-password-cover.html">
+					<!-- <a href="auth-forgot-password-cover.html">
 					<p class="mb-0">Forgot Password?</p>
-					</a>
+					</a> -->
 				</div>
-			</div> -->
+			</div>
 			<button class="btn btn-primary d-grid w-100">ログイン</button>
 		</form>
 		</div>

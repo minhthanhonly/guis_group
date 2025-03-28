@@ -713,3 +713,22 @@ document.addEventListener('keydown', event => {
 if (document.documentElement.querySelector('#autocomplete')) {
   loadSearchData();
 }
+
+// Initialize the displayHourglass
+function displayHourglass() {
+  var optionSection = document.querySelector('#option-block');
+  if (optionSection) {
+    Block.hourglass('#option-block', {
+      backgroundColor: 'rgba(' + window.Helpers.getCssVar('black-rgb') + ', 0)',
+      svgSize: '40px',
+      svgColor: config.colors.white,
+      top: '0',
+    });
+  }
+}
+function hideHourglass() {
+  var optionSection = document.querySelector('#option-block');
+  if (optionSection) {
+    Block.remove('#option-block', 300);
+  }
+}
