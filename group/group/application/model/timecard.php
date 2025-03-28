@@ -68,6 +68,10 @@ class Timecard extends ApplicationModel {
 		$this->redirect();
 	}
 
+	function test($params) {
+		return $this->index();
+	}
+
 	function holiday() {
 		$this->authorize('administrator', 'manager');
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {

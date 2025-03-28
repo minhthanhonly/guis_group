@@ -1,7 +1,7 @@
 <?php
 require_once('application/loader.php');
 $view->script('general.js');
-$view->heading('トップページ', 'top');
+$view->heading('', 'top');
 $hash['group'] = array('グループ') + $hash['group'];
 $calendar = new Calendar;
 $previous = mktime(0, 0, 0, $hash['month'], $hash['day'] - 7, $hash['year']);

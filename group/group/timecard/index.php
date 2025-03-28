@@ -108,149 +108,23 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
 		<div class="card-header sticky-element bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
 			<h4 class="card-title mb-0"><span>タイムカード</span></h4>
 			
-			<div class="d-md-flex justify-content-between align-items-center dt-layout-end col-md-auto ms-auto d-flex gap-md-0 gap-4 mt-0"><div class="dt-length"><select name="DataTables_Table_0_length" aria-controls="DataTables_Table_0" class="form-select me-md-4 me-0" id="dt-length-0"><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></select><label for="dt-length-0"></label></div><div class="review_filter me-md-4"><select class="form-select w-px-100"><option value=""> All </option><option value="Pending" class="text-capitalize">Pending</option><option value="Published" class="text-capitalize">Published</option></select></div><div class="dt-buttons btn-group flex-wrap mb-0"><div class="btn-group"><button class="btn buttons-collection btn-label-primary dropdown-toggle btn-label-secondary" tabindex="0" aria-controls="DataTables_Table_0" type="button" aria-haspopup="dialog" aria-expanded="false"><span><span class="d-flex align-items-center gap-1"><i class="icon-base ti tabler-upload icon-xs"></i> <span class="d-none d-sm-inline-block">Export</span></span></span></button></div> </div></div>
 		</div>
 		<div class="card-datatable">
 		<div class="table-responsive text-nowrap">
-			<table class="table table-sm">
+			<table class="datatables-users table table-striped">
 				<thead>
-				<tr>
-					<th>Project</th>
-					<th>Client</th>
-					<th>Users</th>
-					<th>Status</th>
-					<th>Actions</th>
-				</tr>
+					<tr>
+					<th>Date</th>
+					<th>Open Time</th>
+					<th>Close Time</th>
+					<th>Work Time</th>
+					<th>Break Time</th>
+					<th>Comment</th>
+					<th>Owner</th>
+					</tr>
 				</thead>
-				<tbody class="table-border-bottom-0">
-				<tr>
-					<td>
-					<i class="icon-base ti tabler-brand-angular icon-md text-danger me-4"></i>
-					<span class="fw-medium">Angular Project</span>
-					</td>
-					<td>Albert Cook</td>
-					<td>
-					<ul class="list-unstyled m-0 avatar-group d-flex align-items-center">
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Lilian Fuller" data-bs-original-title="Lilian Fuller">
-						<img src="../../assets/img/avatars/5.png" alt="Avatar" class="rounded-circle">
-						</li>
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Sophia Wilkerson" data-bs-original-title="Sophia Wilkerson">
-						<img src="../../assets/img/avatars/6.png" alt="Avatar" class="rounded-circle">
-						</li>
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Christina Parker" data-bs-original-title="Christina Parker">
-						<img src="../../assets/img/avatars/7.png" alt="Avatar" class="rounded-circle">
-						</li>
-					</ul>
-					</td>
-					<td><span class="badge bg-label-primary me-1">Active</span></td>
-					<td>
-					<div class="dropdown">
-						<button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown" aria-expanded="false">
-						<i class="icon-base ti tabler-dots-vertical"></i>
-						</button>
-						<div class="dropdown-menu" style="">
-						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-pencil me-1"></i> Edit</a>
-						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-trash me-1"></i> Delete</a>
-						</div>
-					</div>
-					</td>
-				</tr>
-				<tr>
-					<td><i class="icon-base ti tabler-brand-react-native icon-md text-info me-4"></i> <span class="fw-medium">React Project</span></td>
-					<td>Barry Hunter</td>
-					<td>
-					<ul class="list-unstyled m-0 avatar-group d-flex align-items-center">
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Lilian Fuller" data-bs-original-title="Lilian Fuller">
-						<img src="../../assets/img/avatars/5.png" alt="Avatar" class="rounded-circle">
-						</li>
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Sophia Wilkerson" data-bs-original-title="Sophia Wilkerson">
-						<img src="../../assets/img/avatars/6.png" alt="Avatar" class="rounded-circle">
-						</li>
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Christina Parker" data-bs-original-title="Christina Parker">
-						<img src="../../assets/img/avatars/7.png" alt="Avatar" class="rounded-circle">
-						</li>
-					</ul>
-					</td>
-					<td><span class="badge bg-label-success me-1">Completed</span></td>
-					<td>
-					<div class="dropdown">
-						<button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
-						<i class="icon-base ti tabler-dots-vertical"></i>
-						</button>
-						<div class="dropdown-menu">
-						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-pencil me-1"></i> Edit</a>
-						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-trash me-1"></i> Delete</a>
-						</div>
-					</div>
-					</td>
-				</tr>
-				<tr>
-					<td>
-					<i class="icon-base ti tabler-brand-vue icon-md text-success me-4"></i>
-					<span class="fw-medium">VueJs Project</span>
-					</td>
-					<td>Trevor Baker</td>
-					<td>
-					<ul class="list-unstyled m-0 avatar-group d-flex align-items-center">
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Lilian Fuller" data-bs-original-title="Lilian Fuller">
-						<img src="../../assets/img/avatars/5.png" alt="Avatar" class="rounded-circle">
-						</li>
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Sophia Wilkerson" data-bs-original-title="Sophia Wilkerson">
-						<img src="../../assets/img/avatars/6.png" alt="Avatar" class="rounded-circle">
-						</li>
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Christina Parker" data-bs-original-title="Christina Parker">
-						<img src="../../assets/img/avatars/7.png" alt="Avatar" class="rounded-circle">
-						</li>
-					</ul>
-					</td>
-					<td><span class="badge bg-label-info me-1">Scheduled</span></td>
-					<td>
-					<div class="dropdown">
-						<button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
-						<i class="icon-base ti tabler-dots-vertical"></i>
-						</button>
-						<div class="dropdown-menu">
-						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-pencil me-1"></i> Edit</a>
-						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-trash me-1"></i> Delete</a>
-						</div>
-					</div>
-					</td>
-				</tr>
-				<tr>
-					<td>
-					<i class="icon-base ti tabler-brand-bootstrap icon-md text-primary me-4"></i>
-					<span class="fw-medium">Bootstrap Project</span>
-					</td>
-					<td>Jerry Milton</td>
-					<td>
-					<ul class="list-unstyled m-0 avatar-group d-flex align-items-center">
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Lilian Fuller" data-bs-original-title="Lilian Fuller">
-						<img src="../../assets/img/avatars/5.png" alt="Avatar" class="rounded-circle">
-						</li>
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Sophia Wilkerson" data-bs-original-title="Sophia Wilkerson">
-						<img src="../../assets/img/avatars/6.png" alt="Avatar" class="rounded-circle">
-						</li>
-						<li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top" class="avatar avatar-xs pull-up" aria-label="Christina Parker" data-bs-original-title="Christina Parker">
-						<img src="../../assets/img/avatars/7.png" alt="Avatar" class="rounded-circle">
-						</li>
-					</ul>
-					</td>
-					<td><span class="badge bg-label-warning me-1">Pending</span></td>
-					<td>
-					<div class="dropdown">
-						<button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
-						<i class="icon-base ti tabler-dots-vertical"></i>
-						</button>
-						<div class="dropdown-menu">
-						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-pencil me-1"></i> Edit</a>
-						<a class="dropdown-item waves-effect" href="javascript:void(0);"><i class="icon-base ti tabler-trash me-1"></i> Delete</a>
-						</div>
-					</div>
-					</td>
-				</tr>
-				</tbody>
+				<tbody></tbody>
 			</table>
-			</div>
 		</div>
 		<!-- Offcanvas to add new user -->
 		<div

@@ -34,8 +34,8 @@ class Controller {
 		}
 	}
 
-	function api($model, $method) {
-		return $this->executeApi($model, $method);
+	function api($model, $method, $params) {
+		return $this->executeApi($model, $method, $params);
 	}
 	
 	function execute() {
@@ -67,7 +67,7 @@ class Controller {
 
 	}
 
-	function executeApi($model, $method) {
+	function executeApi($model, $method, $params) {
 		$modelfile = DIR_MODEL.$model.'.php';
 		$class = ucfirst($model);
 		$hash = array();
@@ -78,7 +78,7 @@ class Controller {
 				$model = new $class;
 				if (method_exists($model, $method)) {
 					$model->connect();
-					$hash = $model->$method();
+					$hash = $model->$method($params);
 					$hash = $model->sanitize($hash);
 					$model->close();
 					if (isset($model->error) && count($model->error) > 0) {
