@@ -288,12 +288,12 @@ document.addEventListener('DOMContentLoaded', function () {
             var dayWeek = date.getDay();
             var dayWeekName = ['日','月', '火', '水', '木', '金', '土'];
             if(dayWeek == 6){
-              return `<span class="badge bg-label-warning">${dayWeekName[dayWeek]}</span>&nbsp;${month}/${day}`;
+              return `<span class="badge bg-label-warning day-label">${dayWeekName[dayWeek]}</span>&nbsp;${month}/${day}`;
             }
             if(dayWeek == 0){
-              return `<span class="badge bg-label-danger">${dayWeekName[dayWeek]}</span>&nbsp;${month}/${day}`;
+              return `<span class="badge bg-label-danger day-label">${dayWeekName[dayWeek]}</span>&nbsp;${month}/${day}`;
             }
-            return `<span class="badge bg-label-primary">${dayWeekName[dayWeek]}</span>&nbsp;${month}/${day}`;
+            return `<span class="badge bg-label-primary day-label">${dayWeekName[dayWeek]}</span>&nbsp;${month}/${day}`;
           }
         }
       ],
@@ -305,10 +305,11 @@ document.addEventListener('DOMContentLoaded', function () {
         var date = new Date(data.timecard_date);
         var dayWeek = date.getDay();
         if (dayWeek === 0 || dayWeek === 6) {
-          $(row).addClass('table-light');
+          $(row).addClass('table-warning');
         }
         if(holidayList.includes(xdayString)){
           $(row).addClass('table-danger');
+          $(row).find('.day-label').addClass('bg-label-warning');
         }
       },
       order: [[0, 'asc']], // Order by the first column (Date) in ascending order
