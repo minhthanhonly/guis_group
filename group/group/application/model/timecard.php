@@ -131,6 +131,8 @@ class Timecard extends ApplicationModel {
 		/*1月対応*/
 		$mt = $_GET['month'];
 		$yr = $_GET['year'];
+		$yrNext = $yr;
+		$mtNext = $mt;
 		if(strcmp($mt,'1') == 0){
 			$mt = $mt + 11;
 			$yr = $yr-1;
@@ -152,7 +154,7 @@ class Timecard extends ApplicationModel {
 
 		for($i = 0; $i < count($hash['list']); $i++){
 			//check holiday
-			if($this->checkHoliday($hash['list'][$i]['timecard_year'], $hash['list'][$i]['timecard_month'], $hash['list'][$i]['timecard_day'], date('w', mktime(0, 0, 0, $hash['list'][$i]['timecard_month'], $hash['list'][$i]['timecard_day'], $hash['list'][$i]['timecard_year'])))){
+			if($this->checkWeekendAndHoliday($hash['list'][$i]['timecard_year'], $hash['list'][$i]['timecard_month'], $hash['list'][$i]['timecard_day'], date('w', mktime(0, 0, 0, $hash['list'][$i]['timecard_month'], $hash['list'][$i]['timecard_day'], $hash['list'][$i]['timecard_year'])))){
 				$hash['list'][$i]['holiday'] = 1;
 			}else{
 				$hash['list'][$i]['holiday'] = 0;
@@ -160,6 +162,26 @@ class Timecard extends ApplicationModel {
 		}
 
 		$hash['isSameUser'] = $hash['owner']['userid'] == $_SESSION['userid'];
+		$hash['holidays'] = [];
+
+		if($mt < 10){
+			$mt = '0' . $mt;
+		}
+		if($mtNext < 10){
+			$mtNext = '0' . $mtNext;
+		}
+		if($yr < 10){
+			$yr = '0' . $yr;
+		}
+		if($yrNext < 10){
+			$yrNext = '0' . $yrNext;
+		}
+		foreach($this->holidays as $key => $value){
+			$dayPart = explode('-', $value);
+			if(($dayPart[0] == $yr || $dayPart[0] == $yrNext) && ($dayPart[1] == $mt || $dayPart[1] == $mtNext)){
+				$hash['holidays'][] = $value;
+			}
+		}
 
 		$hash['config'] = $this->getConfigStatus();
 		return $hash;
@@ -173,11 +195,19 @@ class Timecard extends ApplicationModel {
 		return $config->getConfigTimeCardByUser($_SESSION['userid']);
 	}
 
-	function checkHoliday($year, $month, $day, $weekday, $lastday = 31) {
+	function checkWeekendAndHoliday($year, $month, $day, $weekday, $lastday = 31) {
 		$date = date('Y-m-d', mktime(0, 0, 0, $month, $day, $year));
 		if ($weekday == 0 || ($day > 0 && $day <= $lastday && in_array($date, $this->holidays))) {
 			return true;
 		} elseif ($weekday == 6) {
+			return true;
+		}
+		return false;
+	}
+
+	function checkHoliday($year, $month, $day) {
+		$date = date('Y-m-d', mktime(0, 0, 0, $month, $day, $year));
+		if (in_array($date, $this->holidays)) {
 			return true;
 		}
 		return false;
@@ -387,7 +417,7 @@ class Timecard extends ApplicationModel {
 			$intervalsum += $status['lunchclose'] - $status['lunchopen'];
 		}
 		if($open >= $status['lunchclose']) $intervalsum = 0;
-		$checkHoliday = $this->checkHoliday($syr, $smt, $sdt, $weekday, $lastday);
+		$checkHoliday = $this->checkWeekendAndHoliday($syr, $smt, $sdt, $weekday, $lastday);
 		/*勤務時間計算*/
 		if ($checkHoliday) {
 			// if($sum >= 360){
@@ -498,7 +528,7 @@ class Timecard extends ApplicationModel {
 		}
 		if($open >= $status['lunchclose']) $intervalsum = 0;
 
-		$checkHoliday = $this->checkHoliday($syr, $smt, $sdt, $weekday, $lastday);
+		$checkHoliday = $this->checkWeekendAndHoliday($syr, $smt, $sdt, $weekday, $lastday);
 		/*勤務時間計算*/
 		if ($checkHoliday) {
 			// if($sum >= 360){
@@ -718,7 +748,7 @@ class Timecard extends ApplicationModel {
 						$smt = $mt;
 					}
 				}
-				$checkholiday = $this->checkHoliday($syr, $smt, $dt, $weekday, $lastday);
+				$checkholiday = $this->checkWeekendAndHoliday($syr, $smt, $dt, $weekday, $lastday);
 				if (strlen($data[$dt]['timecard_time']) > 0 && $checkholiday) {
 					$array = explode(':', $data[$dt]['timecard_time']);
 					$sum_holiday += intval($array[0]) * 60 + intval($array[1]);

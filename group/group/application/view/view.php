@@ -14,9 +14,6 @@ class View {
 		$this->javascript = '';
 		$this->style = '';
 		$this->directory = '';
-		if ($_SESSION['realname']) {
-			$realname = $this->escape($_SESSION['realname']).'さん';
-		}
 	}
 	public function heading($caption = '', $directory = '', $onload = '') {
 		$this->javascript = '';
@@ -46,7 +43,12 @@ class View {
 			$caption = 'GUIS HRM';
 		}
 
-		
+		if ($_SESSION['realname']) {
+			$realname = $this->escape($_SESSION['realname']).'さん';
+		}
+		if ($_SESSION['user_groupname']) {
+			$groupname = $this->escape($_SESSION['user_groupname']);
+		}
 		$style = $this->style;
 		$page = $this->page;
 		
@@ -89,8 +91,7 @@ class View {
 		} elseif (strlen($string) > 0) {
 			return '<div class="error">'.$string.'</div>';
 		}
-		return $error;
-	
+		return $string;
 	}
 	
 	function style($value, $string, $display = 'block') {

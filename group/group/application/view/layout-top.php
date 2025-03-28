@@ -553,7 +553,7 @@
                           </div>
                           <div class="flex-grow-1">
                             <h6 class="mb-0"><?=$realname?></h6>
-                            <small class="text-body-secondary">Admin</small>
+                            <small class="text-body-secondary"><?=$groupname?></small>
                           </div>
                         </div>
                       </a>

@@ -17,92 +17,54 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
 ?>
 <!-- Content -->
 <div class="container-xxl flex-grow-1 container-p-y">
-	<!-- <div class="row g-6 mb-6">
-		<div class="col-sm-6 col-xl-3">
-			<div class="card">
-			<div class="card-body">
-				<div class="d-flex align-items-start justify-content-between">
-				<div class="content-left">
-					<span class="text-heading">Session</span>
-					<div class="d-flex align-items-center my-1">
-					<h4 class="mb-0 me-2">21,459</h4>
-					<p class="text-success mb-0">(+29%)</p>
-					</div>
-					<small class="mb-0">Total Users</small>
-				</div>
-				<div class="avatar">
-					<span class="avatar-initial rounded bg-label-primary">
-					<i class="icon-base ti tabler-users icon-26px"></i>
-					</span>
-				</div>
-				</div>
-			</div>
-			</div>
-		</div>
-		<div class="col-sm-6 col-xl-3">
-			<div class="card">
-			<div class="card-body">
-				<div class="d-flex align-items-start justify-content-between">
-				<div class="content-left">
-					<span class="text-heading">Paid Users</span>
-					<div class="d-flex align-items-center my-1">
-					<h4 class="mb-0 me-2">4,567</h4>
-					<p class="text-success mb-0">(+18%)</p>
-					</div>
-					<small class="mb-0">Last week analytics </small>
-				</div>
-				<div class="avatar">
-					<span class="avatar-initial rounded bg-label-danger">
-					<i class="icon-base ti tabler-user-plus icon-26px"></i>
-					</span>
-				</div>
-				</div>
-			</div>
-			</div>
-		</div>
-		<div class="col-sm-6 col-xl-3">
-			<div class="card">
-			<div class="card-body">
-				<div class="d-flex align-items-start justify-content-between">
-				<div class="content-left">
-					<span class="text-heading">Active Users</span>
-					<div class="d-flex align-items-center my-1">
-					<h4 class="mb-0 me-2">19,860</h4>
-					<p class="text-danger mb-0">(-14%)</p>
-					</div>
-					<small class="mb-0">Last week analytics</small>
-				</div>
-				<div class="avatar">
-					<span class="avatar-initial rounded bg-label-success">
-					<i class="icon-base ti tabler-user-check icon-26px"></i>
-					</span>
-				</div>
-				</div>
-			</div>
-			</div>
-		</div>
-		<div class="col-sm-6 col-xl-3">
-			<div class="card">
-			<div class="card-body">
-				<div class="d-flex align-items-start justify-content-between">
-				<div class="content-left">
-					<span class="text-heading">Pending Users</span>
-					<div class="d-flex align-items-center my-1">
-					<h4 class="mb-0 me-2">237</h4>
-					<p class="text-success mb-0">(+42%)</p>
-					</div>
-					<small class="mb-0">Last week analytics</small>
-				</div>
-				<div class="avatar">
-					<span class="avatar-initial rounded bg-label-warning">
-					<i class="icon-base ti tabler-user-search icon-26px"></i>
-					</span>
-				</div>
-				</div>
-			</div>
-			</div>
-		</div>
-	</div> -->
+	<div class="card mb-6">
+        <div class="card-header d-flex justify-content-between">
+          <h5 class="card-title mb-0">時間合計</h5>
+          <!-- <small class="text-body-secondary">Updated 1 month ago</small> -->
+        </div>
+        <div class="card-body d-flex align-items-end">
+          <div class="w-100">
+            <div class="row gy-3">
+              <div class="col-md-3 col-6">
+                <div class="d-flex align-items-center">
+                  <div class="badge rounded bg-label-primary me-4 p-2"><i class="icon-base ti tabler-chart-pie-2 icon-lg"></i></div>
+                  <div class="card-info">
+                    <h4 class="mb-0" id="work_time">0</h4>
+                    <small>勤務時間</small>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3 col-6">
+                <div class="d-flex align-items-center">
+                  <div class="badge rounded bg-label-info me-4 p-2"><i class="icon-base ti tabler-clock-play icon-lg"></i></div>
+                  <div class="card-info">
+                    <h4 class="mb-0" id="over_time">0</h4>
+                    <small>時間外</small>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3 col-6">
+                <div class="d-flex align-items-center">
+                  <div class="badge rounded bg-label-danger me-4 p-2"><i class="icon-base ti tabler-arrow-elbow-right icon-lg"></i></div>
+                  <div class="card-info">
+                    <h4 class="mb-0" id="holiday_time">0</h4>
+                    <small>休日出勤</small>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3 col-6">
+                <div class="d-flex align-items-center">
+                  <div class="badge rounded bg-label-success me-4 p-2"><i class="icon-base ti tabler-calendar-week icon-lg"></i></div>
+                  <div class="card-info">
+                    <h4 class="mb-0" id="work_days">0</h4>
+                    <small>営業日数</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+    </div>
 	<!-- Users List Table -->
 	<div class="card" id="option-block">
 		<div class="card-header sticky-element bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
@@ -127,7 +89,7 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
 		</div>
 		<div class="card-datatable">
 		<div class="table-responsive text-nowrap">
-			<table class="datatables-users table table-striped">
+			<table class="datatables-users table table-bordered">
 				<thead>
 					<tr>
 					<th>Date</th>

@@ -6,6 +6,20 @@ Date.prototype.addDays = function (days) {
   return date;
 };
 var isSameUser = false;
+var sum = {
+  timecard_time: 0,
+  timecard_timeover: 0,
+  timecard_timeholiday: 0,
+  work_days: 0,
+  total_days: 0
+}
+var holidayList = [];
+
+function formatTime(time) {
+  var hour = parseInt(time / 60) < 10 ? `0${parseInt(time / 60)}` : `${parseInt(time / 60)}`;
+  var minute = time % 60 < 10 ? `0${time % 60}` : `${time % 60}`;
+  return `${hour}:${minute}`;
+}
 
 function handleErrors(response) {
   Swal.fire({
@@ -21,27 +35,54 @@ function handleErrors(response) {
   throw new Error('Failed to fetch data');
 }
 
+function updateAnalytics(data){
+  const timecard_time = document.getElementById('work_time');
+  const timecard_timeover = document.getElementById('over_time');
+  const timecard_timeholiday = document.getElementById('holiday_time');
+  const work_days = document.getElementById('work_days');
+
+  timecard_time.innerHTML = formatTime(data.timecard_time);
+  timecard_timeover.innerHTML = formatTime(data.timecard_timeover);
+  timecard_timeholiday.innerHTML = formatTime(data.timecard_timeholiday);
+  work_days.innerHTML = `${data.work_days} / ${data.total_days}`;
+}
+
+function addLeadingZero(number){
+  number = parseInt(number);
+  return number < 10 ? `0${number}` : `${number}`;
+}
+
 async function get_timecard(user, year, month) {
+  holidayList = [];
   isSameUser = false;
+  sum = {
+    timecard_time: 0,
+    timecard_timeover: 0,
+    timecard_timeholiday: 0,
+    work_days: 0,
+    total_days: 0
+  }
   const response = await axios.get(`/api/index.php?model=timecard&method=timecardlist&member=${user}&year=${year}&month=${month}`);
   // check if the response is successful
   if (response.status !== 200 || !response.data || !response.data.list) {
     handleErrors(response.data);
   }
+  holidayList = response.data.holidays;
   // loop through the day in that month, check if not exist then add it
   const list = response.data.list;
   isSameUser = response.data.isSameUser;
   let days = {};
   let startMonth = month - 2;
   let startYear = year;
-  if(startMonth <= 0) {
+  if(startMonth < 0) {
     startYear = year - 1;
     startMonth = 11
   }
   let start = new Date(startYear, startMonth, 21);
   let end = new Date(year, month - 1, 20);
   const countDate = Math.floor((end - start) / (1000 * 60 * 60 * 24));
-
+  sum.total_days = countDate + 1;
+  let countWorkDays = 0;
   for (let i = 0; i <= countDate; i++) {
     let thisDay = start.addDays(i);
     let day = thisDay.getDate();
@@ -55,10 +96,25 @@ async function get_timecard(user, year, month) {
         foundItem.timecard_timeover = '';
         foundItem.timecard_timeholiday = foundItem.timecard_time;
         foundItem.timecard_time = '';
+        var timeHoliday = foundItem.timecard_timeholiday.split(':');
+        sum.timecard_timeholiday += parseInt(timeHoliday[0]) * 60 + parseInt(timeHoliday[1]);
       } else{
         foundItem.timecard_timeholiday = '';
       }
       days[i] = foundItem;
+
+      if(foundItem.timecard_open){
+        countWorkDays++;
+      }
+
+      if(foundItem.timecard_time){
+        var time = foundItem.timecard_time.split(':');
+        sum.timecard_time += parseInt(time[0]) * 60 + parseInt(time[1]);
+      }
+      if(foundItem.timecard_timeover){
+        var timeover = foundItem.timecard_timeover.split(':');
+        sum.timecard_timeover += parseInt(timeover[0]) * 60 + parseInt(timeover[1]);
+      }
 
     } else {
       days[i] = {
@@ -84,7 +140,9 @@ async function get_timecard(user, year, month) {
         updated: ''
       };
     }
+    sum.work_days = countWorkDays;
   }
+  updateAnalytics(sum);
   return days;
 }
 
@@ -136,7 +194,6 @@ function addEvent(dt_user){
 
 async function changeData(dt_user){
   displayHourglass();
-  dt_user.clear().draw();
   const slUser = document.getElementById('selectpickerUser');
   const monthInput = document.getElementById('timecard-month-input');
 
@@ -242,10 +299,16 @@ document.addEventListener('DOMContentLoaded', function () {
       ],
       // format row color if sat or sun
       createdRow: function (row, data, dataIndex) {
+        var dayString = data.timecard_date.split('-');
+        var xdayString = dayString[0] + '-' + addLeadingZero(dayString[1]) + '-' + addLeadingZero(dayString[2]);
+       
         var date = new Date(data.timecard_date);
         var dayWeek = date.getDay();
         if (dayWeek === 0 || dayWeek === 6) {
-          $(row).addClass('bg-light');
+          $(row).addClass('table-light');
+        }
+        if(holidayList.includes(xdayString)){
+          $(row).addClass('table-danger');
         }
       },
       order: [[0, 'asc']], // Order by the first column (Date) in ascending order

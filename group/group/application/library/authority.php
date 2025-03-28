@@ -124,6 +124,7 @@ class Authority
 			$_SESSION['realname'] = $data['realname'];
 			$_SESSION['group'] = $data['user_group'];
 			$_SESSION['authority'] = $data['authority'];
+			$_SESSION['user_groupname'] = $data['user_groupname'];
 			if (isset($_SESSION['referer'])) {
 				header('Location: ' . $_SESSION['referer']);
 				unset($_SESSION['referer']);
@@ -143,7 +144,7 @@ class Authority
 			$token = $_COOKIE['remember_me'];
 			$connection = new Connection;
 			$query = sprintf(
-				"SELECT userid, realname, user_group, authority FROM %suser WHERE remember_token = '%s'",
+				"SELECT * FROM %suser WHERE remember_token = '%s'",
 				DB_PREFIX,
 				$connection->quote($token)
 			);
@@ -158,7 +159,9 @@ class Authority
 				$_SESSION['userid'] = $data['userid'];
 				$_SESSION['realname'] = $data['realname'];
 				$_SESSION['group'] = $data['user_group'];
+				$_SESSION['user_groupname'] = $data['user_groupname'];
 				$_SESSION['authority'] = $data['authority'];
+
 				return true;
 			}
 		}
