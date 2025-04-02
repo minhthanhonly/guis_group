@@ -43,7 +43,6 @@
     <?=$style?>
     <!-- Helpers -->
     <script src="<?=$root?>assets/vendor/js/helpers.js"></script>
-    <script src="<?=$root?>assets/vendor/js/template-customizer.js"></script>
     <script src="<?=$root?>assets/js/config.js"></script>
 
     <!-- <link href="<?=$root?>css/default.css" rel="stylesheet" type="text/css" />
