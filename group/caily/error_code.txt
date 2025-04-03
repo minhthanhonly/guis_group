@@ -4,3 +4,10 @@
 13 Xóa thành công
 14 Lỗi xóa không thành công
 15 Lỗi không xác định id
+
+20 Không thể checkin
+21 Checkin thành công
+22 Lỗi không xác định user
+23 Checkout thành công
+
+25 Tính lại thành công

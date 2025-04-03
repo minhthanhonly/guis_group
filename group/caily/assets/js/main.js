@@ -776,3 +776,5 @@ function handleSuccess(response) {
   })
   hideHourglass();
 }
+
+const _log = console.log;

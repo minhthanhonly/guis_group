@@ -37,7 +37,7 @@ class Connection {
             }
             return $result;
         } else {
-            die('データベースハンドラが見つかりません。');
+            die('データベースハンドラが見つかりません。 '. $query);
         }
     }
 
@@ -50,7 +50,7 @@ class Connection {
             }
             return $data;
         } else {
-            die('データベースハンドラが見つかりません。');
+            die('データベースハンドラが見つかりません。 '. $query);
         }
     }
 
@@ -65,18 +65,18 @@ class Connection {
             $data = mysqli_fetch_assoc($response);
             return is_array($data) ? $data : array();
         } else {
-            die('データベースハンドラが見つかりません。');
+            die('データベースハンドラが見つかりません。' . $query);
         }
     }
 
     function fetchCount($table, $where = "", $field = "*") {
+        $query = sprintf("SELECT COUNT(%s) AS count FROM %s %s", $field, $table, $where);
         if ($this->handler) {
-            $query = sprintf("SELECT COUNT(%s) AS count FROM %s %s", $field, $table, $where);
             $response = $this->query($query);
             $row = mysqli_fetch_assoc($response);
             return $row["count"] ?? false;
         } else {
-            die('データベースハンドラが見つかりません。');
+            die('データベースハンドラが見つかりません。' . $query);
         }
     }
 
@@ -86,7 +86,7 @@ class Connection {
             $this->query($query);
             return mysqli_affected_rows($this->handler);
         } else {
-            die('データベースハンドラが見つかりません。');
+            die('データベースハンドラが見つかりません。' . $query);
         }
     }
 
@@ -99,8 +99,8 @@ class Connection {
     }
 
     function table() {
+        $query = "SHOW TABLES FROM " . DB_DATABASE;
         if ($this->handler) {
-            $query = "SHOW TABLES FROM " . DB_DATABASE;
             $response = $this->query($query);
             $array = array();
             while ($row = mysqli_fetch_assoc($response)) {
@@ -108,7 +108,7 @@ class Connection {
             }
             return $array;
         } else {
-            die('データベースハンドラが見つかりません。');
+            die('データベースハンドラが見つかりません。' . $query);
         }
     }
 
@@ -116,7 +116,7 @@ class Connection {
         if ($this->handler) {
             return mysqli_real_escape_string($this->handler, $string);
         } else {
-            die('データベースハンドラが見つかりません。');
+            die('Quoteエラー: データベースハンドラが見つかりません。');
         }
     }
 }

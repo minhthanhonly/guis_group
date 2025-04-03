@@ -12,7 +12,6 @@ class Model extends Connection {
 	var $validation;
 	
 	function connect() {
-		
 		if (!$this->handler) {
 			parent::__construct();
 			if (!$this->handler) {

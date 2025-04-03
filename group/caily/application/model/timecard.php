@@ -4,7 +4,6 @@
 class Timecard extends ApplicationModel {
 	var $holidays = array();
 	function Timecard() {
-		$this->holidays = $this->getHolidays();
 		$this->table = DB_PREFIX.'timecard';
 		$this->schema = array(
 			'id'=> array('except'=>array('search')),
@@ -43,72 +42,38 @@ class Timecard extends ApplicationModel {
 				$_GET['month'] = date('n');
 			}
 		}
+		$this->connect();
+		$this->holidays = $this->getHolidays();
 	}
 
 	function getHolidays(){
-		$filename = DIR_MODEL . "holidays.txt";
-		$handle = fopen($filename, "r") or die("Unable to open file!");
-		$contents = fread($handle, filesize($filename));
-		fclose($handle);
-		$holidays = explode(',', $contents);
-		for ($i = 0; $i < count($holidays); $i++) {
-			$holidays[$i] = trim($holidays[$i]);
+		$query = "SELECT * FROM groupware_holiday ORDER BY date DESC";
+		$hash['list'] = $this->fetchAll($query);
+		$holidays = [];
+		foreach ($hash['list'] as $key => $value) {
+			$holidays[] = $value['date'];
 		}
 		return $holidays;
 	}
 
 	
 	function saveHolidays($holidays){
-		$filename = DIR_MODEL . "holidays.txt";
-		$handle = fopen($filename, "w") or die("Unable to open file!");
-		fwrite($handle, $holidays);
-		fclose($handle);
-		$this->redirect();
+		// $filename = DIR_MODEL . "holidays.txt";
+		// $handle = fopen($filename, "w") or die("Unable to open file!");
+		// fwrite($handle, $holidays);
+		// fclose($handle);
+		// $this->redirect();
 	}
 
 	function holiday() {
 		$this->authorize('administrator', 'manager');
 		$hash['empty'] = '';
-		return $hash;
 	}
 
 	function index() {
-
-		/*オーナー特定*/
-		$hash = $this->findOwner($_GET['member']);
-		/*データ取得*/
-		$this->add();
-
-		/*リスト取得*/
-		$field = implode(',', $this->schematize());
-		
-
-		/*1月対応*/
-		$mt = $_GET['month'];
-		$yr = $_GET['year'];
-		if(strcmp($mt,'1') == 0){
-			$mt = $mt + 11;
-			$yr = $yr-1;
-		}else{
-			$mt = $mt - 1;
-		}
-
-		/*20日締め対応*/
-		$query = sprintf("SELECT %s FROM %s WHERE (((timecard_year = %d) AND (timecard_month = %d) AND (timecard_day BETWEEN '21' AND '31')) OR ((timecard_year = %d) AND (timecard_month = %d) AND (timecard_day BETWEEN '01' AND '20')))  AND (owner = '%s') ORDER BY timecard_date", $field, $this->table, $yr, $mt, $_GET['year'], $_GET['month'], $this->quote($hash['owner']['userid']));
-
-		/*$query = sprintf("SELECT %s FROM %s WHERE (timecard_year = %d) AND (timecard_month = %d) AND (owner = '%s') ORDER BY timecard_date", $field, $this->table, $_GET['year'], $_GET['month'], $this->quote($hash['owner']['userid']));*/
-
-		$hash['list'] = $this->fetchAll($query);
-
-		/*再計算時*/
-		if ($_GET['recalculate'] == 1 && $_SERVER['REQUEST_METHOD'] != 'POST') {
-			$hash['list'] = $this->recalculate($hash['list']);
-		}
-		
-		$hash['config'] = $this->getConfigStatus();
-		return $hash;
 	}
 
+	/*API*/
 	function timecardlist() {
 		/*オーナー特定*/
 		$hash = $this->findOwnerApi($_GET['member']);
@@ -133,16 +98,15 @@ class Timecard extends ApplicationModel {
 			$field,
 			$this->table,
 			$start->format('Y-m-d'), // Định dạng ngày bắt đầu
-			$end->format('Y-m-d'),   // Định dạng ngày kết thúc
-			$this->quote($hash['owner']['userid']) // Bảo vệ giá trị owner
+			$end->format('Y-m-d'),
+			$hash['owner']['userid']
 		);
-		/*$query = sprintf("SELECT %s FROM %s WHERE (timecard_year = %d) AND (timecard_month = %d) AND (owner = '%s') ORDER BY timecard_date", $field, $this->table, $_GET['year'], $_GET['month'], $this->quote($hash['owner']['userid']));*/
-
+	
 		$hash['list'] = $this->fetchAll($query);
 
 		for($i = 0; $i < count($hash['list']); $i++){
 			//check holiday
-			if($this->checkWeekendAndHoliday($hash['list'][$i]['timecard_year'], $hash['list'][$i]['timecard_month'], $hash['list'][$i]['timecard_day'], date('w', mktime(0, 0, 0, $hash['list'][$i]['timecard_month'], $hash['list'][$i]['timecard_day'], $hash['list'][$i]['timecard_year'])))){
+			if($this->checkWeekendAndHoliday($hash['list'][$i]['timecard_date'])){
 				$hash['list'][$i]['holiday'] = 1;
 			}else{
 				$hash['list'][$i]['holiday'] = 0;
@@ -152,29 +116,21 @@ class Timecard extends ApplicationModel {
 		$hash['isSameUser'] = $hash['owner']['userid'] == $_SESSION['userid'];
 		$hash['holidays'] = [];
 
-		// if($mt < 10){
-		// 	$mt = '0' . $mt;
-		// }
-		// if($mtNext < 10){
-		// 	$mtNext = '0' . $mtNext;
-		// }
-		// if($yr < 10){
-		// 	$yr = '0' . $yr;
-		// }
-		// if($yrNext < 10){
-		// 	$yrNext = '0' . $yrNext;
-		// }
-		// foreach($this->holidays as $key => $value){
-		// 	$dayPart = explode('-', $value);
-		// 	if(($dayPart[0] == $yr || $dayPart[0] == $yrNext) && ($dayPart[1] == $mt || $dayPart[1] == $mtNext)){
-		// 		$hash['holidays'][] = $value;
-		// 	}
-		// }
+		
+		foreach($this->holidays as $key => $value){
+			$dayPart = explode('-', $value);
+			if(($dayPart[0] ==  $start->format('Y') || $dayPart[0] == $end->format('Y')) 
+			&& ($dayPart[1] == $start->format('m') || $dayPart[1] == $start->format('Y'))){
+				$hash['holidays'][] = $value;
+			}
+		}
+
 
 		$hash['config'] = $this->getConfigStatus();
 		return $hash;
 	}
 
+	/*API*/
 	function get_holiday(){
 		$this->authorizeApi('administrator', 'manager');
 		$query = "SELECT * FROM groupware_holiday ORDER BY date DESC";
@@ -182,6 +138,7 @@ class Timecard extends ApplicationModel {
 		return $hash;
 	}
 
+	/*API*/
 	function add_holiday() {
 		$this->authorizeApi('administrator', 'manager');
 		$date = $_POST['date'];
@@ -204,6 +161,7 @@ class Timecard extends ApplicationModel {
 		return $hash;
 	}
 
+	/*API*/
 	function delete_holiday() {
 		$this->authorizeApi('administrator', 'manager');
 		$id = $_POST['id'];
@@ -225,6 +183,7 @@ class Timecard extends ApplicationModel {
 		return $hash;
 	}
 
+	/*API*/
 	function edit_holiday() {
 		$this->authorizeApi('administrator', 'manager');
 		$date_old = $_POST['date_old'];
@@ -263,22 +222,147 @@ class Timecard extends ApplicationModel {
 		return $hash;
 	}
 
+	/*API*/
+	function checkin() {
+		/*時間取得*/
+		$hash = array();
+		$userName = $_POST['owner'];
+		
+		if($userName == ''){
+			$userName = $_SESSION['userid'];
+		}
+		if($userName == ''){
+			$hash['status'] = 'error';
+			$hash['message_code'] = '22';
+			return $hash;
+		}
+		$thisDay = date('j');
+		$thisMonth = date('n');
+		$thisYear = date('Y');
+		$date = date("Y-m-d H:i:s");
+		$date02 = date("Y-m-d");
+		$hour = date("H:i");
 
-	function getConfigStatus(){
+		//check if user already checkin
+		$query = sprintf("SELECT id FROM %stimecard WHERE timecard_year='%s' and timecard_day='%s' and timecard_month='%s' and owner= '%s'", DB_PREFIX, $thisYear, $thisDay, $thisMonth, $userName);
+		$data = $this->fetchOne($query);
+		$timecard_id = 0;
+		if(count($data) > 0){
+			$timecard_id = $data['id'];
+			if ($timecard_id != 0) {
+				$sql02 = "UPDATE `groupware_timecard` SET timecard_open = '$hour', timecard_originalopen = '$hour' WHERE id = $timecard_id";
+				$this->query($sql02);
+				$hash['status'] = 'success';
+				$hash['message_code'] = '21';
+			} else{
+				$hash['status'] = 'error';
+				$hash['message_code'] = '22';
+			}
+		} else{
+			$sql = "INSERT INTO `groupware_timecard` (`timecard_year`, `timecard_month`, `timecard_day`, `timecard_date`, `owner`, `created`, `timecard_open` , `timecard_originalopen`) 
+			VALUES ('$thisYear', '$thisMonth', '$thisDay', '$date02' , '$userName', '$date', '$hour', '$hour');";
+			$this->query($sql);
+			$timecard_id = $this->insertid();
+			if ($timecard_id != 0) {
+				$hash['status'] = 'success';
+				$hash['message_code'] = '21';
+			}
+			else{
+				$hash['status'] = 'error';
+				$hash['message_code'] = '22';
+			}
+		}
+
+		return $hash;
+	}
+
+	/*API*/
+	function checkout() {
+        $hash = array();
+		$userName = $_POST['owner'];
+		
+		if($userName == ''){
+			$userName = $_SESSION['userid'];
+		}
+		if($userName == ''){
+			$hash['status'] = 'error';
+			$hash['message_code'] = '22';
+			return $hash;
+		}
+		$id = $_POST['id'];
+		$open = $_POST['open'];
+
+		if($userName == '' || $id == '' || $open == ''){
+			$hash['status'] = 'error';
+			$hash['message_code'] = '22';
+			return $hash;
+		}
+		$hour = date("H:i");
+		$result = $this->sumAdd($open, $hour, date("Y-m-d"), $userName);
+		$query = sprintf("UPDATE %stimecard SET timecard_close = '%s', timecard_originalclose = '%s', timecard_time = '%s', timecard_timeover = '%s', timecard_timeinterval = '%s', update_time='%s' WHERE id = %s", DB_PREFIX, $hour, $hour, $result["timecard_time"], $result["timecard_timeover"], $result["timecard_timeinterval"], date('Y-m-d H:i:s'), $id);
+		$data = $this->query($query);
+		if(count($data) > 0){
+			$hash['status'] = 'success';
+			$hash['message_code'] = '23';
+		} else{
+			$hash['status'] = 'error';
+			$hash['message_code'] = '22';
+		}
+		return $hash;
+	}
+
+	function recalculateApi(){
+		/*オーナー特定*/
+		$hash = $this->findOwnerApi($_GET['member']);
+		/*リスト取得*/
+		$field = implode(',', $this->schematize());
+		
+		/*1月対応*/
+		$mt = $_GET['month'];
+		$yr = $_GET['year'];
+	
+		$start = DateTime::createFromFormat('Y-m-d', "$yr-$mt-" . TIMECARD_START_DATE);
+		if(TIMECARD_START_DATE != 1){
+			$start->modify('-1 month');
+		}
+		$end = clone $start; // Clone $start to create a new DateTime object
+		$end->modify('+1 month'); // Set the end date to one month after the start date
+		$end->modify('-1 day'); // Subtract one day to get the correct end date
+
+		/*20日締め対応*/
+		$query = sprintf(
+			"SELECT %s FROM %s WHERE STR_TO_DATE(timecard_date, '%%Y-%%m-%%d') BETWEEN '%s' AND '%s' AND owner = '%s' ORDER BY timecard_date",
+			$field,
+			$this->table,
+			$start->format('Y-m-d'), // Định dạng ngày bắt đầu
+			$end->format('Y-m-d'),
+			$hash['owner']['userid']
+		);
+	
+		$hash['list'] = $this->fetchAll($query);
+		$hash['list'] = $this->recalculate($hash['list']);
+		$hash['status'] = 'success';
+		$hash['message_code'] = '25';
+		return $hash;
+	}
+
+
+	function getConfigStatus($member = ''){
 		$config = new Config($this->handler);
-		if($_GET["member"]){
-			return $config->getConfigTimeCardByUser($_GET["member"]);
+		if($member){
+			return $config->getConfigTimeCardByUser($member);
 		}
 		return $config->getConfigTimeCardByUser($_SESSION['userid']);
 	}
 
-	function checkWeekendAndHoliday($year, $month, $day, $weekday, $lastday = 31) {
-		$date = date('Y-m-d', mktime(0, 0, 0, $month, $day, $year));
-		if ($weekday == 0 || ($day > 0 && $day <= $lastday && in_array($date, $this->holidays))) {
+	function checkWeekendAndHoliday($date) {
+		$date = date($date);
+		$timestamp = strtotime($date);
+		$weekday = date('w', $timestamp);
+
+		if ($weekday == 0 || $weekday == 6 || in_array($date, $this->holidays)) {
 			return true;
-		} elseif ($weekday == 6) {
-			return true;
-		}
+		} 
 		return false;
 	}
 
@@ -343,7 +427,6 @@ class Timecard extends ApplicationModel {
 				$this->record($this->post , $hash, $this->post['timecard_year'], $this->post['timecard_month'], $this->post['timecard_day']);
 			}
 		}
-
 	}
 
 	function edit() {
@@ -431,14 +514,7 @@ class Timecard extends ApplicationModel {
 		}
 	}
 
-	function sumAdd($open, $close, $interval = '', $sdt) {
-		$syr = $_GET['year'];
-		if ($sdt < 21) {
-			$smt = $_GET['month'];
-		} else $smt = $_GET['month'] - 1;
-		$timestamp01 = mktime(0, 0, 0, $smt, $sdt, $syr);
-		$lastday = date('t', $timestamp01);
-		$weekday = date('w', $timestamp01);
+	function sumAdd($open, $close, $date = '', $owner = '') {
 		$open = $this->minute($open);
 		$close = $this->minute($close);
 		$close2 = $close;
@@ -446,15 +522,13 @@ class Timecard extends ApplicationModel {
 		$over = ''; // ngoài giờ
 
 		/*コンフィグ情報取得*/
-		$config = new Config($this->handler);
-		//$status = $config->configure('timecard');
-		$status = $this->getConfigStatus();
+		$status = $this->getConfigStatus($owner);
 
 		/*定時：開始時間取得*/
 
 		$status['open'] = intval($status['openhour']) * 60 + intval($status['openminute']); // giờ bắt đầu qui định
-		if ($open < 300) {
-			$open = 300;
+		if ($open < $status['open']) {
+			$open = $status['open'];
 		}
 
 		/*定時：終了時間取得*/
@@ -494,13 +568,9 @@ class Timecard extends ApplicationModel {
 			$intervalsum += $status['lunchclose'] - $status['lunchopen'];
 		}
 		if($open >= $status['lunchclose']) $intervalsum = 0;
-		$checkHoliday = $this->checkWeekendAndHoliday($syr, $smt, $sdt, $weekday, $lastday);
+		$checkHoliday = $this->checkWeekendAndHoliday($date);
 		/*勤務時間計算*/
 		if ($checkHoliday) {
-			// if($sum >= 360){
-			// 	$intervalsum = 60;
-			// 	$sum -= $intervalsum;
-			// } else $intervalsum = 0;
 			$intervalsum = 0;
 			if ($close2 >= 0 && $close2 < $open) {
 				$sum = (24 * 60) - $open + $close2;
@@ -557,7 +627,6 @@ class Timecard extends ApplicationModel {
 		$over = ''; // ngoài giờ
 
 		/*コンフィグ情報取得*/
-		$config = new Config($this->handler);
 		$status = $this->getConfigStatus();
 
 		/*定時：開始時間取得*/
@@ -706,20 +775,14 @@ class Timecard extends ApplicationModel {
 	function recalculate($data) {
 		$hash = $this->findOwner($_GET['member']);
 		if (is_array($data) && count($data) > 0) {
-			$this->response = true;
 			foreach ($data as $key => $row) {
 				if (strlen($row['timecard_close']) > 0) {
-					$array = $this->sumAdd($row['timecard_open'], $row['timecard_close'], $row['timecard_interval'], $row['timecard_day']);
+					$array = $this->sumAdd($row['timecard_open'], $row['timecard_close'], $row['timecard_date'], $row['owner']);
 					$this->record($array, $hash, $row['timecard_year'], $row['timecard_month'], $row['timecard_day']);
 					$data[$key]['timecard_time'] = $array['timecard_time'];
 					$data[$key]['timecard_timeover'] = $array['timecard_timeover'];
 					$data[$key]['timecard_timeinterval'] = $array['timecard_timeinterval'];
 				}
-			}
-			if ($this->response) {
-				$this->error[] = '勤務時間と外出時間の再計算結果を保存しました。';
-			} else {
-				$this->died('勤務時間と外出時間の再計算に失敗しました。');
 			}
 		}
 		return $data;

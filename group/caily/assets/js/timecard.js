@@ -1,6 +1,7 @@
 'use strict';
 
 var isSameUser = false;
+var dt_table = null
 var timecard_start_date = $('html').attr('data-timecard-start');
 var sum = {
   timecard_time: 0,
@@ -10,20 +11,6 @@ var sum = {
   total_days: 0
 }
 var holidayList = [];
-
-function handleErrors(response) {
-  Swal.fire({
-    title: 'Error!',
-    text: response,
-    icon: 'error',
-    customClass: {
-      confirmButton: 'btn btn-primary'
-    },
-    buttonsStyling: false
-  })
-  hideHourglass();
-  throw new Error('Failed to fetch data');
-}
 
 function updateAnalytics(data){
   const timecard_time = document.getElementById('work_time');
@@ -143,7 +130,6 @@ async function get_users() {
   return list;
 }
 
-
 async function fetchUser(){
   const slUser = document.getElementById('selectpickerUser');
   slUser.innerHTML = '';
@@ -164,21 +150,134 @@ async function fetchUser(){
 }
 
 //add event listener for selectpicker
-function addEvent(dt_user){
+function addEvent(){
   const slUser = document.getElementById('selectpickerUser');
   const monthInput = document.getElementById('timecard-month-input');
+  const recalc = document.querySelector('[data-recalculation]');
   // Add event listener for the selectpicker
   slUser.addEventListener('change', async function () {
-    changeData(dt_user)
+    changeData()
   });
 
   // Add event listener for the month input
   monthInput.addEventListener('change', async function () {
-    changeData(dt_user)
+    changeData()
+  });
+
+  recalc.addEventListener('click', async function () {
+    const user = slUser.value;
+    var date = new Date(monthInput.value);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    recalculation(user, year, month);
+  });
+
+  document.querySelector('.datatables-timecard').addEventListener('click', function (e) {
+    if (e.target.closest('[data-checkin]')) {
+      e.preventDefault();
+      const owner = e.target.dataset.owner;
+      checkin(owner);
+    }
+    if (e.target.closest('[data-checkout]')) {
+      e.preventDefault();
+      const id = e.target.dataset.id;
+      const open = e.target.dataset.open;
+      const owner = e.target.dataset.owner;
+      checkout(id, open, owner);
+    }
+
+     // if (e.target.closest('.item-edit')) {
+    //   e.preventDefault();
+
+    //   // Get the row data (assuming DataTable is used)
+    //   const row = dt_table.row(e.target.closest('tr')).data();
+
+    //   // Populate the modal with the row data
+    //   document.querySelector('#modalEditID').value = row.id;
+    //   document.querySelector('#modalEditDate').value = row.date;
+    //   document.querySelector('#modalEditDateOld').value = row.date;
+    //   document.querySelector('#modalEditName').value = row.name;
+
+    //   // Open the modal
+    //   const editModal = new bootstrap.Modal(document.getElementById('editRoleModal'));
+    //   editModal.show();
+    // }
   });
 }
 
-async function changeData(dt_user){
+ async function recalculation(user, year, month){
+  displayHourglass();
+  const response = await axios.get(`/api/index.php?model=timecard&method=recalculateApi&member=${user}&year=${year}&month=${month}`);
+  // check if the response is successful
+  if (response.status !== 200 || !response.data || !response.data.list) {
+    handleErrors(response.data);
+    return;
+  }
+
+  handleSuccess(response.data.message_code);
+  changeData();
+}
+
+
+function checkin(owner = '') {
+  displayHourglass();
+  axios({
+    method: 'post',
+    url: '/api/index.php?model=timecard&method=checkin',
+    data: {
+      owner: owner
+    },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  })
+    .then(function (response) {
+      _log(response)
+      if (response.status === 200 && response.data && response.data.status === 'success') {
+        handleSuccess(response.data.message_code);
+        // delete row from datatable
+        changeData();
+      } else {
+        handleErrors(response.data.message_code);
+      }
+    }).catch(function (error) {
+      handleErrors(error);
+      console.log(error, error.response);
+    });
+}
+
+function checkout(id = '', open = '', owner = '') {
+  displayHourglass();
+  axios({
+    method: 'post',
+    url: '/api/index.php?model=timecard&method=checkout',
+    data: {
+      id: id,
+      open: open,
+      owner: owner
+    },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  })
+    .then(function (response) {
+      _log(response)
+      if (response.status === 200 && response.data && response.data.status === 'success') {
+        handleSuccess(response.data.message_code);
+        // delete row from datatable
+        changeData();
+      } else {
+        handleErrors(response.data.message_code);
+      }
+    }).catch(function (error) {
+      handleErrors(error);
+      console.log(error, error.response);
+    });
+}
+
+
+
+async function changeData(){
   displayHourglass();
   const slUser = document.getElementById('selectpickerUser');
   const monthInput = document.getElementById('timecard-month-input');
@@ -188,25 +287,24 @@ async function changeData(dt_user){
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
   const data = await get_timecard(user, year, month);
-  drawTable(dt_user, data);
+  drawTable(data);
   hideHourglass();
 }
 
 //add event listener for selectpicker
-async function initTable(dt_user){
-  changeData(dt_user);
+async function initTable(){
+  changeData();
 }
 
 
-function drawTable(dt_user, data){
-  if (dt_user) {
-    dt_user.clear().rows.add(Object.values(data)).draw();
+function drawTable(data){
+  if (dt_table) {
+    dt_table.clear().rows.add(Object.values(data)).draw();
   }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  var dt_user;
-  const dt_user_table = document.querySelector('.datatables-users');
+  const dt_timecard_table = document.querySelector('.datatables-timecard');
   const monthInput = document.getElementById('timecard-month-input');
 
   const today = new Date();
@@ -222,8 +320,8 @@ document.addEventListener('DOMContentLoaded', function () {
   // Variable declaration for table
   
   // Users datatable
-  if (dt_user_table) {
-    dt_user = new DataTable(dt_user_table, {
+  if (dt_timecard_table) {
+    dt_table = new DataTable(dt_timecard_table, {
       paging: false,
       searching: false,
       info: false,
@@ -238,6 +336,7 @@ document.addEventListener('DOMContentLoaded', function () {
         { data: 'timecard_timeholiday', title: '休日出勤' },
         { data: 'timecard_comment', title: '備考' },
         { data: 'id', title: 'ID', visible: false },
+        { data: 'owner', title: 'Owner', visible: true },
       ],
       columnDefs: [
         {
@@ -246,7 +345,7 @@ document.addEventListener('DOMContentLoaded', function () {
           render: function (data, type, full, meta) {
             if(today.getDate() == full.timecard_day && isSameUser){
               if(!data){
-                return `<button type="button" class="btn btn-primary btn-sm" data-date="${full.timecard_date}" data-owner="${full.owner}" data-checkin>出社</button>`;
+                return `<button type="button" class="btn btn-primary btn-sm" data-id="${full.id}" data-owner="${full.owner}" data-checkin>出社</button>`;
               }
             }
             return data;
@@ -258,7 +357,7 @@ document.addEventListener('DOMContentLoaded', function () {
           render: function (data, type, full, meta) {
             if(today.getDate() == full.timecard_day && isSameUser){
               if(!data && full.timecard_open){
-                return `<button type="button" class="btn btn-primary btn-sm" data-date="${full.timecard_date}" data-owner="${full.owner}" data-checkout>退社</button>`;
+                return `<button type="button" class="btn btn-primary btn-sm" data-id="${full.id}" data-owner="${full.owner}" data-open="${full.timecard_open}" data-checkout>退社</button>`;
               }
             }
             return data;
@@ -305,7 +404,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
     fetchUser();
-    initTable(dt_user);
-    addEvent(dt_user);
+    initTable();
+    addEvent();
   }
 });
