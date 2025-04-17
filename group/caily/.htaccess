@@ -16,3 +16,8 @@ Options -Indexes
 <Files ".htaccess">
     Require all denied
 </Files>
+
+<Files .env>
+    Order Allow,Deny
+    Deny from all
+</Files>

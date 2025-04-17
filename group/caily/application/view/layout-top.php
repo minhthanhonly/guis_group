@@ -1,4 +1,4 @@
-    <!-- Layout wrapper -->
+<!-- Layout wrapper -->
     <div class="layout-wrapper layout-content-navbar">
       <div class="layout-container">
         <!-- Menu -->
@@ -587,3 +587,17 @@
 
           <!-- Content wrapper -->
           <div class="content-wrapper">
+
+            <!-- AI Chat Widget -->
+            <div id="ai-chat-widget" style="position: fixed; z-index: 9999; bottom: 20px; right: 20px; width: 300px; height: 400px; background: white; border: 1px solid #ccc; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); display: none; flex-direction: column;">
+                <div id="ai-chat-header" style="background: #007bff; color: white; padding: 10px; cursor: pointer; border-top-left-radius: 10px; border-top-right-radius: 10px;">
+                    AI Assistant
+                    <span id="ai-chat-close" style="float: right; cursor: pointer;">&times;</span>
+                </div>
+                <div id="ai-chat-body" style="flex: 1; padding: 10px; overflow-y: auto;"></div>
+                <div id="ai-chat-footer" style="padding: 10px; border-top: 1px solid #ccc;">
+                    <input id="ai-chat-input" type="text" placeholder="Type a message..." style="width: calc(100% - 50px); padding: 5px;" />
+                    <button id="ai-chat-send" style="width: 40px; background: #007bff; color: white; border: none; border-radius: 5px;">Send</button>
+                </div>
+            </div>
+            <button id="ai-chat-toggle" style="position: fixed; bottom: 20px; right: 20px; background: #007bff; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">AI</button>
