@@ -790,7 +790,7 @@ class Timecard extends ApplicationModel {
 	}
 
 	function config() {
-		$this->authorize('administrator');
+		$this->authorize('administrator', 'manager');
 		$config = new Config($this->handler);
 		$type = 'timecard';
 		if($_GET['type']){

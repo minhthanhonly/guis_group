@@ -81,6 +81,6 @@ define('APP_LOGO_DARK', 'logo-site-white.png');
 define('TIMECARD_START_DATE', '1');
 
 
-
+define('GEMINI_KEY', 'AIzaSyApFbXlobPYoEfxqM0nmqHjd9chDF7SC9k');
 error_reporting(E_ERROR | E_PARSE);
 ?>

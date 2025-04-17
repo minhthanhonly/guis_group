@@ -1,4 +1,4 @@
-<?php require_once('../loader.php'); ?>
+
 <!doctype html>
 <?php $root = ROOT;?>
 <html
