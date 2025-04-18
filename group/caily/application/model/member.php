@@ -12,6 +12,7 @@ class Member extends ApplicationModel {
 		'user_groupname'=>array('except'=>array('update')),
 		'realname'=>array('名前', 'notnull', 'length:100'),
 		'user_ruby'=>array('かな', 'length:100'),
+		'authority'=>array('権限', 'length:20'),
 		'user_postcode'=>array('郵便番号', 'postcode', 'length:8'),
 		'user_address'=>array('住所', 'length:1000'),
 		'user_addressruby'=>array('住所(かな)', 'length:1000'),
@@ -19,37 +20,34 @@ class Member extends ApplicationModel {
 		'user_mobile'=>array('携帯電話', 'phone', 'length:20'),
 		'user_email'=>array('メールアドレス', 'email', 'length:1000'),
 		'user_skype'=>array('スカイプID', 'userid', 'length:1000'),
+		'user_image'=>array('写真', 'length:100'),
 		'member_type'=>array('従業員の種類', 'length:100'),
 	);
 		
 	}
 	
 	function validate() {
-		
-		if (strlen($_POST['password']) > 0 || strlen($_POST['newpassword']) > 0 || strlen($_POST['confirmpassword']) > 0) {
-			$this->validator('password', 'パスワード', array('alphaNumeric', 'length:4:32'));
-			$this->validator('newpassword', '新しいパスワード', array('alphaNumeric', 'length:4:32'));
-			$this->validator('confirmpassword', '新しいパスワード(確認)', array('alphaNumeric', 'length:4:32'));
-			$_POST['password'] = trim($_POST['password']);
-			$_POST['newpassword'] = trim($_POST['newpassword']);
-			$_POST['confirmpassword'] = trim($_POST['confirmpassword']);
-			if ($_POST['newpassword'] != $_POST['confirmpassword']) {
-				$this->error[] = '新しいパスワードと確認用パスワードが違います。';
-			} else {
-				$data = $this->fetchOne("SELECT password FROM ".$this->table." WHERE userid = '".$this->quote($_SESSION['userid'])."'");
-				if (is_array($data) && count($data) > 0) {
-					if ($data['password'] === md5($_POST['password'])) {
-						$this->schema['password']['except'] = array('search');
-						$this->post['password'] = md5($_POST['newpassword']);
-					} else {
-						$this->error[] = '現在のパスワードが違います。';
-					}
+		$this->validator('password', 'パスワード', array('alphaNumeric', 'length:4:32'));
+		$this->validator('newpassword', '新しいパスワード', array('alphaNumeric', 'length:4:32'));
+		$this->validator('confirmpassword', '新しいパスワード(確認)', array('alphaNumeric', 'length:4:32'));
+		$_POST['password'] = trim($_POST['password']);
+		$_POST['newpassword'] = trim($_POST['newpassword']);
+		$_POST['confirmpassword'] = trim($_POST['confirmpassword']);
+		if ($_POST['newpassword'] != $_POST['confirmpassword']) {
+			$this->error[] = '新しいパスワードと確認用パスワードが違います。';
+		} else {
+			$data = $this->fetchOne("SELECT password FROM ".$this->table." WHERE userid = '".$this->quote($_SESSION['userid'])."'");
+			if (is_array($data) && count($data) > 0) {
+				if ($data['password'] === md5($_POST['password'])) {
+					$this->schema['password']['except'] = array('search');
+					$this->post['password'] = md5($_POST['newpassword']);
 				} else {
-					$this->error[] = 'パスワード確認時にエラーが発生しました。';
+					$this->error[] = '現在のパスワードが違います。';
 				}
+			} else {
+				$this->error[] = 'パスワード確認時にエラーが発生しました。';
 			}
 		}
-	
 	}
 	
 	function index() {
@@ -82,19 +80,50 @@ class Member extends ApplicationModel {
 	}
 	
 	function view() {
-		
 		$hash['data'] = $this->findView();
 		return $hash;
+	}
+
+	function change_password(){
+		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+			$this->validate();
+			$check = FALSE;
+			if (count($this->error) <= 0) {
+				$this->post['editor'] = $_SESSION['userid'];
+				$this->post['updated'] = date('Y-m-d H:i:s');
+				$field = $this->schematize('update');
+				foreach ($field as $key) {
+					if (isset($this->post[$key])) {
+						$array[] = $key." = '".$this->quote($this->post[$key])."'";
+					}
+				}
+				$query = sprintf("UPDATE %s SET %s WHERE userid = '%s'", $this->table, implode(",", $array), $this->quote($_SESSION['userid']));
+				$this->response = $this->update_query($query);
+				echo $this->response. "<br>".'aaa';
+				if ($this->response == '1') {
+					
+					$check = TRUE;
+				}
+			}
+			$hash['data'] = $this->post;
+			if($check){
+				$hash['data']['message'] = 'パスワードを変更しました。';
+			}
+		}
 		
+		return $hash;
 	}
 
 	function edit() {
-	
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$this->validateSchema('update');
-			$this->validate();
+			//$this->validate();
 			$this->post['editor'] = $_SESSION['userid'];
 			$this->post['updated'] = date('Y-m-d H:i:s');
+			if(isset($_FILES['user_image']) && $_FILES['user_image']['name'] != '') {
+				$this->post['user_image'] = $_SESSION['userid'].'_'.$_FILES['user_image']['name'];
+				$this->uploadAvatar($_SESSION['userid'].'_'.$_FILES['user_image']['name']);
+			}
 			if (count($this->error) <= 0) {
 				$field = $this->schematize('update');
 				foreach ($field as $key) {
@@ -105,14 +134,34 @@ class Member extends ApplicationModel {
 				$query = sprintf("UPDATE %s SET %s WHERE userid = '%s'", $this->table, implode(",", $array), $this->quote($_SESSION['userid']));
 				$this->response = $this->query($query);
 			}
+			if(isset($_FILES['user_image']) && $_FILES['user_image']['name'] != '' && $this->response) {
+				$_SESSION['user_image'] = $_SESSION['userid'].'_'.$_FILES['user_image']['name'];
+				$hash['data']['user_image'] = $_SESSION['user_image'];
+			}
 			$this->redirect();
 			$hash['data'] = $this->post;
+			
 		} else {
 			$field = implode(',', $this->schematize());
 			$hash['data'] = $this->fetchOne("SELECT ".$field." FROM ".$this->table." WHERE userid = '".$this->quote($_SESSION['userid'])."'");
 		}
 		return $hash;
 	
+	}
+
+	function uploadAvatar($filename){
+		//help me upload file to /assets/upload/avatar/
+		if (isset($_FILES['user_image']) && $_FILES['user_image']['error'] == UPLOAD_ERR_OK) {
+			//check if file is image
+			$allowed = array('jpg', 'jpeg', 'png', 'gif');
+			$ext = pathinfo($filename, PATHINFO_EXTENSION);
+			if (in_array($ext, $allowed)) {
+				//move file to /assets/upload/avatar/
+				move_uploaded_file($_FILES['user_image']['tmp_name'], '../assets/upload/avatar/'.$filename);
+			} else {
+				$this->error[] = '画像ファイルを選択してください。';
+			}
+		}
 	}
 
 }

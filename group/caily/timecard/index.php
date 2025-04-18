@@ -14,10 +14,10 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
 <!-- Content -->
 <div class="container-xxl flex-grow-1 container-p-y">
 	<div class="card mb-6">
-        <div class="card-header d-flex justify-content-between">
+        <!-- <div class="card-header d-flex justify-content-between">
           <h5 class="card-title mb-0">時間合計</h5>
-          <!-- <small class="text-body-secondary">Updated 1 month ago</small> -->
-        </div>
+         
+        </div> -->
         <div class="card-body d-flex align-items-end">
           <div class="w-100">
             <div class="row gy-3">
@@ -63,16 +63,16 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
     </div>
 	<!-- Users List Table -->
 	<div class="card" id="option-block">
-		<div class="card-header sticky-element bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
-			<div class="col-md-4">
+		<div class="card-header bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
+			<div class="col-md-3">
 				<h4 class="card-title mb-0"><span>タイムカード</span></h4>
 			</div>
-			<div class="col-md-6 justify-content-end row">
-        <div class="col-md-6">
+      <div class="col-md-3">
 				  <button class="btn add-new btn-primary rounded-2 waves-effect waves-light" type="button" data-recalculation>
-            <span><i class="icon-base ti tabler-calculator me-0 me-sm-1 icon-16px"></i><span class="d-none d-sm-inline-block">Tính lại</span></span>
+            <span><i class="icon-base ti tabler-calculator me-0 me-sm-1 icon-16px"></i><span class="d-none d-sm-inline-block">再計算</span></span>
           </button>
 				</div>
+			<div class="col-md-6 justify-content-end row">
 				<div class="col-md-6">
 					<label for="selectpickerUser" class="col-md-2 col-form-label">User</label>
 					<div class="col-md-10">

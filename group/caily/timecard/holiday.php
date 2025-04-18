@@ -1,7 +1,7 @@
 <?php
 
 require_once('../application/loader.php');
-$view->heading('タイムカード');
+$view->heading('Thiết lập ngày nghỉ');
 ?>
 <!-- Content -->
 <div class="container-xxl flex-grow-1 container-p-y">

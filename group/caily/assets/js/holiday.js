@@ -110,11 +110,49 @@ function drawTable(data){
   }
 }
 
+
+// Filter form control to default size
+// ? setTimeout used for multilingual table initialization
+setTimeout(() => {
+  const elementsToModify = [
+    { selector: '.dt-buttons .btn', classToRemove: 'btn-secondary' },
+    { selector: '.dt-buttons.btn-group .btn-group', classToRemove: 'btn-group' },
+    { selector: '.dt-buttons.btn-group', classToRemove: 'btn-group', classToAdd: 'd-flex' },
+    { selector: '.dt-search .form-control', classToRemove: 'form-control-sm' },
+    { selector: '.dt-length .form-select', classToRemove: 'form-select-sm' },
+    { selector: '.dt-length', classToAdd: 'mb-md-6 mb-0' },
+    { selector: '.dt-layout-start', classToAdd: 'ps-3 mt-0' },
+    {
+      selector: '.dt-layout-end',
+      classToRemove: 'justify-content-between',
+      classToAdd: 'justify-content-md-between justify-content-center d-flex flex-wrap gap-4 mt-0 mb-md-0 mb-6'
+    },
+    { selector: '.dt-layout-table', classToRemove: 'row mt-2' },
+    { selector: '.dt-layout-full', classToRemove: 'col-md col-12', classToAdd: 'table-responsive' }
+  ];
+
+  // Delete record
+  elementsToModify.forEach(({ selector, classToRemove, classToAdd }) => {
+    document.querySelectorAll(selector).forEach(element => {
+      if (classToRemove) {
+        classToRemove.split(' ').forEach(className => element.classList.remove(className));
+      }
+      if (classToAdd) {
+        classToAdd.split(' ').forEach(className => element.classList.add(className));
+      }
+    });
+  });
+}, 1000);
+
 document.addEventListener('DOMContentLoaded', function () {
+  whenContainerReady()
+});
+
+
+function whenContainerReady() {
   const $table = document.querySelector('.datatables-holiday');
-  
   // Users datatable
-  if ($table) {
+  if ($table && !dt_table) {
     dt_table = new DataTable($table, {
       paging: true,
       searching: true,
@@ -252,283 +290,249 @@ document.addEventListener('DOMContentLoaded', function () {
         bottomEnd: 'paging'
       },
     });
-    initTable();
-    addEvent();
   }
-});
+  initTable();
+  addEvent();
 
 
-// Filter form control to default size
-// ? setTimeout used for multilingual table initialization
-setTimeout(() => {
-  const elementsToModify = [
-    { selector: '.dt-buttons .btn', classToRemove: 'btn-secondary' },
-    { selector: '.dt-buttons.btn-group .btn-group', classToRemove: 'btn-group' },
-    { selector: '.dt-buttons.btn-group', classToRemove: 'btn-group', classToAdd: 'd-flex' },
-    { selector: '.dt-search .form-control', classToRemove: 'form-control-sm' },
-    { selector: '.dt-length .form-select', classToRemove: 'form-select-sm' },
-    { selector: '.dt-length', classToAdd: 'mb-md-6 mb-0' },
-    { selector: '.dt-layout-start', classToAdd: 'ps-3 mt-0' },
-    {
-      selector: '.dt-layout-end',
-      classToRemove: 'justify-content-between',
-      classToAdd: 'justify-content-md-between justify-content-center d-flex flex-wrap gap-4 mt-0 mb-md-0 mb-6'
-    },
-    { selector: '.dt-layout-table', classToRemove: 'row mt-2' },
-    { selector: '.dt-layout-full', classToRemove: 'col-md col-12', classToAdd: 'table-responsive' }
-  ];
 
-  // Delete record
-  elementsToModify.forEach(({ selector, classToRemove, classToAdd }) => {
-    document.querySelectorAll(selector).forEach(element => {
-      if (classToRemove) {
-        classToRemove.split(' ').forEach(className => element.classList.remove(className));
-      }
-      if (classToAdd) {
-        classToAdd.split(' ').forEach(className => element.classList.add(className));
-      }
-    });
-  });
-}, 1000);
-
-document.addEventListener('DOMContentLoaded', function () {
-  let fv;
-  (() => {
-    const formAddNewRecord = document.querySelector('#formAddNewRecord');
-    if (formAddNewRecord && typeof FormValidation !== 'undefined') {
-   
-    // Form validation for Add new record
-   
-    fv = FormValidation.formValidation(formAddNewRecord, {
-        fields: {
-          date: {
-            validators: {
-              notEmpty: {
-                message: 'Vui lòng nhập ngày'
-              },
-              stringLength: {
-                min: 6,
-                message: 'Vui lòng nhập từ 6 ký tự trở lên'
-              }
-            }
-          },
-          name: {
-            validators: {
-              notEmpty: {
-                message: 'Vui lòng nhập tên ngày nghỉ'
-              },
-              stringLength: {
-                min: 6,
-                message: 'Vui lòng nhập từ 6 ký tự trở lên'
-              }
-            }
-          },
-          
-        },
-        plugins: {
-          trigger: new FormValidation.plugins.Trigger(),
-          bootstrap5: new FormValidation.plugins.Bootstrap5({
-            eleValidClass: '',
-            rowSelector: '.form-control-validation'
-          }),
-        },
-        init: instance => {
-          instance.on('plugins.message.placed', e => {
-            if (e.element.parentElement.classList.contains('input-group')) {
-              e.element.parentElement.insertAdjacentElement('afterend', e.messageElement);
-            }
-          });
-        }
-      });
-    }
-   
-    formAddNewRecord.addEventListener('submit', function (e) {
-      e.preventDefault();
-      console.log('formAddNewRecord');
-      fv.validate().then(function (status) {
-        if (status === 'Valid') {
-          displayHourglass();
-          const formData = new FormData(formAddNewRecord);
-          axios.post('/api/index.php?model=timecard&method=add_holiday', formData)
-            .then(function (response) {
-              if (response.status === 200 && response.data && response.data.status === 'success') {
-                handleSuccess(response.data.message_code);
-                formAddNewRecord.reset();
-                changeData();
-              } else {
-                handleErrors(response.data.message_code);
-              }
-            })
-            .catch(function (error) {
-              handleErrors(error);
-            });
-        }
-      });
-    }
-    );
-   
-  })();
-
-
-  let fv2;
-  (() => {
-    const formEditRecord = document.querySelector('#formEditRecord');
-    if (formEditRecord && typeof FormValidation !== 'undefined') {
+  // Initialize the DataTable
+    let fv;
+    (() => {
+      const formAddNewRecord = document.querySelector('#formAddNewRecord');
+      if (formAddNewRecord && typeof FormValidation !== 'undefined') {
+    
       // Form validation for Add new record
-      fv2 = FormValidation.formValidation(formEditRecord, {
-        fields: {
-          date: {
-            validators: {
-              notEmpty: {
-                message: 'Vui lòng nhập ngày'
-              },
-              stringLength: {
-                min: 6,
-                message: 'Vui lòng nhập từ 6 ký tự trở lên'
-              }
-            }
-          },
-          name: {
-            validators: {
-              notEmpty: {
-                message: 'Vui lòng nhập tên ngày nghỉ'
-              },
-              stringLength: {
-                min: 6,
-                message: 'Vui lòng nhập từ 6 ký tự trở lên'
-              }
-            }
-          },
-          
-        },
-        plugins: {
-          trigger: new FormValidation.plugins.Trigger(),
-          bootstrap5: new FormValidation.plugins.Bootstrap5({
-            eleValidClass: '',
-            rowSelector: '.form-control-validation'
-          }),
-        },
-        init: instance => {
-          instance.on('plugins.message.placed', e => {
-            if (e.element.parentElement.classList.contains('input-group')) {
-              e.element.parentElement.insertAdjacentElement('afterend', e.messageElement);
-            }
-          });
-        }
-      });
-    }
-  
-    formEditRecord.addEventListener('submit', function (e) {
-      e.preventDefault();
-      fv2.validate().then(function (status) {
-        if (status === 'Valid') {
-          displayHourglass();
-          const formData = new FormData(formEditRecord);
-          axios.post('/api/index.php?model=timecard&method=edit_holiday', formData)
-            .then(function (response) {
-              if (response.status === 200 && response.data && response.data.status === 'success') {
-                handleSuccess(response.data.message_code);
-                formEditRecord.reset();
-                changeData();
-                // Close the modal
-                const editModal = bootstrap.Modal.getInstance(document.getElementById('editRoleModal'));
-                if (editModal) {
-                  editModal.hide();
+    
+      fv = FormValidation.formValidation(formAddNewRecord, {
+          fields: {
+            date: {
+              validators: {
+                notEmpty: {
+                  message: 'Vui lòng nhập ngày'
+                },
+                stringLength: {
+                  min: 6,
+                  message: 'Vui lòng nhập từ 6 ký tự trở lên'
                 }
-              } else {
-                handleErrors(response.data.message_code);
               }
-            })
-            .catch(function (error) {
-              handleErrors(error);
+            },
+            name: {
+              validators: {
+                notEmpty: {
+                  message: 'Vui lòng nhập tên ngày nghỉ'
+                },
+                stringLength: {
+                  min: 6,
+                  message: 'Vui lòng nhập từ 6 ký tự trở lên'
+                }
+              }
+            },
+            
+          },
+          plugins: {
+            trigger: new FormValidation.plugins.Trigger(),
+            bootstrap5: new FormValidation.plugins.Bootstrap5({
+              eleValidClass: '',
+              rowSelector: '.form-control-validation'
+            }),
+          },
+          init: instance => {
+            instance.on('plugins.message.placed', e => {
+              if (e.element.parentElement.classList.contains('input-group')) {
+                e.element.parentElement.insertAdjacentElement('afterend', e.messageElement);
+              }
             });
-        }
-      });
+          }
+        });
+      }
+    
+      formAddNewRecord.addEventListener('submit', function (e) {
+        e.preventDefault();
+        console.log('formAddNewRecord');
+        fv.validate().then(function (status) {
+          if (status === 'Valid') {
+            displayHourglass();
+            const formData = new FormData(formAddNewRecord);
+            axios.post('/api/index.php?model=timecard&method=add_holiday', formData)
+              .then(function (response) {
+                if (response.status === 200 && response.data && response.data.status === 'success') {
+                  handleSuccess(response.data.message_code);
+                  formAddNewRecord.reset();
+                  changeData();
+                } else {
+                  handleErrors(response.data.message_code);
+                }
+              })
+              .catch(function (error) {
+                handleErrors(error);
+              });
+          }
+        });
+      }
+      );
+    
+    })();
+
+
+    let fv2;
+    (() => {
+      const formEditRecord = document.querySelector('#formEditRecord');
+      if (formEditRecord && typeof FormValidation !== 'undefined') {
+        // Form validation for Add new record
+        fv2 = FormValidation.formValidation(formEditRecord, {
+          fields: {
+            date: {
+              validators: {
+                notEmpty: {
+                  message: 'Vui lòng nhập ngày'
+                },
+                stringLength: {
+                  min: 6,
+                  message: 'Vui lòng nhập từ 6 ký tự trở lên'
+                }
+              }
+            },
+            name: {
+              validators: {
+                notEmpty: {
+                  message: 'Vui lòng nhập tên ngày nghỉ'
+                },
+                stringLength: {
+                  min: 6,
+                  message: 'Vui lòng nhập từ 6 ký tự trở lên'
+                }
+              }
+            },
+            
+          },
+          plugins: {
+            trigger: new FormValidation.plugins.Trigger(),
+            bootstrap5: new FormValidation.plugins.Bootstrap5({
+              eleValidClass: '',
+              rowSelector: '.form-control-validation'
+            }),
+          },
+          init: instance => {
+            instance.on('plugins.message.placed', e => {
+              if (e.element.parentElement.classList.contains('input-group')) {
+                e.element.parentElement.insertAdjacentElement('afterend', e.messageElement);
+              }
+            });
+          }
+        });
+      }
+    
+      formEditRecord.addEventListener('submit', function (e) {
+        e.preventDefault();
+        fv2.validate().then(function (status) {
+          if (status === 'Valid') {
+            displayHourglass();
+            const formData = new FormData(formEditRecord);
+            axios.post('/api/index.php?model=timecard&method=edit_holiday', formData)
+              .then(function (response) {
+                if (response.status === 200 && response.data && response.data.status === 'success') {
+                  handleSuccess(response.data.message_code);
+                  formEditRecord.reset();
+                  changeData();
+                  // Close the modal
+                  const editModal = bootstrap.Modal.getInstance(document.getElementById('editRoleModal'));
+                  if (editModal) {
+                    editModal.hide();
+                  }
+                } else {
+                  handleErrors(response.data.message_code);
+                }
+              })
+              .catch(function (error) {
+                handleErrors(error);
+              });
+          }
+        });
+      }
+      );
+    
+    })();
+
+  const momentFormat = 'YYYY-MM-DD';
+
+  IMask(document.querySelector('#modalAddDate'), {
+    mask: Date,
+    pattern: momentFormat,
+    lazy: false,
+    min: new Date(1970, 0, 1),
+    max: new Date(2030, 0, 1),
+
+    format: date => moment(date).format(momentFormat),
+    parse: str => moment(str, momentFormat),
+
+    blocks: {
+      YYYY: {
+        mask: IMask.MaskedRange,
+        from: 1970,
+        to: 2030
+      },
+      MM: {
+        mask: IMask.MaskedRange,
+        from: 1,
+        to: 12
+      },
+      DD: {
+        mask: IMask.MaskedRange,
+        from: 1,
+        to: 31
+      },
+      HH: {
+        mask: IMask.MaskedRange,
+        from: 0,
+        to: 23
+      },
+      mm: {
+        mask: IMask.MaskedRange,
+        from: 0,
+        to: 59
+      }
     }
-    );
-   
-  })();
+  });
 
-const momentFormat = 'YYYY-MM-DD';
 
-IMask(document.querySelector('#modalAddDate'), {
-  mask: Date,
-  pattern: momentFormat,
-  lazy: false,
-  min: new Date(1970, 0, 1),
-  max: new Date(2030, 0, 1),
+  IMask(document.querySelector('#modalEditDate'), {
+    mask: Date,
+    pattern: momentFormat,
+    lazy: false,
+    min: new Date(1970, 0, 1),
+    max: new Date(2030, 0, 1),
 
-  format: date => moment(date).format(momentFormat),
-  parse: str => moment(str, momentFormat),
+    format: date => moment(date).format(momentFormat),
+    parse: str => moment(str, momentFormat),
 
-  blocks: {
-    YYYY: {
-      mask: IMask.MaskedRange,
-      from: 1970,
-      to: 2030
-    },
-    MM: {
-      mask: IMask.MaskedRange,
-      from: 1,
-      to: 12
-    },
-    DD: {
-      mask: IMask.MaskedRange,
-      from: 1,
-      to: 31
-    },
-    HH: {
-      mask: IMask.MaskedRange,
-      from: 0,
-      to: 23
-    },
-    mm: {
-      mask: IMask.MaskedRange,
-      from: 0,
-      to: 59
+    blocks: {
+      YYYY: {
+        mask: IMask.MaskedRange,
+        from: 1970,
+        to: 2030
+      },
+      MM: {
+        mask: IMask.MaskedRange,
+        from: 1,
+        to: 12
+      },
+      DD: {
+        mask: IMask.MaskedRange,
+        from: 1,
+        to: 31
+      },
+      HH: {
+        mask: IMask.MaskedRange,
+        from: 0,
+        to: 23
+      },
+      mm: {
+        mask: IMask.MaskedRange,
+        from: 0,
+        to: 59
+      }
     }
-  }
-});
+  });
 
-
-IMask(document.querySelector('#modalEditDate'), {
-  mask: Date,
-  pattern: momentFormat,
-  lazy: false,
-  min: new Date(1970, 0, 1),
-  max: new Date(2030, 0, 1),
-
-  format: date => moment(date).format(momentFormat),
-  parse: str => moment(str, momentFormat),
-
-  blocks: {
-    YYYY: {
-      mask: IMask.MaskedRange,
-      from: 1970,
-      to: 2030
-    },
-    MM: {
-      mask: IMask.MaskedRange,
-      from: 1,
-      to: 12
-    },
-    DD: {
-      mask: IMask.MaskedRange,
-      from: 1,
-      to: 31
-    },
-    HH: {
-      mask: IMask.MaskedRange,
-      from: 0,
-      to: 23
-    },
-    mm: {
-      mask: IMask.MaskedRange,
-      from: 0,
-      to: 59
-    }
-  }
-});
-
-
-});
+}

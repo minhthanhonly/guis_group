@@ -16,7 +16,7 @@ class Helper {
 				$string .= sprintf('<option value="%s"%s>%s</option>', $key, $selected, $value);
 			}
 		}
-		$selector = sprintf('<select id="%s" name="%s"%s>%s</select>', $name, $name, $attribute, $string);
+		$selector = sprintf('<select class="form-select" id="%s" name="%s"%s>%s</select>', $name, $name, $attribute, $string);
 		return $selector;
 		
 	}
@@ -44,7 +44,7 @@ class Helper {
 		} else {
 			$checked = '';
 		}
-		$checkbox = '<input type="checkbox" name="%s" id="%s" value="%s"%s%s /><label for="%s">%s</label>';
+		$checkbox = '<input class="form-check-input" type="checkbox" name="%s" id="%s" value="%s"%s%s />&nbsp;<label for="%s">%s</label>';
 		$checkbox = sprintf($checkbox, $name, $label, $value, $checked, $attribute, $label, $caption);
 		return $checkbox;
 	
@@ -57,7 +57,7 @@ class Helper {
 		} else {
 			$checked = '';
 		}
-		$radio = '<input type="radio" name="%s" id="%s" value="%s"%s%s /><label for="%s">%s</label>';
+		$radio = '<input class="form-check-input" type="radio" name="%s" id="%s" value="%s"%s%s />&nbsp;<label for="%s">%s</label>';
 		$radio = sprintf($radio, $name, $label, $value, $checked, $attribute, $label, $caption);
 		return $radio;
 	

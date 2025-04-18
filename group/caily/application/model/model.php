@@ -95,7 +95,11 @@ class Model extends Connection {
 	function findView($id = 0) {
 		
 		if ($id <= 0) {
-			$id = $_REQUEST['id'];
+			if( $_REQUEST['id']){
+				$id = $_REQUEST['id'];
+			} else{
+				$id = $_SESSION['id'];
+			}
 		}
 		if ($id > 0) {
 			$field = implode(',', $this->schematize());
@@ -215,7 +219,7 @@ class Model extends Connection {
 		
 	}
 
-	function redirect($redirect = 'index.php') {
+	function redirect($redirect = 'view.php') {
 	
 		if ($this->response && $redirect) {
 			header('Location:'.$redirect);

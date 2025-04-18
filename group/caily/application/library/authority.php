@@ -71,7 +71,7 @@ class Authority
 				}
 				if ($postuserid != '' && count($error) <= 0) {
 					$connection = new Connection;
-					$query = sprintf("SELECT id,userid,password,realname,user_group,authority FROM %suser WHERE userid = '%s'", DB_PREFIX, $connection->quote($postuserid));
+					$query = sprintf("SELECT id,userid,password,realname,user_group,authority,user_image FROM %suser WHERE userid = '%s'", DB_PREFIX, $connection->quote($postuserid));
 					$data = $connection->fetchOne($query);
 					$connection->close();
 					if (count($data) > 0 && $data['userid'] === $postuserid && $data['password'] === $password) {
@@ -114,9 +114,11 @@ class Authority
 			$_SESSION['accesstime'] = $_SESSION['logintime'];
 			$_SESSION['authorized'] = md5(__FILE__ . $_SESSION['logintime']);
 			$_SESSION['userid'] = $data['userid'];
+			$_SESSION['id'] = $data['id'];
 			$_SESSION['realname'] = $data['realname'];
 			$_SESSION['group'] = $data['user_group'];
 			$_SESSION['authority'] = $data['authority'];
+			$_SESSION['user_image'] = $data['user_image'];
 			$_SESSION['user_groupname'] = $data['user_groupname'];
 			if (isset($_SESSION['referer'])) {
 				header('Location: ' . $_SESSION['referer']);

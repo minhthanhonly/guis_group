@@ -824,7 +824,7 @@ class Timecard extends ApplicationModel {
 	}
 
 	function add_config() {
-		$this->authorize('administrator');
+		$this->authorize('administrator', 'manager');
 		$config = new Config($this->handler);
 		$hash['type_id'] = "timecard" . date('YmdHis');
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -935,6 +935,19 @@ class Timecard extends ApplicationModel {
 		if ($_GET['group'] <= 0) {
 			$_GET['group'] = $_SESSION['group'];
 		}
+
+		$mt = $_GET['month'];
+		$yr = $_GET['year'];
+	
+		$start = DateTime::createFromFormat('Y-m-d', "$yr-$mt-" . TIMECARD_START_DATE);
+		if(TIMECARD_START_DATE != 1){
+			$start->modify('-1 month');
+		}
+		$end = clone $start; // Clone $start to create a new DateTime object
+		$end->modify('+1 month'); // Set the end date to one month after the start date
+		$end->modify('-1 day'); // Subtract one day to get the correct end date
+
+
 		$data = $this->fetchAll("SELECT userid, realname FROM ".DB_PREFIX."user WHERE user_group = ".intval($_GET['group'])." ORDER BY user_order,id");
 		$hash['user'] = array();
 		if (is_array($data) && count($data) > 0) {
@@ -943,11 +956,14 @@ class Timecard extends ApplicationModel {
 			}
 			$user = implode("','", array_keys($hash['user']));
 			$field = implode(',', $this->schematize());
-			if ($_GET['month'] > 1) {
-				$query = sprintf("SELECT %s FROM %s WHERE (timecard_year = %d) AND (((timecard_month = %d) AND (timecard_day > 20)) or ((timecard_month = %d) AND (timecard_day < 21))) AND (owner IN ('%s')) ORDER BY timecard_date", $field, $this->table, $_GET['year'], $_GET['month'] - 1, $_GET['month'], $user);
-			} else{
-				$query = sprintf("SELECT %s FROM %s WHERE (((timecard_year = %d) AND (timecard_month = %d) AND (timecard_day > 20)) or ((timecard_year = %d) AND (timecard_month = %d) AND (timecard_day < 21))) AND (owner IN ('%s')) ORDER BY timecard_date", $field, $this->table, $_GET['year'] - 1, $_GET['month'] + 11,$_GET['year'], $_GET['month'], $user);
-			}
+			$query = sprintf("SELECT %s FROM %s WHERE STR_TO_DATE(timecard_date, '%%Y-%%m-%%d') BETWEEN '%s' AND '%s' AND (owner IN ('%s')) ORDER BY timecard_date", 
+				$field, 
+				$this->table, 
+				$start->format('Y-m-d'),
+				$end->format('Y-m-d'),
+				$user
+			);
+			
 			$hash['list'] = $this->fetchAll($query);
 		}
 		$hash['group'] = $this->findGroup();

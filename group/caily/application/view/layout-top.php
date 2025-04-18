@@ -23,65 +23,42 @@
           </div>
 
           <div class="menu-inner-shadow"></div>
-
           <ul class="menu-inner py-1">
             <!-- Dashboards -->
-            <li class="menu-item">
-              <a href="javascript:void(0);" class="menu-link menu-toggle">
+            <li class="menu-item <?php if($directory == 'top') echo 'active'; ?>">
+              <a href="<?=$root?>" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-smart-home"></i>
-                <div data-i18n="Dashboards">Dashboards</div>
+                <div data-i18n="ホーム">ホーム</div>
                 <!-- <div class="badge text-bg-danger rounded-pill ms-auto">5</div> -->
               </a>
-              <ul class="menu-sub">
-                <li class="menu-item">
-                  <a href="index.html" class="menu-link">
-                    <div data-i18n="Analytics">Analytics</div>
-                  </a>
-                </li>
-                <li class="menu-item">
-                  <a href="dashboards-crm.html" class="menu-link">
-                    <div data-i18n="CRM">CRM</div>
-                  </a>
-                </li>
-                <li class="menu-item">
-                  <a href="app-ecommerce-dashboard.html" class="menu-link">
-                    <div data-i18n="eCommerce">eCommerce</div>
-                  </a>
-                </li>
-                <li class="menu-item">
-                  <a href="app-logistics-dashboard.html" class="menu-link">
-                    <div data-i18n="Logistics">Logistics</div>
-                  </a>
-                </li>
-                <li class="menu-item">
-                  <a href="app-academy-dashboard.html" class="menu-link">
-                    <div data-i18n="Academy">Academy</div>
-                  </a>
-                </li>
-              </ul>
             </li>
 
             <!-- Layouts -->
             <li class="menu-item <?php if($directory == 'timecard') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base ti tabler-calendar"></i>
-                <div>Thẻ giờ</div>
+                <div>勤怠管理</div>
               </a>
 
               <ul class="menu-sub">
-                <li class="menu-item <?php if($page == 'index') echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/" class="menu-link">
-                    <div>Thẻ giờ</div>
+                <li class="menu-item <?php if($directory == 'timecard' && $page == 'index') echo 'active'; ?>">
+                  <a href="<?=$root?>timecard/" class="menu-link" data-pjax>
+                    <div>タイムカード</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($page == 'holiday') echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/holiday.php" class="menu-link">
-                    <div>Thiết lập ngày nghỉ</div>
+                <li class="menu-item <?php if($directory == 'timecard' && $page == 'holiday') echo 'active'; ?>">
+                  <a href="<?=$root?>timecard/holiday.php" class="menu-link" data-pjax>
+                    <div>休日設定</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($page == 'config') echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/config.php" class="menu-link">
-                    <div>Thiết lập giờ</div>
+                <li class="menu-item <?php if($directory == 'timecard' && ($page == 'config' || $page == 'add_config')) echo 'active'; ?>">
+                  <a href="<?=$root?>timecard/config.php" class="menu-link" data-pjax>
+                    <div>タイムカード設定</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php if($directory == 'timecard' && $page == 'group') echo 'active'; ?>">
+                  <a href="<?=$root?>timecard/group.php" class="menu-link" data-pjax>
+                    <div>時間合計</div>
                   </a>
                 </li>
               </ul>
@@ -175,7 +152,7 @@
                 <!-- / Style Switcher-->
 
                 <!-- Quick links  -->
-                <li class="nav-item dropdown-shortcuts navbar-dropdown dropdown">
+                <!-- <li class="nav-item dropdown-shortcuts navbar-dropdown dropdown">
                   <a
                     class="nav-link dropdown-toggle hide-arrow btn btn-icon btn-text-secondary rounded-pill"
                     href="javascript:void(0);"
@@ -265,7 +242,7 @@
                       </div>
                     </div>
                   </div>
-                </li>
+                </li> -->
                 <!-- Quick links -->
 
                 <!-- Notification -->
@@ -278,7 +255,7 @@
                     aria-expanded="false">
                     <span class="position-relative">
                       <i class="icon-base ti tabler-bell icon-22px text-heading"></i>
-                      <span class="badge rounded-pill bg-danger badge-dot badge-notifications border"></span>
+                      <!-- <span class="badge rounded-pill bg-danger badge-dot badge-notifications border"></span> -->
                     </span>
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end p-0">
@@ -286,7 +263,7 @@
                       <div class="dropdown-header d-flex align-items-center py-3">
                         <h6 class="mb-0 me-auto">Notification</h6>
                         <div class="d-flex align-items-center h6 mb-0">
-                          <span class="badge bg-label-primary me-2">8 New</span>
+                          <!-- <span class="badge bg-label-primary me-2">8 New</span> -->
                           <a
                             href="javascript:void(0)"
                             class="dropdown-notifications-all p-2 btn btn-icon"
@@ -300,7 +277,7 @@
                     </li>
                     <li class="dropdown-notifications-list scrollable-container">
                       <ul class="list-group list-group-flush">
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item">
+                        <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
                           <div class="d-flex">
                             <div class="flex-shrink-0 me-3">
                               <div class="avatar">
@@ -308,9 +285,9 @@
                               </div>
                             </div>
                             <div class="flex-grow-1">
-                              <h6 class="small mb-1">Congratulation Lettie 🎉</h6>
-                              <small class="mb-1 d-block text-body">Won the monthly best seller gold badge</small>
-                              <small class="text-body-secondary">1h ago</small>
+                              <h6 class="small mb-1">No items 🎉</h6>
+                              <small class="mb-1 d-block text-body">under contruction...</small>
+                              <!-- <small class="text-body-secondary">1h ago</small> -->
                             </div>
                             <div class="flex-shrink-0 dropdown-notifications-actions">
                               <a href="javascript:void(0)" class="dropdown-notifications-read"
@@ -322,7 +299,7 @@
                             </div>
                           </div>
                         </li>
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item">
+                        <!-- <li class="list-group-item list-group-item-action dropdown-notifications-item">
                           <div class="d-flex">
                             <div class="flex-shrink-0 me-3">
                               <div class="avatar">
@@ -507,7 +484,7 @@
                               ></a>
                             </div>
                           </div>
-                        </li>
+                        </li> -->
                       </ul>
                     </li>
                     <li class="border-top">
@@ -528,16 +505,25 @@
                     href="javascript:void(0);"
                     data-bs-toggle="dropdown">
                     <div class="avatar avatar-online">
-                      <img src="<?=$root?>assets/img/avatars/1.png" alt class="rounded-circle" />
+                      <?php if($_SESSION['user_image'] != '') {
+                          echo '<img src="'.$root.'assets/upload/avatar/'.$_SESSION['user_image'].'" alt class="rounded-circle" />';
+                        } else{
+                          echo '<img src="'.$root.'assets/img/avatars/1.png" alt class="rounded-circle" />';
+                       }?>
                     </div>
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end">
                     <li>
-                      <a class="dropdown-item mt-0" href="pages-account-settings-account.html">
+                      <a class="dropdown-item mt-0" href="<?=$root?>member/view.php?id=<?=$_SESSION['id']?>">
                         <div class="d-flex align-items-center">
                           <div class="flex-shrink-0 me-2">
                             <div class="avatar avatar-online">
-                              <img src="<?=$root?>assets/img/avatars/1.png" alt class="rounded-circle" />
+                              <?php if($_SESSION['user_image'] != '') {
+                                echo '<img src="'.$root.'assets/upload/avatar/'.$_SESSION['user_image'].'" alt class="rounded-circle" />';
+                              } else{
+                                echo '<img src="'.$root.'assets/img/avatars/1.png" alt class="rounded-circle" />';
+                              }
+                              ?>
                             </div>
                           </div>
                           <div class="flex-grow-1">
@@ -551,17 +537,17 @@
                       <div class="dropdown-divider my-1 mx-n2"></div>
                     </li>
                     <li>
-                      <a class="dropdown-item" href="pages-profile-user.html">
+                      <a class="dropdown-item" href="<?=$root?>member/view.php?id=<?=$_SESSION['id']?>">
                         <i class="icon-base ti tabler-user me-3 icon-md"></i
-                        ><span class="align-middle">Thông tin cá nhân</span>
+                        ><span class="align-middle">個人情報</span>
                       </a>
                     </li>
-                    <li>
+                    <!-- <li>
                       <a class="dropdown-item" href="pages-account-settings-account.html">
                         <i class="icon-base ti tabler-settings me-3 icon-md"></i
                         ><span class="align-middle">Thiết lập tài khoản</span>
                       </a>
-                    </li>
+                    </li> -->
                     <!-- <li>
                       <a class="dropdown-item" href="pages-faq.html">
                         <i class="icon-base ti tabler-question-mark me-3 icon-md"></i
@@ -584,20 +570,20 @@
           </nav>
 
           <!-- / Navbar -->
-
+          <!-- AI Chat Widget -->
+          <div id="ai-chat-widget" style="position: fixed; z-index: 9999; bottom: 20px; right: 20px; width: 300px; height: 400px; background: white; border: 1px solid #ccc; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); display: none; flex-direction: column;">
+              <div id="ai-chat-header" style="background: #007bff; color: white; padding: 10px; cursor: pointer; border-top-left-radius: 10px; border-top-right-radius: 10px;">
+                  AI Assistant
+                  <span id="ai-chat-close" style="float: right; cursor: pointer;">&times;</span>
+              </div>
+              <div id="ai-chat-body" style="flex: 1; padding: 10px; overflow-y: auto;"></div>
+              <div id="ai-chat-footer" style="padding: 10px; border-top: 1px solid #ccc;">
+                  <input id="ai-chat-input" type="text" placeholder="Type a message..." style="width: calc(100% - 50px); padding: 5px;" />
+                  <button id="ai-chat-send" style="width: 40px; background: #007bff; color: white; border: none; border-radius: 5px;">Send</button>
+              </div>
+            </div>
+          <button id="ai-chat-toggle" style="position: fixed; z-index: 9998; bottom: 20px; right: 20px; background: #007bff; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">AI</button>
           <!-- Content wrapper -->
           <div class="content-wrapper">
 
-            <!-- AI Chat Widget -->
-            <div id="ai-chat-widget" style="position: fixed; z-index: 9999; bottom: 20px; right: 20px; width: 300px; height: 400px; background: white; border: 1px solid #ccc; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); display: none; flex-direction: column;">
-                <div id="ai-chat-header" style="background: #007bff; color: white; padding: 10px; cursor: pointer; border-top-left-radius: 10px; border-top-right-radius: 10px;">
-                    AI Assistant
-                    <span id="ai-chat-close" style="float: right; cursor: pointer;">&times;</span>
-                </div>
-                <div id="ai-chat-body" style="flex: 1; padding: 10px; overflow-y: auto;"></div>
-                <div id="ai-chat-footer" style="padding: 10px; border-top: 1px solid #ccc;">
-                    <input id="ai-chat-input" type="text" placeholder="Type a message..." style="width: calc(100% - 50px); padding: 5px;" />
-                    <button id="ai-chat-send" style="width: 40px; background: #007bff; color: white; border: none; border-radius: 5px;">Send</button>
-                </div>
-            </div>
-            <button id="ai-chat-toggle" style="position: fixed; bottom: 20px; right: 20px; background: #007bff; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">AI</button>
+            

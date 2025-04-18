@@ -55,6 +55,9 @@ if (is_array($hash['list']) && count($hash['list']) > 0) {
 	</table>
 	<?=$view->pagination($pagination, $hash['count'])?>
 </td></tr></table>
+
+
+
 <?php
 $view->footing();
 ?>

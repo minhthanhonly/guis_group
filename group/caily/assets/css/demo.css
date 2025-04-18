@@ -112,3 +112,7 @@
 .layout-wide .container{
   max-width: 100% !important;
 }
+
+.menu-toggle::after{
+  right: 4px;
+}

@@ -77,9 +77,9 @@ class View {
 	function error($array, $string = '') {
 		
 		if (is_array($array) && count($array) > 0) {
-			return '<div class="error">'.implode('<br />', $array).'</div>';
+			return '<div class="alert alert-outline-danger">'.implode('<br />', $array).'</div>';
 		} elseif (strlen($string) > 0) {
-			return '<div class="error">'.$string.'</div>';
+			return '<div class="alert alert-outline-danger">'.$string.'</div>';
 		}
 		return $string;
 	}
