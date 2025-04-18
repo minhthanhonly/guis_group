@@ -103,3 +103,12 @@
   text-align: center;
   margin-top: 1rem;
 }
+
+.layout-wide .container-xxl, 
+.layout-wide .container-xl, 
+.layout-wide .container-lg, 
+.layout-wide .container-md, 
+.layout-wide .container-sm, 
+.layout-wide .container{
+  max-width: 100% !important;
+}
