@@ -43,9 +43,10 @@ define('DIR_UPLOAD', DIR_PATH.'upload/');
  */
 //データベースの種類
 define('DB_STORAGE', 'mysql');
+
 //データベースのホスト名
 //define('DB_HOSTNAME', 'mysql653.db.sakura.ne.jp');
-define('DB_HOSTNAME', 'localhost');
+define('DB_HOSTNAME', 'mysql');
 //データベース名
 define('DB_DATABASE', 'cail9460_group');
 //データベースユーザー名
@@ -53,11 +54,12 @@ define('DB_USERNAME', 'root');
 // define('DB_USERNAME', 'guis2');
 //データベースパスワード
 // define('DB_PASSWORD', 'URtMzWthwqB5');
-define('DB_PASSWORD', '');
+define('DB_PASSWORD', 'root');
 //テーブル接頭辞
 define('DB_PREFIX', 'groupware_');
 //データベースポート番号
-define('DB_PORT', '5432');
+// define('DB_PORT', '5432');
+define('DB_PORT', '3306');
 //データベース文字コード設定
 define('DB_CHARSET', false);
 //データベースファイル

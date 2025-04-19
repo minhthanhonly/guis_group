@@ -1,6 +1,3 @@
-# Enable Rewrite Engine
-RewriteEngine On
-
 # Custom Error Pages
 ErrorDocument 404 /404.php
 ErrorDocument 500 /500.php
@@ -8,9 +5,7 @@ ErrorDocument 500 /500.php
 # Disable Directory Indexing
 Options -Indexes
 
-# Redirect to HTTPS (Optional, if needed)
-# RewriteCond %{HTTPS} off
-# RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
 
 # Prevent Access to .htaccess File
 <Files ".htaccess">

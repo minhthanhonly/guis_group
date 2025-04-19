@@ -108,25 +108,25 @@ class Controller {
 		require_once(DIR_VIEW.'applicationview.php');
 		require_once(DIR_VIEW.'calendar.php');
 		require_once(DIR_VIEW.'explanation.php');
-		if (get_magic_quotes_gpc()) {
-			if (is_array($_POST)) {
-				$_POST = $this->strip($_POST);
-			}
-			if (is_array($_GET)) {
-				$_GET = $this->strip($_GET);
-			}
-		}
+		$input = $_POST;
+		$input = array_map(function($value) {
+			return is_array($value) ? array_map('stripslashes', $value) : stripslashes($value);
+		}, $input);
+		$_POST = $input;
 
+		$input = $_GET;
+		$input = array_map(function($value) {
+			return is_array($value) ? array_map('stripslashes', $value) : stripslashes($value);
+		}, $input);
+		$_GET = $input;
 	}
 
 	function strip($data) {
 	
-		if (get_magic_quotes_gpc()) {
-			if (is_array($data)) {
-				return array_map(array($this, 'strip'), $data);
-			} else {
-				return stripslashes($data);
-			}
+		if (is_array($data)) {
+			return array_map(array($this, 'strip'), $data);
+		} else {
+			return stripslashes($data);
 		}
 		
 	}

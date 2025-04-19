@@ -179,6 +179,22 @@ CREATE TABLE `groupware_bookmark` (
 -- Table structure for table `groupware_config`
 --
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `specifications`
+--
+
+CREATE TABLE specifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    company_id INT NOT NULL,
+    text TEXT,
+    files JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES company(id) ON DELETE CASCADE
+);
+
 CREATE TABLE `groupware_config` (
   `id` int(11) NOT NULL,
   `config_type` mediumtext NOT NULL,
