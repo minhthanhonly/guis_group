@@ -1,6 +1,6 @@
 group/group/application/database/KEN_ALL.CSV
 node_modules/
-vendor/
+
 .idea/
 .env
 .env.example

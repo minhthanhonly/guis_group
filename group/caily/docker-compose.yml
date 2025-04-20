@@ -1,6 +1,8 @@
 services:
   php:
-    image: php:7.4-apache
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: php_container
     volumes:
       - .:/var/www/html
