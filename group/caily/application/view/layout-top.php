@@ -64,6 +64,25 @@
               </ul>
             </li>
 
+            <li class="menu-item <?php if($directory == 'customer') echo 'active open'; ?>">
+              <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base ti tabler-users"></i>
+                <div>顧客管理</div>
+              </a>
+              <ul class="menu-sub">
+                <li class="menu-item <?php if($directory == 'customer' && $page == 'index') echo 'active'; ?>">
+                  <a href="<?=$root?>customer/" class="menu-link" data-pjax>
+                    <div>タイムカード</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php if($directory == 'customer' && $page == 'specification') echo 'active'; ?>">
+                  <a href="<?=$root?>customer/specification.php" class="menu-link" data-pjax>
+                    <div>休日設定</div>
+                  </a>
+                </li>
+              </ul>
+            </li>
+
           </ul>
         </aside>
 

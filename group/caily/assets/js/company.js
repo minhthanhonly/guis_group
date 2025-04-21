@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Fetch and populate company data
         function fetchCompanyData() {
-            fetch('/api/index.php?model=company&method=listWithRepresentatives')
+            fetch('/api/index.php?model=customer&method=listWithRepresentatives')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (e.target.closest('.delete-button')) {
                 const companyId = e.target.dataset.id;
                 if (confirm('Bạn có chắc chắn muốn xóa công ty này?')) {
-                    fetch(`/api/index.php?model=company&method=delete&id=${companyId}`, {
+                    fetch(`/api/index.php?model=customer&method=delete&id=${companyId}`, {
                         method: 'DELETE'
                     })
                         .then(response => response.json())
@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (e.target.closest('.edit-button')) {
                 const companyId = e.target.dataset.id;
-                fetch(`/api/index.php?model=company&method=get&id=${companyId}`)
+                fetch(`/api/index.php?model=customer&method=get&id=${companyId}`)
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (e.target.closest('.view-button')) {
                 const companyId = e.target.dataset.id;
-                fetch(`/api/index.php?model=company&method=get&id=${companyId}`)
+                fetch(`/api/index.php?model=customer&method=get&id=${companyId}`)
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
@@ -104,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <p><strong>Số điện thoại:</strong> ${company.phone}</p>
                             `;
 
-                            fetch(`/api/index.php?model=company&method=listRepresentatives&company_id=${companyId}`)
+                            fetch(`/api/index.php?model=customer&method=listRepresentatives&company_id=${companyId}`)
                                 .then(response => response.json())
                                 .then(repData => {
                                     if (repData.success) {
@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (e.target.closest('.delete-rep-button')) {
                 const repId = e.target.dataset.id;
                 if (confirm('Bạn có chắc chắn muốn xóa người đại diện này?')) {
-                    fetch(`/api/index.php?model=company&method=deleteRepresentative&id=${repId}`, {
+                    fetch(`/api/index.php?model=customer&method=deleteRepresentative&id=${repId}`, {
                         method: 'DELETE'
                     })
                         .then(response => response.json())
@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (e.target.closest('.edit-rep-button')) {
                 const repId = e.target.dataset.id;
-                fetch(`/api/index.php?model=company&method=getRepresentative&id=${repId}`)
+                fetch(`/api/index.php?model=customer&method=getRepresentative&id=${repId}`)
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
@@ -178,7 +178,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelector('#formAddNewCompany').addEventListener('submit', function (e) {
             e.preventDefault();
             const formData = new FormData(this);
-            fetch('/api/index.php?model=company&method=add', {
+            fetch('/api/index.php?model=customer&method=add', {
                 method: 'POST',
                 body: formData
             })
@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelector('#formEditCompany').addEventListener('submit', function (e) {
             e.preventDefault();
             const formData = new FormData(this);
-            fetch('/api/index.php?model=company&method=edit', {
+            fetch('/api/index.php?model=customer&method=edit', {
                 method: 'POST',
                 body: formData
             })
@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelector('#formAddRepresentative').addEventListener('submit', function (e) {
             e.preventDefault();
             const formData = new FormData(this);
-            fetch('/api/index.php?model=company&method=addRepresentative', {
+            fetch('/api/index.php?model=customer&method=addRepresentative', {
                 method: 'POST',
                 body: formData
             })
@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelector('#formEditRepresentative').addEventListener('submit', function (e) {
             e.preventDefault();
             const formData = new FormData(this);
-            fetch('/api/index.php?model=company&method=editRepresentative', {
+            fetch('/api/index.php?model=customer&method=editRepresentative', {
                 method: 'POST',
                 body: formData
             })

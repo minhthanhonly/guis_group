@@ -1,6 +1,6 @@
 <?php
 
-class Company extends ApplicationModel {
+class Customer extends ApplicationModel {
     function __construct() {
         $this->table = DB_PREFIX . 'company';
         $this->schema = array(
@@ -12,6 +12,10 @@ class Company extends ApplicationModel {
             'created_at' => array()
         );
         $this->connect();
+    }
+
+    function index(){
+
     }
 
     function list() {
