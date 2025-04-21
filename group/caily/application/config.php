@@ -70,9 +70,9 @@ define('DB_POSTCODE', DIR_PATH.'database/KEN_ALL.CSV');
 define('ROOT_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
 define('ROOT', '/');
 
-define('APP_NAME', 'CAILY HUB');
+define('APP_NAME', 'GUIS HUB');
 
-define('APP_COMPANY', 'CAILY Co.,Ltd');
+define('APP_COMPANY', 'GUIS Co.,Ltd');
 
 define('APP_VERSION', '1.0.0');
 
@@ -80,7 +80,7 @@ define('APP_LOGO', 'logo-site-white.png');
 
 define('APP_LOGO_DARK', 'logo-site-white.png');
 
-define('TIMECARD_START_DATE', '1');
+define('TIMECARD_START_DATE', '21');
 
 
 error_reporting(E_ERROR | E_PARSE);

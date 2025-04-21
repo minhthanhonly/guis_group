@@ -25,7 +25,7 @@
 <script src="<?=$root?>assets/vendor/libs/bootstrap-select/bootstrap-select.js"></script>
 <script src="<?=$root?>assets/vendor/libs/notiflix/notiflix.js"></script>
 <script src="<?=$root?>assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
-<script src="<?=$root?>assets/vendor/libs/imask.js"></script>
+<script src="<?=$root?>assets/js/imask.js"></script>
 <!-- Main JS -->
 
 <script src="<?=$root?>assets/js/main.js"></script>

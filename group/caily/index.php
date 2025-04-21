@@ -2,12 +2,12 @@
 require_once('application/loader.php');
 $view->script('general.js');
 $view->heading('', 'top');
-$hash['group'] = array('グループ') + $hash['group'];
-$calendar = new Calendar;
-$previous = mktime(0, 0, 0, $hash['month'], $hash['day'] - 7, $hash['year']);
-$next = mktime(0, 0, 0, $hash['month'], $hash['day'] + 7, $hash['year']);
-$week = array('日', '月', '火', '水', '木', '金', '土');
-$caption = $hash['year'].'年'.$hash['month'].'月'.$hash['day'].'日('.$week[$hash['weekday']].')';
+// $hash['group'] = array('グループ') + $hash['group'];
+// $calendar = new Calendar;
+// $previous = mktime(0, 0, 0, $hash['month'], $hash['day'] - 7, $hash['year']);
+// $next = mktime(0, 0, 0, $hash['month'], $hash['day'] + 7, $hash['year']);
+// $week = array('日', '月', '火', '水', '木', '金', '土');
+// $caption = $hash['year'].'年'.$hash['month'].'月'.$hash['day'].'日('.$week[$hash['weekday']].')';
 ?>
 
 <!-- Content -->

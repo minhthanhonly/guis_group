@@ -1,11 +1,11 @@
 -- phpMyAdmin SQL Dump
--- version 5.2.0
+-- version 5.2.2
 -- https://www.phpmyadmin.net/
 --
--- Host: 127.0.0.1
--- Generation Time: Apr 18, 2025 at 12:16 PM
--- Server version: 10.4.25-MariaDB
--- PHP Version: 7.4.30
+-- Host: mysql
+-- Generation Time: Apr 21, 2025 at 12:57 AM
+-- Server version: 5.7.44
+-- PHP Version: 8.2.27
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -31,7 +31,7 @@ CREATE TABLE `achieve` (
   `achieve_id` int(11) NOT NULL,
   `achieve_order` int(11) NOT NULL,
   `date_create` varchar(15) NOT NULL,
-  `achieve_status` int(11) NOT NULL DEFAULT 1
+  `achieve_status` int(11) NOT NULL DEFAULT '1'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
@@ -75,6 +75,21 @@ CREATE TABLE `adressデータ` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `company_representatives`
+--
+
+CREATE TABLE `company_representatives` (
+  `id` int(11) NOT NULL,
+  `company_id` int(11) DEFAULT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `groupware_addressbook`
 --
 
@@ -82,32 +97,32 @@ CREATE TABLE `groupware_addressbook` (
   `id` int(11) NOT NULL,
   `folder_id` int(11) NOT NULL,
   `addressbook_type` int(11) NOT NULL,
-  `addressbook_name` mediumtext DEFAULT NULL,
-  `addressbook_ruby` mediumtext DEFAULT NULL,
-  `addressbook_company` mediumtext DEFAULT NULL,
-  `addressbook_companyruby` mediumtext DEFAULT NULL,
-  `addressbook_department` mediumtext DEFAULT NULL,
-  `addressbook_position` mediumtext DEFAULT NULL,
-  `addressbook_postcode` mediumtext DEFAULT NULL,
-  `addressbook_address` mediumtext DEFAULT NULL,
-  `addressbook_addressruby` mediumtext DEFAULT NULL,
-  `addressbook_phone` mediumtext DEFAULT NULL,
-  `addressbook_fax` mediumtext DEFAULT NULL,
-  `addressbook_mobile` mediumtext DEFAULT NULL,
-  `addressbook_email` mediumtext DEFAULT NULL,
-  `addressbook_url` mediumtext DEFAULT NULL,
-  `addressbook_comment` mediumtext DEFAULT NULL,
+  `addressbook_name` mediumtext,
+  `addressbook_ruby` mediumtext,
+  `addressbook_company` mediumtext,
+  `addressbook_companyruby` mediumtext,
+  `addressbook_department` mediumtext,
+  `addressbook_position` mediumtext,
+  `addressbook_postcode` mediumtext,
+  `addressbook_address` mediumtext,
+  `addressbook_addressruby` mediumtext,
+  `addressbook_phone` mediumtext,
+  `addressbook_fax` mediumtext,
+  `addressbook_mobile` mediumtext,
+  `addressbook_email` mediumtext,
+  `addressbook_url` mediumtext,
+  `addressbook_comment` mediumtext,
   `addressbook_parent` int(11) DEFAULT NULL,
   `public_level` int(11) NOT NULL,
-  `public_group` mediumtext DEFAULT NULL,
-  `public_user` mediumtext DEFAULT NULL,
+  `public_group` mediumtext,
+  `public_user` mediumtext,
   `edit_level` int(11) DEFAULT NULL,
-  `edit_group` mediumtext DEFAULT NULL,
-  `edit_user` mediumtext DEFAULT NULL,
+  `edit_group` mediumtext,
+  `edit_user` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL
+  `updated` mediumtext
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
 
 --
@@ -155,23 +170,38 @@ INSERT INTO `groupware_addressbook` (`id`, `folder_id`, `addressbook_type`, `add
 CREATE TABLE `groupware_bookmark` (
   `id` int(11) NOT NULL,
   `folder_id` int(11) NOT NULL,
-  `bookmark_title` mediumtext DEFAULT NULL,
-  `bookmark_name` mediumtext DEFAULT NULL,
-  `bookmark_url` mediumtext DEFAULT NULL,
-  `bookmark_date` mediumtext DEFAULT NULL,
-  `bookmark_comment` mediumtext DEFAULT NULL,
+  `bookmark_title` mediumtext,
+  `bookmark_name` mediumtext,
+  `bookmark_url` mediumtext,
+  `bookmark_date` mediumtext,
+  `bookmark_comment` mediumtext,
   `bookmark_order` int(11) DEFAULT NULL,
   `public_level` int(11) NOT NULL,
-  `public_group` mediumtext DEFAULT NULL,
-  `public_user` mediumtext DEFAULT NULL,
+  `public_group` mediumtext,
+  `public_user` mediumtext,
   `edit_level` int(11) DEFAULT NULL,
-  `edit_group` mediumtext DEFAULT NULL,
-  `edit_user` mediumtext DEFAULT NULL,
+  `edit_group` mediumtext,
+  `edit_user` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL
+  `updated` mediumtext
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `groupware_company`
+--
+
+CREATE TABLE `groupware_company` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `type` enum('client','partner') DEFAULT NULL,
+  `address` mediumtext,
+  `phone` varchar(20) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 -- --------------------------------------------------------
 
@@ -179,31 +209,15 @@ CREATE TABLE `groupware_bookmark` (
 -- Table structure for table `groupware_config`
 --
 
--- --------------------------------------------------------
-
---
--- Table structure for table `specifications`
---
-
-CREATE TABLE specifications (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    company_id INT NOT NULL,
-    text TEXT,
-    files JSON,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (company_id) REFERENCES company(id) ON DELETE CASCADE
-);
-
 CREATE TABLE `groupware_config` (
   `id` int(11) NOT NULL,
   `config_type` mediumtext NOT NULL,
   `config_key` mediumtext NOT NULL,
-  `config_value` mediumtext DEFAULT NULL,
+  `config_value` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL,
+  `updated` mediumtext,
   `config_name` varchar(50) DEFAULT '正社員'
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
 
@@ -271,12 +285,12 @@ CREATE TABLE `groupware_dayoff` (
   `req_edit_by` varchar(50) DEFAULT NULL,
   `req_edit_time` varchar(20) DEFAULT NULL,
   `req_edit_name` varchar(50) DEFAULT NULL,
-  `version` int(11) NOT NULL DEFAULT 0,
+  `version` int(11) NOT NULL DEFAULT '0',
   `update_date` varchar(20) NOT NULL,
   `update_by` varchar(20) NOT NULL,
   `minus_leave` varchar(1) DEFAULT '1',
   `is_repeat` varchar(1) DEFAULT '0',
-  `cancel_repeat_dates` text DEFAULT NULL,
+  `cancel_repeat_dates` text,
   `is_overwork` varchar(1) DEFAULT NULL,
   `is_BHXH` varchar(1) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -1038,22 +1052,22 @@ CREATE TABLE `groupware_folder` (
   `folder_type` mediumtext NOT NULL,
   `folder_id` int(11) NOT NULL,
   `folder_caption` mediumtext NOT NULL,
-  `folder_name` mediumtext DEFAULT NULL,
-  `folder_date` mediumtext DEFAULT NULL,
+  `folder_name` mediumtext,
+  `folder_date` mediumtext,
   `folder_order` int(11) DEFAULT NULL,
   `add_level` int(11) DEFAULT NULL,
-  `add_group` mediumtext DEFAULT NULL,
-  `add_user` mediumtext DEFAULT NULL,
+  `add_group` mediumtext,
+  `add_user` mediumtext,
   `public_level` int(11) DEFAULT NULL,
-  `public_group` mediumtext DEFAULT NULL,
-  `public_user` mediumtext DEFAULT NULL,
+  `public_group` mediumtext,
+  `public_user` mediumtext,
   `edit_level` int(11) DEFAULT NULL,
-  `edit_group` mediumtext DEFAULT NULL,
-  `edit_user` mediumtext DEFAULT NULL,
+  `edit_group` mediumtext,
+  `edit_user` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL
+  `updated` mediumtext
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
 
 --
@@ -1062,7 +1076,7 @@ CREATE TABLE `groupware_folder` (
 
 INSERT INTO `groupware_folder` (`id`, `folder_type`, `folder_id`, `folder_caption`, `folder_name`, `folder_date`, `folder_order`, `add_level`, `add_group`, `add_user`, `public_level`, `public_group`, `public_user`, `edit_level`, `edit_group`, `edit_user`, `owner`, `editor`, `created`, `updated`) VALUES
 (6, 'forum', 1, 'Webteam Thong Bao', 'Admin', '2018-08-22 07:56:16', 1, 0, '', '', 0, '', '', 1, '', '', 'admin', NULL, '2018-08-22 07:56:16', NULL),
-(0, 'forum', 0, 'All', 'All', '2018-08-22 07:56:16', 1, 0, '', '', 0, '', '', 1, '', '', 'admin', NULL, '2018-08-22 07:56:16', NULL);
+(7, 'forum', 0, 'All', 'All', '2018-08-22 07:56:16', 1, 0, '', '', 0, '', '', 1, '', '', 'admin', NULL, '2018-08-22 07:56:16', NULL);
 
 -- --------------------------------------------------------
 
@@ -1074,23 +1088,23 @@ CREATE TABLE `groupware_forum` (
   `id` int(11) NOT NULL,
   `folder_id` int(11) NOT NULL,
   `forum_parent` int(11) NOT NULL,
-  `forum_title` mediumtext DEFAULT NULL,
-  `forum_name` mediumtext DEFAULT NULL,
-  `forum_comment` mediumtext DEFAULT NULL,
-  `forum_date` mediumtext DEFAULT NULL,
-  `forum_file` mediumtext DEFAULT NULL,
-  `forum_lastupdate` mediumtext DEFAULT NULL,
+  `forum_title` mediumtext,
+  `forum_name` mediumtext,
+  `forum_comment` mediumtext,
+  `forum_date` mediumtext,
+  `forum_file` mediumtext,
+  `forum_lastupdate` mediumtext,
   `forum_node` int(11) DEFAULT NULL,
   `public_level` int(11) NOT NULL,
-  `public_group` mediumtext DEFAULT NULL,
-  `public_user` mediumtext DEFAULT NULL,
+  `public_group` mediumtext,
+  `public_user` mediumtext,
   `edit_level` int(11) DEFAULT NULL,
-  `edit_group` mediumtext DEFAULT NULL,
-  `edit_user` mediumtext DEFAULT NULL,
+  `edit_group` mediumtext,
+  `edit_user` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL
+  `updated` mediumtext
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
 
 --
@@ -1113,15 +1127,15 @@ CREATE TABLE `groupware_group` (
   `group_name` mediumtext NOT NULL,
   `group_order` int(11) DEFAULT NULL,
   `add_level` int(11) NOT NULL,
-  `add_group` mediumtext DEFAULT NULL,
-  `add_user` mediumtext DEFAULT NULL,
+  `add_group` mediumtext,
+  `add_user` mediumtext,
   `edit_level` int(11) DEFAULT NULL,
-  `edit_group` mediumtext DEFAULT NULL,
-  `edit_user` mediumtext DEFAULT NULL,
+  `edit_group` mediumtext,
+  `edit_user` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL
+  `updated` mediumtext
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
 
 --
@@ -1211,16 +1225,16 @@ CREATE TABLE `groupware_message` (
   `message_type` mediumtext NOT NULL,
   `message_to` mediumtext NOT NULL,
   `message_from` mediumtext NOT NULL,
-  `message_toname` mediumtext DEFAULT NULL,
-  `message_fromname` mediumtext DEFAULT NULL,
-  `message_title` mediumtext DEFAULT NULL,
-  `message_comment` mediumtext DEFAULT NULL,
-  `message_date` mediumtext DEFAULT NULL,
-  `message_file` mediumtext DEFAULT NULL,
+  `message_toname` mediumtext,
+  `message_fromname` mediumtext,
+  `message_title` mediumtext,
+  `message_comment` mediumtext,
+  `message_date` mediumtext,
+  `message_file` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL
+  `updated` mediumtext
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
@@ -1253,7 +1267,7 @@ CREATE TABLE `groupware_overtime` (
   `time_end` varchar(10) DEFAULT NULL,
   `allday` varchar(6) DEFAULT NULL,
   `offtype` varchar(50) NOT NULL,
-  `reason` text DEFAULT NULL,
+  `reason` text,
   `confirm_userid` varchar(50) DEFAULT NULL,
   `confirm_real_userid` varchar(50) DEFAULT NULL,
   `confirm_real_name` varchar(50) DEFAULT NULL,
@@ -1265,7 +1279,7 @@ CREATE TABLE `groupware_overtime` (
   `req_edit_by` varchar(50) DEFAULT NULL,
   `req_edit_time` varchar(20) DEFAULT NULL,
   `req_edit_name` varchar(50) DEFAULT NULL,
-  `version` int(11) NOT NULL DEFAULT 0,
+  `version` int(11) NOT NULL DEFAULT '0',
   `update_date` varchar(20) NOT NULL,
   `update_by` varchar(20) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -1500,32 +1514,25 @@ INSERT INTO `groupware_overtime` (`id`, `userid`, `group_id`, `date_start`, `dat
 -- --------------------------------------------------------
 
 --
--- Table structure for table `groupware_project`
+-- Table structure for table `groupware_projects`
 --
 
-CREATE TABLE `groupware_project` (
+CREATE TABLE `groupware_projects` (
   `id` int(11) NOT NULL,
-  `folder_id` int(11) NOT NULL,
-  `project_parent` int(11) NOT NULL,
-  `project_title` mediumtext DEFAULT NULL,
-  `project_begin` mediumtext DEFAULT NULL,
-  `project_end` mediumtext DEFAULT NULL,
-  `project_name` mediumtext DEFAULT NULL,
-  `project_progress` int(11) DEFAULT NULL,
-  `project_comment` mediumtext DEFAULT NULL,
-  `project_date` mediumtext DEFAULT NULL,
-  `project_file` mediumtext DEFAULT NULL,
-  `public_level` int(11) NOT NULL,
-  `public_group` mediumtext DEFAULT NULL,
-  `public_user` mediumtext DEFAULT NULL,
-  `edit_level` int(11) DEFAULT NULL,
-  `edit_group` mediumtext DEFAULT NULL,
-  `edit_user` mediumtext DEFAULT NULL,
-  `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
-  `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
+  `code` varchar(255) NOT NULL,
+  `address` mediumtext,
+  `tags` mediumtext,
+  `notes` mediumtext,
+  `specifications` mediumtext,
+  `estimated_hours` float DEFAULT NULL,
+  `actual_hours` float DEFAULT NULL,
+  `assignees` mediumtext,
+  `responsible_person` varchar(255) DEFAULT NULL,
+  `viewable_groups` mediumtext,
+  `status` varchar(50) DEFAULT NULL,
+  `progress` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
 
@@ -1536,35 +1543,35 @@ CREATE TABLE `groupware_project` (
 CREATE TABLE `groupware_schedule` (
   `id` int(11) NOT NULL,
   `schedule_type` int(11) NOT NULL,
-  `schedule_title` mediumtext DEFAULT NULL,
-  `schedule_name` mediumtext DEFAULT NULL,
-  `schedule_comment` mediumtext DEFAULT NULL,
+  `schedule_title` mediumtext,
+  `schedule_name` mediumtext,
+  `schedule_comment` mediumtext,
   `schedule_year` int(11) DEFAULT NULL,
   `schedule_month` int(11) DEFAULT NULL,
   `schedule_day` int(11) DEFAULT NULL,
-  `schedule_date` mediumtext DEFAULT NULL,
-  `schedule_time` mediumtext DEFAULT NULL,
-  `schedule_endtime` mediumtext DEFAULT NULL,
-  `schedule_allday` mediumtext DEFAULT NULL,
-  `schedule_repeat` mediumtext DEFAULT NULL,
-  `schedule_everyweek` mediumtext DEFAULT NULL,
-  `schedule_everymonth` mediumtext DEFAULT NULL,
-  `schedule_begin` mediumtext DEFAULT NULL,
-  `schedule_end` mediumtext DEFAULT NULL,
+  `schedule_date` mediumtext,
+  `schedule_time` mediumtext,
+  `schedule_endtime` mediumtext,
+  `schedule_allday` mediumtext,
+  `schedule_repeat` mediumtext,
+  `schedule_everyweek` mediumtext,
+  `schedule_everymonth` mediumtext,
+  `schedule_begin` mediumtext,
+  `schedule_end` mediumtext,
   `schedule_facility` int(11) DEFAULT NULL,
   `schedule_level` int(11) NOT NULL,
-  `schedule_group` mediumtext DEFAULT NULL,
-  `schedule_user` mediumtext DEFAULT NULL,
+  `schedule_group` mediumtext,
+  `schedule_user` mediumtext,
   `public_level` int(11) NOT NULL,
-  `public_group` mediumtext DEFAULT NULL,
-  `public_user` mediumtext DEFAULT NULL,
+  `public_group` mediumtext,
+  `public_user` mediumtext,
   `edit_level` int(11) DEFAULT NULL,
-  `edit_group` mediumtext DEFAULT NULL,
-  `edit_user` mediumtext DEFAULT NULL,
+  `edit_group` mediumtext,
+  `edit_user` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL
+  `updated` mediumtext
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
 
 --
@@ -1587,6 +1594,21 @@ INSERT INTO `groupware_schedule` (`id`, `schedule_type`, `schedule_title`, `sche
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `groupware_specifications`
+--
+
+CREATE TABLE `groupware_specifications` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `company_id` int(11) NOT NULL,
+  `text` text,
+  `files` json DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `groupware_storage`
 --
 
@@ -1594,25 +1616,25 @@ CREATE TABLE `groupware_storage` (
   `id` int(11) NOT NULL,
   `storage_type` mediumtext NOT NULL,
   `storage_folder` int(11) NOT NULL,
-  `storage_title` mediumtext DEFAULT NULL,
-  `storage_name` mediumtext DEFAULT NULL,
-  `storage_comment` mediumtext DEFAULT NULL,
-  `storage_date` mediumtext DEFAULT NULL,
-  `storage_file` mediumtext DEFAULT NULL,
-  `storage_size` mediumtext DEFAULT NULL,
+  `storage_title` mediumtext,
+  `storage_name` mediumtext,
+  `storage_comment` mediumtext,
+  `storage_date` mediumtext,
+  `storage_file` mediumtext,
+  `storage_size` mediumtext,
   `add_level` int(11) DEFAULT NULL,
-  `add_group` mediumtext DEFAULT NULL,
-  `add_user` mediumtext DEFAULT NULL,
+  `add_group` mediumtext,
+  `add_user` mediumtext,
   `public_level` int(11) NOT NULL,
-  `public_group` mediumtext DEFAULT NULL,
-  `public_user` mediumtext DEFAULT NULL,
+  `public_group` mediumtext,
+  `public_user` mediumtext,
   `edit_level` int(11) DEFAULT NULL,
-  `edit_group` mediumtext DEFAULT NULL,
-  `edit_user` mediumtext DEFAULT NULL,
+  `edit_group` mediumtext,
+  `edit_user` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL
+  `updated` mediumtext
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
@@ -1623,22 +1645,22 @@ CREATE TABLE `groupware_storage` (
 
 CREATE TABLE `groupware_timecard` (
   `id` int(11) NOT NULL,
-  `timecard_open` mediumtext DEFAULT NULL,
-  `timecard_close` mediumtext DEFAULT NULL,
-  `timecard_originalopen` mediumtext DEFAULT NULL,
-  `timecard_originalclose` mediumtext DEFAULT NULL,
-  `timecard_interval` mediumtext DEFAULT NULL,
-  `timecard_originalinterval` mediumtext DEFAULT NULL,
-  `timecard_time` mediumtext DEFAULT NULL,
-  `timecard_timeover` mediumtext DEFAULT NULL,
-  `timecard_timeinterval` mediumtext DEFAULT NULL,
-  `timecard_comment` mediumtext DEFAULT NULL,
+  `timecard_open` mediumtext,
+  `timecard_close` mediumtext,
+  `timecard_originalopen` mediumtext,
+  `timecard_originalclose` mediumtext,
+  `timecard_interval` mediumtext,
+  `timecard_originalinterval` mediumtext,
+  `timecard_time` mediumtext,
+  `timecard_timeover` mediumtext,
+  `timecard_timeinterval` mediumtext,
+  `timecard_comment` mediumtext,
   `update_time` varchar(50) DEFAULT NULL,
-  `version` int(11) NOT NULL DEFAULT 0,
-  `leader_comment` text DEFAULT NULL,
+  `version` int(11) NOT NULL DEFAULT '0',
+  `leader_comment` text,
   `leader_comment_id` varchar(50) DEFAULT NULL,
   `leader_comment_time` varchar(50) DEFAULT NULL,
-  `tv_comment` text DEFAULT NULL,
+  `tv_comment` text,
   `tv_comment_id` varchar(50) DEFAULT NULL,
   `tv_comment_time` varchar(20) DEFAULT NULL,
   `timecard_minus` varchar(10) DEFAULT NULL,
@@ -1646,11 +1668,11 @@ CREATE TABLE `groupware_timecard` (
   `timecard_year` int(11) DEFAULT NULL,
   `timecard_month` int(11) DEFAULT NULL,
   `timecard_day` int(11) DEFAULT NULL,
-  `timecard_date` mediumtext DEFAULT NULL,
+  `timecard_date` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL,
+  `updated` mediumtext,
   `timecard_temp` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -1660,7 +1682,8 @@ CREATE TABLE `groupware_timecard` (
 
 INSERT INTO `groupware_timecard` (`id`, `timecard_open`, `timecard_close`, `timecard_originalopen`, `timecard_originalclose`, `timecard_interval`, `timecard_originalinterval`, `timecard_time`, `timecard_timeover`, `timecard_timeinterval`, `timecard_comment`, `update_time`, `version`, `leader_comment`, `leader_comment_id`, `leader_comment_time`, `tv_comment`, `tv_comment_id`, `tv_comment_time`, `timecard_minus`, `timecard_overtime_real`, `timecard_year`, `timecard_month`, `timecard_day`, `timecard_date`, `owner`, `editor`, `created`, `updated`, `timecard_temp`) VALUES
 (153266, '10:32', '15:20', '10:32', '10:32', NULL, NULL, '4:18', '0:00', '0:30', NULL, '2025-04-03 10:32:35', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 2025, 4, 3, '2025-04-03', 'minhthanhonly', NULL, '2025-04-03 10:32:25', NULL, NULL),
-(153267, '07:19', '07:26', '07:19', '07:26', NULL, NULL, '8:00', '15:26', '0:30', NULL, '2025-04-18 07:26:36', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 2025, 4, 18, '2025-04-18', 'minhthanhonly', NULL, '2025-04-18 07:19:14', NULL, NULL);
+(153267, '07:19', '07:26', '07:19', '07:26', NULL, NULL, '8:00', '15:26', '0:30', NULL, '2025-04-18 07:26:36', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 2025, 4, 18, '2025-04-18', 'minhthanhonly', NULL, '2025-04-18 07:19:14', NULL, NULL),
+(153268, '07:52', NULL, '07:52', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 2025, 4, 21, '2025-04-21', 'minhthanhonly', NULL, '2025-04-21 07:52:55', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -1672,19 +1695,19 @@ CREATE TABLE `groupware_todo` (
   `id` int(11) NOT NULL,
   `folder_id` int(11) NOT NULL,
   `todo_parent` int(11) DEFAULT NULL,
-  `todo_title` mediumtext DEFAULT NULL,
-  `todo_name` mediumtext DEFAULT NULL,
-  `todo_term` mediumtext DEFAULT NULL,
-  `todo_noterm` mediumtext DEFAULT NULL,
+  `todo_title` mediumtext,
+  `todo_name` mediumtext,
+  `todo_term` mediumtext,
+  `todo_noterm` mediumtext,
   `todo_priority` int(11) DEFAULT NULL,
-  `todo_comment` mediumtext DEFAULT NULL,
+  `todo_comment` mediumtext,
   `todo_complete` int(11) DEFAULT NULL,
-  `todo_completedate` mediumtext DEFAULT NULL,
-  `todo_user` mediumtext DEFAULT NULL,
+  `todo_completedate` mediumtext,
+  `todo_user` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL
+  `updated` mediumtext
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
@@ -1701,23 +1724,23 @@ CREATE TABLE `groupware_user` (
   `realname` mediumtext NOT NULL,
   `authority` mediumtext NOT NULL,
   `user_group` int(11) DEFAULT NULL,
-  `user_groupname` mediumtext DEFAULT NULL,
-  `user_email` mediumtext DEFAULT NULL,
-  `user_skype` mediumtext DEFAULT NULL,
-  `user_ruby` mediumtext DEFAULT NULL,
-  `user_postcode` mediumtext DEFAULT NULL,
-  `user_address` mediumtext DEFAULT NULL,
-  `user_addressruby` mediumtext DEFAULT NULL,
-  `user_phone` mediumtext DEFAULT NULL,
-  `user_mobile` mediumtext DEFAULT NULL,
+  `user_groupname` mediumtext,
+  `user_email` mediumtext,
+  `user_skype` mediumtext,
+  `user_ruby` mediumtext,
+  `user_postcode` mediumtext,
+  `user_address` mediumtext,
+  `user_addressruby` mediumtext,
+  `user_phone` mediumtext,
+  `user_mobile` mediumtext,
   `user_order` int(11) DEFAULT NULL,
   `edit_level` int(11) DEFAULT NULL,
-  `edit_group` mediumtext DEFAULT NULL,
-  `edit_user` mediumtext DEFAULT NULL,
+  `edit_group` mediumtext,
+  `edit_user` mediumtext,
   `owner` mediumtext NOT NULL,
-  `editor` mediumtext DEFAULT NULL,
+  `editor` mediumtext,
   `created` mediumtext NOT NULL,
-  `updated` mediumtext DEFAULT NULL,
+  `updated` mediumtext,
   `pc_name` varchar(50) NOT NULL,
   `last_active` varchar(50) NOT NULL,
   `status` varchar(50) NOT NULL,
@@ -1736,7 +1759,7 @@ INSERT INTO `groupware_user` (`id`, `userid`, `password`, `password_default`, `r
 (1, 'admin', '3c6b2cbde180f07b64004617bf4eee44', '21232f297a57a5a743894a0e4a801fc3', 'Admin', 'administrator', 1, 'Chung', '', '', '', '', '', '', '', '', 0, 0, '', '', 'admin', 'admin', '2011-07-13 16:59:48', '2021-03-10 12:23:32', 'NOONE', '2024-06-27 17:24:46', 'online', '', '', 'timecard', '2804e937e57ddee327755ca623f65694', NULL),
 (12, 'tranvinh.loc', '06367194b29bc307b35763e6e85dbfaa', '06367194b29bc307b35763e6e85dbfaa', 'Tran Vinh Loc', 'editor', 1, 'Chung', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', '', 'minhthanhonly', '', '2024-06-27 11:13:20', 'TB_007', '2024-07-12 17:00:22', 'offline', '2024-07-12 11:59:15', 'MT7017003604892-BFEBFBFF00000F65-TB_007-Microsoft Windows NT 6.1.7601 Service Pack 1', 'timecard', NULL, NULL),
 (13, 'minhthomonly', '7ee4e16825da9eb26585986429271d91', '89a64ecaffb30bcade81eb8ffefe75ed', 'Dinh Minh Thom', 'manager', 17, 'Kien Truc', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', '', 'minhthanhonly', '', '2024-06-19 17:09:30', 'KT-001', '2024-07-15 07:51:28', 'offline', '2024-07-12 11:38:18', '', 'timecard', NULL, NULL),
-(15, 'minhthanhonly', '3c6b2cbde180f07b64004617bf4eee44', '89a64ecaffb30bcade81eb8ffefe75ed', 'Dinh Minh Thanh', 'manager', 7, 'Web', 'thanhonly@caily.com.vn', 'minhthanhonly', '', NULL, 'MDC', '28 Cổng khu liên cơ quan', '0966448826', '0966448826', 0, 0, '', '', '', 'minhthanhonly', '', '2025-04-18 16:19:13', 'NOONE', '2024-07-12 13:13:40', 'offline', '2024-06-28 16:55:30', '', 'timecard20240925092540', '7dc4a84354e91cd50a41692561be7fe0', 'minhthanhonly_468060297_3568170183473230_7899804344408757641_n.jpg'),
+(15, 'minhthanhonly', '3c6b2cbde180f07b64004617bf4eee44', '89a64ecaffb30bcade81eb8ffefe75ed', 'Dinh Minh Thanh', 'manager', 7, 'Web', 'thanhonly@caily.com.vn', 'minhthanhonly', '', NULL, 'MDC', '28 Cổng khu liên cơ quan', '0966448826', '0966448826', 0, 0, '', '', '', 'minhthanhonly', '', '2025-04-18 16:19:13', 'NOONE', '2024-07-12 13:13:40', 'offline', '2024-06-28 16:55:30', '', 'timecard20240925092540', '16c92b61d3a924dd4d84de0ebd1ed5d8', 'minhthanhonly_468060297_3568170183473230_7899804344408757641_n.jpg'),
 (16, 'dat', 'e8c18bde56087ea04566b7f5a7e99e7f', 'e8c18bde56087ea04566b7f5a7e99e7f', 'Tran Vinh Dat', 'editor', 14, '3D', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'admin', 'admin', '2012-11-06 10:49:25', '2021-03-10 09:17:39', 'PC', '2024-07-15 07:37:34', 'offline', '2024-07-15 06:57:40', 'sb45nrcx001mnzmb-178bfbff00a70f52-dat-zephyrus-microsoft windows nt 6.2.9200.0,BSS-0123456789-BFEBFBFF000806EA-DESKTOP-U3UH4CR-Microsoft Windows NT 6.2.9200.0', 'timecard', NULL, NULL),
 (19, 'ngocthuy', 'c63a090ecb5aed04036c5864e8c31652', 'c63a090ecb5aed04036c5864e8c31652', 'Luong Ngoc Thuy', 'manager', 19, 'Tổng Vụ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'admin', 'admin', '2013-03-11 10:02:25', '2021-03-10 06:18:20', 'THUY_TV', '2024-07-02 07:39:50', 'offline', '2024-07-01 13:27:17', '', 'timecard', NULL, NULL),
 (22, 'lien', '26dd2ba83929792128d28b0e464e8350', '26dd2ba83929792128d28b0e464e8350', 'Vu Thi Lien', 'editor', 9, 'Thiet Bi B', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'admin', 'admin', '2013-06-10 10:31:04', '2021-03-10 09:16:31', 'TB_006', '2024-07-15 06:21:23', 'offline', '2024-07-12 11:44:34', '..CN70163161007N.                  -BFEBFBFF000206A7-TB_006-Microsoft Windows NT 6.1.7601 Service Pack 1', 'timecard', NULL, NULL),
@@ -1870,6 +1893,13 @@ ALTER TABLE `achieve`
   ADD PRIMARY KEY (`achieve_id`);
 
 --
+-- Indexes for table `company_representatives`
+--
+ALTER TABLE `company_representatives`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `company_id` (`company_id`);
+
+--
 -- Indexes for table `groupware_addressbook`
 --
 ALTER TABLE `groupware_addressbook`
@@ -1883,6 +1913,12 @@ ALTER TABLE `groupware_addressbook`
 ALTER TABLE `groupware_bookmark`
   ADD PRIMARY KEY (`id`),
   ADD KEY `groupware_index_bookmark_folder_id` (`folder_id`);
+
+--
+-- Indexes for table `groupware_company`
+--
+ALTER TABLE `groupware_company`
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `groupware_config`
@@ -1954,12 +1990,10 @@ ALTER TABLE `groupware_overtime`
   ADD PRIMARY KEY (`id`);
 
 --
--- Indexes for table `groupware_project`
+-- Indexes for table `groupware_projects`
 --
-ALTER TABLE `groupware_project`
-  ADD PRIMARY KEY (`id`),
-  ADD KEY `groupware_index_project_folder_id` (`folder_id`),
-  ADD KEY `groupware_index_project_parent` (`project_parent`);
+ALTER TABLE `groupware_projects`
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `groupware_schedule`
@@ -1973,6 +2007,12 @@ ALTER TABLE `groupware_schedule`
   ADD KEY `groupware_index_schedule_end` (`schedule_end`(250)),
   ADD KEY `groupware_index_schedule_level` (`schedule_level`),
   ADD KEY `groupware_index_schedule_owner` (`owner`(250));
+
+--
+-- Indexes for table `groupware_specifications`
+--
+ALTER TABLE `groupware_specifications`
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `groupware_storage`
@@ -2000,30 +2040,34 @@ ALTER TABLE `groupware_todo`
 -- Indexes for table `groupware_user`
 --
 ALTER TABLE `groupware_user`
-  ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `groupware_index_userid` (`userid`(255)) USING HASH,
-  ADD KEY `groupware_index_user_group` (`user_group`);
+  ADD PRIMARY KEY (`id`);
 
 --
 -- AUTO_INCREMENT for dumped tables
 --
 
 --
--- AUTO_INCREMENT for table `achieve`
+-- AUTO_INCREMENT for table `company_representatives`
 --
-ALTER TABLE `achieve`
-  MODIFY `achieve_id` int(11) NOT NULL AUTO_INCREMENT;
+ALTER TABLE `company_representatives`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `groupware_addressbook`
 --
 ALTER TABLE `groupware_addressbook`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=148;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=105;
 
 --
 -- AUTO_INCREMENT for table `groupware_bookmark`
 --
 ALTER TABLE `groupware_bookmark`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `groupware_company`
+--
+ALTER TABLE `groupware_company`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
@@ -2042,7 +2086,7 @@ ALTER TABLE `groupware_dayoff`
 -- AUTO_INCREMENT for table `groupware_folder`
 --
 ALTER TABLE `groupware_folder`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `groupware_forum`
@@ -2060,13 +2104,13 @@ ALTER TABLE `groupware_group`
 -- AUTO_INCREMENT for table `groupware_holiday`
 --
 ALTER TABLE `groupware_holiday`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `groupware_log`
 --
 ALTER TABLE `groupware_log`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=48454;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `groupware_message`
@@ -2078,7 +2122,7 @@ ALTER TABLE `groupware_message`
 -- AUTO_INCREMENT for table `groupware_notification`
 --
 ALTER TABLE `groupware_notification`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10098;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `groupware_overtime`
@@ -2087,10 +2131,10 @@ ALTER TABLE `groupware_overtime`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=223;
 
 --
--- AUTO_INCREMENT for table `groupware_project`
+-- AUTO_INCREMENT for table `groupware_projects`
 --
-ALTER TABLE `groupware_project`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+ALTER TABLE `groupware_projects`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `groupware_schedule`
@@ -2099,16 +2143,22 @@ ALTER TABLE `groupware_schedule`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
 
 --
+-- AUTO_INCREMENT for table `groupware_specifications`
+--
+ALTER TABLE `groupware_specifications`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `groupware_storage`
 --
 ALTER TABLE `groupware_storage`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `groupware_timecard`
 --
 ALTER TABLE `groupware_timecard`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=153268;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=153269;
 
 --
 -- AUTO_INCREMENT for table `groupware_todo`
@@ -2121,6 +2171,16 @@ ALTER TABLE `groupware_todo`
 --
 ALTER TABLE `groupware_user`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=171;
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `company_representatives`
+--
+ALTER TABLE `company_representatives`
+  ADD CONSTRAINT `company_representatives_ibfk_1` FOREIGN KEY (`company_id`) REFERENCES `groupware_company` (`id`);
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
