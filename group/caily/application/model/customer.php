@@ -24,6 +24,15 @@ class Customer extends ApplicationModel {
     }
 
     function add() {
+        // Check if company exists by name
+        $companyQuery = sprintf("SELECT id FROM {$this->table} WHERE name = '%s'", $this->quote($_POST['name']));
+        $company = $this->fetchOne($companyQuery);
+        
+        if ($company) {
+            $hash['status'] = 'error';
+            $hash['message_code'] = 7; // Company with this name already exists
+            return $hash;
+        }
         $query = sprintf(
             "INSERT INTO {$this->table} (name, type, address, phone, created_at) VALUES ('%s', '%s', '%s', '%s', NOW())",
             $this->quote($_POST['name']),
@@ -46,6 +55,16 @@ class Customer extends ApplicationModel {
             $hash['message_code'] = 0;
             return $hash;
         }
+        // Check if company exists by name
+        $companyQuery = sprintf("SELECT id FROM {$this->table} WHERE name = '%s' AND id != %d", $this->quote($_POST['name']), intval($id));
+        $company = $this->fetchOne($companyQuery);
+        
+        if ($company) {
+            $hash['status'] = 'error';
+            $hash['message_code'] = 7; // Company with this name already exists
+            return $hash;
+        }
+        
         $query = sprintf(
             "UPDATE {$this->table} SET name = '%s', type = '%s', address = '%s', phone = '%s' WHERE id = %d",
             $this->quote($_POST['name']),
@@ -105,6 +124,16 @@ class Customer extends ApplicationModel {
     }
 
     function addRepresentative() {
+        // Check if representative exists by name
+        $repQuery = sprintf("SELECT id FROM company_representatives WHERE name = '%s'", $this->quote($_POST['name']));
+        $rep = $this->fetchOne($repQuery);
+        
+        if ($rep) {
+            $hash['status'] = 'error';
+            $hash['message_code'] = 8; // Representative with this name already exists
+            return $hash;
+        }
+
         $query = sprintf(
             "INSERT INTO company_representatives (company_id, name, email, phone, created_at) VALUES (%d, '%s', '%s', '%s', NOW())",
             intval($_POST['company_id']),
@@ -143,6 +172,20 @@ class Customer extends ApplicationModel {
             $hash['message_code'] = 0;
             return $hash;
         }
+
+        // Check if representative exists by name (excluding current record)
+        $repQuery = sprintf("SELECT id FROM company_representatives WHERE name = '%s' AND id != %d", 
+            $this->quote($_POST['name']), 
+            intval($id)
+        );
+        $rep = $this->fetchOne($repQuery);
+        
+        if ($rep) {
+            $hash['status'] = 'error';
+            $hash['message_code'] = 8; // Representative with this name already exists
+            return $hash;
+        }
+
         $query = sprintf(
             "UPDATE company_representatives SET name = '%s', email = '%s', phone = '%s' WHERE id = %d",
             $this->quote($_POST['name']),

@@ -777,10 +777,10 @@ function handleSuccess(response) {
   hideHourglass();
 }
 
-function showMessage(response, isError = false) {
+function showMessage(message, isError = false) {
   Swal.fire({
     title: isError ? 'Error!' : 'Success!', 
-    text: response,
+    text: message,
     icon: isError ? 'error' : 'success',
     customClass: {
       confirmButton: 'btn btn-primary'

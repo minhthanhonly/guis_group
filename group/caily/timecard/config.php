@@ -33,7 +33,7 @@ $array = array('0'=>'00', '10'=>'10', '20'=>'20', '30'=>'30', '40'=>'40', '50'=>
 						<?php } ?>
 						</select>
 					</div>
-					<div class="col-md-4"><a class="btn btn-primary" onclick="location.href='add_config.php'">種類を追加する</a></div>
+					<div class="col-md-4"><a href="javascript:void(0)" class="btn btn-primary" onclick="location.href='add_config.php'">種類を追加する</a></div>
 					
 				</div>
 				<h2><?=$hash['data']['config_name']?></h2>

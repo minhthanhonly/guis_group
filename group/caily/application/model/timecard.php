@@ -120,7 +120,7 @@ class Timecard extends ApplicationModel {
 		foreach($this->holidays as $key => $value){
 			$dayPart = explode('-', $value);
 			if(($dayPart[0] ==  $start->format('Y') || $dayPart[0] == $end->format('Y')) 
-			&& ($dayPart[1] == $start->format('m') || $dayPart[1] == $start->format('Y'))){
+			&& ($dayPart[1] == $start->format('m') || $dayPart[1] == $end->format('m'))){
 				$hash['holidays'][] = $value;
 			}
 		}

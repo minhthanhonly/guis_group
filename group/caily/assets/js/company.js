@@ -13,12 +13,12 @@ document.addEventListener('DOMContentLoaded', function () {
             ordering: true,
             columns: [
                 { data: 'id', title: 'ID' },
-                { data: 'name', title: 'Tên công ty' },
-                { data: 'type', title: 'Loại' },
-                { data: 'address', title: 'Địa chỉ' },
-                { data: 'phone', title: 'Số điện thoại' },
-                { data: 'created_at', title: 'Ngày tạo' },
-                { data: 'representatives', title: 'Người đại diện' },
+                { data: 'name', title: '会社名' },
+                { data: 'type', title: 'タイプ' },
+                { data: 'address', title: '住所' },
+                { data: 'phone', title: '電話番号' },
+                { data: 'created_at', title: '作成日' },
+                { data: 'representatives', title: '担当者' },
                 { data: '', title: '' },
             ],
             columnDefs: [
@@ -41,8 +41,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
               ],
             language: {
-                zeroRecords: 'Không có dữ liệu',
-                emptyTable: 'Không có dữ liệu',
+                zeroRecords: 'データがありません',
+                emptyTable: 'データがありません',
             }
         });
 
@@ -66,8 +66,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
                 dt_table.clear().rows.add(companies).draw();
             } catch (error) {
-                console.error('Error fetching company data:', error);
-                showMessage(error.message, true);
+                console.error('会社データの取得エラー:', error);
+                handleMessage(error.message);
             }
         }
 
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function () {
         companyTable.addEventListener('click', async function (e) {
             if (e.target.closest('.delete-button')) {
                 const companyId = e.target.closest('.delete-button').dataset.id;
-                if (confirm('Bạn có chắc chắn muốn xóa công ty này?')) {
+                if (confirm('この会社を削除してもよろしいですか？')) {
                     try {
                         const response = await fetch(`/api/index.php?model=customer&method=delete&id=${companyId}`, {
                             method: 'DELETE'
@@ -89,11 +89,11 @@ document.addEventListener('DOMContentLoaded', function () {
                             return;
                         }
 
-                        showMessage(data.message_code);
+                        handleMessage(data);
                         fetchCompanyData();
                     } catch (error) {
-                        console.error('Error deleting company:', error);
-                        showMessage(error.message, true);
+                        console.error('会社削除エラー:', error);
+                        handleMessage(error.message);
                     }
                 }
             }
@@ -119,8 +119,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     const editModal = new bootstrap.Modal(document.getElementById('editCompanyModal'));
                     editModal.show();
                 } catch (error) {
-                    console.error('Error fetching company data:', error);
-                    showMessage(error.message, true);
+                    console.error('会社データの取得エラー:', error);
+                    handleMessage(error.message);
                 }
             }
 
@@ -131,25 +131,25 @@ document.addEventListener('DOMContentLoaded', function () {
                     const data = await response.json();
                     
                     if (response.status !== 200 || !data || !data.data) {
-                        handleErrors(data);
+                        handleMessage(data);
                         return;
                     }
 
                     const company = data.data;
                     document.querySelector('#companyDetails').innerHTML = `
-                        <p><strong>Tên công ty:</strong> ${company.name}</p>
-                        <p><strong>Loại:</strong> ${company.type}</p>
-                        <p><strong>Địa chỉ:</strong> ${company.address}</p>
-                        <p><strong>Số điện thoại:</strong> ${company.phone}</p>
+                        <p><strong>会社名:</strong> ${company.name}</p>
+                        <p><strong>タイプ:</strong> ${company.type}</p>
+                        <p><strong>住所:</strong> ${company.address}</p>
+                        <p><strong>電話番号:</strong> ${company.phone}</p>
                     `;
-                    
+
                     document.querySelector('#companyDetails').dataset.companyId = companyId;
 
                     const repResponse = await fetch(`/api/index.php?model=customer&method=listRepresentatives&company_id=${companyId}`);
                     const repData = await repResponse.json();
                     
                     if (repResponse.status !== 200 || !repData || !repData.list) {
-                        handleErrors(repData);
+                        handleMessage(repData);
                         return;
                     }
 
@@ -163,8 +163,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <td>${rep.email}</td>
                                 <td>${rep.phone}</td>
                                 <td>
-                                    <button class="btn btn-danger btn-sm delete-rep-button" data-id="${rep.id}">Xóa</button>
-                                    <button class="btn btn-primary btn-sm edit-rep-button" data-id="${rep.id}">Sửa</button>
+                                    <button class="btn btn-danger btn-sm delete-rep-button" data-id="${rep.id}">削除</button>
+                                    <button class="btn btn-primary btn-sm edit-rep-button" data-id="${rep.id}">編集</button>
                                 </td>
                             </tr>
                         `;
@@ -173,14 +173,17 @@ document.addEventListener('DOMContentLoaded', function () {
                     const viewModal = new bootstrap.Modal(document.getElementById('viewCompanyModal'));
                     viewModal.show();
                 } catch (error) {
-                    console.error('Error fetching company details:', error);
-                    showMessage(error.message, true);
+                    console.error('会社詳細の取得エラー:', error);
+                    handleMessage(error.message);
                 }
             }
+            
+        });
 
+        document.querySelector('.datatables-representatives').addEventListener('click', async function (e) {
             if (e.target.closest('.delete-rep-button')) {
                 const repId = e.target.closest('.delete-rep-button').dataset.id;
-                if (confirm('Bạn có chắc chắn muốn xóa người đại diện này?')) {
+                if (confirm('この担当者を削除してもよろしいですか？')) {
                     try {
                         const response = await fetch(`/api/index.php?model=customer&method=deleteRepresentative&id=${repId}`, {
                             method: 'DELETE'
@@ -188,27 +191,32 @@ document.addEventListener('DOMContentLoaded', function () {
                         const data = await response.json();
                         
                         if (response.status !== 200 || !data || data.status !== 'success') {
-                            handleErrors(data);
+                            handleMessage(data);
                             return;
                         }
 
-                        showMessage(data.message_code);
+                        handleMessage(data);
                         e.target.closest('tr').remove();
                     } catch (error) {
-                        console.error('Error deleting representative:', error);
-                        showMessage(error.message, true);
+                        console.error('担当者削除エラー:', error);
+                        handleMessage(error.message);
                     }
                 }
             }
 
             if (e.target.closest('.edit-rep-button')) {
+                //close viewCompanyModal
+                const viewModal = bootstrap.Modal.getInstance(document.getElementById('viewCompanyModal'));
+                if (viewModal) {
+                    viewModal.hide();
+                }
                 const repId = e.target.closest('.edit-rep-button').dataset.id;
                 try {
                     const response = await fetch(`/api/index.php?model=customer&method=getRepresentative&id=${repId}`);
                     const data = await response.json();
                     
                     if (response.status !== 200 || !data || !data.data) {
-                        handleErrors(data);
+                        handleMessage(data);
                         return;
                     }
 
@@ -221,8 +229,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     const editRepModal = new bootstrap.Modal(document.getElementById('editRepresentativeModal'));
                     editRepModal.show();
                 } catch (error) {
-                    console.error('Error fetching representative data:', error);
-                    showMessage(error.message, true); 
+                    console.error('担当者データの取得エラー:', error);
+                    handleMessage(error.message);
                 }
             }
         });
@@ -239,19 +247,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 const data = await response.json();
                 
                 if (response.status !== 200 || !data || data.status !== 'success') {
-                    handleErrors(data);
+                    handleMessage(data);
                     return;
                 }
 
-                showMessage(data.message_code);
+                handleMessage(data);
                 fetchCompanyData();
                 const addModal = bootstrap.Modal.getInstance(document.getElementById('addCompanyModal'));
                 if (addModal) {
                     addModal.hide();
                 }
             } catch (error) {
-                console.error('Error adding company:', error);
-                showMessage(error.message, true);
+                console.error('会社追加エラー:', error);
+                handleMessage(error.message);
             }
         });
 
@@ -267,19 +275,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 const data = await response.json();
                 
                 if (response.status !== 200 || !data || data.status !== 'success') {
-                    handleErrors(data);
+                    handleMessage(data);
                     return;
                 }
 
-                showMessage(data.message);
+                handleMessage(data);
                 fetchCompanyData();
                 const editModal = bootstrap.Modal.getInstance(document.getElementById('editCompanyModal'));
                 if (editModal) {
                     editModal.hide();
                 }
             } catch (error) {
-                console.error('Error updating company:', error);
-                showMessage(error.message, true);
+                console.error('会社更新エラー:', error);
+                handleMessage(error.message);
             }
         });
 
@@ -288,11 +296,17 @@ document.addEventListener('DOMContentLoaded', function () {
             document.querySelector('#modalAddRepCompanyID').value = companyId;
             const addRepModal = new bootstrap.Modal(document.getElementById('addRepresentativeModal'));
             addRepModal.show();
+             //close viewCompanyModal
+             const viewModal = bootstrap.Modal.getInstance(document.getElementById('viewCompanyModal'));
+             if (viewModal) {
+                 viewModal.hide();
+             }
         });
 
         document.querySelector('#formAddRepresentative').addEventListener('submit', async function (e) {
             e.preventDefault();
             try {
+               
                 const formData = new FormData(this);
                 const response = await fetch('/api/index.php?model=customer&method=addRepresentative', {
                     method: 'POST',
@@ -301,19 +315,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 const data = await response.json();
                 
                 if (response.status !== 200 || !data || data.status !== 'success') {
-                    handleErrors(data);
+                    handleMessage(data);
                     return;
                 }
 
-                showMessage(data.message_code);
+                handleMessage(data);
                 const addRepModal = bootstrap.Modal.getInstance(document.getElementById('addRepresentativeModal'));
                 if (addRepModal) {
                     addRepModal.hide();
                 }
                 fetchCompanyData();
             } catch (error) {
-                console.error('Error adding representative:', error);
-                showMessage(error.message, true);
+                console.error('担当者追加エラー:', error);
+                handleMessage(error.message);
             }
         });
 
@@ -321,7 +335,7 @@ document.addEventListener('DOMContentLoaded', function () {
             e.preventDefault();
             try {
                 const formData = new FormData(this);
-                const response = await fetch('/api/index.php?model=customer&method=editRepresentative', {
+                const response = await fetch('/api/index.php?model=customer&method=editRepresentative&id=' + document.querySelector('#modalEditRepID').value, {
                     method: 'POST',
                     body: formData
                 });
@@ -332,50 +346,63 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
 
-                showMessage(data.message_code);
+                handleMessage(data);
                 const editRepModal = bootstrap.Modal.getInstance(document.getElementById('editRepresentativeModal'));
                 if (editRepModal) {
                     editRepModal.hide();
                 }
                 fetchCompanyData();
             } catch (error) {
-                console.error('Error updating representative:', error);
-                showMessage(error.message, true);
+                console.error('担当者更新エラー:', error);
+                handleMessage(error.message);
             }
         });
     }
 });
 
 // Error handling function
-function handleErrors(data) {
+function handleMessage(data) {
     if (!data) {
-        showMessage('Lỗi không xác định!', true);
+        showMessage('不明なエラーが発生しました！', true);
         return;
     }
-    
-    switch (data.message_code) {
-        case 0:
-            showMessage('Thao tác thất bại!', true);
-            break;
-        case 1:
-            showMessage('Thêm công ty thất bại!', true);
-            break;
-        case 2:
-            showMessage('Cập nhật công ty thất bại!', true);
-            break;
-        case 3:
-            showMessage('Xóa công ty thất bại!', true);
-            break;
-        case 4:
-            showMessage('Thêm người đại diện thất bại!', true);
-            break;
-        case 5:
-            showMessage('Xóa người đại diện thất bại!', true);
-            break;
-        case 6:
-            showMessage('Cập nhật người đại diện thất bại!', true);
-            break;
-        default:
-            showMessage('Lỗi không xác định!', true);
+    console.log(data);
+   
+    if(data.message_code){
+        var message_code = parseInt(data.message_code);
+        var status = data.status == 'success' ? false : true;
+        switch (message_code) {
+            case 0:
+                showMessage('操作に失敗しました！', status);
+                break;
+            case 1:
+                showMessage('会社の更新に成功しました！', status);
+                break;
+            case 2:
+                showMessage('会社の更新に成功しました！', status);
+                break;
+            case 3:
+                showMessage('会社の削除に成功しました！', status);
+                break;
+            case 4:
+                showMessage('担当者の追加に成功しました！', status);
+                break;
+            case 5:
+                showMessage('担当者の削除に成功しました！', status);
+                break;
+            case 6:
+                showMessage('担当者の更新に成功しました！', status);
+                break;
+            case 7:
+                showMessage('会社は既に存在しています！', status);
+                break;
+            case 8:
+                showMessage('担当者は既に存在しています！', status);
+                break;
+            default:
+                showMessage('不明なエラーが発生しました！', status);
+        }
+    } else{
+        showMessage(data, true);
     }
 }
