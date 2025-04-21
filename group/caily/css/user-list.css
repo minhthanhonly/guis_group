@@ -1,0 +1,84 @@
+.user-list-container {
+    position: fixed;
+    right: 0;
+    top: 0;
+    height: 100vh;
+    width: 250px;
+    background-color: #fff;
+    box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+}
+
+.user-list-container.hidden {
+    transform: translateX(100%);
+}
+
+.user-list-toggle {
+    position: fixed;
+    right: 80px;
+    bottom: 0;
+    margin-bottom: 10px;
+    z-index: 1001;
+    padding: 10px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.user-list {
+    padding: 15px;
+    overflow-y: auto;
+    height: calc(100vh - 60px);
+}
+
+.user-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-right: 10px;
+    background-color: #007bff;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.user-info {
+    flex-grow: 1;
+}
+
+.user-name {
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.user-status {
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.status-online {
+    background-color: #28a745;
+}
+
+.status-offline {
+    background-color: #dc3545;
+} 

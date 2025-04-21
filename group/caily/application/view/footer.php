@@ -26,11 +26,14 @@
 <script src="<?=$root?>assets/vendor/libs/notiflix/notiflix.js"></script>
 <script src="<?=$root?>assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
 <script src="<?=$root?>assets/js/imask.js"></script>
-<!-- Main JS -->
+
+
 
 <script src="<?=$root?>assets/js/main.js"></script>
 <script src="<?=$root?>assets/js/forms-tagify.js"></script>
 
+<script src="<?=$root?>js/user-list.js"></script>
+<link rel="stylesheet" href="<?=$root?>css/user-list.css">
 
 </body>
 </html>
