@@ -14,9 +14,58 @@ class UserList {
     init() {
         this.toggleBtn.addEventListener('click', () => this.toggleUserList());
         this.loadUsers();
-        
-        // Update status every 30 seconds
-        setInterval(() => this.loadUsers(), 30000);
+       
+    }
+
+    connectWebSocket() {
+        if (userId) {
+            const wsUrl = 'ws://localhost:3001?userId=' + userId;
+            let ws;
+            let reconnectAttempts = 0;
+            const maxReconnectAttempts = 5;
+            const reconnectDelay = 3000; // 3 seconds
+            console.log('Attempting to connect to WebSocket...');
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function() {
+                console.log('WebSocket connection opened successfully');
+                reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('WebSocket message received:', data);
+                    // Handle the message based on its type
+                    if (data.type === 'userStatus') {
+                        console.log(`User ${data.userId} is ${data.isOnline ? 'online' : 'offline'}`);
+                        this.setUserStatus(data.userId, data.isOnline ? 'online' : 'offline');
+                    }
+                } catch (error) {
+                    console.error('Error parsing WebSocket message:', error);
+                }
+            };
+
+            ws.onclose = function(event) {
+                console.log('WebSocket connection closed:', event.code, event.reason);
+                
+                // Attempt to reconnect if we haven't exceeded max attempts
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
+                    setTimeout(connectWebSocket, reconnectDelay);
+                } else {
+                    console.error('Max reconnection attempts reached');
+                }
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+    
+        } else {
+            console.error('No user ID available for WebSocket connection');
+        }
     }
 
     toggleUserList() {
@@ -31,6 +80,7 @@ class UserList {
             const data = await response.json();
             if (data.list) {
                 this.renderUsers(data.list);
+                this.connectWebSocket();
             }
         } catch (error) {
             console.error('Error loading users:', error);
@@ -44,8 +94,8 @@ class UserList {
                 <div class="user-info">
                     <div class="user-name">${user.realname}</div>
                     <div class="user-status">
-                        <span class="status-indicator ${this.isUserOnline(user) ? 'status-online' : 'status-offline'}"></span>
-                        ${this.isUserOnline(user) ? 'Online' : 'Offline'}
+                        <span class="status-indicator" data-status="offline" data-user-id="${user.userid}"></span>
+                         <span class="status-text" data-user-id="${user.userid}">Offline</span>
                     </div>
                 </div>
             </div>
@@ -60,10 +110,11 @@ class UserList {
             .toUpperCase();
     }
 
-    isUserOnline(user) {
-        // You can implement your own logic here based on your session tracking
-        // For now, we'll use a random status for demonstration
-        return Math.random() > 0.5;
+    setUserStatus(userId, status) {
+        const statusIndicator = document.querySelector(`.status-indicator[data-user-id="${userId}"]`);
+        const statusText = document.querySelector(`.status-text[data-user-id="${userId}"]`);
+        statusIndicator.setAttribute('data-status', status);
+        statusText.textContent = status;
     }
 } 
 

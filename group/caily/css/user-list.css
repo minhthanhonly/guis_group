@@ -75,10 +75,10 @@
     margin-right: 5px;
 }
 
-.status-online {
+.status-indicator[data-status="online"] {
     background-color: #28a745;
 }
 
-.status-offline {
+.status-indicator[data-status="offline"] {
     background-color: #dc3545;
 } 

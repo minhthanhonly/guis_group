@@ -31,9 +31,17 @@
 
 <script src="<?=$root?>assets/js/main.js"></script>
 <script src="<?=$root?>assets/js/forms-tagify.js"></script>
-
-<script src="<?=$root?>js/user-list.js"></script>
-<link rel="stylesheet" href="<?=$root?>css/user-list.css">
+<?php
+if(isset($_SESSION['userid'])) {
+?>
+<script>
+    const userId = '<?= isset($_SESSION['userid']) ? $_SESSION['userid'] : 'null' ?>';
+    </script>
+    <script src="<?=$root?>js/user-list.js"></script>
+    <link rel="stylesheet" href="<?=$root?>css/user-list.css">
+<?php
+}
+?>
 
 </body>
 </html>
