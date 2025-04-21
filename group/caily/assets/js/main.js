@@ -777,6 +777,20 @@ function handleSuccess(response) {
   hideHourglass();
 }
 
+function showMessage(response, isError = false) {
+  Swal.fire({
+    title: isError ? 'Error!' : 'Success!', 
+    text: response,
+    icon: isError ? 'error' : 'success',
+    customClass: {
+      confirmButton: 'btn btn-primary'
+    },
+    buttonsStyling: false
+  })
+  hideHourglass();
+}
+
+
 const _log = console.log;
 
 

@@ -23,74 +23,151 @@ class Customer extends ApplicationModel {
         return $this->fetchAll($query);
     }
 
-    function add($data) {
+    function add() {
         $query = sprintf(
             "INSERT INTO {$this->table} (name, type, address, phone, created_at) VALUES ('%s', '%s', '%s', '%s', NOW())",
-            $this->quote($data['name']),
-            $this->quote($data['type']),
-            $this->quote($data['address']),
-            $this->quote($data['phone'])
+            $this->quote($_POST['name']),
+            $this->quote($_POST['type']),
+            $this->quote($_POST['address']),
+            $this->quote($_POST['phone'])
         );
-        return $this->query($query);
+        $result = $this->query($query);
+        $hash['status'] = $result ? 'success' : 'error';
+        $hash['message_code'] = $result ? 1 : 0;
+        return $hash;
     }
 
-    function edit($id, $data) {
+    function edit($id = null) {
+        if(isset($_GET['id'])){
+            $id = $_GET['id'];
+        }
+        if (!$id) {
+            $hash['status'] = 'error';
+            $hash['message_code'] = 0;
+            return $hash;
+        }
         $query = sprintf(
             "UPDATE {$this->table} SET name = '%s', type = '%s', address = '%s', phone = '%s' WHERE id = %d",
-            $this->quote($data['name']),
-            $this->quote($data['type']),
-            $this->quote($data['address']),
-            $this->quote($data['phone']),
+            $this->quote($_POST['name']),
+            $this->quote($_POST['type']),
+            $this->quote($_POST['address']),
+            $this->quote($_POST['phone']),
             intval($id)
         );
-        return $this->query($query);
+        $result = $this->query($query);
+        $hash['status'] = $result ? 'success' : 'error';
+        $hash['message_code'] = $result ? 2 : 0;
+        return $hash;
     }
 
-    function delete($id) {
+    function delete($id = null) {
+        if(isset($_GET['id'])){
+            $id = $_GET['id'];
+        }
+        if (!$id) {
+            $hash['status'] = 'error';
+            $hash['message_code'] = 0;
+            return $hash;
+        }
         $query = sprintf("DELETE FROM {$this->table} WHERE id = %d", intval($id));
-        return $this->query($query);
+        $result = $this->query($query);
+        $hash['status'] = $result ? 'success' : 'error';
+        $hash['message_code'] = $result ? 3 : 0;
+        return $hash;
     }
 
-    function get($id) {
+    function get($id = '') {
+        if(isset($_GET['id'])){
+            $id = $_GET['id'];
+        }
+        if (!$id) {
+            $hash['status'] = 'error';
+            $hash['message_code'] = 0;
+            return $hash;
+        }
         $query = sprintf("SELECT * FROM {$this->table} WHERE id = %d", intval($id));
-        return $this->fetchOne($query);
+        $hash['data'] = $this->fetchOne($query);
+        return $hash;
     }
 
-    function listRepresentatives($companyId) {
+    function listRepresentatives($companyId = null) {
+        if(isset($_GET['company_id'])){
+            $companyId = $_GET['company_id'];
+        }
+        if (!$companyId) {
+            $hash['status'] = 'error';
+            $hash['message_code'] = 0;
+            return $hash;
+        }
         $query = sprintf("SELECT * FROM company_representatives WHERE company_id = %d ORDER BY created_at DESC", intval($companyId));
-        return $this->fetchAll($query);
+        $hash['list'] = $this->fetchAll($query);
+        return $hash;
     }
 
-    function addRepresentative($data) {
+    function addRepresentative() {
         $query = sprintf(
             "INSERT INTO company_representatives (company_id, name, email, phone, created_at) VALUES (%d, '%s', '%s', '%s', NOW())",
-            intval($data['company_id']),
-            $this->quote($data['name']),
-            $this->quote($data['email']),
-            $this->quote($data['phone'])
+            intval($_POST['company_id']),
+            $this->quote($_POST['name']),
+            $this->quote($_POST['email']),
+            $this->quote($_POST['phone'])
         );
-        return $this->query($query);
+        $result = $this->query($query);
+        $hash['status'] = $result ? 'success' : 'error';
+        $hash['message_code'] = $result ? 4 : 0;
+        return $hash;
     }
 
-    function deleteRepresentative($id) {
+    function deleteRepresentative($id = null) {
+        if(isset($_GET['id'])){
+            $id = $_GET['id'];
+        }
+        if (!$id) {
+            $hash['status'] = 'error';
+            $hash['message_code'] = 0;
+            return $hash;
+        }
         $query = sprintf("DELETE FROM company_representatives WHERE id = %d", intval($id));
-        return $this->query($query);
+        $result = $this->query($query);
+        $hash['status'] = $result ? 'success' : 'error';
+        $hash['message_code'] = $result ? 5 : 0;
+        return $hash;
     }
 
-    function editRepresentative($id, $data) {
+    function editRepresentative($id = null) {
+        if(isset($_GET['id'])){
+            $id = $_GET['id'];
+        }
+        if (!$id) {
+            $hash['status'] = 'error';
+            $hash['message_code'] = 0;
+            return $hash;
+        }
         $query = sprintf(
             "UPDATE company_representatives SET name = '%s', email = '%s', phone = '%s' WHERE id = %d",
-            $this->quote($data['name']),
-            $this->quote($data['email']),
-            $this->quote($data['phone']),
+            $this->quote($_POST['name']),
+            $this->quote($_POST['email']),
+            $this->quote($_POST['phone']),
             intval($id)
         );
-        return $this->query($query);
+        $result = $this->query($query);
+        $hash['status'] = $result ? 'success' : 'error';
+        $hash['message_code'] = $result ? 6 : 0;
+        return $hash;
     }
 
-    function getRepresentative($id) {
+    function getRepresentative($id = '') {
+        if(isset($_GET['id'])){
+            $id = $_GET['id'];
+        }
+        if (!$id) {
+            $hash['status'] = 'error';
+            $hash['message_code'] = 0;
+            return $hash;
+        }
         $query = sprintf("SELECT * FROM company_representatives WHERE id = %d", intval($id));
-        return $this->fetchOne($query);
+        $hash['data'] = $this->fetchOne($query);
+        return $hash;
     }
 
     function listWithRepresentatives() {
@@ -128,8 +205,8 @@ class Customer extends ApplicationModel {
                 ];
             }
         }
-
-        return array_values($companies);
+        $hash['list'] = $companies;
+        return $hash;
     }
 }
 
