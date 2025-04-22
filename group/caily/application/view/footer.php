@@ -43,5 +43,9 @@ if(isset($_SESSION['userid'])) {
 }
 ?>
 
+
+<script type="text/javascript" src="<?=$root?>js/library/jquery-ui.min.js"></script>
+<script type="text/javascript" src="<?=$root?>js/application.js"></script>
+
 </body>
 </html>

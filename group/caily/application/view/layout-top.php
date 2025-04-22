@@ -64,20 +64,39 @@
               </ul>
             </li>
 
-            <li class="menu-item <?php if($directory == 'customer') echo 'active open'; ?>">
+            <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base ti tabler-users"></i>
-                <div>顧客管理</div>
+                <div>アドレス帳</div>
               </a>
               <ul class="menu-sub">
-                <li class="menu-item <?php if($directory == 'customer' && $page == 'index') echo 'active'; ?>">
-                  <a href="<?=$root?>customer/" class="menu-link" data-pjax>
-                    <div>タイムカード</div>
+                <li class="menu-item <?php if($directory == 'addressbook' && $page == 'index') echo 'active'; ?>">
+                  <a href="<?=$root?>addressbook/" class="menu-link" data-pjax>
+                    <div>一覧</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'customer' && $page == 'specification') echo 'active'; ?>">
-                  <a href="<?=$root?>customer/specification.php" class="menu-link" data-pjax>
-                    <div>休日設定</div>
+                <li class="menu-item <?php if($directory == 'folder' && $page == 'category') echo 'active'; ?>">
+                  <a href="<?=$root?>folder/category.php?type=addressbook" class="menu-link" data-pjax>
+                    <div>カテゴリ管理</div>
+                  </a>
+                </li>
+              </ul>
+            </li>
+
+            <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
+              <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base ti tabler-users"></i>
+                <div>スケジュール</div>
+              </a>
+              <ul class="menu-sub">
+                <li class="menu-item <?php if($directory == 'schedule' && $page == 'index') echo 'active'; ?>">
+                  <a href="<?=$root?>schedule/" class="menu-link" data-pjax>
+                    <div>カレンダー</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php if($directory == 'schedule' && $page == 'groupweek') echo 'active'; ?>">
+                  <a href="<?=$root?>schedule/groupweek.php" class="menu-link" data-pjax>
+                    <div>グループ</div>
                   </a>
                 </li>
               </ul>

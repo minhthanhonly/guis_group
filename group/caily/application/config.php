@@ -46,7 +46,7 @@ define('DB_STORAGE', 'mysql');
 
 //データベースのホスト名
 //define('DB_HOSTNAME', 'mysql653.db.sakura.ne.jp');
-define('DB_HOSTNAME', 'mysql');
+define('DB_HOSTNAME', 'localhost');
 //データベース名
 define('DB_DATABASE', 'cail9460_group');
 //データベースユーザー名
@@ -54,12 +54,12 @@ define('DB_USERNAME', 'root');
 // define('DB_USERNAME', 'guis2');
 //データベースパスワード
 // define('DB_PASSWORD', 'URtMzWthwqB5');
-define('DB_PASSWORD', 'root');
+define('DB_PASSWORD', '');
 //テーブル接頭辞
 define('DB_PREFIX', 'groupware_');
 //データベースポート番号
-// define('DB_PORT', '5432');
-define('DB_PORT', '3306');
+define('DB_PORT', '5432');
+// define('DB_PORT', '3306');
 //データベース文字コード設定
 define('DB_CHARSET', 'utf8');
 //データベースファイル
@@ -70,7 +70,7 @@ define('DB_POSTCODE', DIR_PATH.'database/KEN_ALL.CSV');
 define('ROOT_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
 define('ROOT', '/');
 
-define('APP_NAME', 'GUIS HUB');
+define('APP_NAME', 'GUISシステム');
 
 define('APP_COMPANY', 'GUIS Co.,Ltd');
 

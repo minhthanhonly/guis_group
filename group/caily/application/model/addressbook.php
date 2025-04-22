@@ -39,13 +39,11 @@ class Addressbook extends ApplicationModel {
 	}
 	
 	function index($type = 0) {
-		
 		$hash = $this->permitCategory('addressbook', $_GET['folder']);
 		$this->where[] = $this->folderWhere($hash['folder']);
 		$this->where[] = "(addressbook_type = ".intval($type).")";
 		$hash += $this->permitList('id', 1);
 		return $hash;
-	
 	}
 
 	function view() {

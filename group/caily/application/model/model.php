@@ -62,7 +62,7 @@ class Model extends Connection {
 			$string = '*';
 		}
 		$query = sprintf("SELECT %s FROM %s %s %s", $string, $this->table, $where, $order);
-		//$result['querystring'] = $query;
+		// $result['querystring'] = $query;
 		$result['list'] = $this->fetchLimit($query, $offset, $limit);
 		$result['count'] = $this->fetchCount($this->table, $where, 'id');
 		return $result;

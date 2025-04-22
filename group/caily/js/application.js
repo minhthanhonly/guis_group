@@ -26,7 +26,7 @@ App.loader = function (url, parameter, id) {
 		element.appendTo(document.body);
 		element.css({'top': top, 'left': left, 'visibility': 'visible'});
 	}
-	element.draggable({handle: 'div.handle'});
+	//element.draggable({handle: 'div.handle'});
 	$('div.layerclose', element).click(function(){
 		element.remove();
 	});
@@ -294,7 +294,7 @@ App.explain = function (object) {
 				element.css('display', 'block');
 				var position = $(object).position();
 				element.css({'top': (position.top + 17) + 'px', 'left': (position.left + 5) + 'px'});
-				element.draggable();
+				// element.draggable();
 				$('span.operator', element).click(function(){
 					element.css('display', 'none');
 				});

@@ -118,14 +118,14 @@ class Customer extends ApplicationModel {
             $hash['message_code'] = 0;
             return $hash;
         }
-        $query = sprintf("SELECT * FROM company_representatives WHERE company_id = %d ORDER BY created_at DESC", intval($companyId));
+        $query = sprintf("SELECT * FROM groupware_representatives WHERE company_id = %d ORDER BY created_at DESC", intval($companyId));
         $hash['list'] = $this->fetchAll($query);
         return $hash;
     }
 
     function addRepresentative() {
         // Check if representative exists by name
-        $repQuery = sprintf("SELECT id FROM company_representatives WHERE name = '%s'", $this->quote($_POST['name']));
+        $repQuery = sprintf("SELECT id FROM groupware_representatives WHERE name = '%s'", $this->quote($_POST['name']));
         $rep = $this->fetchOne($repQuery);
         
         if ($rep) {
@@ -135,7 +135,7 @@ class Customer extends ApplicationModel {
         }
 
         $query = sprintf(
-            "INSERT INTO company_representatives (company_id, name, email, phone, created_at) VALUES (%d, '%s', '%s', '%s', NOW())",
+            "INSERT INTO groupware_representatives (company_id, name, email, phone, created_at) VALUES (%d, '%s', '%s', '%s', NOW())",
             intval($_POST['company_id']),
             $this->quote($_POST['name']),
             $this->quote($_POST['email']),
@@ -156,7 +156,7 @@ class Customer extends ApplicationModel {
             $hash['message_code'] = 0;
             return $hash;
         }
-        $query = sprintf("DELETE FROM company_representatives WHERE id = %d", intval($id));
+        $query = sprintf("DELETE FROM groupware_representatives WHERE id = %d", intval($id));
         $result = $this->query($query);
         $hash['status'] = $result ? 'success' : 'error';
         $hash['message_code'] = $result ? 5 : 0;
@@ -174,7 +174,7 @@ class Customer extends ApplicationModel {
         }
 
         // Check if representative exists by name (excluding current record)
-        $repQuery = sprintf("SELECT id FROM company_representatives WHERE name = '%s' AND id != %d", 
+        $repQuery = sprintf("SELECT id FROM groupware_representatives WHERE name = '%s' AND id != %d", 
             $this->quote($_POST['name']), 
             intval($id)
         );
@@ -187,7 +187,7 @@ class Customer extends ApplicationModel {
         }
 
         $query = sprintf(
-            "UPDATE company_representatives SET name = '%s', email = '%s', phone = '%s' WHERE id = %d",
+            "UPDATE groupware_representatives SET name = '%s', email = '%s', phone = '%s' WHERE id = %d",
             $this->quote($_POST['name']),
             $this->quote($_POST['email']),
             $this->quote($_POST['phone']),
@@ -208,7 +208,7 @@ class Customer extends ApplicationModel {
             $hash['message_code'] = 0;
             return $hash;
         }
-        $query = sprintf("SELECT * FROM company_representatives WHERE id = %d", intval($id));
+        $query = sprintf("SELECT * FROM groupware_representatives WHERE id = %d", intval($id));
         $hash['data'] = $this->fetchOne($query);
         return $hash;
     }
@@ -220,7 +220,7 @@ class Customer extends ApplicationModel {
                          r.email AS representative_email, 
                          r.phone AS representative_phone 
                   FROM {$this->table} c 
-                  LEFT JOIN company_representatives r ON c.id = r.company_id 
+                  LEFT JOIN groupware_representatives r ON c.id = r.company_id 
                   ORDER BY c.created_at DESC, r.created_at DESC";
         $result = $this->fetchAll($query);
 

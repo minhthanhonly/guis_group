@@ -52,11 +52,9 @@
     <!-- <link href="<?=$root?>css/default.css" rel="stylesheet" type="text/css" />
     <link href="<?=$root?>css/control.css" rel="stylesheet" type="text/css" />
     <link href="<?=$root?>css/application.css" rel="stylesheet" type="text/css" />
-    <link href="<?=$root?>css/style.css" rel="stylesheet" type="text/css" />
-    <script type="text/javascript" src="<?=$root?>js/library/jquery.js"></script>
-    <script type="text/javascript" src="<?=$root?>js/library/ui.core.js"></script>
-    <script type="text/javascript" src="<?=$root?>js/library/ui.draggable.js"></script>
-    <script type="text/javascript" src="<?=$root?>js/application.js"></script> -->
+    <link href="<?=$root?>css/style.css" rel="stylesheet" type="text/css" /> -->
+
+   
     
   </head>
 
