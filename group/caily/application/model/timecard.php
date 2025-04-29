@@ -3,7 +3,7 @@
 
 class Timecard extends ApplicationModel {
 	var $holidays = array();
-	function Timecard() {
+	function __construct() {
 		$this->table = DB_PREFIX.'timecard';
 		$this->schema = array(
 			'id'=> array('except'=>array('search')),

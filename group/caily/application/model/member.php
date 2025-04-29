@@ -3,7 +3,7 @@
 
 class Member extends ApplicationModel {
 	
-	function Member() {
+	function __construct() {
 		
 		$this->table = DB_PREFIX.'user';
 		$this->schema = array(

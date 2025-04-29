@@ -9,7 +9,7 @@ class Connection {
 
 	var $handler;
 	
-	function Connection() {
+	function __construct() {
 		
 		if (file_exists(DB_FILE)) {
 			$this->handler = sqlite_open(DB_FILE, 0666, $sqliteerror);

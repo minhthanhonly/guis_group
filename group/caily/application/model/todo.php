@@ -3,7 +3,7 @@
 
 class Todo extends ApplicationModel {
 	
-	function Todo() {
+	function __construct() {
 		
 		$this->table = DB_PREFIX.'todo';
 		$this->schema = array(

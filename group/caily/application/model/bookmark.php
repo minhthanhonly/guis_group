@@ -3,7 +3,7 @@
 
 class Bookmark extends ApplicationModel {
 	
-	function Bookmark() {
+	function __construct() {
 	
 		$this->schema = array(
 		'folder_id'=>array('カテゴリ', 'notnull', 'numeric', 'except'=>array('search')),

@@ -3,7 +3,7 @@
 
 class Folder extends ApplicationModel {
 	
-	function Folder() {
+	function __construct() {
 		
 		$type = array('message', 'forum', 'addressbook', 'bookmark', 'facility', 'project', 'todo');
 		if (isset($_GET['type']) && !in_array($_GET['type'], $type)) {

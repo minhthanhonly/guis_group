@@ -24,8 +24,10 @@ class Controller {
 
 	function initApi() {
 		$this->requiring();
+		print_r($_SESSION);
 		$authority = new Authority;
 		$authorized = $authority->authorize();
+		
 		if ($authorized !== true) {
 			die('認証に失敗しました。ログインし直してください。');
 		}

@@ -3,10 +3,11 @@
 
 class User extends ApplicationModel {
 	
-	function User() {
+	function __construct() {
 		if (basename($_SERVER['SCRIPT_NAME']) != 'feed.php' && $_SERVER['SCRIPT_NAME'] != '/api/index.php') {
 			$this->authorize('administrator', 'manager');
 		}
+		
 		$this->table = DB_PREFIX.'user';
 		$this->schema = array(
 		'userid'=>array('ユーザーID', 'notnull', 'userid', 'length:100', 'distinct'),

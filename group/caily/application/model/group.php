@@ -3,7 +3,7 @@
 
 class Group extends ApplicationModel {
 	
-	function Group() {
+	function __construct() {
 		
 		$this->authorize('administrator');
 		$this->schema = array(

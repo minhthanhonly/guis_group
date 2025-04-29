@@ -3,7 +3,7 @@
 
 class Schedule extends ApplicationModel {
 	
-	function Schedule() {
+	function __construct() {
 	
 		$this->schema = array(
 		'schedule_type'=>array('分類', 'notnull', 'numeric'),

@@ -3,7 +3,7 @@
 
 class Storage extends ApplicationModel {
 	
-	function Storage() {
+	function __construct() {
 	
 		$this->schema = array(
 		'storage_folder'=>array('fix'=>intval($_GET['folder']), 'except'=>array('search', 'update')),

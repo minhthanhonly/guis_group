@@ -4,13 +4,14 @@
 class Authority
 {
 
-	function Authority()
+	function __construct()
 	{
 		session_name(APP_TYPE . 'sid');
 		if (!isset($_SESSION)) {
 			session_start();
 		}
-
+		print_r($_SESSION);
+		echo session_name();
 	}
 
 	function check()
@@ -30,7 +31,7 @@ class Authority
 
 	function authorize()
 	{
-
+		print_r($_SESSION);
 		$authorized = false;
 		if (isset($_SESSION['authorized'])) {
 			if ($_SESSION['authorized'] === md5(__FILE__ . $_SESSION['logintime'])) {
@@ -120,6 +121,7 @@ class Authority
 			$_SESSION['authority'] = $data['authority'];
 			$_SESSION['user_image'] = $data['user_image'];
 			$_SESSION['user_groupname'] = $data['user_groupname'];
+			
 			if (isset($_SESSION['referer'])) {
 				header('Location: ' . $_SESSION['referer']);
 				unset($_SESSION['referer']);

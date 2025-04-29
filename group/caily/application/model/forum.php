@@ -3,7 +3,7 @@
 
 class Forum extends ApplicationModel {
 	
-	function Forum() {
+	function __construct() {
 	
 		$this->schema = array(
 		'folder_id'=>array('カテゴリ', 'numeric', 'except'=>array('search')),

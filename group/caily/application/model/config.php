@@ -3,7 +3,7 @@
 
 class Config extends ApplicationModel {
 	
-	function Config($handler = null) {
+	function __construct($handler = null) {
 		
 		$this->table = DB_PREFIX.'config';
 		$this->schema = array(

@@ -2,14 +2,7 @@
 
 require_once('../application/loader.php');
 $view->heading('タイムカード');
-$calendar = new Calendar;
 
-if (count($hash['list']) <= 0) {
-	$attribute = ' onclick="alert(\'出力するデータがありません。\');return false;"';
-}
-if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['owner']['userid'] != $_SESSION['userid'])) {
-	$caption = ' - '.$hash['owner']['realname'];
-}
 ?>
 <!-- Content -->
 <div class="container-xxl flex-grow-1 container-p-y">

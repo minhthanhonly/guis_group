@@ -3,7 +3,7 @@
 
 class Message extends ApplicationModel {
 	
-	function Message() {
+	function __construct() {
 	
 		$this->schema = array(
 		'folder_id'=>array('fix'=>'0', 'except'=>array('search')),
