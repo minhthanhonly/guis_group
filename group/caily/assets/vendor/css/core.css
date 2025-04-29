@@ -8076,7 +8076,7 @@ textarea.form-control-lg {
   --bs-border-subtle-amount: 61%;
   --bs-base-color: #e1def5;
   --bs-base-color-rgb: 225, 222, 245;
-  --bs-paper-bg: #2f3349;
+  --bs-paper-bg: #1a1c27;
   --bs-paper-bg-rgb: 47, 51, 73;
   --bs-box-shadow: 0 0.1875rem 0.75rem 0 rgba(19, 17, 32, 0.2);
   --bs-box-shadow-xs: 0 0.0625rem 0.375rem 0 rgba(19, 17, 32, 0.16);
@@ -25675,7 +25675,7 @@ li:not(:first-child) .dropdown-item, .dropdown-menu .dropdown-item:not(:first-ch
 
 [data-semidark-menu=true],
 [data-bs-theme=dark] {
-  --bs-menu-bg: #2f3349;
+  --bs-menu-bg: #1a1c27;
   --bs-menu-bg-rgb: var(--bs-paper-bg-rgb);
   --bs-menu-color: #cfcde4;
   --bs-menu-color-rgb: 207, 205, 228;
