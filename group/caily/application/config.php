@@ -82,6 +82,8 @@ define('APP_LOGO_DARK', 'logo-site-white.png');
 
 define('TIMECARD_START_DATE', '21');
 
+define('ADMIN_GROUP', '4');
 
+define('RETIRE_GROUP', '5');
 error_reporting(E_ERROR | E_PARSE);
 ?>

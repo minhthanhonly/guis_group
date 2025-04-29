@@ -112,10 +112,12 @@ class View {
 			$onchange = sprintf(' onchange="App.limit(\'%s\',\'%s\')"', $sort, $desc);
 		}
 ?>
-		<div class="pagination">
-			<?=$pagination->create($count)?>&nbsp;
+		<nav aria-label="Page navigation">
+			<ul class="pagination pagination-rounded mt-8">
+			<?=$pagination->create($count)?>
+			</ul>
 			表示件数:<?=$pagination->limit($onchange)?>
-		</div>
+		</nav>
 <?php
 	
 	}

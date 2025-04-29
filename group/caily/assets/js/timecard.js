@@ -120,7 +120,7 @@ async function get_timecard(user, year, month) {
 }
 
 async function get_users() {
-  const response = await axios.get(`/api/index.php?model=user&method=index&group=all&type=active`);
+  const response = await axios.get(`/api/index.php?model=user&method=getList`);
   // check if the response is successful
   if (response.status !== 200 || !response.data || !response.data.list) {
     handleErrors(response.data);

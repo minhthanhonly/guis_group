@@ -61,11 +61,18 @@ $weekday = date('w', $timestamp);
 				}
 				if (is_array($hash['user']) && count($hash['user']) > 0) {
 					foreach ($hash['user'] as $key => $value) {
-						$day = count($data[$key]['sum']);
-						if (is_array($data[$key]['sum'])) {
-							$sum = array_sum($data[$key]['sum']);
-						} else {
-							$sum = 0;
+						
+						$sum = 0;
+						$day = 0;
+						$intervalsum = 0;
+						$sum2 = 0;
+						if(isset($data[$key]['sum'])) {
+							$day = count($data[$key]['sum']);
+							if (is_array($data[$key]['sum'])) {
+								$sum = array_sum($data[$key]['sum']);
+							} else {
+								$sum = 0;
+							}
 						}
 						$sum = sprintf('%d:%02d', (($sum - ($sum % 60)) / 60), ($sum % 60));
 						if (is_array($data[$key]['intervalsum'])) {

@@ -1,18 +1,17 @@
 <?php
 
 require_once('../application/loader.php');
-$view->script('postcode.js');
 $view->heading('アドレス帳');
 $pagination = new Pagination(array('folder'=>$_GET['folder']));
 ?>
-<div class="contentcontrol">
-	<h1>アドレス帳<?=$view->caption($hash['folder'], array('all'=>'すべて表示'))?></h1>
-	<table class="addressbooktype" cellspacing="0"><tr>
-		<td><a class="current" href="index.php">個人</a></td>
-		<td><a href="company.php">法人</a></td>
-	</tr></table>
-	<div class="clearer"></div>
-</div>
+<div class="container-xxl flex-grow-1 container-p-y">
+	<div class="card" id="option-block">
+		<div class="card-header bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
+			<div class="col-md-6">
+				<h4 class="card-title mb-0"><span>アドレス帳<?=$view->caption($hash['folder'], array('all'=>'すべて表示'))?></span></h4>
+			</div>
+		</div>
+
 <ul class="operate">
 <?php
 if ($view->permitted($hash['category'], 'add')) {
@@ -28,7 +27,7 @@ if (count($hash['list']) <= 0) {
 <table class="content" cellspacing="0"><tr><td class="contentfolder">
 	<?=$view->category($hash['folder'], 'addressbook')?>
 </td><td>
-	<table class="list" cellspacing="0">
+	<table class="table" cellspacing="0">
 		<tr><th><?=$pagination->sortby('addressbook_name', '名前')?></th>
 		<th><?=$pagination->sortby('addressbook_postcode', '郵便番号')?></th>
 		<th><?=$pagination->sortby('addressbook_address', '住所')?></th>
@@ -48,6 +47,8 @@ if (is_array($hash['list']) && count($hash['list']) > 0) {
 	</table>
 	<?=$view->pagination($pagination, $hash['count'])?>
 </td></tr></table>
+	</div>
+</div>
 <?php
 $view->footing();
 ?>

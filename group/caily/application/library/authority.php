@@ -10,8 +10,6 @@ class Authority
 		if (!isset($_SESSION)) {
 			session_start();
 		}
-		print_r($_SESSION);
-		echo session_name();
 	}
 
 	function check()
@@ -31,7 +29,6 @@ class Authority
 
 	function authorize()
 	{
-		print_r($_SESSION);
 		$authorized = false;
 		if (isset($_SESSION['authorized'])) {
 			if ($_SESSION['authorized'] === md5(__FILE__ . $_SESSION['logintime'])) {

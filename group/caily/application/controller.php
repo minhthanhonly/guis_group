@@ -24,7 +24,6 @@ class Controller {
 
 	function initApi() {
 		$this->requiring();
-		print_r($_SESSION);
 		$authority = new Authority;
 		$authorized = $authority->authorize();
 		

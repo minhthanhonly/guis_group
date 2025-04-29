@@ -518,8 +518,10 @@ class Timecard extends ApplicationModel {
 		$open = $this->minute($open);
 		$close = $this->minute($close);
 		$close2 = $close;
-
-		$over = ''; // ngoài giờ
+		$sum = 0;
+		$intervalsum = 0;
+		$over = 0;
+		$temp1 = 0;
 
 		/*コンフィグ情報取得*/
 		$status = $this->getConfigStatus($owner);
@@ -591,6 +593,7 @@ class Timecard extends ApplicationModel {
 				$over  = $total - $sum - $intervalsum;
 			}
 			else{
+				
 				if ($open >= $status['open'] - 30  && $open <= $status['open']) {
 					$open = $status['open'];
 				}

@@ -7,7 +7,7 @@ class Pagination {
 	var $recordlimit = APP_LIMIT;
 	var $maxlimit = APP_LIMITMAX;
 	
-	function Pagination($array = null) {
+	function __construct($array = null) {
 		
 		if (is_array($array)) {
 			$this->parameter = $array;
@@ -16,7 +16,9 @@ class Pagination {
 	}
 	
 	function create($count) {
-		
+		if($count <= 0) {
+			return '';
+		}
 		$result = array();
 		if ($_REQUEST['page'] > 0) {
 			$page = intval($_REQUEST['page']);
@@ -34,11 +36,7 @@ class Pagination {
 			$limit = $this->recordlimit;
 		}
 		$pagecount = ceil($count/$limit);
-		if ($page > 1) {
-			$result[0] = $this->createlink('前ページ', $previous, $_REQUEST['sort'], $_REQUEST['desc']);
-		} else {
-			$result[0] = '前ページ';
-		}
+		$result[0] = $this->createlink('前ページ', $previous, $_REQUEST['sort'], $_REQUEST['desc']);
 		if ($page <= 5 || $pagecount <= 10) {
 			$begin = 1;
 			$end = $pagecount;
@@ -54,26 +52,22 @@ class Pagination {
 		}
 		$array = array();
 		for ($i = $begin; $i <= $end; $i++) {
+			$class = '';
 			if ($i == $page) {
-				$array[] = $i;
-			} else {
-				$array[] = $this->createlink($i, $i, $_REQUEST['sort'], $_REQUEST['desc']);
+				$class = 'active';
 			}
+			$array[] = $this->createlink($i, $i, $_REQUEST['sort'], $_REQUEST['desc'], $class);
 		}
-		$result[1] = implode('<span class="separator">|</span>', $array);
+		$result[1] = implode('', array: $array);
 		if (strlen($result[1]) <= 0) {
-			$result[1] = 1;
+			$result[1] = $this->createlink(1, 1, $_REQUEST['sort'], $_REQUEST['desc'], 'active');
 		}
-		if (($next - 1) * $limit < $count) {
-			$result[2] = $this->createlink('次ページ', $next, $_REQUEST['sort'], $_REQUEST['desc']);
-		} else {
-			$result[2] = '次ページ';
-		}
-		return implode('<span class="separator">|</span>', $result);
+		$result[2] = $this->createlink('次ページ', $next, $_REQUEST['sort'], $_REQUEST['desc']);
+		return implode('',$result);
 	
 	}
 	
-	function createlink($caption, $page, $sort, $desc) {
+	function createlink($caption, $page, $sort, $desc, $class = '') {
 		
 		$result = array();
 		if (isset($page)) {
@@ -101,7 +95,39 @@ class Pagination {
 		if (count($result) > 0) {
 			$parameter = '?'.implode('&', $result);
 		}
-		return sprintf('<a href="%s%s">%s</a>', $_SERVER['SCRIPT_NAME'], $parameter, $caption);
+		return sprintf('<li class="page-item %s"><a href="%s%s" class="page-link waves-effect" >%s</a></li>', $class, $_SERVER['SCRIPT_NAME'], $parameter, $caption);
+	
+	}
+
+	function createAnchor($caption, $page, $sort, $desc, $class = '') {
+		
+		$result = array();
+		if (isset($page)) {
+			$result[] = 'page='.intval($page);
+		}
+		if ($sort) {
+			$result[] = 'sort='.htmlspecialchars($sort, ENT_QUOTES, 'UTF-8');
+		}
+		if (isset($desc)) {
+			$result[] = 'desc='.intval($desc);
+		}
+		if ($_REQUEST['limit']) {
+			$result[] = 'limit='.intval($_REQUEST['limit']);
+		}
+		if ($_REQUEST['search']) {
+			$result[] = 'search='.htmlspecialchars($_REQUEST['search'], ENT_QUOTES, 'UTF-8');
+		}
+		if (count($this->parameter) > 0) {
+			foreach ($this->parameter as $key => $value) {
+				if (strlen($value) > 0) {
+					$result[] = $key.'='.htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+				}
+			}
+		}
+		if (count($result) > 0) {
+			$parameter = '?'.implode('&', $result);
+		}
+		return sprintf('<a href="%s%s">%s</a></li>', $_SERVER['SCRIPT_NAME'], $parameter, $caption);
 	
 	}
 	
@@ -119,7 +145,7 @@ class Pagination {
 			$image = '';
 			$desc = $_REQUEST['desc'];
 		}
-		return $this->createlink($caption.$image, 1, $sort, $desc);
+		return $this->createAnchor($caption.$image, 1, $sort, $desc);
 	
 	}
 	
