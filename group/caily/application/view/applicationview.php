@@ -192,11 +192,12 @@ class ApplicationView extends View {
 		
 		$string = '<form method="post" class="searchform" action="';
 		$string .= $_SERVER['SCRIPT_NAME'].$this->parameter($parameter);
-		$string .= '"><input type="text" name="search" id="search" class="inputsearch" value="';
-		$string .= $this->escape($_REQUEST['search']);
-		$string .= '" /><input type="submit" value="検索" /></form>';
+		$string .= '"><div class="input-group input-group-merge">
+            <span class="input-group-text" id="basic-addon-search31"><i class="icon-base ti tabler-search"></i></span>
+            <input type="text" class="form-control" placeholder="Search..." aria-label="Search..." value="'.$this->escape($_REQUEST['search']).'">
+			<button class="btn btn-outline-primary waves-effect" type="submit" id="button-addon2">検索</button>
+          </div></form>';
 		return $string;
-		
 	}
 	
 	function authorize() {

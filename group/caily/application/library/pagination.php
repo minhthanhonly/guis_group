@@ -95,7 +95,7 @@ class Pagination {
 		if (count($result) > 0) {
 			$parameter = '?'.implode('&', $result);
 		}
-		return sprintf('<li class="page-item %s"><a href="%s%s" class="page-link waves-effect" >%s</a></li>', $class, $_SERVER['SCRIPT_NAME'], $parameter, $caption);
+		return sprintf('<div class="page-item %s"><a href="%s%s" class="page-link waves-effect" >%s</a></div>', $class, $_SERVER['SCRIPT_NAME'], $parameter, $caption);
 	
 	}
 
@@ -165,7 +165,7 @@ class Pagination {
 				$string .= '<option value="'.$key.'">'.$value.'</option>';
 			}
 		}
-		return '<select id="limit" name="limit"'.$attribute.'>'.$string.'</select>';
+		return '<select class="form-select" id="limit" name="limit"'.$attribute.'>'.$string.'</select>';
 		
 	}
 
