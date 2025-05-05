@@ -310,7 +310,7 @@ function whenContainerReady() {
           targets: 1,
           render: function (data, type, full, meta) {
             return (
-              full.is_api ? data+'<span class="badge bg-label-primary ms-2">API</span>' : data+'<span class="badge bg-info ms-2">CUSTOM</span>'
+              full.is_api ? data+' <span class="badge bg-label-primary ms-2">API</span>' : data+' <span class="badge bg-info ms-2">CUSTOM</span>'
             );
           }
         }
@@ -381,14 +381,6 @@ function whenContainerReady() {
                     {
                       extend: 'excel',
                       text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-export me-1"></i>Excel</span>`,
-                      className: 'dropdown-item',
-                      exportOptions: {
-                        columns: [1, 2],
-                      }
-                    },
-                    {
-                      extend: 'pdf',
-                      text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-text me-1"></i>Pdf</span>`,
                       className: 'dropdown-item',
                       exportOptions: {
                         columns: [1, 2],
