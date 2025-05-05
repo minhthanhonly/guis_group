@@ -17,6 +17,8 @@ async function get_holiday() {
 
 //add event listener for selectpicker
 function addEvent(){
+  let holidayList = [];
+  const modal = new bootstrap.Modal(document.getElementById('modalSyncAPI'));
   document.querySelector('.datatables-holiday').addEventListener('click', function (e) {
     if (e.target.closest('.item-edit')) {
       e.preventDefault();
@@ -45,11 +47,12 @@ function addEvent(){
       // call delete function
 
       Swal.fire({
-        title: 'Are you sure?',
-        text: "You won't be able to revert this!",
+        title: '休日を削除しますか？',
+        text: '休日を削除すると元に戻すことはできません。',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Yes, delete it!',
+        confirmButtonText: 'はい、削除します',
+        cancelButtonText: 'キャンセル',
         customClass: {
           confirmButton: 'btn btn-primary',
           cancelButton: 'btn btn-label-secondary'
@@ -71,11 +74,11 @@ function addEvent(){
           })
             .then(function (response) {
               if (response.status === 200 && response.data && response.data.status === 'success') {
-                handleSuccess(response.data.message_code);
+                showMessage('休日を削除しました');
                 // delete row from datatable
                 dt_table.row(e.target.closest('tr')).remove().draw();
               } else {
-                handleErrors(response.data.message_code);
+                showMessage('休日を削除できませんでした', true);
               }
             }).catch(function (error) {
               handleErrors(error);
@@ -88,7 +91,127 @@ function addEvent(){
       
     }
   });
-  
+
+  document.querySelector('[data-sync-api]').addEventListener('click', async function (e) {
+    e.preventDefault();
+    holidayList = [];
+    displayHourglass();
+    const submitSyncAPI = document.getElementById('submitSyncAPI');
+    const modalSyncBody = document.querySelector('#modalSyncAPITableBody');
+    submitSyncAPI.disabled = true;
+    modalSyncBody.innerHTML = '';
+    const apiHolidays = await axios.get('https://holidays-jp.github.io/api/v1/date.json')
+      .then(function (response) {
+        if (response.status !== 200 || !response.data) {
+          handleErrors('APIからデータを取得できませんでした');
+          hideHourglass();
+          return;
+        }
+        return response.data;
+      });
+    let startDate = '';
+    let endDate = '';
+   
+    if(Object.keys(apiHolidays).length > 0){
+      startDate = Object.keys(apiHolidays)[0];
+      endDate = Object.keys(apiHolidays)[Object.keys(apiHolidays).length - 1];
+    }
+    const currentHolidays = await axios.get('/api/index.php?model=timecard&method=get_holiday&start_date='+startDate+'&end_date='+endDate)
+      .then(function (response) {
+        if (response.status !== 200 || !response.data || !response.data.list) {
+          handleErrors(response.data);
+          hideHourglass();
+          return;
+        }
+        return response.data.list;
+      });
+
+    
+    if(currentHolidays.length == 0){
+      if(Object.keys(apiHolidays).length > 0){
+        Object.entries(apiHolidays).forEach(function([date, text]){
+          holidayList.push({
+            date: date,
+            name: text
+          });
+        });
+      }
+    } else {
+      Object.entries(apiHolidays).forEach(function([date, text]){
+        if(!currentHolidays.some(holiday => holiday.date === date)){
+          holidayList.push({
+            date: date,
+            name: text
+          });
+        }
+      });
+    }
+    document.querySelector('#modalSyncAPITableBody').innerHTML = '';
+    holidayList.forEach(function(holiday){
+      document.querySelector('#modalSyncAPITableBody').innerHTML += `
+        <tr>
+          <td>${holiday.date}</td>
+          <td>${holiday.name}</td>
+          <td>
+            <button class="btn btn-danger btn-sm delete-holiday" data-date="${holiday.date}">
+              <i class="icon-base ti tabler-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+    
+    if(holidayList.length > 0){
+      submitSyncAPI.disabled = false;
+    } else{
+      document.querySelector('#modalSyncAPITableBody').innerHTML += `
+        <tr>
+          <td colspan="3" class="text-center">新しい休日はありません</td>
+        </tr>
+      `;
+    }
+
+    //show modal
+    
+    modal.show();
+  });
+
+  document.querySelector('#modalSyncAPI').addEventListener('click', function (e) {
+    if (e.target.closest('.delete-holiday')) {
+      e.preventDefault();
+      const date = e.target.closest('.delete-holiday').dataset.date;
+      holidayList = holidayList.filter(function(holiday){
+        return holiday.date !== date;
+      });
+      console.log(holidayList);
+      const thisRow = e.target.closest('tr');
+      thisRow.remove();
+    }
+  });
+
+  document.getElementById('modalSyncAPI').addEventListener('hidden.bs.modal', function () {
+    hideHourglass();
+  });
+
+  document.getElementById('submitSyncAPI').addEventListener('click', async function (e) {
+    e.preventDefault();
+    modal.hide();
+    const d = {
+      holidayList: holidayList
+    }
+    let jsonHolidayList = JSON.stringify(d);
+    const response = await axios.post('/api/index.php?model=timecard&method=add_holiday_list', jsonHolidayList, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    if(response.status === 200 && response.data && response.data.status === 'success'){
+      showMessage('休日を追加しました');
+      changeData();
+    } else {
+      showMessage('休日を追加できませんでした', true);
+    }
+  });
 }
 
 async function changeData(){
@@ -158,10 +281,11 @@ function whenContainerReady() {
       searching: true,
       info: true,
       ordering: true,
+      pageLength: 50,
       columns: [
         { data: 'id', title: 'ID', visible: false },
-        { data: 'date', title: 'Ngày' },
-        { data: 'name', title: 'Tên' },
+        { data: 'date', title: '日付' },
+        { data: 'name', title: '内容' },
         { data: '', title: '' },
       ],
       columnDefs: [
@@ -178,6 +302,15 @@ function whenContainerReady() {
               '<a href="javascript:;" class="item-edit text-body"><i class="icon-base ti tabler-pencil"></i></a>' +
               '<a href="javascript:;" class="text-danger item-delete"><i class="icon-base ti tabler-trash"></i></a>' +
               '</div>'
+            );
+          }
+        },
+        {
+          // Actions
+          targets: 1,
+          render: function (data, type, full, meta) {
+            return (
+              full.is_api ? data+'<span class="badge bg-label-primary ms-2">API</span>' : data+'<span class="badge bg-info ms-2">CUSTOM</span>'
             );
           }
         }
@@ -272,11 +405,18 @@ function whenContainerReady() {
                   ]
                 },
                 {
-                  text: '<i class="icon-base ti tabler-plus me-0 me-sm-1 icon-16px"></i><span class="d-none d-sm-inline-block">Thêm ngày nghỉ</span>',
-                  className: 'add-new btn btn-primary rounded-2 waves-effect waves-light',
+                  text: '<i class="icon-base ti tabler-plus me-0 me-sm-1 icon-16px"></i><span class="d-none d-sm-inline-block">休日追加</span>',
+                  className: 'me-4 add-new btn btn-primary rounded-2 waves-effect waves-light',
                   attr: {
                     'data-bs-toggle': 'modal',
                     'data-bs-target': '#addRoleModal'
+                  }
+                },
+                {
+                  text: '<i class="icon-base ti tabler-refresh me-0 me-sm-1 icon-16px"></i><span class="d-none d-sm-inline-block">APIと同期する</span>',
+                  className: 'btn btn-info rounded-2 waves-effect waves-light',
+                  attr: {
+                    'data-sync-api': 'true',
                   }
                 }
               ]
@@ -309,22 +449,22 @@ function whenContainerReady() {
             date: {
               validators: {
                 notEmpty: {
-                  message: 'Vui lòng nhập ngày'
+                  message: '日付を入力してください'
                 },
                 stringLength: {
                   min: 6,
-                  message: 'Vui lòng nhập từ 6 ký tự trở lên'
+                  message: '6文字以上入力してください'
                 }
               }
             },
             name: {
               validators: {
                 notEmpty: {
-                  message: 'Vui lòng nhập tên ngày nghỉ'
+                  message: '内容を入力してください'
                 },
                 stringLength: {
-                  min: 6,
-                  message: 'Vui lòng nhập từ 6 ký tự trở lên'
+                  min: 2,
+                  message: '2文字以上入力してください'
                 }
               }
             },
@@ -357,11 +497,11 @@ function whenContainerReady() {
             axios.post('/api/index.php?model=timecard&method=add_holiday', formData)
               .then(function (response) {
                 if (response.status === 200 && response.data && response.data.status === 'success') {
-                  handleSuccess(response.data.message_code);
+                  showMessage('休日を追加しました');
                   formAddNewRecord.reset();
                   changeData();
                 } else {
-                  handleErrors(response.data.message_code);
+                  showMessage('休日を追加できませんでした', true);
                 }
               })
               .catch(function (error) {
@@ -385,22 +525,22 @@ function whenContainerReady() {
             date: {
               validators: {
                 notEmpty: {
-                  message: 'Vui lòng nhập ngày'
+                  message: '日付を入力してください'
                 },
                 stringLength: {
                   min: 6,
-                  message: 'Vui lòng nhập từ 6 ký tự trở lên'
+                  message: '6文字以上入力してください'
                 }
               }
             },
             name: {
               validators: {
                 notEmpty: {
-                  message: 'Vui lòng nhập tên ngày nghỉ'
+                  message: '内容を入力してください'
                 },
                 stringLength: {
-                  min: 6,
-                  message: 'Vui lòng nhập từ 6 ký tự trở lên'
+                  min: 2,
+                  message: '2文字以上入力してください'
                 }
               }
             },
@@ -432,7 +572,7 @@ function whenContainerReady() {
             axios.post('/api/index.php?model=timecard&method=edit_holiday', formData)
               .then(function (response) {
                 if (response.status === 200 && response.data && response.data.status === 'success') {
-                  handleSuccess(response.data.message_code);
+                  showMessage('休日を編集しました');
                   formEditRecord.reset();
                   changeData();
                   // Close the modal
@@ -441,7 +581,7 @@ function whenContainerReady() {
                     editModal.hide();
                   }
                 } else {
-                  handleErrors(response.data.message_code);
+                  showMessage('休日を編集できませんでした', true);
                 }
               })
               .catch(function (error) {

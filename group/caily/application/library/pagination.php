@@ -58,7 +58,7 @@ class Pagination {
 			}
 			$array[] = $this->createlink($i, $i, $_REQUEST['sort'], $_REQUEST['desc'], $class);
 		}
-		$result[1] = implode('', array: $array);
+		$result[1] = implode('', $array);
 		if (strlen($result[1]) <= 0) {
 			$result[1] = $this->createlink(1, 1, $_REQUEST['sort'], $_REQUEST['desc'], 'active');
 		}

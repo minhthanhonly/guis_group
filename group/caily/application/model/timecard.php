@@ -133,8 +133,47 @@ class Timecard extends ApplicationModel {
 	/*API*/
 	function get_holiday(){
 		$this->authorizeApi('administrator', 'manager');
-		$query = "SELECT * FROM groupware_holiday ORDER BY date DESC";
+		$startDate = $_GET['start_date'];
+		$endDate = $_GET['end_date'];
+		if(!$startDate && !$endDate){
+			$query = "SELECT * FROM groupware_holiday ORDER BY date DESC";
+		} else{
+			$query = "SELECT * FROM groupware_holiday WHERE date BETWEEN '$startDate' AND '$endDate' ORDER BY date DESC";
+		}
 		$hash['list'] = $this->fetchAll($query);
+		return $hash;
+	}
+
+	/*API*/
+	function get_lastest_holiday(){
+		$this->authorizeApi('administrator', 'manager');
+		$query = "SELECT * FROM groupware_holiday ORDER BY date DESC LIMIT 1";
+		$hash['list'] = $this->fetchAll($query);
+		return $hash;
+	}
+
+	/*API*/
+	function add_holiday_list(){
+		$this->authorizeApi('administrator', 'manager');
+		$json = file_get_contents('php://input');
+		$holidayList = json_decode($json, true);
+		$holidayList = $holidayList['holidayList'];
+		$query = "INSERT INTO groupware_holiday (date, name, is_api) VALUES ";
+		foreach($holidayList as $holiday){
+			if(isset($holiday['name']) && $holiday['name'] == ''){
+				continue;
+			}
+			$query .= "('".$holiday['date']."', '".$holiday['name']."', 1),";
+		}
+		$query = rtrim($query, ',');
+		$response = $this->update_query($query);
+		if($response > 0){
+			$hash['status'] = 'success';
+			$hash['message_code'] = 11;
+		} else{
+			$hash['status'] = 'error';
+			$hash['message_code'] = 12;
+		}
 		return $hash;
 	}
 
@@ -209,7 +248,7 @@ class Timecard extends ApplicationModel {
 		}
 
 		$query = sprintf(
-			"UPDATE groupware_holiday SET name = '%s', date = '%s' WHERE id = '%s'",
+			"UPDATE groupware_holiday SET name = '%s', date = '%s', is_api = '' WHERE id = '%s'",
 			$holiday,
 			$date,
 			$id
