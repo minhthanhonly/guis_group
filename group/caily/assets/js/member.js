@@ -24,11 +24,33 @@ async function get_member() {
 function generateGroupList(){
     const groupListElement = document.getElementById('UserGroup');
     const roleListElement = document.getElementById('UserRole');
+    const addGroupListElement = document.getElementById('add-user-group');
+    const editGroupListElement = document.getElementById('edit-user-group');
+    const addTypeListElement = document.getElementById('add-user-type');
+    const editTypeListElement = document.getElementById('edit-user-type');
     Object.entries(groupList).forEach(([key, value]) => {
         const option = document.createElement('option');
         option.value = value;
         option.textContent = value;
+        const option2 = document.createElement('option');
+        option2.value = value;
+        option2.textContent = value;
+        const option3 = document.createElement('option');
+        option3.value = value;
+        option3.textContent = value;
         groupListElement.appendChild(option);
+        addGroupListElement.appendChild(option2);
+        editGroupListElement.appendChild(option3);
+    });
+    Object.entries(configList).forEach(([key, value]) => {
+        const option = document.createElement('option');
+        option.value = value.config_name;
+        option.textContent = value.config_name;
+        const option2 = document.createElement('option');
+        option2.value = value.config_name;
+        option2.textContent = value.config_name;
+        addTypeListElement.appendChild(option);
+        editTypeListElement.appendChild(option2);
     });
 
     groupListElement.addEventListener('change', (e) => {
@@ -38,6 +60,7 @@ function generateGroupList(){
     roleListElement.addEventListener('change', (e) => {
         dt_user.column(2).search(e.target.value).draw();
     });
+
 }
 
 function drawTable(data){
@@ -233,11 +256,11 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                     {
                     extend: 'collection',
                     className: 'btn btn-label-secondary dropdown-toggle',
-                    text: '<span class="d-flex align-items-center gap-2"><i class="icon-base ti tabler-upload icon-xs"></i> <span class="d-none d-sm-inline-block">Export</span></span>',
+                    text: '<span class="d-flex align-items-center gap-2"><i class="icon-base ti tabler-upload icon-xs"></i> <span class="d-none d-sm-inline-block">書き出し</span></span>',
                     buttons: [
                         {
                         extend: 'print',
-                        text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-printer me-1"></i>Print</span>`,
+                        text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-printer me-1"></i>印刷</span>`,
                         className: 'dropdown-item',
                         exportOptions: {
                             columns: [1,2,3,4,5,6],
@@ -400,7 +423,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                         // },
                         {
                         extend: 'copy',
-                        text: `<i class="icon-base ti tabler-copy me-1"></i>Copy`,
+                        text: `<i class="icon-base ti tabler-copy me-1"></i>コピー`,
                         className: 'dropdown-item',
                         exportOptions: {
                             columns: [1,2,3,4,5,6],
@@ -438,7 +461,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                     ]
                     },
                     {
-                    text: '<span class="d-flex align-items-center gap-2"><i class="icon-base ti tabler-plus icon-xs"></i> <span class="d-none d-sm-inline-block">Add New Record</span></span>',
+                    text: '<span class="d-flex align-items-center gap-2"><i class="icon-base ti tabler-plus icon-xs"></i> <span class="d-none d-sm-inline-block">メンバー追加</span></span>',
                     className: 'add-new btn btn-primary',
                     attr: {
                         'data-bs-toggle': 'offcanvas',
@@ -672,20 +695,67 @@ document.addEventListener('DOMContentLoaded', async function (e) {
   // Add New User Form Validation
   const fv = FormValidation.formValidation(addNewUserForm, {
     fields: {
-      userFullname: {
+      userid: {
         validators: {
           notEmpty: {
-            message: 'Please enter fullname '
+            message: 'ユーザー名を入力してください'
+          },
+          stringLength: {
+            min: 6,
+            message: '6文字以上入力してください'
           }
         }
       },
-      userEmail: {
+      password: {
         validators: {
           notEmpty: {
-            message: 'Please enter your email'
+            message: 'パスワードを入力してください'
           },
+          stringLength: {
+            min: 6,
+            message: '6文字以上入力してください'
+          }
+        }
+      },
+      realname: {
+        validators: {
+          notEmpty: {
+            message: '氏名を入力してください'
+          }
+        }
+      },
+      email: {
+        validators: {
           emailAddress: {
-            message: 'The value is not a valid email address'
+            message: 'メールアドレスが不正です'
+          }
+        }
+      },
+      // gender: {
+      //   validators: {
+      //     notEmpty: {
+      //       message: '性別を選択してください'
+      //     }
+      //   }
+      // },
+      group: {
+        validators: {
+          notEmpty: {
+            message: 'グループを選択してください'  
+          }
+        }
+      },
+      type: {
+        validators: {
+          notEmpty: {
+            message: '従業員の種類を選択してください'
+          }
+        }
+      },
+      role: {
+        validators: {
+          notEmpty: {
+            message: '制限を選択してください'
           }
         }
       }
@@ -693,17 +763,34 @@ document.addEventListener('DOMContentLoaded', async function (e) {
     plugins: {
       trigger: new FormValidation.plugins.Trigger(),
       bootstrap5: new FormValidation.plugins.Bootstrap5({
-        // Use this for enabling/changing valid/invalid class
         eleValidClass: '',
-        rowSelector: function (field, ele) {
-          // field is the field name & ele is the field element
-          return '.form-control-validation';
-        }
+        rowSelector: '.form-control-validation'
       }),
-      submitButton: new FormValidation.plugins.SubmitButton(),
-      // Submit the form when all fields are valid
-      // defaultSubmit: new FormValidation.plugins.DefaultSubmit(),
-      autoFocus: new FormValidation.plugins.AutoFocus()
-    }
+    },
   });
+
+  addNewUserForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    fv.validate().then(function (status) {
+      if (status === 'Valid') {
+        displayHourglass();
+        const formData = new FormData(addNewUserForm);
+        axios.post('/api/index.php?model=member&method=add_member', formData)
+          .then(function (response) {
+            if (response.status === 200 && response.data && response.data.status === 'success') {
+              showMessage('メンバーを追加しました');
+              addNewUserForm.reset();
+              changeData();
+            } else {
+              showMessage('メンバーを追加できませんでした', true);
+            }
+          })
+          .catch(function (error) {
+            handleErrors(error);
+          });
+      }
+    });
+  });
+
+  generatePermit('edit', null, '', document.getElementById('add-user-permit'));
 });

@@ -2,8 +2,8 @@
 
 function App() {}
 
-App.loader = function (url, parameter, id) {
-	
+App.loader = function (url, parameter, id, wrapId) {
+	console.log(wrapId);
 	if (!id) {
 		id = 'layer';
 	}
@@ -26,7 +26,8 @@ App.loader = function (url, parameter, id) {
 		element.appendTo(document.body);
 		element.css({'top': top, 'left': left, 'visibility': 'visible'});
 	}
-	//element.draggable({handle: 'div.handle'});
+	$('#' + id).attr('data-wrapid', wrapId);
+	element.draggable({handle: 'div.handle'});
 	$('div.layerclose', element).click(function(){
 		element.remove();
 	});
@@ -159,7 +160,7 @@ App.move = function (object, form) {
 	
 }
 
-App.permitlevel = function (object, level, type) {
+App.permitlevel = function (object, level, type, wrapId) {
 	
 	try {
 		if (!level) {
@@ -167,25 +168,20 @@ App.permitlevel = function (object, level, type) {
 		} else {
 			App.level = level;
 		}
-		if (object.options && object.options[object.selectedIndex].value != 2) {
-			document.getElementById(level + 'search').style.display = 'none';
-		} else {
-			document.getElementById(level + 'search').style.display = 'inline';
-			App.permitlist(null, type);
-		}
+		App.permitlist(null, type, wrapId);
 	} catch(e) {
 		alert(e.message);
 	}
 	
 }
 
-App.permitlist = function (object, type) {
+App.permitlist = function (object, type, wrapId) {
 	
 	try {
 		if (object) {
 			var integer = object.options[object.selectedIndex].value;
 		}
-		App.loader('../user/feed.php', {'group': integer, 'type': type}, 'userlist');
+		App.loader('../user/feed.php', {'group': integer, 'type': type}, 'userlist', wrapId);
 	} catch(e) {
 		alert(e.message);
 	}
@@ -218,6 +214,8 @@ App.permit = function (object) {
 App.permitAppend = function (userid, realname) {
 	
 	try {
+		var wrapId = $('#userlist').attr('data-wrapid');
+		var $wrap = $('#' + wrapId).get(0);
 		if (userid.match(/group:/)) {
 			var type = 'group';
 			userid = userid.replace(/group:/, '');
@@ -225,24 +223,26 @@ App.permitAppend = function (userid, realname) {
 			var type = 'user';
 		}
 		var id = App.level + type + userid;
-		if (document.getElementById(id) && document.getElementById(id).type == 'checkbox') {
-			document.getElementById(id).checked = true;
+		var idString = '#' + id;
+		if ($wrap.querySelector(idString) && $wrap.querySelector(idString).type == 'checkbox') {
+			$wrap.querySelector(idString).checked = true;
 		} else {
 			var element = document.createElement('div');
 			var string = '<div><input type="checkbox" name="' + App.level + '[' + type + '][' + userid + ']" ';
 			string += 'id="' + id + '" value="' + realname + '" checked="checked" />';
 			string += '<label for="' + id + '">' + realname + '</label></div>';
 			element.innerHTML = string;
-			var parent = document.getElementById(App.level + 'search').parentNode;
-			if (parent.getElementsByTagName('select').length > 0) {
-				parent.appendChild(element);
-			} else {
-				parent.insertBefore(element, document.getElementById(App.level + 'search'));
-			}
+			$wrap.appendChild(element);
+			// var parent = document.getElementById(App.level + 'search').parentNode;
+			// if (parent.getElementsByTagName('select').length > 0) {
+			// 	parent.appendChild(element);
+			// } else {
+			// 	parent.insertBefore(element, document.getElementById(App.level + 'search'));
+			// }
 			
 		}
 	} catch(e) {
-		alert(e.message);
+		console.log(e);
 	}
 	
 }

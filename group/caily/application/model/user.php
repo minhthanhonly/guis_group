@@ -22,6 +22,7 @@ class User extends ApplicationModel {
 		'edit_group'=>array('except'=>array('search')),
 		'edit_user'=>array('except'=>array('search')),
 		'member_type'=>array('従業員の種類', 'length:100'),
+		'is_suspend'=>array('ステータス', 'numeric', 'length:1'),
 		);
 	}
 	

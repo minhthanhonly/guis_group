@@ -865,3 +865,84 @@ const _log = console.log;
 //           });
 //   });
 // });
+
+
+function generatePermit($level = 'public', $option = null, $type = '', $element = null, $id = 1, $data = null) {
+  $element.innerHTML = '';
+  var $string = '';
+  var $typeStr = '';
+
+  App.level = $level;
+		
+  if (!Array.isArray($option)) {
+    if ($level == 'public') {
+      $option = ['公開', '非公開', '公開するグループ・ユーザーを設定'];
+    } else {
+      $option = ['許可', '登録者のみ', '許可するグループ・ユーザーを設定'];
+    }
+  }
+  $option.forEach(function(value, key) {
+    $string += `<option value="${key}">${value}</option>`;
+  });
+ 
+  if ($type == 1) {
+    $typeStr = ', 1';
+  } else {
+    $typeStr = '';
+  }
+  var wrapId = 'selectedWrap' + '_' + $id;
+  var string = `<select name="${$level}_level">${$string}</select>&nbsp;
+  <span class="operator btn btn-primary btn-search" id="${$level}search" onclick="App.permitlevel(this, '${$level}', '', '${wrapId}')">検索</span><div class="selected_items"></div>`;
+  if ($element) {
+    $element.innerHTML = string;
+  }
+
+  try {
+    var $select = document.querySelector(`select[name="${$level}_level"]`);
+    var $button = document.querySelector(`.btn-search`);
+    var $selected = document.querySelector(`.selected_items`);
+    
+    $selected.setAttribute('id', wrapId);
+    if($data && $data[$level+ '_level']){
+      $select.value = $data[$level +'_'+ $type];
+    }
+    $button.style.display = 'none';
+    if($data && $data[$level + '_level'] && $data[$level + '_level'] == 2){
+      $button.style.display = 'inline';
+    }
+    $select.addEventListener('change', function() {
+      if ($select.value != 2) {
+        $button.style.display = 'none';
+        $selected.innerHTML = '';
+      } else {
+        $button.style.display = 'inline';
+        App.permitlist(null, $type, wrapId);
+      }
+    });
+	} catch(e) {
+		alert(e.message);
+	}
+  // appParse($level, 'group', $element);
+  // appParse($level, 'user', $element);
+}
+
+function appParse($level, $type, $data, $element) {
+  // if (strlen($data[$level + '_' + $type]) > 0) {
+  //   $data = explode(',', str_replace(array('][', '[', ']'), array(',', '', ''), $data[$level+'_'+$type]));
+  //   if (is_array($data) && count($data) > 0) {
+  //     $list = $this->$type;
+  //     foreach ($data as $key) {
+  //       $array[$key] = $list[$key];
+  //     }
+  //   }
+  // }
+  // if (is_array($array) && count($array) > 0) {
+  //   foreach ($array as $key => $value) {
+  //     $id = $level.$type.$key;
+  //     $string .= '<div><input type="checkbox" name="'.$level.'['.$type.']['.$key.']"';
+  //     $string .= ' id="'.$id.'" value="'.$value.'" checked="checked" />';
+  //     $string .= '<label for="'.$id.'">'.$value.'</label></div>';
+  //   }
+  // }
+  return $string;
+}

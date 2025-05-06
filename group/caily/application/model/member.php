@@ -22,6 +22,7 @@ class Member extends ApplicationModel {
 		'user_skype'=>array('スカイプID', 'userid', 'length:1000'),
 		'user_image'=>array('写真', 'length:100'),
 		'member_type'=>array('従業員の種類', 'length:100'),
+		'is_suspend'=>array('ステータス', 'numeric', 'length:1'),
 	);
 		
 	}
@@ -100,6 +101,36 @@ class Member extends ApplicationModel {
 		}
 		return $hash;
 	
+	}
+
+	/*API*/
+	function add_member() {
+		$this->authorizeApi('administrator', 'manager');
+		$userid = $_POST['userid'];
+		$password = $_POST['password'];
+		$realname = $_POST['realname'];
+		$authority = $_POST['role'];
+		$user_group = $_POST['group'];
+		$user_email = $_POST['email'];
+		$user_phone = $_POST['phone'];
+
+
+		$date = date('Y-m-d H:i:s');
+		// check if date already exists
+		$result = $this->fetchCount("groupware_user", "WHERE userid = '$userid'", 'id');
+		if($result){
+			$hash['status'] = 'error';
+			$hash['message_code'] = 10;
+			return $hash;
+		}
+
+		$query = sprintf("INSERT INTO groupware_user (userid, password, realname, authority, user_group, user_email, user_phone, created) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')", $userid, $password, $realname, $authority, $user_group, $user_email, $user_phone, $date);
+		$response = $this->query($query);
+		if($response){
+			$hash['status'] = 'success';
+			$hash['message_code'] = 11;
+		}
+		return $hash;
 	}
 	
 	function view() {

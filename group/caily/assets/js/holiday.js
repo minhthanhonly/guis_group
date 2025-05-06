@@ -482,7 +482,6 @@ function whenContainerReady() {
     
       formAddNewRecord.addEventListener('submit', function (e) {
         e.preventDefault();
-        console.log('formAddNewRecord');
         fv.validate().then(function (status) {
           if (status === 'Valid') {
             displayHourglass();
@@ -502,8 +501,7 @@ function whenContainerReady() {
               });
           }
         });
-      }
-      );
+      });
     
     })();
 

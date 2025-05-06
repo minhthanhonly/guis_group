@@ -36,7 +36,7 @@ $view->heading('メンバー詳細');
 					</div>
 				
 
-					<div class="d-flex justify-content-start flex-wrap my-6 gap-0 gap-md-3 gap-lg-4">
+					<!-- <div class="d-flex justify-content-start flex-wrap my-6 gap-0 gap-md-3 gap-lg-4">
 						<div class="d-flex align-items-center me-5 gap-4">
 						  <div class="avatar">
 							<div class="avatar-initial bg-label-primary rounded">
@@ -59,8 +59,8 @@ $view->heading('メンバー詳細');
 							<span>Project Done</span>
 						  </div>
 						</div>
-					</div>
-					<h5 class="pb-4 border-bottom mb-4">詳細</h5>
+					</div> -->
+					<h5 class="pb-4 border-bottom mb-4 mt-4">詳細</h5>
 					<div class="info-container">
 						<ul class="list-unstyled mb-6">
 						  <li class="mb-2">
@@ -73,7 +73,7 @@ $view->heading('メンバー詳細');
 						  </li>
 						  <li class="mb-2">
 							<span class="h6">状態:</span>
-							<span class="badge bg-label-success">アクティブ</span>
+							<span class="badge <?=$hash['data']['is_suspend'] != 1 ? 'bg-label-success' : 'bg-label-warning'?>"><?=$hash['data']['is_suspend'] == 1 ? '停止' : 'アクティブ'?></span>
 						  </li>
 						  <li class="mb-2">
 							<span class="h6">グループ:</span>
