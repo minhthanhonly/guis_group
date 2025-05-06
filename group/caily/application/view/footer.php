@@ -18,7 +18,6 @@
 <script src="<?=$root?>assets/vendor/libs/@form-validation/auto-focus.js"></script>
 <script src="<?=$root?>assets/vendor/libs/apex-charts/apexcharts.js"></script>
 <script src="<?=$root?>assets/vendor/libs/moment/moment.js"></script>
-<script src="<?=$root?>assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js"></script>
 <script src="<?=$root?>assets/vendor/libs/select2/select2.js"></script>
 <script src="<?=$root?>assets/vendor/libs/cleave-zen/cleave-zen.js"></script>
 <script src="<?=$root?>assets/vendor/libs/tagify/tagify.js"></script>
@@ -26,6 +25,8 @@
 <script src="<?=$root?>assets/vendor/libs/notiflix/notiflix.js"></script>
 <script src="<?=$root?>assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
 <script src="<?=$root?>assets/js/imask.js"></script>
+
+<script src="<?=$root?>assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js"></script>
 
 
 
@@ -37,12 +38,11 @@ if(isset($_SESSION['userid'])) {
 <script>
     const userId = '<?= isset($_SESSION['userid']) ? $_SESSION['userid'] : 'null' ?>';
     </script>
-    <script src="<?=$root?>js/user-list.js"></script>
-    <link rel="stylesheet" href="<?=$root?>css/user-list.css">
+    <!-- <script src="<?=$root?>js/user-list.js"></script> -->
+    <!-- <link rel="stylesheet" href="<?=$root?>css/user-list.css"> -->
 <?php
 }
 ?>
-
 
 <script type="text/javascript" src="<?=$root?>js/library/jquery-ui.min.js"></script>
 <script type="text/javascript" src="<?=$root?>js/application.js"></script>

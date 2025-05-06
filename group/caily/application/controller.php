@@ -6,7 +6,9 @@ class Controller {
 	function dispatch() {
 		$this->requiring();
 		$authority = new Authority;
-		$authority->check();
+		if(!isset($_SESSION['authorized'])){
+			$authority->check();
+		}
 		
 		return $this->execute();
 	}

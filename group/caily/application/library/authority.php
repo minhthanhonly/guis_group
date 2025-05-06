@@ -151,10 +151,12 @@ class Authority
 				$_SESSION['accesstime'] = $_SESSION['logintime'];
 				$_SESSION['authorized'] = md5(__FILE__ . $_SESSION['logintime']);
 				$_SESSION['userid'] = $data['userid'];
+				$_SESSION['id'] = $data['id'];
 				$_SESSION['realname'] = $data['realname'];
 				$_SESSION['group'] = $data['user_group'];
-				$_SESSION['user_groupname'] = $data['user_groupname'];
 				$_SESSION['authority'] = $data['authority'];
+				$_SESSION['user_image'] = $data['user_image'];
+				$_SESSION['user_groupname'] = $data['user_groupname'];
 
 				return true;
 			}

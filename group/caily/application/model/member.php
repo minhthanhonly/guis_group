@@ -78,6 +78,29 @@ class Member extends ApplicationModel {
 		return $hash;
 	
 	}
+
+	function get_member() {
+		$config = new Config($this->handler);
+		$query = "SELECT groupware_user.id as `id`, `userid`, `password`, `password_default`, `realname`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend` , groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
+		$hash['list'] = $this->fetchAll($query);
+		$hash['group'] = $this->findGroup();
+
+		$hash['list_config'] = $config->getListConfigTimecard();
+
+		$arr_config = array();
+		foreach ($hash['list_config'] as $key => $value) {
+			$arr_config[$value["config_type"]] = $value["config_name"];
+		}
+		foreach ($hash['list'] as $key => $value) {
+			if($value["member_type"] == null){
+				$hash['list'][$key]["member_type_name"] = $arr_config['timecard'];
+			} else{
+				$hash['list'][$key]["member_type_name"] = $arr_config[$value["member_type"]];
+			}
+		}
+		return $hash;
+	
+	}
 	
 	function view() {
 		$hash['data'] = $this->findView();

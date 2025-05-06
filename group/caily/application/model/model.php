@@ -93,9 +93,8 @@ class Model extends Connection {
 	}
 	
 	function findView($id = 0) {
-		
 		if ($id <= 0) {
-			if( $_REQUEST['id']){
+			if($_REQUEST['id']){
 				$id = $_REQUEST['id'];
 			} else{
 				$id = $_SESSION['id'];

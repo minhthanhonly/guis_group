@@ -268,6 +268,7 @@ setTimeout(() => {
 }, 1000);
 
 document.addEventListener('DOMContentLoaded', function () {
+  
   whenContainerReady()
 });
 

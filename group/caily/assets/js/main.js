@@ -794,75 +794,74 @@ function showMessage(message, isError = false) {
 const _log = console.log;
 
 
+// document.addEventListener('DOMContentLoaded', function () {
+//   const chatWidget = document.getElementById('ai-chat-widget');
+//   const chatToggle = document.getElementById('ai-chat-toggle');
+//   const chatClose = document.getElementById('ai-chat-close');
+//   const chatBody = document.getElementById('ai-chat-body');
+//   const chatInput = document.getElementById('ai-chat-input');
+//   const chatSend = document.getElementById('ai-chat-send');
 
-document.addEventListener('DOMContentLoaded', function () {
-  const chatWidget = document.getElementById('ai-chat-widget');
-  const chatToggle = document.getElementById('ai-chat-toggle');
-  const chatClose = document.getElementById('ai-chat-close');
-  const chatBody = document.getElementById('ai-chat-body');
-  const chatInput = document.getElementById('ai-chat-input');
-  const chatSend = document.getElementById('ai-chat-send');
+//   // Toggle chat widget visibility
+//   chatToggle.addEventListener('click', () => {
+//       chatWidget.style.display = chatWidget.style.display === 'none' ? 'flex' : 'none';
+//   });
 
-  // Toggle chat widget visibility
-  chatToggle.addEventListener('click', () => {
-      chatWidget.style.display = chatWidget.style.display === 'none' ? 'flex' : 'none';
-  });
+//   chatClose.addEventListener('click', () => {
+//       chatWidget.style.display = 'none';
+//   });
 
-  chatClose.addEventListener('click', () => {
-      chatWidget.style.display = 'none';
-  });
+//   // Send message to AI
+//   chatSend.addEventListener('click', () => {
+//       const message = chatInput.value.trim();
+//       if (!message) return;
 
-  // Send message to AI
-  chatSend.addEventListener('click', () => {
-      const message = chatInput.value.trim();
-      if (!message) return;
+//       // Display user message
+//       const userMessage = document.createElement('div');
+//       userMessage.textContent = `You: ${message}`;
+//       userMessage.style.marginBottom = '10px';
+//       chatBody.appendChild(userMessage);
 
-      // Display user message
-      const userMessage = document.createElement('div');
-      userMessage.textContent = `You: ${message}`;
-      userMessage.style.marginBottom = '10px';
-      chatBody.appendChild(userMessage);
+//       // Clear input
+//       chatInput.value = '';
 
-      // Clear input
-      chatInput.value = '';
+//       // Send message to server
+//       fetch('/ai/index.php?method=chat', {
+//           method: 'POST',
+//           headers: {
+//               'Content-Type': 'application/json',
+//           },
+//           body: JSON.stringify({ message }),
+//       })
+//           .then(response => response.json())
+//           .then(data => {
+//             // Display AI response
+//             const aiMessage = document.createElement('div');
 
-      // Send message to server
-      fetch('/ai/index.php?method=chat', {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ message }),
-      })
-          .then(response => response.json())
-          .then(data => {
-            // Display AI response
-            const aiMessage = document.createElement('div');
-
-            // Check if candidates exist in the response
-            if (data.candidates && data.candidates.length > 0) {
-                const parts = data.candidates[0].content.parts; // Access the parts array
-                //format the response
+//             // Check if candidates exist in the response
+//             if (data.candidates && data.candidates.length > 0) {
+//                 const parts = data.candidates[0].content.parts; // Access the parts array
+//                 //format the response
                 
-                aiMessage.innerHTML = parts.map(part => {
-                  const formattedText = part.text
-                  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Convert **text** to <strong>text</strong>
-                  .replace(/\n/g, '<br>');
-                  return `<p>${formattedText}</p>`
-                }).join(''); // Display all parts
-            } else {
-                aiMessage.textContent = 'No response';
-            }
+//                 aiMessage.innerHTML = parts.map(part => {
+//                   const formattedText = part.text
+//                   .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Convert **text** to <strong>text</strong>
+//                   .replace(/\n/g, '<br>');
+//                   return `<p>${formattedText}</p>`
+//                 }).join(''); // Display all parts
+//             } else {
+//                 aiMessage.textContent = 'No response';
+//             }
 
-            aiMessage.style.marginBottom = '10px';
-            aiMessage.style.color = 'blue';
-            chatBody.appendChild(aiMessage);
+//             aiMessage.style.marginBottom = '10px';
+//             aiMessage.style.color = 'blue';
+//             chatBody.appendChild(aiMessage);
 
-            // Scroll to bottom
-            chatBody.scrollTop = chatBody.scrollHeight;
-          })
-          .catch(error => {
-              console.error('Error:', error);
-          });
-  });
-});
+//             // Scroll to bottom
+//             chatBody.scrollTop = chatBody.scrollHeight;
+//           })
+//           .catch(error => {
+//               console.error('Error:', error);
+//           });
+//   });
+// });

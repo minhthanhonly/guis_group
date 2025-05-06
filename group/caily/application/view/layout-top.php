@@ -64,6 +64,24 @@
               </ul>
             </li>
 
+            <li class="menu-item <?php if($directory == 'member') echo 'active open'; ?>">
+              <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base ti tabler-users"></i>
+                <div>メンバー</div>
+              </a>
+              <ul class="menu-sub">
+                <li class="menu-item <?php if($directory == 'member' && $page == 'index') echo 'active'; ?>">
+                  <a href="<?=$root?>member/" class="menu-link" data-pjax>
+                    <div>一覧</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php if($directory == 'member' && $page == 'config') echo 'active'; ?>">
+                  <a href="<?=$root?>member/config.php" class="menu-link" data-pjax>
+                    <div>設定</div>
+                  </a>
+                </li>
+              </ul>
+            </li>
             <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base ti tabler-users"></i>
@@ -595,7 +613,7 @@
                     <li>
                       <div class="d-grid px-2 pt-2 pb-1">
                         <a class="btn btn-sm btn-danger d-flex" href="<?=$root?>logout.php"">
-                          <small class="align-middle">Đăng xuất</small>
+                          <small class="align-middle">ログアウト</small>
                           <i class="icon-base ti tabler-logout ms-2 icon-14px"></i>
                         </a>
                       </div>
@@ -609,7 +627,7 @@
 
           <!-- / Navbar -->
           <!-- AI Chat Widget -->
-          <div id="ai-chat-widget" style="position: fixed; z-index: 9999; bottom: 20px; right: 20px; width: 300px; height: 400px; background: white; border: 1px solid #ccc; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); display: none; flex-direction: column;">
+          <!-- <div id="ai-chat-widget" style="position: fixed; z-index: 9999; bottom: 20px; right: 20px; width: 300px; height: 400px; background: white; border: 1px solid #ccc; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); display: none; flex-direction: column;">
               <div id="ai-chat-header" style="background: #007bff; color: white; padding: 10px; cursor: pointer; border-top-left-radius: 10px; border-top-right-radius: 10px;">
                   AI Assistant
                   <span id="ai-chat-close" style="float: right; cursor: pointer;">&times;</span>
@@ -620,7 +638,7 @@
                   <button id="ai-chat-send" style="width: 40px; background: #007bff; color: white; border: none; border-radius: 5px;">Send</button>
               </div>
             </div>
-          <button id="ai-chat-toggle" style="position: fixed; z-index: 9998; bottom: 20px; right: 20px; background: #007bff; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">AI</button>
+          <button id="ai-chat-toggle" style="position: fixed; z-index: 9998; bottom: 20px; right: 20px; background: #007bff; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">AI</button> -->
           <!-- Content wrapper -->
           <div class="content-wrapper">
 
