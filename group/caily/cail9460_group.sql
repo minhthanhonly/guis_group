@@ -1,11 +1,11 @@
 -- phpMyAdmin SQL Dump
--- version 5.2.0
+-- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: May 05, 2025 at 10:24 AM
--- Server version: 10.4.25-MariaDB
--- PHP Version: 7.4.30
+-- Generation Time: May 06, 2025 at 12:28 PM
+-- Server version: 10.4.32-MariaDB
+-- PHP Version: 8.1.25
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -32,7 +32,7 @@ CREATE TABLE `achieve` (
   `achieve_order` int(11) NOT NULL,
   `date_create` varchar(15) NOT NULL,
   `achieve_status` int(11) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 -- --------------------------------------------------------
 
@@ -70,7 +70,7 @@ CREATE TABLE `adressデータ` (
   `editor` varchar(5) DEFAULT NULL,
   `created` varchar(19) DEFAULT NULL,
   `updated` varchar(10) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `adressデータ`
@@ -252,7 +252,7 @@ CREATE TABLE `groupware_addressbook` (
   `editor` mediumtext DEFAULT NULL,
   `created` mediumtext NOT NULL,
   `updated` mediumtext DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `groupware_addressbook`
@@ -430,7 +430,7 @@ CREATE TABLE `groupware_bookmark` (
   `editor` mediumtext DEFAULT NULL,
   `created` mediumtext NOT NULL,
   `updated` mediumtext DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 -- --------------------------------------------------------
 
@@ -451,7 +451,7 @@ CREATE TABLE `groupware_company` (
   `url` text DEFAULT NULL,
   `note` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `groupware_company`
@@ -477,7 +477,7 @@ CREATE TABLE `groupware_config` (
   `created` mediumtext NOT NULL,
   `updated` mediumtext DEFAULT NULL,
   `config_name` varchar(50) DEFAULT '正社員'
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `groupware_config`
@@ -611,7 +611,7 @@ CREATE TABLE `groupware_dayoff` (
   `cancel_repeat_dates` text DEFAULT NULL,
   `is_overwork` varchar(1) DEFAULT NULL,
   `is_BHXH` varchar(1) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 -- --------------------------------------------------------
 
@@ -640,7 +640,7 @@ CREATE TABLE `groupware_folder` (
   `editor` mediumtext DEFAULT NULL,
   `created` mediumtext NOT NULL,
   `updated` mediumtext DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `groupware_folder`
@@ -682,7 +682,7 @@ CREATE TABLE `groupware_forum` (
   `editor` mediumtext DEFAULT NULL,
   `created` mediumtext NOT NULL,
   `updated` mediumtext DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `groupware_forum`
@@ -1743,7 +1743,7 @@ CREATE TABLE `groupware_group` (
   `editor` mediumtext DEFAULT NULL,
   `created` mediumtext NOT NULL,
   `updated` mediumtext DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `groupware_group`
@@ -1765,7 +1765,7 @@ CREATE TABLE `groupware_holiday` (
   `date` varchar(20) NOT NULL,
   `name` varchar(50) DEFAULT NULL,
   `is_api` varchar(1) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `groupware_holiday`
@@ -1846,7 +1846,7 @@ CREATE TABLE `groupware_log` (
   `created_date` varchar(20) NOT NULL,
   `start_time` varchar(50) DEFAULT NULL,
   `end_time` varchar(50) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Triggers `groupware_log`
@@ -1879,7 +1879,7 @@ CREATE TABLE `groupware_message` (
   `editor` mediumtext DEFAULT NULL,
   `created` mediumtext NOT NULL,
   `updated` mediumtext DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1893,7 +1893,7 @@ CREATE TABLE `groupware_notification` (
   `message` text NOT NULL,
   `created_date` varchar(50) NOT NULL,
   `isRead` varchar(10) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1926,7 +1926,7 @@ CREATE TABLE `groupware_overtime` (
   `version` int(11) NOT NULL DEFAULT 0,
   `update_date` varchar(20) NOT NULL,
   `update_by` varchar(20) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1949,7 +1949,7 @@ CREATE TABLE `groupware_projects` (
   `status` varchar(50) DEFAULT NULL,
   `progress` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1964,7 +1964,7 @@ CREATE TABLE `groupware_representatives` (
   `email` varchar(255) DEFAULT NULL,
   `phone` varchar(20) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `groupware_representatives`
@@ -2012,7 +2012,7 @@ CREATE TABLE `groupware_schedule` (
   `editor` mediumtext DEFAULT NULL,
   `created` mediumtext NOT NULL,
   `updated` mediumtext DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `groupware_schedule`
@@ -4959,7 +4959,7 @@ CREATE TABLE `groupware_specifications` (
   `text` mediumtext DEFAULT NULL,
   `files` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`files`)),
   `created_at` datetime DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 -- --------------------------------------------------------
 
@@ -4990,7 +4990,7 @@ CREATE TABLE `groupware_storage` (
   `editor` mediumtext DEFAULT NULL,
   `created` mediumtext NOT NULL,
   `updated` mediumtext DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 -- --------------------------------------------------------
 
@@ -5029,7 +5029,7 @@ CREATE TABLE `groupware_timecard` (
   `created` mediumtext NOT NULL,
   `updated` mediumtext DEFAULT NULL,
   `timecard_temp` int(11) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `groupware_timecard`
@@ -5061,7 +5061,7 @@ CREATE TABLE `groupware_todo` (
   `editor` mediumtext DEFAULT NULL,
   `created` mediumtext NOT NULL,
   `updated` mediumtext DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 -- --------------------------------------------------------
 
@@ -5078,6 +5078,7 @@ CREATE TABLE `groupware_user` (
   `authority` mediumtext NOT NULL,
   `user_group` int(11) DEFAULT NULL,
   `user_groupname` mediumtext DEFAULT NULL,
+  `gender` varchar(10) NOT NULL,
   `user_email` mediumtext DEFAULT NULL,
   `user_skype` mediumtext DEFAULT NULL,
   `user_ruby` mediumtext DEFAULT NULL,
@@ -5103,63 +5104,63 @@ CREATE TABLE `groupware_user` (
   `remember_token` varchar(100) DEFAULT NULL,
   `user_image` varchar(100) DEFAULT NULL,
   `is_suspend` varchar(5) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 --
 -- Dumping data for table `groupware_user`
 --
 
-INSERT INTO `groupware_user` (`id`, `userid`, `password`, `password_default`, `realname`, `authority`, `user_group`, `user_groupname`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `edit_level`, `edit_group`, `edit_user`, `owner`, `editor`, `created`, `updated`, `pc_name`, `last_active`, `status`, `idle_time`, `pc_hashs`, `member_type`, `remember_token`, `user_image`, `is_suspend`) VALUES
-(71, 'kamata', '1d5f32ae93a582fec585d5b2cf06e3d0', '1d5f32ae93a582fec585d5b2cf06e3d0', '鎌田　悠源', 'member', 4, '管理', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '', '[admin]', 'takasaki', 'takasaki', '2025-03-25 12:01:04', '2025-03-25 12:02:49', '', '', '', '', '', 'timecard20250325120120', NULL, NULL, NULL),
-(70, 'higuchi', '927ec748d27023acb8c96cd9bbcabbc6', '927ec748d27023acb8c96cd9bbcabbc6', '樋口 友束', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '', '[admin][saito][takasaki]', 'takasaki', NULL, '2025-01-28 14:09:37', NULL, '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(68, 'sekine', '57540805ee2261288aa235401b19bae0', '57540805ee2261288aa235401b19bae0', '関根　栄子', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '', '[admin][saito][takasaki]', 'takasaki', 'takasaki', '2024-12-05 14:28:47', '2024-12-27 10:06:30', '', '', '', '', '', 'timecard20241205143954', NULL, NULL, NULL),
-(69, 'okada', '6da9fb4f529a56209eb0886ff27b4a4a', '6da9fb4f529a56209eb0886ff27b4a4a', '岡田 将吾', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '', '[admin][saito][takasaki]', 'takasaki', 'takasaki', '2024-12-05 14:29:32', '2025-02-25 11:03:56', '', '', '', '', '', 'timecard20241224104346', NULL, NULL, NULL),
-(67, 'sakurai', 'e2c29ece51674ca027b842cfaa21f4af', 'e2c29ece51674ca027b842cfaa21f4af', '櫻井 聖子', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'takasaki', 'takasaki', '2024-10-31 17:51:14', '2024-11-21 14:24:57', '', '', '', '', '', 'timecard20241121142158', NULL, NULL, NULL),
-(66, 'eyamada', 'e12d44b3b20571cb2241183f9006b426', 'e12d44b3b20571cb2241183f9006b426', '山田 英愛', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'takasaki', 'takasaki', '2024-10-31 15:48:54', '2024-11-01 15:48:23', '', '', '', '', '', 'timecard20240725144536', NULL, NULL, NULL),
-(64, 'kanbara', '0c210307e81c5f8859dccb2e46497947', '0c210307e81c5f8859dccb2e46497947', '蒲原　由紀', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'takasaki', 'takasaki', '2024-10-02 15:32:00', '2024-10-17 14:13:09', '', '', '', '', '', 'timecard20240725144536', NULL, NULL, NULL),
-(62, 'kato', 'c64edcf53d4a416365c98faae57971f7', 'c64edcf53d4a416365c98faae57971f7', '加藤　貴仁', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'takasaki', '2024-07-18 13:31:57', '2024-09-03 10:52:00', '', '', '', '', '', 'timecard20240725145328', NULL, NULL, NULL),
-(61, 'kusachi', '6e30ad4c45cd20fff4f497b20a4082ac', '6e30ad4c45cd20fff4f497b20a4082ac', '草地　暁子', 'member', 5, '退職者', 'kusachi@guis.co.jp', '', '', '', '', '', '', '080-7208-1749', 0, 2, '[4]', '', 'takasaki', 'takasaki', '2024-07-18 13:31:22', '2024-12-27 10:07:04', '', '', '', '', '', 'timecard20241121141852', NULL, NULL, NULL),
-(60, 'matsuki', '6b7471d0589edb90c6a0f5937d7fa27c', '6b7471d0589edb90c6a0f5937d7fa27c', '松木 未希', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'takasaki', '2023-09-26 11:10:38', '2023-09-26 11:11:06', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(59, 'shimi', '630c0f3ecc0aa86c2cab0062c69ca959', '630c0f3ecc0aa86c2cab0062c69ca959', '馬 思敏', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'takasaki', '2023-08-07 11:17:34', '2024-12-27 10:06:50', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(56, 'nguyen', 'bbc280da914876ec639f7cb34ff6df2f', 'bbc280da914876ec639f7cb34ff6df2f', 'グエン　タン　チュン', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'kaneko', '2023-01-12 16:53:56', '2023-03-15 08:51:49', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(57, 'ichikawa', '4b7bd9e9f4c2eae4a1a9ea8e7284e5da', '4b7bd9e9f4c2eae4a1a9ea8e7284e5da', '市川モカ', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', NULL, '2023-04-14 14:54:54', NULL, '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(58, 'saruta', '2c93041f686eed921e512d8579c27618', '2c93041f686eed921e512d8579c27618', '猿田 俊雄', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'admin', '2023-04-28 09:43:55', '2024-07-22 15:51:00', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(55, 'saw', 'baa8fdc0a5682cee08bf37d5d8150ff5', 'baa8fdc0a5682cee08bf37d5d8150ff5', 'ソウ　シュウエ　モウ', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', NULL, '2023-01-12 16:52:44', NULL, '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(54, 'akashi', '841f69c0e9d84cc43e6bb79ccb8ce9e3', '841f69c0e9d84cc43e6bb79ccb8ce9e3', '明石 絢実', 'member', 5, '退職者', 'akashi@guis.co.jp', 'cid.ecb7d3c3b34aac9a', '', '', '', '', '', '08044293561', 0, 2, '[4]', '', 'takasaki', 'takasaki', '2022-11-16 15:24:09', '2025-02-25 11:02:42', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(53, 'sugiyama', 'fd5828f3cd4e62186378de9507825441', 'fd5828f3cd4e62186378de9507825441', '杉山 奈々美', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'takasaki', '2022-09-22 14:17:09', '2024-09-03 10:52:14', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(52, 'oono', 'ff7bb5d2c47211b856ddbc5591660949', 'ff7bb5d2c47211b856ddbc5591660949', '大野 いづみ', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'takasaki', '2022-08-01 09:51:11', '2024-07-12 10:50:52', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(51, 'okamoto', '59fb4719d3b9c8af64c4d7032d330cb2', '59fb4719d3b9c8af64c4d7032d330cb2', '岡本莉佳', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'kaneko', '2022-05-20 11:00:59', '2022-07-28 13:52:02', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(49, 'takano', '3fad4f6c5ed0a1072b48be8b20f4f675', '3fad4f6c5ed0a1072b48be8b20f4f675', '髙埜執行役', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'takasaki', '2021-10-25 13:30:25', '2024-03-06 15:26:27', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(48, 'sugitani', 'd4d2361cca5c39096e2400f5419911d2', '1c6e13cdb2c9807361d4dab12553ebb5', '杉谷 尚彦', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'kaneko', '2021-06-01 14:32:10', '2021-10-27 09:15:44', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(50, 'yamada', 'dd7769dd16c39313332aafc1be560ffb', 'dd7769dd16c39313332aafc1be560ffb', '山田 駆', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'kaneko', '2022-02-14 10:13:58', '2022-11-18 16:07:39', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(46, 'hori', '265daa949f8bf15dbaf0c2aa4dd3d824', '265daa949f8bf15dbaf0c2aa4dd3d824', '堀　真理子', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'kaneko', '2020-06-10 13:43:21', '2023-03-15 08:52:07', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(47, 'yoshikawa', '5faff7de73b9bf2638161df134eaac54', '5faff7de73b9bf2638161df134eaac54', '吉川 愛華', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'kaneko', '2020-08-24 11:02:14', '2021-07-30 16:02:43', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(43, 'fuse', '682f2ef5e40e760d100689eb4496c3c8', '8df77ea00106605c3411d5c0c68cc20a', '布施 亜由未', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'admin', 'kaneko', '2020-01-21 14:39:40', '2021-07-30 16:04:19', '', '', '', '', '', 'timecard', 'ad339b3aa9085d3c4ab82599924b7cfc', NULL, NULL),
-(41, 'nakano', 'c8ceb772a57484c149d2f8cfeba5873c', 'c8ceb772a57484c149d2f8cfeba5873c', '中野真弓', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'admin', 'admin', '2019-02-15 10:19:42', '2019-09-05 15:30:21', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(42, 'oguri', '1b579c6de0070094ed1dc26494c463ee', '1b579c6de0070094ed1dc26494c463ee', '小栗 正之', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'kaneko', 'kaneko', '2020-01-20 13:33:05', '2022-10-19 13:13:18', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(40, 'furuzawa', '0e83c61b1da48536963556688691801d', '0e83c61b1da48536963556688691801d', '古澤 知巳', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'admin', 'admin', '2018-09-27 09:44:02', '2021-07-30 16:05:13', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(39, 'tokoro', '9dca9317374f3057eff314d41151d251', '9dca9317374f3057eff314d41151d251', '所 真由美', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2018-06-18 13:02:25', '2020-02-26 09:17:56', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(38, 'ikeda', 'ee961f2b791119d446627c2f57e883c2', 'ee961f2b791119d446627c2f57e883c2', '池田 明裕', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2018-06-12 09:47:03', '2021-07-30 16:03:35', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(36, 'nakamura', '954845ed2df679785e34ff84b7cb6dd3', '954845ed2df679785e34ff84b7cb6dd3', '中村 麻子', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'takasaki', '2017-11-18 22:30:50', '2024-03-06 15:27:01', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(37, 'thy', '82038891f79d1518f07a4b40829a15b1', '82038891f79d1518f07a4b40829a15b1', 'Tran Giang Thy', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'admin', 'admin', '2018-04-23 10:16:17', '2020-02-26 09:20:09', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(32, 'mochizuki', '7d20bb96395bea6d7ceee4b31c63211f', '7d20bb96395bea6d7ceee4b31c63211f', '望月康剛', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'admin', '2016-10-27 14:51:43', '2018-11-12 15:34:01', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(30, 'miyazawa', 'c5085bad85fa9b852c20585d4386246a', 'c5085bad85fa9b852c20585d4386246a', '宮澤里奈', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'admin', '2016-10-11 10:03:40', '2019-02-15 10:20:54', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(29, 'akaishi', '1d2e685738cbbc33d1c9a66beb87a0ff', 'dec20cd1dd742532d05f2f3222c278e9', '赤石 法子', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'takasaki', '2016-06-28 09:29:22', '2024-07-12 10:50:42', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(20, 'shimada', '93ec1276b7fe4dee8a3153c7c23779f0', '93ec1276b7fe4dee8a3153c7c23779f0', '嶋田剛士', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'admin', '2014-05-07 12:05:00', '2018-11-12 15:33:52', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(34, 'yamamoto', '72b9d85a682e3e5dc69c39245739e266', '72b9d85a682e3e5dc69c39245739e266', '山本茂樹', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'admin', '2017-09-20 13:03:56', '2019-02-15 10:20:46', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(27, 'yokosuka', '6fd84150083a38d40cbb520d3c9756e4', '6fd84150083a38d40cbb520d3c9756e4', '横須賀一興', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2016-05-19 09:39:24', '2019-10-28 15:12:26', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(13, 'kobayashi_h', 'b8a26cef1d2dfaf34b803a820990f476', 'd1ace899ec62d99dbbd7b0912f514037', '小林 宏和', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2013-01-24 10:27:03', '2021-07-30 16:03:20', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(26, 'kaneko', '962ea912473a4a65037069a544efc2b8', '4cee2e6a81fea84316b13626e705e431', '金子 仁美', 'administrator', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'takasaki', '2016-04-06 11:19:13', '2023-06-28 11:35:27', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(11, 'saito', '20b46b82b477e76b30a00b0cc1257167', '20b46b82b477e76b30a00b0cc1257167', '齋藤社長', 'administrator', 4, '管理', 'saito@guis.co.jp', 'sai', 'さいとうさとし', '', '藤ヶ丘', '', '', '07050366211', 0, 2, '[4]', '[admin]', 'admin', 'kaneko', '2011-10-06 19:11:43', '2020-04-16 15:06:23', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(45, 'wang', '1b06e0aeeeca1e0a2d2f59ef1181945e', 'da23e6eba69d5b73b70c01167e595e83', '王　淼', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'admin', '2020-05-15 16:07:13', '2021-04-19 14:48:26', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(24, 'hosaka', 'd7cfb39d37a726a32dcfae605d36769f', 'd7cfb39d37a726a32dcfae605d36769f', '保坂逢里', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'admin', 'admin', '2015-12-01 10:50:48', '2018-11-12 15:33:26', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(44, 'ozeki', '2ed4cc83138ec2410cc29a44e87a3088', '2ed4cc83138ec2410cc29a44e87a3088', '尾関 文代', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'kaneko', '2020-03-31 16:25:28', '2021-07-30 16:03:12', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(12, 'takasaki', 'b54f413007b4f03a2e020a553df8d3d9', 'b054c3b3d33d1ce2f1d3d7763cfdc891', '高﨑 亜生', 'administrator', 4, '管理', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2012-08-03 10:35:55', '2021-07-30 16:04:05', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(8, 'kobayashi', '2d7b99ddce72d3c723f121df99144072', '2d7b99ddce72d3c723f121df99144072', '小林　翔', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'admin', '2011-07-19 17:25:25', '2019-02-15 10:20:32', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(5, 'yamazaki', '82bd29a3fb25b666c1a89fabe6e20c48', '82bd29a3fb25b666c1a89fabe6e20c48', '山崎あゆみ', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2011-07-19 17:19:21', '2019-01-22 10:12:50', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(23, 'hayashida', '16ed77f355c21dfa5091db2fea8178e1', '16ed77f355c21dfa5091db2fea8178e1', '林田 洋明', 'member', 5, '退職者', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'kaneko', '2015-08-03 14:05:19', '2022-12-15 09:47:48', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(22, 'minoura', '2fbca8955205be026e27accba3a7c337', '2fbca8955205be026e27accba3a7c337', '箕浦 麻衣', 'member', 1, 'メンバー', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'yito', 'kaneko', '2014-11-05 19:40:43', '2021-07-30 16:02:59', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
-(1, 'admin', '682f2ef5e40e760d100689eb4496c3c8', '682f2ef5e40e760d100689eb4496c3c8', '管理', 'administrator', 4, '管理', '', '', '', '', '', '', '', '', 0, 0, '', '', 'admin', 'admin', '2011-07-13 16:59:48', '2016-10-24 12:06:34', '', '', '', '', '', 'timecard', 'e5e75ab7a6fa0baa73a3921e05b24416', NULL, NULL);
+INSERT INTO `groupware_user` (`id`, `userid`, `password`, `password_default`, `realname`, `authority`, `user_group`, `user_groupname`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `edit_level`, `edit_group`, `edit_user`, `owner`, `editor`, `created`, `updated`, `pc_name`, `last_active`, `status`, `idle_time`, `pc_hashs`, `member_type`, `remember_token`, `user_image`, `is_suspend`) VALUES
+(71, 'kamata', '1d5f32ae93a582fec585d5b2cf06e3d0', '1d5f32ae93a582fec585d5b2cf06e3d0', '鎌田　悠源', 'member', 4, '管理', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '', '[admin]', 'takasaki', 'takasaki', '2025-03-25 12:01:04', '2025-03-25 12:02:49', '', '', '', '', '', 'timecard20250325120120', NULL, NULL, NULL),
+(70, 'higuchi', '927ec748d27023acb8c96cd9bbcabbc6', '927ec748d27023acb8c96cd9bbcabbc6', '樋口 友束', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '', '[admin][saito][takasaki]', 'takasaki', NULL, '2025-01-28 14:09:37', NULL, '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(68, 'sekine', '57540805ee2261288aa235401b19bae0', '57540805ee2261288aa235401b19bae0', '関根　栄子', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '', '[admin][saito][takasaki]', 'takasaki', 'takasaki', '2024-12-05 14:28:47', '2024-12-27 10:06:30', '', '', '', '', '', 'timecard20241205143954', NULL, NULL, NULL),
+(69, 'okada', '6da9fb4f529a56209eb0886ff27b4a4a', '6da9fb4f529a56209eb0886ff27b4a4a', '岡田 将吾', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '', '[admin][saito][takasaki]', 'takasaki', 'takasaki', '2024-12-05 14:29:32', '2025-02-25 11:03:56', '', '', '', '', '', 'timecard20241224104346', NULL, NULL, NULL),
+(67, 'sakurai', 'e2c29ece51674ca027b842cfaa21f4af', 'e2c29ece51674ca027b842cfaa21f4af', '櫻井 聖子', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'takasaki', 'takasaki', '2024-10-31 17:51:14', '2024-11-21 14:24:57', '', '', '', '', '', 'timecard20241121142158', NULL, NULL, NULL),
+(66, 'eyamada', 'e12d44b3b20571cb2241183f9006b426', 'e12d44b3b20571cb2241183f9006b426', '山田 英愛', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'takasaki', 'takasaki', '2024-10-31 15:48:54', '2024-11-01 15:48:23', '', '', '', '', '', 'timecard20240725144536', NULL, NULL, NULL),
+(64, 'kanbara', '0c210307e81c5f8859dccb2e46497947', '0c210307e81c5f8859dccb2e46497947', '蒲原　由紀', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'takasaki', 'takasaki', '2024-10-02 15:32:00', '2024-10-17 14:13:09', '', '', '', '', '', 'timecard20240725144536', NULL, NULL, NULL),
+(62, 'kato', 'c64edcf53d4a416365c98faae57971f7', 'c64edcf53d4a416365c98faae57971f7', '加藤　貴仁', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'takasaki', '2024-07-18 13:31:57', '2024-09-03 10:52:00', '', '', '', '', '', 'timecard20240725145328', NULL, NULL, NULL),
+(61, 'kusachi', '6e30ad4c45cd20fff4f497b20a4082ac', '6e30ad4c45cd20fff4f497b20a4082ac', '草地　暁子', 'member', 5, '退職者', '', 'kusachi@guis.co.jp', '', '', '', '', '', '', '080-7208-1749', 0, 2, '[4]', '', 'takasaki', 'takasaki', '2024-07-18 13:31:22', '2024-12-27 10:07:04', '', '', '', '', '', 'timecard20241121141852', NULL, NULL, NULL),
+(60, 'matsuki', '6b7471d0589edb90c6a0f5937d7fa27c', '6b7471d0589edb90c6a0f5937d7fa27c', '松木 未希', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'takasaki', '2023-09-26 11:10:38', '2023-09-26 11:11:06', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(59, 'shimi', '630c0f3ecc0aa86c2cab0062c69ca959', '630c0f3ecc0aa86c2cab0062c69ca959', '馬 思敏', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'takasaki', '2023-08-07 11:17:34', '2024-12-27 10:06:50', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(56, 'nguyen', 'bbc280da914876ec639f7cb34ff6df2f', 'bbc280da914876ec639f7cb34ff6df2f', 'グエン　タン　チュン', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'kaneko', '2023-01-12 16:53:56', '2023-03-15 08:51:49', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(57, 'ichikawa', '4b7bd9e9f4c2eae4a1a9ea8e7284e5da', '4b7bd9e9f4c2eae4a1a9ea8e7284e5da', '市川モカ', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', NULL, '2023-04-14 14:54:54', NULL, '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(58, 'saruta', '2c93041f686eed921e512d8579c27618', '2c93041f686eed921e512d8579c27618', '猿田 俊雄', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'admin', '2023-04-28 09:43:55', '2024-07-22 15:51:00', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(55, 'saw', 'baa8fdc0a5682cee08bf37d5d8150ff5', 'baa8fdc0a5682cee08bf37d5d8150ff5', 'ソウ　シュウエ　モウ', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', NULL, '2023-01-12 16:52:44', NULL, '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(54, 'akashi', '841f69c0e9d84cc43e6bb79ccb8ce9e3', '841f69c0e9d84cc43e6bb79ccb8ce9e3', '明石 絢実', 'member', 5, '退職者', '', 'akashi@guis.co.jp', 'cid.ecb7d3c3b34aac9a', '', '', '', '', '', '08044293561', 0, 2, '[4]', '', 'takasaki', 'takasaki', '2022-11-16 15:24:09', '2025-02-25 11:02:42', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(53, 'sugiyama', 'fd5828f3cd4e62186378de9507825441', 'fd5828f3cd4e62186378de9507825441', '杉山 奈々美', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'takasaki', '2022-09-22 14:17:09', '2024-09-03 10:52:14', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(52, 'oono', 'ff7bb5d2c47211b856ddbc5591660949', 'ff7bb5d2c47211b856ddbc5591660949', '大野 いづみ', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'takasaki', '2022-08-01 09:51:11', '2024-07-12 10:50:52', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(51, 'okamoto', '59fb4719d3b9c8af64c4d7032d330cb2', '59fb4719d3b9c8af64c4d7032d330cb2', '岡本莉佳', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'kaneko', '2022-05-20 11:00:59', '2022-07-28 13:52:02', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(49, 'takano', '3fad4f6c5ed0a1072b48be8b20f4f675', '3fad4f6c5ed0a1072b48be8b20f4f675', '髙埜執行役', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'takasaki', '2021-10-25 13:30:25', '2024-03-06 15:26:27', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(48, 'sugitani', 'd4d2361cca5c39096e2400f5419911d2', '1c6e13cdb2c9807361d4dab12553ebb5', '杉谷 尚彦', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'kaneko', '2021-06-01 14:32:10', '2021-10-27 09:15:44', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(50, 'yamada', 'dd7769dd16c39313332aafc1be560ffb', 'dd7769dd16c39313332aafc1be560ffb', '山田 駆', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'kaneko', '2022-02-14 10:13:58', '2022-11-18 16:07:39', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(46, 'hori', '265daa949f8bf15dbaf0c2aa4dd3d824', '265daa949f8bf15dbaf0c2aa4dd3d824', '堀　真理子', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'kaneko', '2020-06-10 13:43:21', '2023-03-15 08:52:07', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(47, 'yoshikawa', '5faff7de73b9bf2638161df134eaac54', '5faff7de73b9bf2638161df134eaac54', '吉川 愛華', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'kaneko', '2020-08-24 11:02:14', '2021-07-30 16:02:43', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(43, 'fuse', '682f2ef5e40e760d100689eb4496c3c8', '8df77ea00106605c3411d5c0c68cc20a', '布施 亜由未', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'admin', 'kaneko', '2020-01-21 14:39:40', '2021-07-30 16:04:19', '', '', '', '', '', 'timecard', 'ad339b3aa9085d3c4ab82599924b7cfc', NULL, NULL),
+(41, 'nakano', 'c8ceb772a57484c149d2f8cfeba5873c', 'c8ceb772a57484c149d2f8cfeba5873c', '中野真弓', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'admin', 'admin', '2019-02-15 10:19:42', '2019-09-05 15:30:21', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(42, 'oguri', '1b579c6de0070094ed1dc26494c463ee', '1b579c6de0070094ed1dc26494c463ee', '小栗 正之', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'kaneko', 'kaneko', '2020-01-20 13:33:05', '2022-10-19 13:13:18', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(40, 'furuzawa', '0e83c61b1da48536963556688691801d', '0e83c61b1da48536963556688691801d', '古澤 知巳', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'admin', 'admin', '2018-09-27 09:44:02', '2021-07-30 16:05:13', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(39, 'tokoro', '9dca9317374f3057eff314d41151d251', '9dca9317374f3057eff314d41151d251', '所 真由美', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2018-06-18 13:02:25', '2020-02-26 09:17:56', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(38, 'ikeda', 'ee961f2b791119d446627c2f57e883c2', 'ee961f2b791119d446627c2f57e883c2', '池田 明裕', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2018-06-12 09:47:03', '2021-07-30 16:03:35', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(36, 'nakamura', '954845ed2df679785e34ff84b7cb6dd3', '954845ed2df679785e34ff84b7cb6dd3', '中村 麻子', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'takasaki', '2017-11-18 22:30:50', '2024-03-06 15:27:01', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(37, 'thy', '82038891f79d1518f07a4b40829a15b1', '82038891f79d1518f07a4b40829a15b1', 'Tran Giang Thy', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'admin', 'admin', '2018-04-23 10:16:17', '2020-02-26 09:20:09', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(32, 'mochizuki', '7d20bb96395bea6d7ceee4b31c63211f', '7d20bb96395bea6d7ceee4b31c63211f', '望月康剛', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'admin', '2016-10-27 14:51:43', '2018-11-12 15:34:01', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(30, 'miyazawa', 'c5085bad85fa9b852c20585d4386246a', 'c5085bad85fa9b852c20585d4386246a', '宮澤里奈', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'admin', '2016-10-11 10:03:40', '2019-02-15 10:20:54', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(29, 'akaishi', '1d2e685738cbbc33d1c9a66beb87a0ff', 'dec20cd1dd742532d05f2f3222c278e9', '赤石 法子', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'takasaki', '2016-06-28 09:29:22', '2024-07-12 10:50:42', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(20, 'shimada', '93ec1276b7fe4dee8a3153c7c23779f0', '93ec1276b7fe4dee8a3153c7c23779f0', '嶋田剛士', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'admin', '2014-05-07 12:05:00', '2018-11-12 15:33:52', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(34, 'yamamoto', '72b9d85a682e3e5dc69c39245739e266', '72b9d85a682e3e5dc69c39245739e266', '山本茂樹', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'admin', '2017-09-20 13:03:56', '2019-02-15 10:20:46', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(27, 'yokosuka', '6fd84150083a38d40cbb520d3c9756e4', '6fd84150083a38d40cbb520d3c9756e4', '横須賀一興', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2016-05-19 09:39:24', '2019-10-28 15:12:26', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(13, 'kobayashi_h', 'b8a26cef1d2dfaf34b803a820990f476', 'd1ace899ec62d99dbbd7b0912f514037', '小林 宏和', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2013-01-24 10:27:03', '2021-07-30 16:03:20', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(26, 'kaneko', '962ea912473a4a65037069a544efc2b8', '4cee2e6a81fea84316b13626e705e431', '金子 仁美', 'administrator', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'takasaki', '2016-04-06 11:19:13', '2023-06-28 11:35:27', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(11, 'saito', '20b46b82b477e76b30a00b0cc1257167', '20b46b82b477e76b30a00b0cc1257167', '齋藤社長', 'administrator', 4, '管理', '', 'saito@guis.co.jp', 'sai', 'さいとうさとし', '', '藤ヶ丘', '', '', '07050366211', 0, 2, '[4]', '[admin]', 'admin', 'kaneko', '2011-10-06 19:11:43', '2020-04-16 15:06:23', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(45, 'wang', '1b06e0aeeeca1e0a2d2f59ef1181945e', 'da23e6eba69d5b73b70c01167e595e83', '王　淼', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'admin', '2020-05-15 16:07:13', '2021-04-19 14:48:26', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(24, 'hosaka', 'd7cfb39d37a726a32dcfae605d36769f', 'd7cfb39d37a726a32dcfae605d36769f', '保坂逢里', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '', '', 'admin', 'admin', '2015-12-01 10:50:48', '2018-11-12 15:33:26', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(44, 'ozeki', '2ed4cc83138ec2410cc29a44e87a3088', '2ed4cc83138ec2410cc29a44e87a3088', '尾関 文代', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '', '', 'takasaki', 'kaneko', '2020-03-31 16:25:28', '2021-07-30 16:03:12', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(12, 'takasaki', 'b54f413007b4f03a2e020a553df8d3d9', 'b054c3b3d33d1ce2f1d3d7763cfdc891', '高﨑 亜生', 'administrator', 4, '管理', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2012-08-03 10:35:55', '2021-07-30 16:04:05', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(8, 'kobayashi', '2d7b99ddce72d3c723f121df99144072', '2d7b99ddce72d3c723f121df99144072', '小林　翔', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'admin', '2011-07-19 17:25:25', '2019-02-15 10:20:32', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(5, 'yamazaki', '82bd29a3fb25b666c1a89fabe6e20c48', '82bd29a3fb25b666c1a89fabe6e20c48', '山崎あゆみ', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'admin', 'kaneko', '2011-07-19 17:19:21', '2019-01-22 10:12:50', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(23, 'hayashida', '16ed77f355c21dfa5091db2fea8178e1', '16ed77f355c21dfa5091db2fea8178e1', '林田 洋明', 'member', 5, '退職者', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'takasaki', 'kaneko', '2015-08-03 14:05:19', '2022-12-15 09:47:48', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(22, 'minoura', '2fbca8955205be026e27accba3a7c337', '2fbca8955205be026e27accba3a7c337', '箕浦 麻衣', 'member', 1, 'メンバー', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, '[4]', '', 'yito', 'kaneko', '2014-11-05 19:40:43', '2021-07-30 16:02:59', '', '', '', '', '', 'timecard', NULL, NULL, NULL),
+(1, 'admin', '682f2ef5e40e760d100689eb4496c3c8', '682f2ef5e40e760d100689eb4496c3c8', '管理', 'administrator', 4, '管理', '', '', '', '', '', '', '', '', '', 0, 0, '', '', 'admin', 'admin', '2011-07-13 16:59:48', '2016-10-24 12:06:34', '', '', '', '', '', 'timecard', '2dd8ea061469f2a9793fb5dff84c1f3b', NULL, NULL);
 
 --
 -- Indexes for dumped tables
