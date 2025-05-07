@@ -22,6 +22,8 @@ class Model extends Connection {
 		}
 
 	}
+
+	
 	
 	function findLimit($sort = null, $desc = 0, $searchfield = null) {
 		
@@ -246,7 +248,6 @@ class Model extends Connection {
 				}
 			}
 		}
-		
 	}
 	
 	function validator($field, $caption, $rule) {

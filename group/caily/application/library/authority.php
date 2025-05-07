@@ -47,7 +47,6 @@ class Authority
 			}
 		}
 		return $authorized;
-
 	}
 
 	function login()
@@ -185,7 +184,6 @@ class Authority
 			setcookie(session_name(), '', time() - 42000, '/');
 		}
 		session_destroy();
-
 	}
 
 }

@@ -854,8 +854,8 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             message: 'ユーザー名を入力してください'
           },
           stringLength: {
-            min: 6,
-            message: '6文字以上入力してください'
+            min: 4,
+            message: '4文字以上入力してください'
           }
         }
       },
@@ -964,8 +964,8 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             message: 'ユーザー名を入力してください'
           },
           stringLength: {
-            min: 6,
-            message: '6文字以上入力してください'
+            min: 4,
+            message: '4文字以上入力してください'
           }
         }
       },

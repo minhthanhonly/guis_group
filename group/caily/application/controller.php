@@ -52,6 +52,7 @@ class Controller {
 			require_once($modelfile);
 			if (class_exists($class)) {
 				$model = new $class;
+				$model->checkSuspend();
 				if (method_exists($model, $method)) {
 					$model->connect();
 					$hash = $model->$method();

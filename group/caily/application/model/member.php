@@ -26,7 +26,7 @@ class Member extends ApplicationModel {
 		'edit_group'=>array('except'=>array('search')),
 		'edit_user'=>array('except'=>array('search')),
 		'member_type'=>array('従業員の種類', 'length:100'),
-		'is_suspend'=>array('ステータス', 'numeric', 'length:1'),
+		'is_suspend'=>array('ステータス', 'numeric', 'length:1','except'=>array('search', 'update')),
 	);
 		
 	}
@@ -203,18 +203,24 @@ class Member extends ApplicationModel {
 
 	/*API*/
 	function suspend_member() {
-		$this->authorizeApi('administrator', 'manager');
 		$id = $_POST['id'];
 		if(!$id){
 			$hash['status'] = 'error';
 			$hash['message_code'] = 15;
 			return $hash;
 		}
+		$hash['data'] = $this->permitFindApi('edit');
+		if(count($this->error) > 0){
+			$hash['status'] = 'error';
+			$hash['message_code'] = $this->error;
+			return $hash;
+		}
+
 		$date = date('Y-m-d H:i:s');
 		$editor = $_SESSION['userid'];
 
 		$query = sprintf(
-			"UPDATE groupware_user SET is_suspend = '1', editor = '%s', updated = '%s' WHERE id = '%s'",
+			"UPDATE groupware_user SET remember_token = NULL, is_suspend = '1', editor = '%s', updated = '%s' WHERE id = '%s'",
 			$editor,
 			$date,
 			$id,
@@ -232,13 +238,19 @@ class Member extends ApplicationModel {
 	
 	/*API*/
 	function active_member() {
-		$this->authorizeApi('administrator', 'manager');
 		$id = $_POST['id'];
 		if(!$id){
 			$hash['status'] = 'error';
 			$hash['message_code'] = 15;
 			return $hash;
 		}
+		$hash['data'] = $this->permitFindApi('edit');
+		if(count($this->error) > 0){
+			$hash['status'] = 'error';
+			$hash['message_code'] = $this->error;
+			return $hash;
+		}
+		
 		$date = date('Y-m-d H:i:s');
 		$editor = $_SESSION['userid'];
 
@@ -311,8 +323,13 @@ class Member extends ApplicationModel {
 
 	/*API*/
 	function resign_member() {
-		$this->authorizeApi('administrator', 'manager');
 		$id = $_POST['id'];
+		$hash['data'] = $this->permitFindApi('edit');
+		if(count($this->error) > 0){
+			$hash['status'] = 'error';
+			$hash['message_code'] = $this->error;
+			return $hash;
+		}
 		if(!$id){
 			$hash['status'] = 'error';
 			$hash['message_code'] = 15;
@@ -322,7 +339,7 @@ class Member extends ApplicationModel {
 		$editor = $_SESSION['userid'];
 
 		$query = sprintf(
-			"UPDATE groupware_user SET user_group = '". RETIRE_GROUP ."', user_groupname = '". RETIRE_GROUP_NAME ."', is_suspend = '1', editor = '%s', updated = '%s' WHERE id = '%s'",
+			"UPDATE groupware_user SET remember_token = NULL, user_group = '". RETIRE_GROUP ."', user_groupname = '". RETIRE_GROUP_NAME ."', is_suspend = '1', editor = '%s', updated = '%s' WHERE id = '%s'",
 			$editor,
 			$date,
 			$id

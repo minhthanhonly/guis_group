@@ -23,6 +23,17 @@ class ApplicationModel extends Model {
 	
 	}
 
+	function checkSuspend() {
+		$this->connect();
+		$query = sprintf("SELECT is_suspend FROM %suser WHERE id = '%s'", DB_PREFIX, $_SESSION['id']);
+		$data = $this->fetchOne($query);
+		if($data['is_suspend'] == 1) {
+			$authority = new Authority;
+			$authority->sessionDestroy();
+			$this->died('アカウントが無効化されています。');
+		}
+	}
+
 	function authorizeApi() {
 		
 		$this->connect();
