@@ -36,8 +36,14 @@
 if(isset($_SESSION['userid'])) {
 ?>
 <script>
-    const userId = '<?= isset($_SESSION['userid']) ? $_SESSION['userid'] : 'null' ?>';
-    </script>
+    const userId = '<?= isset($_SESSION['userid']) ? $_SESSION['userid'] : '' ?>';
+    const userGroup = '<?= isset($_SESSION['group']) ? $_SESSION['group'] : '' ?>';
+    <?php 
+    if(isset($_SESSION['authority']) && $_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') {
+        echo 'const userRole = "'.$_SESSION['authority'].'";'; 
+    }
+    ?>
+</script>
     <!-- <script src="<?=$root?>js/user-list.js"></script> -->
     <!-- <link rel="stylesheet" href="<?=$root?>css/user-list.css"> -->
 <?php

@@ -891,20 +891,20 @@ function generatePermit($level = 'public', $option = null, $type = '', $element 
     $typeStr = '';
   }
   var wrapId = 'selectedWrap' + '_' + $id;
-  var string = `<select name="${$level}_level">${$string}</select>&nbsp;
-  <span class="operator btn btn-primary btn-search" id="${$level}search" onclick="App.permitlevel(this, '${$level}', '', '${wrapId}')">検索</span><div class="selected_items"></div>`;
+  var string = `<div class="d-flex gap-2 align-items-center"><select name="${$level}_level" class="form-select">${$string}</select>&nbsp;
+  <span class="operator btn btn-primary btn-search flex-shrink-0" id="${$level}search" onclick="App.permitlevelApi(this, '${$level}', '', '${wrapId}')">検索</span></div><div class="selected_items"></div>`;
   if ($element) {
     $element.innerHTML = string;
   }
 
   try {
-    var $select = document.querySelector(`select[name="${$level}_level"]`);
-    var $button = document.querySelector(`.btn-search`);
-    var $selected = document.querySelector(`.selected_items`);
+    var $select = $element.querySelector(`select[name="${$level}_level"]`);
+    var $button = $element.querySelector(`.btn-search`);
+    var $selected = $element.querySelector(`.selected_items`);
     
     $selected.setAttribute('id', wrapId);
     if($data && $data[$level+ '_level']){
-      $select.value = $data[$level +'_'+ $type];
+      $select.value = $data[$level + '_level'];
     }
     $button.style.display = 'none';
     if($data && $data[$level + '_level'] && $data[$level + '_level'] == 2){
@@ -916,33 +916,31 @@ function generatePermit($level = 'public', $option = null, $type = '', $element 
         $selected.innerHTML = '';
       } else {
         $button.style.display = 'inline';
-        App.permitlist(null, $type, wrapId);
+        App.permitlistApi(null, $type, wrapId);
       }
     });
 	} catch(e) {
 		alert(e.message);
 	}
-  // appParse($level, 'group', $element);
-  // appParse($level, 'user', $element);
+  if($data && $data[$level + '_level'] == 2){
+    appParse($level, 'group', $data, $element);
+    appParse($level, 'user', $data, $element);
+  }
 }
 
 function appParse($level, $type, $data, $element) {
-  // if (strlen($data[$level + '_' + $type]) > 0) {
-  //   $data = explode(',', str_replace(array('][', '[', ']'), array(',', '', ''), $data[$level+'_'+$type]));
-  //   if (is_array($data) && count($data) > 0) {
-  //     $list = $this->$type;
-  //     foreach ($data as $key) {
-  //       $array[$key] = $list[$key];
-  //     }
-  //   }
-  // }
-  // if (is_array($array) && count($array) > 0) {
-  //   foreach ($array as $key => $value) {
-  //     $id = $level.$type.$key;
-  //     $string .= '<div><input type="checkbox" name="'.$level.'['.$type.']['.$key.']"';
-  //     $string .= ' id="'.$id.'" value="'.$value.'" checked="checked" />';
-  //     $string .= '<label for="'.$id.'">'.$value.'</label></div>';
-  //   }
-  // }
-  return $string;
+  let $array = {};
+  if(!$data || !$data[$level + '_' + $type]){
+    return;
+  }
+  $array = $data[$level + '_' + $type];
+  let $string = '';
+  Object.entries($array).forEach(($value, $key) => {
+    const $id = $level + $type + $value[0];
+    $string += `<div><input type="checkbox" name="${$level}[${$type}][${$value[0]}]"`;
+    $string += ` id="${$id}" value="${$value[1]}" checked="checked" />`;
+    $string += `<label for="${$id}">${$value[1]}</label></div>`;
+  });
+  var $selected = $element.querySelector(`.selected_items`);
+  $selected.innerHTML = $string;
 }

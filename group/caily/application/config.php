@@ -85,5 +85,8 @@ define('TIMECARD_START_DATE', '21');
 define('ADMIN_GROUP', '4');
 
 define('RETIRE_GROUP', '5');
+
+define('RETIRE_GROUP_NAME', '退職者');
+
 error_reporting(E_ERROR | E_PARSE);
 ?>

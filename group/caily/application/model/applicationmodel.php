@@ -84,9 +84,32 @@ class ApplicationModel extends Model {
 		}
 		
 	}
+
+	function permitFindApi($level = 'public', $id = 0) {
+		
+		if ($id <= 0) {
+			$id = $_REQUEST['id'];
+		}
+		if ($id > 0) {
+			$field = implode(',', $this->schematize());
+			$data = $this->fetchOne("SELECT ".$field." FROM ".$this->table." WHERE id = ".intval($id));
+			if ($this->permitted($data, 'public')) {
+				if ($level == 'edit' && !$this->permitted($data, 'edit')) {
+					$this->error[] = '編集する権限がありません。';
+				} else {
+					return $data;
+				}
+			} else {
+				$this->error[] = '閲覧する権限がありません。';
+			}
+		}
+		
+	}
 	
 	function permitted($data, $level = 'public') {
-		
+		if($_SESSION['userid'] == 'admin'){
+			return true;
+		}
 		$permission = false;
 		if ($data[$level.'_level'] == 0) {
 			$permission = true;
@@ -136,7 +159,7 @@ class ApplicationModel extends Model {
 			if (isset($_POST[$key.'_level'])) {
 				$this->post[$key.'_level'] = intval($_POST[$key.'_level']);
 				if ($_POST[$key.'_level'] == 2) {
-					if (count($_POST[$key]['group']) <= 0 && count($_POST[$key]['user']) <= 0) {
+					if (!isset($_POST[$key]['group']) && !isset($_POST[$key]['user']) ) {
 						$this->error[] = $value.'するグループ・ユーザーを選択してください。';
 					} else {
 						$this->post[$key.'_group'] = $this->permitParse($_POST[$key]['group']);

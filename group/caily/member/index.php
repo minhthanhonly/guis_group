@@ -52,122 +52,150 @@ $view->heading('メンバー一覧');
 </div>
 
 <!-- Offcanvas to add new user -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasAddUser" aria-labelledby="offcanvasAddUserLabel">
-	<div class="offcanvas-header border-bottom">
-		<h5 id="offcanvasAddUserLabel" class="offcanvas-title">メンバー追加</h5>
-		<button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-	</div>
-    <div class="offcanvas-body mx-0 flex-grow-0 p-6 h-100">
+<div class="modal fade" id="modalAddUser" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-lg modal-simple modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body">
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+        <div class="text-center mb-6">
+          <h4 class="modal-title">メンバーを追加</h4>
+        </div>
         <form class="add-new-user pt-0" id="addNewUserForm">
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="add-user-userName">ユーザー名</label>
-            <input type="text" class="form-control" id="add-user-userName" placeholder="" name="userid"/>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-userName">ユーザー名</label>
+              <input type="text" class="form-control" id="add-user-userName" placeholder="" name="userid"/>
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-password">パスワード</label>
+              <input type="password" class="form-control" id="add-user-password" placeholder="" name="password"/>
+            </div>
           </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="add-user-password">パスワード</label>
-            <input type="password" class="form-control" id="add-user-password" placeholder="" name="password"/>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-fullname">氏名</label>
+              <input type="text" class="form-control" id="add-user-fullname" placeholder="" name="realname"/>
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-email">メールアドレス</label>
+              <input type="text" id="add-user-email" class="form-control" placeholder="" name="user_email" />
+            </div>
           </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="add-user-fullname">氏名</label>
-            <input type="text" class="form-control" id="add-user-fullname" placeholder="" name="realname"/>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-contact">電話番号</label>
+              <input type="text" id="add-user-contact" class="form-control phone-mask" placeholder="" name="user_phone" />
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="user-role">制限</label>
+              <select id="user-role" class="form-select" name="authority">
+                <option value="">選択してください</option>
+                <option value="administrator">administrator</option>
+                <option value="manager">manager</option>
+                <option value="editor">editor</option>
+                <option value="member">member</option>
+              </select>
+            </div>
           </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="add-user-email">メールアドレス</label>
-            <input type="text" id="add-user-email" class="form-control" placeholder="" name="email" />
-          </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="add-user-contact">電話番号</label>
-            <input type="text" id="add-user-contact" class="form-control phone-mask" placeholder="" name="phone" />
-          </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="user-role">制限</label>
-            <select id="user-role" class="form-select" name="role">
-              <option value="">選択してください</option>
-              <option value="administrator">administrator</option>
-              <option value="manager">manager</option>
-              <option value="editor">editor</option>
-              <option value="member">member</option>
-            </select>
-          </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="add-user-group">グループ</label>
-            <select id="add-user-group" class="form-select" name="group">
-              <option value="">選択してください</option>
-            </select>
-          </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="add-user-type">従業員の種類</label>
-            <select id="add-user-type" class="form-select" name="type">
-              <option value="">選択してください</option>
-            </select>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-group">グループ</label>
+              <select id="add-user-group" class="form-select" name="user_group">
+                <option value="">選択してください</option>
+              </select>
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-type">従業員の種類</label>
+              <select id="add-user-type" class="form-select" name="member_type">
+                <option value="">選択してください</option>
+              </select>
+            </div>
           </div>
           <div class="mb-4 form-control-validation">
             <label class="form-label" for="add-user-type">編集設定</label>
             <div id="add-user-permit"></div>
           </div>
           <button type="submit" class="btn btn-primary me-3 data-submit">追加</button>
-          <button type="reset" class="btn btn-label-danger" data-bs-dismiss="offcanvas">キャンセル</button>
+          <button type="reset" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
         </form>
+      </div>
     </div>
+  </div>
 </div>
 
-<!-- Offcanvas to edit new user -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasEditUser" aria-labelledby="offcanvasEditUserLabel">
-	<div class="offcanvas-header border-bottom">
-		<h5 id="offcanvasEditUserLabel" class="offcanvas-title">メンバー編集</h5>
-		<button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-	</div>
-    <div class="offcanvas-body mx-0 flex-grow-0 p-6 h-100">
-        <form class="add-new-user pt-0" id="editUserForm" onsubmit="return false">
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="edit-user-userName">ユーザー名</label>
-            <input type="text" class="form-control" id="edit-user-userName" placeholder="" name="userid"/>
+<!-- Modal to edit new user -->
+
+<div class="modal fade" id="modalEditUser" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-lg modal-simple modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body">
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+        <div class="text-center mb-6">
+          <h4 class="modal-title">メンバーを編集</h4>
+        </div>
+        <form class="add-new-user pt-0" id="editUserForm">
+          <input type="hidden" id="edit-user-id" name="id" />
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-userName">ユーザー名</label>
+              <input type="text" class="form-control" id="edit-user-userName" placeholder="" name="userid"/>
+            </div>
+          </div>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-fullname">氏名</label>
+              <input type="text" class="form-control" id="edit-user-fullname" placeholder="" name="realname"/>
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-email">メールアドレス</label>
+              <input type="text" id="edit-user-email" class="form-control" placeholder="" name="user_email" />
+            </div>
+          </div>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-contact">電話番号</label>
+              <input type="text" id="edit-user-contact" class="form-control phone-mask" placeholder="" name="user_phone" />
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="user-role">制限</label>
+              <select id="edit-user-role" class="form-select" name="authority">
+                <option value="">選択してください</option>
+                <option value="administrator">administrator</option>
+                <option value="manager">manager</option>
+                <option value="editor">editor</option>
+                <option value="member">member</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-group">グループ</label>
+              <select id="edit-user-group" class="form-select" name="user_group">
+                <option value="">選択してください</option>
+              </select>
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-type">従業員の種類</label>
+              <select id="edit-user-type" class="form-select" name="member_type">
+                <option value="">選択してください</option>
+              </select>
+            </div>
           </div>
           <div class="mb-4 form-control-validation">
-            <label class="form-label" for="edit-user-password">パスワード</label>
-            <input type="password" class="form-control" id="edit-user-password" placeholder="" name="password"/>
+            <label class="form-label" for="edit-user-type">編集設定</label>
+            <div id="edit-user-permit"></div>
           </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="edit-user-fullname">氏名</label>
-            <input type="text" class="form-control" id="edit-user-fullname" placeholder="" name="realname"/>
-          </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="edit-user-email">メールアドレス</label>
-            <input type="text" id="edit-user-email" class="form-control" placeholder="" name="email" />
-          </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="edit-user-contact">電話番号</label>
-            <input type="text" id="edit-user-contact" class="form-control phone-mask" placeholder="" name="phone" />
-          </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="edit-user-role">制限</label>
-            <select id="edit-user-role" class="form-select" name="role">
-              <option value="">選択してください</option>
-              <option value="administrator">administrator</option>
-              <option value="manager">manager</option>
-              <option value="editor">editor</option>
-              <option value="member">member</option>
-            </select>
-          </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="edit-user-group">グループ</label>
-            <select id="edit-user-group" class="form-select" name="group">
-              <option value="">選択してください</option>
-            </select>
-          </div>
-          <div class="mb-4 form-control-validation">
-            <label class="form-label" for="edit-user-type">従業員の種類</label>
-            <select id="edit-user-type" class="form-select" name="type">
-              <option value="">選択してください</option>
-            </select>
-          </div>
-          <button type="submit" class="btn btn-primary me-3 data-submit">更新</button>
-          <button type="reset" class="btn btn-label-danger" data-bs-dismiss="offcanvas">キャンセル</button>
+          <button type="submit" class="btn btn-primary me-3 data-submit">編集</button>
+          <button type="reset" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
         </form>
+      </div>
     </div>
+  </div>
 </div>
 
-<script src="<?=ROOT?>assets/js/member.js"></script>
+
 <?php
 $view->footing();
 ?>
+
+<script src="<?=ROOT?>assets/js/member.js"></script>

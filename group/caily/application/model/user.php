@@ -4,7 +4,7 @@
 class User extends ApplicationModel {
 	
 	function __construct() {
-		if (basename($_SERVER['SCRIPT_NAME']) != 'feed.php' && $_SERVER['SCRIPT_NAME'] != '/api/index.php') {
+		if (basename($_SERVER['SCRIPT_NAME']) != 'feedApi.php' && basename($_SERVER['SCRIPT_NAME']) != 'feed.php' && $_SERVER['SCRIPT_NAME'] != '/api/index.php') {
 			$this->authorize('administrator', 'manager');
 		}
 		
@@ -207,6 +207,20 @@ class User extends ApplicationModel {
 	}
 	
 	function feed() {
+		
+		if ($_REQUEST['type'] == 1 && $_REQUEST['group'] <= 0) {
+			$_REQUEST['group'] = $_SESSION['group'];
+		}
+		if ($_REQUEST['group'] > 0) {
+			$query = "SELECT userid, realname FROM ".$this->table." WHERE (user_group = '".intval($_REQUEST['group'])."') ORDER BY user_order,id";
+			$hash['list'] = $this->fetchAll($query);
+		}
+		$hash['group'] = $this->findGroup();
+		return $hash;
+		
+	}
+
+	function feedApi() {
 		
 		if ($_REQUEST['type'] == 1 && $_REQUEST['group'] <= 0) {
 			$_REQUEST['group'] = $_SESSION['group'];

@@ -7,9 +7,9 @@ class Member extends ApplicationModel {
 		
 		$this->table = DB_PREFIX.'user';
 		$this->schema = array(
-		'userid'=>array('except'=>array('search', 'update')),
-		'user_group'=>array('except'=>array('search', 'update')),
-		'user_groupname'=>array('except'=>array('update')),
+		'userid'=>array('ユーザーID', 'notnull', 'userid', 'length:100', 'distinct'),
+		'user_group'=>array('except'=>array('search')),
+		'user_groupname'=>array('except'=>array('search')),
 		'realname'=>array('名前', 'notnull', 'length:100'),
 		'user_ruby'=>array('かな', 'length:100'),
 		'authority'=>array('権限', 'length:20'),
@@ -21,6 +21,10 @@ class Member extends ApplicationModel {
 		'user_email'=>array('メールアドレス', 'email', 'length:1000'),
 		'user_skype'=>array('スカイプID', 'userid', 'length:1000'),
 		'user_image'=>array('写真', 'length:100'),
+		'user_order'=>array('順序', 'numeric', 'length:10', 'except'=>array('search')),
+		'edit_level'=>array('except'=>array('search')),
+		'edit_group'=>array('except'=>array('search')),
+		'edit_user'=>array('except'=>array('search')),
 		'member_type'=>array('従業員の種類', 'length:100'),
 		'is_suspend'=>array('ステータス', 'numeric', 'length:1'),
 	);
@@ -48,6 +52,56 @@ class Member extends ApplicationModel {
 			} else {
 				$this->error[] = 'パスワード確認時にエラーが発生しました。';
 			}
+		}
+	}
+
+	function permitGroup($id, $level = 'public') {
+		
+		if ($level == 'add') {
+			$where = "WHERE (add_level = 0 OR owner = '%s' OR ";
+			$where .= "(add_level = 2 AND (add_group LIKE '%%[%s]%%' OR add_user LIKE '%%[%s]%%')))";
+			$where = sprintf($where, $this->quote($_SESSION['userid']), $this->quote($_SESSION['group']), $this->quote($_SESSION['userid']));
+		}
+		$query = "SELECT id,group_name FROM ".DB_PREFIX."group ".$where." ORDER BY group_order,id";
+		$data = $this->fetchAll($query);
+		$result['folder'] = array();
+		if (is_array($data) && count($data) > 0) {
+			foreach ($data as $row) {
+				$result['folder'][$row['id']] = $row['group_name'];
+			}
+		}
+		if ($id > 0) {
+			$data = $this->fetchOne("SELECT * FROM ".DB_PREFIX."group WHERE id = ".intval($id));
+			if ($level == 'add' && !$this->permitted($data, 'add')) {
+				$this->died('このグループへの書き込み権限がありません。');
+			} else {
+				$result['parent'] = $data;
+			}
+		}
+		return $result;
+		
+	}
+
+	function validateAdd() {
+		$hash = $this->permitGroup($_POST['user_group'], 'add');
+		$this->post['password'] = md5(trim($_POST['password']));
+		$this->post['password_default'] = $this->post['password'];
+		$this->schema['password']['except'] = array('search');
+		$this->schema['password_default']['except'] = array('search');
+		$this->validator('password', 'パスワード', array('alphaNumeric', 'length:4:32'));
+
+		$this->post['user_order'] = 0;
+		if ($_POST['user_group'] > 0) {
+			$this->post['user_groupname'] = $hash['parent']['group_name'];
+			
+		}
+	}
+
+	function validateEdit() {
+		$hash = $this->permitGroup($_POST['user_group'], 'add');
+		
+		if ($_POST['user_group'] > 0) {
+			$this->post['user_groupname'] = $hash['parent']['group_name'];
 		}
 	}
 	
@@ -106,32 +160,184 @@ class Member extends ApplicationModel {
 	/*API*/
 	function add_member() {
 		$this->authorizeApi('administrator', 'manager');
-		$userid = $_POST['userid'];
-		$password = $_POST['password'];
-		$realname = $_POST['realname'];
-		$authority = $_POST['role'];
-		$user_group = $_POST['group'];
-		$user_email = $_POST['email'];
-		$user_phone = $_POST['phone'];
-
-
-		$date = date('Y-m-d H:i:s');
-		// check if date already exists
-		$result = $this->fetchCount("groupware_user", "WHERE userid = '$userid'", 'id');
-		if($result){
+		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+			$this->validateSchema('insert');
+			$this->permitValidate();
+			if (method_exists($this, 'validateAdd')) {
+				$this->validateAdd();
+			}
+			$this->insertPost();
+		}
+		if(count($this->error) > 0){
 			$hash['status'] = 'error';
-			$hash['message_code'] = 10;
+			$hash['error'] = $this->error;
 			return $hash;
 		}
+		
+		$hash['status'] = 'success';
+		$hash['message_code'] = 11;
+		return $hash;
+	}
 
-		$query = sprintf("INSERT INTO groupware_user (userid, password, realname, authority, user_group, user_email, user_phone, created) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')", $userid, $password, $realname, $authority, $user_group, $user_email, $user_phone, $date);
-		$response = $this->query($query);
-		if($response){
+	function edit_member() {
+		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+			$this->validateSchema('update');
+			$this->permitValidate();
+			if (method_exists($this, 'validateEdit')) {
+				$this->validateEdit();
+			}
+			$this->updatePost();
+		}
+		if(count($this->error) > 0){
+			$hash['status'] = 'error';
+			$hash['error'] = $this->error;
+			return $hash;
+		}
+		
+		$hash['status'] = 'success';
+		$hash['message_code'] = 11;
+		return $hash;
+	}
+
+
+
+	/*API*/
+	function suspend_member() {
+		$this->authorizeApi('administrator', 'manager');
+		$id = $_POST['id'];
+		if(!$id){
+			$hash['status'] = 'error';
+			$hash['message_code'] = 15;
+			return $hash;
+		}
+		$date = date('Y-m-d H:i:s');
+		$editor = $_SESSION['userid'];
+
+		$query = sprintf(
+			"UPDATE groupware_user SET is_suspend = '1', editor = '%s', updated = '%s' WHERE id = '%s'",
+			$editor,
+			$date,
+			$id,
+		);
+		$response = $this->update_query($query);
+		if($response > 0){
 			$hash['status'] = 'success';
-			$hash['message_code'] = 11;
+			$hash['message_code'] = $response;
+		} else{
+			$hash['status'] = 'error';
+			$hash['message_code'] = $response;
 		}
 		return $hash;
 	}
+	
+	/*API*/
+	function active_member() {
+		$this->authorizeApi('administrator', 'manager');
+		$id = $_POST['id'];
+		if(!$id){
+			$hash['status'] = 'error';
+			$hash['message_code'] = 15;
+			return $hash;
+		}
+		$date = date('Y-m-d H:i:s');
+		$editor = $_SESSION['userid'];
+
+		$query = sprintf(
+			"UPDATE groupware_user SET is_suspend = NULL, editor = '%s', updated = '%s' WHERE id = '%s'",
+			$editor,
+			$date,
+			$id,
+		);
+		$response = $this->update_query($query);
+		if($response > 0){
+			$hash['status'] = 'success';
+			$hash['message_code'] = $response;
+		} else{
+			$hash['status'] = 'error';
+			$hash['message_code'] = $response;
+		}
+		return $hash;
+	}
+
+	function delete_member() {
+		$id = $_POST['id'];
+		$hash['data'] = $this->permitFindApi('edit');
+		if(count($this->error) > 0){
+			$hash['status'] = 'error';
+			$hash['message_code'] = $this->error;
+			return $hash;
+		}
+		if(!$id){
+			$hash['status'] = 'error';
+			$hash['message_code'] = 15;
+			return $hash;
+		}
+
+		$query = sprintf(
+			"DELETE FROM groupware_user WHERE id = '%s'",
+			$id,
+		);
+		$response = $this->update_query($query);
+		if($response > 0){
+			$hash['status'] = 'success';
+			$hash['message_code'] = $response;
+		} else{
+			$hash['status'] = 'error';
+			$hash['message_code'] = $response;
+		}
+		return $hash;
+	}
+
+
+	function get_user_by_id() {
+		$id = $_POST['id'];
+		if(!$id){
+			$hash['status'] = 'error';
+			$hash['message_code'] = 15;
+			return $hash;
+		}
+		$hash['data'] = $this->permitFindApi('edit');
+		$hash += $this->findUser($hash['data']);
+		if(count($this->error) > 0){
+			$hash['status'] = 'error';
+			$hash['message_code'] = '12';
+			return $hash;
+		}
+		
+		$hash['error'] = $this->error;
+		$hash['status'] = 'success';
+		return $hash;
+	}
+
+	/*API*/
+	function resign_member() {
+		$this->authorizeApi('administrator', 'manager');
+		$id = $_POST['id'];
+		if(!$id){
+			$hash['status'] = 'error';
+			$hash['message_code'] = 15;
+			return $hash;
+		}
+		$date = date('Y-m-d H:i:s');
+		$editor = $_SESSION['userid'];
+
+		$query = sprintf(
+			"UPDATE groupware_user SET user_group = '". RETIRE_GROUP ."', user_groupname = '". RETIRE_GROUP_NAME ."', is_suspend = '1', editor = '%s', updated = '%s' WHERE id = '%s'",
+			$editor,
+			$date,
+			$id
+		);
+		$response = $this->update_query($query);
+		if($response > 0){
+			$hash['status'] = 'success';
+			$hash['message_code'] = $response;
+		} else{
+			$hash['status'] = 'error';
+			$hash['message_code'] = $response;
+		}
+		return $hash;
+	}
+	
 	
 	function view() {
 		$hash['data'] = $this->findView();

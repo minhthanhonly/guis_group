@@ -2,8 +2,8 @@
 
 function App() {}
 
-App.loader = function (url, parameter, id, wrapId) {
-	console.log(wrapId);
+App.loader = function (url, parameter, id) {
+	
 	if (!id) {
 		id = 'layer';
 	}
@@ -26,8 +26,7 @@ App.loader = function (url, parameter, id, wrapId) {
 		element.appendTo(document.body);
 		element.css({'top': top, 'left': left, 'visibility': 'visible'});
 	}
-	$('#' + id).attr('data-wrapid', wrapId);
-	element.draggable({handle: 'div.handle'});
+	//element.draggable({handle: 'div.handle'});
 	$('div.layerclose', element).click(function(){
 		element.remove();
 	});
@@ -160,7 +159,7 @@ App.move = function (object, form) {
 	
 }
 
-App.permitlevel = function (object, level, type, wrapId) {
+App.permitlevel = function (object, level, type) {
 	
 	try {
 		if (!level) {
@@ -168,20 +167,25 @@ App.permitlevel = function (object, level, type, wrapId) {
 		} else {
 			App.level = level;
 		}
-		App.permitlist(null, type, wrapId);
+		if (object.options && object.options[object.selectedIndex].value != 2) {
+			document.getElementById(level + 'search').style.display = 'none';
+		} else {
+			document.getElementById(level + 'search').style.display = 'inline';
+			App.permitlist(null, type);
+		}
 	} catch(e) {
 		alert(e.message);
 	}
 	
 }
 
-App.permitlist = function (object, type, wrapId) {
+App.permitlist = function (object, type) {
 	
 	try {
 		if (object) {
 			var integer = object.options[object.selectedIndex].value;
 		}
-		App.loader('../user/feed.php', {'group': integer, 'type': type}, 'userlist', wrapId);
+		App.loader('../user/feed.php', {'group': integer, 'type': type}, 'userlist');
 	} catch(e) {
 		alert(e.message);
 	}
@@ -214,8 +218,6 @@ App.permit = function (object) {
 App.permitAppend = function (userid, realname) {
 	
 	try {
-		var wrapId = $('#userlist').attr('data-wrapid');
-		var $wrap = $('#' + wrapId).get(0);
 		if (userid.match(/group:/)) {
 			var type = 'group';
 			userid = userid.replace(/group:/, '');
@@ -223,26 +225,24 @@ App.permitAppend = function (userid, realname) {
 			var type = 'user';
 		}
 		var id = App.level + type + userid;
-		var idString = '#' + id;
-		if ($wrap.querySelector(idString) && $wrap.querySelector(idString).type == 'checkbox') {
-			$wrap.querySelector(idString).checked = true;
+		if (document.getElementById(id) && document.getElementById(id).type == 'checkbox') {
+			document.getElementById(id).checked = true;
 		} else {
 			var element = document.createElement('div');
 			var string = '<div><input type="checkbox" name="' + App.level + '[' + type + '][' + userid + ']" ';
 			string += 'id="' + id + '" value="' + realname + '" checked="checked" />';
 			string += '<label for="' + id + '">' + realname + '</label></div>';
 			element.innerHTML = string;
-			$wrap.appendChild(element);
-			// var parent = document.getElementById(App.level + 'search').parentNode;
-			// if (parent.getElementsByTagName('select').length > 0) {
-			// 	parent.appendChild(element);
-			// } else {
-			// 	parent.insertBefore(element, document.getElementById(App.level + 'search'));
-			// }
+			var parent = document.getElementById(App.level + 'search').parentNode;
+			if (parent.getElementsByTagName('select').length > 0) {
+				parent.appendChild(element);
+			} else {
+				parent.insertBefore(element, document.getElementById(App.level + 'search'));
+			}
 			
 		}
 	} catch(e) {
-		console.log(e);
+		alert(e.message);
 	}
 	
 }
@@ -304,4 +304,127 @@ App.explain = function (object) {
 		alert(e.message);
 	}
 
+}
+
+
+App.permitlistApi = function (object, type, wrapId) {
+	
+	try {
+		if (object) {
+			var integer = object.options[object.selectedIndex].value;
+		}
+		App.loaderApi('../user/feedApi.php', {'group': integer, 'type': type}, 'userlist', wrapId);
+	} catch(e) {
+		alert(e.message);
+	}
+	
+}
+
+App.loaderApi = function (url, parameter, id, wrapId) {
+	if (!id) {
+		id = 'layer';
+	}
+	if (App.layercaption) {
+		caption = App.layercaption;
+	} else {
+		caption = '検索結果';
+	}
+	var string = '<div class="layer"><div class="handle"><div class="layercaption">' + caption + '</div>';
+	string += '<div class="layerclose"></div><div class="clearer"></div></div>';
+	string += '<div class="layercontent"><img src="../images/indicator.gif" style="vertical-align:middle;" />&nbsp;';
+	string += 'データを読み込んでいます。しばらくお待ちください。</div></div>';
+	if (document.getElementById(id)) {
+		var element = $('#' + id);
+		element.html(string);
+	} else {
+		var element = $('<div id="' + id + '" class="layerwrapper">' + string + '</div>');
+		var top  = Math.floor((document.documentElement.clientHeight - 300) / 2 + document.documentElement.scrollTop);
+		var left = Math.floor((document.documentElement.clientWidth - 500) / 2 + document.documentElement.scrollLeft);
+		element.appendTo(document.body);
+		element.css({'top': top, 'left': left, 'visibility': 'visible'});
+	}
+	$('#' + id).attr('data-wrapid', wrapId);
+	element.draggable({handle: 'div.handle'});
+	$('div.layerclose', element).click(function(){
+		element.remove();
+	});
+	var object = $('div.layercontent', element);
+	object.ajaxError(function(){
+		object.html('<div class="error">データファイルへのアクセスに失敗しました。</div>');
+	});
+	object.load(url, parameter);
+	
+}
+
+App.permitlevelApi = function (object, level, type, wrapId) {
+	
+	try {
+		if (!level) {
+			App.level = 'public';
+		} else {
+			App.level = level;
+		}
+		App.permitlistApi(null, type, wrapId);
+	} catch(e) {
+		alert(e.message);
+	}
+	
+}
+
+App.permitAppendApi = function (userid, realname) {
+	
+	try {
+		var wrapId = $('#userlist').attr('data-wrapid');
+		var $wrap = $('#' + wrapId).get(0);
+		if (userid.match(/group:/)) {
+			var type = 'group';
+			userid = userid.replace(/group:/, '');
+		} else {
+			var type = 'user';
+		}
+		var id = App.level + type + userid;
+		var idString = '#' + id;
+		if ($wrap.querySelector(idString) && $wrap.querySelector(idString).type == 'checkbox') {
+			$wrap.querySelector(idString).checked = true;
+		} else {
+			var element = document.createElement('div');
+			var string = '<div><input type="checkbox" name="' + App.level + '[' + type + '][' + userid + ']" ';
+			string += 'id="' + id + '" value="' + realname + '" checked="checked" />';
+			string += '<label for="' + id + '">' + realname + '</label></div>';
+			element.innerHTML = string;
+			$wrap.appendChild(element);
+			// var parent = document.getElementById(App.level + 'search').parentNode;
+			// if (parent.getElementsByTagName('select').length > 0) {
+			// 	parent.appendChild(element);
+			// } else {
+			// 	parent.insertBefore(element, document.getElementById(App.level + 'search'));
+			// }
+			
+		}
+	} catch(e) {
+		console.log(e);
+	}
+	
+}
+
+App.permitApi = function (object) {
+	try {
+		if (object) {
+			var element = object.parentNode.getElementsByTagName('input');
+			App.permitAppendApi(element[0].name, element[0].value);
+		} else {
+			var element = document.forms['userlist'].getElementsByTagName('input');
+			if (element && element.length > 0) {
+				for (var i = 0; i < element.length; i++) {
+					if (element[i].type == 'checkbox' && element[i].checked == true) {
+						App.permitAppendApi(element[i].name, element[i].value);
+					}
+				}
+			}
+		}
+		$('#userlist').remove();
+	} catch(e) {
+		alert(e.message);
+	}
+	
 }

@@ -121,15 +121,16 @@
 .layerwrapper {
 	width: 500px;
 	position: absolute;
-  z-index: 9999;
+	z-index: 9999;
 	visibility: hidden;
-	background-color: #fff;
-	border-right: 1px solid #ddd;
-	border-bottom: 1px solid #ddd;
+	background-color: #222;
+	color: #fff;
 }
-
+.layerwrapper select {
+	color: #fff;
+}
 .layer {
-	border: 1px solid #666;
+	border: 1px solid #333;
 }
 
 .handle {
@@ -137,7 +138,17 @@
 	background-color: #57d;
 	background-image: url(../images/handle.gif);
 	background-repeat: repeat-x;
-	border-bottom: 1px solid #666;
+	height: 28px;
+}
+
+.selected_items{
+	margin-top: 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.selected_items label{
+	margin-left: 4px;
 }
 
 .layercaption {
@@ -165,18 +176,16 @@
 }
 
 .layerlist {
-	border: 1px solid #8be;
 }
 
 .layerlistcaption {
 	padding: 3px 5px 2px 5px;
 	white-space: nowrap;
-	background-color: #eff7ff;
-	border-bottom: 1px solid #8be;
 }
 
 .layerlist ul {
 	padding: 5px;
+	list-style: none;
 }
 
 .layerlist li {

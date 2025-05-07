@@ -7,6 +7,11 @@ var memberList = [];
 var dt_user = null;
 var groupList = [];
 var configList = [];
+var user_role = 'user';
+if (typeof userRole !== 'undefined') {
+  user_role = userRole;
+}
+
 async function get_member() {
     memberList = [];
     const response = await axios.get(`/api/index.php?model=member&method=get_member`);
@@ -30,13 +35,13 @@ function generateGroupList(){
     const editTypeListElement = document.getElementById('edit-user-type');
     Object.entries(groupList).forEach(([key, value]) => {
         const option = document.createElement('option');
-        option.value = value;
+        option.value = key;
         option.textContent = value;
         const option2 = document.createElement('option');
-        option2.value = value;
+        option2.value = key;
         option2.textContent = value;
         const option3 = document.createElement('option');
-        option3.value = value;
+        option3.value = key;
         option3.textContent = value;
         groupListElement.appendChild(option);
         addGroupListElement.appendChild(option2);
@@ -44,22 +49,28 @@ function generateGroupList(){
     });
     Object.entries(configList).forEach(([key, value]) => {
         const option = document.createElement('option');
-        option.value = value.config_name;
+        option.value = value.config_type;
         option.textContent = value.config_name;
         const option2 = document.createElement('option');
-        option2.value = value.config_name;
+        option2.value = value.config_type;
         option2.textContent = value.config_name;
         addTypeListElement.appendChild(option);
         editTypeListElement.appendChild(option2);
     });
 
-    groupListElement.addEventListener('change', (e) => {
-        dt_user.column(3).search(e.target.value).draw();
-    });
 
     roleListElement.addEventListener('change', (e) => {
         dt_user.column(2).search(e.target.value).draw();
     });
+
+    groupListElement.addEventListener('change', (e) => {
+      if(e.target.value == ''){
+        dt_user.column(3).search('').draw();
+      } else{
+        var text = e.target.options[e.target.selectedIndex].text;
+        dt_user.column(3).search(text).draw();
+      }
+  });
 
 }
 
@@ -101,6 +112,228 @@ document.addEventListener('DOMContentLoaded', async function (e) {
       placeholder: 'Select Country',
       dropdownParent: $this.parent()
     });
+  }
+
+  let featureButtons = [
+    {
+      extend: 'collection',
+      className: 'btn btn-label-secondary dropdown-toggle',
+      text: '<span class="d-flex align-items-center gap-2"><i class="icon-base ti tabler-upload icon-xs"></i> <span class="d-none d-sm-inline-block">書き出し</span></span>',
+      buttons: [
+          {
+          extend: 'print',
+          text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-printer me-1"></i>印刷</span>`,
+          className: 'dropdown-item',
+          exportOptions: {
+              columns: [1,2,3,4,5,6],
+              format: {
+              body: function (inner, coldex, rowdex) {
+                  if (inner.length <= 0) return inner;
+
+                  // Check if inner is HTML content
+                  if (inner.indexOf('<') > -1) {
+                  const parser = new DOMParser();
+                  const doc = parser.parseFromString(inner, 'text/html');
+
+                  // Get all text content
+                  let text = '';
+
+                  // Handle specific elements
+                  const userNameElements = doc.querySelectorAll('.user-name');
+                  if (userNameElements.length > 0) {
+                      userNameElements.forEach(el => {
+                      // Get text from nested structure
+                      const nameText =
+                          el.querySelector('.fw-medium')?.textContent ||
+                          el.querySelector('.d-block')?.textContent ||
+                          el.textContent;
+                      text += nameText.trim() + ' ';
+                      });
+                  } else {
+                      // Get regular text content
+                      text = doc.body.textContent || doc.body.innerText;
+                  }
+
+                  return text.trim();
+                  }
+
+                  return inner;
+              }
+              }
+          },
+          customize: function (win) {
+              win.document.body.style.color = config.colors.headingColor;
+              win.document.body.style.borderColor = config.colors.borderColor;
+              win.document.body.style.backgroundColor = config.colors.bodyBg;
+              const table = win.document.body.querySelector('table');
+              table.classList.add('compact');
+              table.style.color = 'inherit';
+              table.style.borderColor = 'inherit';
+              table.style.backgroundColor = 'inherit';
+          }
+          },
+          {
+          extend: 'csv',
+          text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-text me-1"></i>Csv</span>`,
+          className: 'dropdown-item',
+          exportOptions: {
+              columns: [1,2,3,4,5,6],
+              format: {
+              body: function (inner, coldex, rowdex) {
+                  if (inner.length <= 0) return inner;
+
+                  // Parse HTML content
+                  const parser = new DOMParser();
+                  const doc = parser.parseFromString(inner, 'text/html');
+
+                  let text = '';
+
+                  // Handle user-name elements specifically
+                  const userNameElements = doc.querySelectorAll('.user-name');
+                  if (userNameElements.length > 0) {
+                  userNameElements.forEach(el => {
+                      // Get text from nested structure - try different selectors
+                      const nameText =
+                      el.querySelector('.fw-medium')?.textContent ||
+                      el.querySelector('.d-block')?.textContent ||
+                      el.textContent;
+                      text += nameText.trim() + ' ';
+                  });
+                  } else {
+                  // Handle other elements (status, role, etc)
+                  text = doc.body.textContent || doc.body.innerText;
+                  }
+
+                  return text.trim();
+              }
+              }
+          }
+          },
+          {
+          extend: 'excel',
+          text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-spreadsheet me-1"></i>Excel</span>`,
+          className: 'dropdown-item',
+          exportOptions: {
+              columns: [1,2,3,4,5,6],
+              format: {
+              body: function (inner, coldex, rowdex) {
+                  if (inner.length <= 0) return inner;
+
+                  // Parse HTML content
+                  const parser = new DOMParser();
+                  const doc = parser.parseFromString(inner, 'text/html');
+
+                  let text = '';
+
+                  // Handle user-name elements specifically
+                  const userNameElements = doc.querySelectorAll('.user-name');
+                  if (userNameElements.length > 0) {
+                  userNameElements.forEach(el => {
+                      // Get text from nested structure - try different selectors
+                      const nameText =
+                      el.querySelector('.fw-medium')?.textContent ||
+                      el.querySelector('.d-block')?.textContent ||
+                      el.textContent;
+                      text += nameText.trim() + ' ';
+                  });
+                  } else {
+                  // Handle other elements (status, role, etc)
+                  text = doc.body.textContent || doc.body.innerText;
+                  }
+
+                  return text.trim();
+              }
+              }
+          }
+          },
+          // {
+          // extend: 'pdf',
+          // text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-description me-1"></i>Pdf</span>`,
+          // className: 'dropdown-item',
+          // exportOptions: {
+          //     columns: [1,2,3,4,5,6],
+          //     format: {
+          //     body: function (inner, coldex, rowdex) {
+          //         if (inner.length <= 0) return inner;
+
+          //         // Parse HTML content
+          //         const parser = new DOMParser();
+          //         const doc = parser.parseFromString(inner, 'text/html');
+
+          //         let text = '';
+
+          //         // Handle user-name elements specifically
+          //         const userNameElements = doc.querySelectorAll('.user-name');
+          //         if (userNameElements.length > 0) {
+          //         userNameElements.forEach(el => {
+          //             // Get text from nested structure - try different selectors
+          //             const nameText =
+          //             el.querySelector('.fw-medium')?.textContent ||
+          //             el.querySelector('.d-block')?.textContent ||
+          //             el.textContent;
+          //             text += nameText.trim() + ' ';
+          //         });
+          //         } else {
+          //         // Handle other elements (status, role, etc)
+          //         text = doc.body.textContent || doc.body.innerText;
+          //         }
+
+          //         return text.trim();
+          //     }
+          //     }
+          // }
+          // },
+          {
+          extend: 'copy',
+          text: `<i class="icon-base ti tabler-copy me-1"></i>コピー`,
+          className: 'dropdown-item',
+          exportOptions: {
+              columns: [1,2,3,4,5,6],
+              format: {
+              body: function (inner, coldex, rowdex) {
+                  if (inner.length <= 0) return inner;
+
+                  // Parse HTML content
+                  const parser = new DOMParser();
+                  const doc = parser.parseFromString(inner, 'text/html');
+
+                  let text = '';
+
+                  // Handle user-name elements specifically
+                  const userNameElements = doc.querySelectorAll('.user-name');
+                  if (userNameElements.length > 0) {
+                  userNameElements.forEach(el => {
+                      // Get text from nested structure - try different selectors
+                      const nameText =
+                      el.querySelector('.fw-medium')?.textContent ||
+                      el.querySelector('.d-block')?.textContent ||
+                      el.textContent;
+                      text += nameText.trim() + ' ';
+                  });
+                  } else {
+                  // Handle other elements (status, role, etc)
+                  text = doc.body.textContent || doc.body.innerText;
+                  }
+
+                  return text.trim();
+              }
+              }
+          }
+          }
+      ]
+    },
+    {
+      text: '<span class="d-flex align-items-center gap-2"><i class="icon-base ti tabler-plus icon-xs"></i> <span class="d-none d-sm-inline-block">メンバー追加</span></span>',
+      className: 'add-new btn btn-primary',
+      attr: {
+          'data-bs-toggle': 'modal',
+          'data-bs-target': '#modalAddUser'
+      }
+    }
+  ];
+
+  if(user_role != 'administrator' && user_role != 'manager'){
+    featureButtons.pop();
   }
 
   // Users datatable
@@ -208,28 +441,39 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             }
             },
             {
-            targets: -1,
-            title: 'Actions',
-            searchable: false,
-            orderable: false,
-            render: (data, type, full, meta) => {
-                return `
-                <div class="d-flex align-items-center">
-                    <a href="${userView}?id=${full['id']}" class="btn btn-text-secondary rounded-pill waves-effect btn-icon">
-                    <i class="icon-base ti tabler-eye icon-22px"></i>
-                    </a>
-                    <a href="javascript:;" class="btn btn-text-secondary rounded-pill waves-effect btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
-                    <i class="icon-base ti tabler-dots-vertical icon-22px"></i>
-                    </a>
-                    <div class="dropdown-menu dropdown-menu-end m-0">
-                    <a href="javascript:;" class="dropdown-item">編集</a>
-                    <a href="javascript:;" class="dropdown-item">退職者へ変更</a>
-                    <a href="javascript:;" class="dropdown-item">停止する</a>
-                    </div>
-                </div>
-                `;
-            }
-            }
+              targets: -1,
+              title: 'Actions',
+              searchable: false,
+              orderable: false,
+              render: (data, type, full, meta) => {
+                if(user_role == 'administrator' || user_role == 'manager'){
+                  return `
+                  <div class="d-flex align-items-center">
+                      <a href="${userView}?id=${full['id']}" class="btn btn-text-secondary rounded-pill waves-effect btn-icon">
+                      <i class="icon-base ti tabler-eye icon-22px"></i>
+                      </a>
+                      <a href="javascript:;" class="btn btn-text-secondary rounded-pill waves-effect btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
+                      <i class="icon-base ti tabler-dots-vertical icon-22px"></i>
+                      </a>
+                      <div class="dropdown-menu dropdown-menu-end m-0">
+                      <a href="javascript:;" data-id="${full['id']}" data-realname="${full['realname']}" class="dropdown-item item-edit">編集</a>
+                      ${full['is_suspend'] != 1 ? `<a href="javascript:;" data-id="${full['id']}" data-realname="${full['realname']}" class="dropdown-item item-suspend">停止する</a>` : ''}
+                      ${full['is_suspend'] == 1 ? `<a href="javascript:;" data-id="${full['id']}" data-realname="${full['realname']}" class="dropdown-item item-active">アクティブする</a>` : ''}
+                      ${full['group_name'] != '退職者' ? `<a href="javascript:;" data-id="${full['id']}" data-realname="${full['realname']}" class="dropdown-item item-resign">退職者へ変更</a>` : ''}
+                     <!-- <a href="javascript:;" data-id="${full['id']}" data-realname="${full['realname']}" class="dropdown-item item-delete">削除</a> -->
+                      </div>
+                  </div>
+                  `;
+                }else{
+                  return `
+                    <div class="d-flex align-items-center">
+                        <a href="${userView}?id=${full['id']}" class="btn btn-text-secondary rounded-pill waves-effect btn-icon">
+                        <i class="icon-base ti tabler-eye icon-22px"></i>
+                        </a>
+                    </div>`;
+                }
+              }
+          }
         ],
         layout: {
             topStart: {
@@ -247,229 +491,13 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             features: [
                 {
                 search: {
-                    placeholder: 'Search User',
+                    placeholder: 'メンバーを検索',
                     text: '_INPUT_'
                 }
                 },
                 {
-                buttons: [
-                    {
-                    extend: 'collection',
-                    className: 'btn btn-label-secondary dropdown-toggle',
-                    text: '<span class="d-flex align-items-center gap-2"><i class="icon-base ti tabler-upload icon-xs"></i> <span class="d-none d-sm-inline-block">書き出し</span></span>',
-                    buttons: [
-                        {
-                        extend: 'print',
-                        text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-printer me-1"></i>印刷</span>`,
-                        className: 'dropdown-item',
-                        exportOptions: {
-                            columns: [1,2,3,4,5,6],
-                            format: {
-                            body: function (inner, coldex, rowdex) {
-                                if (inner.length <= 0) return inner;
-
-                                // Check if inner is HTML content
-                                if (inner.indexOf('<') > -1) {
-                                const parser = new DOMParser();
-                                const doc = parser.parseFromString(inner, 'text/html');
-
-                                // Get all text content
-                                let text = '';
-
-                                // Handle specific elements
-                                const userNameElements = doc.querySelectorAll('.user-name');
-                                if (userNameElements.length > 0) {
-                                    userNameElements.forEach(el => {
-                                    // Get text from nested structure
-                                    const nameText =
-                                        el.querySelector('.fw-medium')?.textContent ||
-                                        el.querySelector('.d-block')?.textContent ||
-                                        el.textContent;
-                                    text += nameText.trim() + ' ';
-                                    });
-                                } else {
-                                    // Get regular text content
-                                    text = doc.body.textContent || doc.body.innerText;
-                                }
-
-                                return text.trim();
-                                }
-
-                                return inner;
-                            }
-                            }
-                        },
-                        customize: function (win) {
-                            win.document.body.style.color = config.colors.headingColor;
-                            win.document.body.style.borderColor = config.colors.borderColor;
-                            win.document.body.style.backgroundColor = config.colors.bodyBg;
-                            const table = win.document.body.querySelector('table');
-                            table.classList.add('compact');
-                            table.style.color = 'inherit';
-                            table.style.borderColor = 'inherit';
-                            table.style.backgroundColor = 'inherit';
-                        }
-                        },
-                        {
-                        extend: 'csv',
-                        text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-text me-1"></i>Csv</span>`,
-                        className: 'dropdown-item',
-                        exportOptions: {
-                            columns: [1,2,3,4,5,6],
-                            format: {
-                            body: function (inner, coldex, rowdex) {
-                                if (inner.length <= 0) return inner;
-
-                                // Parse HTML content
-                                const parser = new DOMParser();
-                                const doc = parser.parseFromString(inner, 'text/html');
-
-                                let text = '';
-
-                                // Handle user-name elements specifically
-                                const userNameElements = doc.querySelectorAll('.user-name');
-                                if (userNameElements.length > 0) {
-                                userNameElements.forEach(el => {
-                                    // Get text from nested structure - try different selectors
-                                    const nameText =
-                                    el.querySelector('.fw-medium')?.textContent ||
-                                    el.querySelector('.d-block')?.textContent ||
-                                    el.textContent;
-                                    text += nameText.trim() + ' ';
-                                });
-                                } else {
-                                // Handle other elements (status, role, etc)
-                                text = doc.body.textContent || doc.body.innerText;
-                                }
-
-                                return text.trim();
-                            }
-                            }
-                        }
-                        },
-                        {
-                        extend: 'excel',
-                        text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-spreadsheet me-1"></i>Excel</span>`,
-                        className: 'dropdown-item',
-                        exportOptions: {
-                            columns: [1,2,3,4,5,6],
-                            format: {
-                            body: function (inner, coldex, rowdex) {
-                                if (inner.length <= 0) return inner;
-
-                                // Parse HTML content
-                                const parser = new DOMParser();
-                                const doc = parser.parseFromString(inner, 'text/html');
-
-                                let text = '';
-
-                                // Handle user-name elements specifically
-                                const userNameElements = doc.querySelectorAll('.user-name');
-                                if (userNameElements.length > 0) {
-                                userNameElements.forEach(el => {
-                                    // Get text from nested structure - try different selectors
-                                    const nameText =
-                                    el.querySelector('.fw-medium')?.textContent ||
-                                    el.querySelector('.d-block')?.textContent ||
-                                    el.textContent;
-                                    text += nameText.trim() + ' ';
-                                });
-                                } else {
-                                // Handle other elements (status, role, etc)
-                                text = doc.body.textContent || doc.body.innerText;
-                                }
-
-                                return text.trim();
-                            }
-                            }
-                        }
-                        },
-                        // {
-                        // extend: 'pdf',
-                        // text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-description me-1"></i>Pdf</span>`,
-                        // className: 'dropdown-item',
-                        // exportOptions: {
-                        //     columns: [1,2,3,4,5,6],
-                        //     format: {
-                        //     body: function (inner, coldex, rowdex) {
-                        //         if (inner.length <= 0) return inner;
-
-                        //         // Parse HTML content
-                        //         const parser = new DOMParser();
-                        //         const doc = parser.parseFromString(inner, 'text/html');
-
-                        //         let text = '';
-
-                        //         // Handle user-name elements specifically
-                        //         const userNameElements = doc.querySelectorAll('.user-name');
-                        //         if (userNameElements.length > 0) {
-                        //         userNameElements.forEach(el => {
-                        //             // Get text from nested structure - try different selectors
-                        //             const nameText =
-                        //             el.querySelector('.fw-medium')?.textContent ||
-                        //             el.querySelector('.d-block')?.textContent ||
-                        //             el.textContent;
-                        //             text += nameText.trim() + ' ';
-                        //         });
-                        //         } else {
-                        //         // Handle other elements (status, role, etc)
-                        //         text = doc.body.textContent || doc.body.innerText;
-                        //         }
-
-                        //         return text.trim();
-                        //     }
-                        //     }
-                        // }
-                        // },
-                        {
-                        extend: 'copy',
-                        text: `<i class="icon-base ti tabler-copy me-1"></i>コピー`,
-                        className: 'dropdown-item',
-                        exportOptions: {
-                            columns: [1,2,3,4,5,6],
-                            format: {
-                            body: function (inner, coldex, rowdex) {
-                                if (inner.length <= 0) return inner;
-
-                                // Parse HTML content
-                                const parser = new DOMParser();
-                                const doc = parser.parseFromString(inner, 'text/html');
-
-                                let text = '';
-
-                                // Handle user-name elements specifically
-                                const userNameElements = doc.querySelectorAll('.user-name');
-                                if (userNameElements.length > 0) {
-                                userNameElements.forEach(el => {
-                                    // Get text from nested structure - try different selectors
-                                    const nameText =
-                                    el.querySelector('.fw-medium')?.textContent ||
-                                    el.querySelector('.d-block')?.textContent ||
-                                    el.textContent;
-                                    text += nameText.trim() + ' ';
-                                });
-                                } else {
-                                // Handle other elements (status, role, etc)
-                                text = doc.body.textContent || doc.body.innerText;
-                                }
-
-                                return text.trim();
-                            }
-                            }
-                        }
-                        }
-                    ]
-                    },
-                    {
-                    text: '<span class="d-flex align-items-center gap-2"><i class="icon-base ti tabler-plus icon-xs"></i> <span class="d-none d-sm-inline-block">メンバー追加</span></span>',
-                    className: 'add-new btn btn-primary',
-                    attr: {
-                        'data-bs-toggle': 'offcanvas',
-                        'data-bs-target': '#offcanvasAddUser'
-                    }
-                    }
-                ]
-                }
+                buttons: featureButtons
+              }
             ]
             },
             bottomStart: {
@@ -481,7 +509,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
         language: {
             sLengthMenu: '_MENU_',
             search: '',
-            searchPlaceholder: 'Search User',
+            searchPlaceholder: 'メンバーを検索',
             paginate: {
             next: '<i class="icon-base ti tabler-chevron-right scaleX-n1-rtl icon-18px"></i>',
             previous: '<i class="icon-base ti tabler-chevron-left scaleX-n1-rtl icon-18px"></i>',
@@ -526,117 +554,242 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             }
             }
         },
-        initComplete: function () {
-            // const api = this.api();
-
-            // // Helper function to create a select dropdown and append options
-            // const createFilter = (columnIndex, containerClass, selectId, defaultOptionText) => {
-            //     const column = api.column(columnIndex);
-            //     const select = document.createElement('select');
-            //     select.id = selectId;
-            //     select.className = 'form-select text-capitalize';
-            //     select.innerHTML = `<option value="">${defaultOptionText}</option>`;
-
-            //     document.querySelector(containerClass).appendChild(select);
-
-            //     // Add event listener for filtering
-            //     select.addEventListener('change', () => {
-            //         const val = select.value ? `^${select.value}$` : '';
-            //         column.search(val, true, false).draw();
-            //     });
-
-            //     // Populate options based on unique column data
-            //     const uniqueData = Array.from(new Set(column.data().toArray())).sort();
-            //     uniqueData.forEach(d => {
-            //         const option = document.createElement('option');
-            //         option.value = d;
-            //         option.textContent = d;
-            //         select.appendChild(option);
-            //     });
-            // };
-
-            // // Role filter
-            // createFilter(2, '.user_role', 'UserRole', '制限');
-
-            // // Plan filter
-            // createFilter(4, '.user_plan', 'UserPlan', 'グループ');
-
-            // // Status filter
-            // const statusFilter = document.createElement('select');
-            // statusFilter.id = 'FilterTransaction';
-            // statusFilter.className = 'form-select text-capitalize';
-            // statusFilter.innerHTML = '<option value="">ステータス</option>';
-            // document.querySelector('.user_status').appendChild(statusFilter);
-            // statusFilter.addEventListener('change', () => {
-            // const val = statusFilter.value ? `^${statusFilter.value}$` : '';
-            // api.column(6).search(val, true, false).draw();
-            // });
-
-            // const statusColumn = api.column(6);
-            // const uniqueStatusData = Array.from(new Set(statusColumn.data().toArray())).sort();
-            // uniqueStatusData.forEach(d => {
-            // const option = document.createElement('option');
-            // option.value = statusObj[d]?.title || d;
-            // option.textContent = statusObj[d]?.title || d;
-            // option.className = 'text-capitalize';
-            // statusFilter.appendChild(option);
-            // });
-        }
     });
 
-    //? The 'delete-record' class is necessary for the functionality of the following code.
-    function deleteRecord(event) {
-      let row = document.querySelector('.dtr-expanded');
-      if (event) {
-        row = event.target.parentElement.closest('tr');
-      }
-      if (row) {
-        dt_user.row(row).remove().draw();
-      }
-    }
 
-    function bindDeleteEvent() {
-      const userListTable = document.querySelector('.datatables-users');
-      const modal = document.querySelector('.dtr-bs-modal');
+    function bindEvent() {
+      document.querySelector('.datatables-users').addEventListener('click', async function (e) {
+        if (e.target.closest('.item-edit')) {
+          e.preventDefault();
+          const id = e.target.closest('.item-edit').dataset.id;
+          const response = await axios.post('/api/index.php?model=member&method=get_user_by_id', {
+            id: id
+          }, {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }
+          });
+          if(response.status === 200 && response.data && response.data.status === 'success'){
+            // Open the modal
+            var userinfo = response.data.data;
+            document.getElementById('edit-user-id').value = userinfo.id;
+            document.getElementById('edit-user-userName').value = userinfo.userid;
+            document.getElementById('edit-user-fullname').value = userinfo.realname;
+            document.getElementById('edit-user-email').value = userinfo.user_email;
+            document.getElementById('edit-user-contact').value = userinfo.user_phone;
+            document.getElementById('edit-user-role').value = userinfo.authority;
+            document.getElementById('edit-user-group').value = userinfo.user_group;
+            document.getElementById('edit-user-type').value = userinfo.member_type;
+            document.getElementById('edit-user-permit').innerHTML = '';
+            const permitData = {};
+            permitData.edit_level = userinfo.edit_level;
+            permitData.edit_group = response.data.group;
+            permitData.edit_user = response.data.user;
+            
+            generatePermit('edit', null, '', document.getElementById('edit-user-permit'), 2, permitData);
+            const editModal = new bootstrap.Modal(document.getElementById('modalEditUser'));
+            editModal.show();
+          }else{
+            showMessage(response.data.error, true);
+          }
+        }
 
-      if (userListTable && userListTable.classList.contains('collapsed')) {
-        if (modal) {
-          modal.addEventListener('click', function (event) {
-            if (event.target.parentElement.classList.contains('delete-record')) {
-              deleteRecord();
-              const closeButton = modal.querySelector('.btn-close');
-              if (closeButton) closeButton.click(); // Simulates a click on the close button
+        if (e.target.closest('.item-suspend')) {
+          e.preventDefault();
+
+          const id = e.target.closest('.item-suspend').dataset.id;
+          const realname = e.target.closest('.item-suspend').dataset.realname;
+          Swal.fire({
+            title: realname + 'さんのアカウントを停止しますか？',
+            text: '停止するとログインできなくなります。',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'はい、停止します',
+            cancelButtonText: 'キャンセル',
+            customClass: {
+              confirmButton: 'btn btn-primary',
+              cancelButton: 'btn btn-label-secondary'
+            },
+            buttonsStyling: false
+          }).then(function (result) {
+            if (result.value) {
+    
+              displayHourglass();
+              axios({
+                method: 'post',
+                url: '/api/index.php?model=member&method=suspend_member',
+                data: {
+                  id: id,
+                },
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded'
+                }
+              })
+                .then(function (response) {
+                  if (response.status === 200 && response.data && response.data.status === 'success') {
+                    showMessage('メンバーを停止しました');
+                    // delete row from datatable
+                    changeData();
+                  } else {
+                    showMessage('メンバーを停止できませんでした', true);
+                  }
+                }).catch(function (error) {
+                  handleErrors(error);
+                });
+              
             }
           });
         }
-      } else {
-        const tableBody = userListTable?.querySelector('tbody');
-        if (tableBody) {
-          tableBody.addEventListener('click', function (event) {
-            if (event.target.parentElement.classList.contains('delete-record')) {
-              deleteRecord(event);
+
+        if (e.target.closest('.item-active')) {
+          e.preventDefault();
+
+          const id = e.target.closest('.item-active').dataset.id;
+          const realname = e.target.closest('.item-active').dataset.realname;
+          Swal.fire({
+            title: realname + 'さんのアカウントをアクティブにしますか？',
+            text: 'アクティブにするとログインできるようになります。',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'はい、アクティブにします',
+            cancelButtonText: 'キャンセル',
+            customClass: {
+              confirmButton: 'btn btn-primary',
+              cancelButton: 'btn btn-label-secondary'
+            },
+            buttonsStyling: false
+          }).then(function (result) {
+            if (result.value) {
+    
+              displayHourglass();
+              axios({
+                method: 'post',
+                url: '/api/index.php?model=member&method=active_member',
+                data: {
+                  id: id,
+                },
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded'
+                }
+              })
+                .then(function (response) {
+                  if (response.status === 200 && response.data && response.data.status === 'success') {
+                    showMessage('メンバーをアクティブにしました');
+                    // delete row from datatable
+                    changeData();
+                  } else {
+                    showMessage('メンバーをアクティブにできませんでした', true);
+                  }
+                }).catch(function (error) {
+                  handleErrors(error);
+                });
+              
             }
           });
         }
-      }
+
+        if (e.target.closest('.item-resign')) {
+          e.preventDefault();
+
+          const id = e.target.closest('.item-resign').dataset.id;
+          const realname = e.target.closest('.item-resign').dataset.realname;
+          Swal.fire({
+            title: realname + 'さんのアカウントを退職者へ変更しますか？',
+            text: '退職者へ変更するとログインできなくなります。',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'はい、退職者へ変更します',
+            cancelButtonText: 'キャンセル',
+            customClass: {
+              confirmButton: 'btn btn-primary',
+              cancelButton: 'btn btn-label-secondary'
+            },
+            buttonsStyling: false
+          }).then(function (result) {
+            if (result.value) {
+    
+              displayHourglass();
+              axios({
+                method: 'post',
+                url: '/api/index.php?model=member&method=resign_member',
+                data: {
+                  id: id,
+                },
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded'
+                }
+              })
+                .then(function (response) {
+                  if (response.status === 200 && response.data && response.data.status === 'success') {
+                    showMessage('メンバーを退職者へ変更しました');
+                    // delete row from datatable
+                    changeData();
+                  } else {
+                    showMessage('メンバーを退職者へ変更できませんでした', true);
+                  }
+                }).catch(function (error) {
+                  handleErrors(error);
+                });
+              
+            }
+          });
+        }
+    
+        if (e.target.closest('.item-delete')) {
+          e.preventDefault();
+          const id = e.target.closest('.item-delete').dataset.id;
+          const realname = e.target.closest('.item-delete').dataset.realname;
+          Swal.fire({
+            title: realname + 'さんのアカウントを削除しますか？',
+            text: 'メンバーを削除すると元に戻すことはできません。',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'はい、削除します',
+            cancelButtonText: 'キャンセル',
+            customClass: {
+              confirmButton: 'btn btn-primary',
+              cancelButton: 'btn btn-label-secondary'
+            },
+            buttonsStyling: false
+          }).then(function (result) {
+            if (result.value) {
+    
+              displayHourglass();
+              axios({
+                method: 'post',
+                url: '/api/index.php?model=member&method=delete_member',
+                data: {
+                  id: id,
+                },
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded'
+                }
+              })
+                .then(function (response) {
+                  if (response.status === 200 && response.data && response.data.status === 'success') {
+                    showMessage('メンバーを削除しました');
+                    // delete row from datatable
+                    dt_user.row(e.target.closest('tr')).remove().draw();
+                  } else {
+                    showMessage('メンバーを削除できませんでした', true);
+                  }
+                }).catch(function (error) {
+                  handleErrors(error);
+                });
+              
+            }
+          });
+    
+          
+          
+        }
+      });
     }
 
     // Initial event binding
-    bindDeleteEvent();
+    bindEvent();
 
-    // Re-bind events when modal is shown or hidden
-    document.addEventListener('show.bs.modal', function (event) {
-      if (event.target.classList.contains('dtr-bs-modal')) {
-        bindDeleteEvent();
-      }
-    });
-
-    document.addEventListener('hide.bs.modal', function (event) {
-      if (event.target.classList.contains('dtr-bs-modal')) {
-        bindDeleteEvent();
-      }
-    });
-
+  
     await changeData();
     generateGroupList();
   }
@@ -677,21 +830,21 @@ document.addEventListener('DOMContentLoaded', async function (e) {
     addNewUserForm = document.getElementById('addNewUserForm');
 
   // Phone Number
-  if (phoneMaskList) {
-    phoneMaskList.forEach(function (phoneMask) {
-      phoneMask.addEventListener('input', event => {
-        const cleanValue = event.target.value.replace(/\D/g, '');
-        phoneMask.value = formatGeneral(cleanValue, {
-          blocks: [3, 3, 4],
-          delimiters: [' ', ' ']
-        });
-      });
-      registerCursorTracker({
-        input: phoneMask,
-        delimiter: ' '
-      });
-    });
-  }
+  // if (phoneMaskList) {
+  //   phoneMaskList.forEach(function (phoneMask) {
+  //     phoneMask.addEventListener('input', event => {
+  //       const cleanValue = event.target.value.replace(/\D/g, '');
+  //       phoneMask.value = formatGeneral(cleanValue, {
+  //         blocks: [3, 3, 4],
+  //         delimiters: ['-', '-']
+  //       });
+  //     });
+  //     registerCursorTracker({
+  //       input: phoneMask,
+  //       delimiter: ' '
+  //     });
+  //   });
+  // }
   // Add New User Form Validation
   const fv = FormValidation.formValidation(addNewUserForm, {
     fields: {
@@ -724,7 +877,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           }
         }
       },
-      email: {
+      user_email: {
         validators: {
           emailAddress: {
             message: 'メールアドレスが不正です'
@@ -738,21 +891,21 @@ document.addEventListener('DOMContentLoaded', async function (e) {
       //     }
       //   }
       // },
-      group: {
+      user_group: {
         validators: {
           notEmpty: {
             message: 'グループを選択してください'  
           }
         }
       },
-      type: {
+      member_type: {
         validators: {
           notEmpty: {
             message: '従業員の種類を選択してください'
           }
         }
       },
-      role: {
+      authority: {
         validators: {
           notEmpty: {
             message: '制限を選択してください'
@@ -781,16 +934,120 @@ document.addEventListener('DOMContentLoaded', async function (e) {
               showMessage('メンバーを追加しました');
               addNewUserForm.reset();
               changeData();
+              
             } else {
-              showMessage('メンバーを追加できませんでした', true);
+              if(response.data.error){
+                showMessage(response.data.error, true);
+              }else{
+                showMessage('メンバーを追加できませんでした', true);
+              }
             }
+            $('#modalAddUser').modal('hide'); 
           })
           .catch(function (error) {
             handleErrors(error);
+            $('#modalAddUser').modal('hide');
           });
       }
     });
   });
 
   generatePermit('edit', null, '', document.getElementById('add-user-permit'));
+
+
+  const editUserForm = document.getElementById('editUserForm');
+  const fvEdit = FormValidation.formValidation(editUserForm, {
+    fields: {
+      userid: {
+        validators: {
+          notEmpty: {
+            message: 'ユーザー名を入力してください'
+          },
+          stringLength: {
+            min: 6,
+            message: '6文字以上入力してください'
+          }
+        }
+      },
+      realname: {
+        validators: {
+          notEmpty: {
+            message: '氏名を入力してください'
+          }
+        }
+      },
+      user_email: {
+        validators: {
+          emailAddress: {
+            message: 'メールアドレスが不正です'
+          }
+        }
+      },
+      // gender: {
+      //   validators: {
+      //     notEmpty: {
+      //       message: '性別を選択してください'
+      //     }
+      //   }
+      // },
+      user_group: {
+        validators: {
+          notEmpty: {
+            message: 'グループを選択してください'  
+          }
+        }
+      },
+      member_type: {
+        validators: {
+          notEmpty: {
+            message: '従業員の種類を選択してください'
+          }
+        }
+      },
+      authority: {
+        validators: {
+          notEmpty: {
+            message: '制限を選択してください'
+          }
+        }
+      }
+    },
+    plugins: {
+      trigger: new FormValidation.plugins.Trigger(),
+      bootstrap5: new FormValidation.plugins.Bootstrap5({
+        eleValidClass: '',
+        rowSelector: '.form-control-validation'
+      }),
+    },
+  });
+
+  editUserForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    fvEdit.validate().then(function (status) {
+      if (status === 'Valid') {
+        displayHourglass();
+        const formData = new FormData(editUserForm);
+        axios.post('/api/index.php?model=member&method=edit_member', formData)
+          .then(function (response) {
+            if (response.status === 200 && response.data && response.data.status === 'success') {
+              showMessage('メンバーを編集しました');
+              editUserForm.reset();
+              changeData();
+              
+            } else {
+              if(response.data.error){
+                showMessage(response.data.error, true);
+              }else{
+                showMessage('メンバーを編集できませんでした', true);
+              }
+            }
+            $('#modalEditUser').modal('hide'); 
+          })
+          .catch(function (error) {
+            handleErrors(error);
+            $('#modalEditUser').modal('hide');
+          });
+      }
+    });
+  });
 });

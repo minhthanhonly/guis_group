@@ -113,13 +113,23 @@ class Controller {
 		require_once(DIR_VIEW.'explanation.php');
 		$input = $_POST;
 		$input = array_map(function($value) {
-			return is_array($value) ? array_map('stripslashes', $value) : stripslashes($value);
+			if (is_array($value)) {
+				return array_map(function($v) {
+					return is_string($v) ? stripslashes($v) : $v;
+				}, $value);
+			}
+			return is_string($value) ? stripslashes($value) : $value;
 		}, $input);
 		$_POST = $input;
 
 		$input = $_GET;
 		$input = array_map(function($value) {
-			return is_array($value) ? array_map('stripslashes', $value) : stripslashes($value);
+			if (is_array($value)) {
+				return array_map(function($v) {
+					return is_string($v) ? stripslashes($v) : $v;
+				}, $value);
+			}
+			return is_string($value) ? stripslashes($value) : $value;
 		}, $input);
 		$_GET = $input;
 	}
