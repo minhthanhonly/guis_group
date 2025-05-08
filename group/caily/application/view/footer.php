@@ -25,22 +25,29 @@
 <script src="<?=$root?>assets/vendor/libs/notiflix/notiflix.js"></script>
 <script src="<?=$root?>assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
 <script src="<?=$root?>assets/js/imask.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/style.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ja.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/index.js"></script>
 
 <script src="<?=$root?>assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js"></script>
 
 
 
 <script src="<?=$root?>assets/js/main.js"></script>
+<script src="<?=$root?>assets/js/app-chat.js"></script>
+<link rel="stylesheet" href="<?=$root?>assets/css/app-chat.css">
 <script src="<?=$root?>assets/js/forms-tagify.js"></script>
 <?php
 if(isset($_SESSION['userid'])) {
 ?>
 <script>
-    const userId = '<?= isset($_SESSION['userid']) ? $_SESSION['userid'] : '' ?>';
-    const userGroup = '<?= isset($_SESSION['group']) ? $_SESSION['group'] : '' ?>';
+    const USER_ID = '<?= isset($_SESSION['userid']) ? $_SESSION['userid'] : '' ?>';
+    const USER_GROUP = '<?= isset($_SESSION['group']) ? $_SESSION['group'] : '' ?>';
     <?php 
     if(isset($_SESSION['authority']) && $_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') {
-        echo 'const userRole = "'.$_SESSION['authority'].'";'; 
+        echo 'const USER_ROLE = "'.$_SESSION['authority'].'";'; 
     }
     ?>
 </script>

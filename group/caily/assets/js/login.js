@@ -17,8 +17,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 message: 'ユーザー名を入力してください。'
               },
               stringLength: {
-                min: 6,
-                message: 'ユーザー名は6文字以上で入力してください。'
+                min: 4,
+                message: 'ユーザー名は4文字以上で入力してください。'
               }
             }
           },
@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function () {
               },
               stringLength: {
                 min: 4,
-                message: 'ユーザー名は6文字以上で入力してください。'
+                message: 'ユーザー名は4文字以上で入力してください。'
               }
             }
           },

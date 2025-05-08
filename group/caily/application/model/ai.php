@@ -38,37 +38,37 @@ class AI extends ApplicationModel{
         $response = $this->sendToGemini($message, $apiKey);
     
         // Kiểm tra phản hồi từ Gemini
-        if (isset($response['candidates'][0]['content']['parts'][0]['text'])) {
-            $aiResponse = json_decode($response['candidates'][0]['content']['parts'][0]['text'], true);
+        // if (isset($response['candidates'][0]['content']['parts'][0]['text'])) {
+        //     $aiResponse = json_decode($response['candidates'][0]['content']['parts'][0]['text'], true);
     
-            if (isset($aiResponse['action'])) {
-                $action = $aiResponse['action'];
-                $parameters = $aiResponse['parameters'] ?? [];
+        //     if (isset($aiResponse['action'])) {
+        //         $action = $aiResponse['action'];
+        //         $parameters = $aiResponse['parameters'] ?? [];
     
-                // Thực hiện hành động dựa trên action
-                switch ($action) {
-                    case 'get_projects':
-                        $data = $this->getProjectsFromDatabase();
-                        break;
+        //         // Thực hiện hành động dựa trên action
+        //         switch ($action) {
+        //             case 'get_projects':
+        //                 $data = $this->getProjectsFromDatabase();
+        //                 break;
     
-                    case 'get_project_details':
-                        $projectId = $parameters['project_id'] ?? null;
-                        $data = $this->getProjectDetailsFromDatabase($projectId);
-                        break;
+        //             case 'get_project_details':
+        //                 $projectId = $parameters['project_id'] ?? null;
+        //                 $data = $this->getProjectDetailsFromDatabase($projectId);
+        //                 break;
     
-                    default:
-                        $data = ['error' => 'Unknown action'];
-                }
+        //             default:
+        //                 $data = ['error' => 'Unknown action'];
+        //         }
     
-                // Gửi dữ liệu đến Gemini để phân tích
-                $analysisResponse = $this->sendToGeminiWithData($data, $apiKey);
+        //         // Gửi dữ liệu đến Gemini để phân tích
+        //         $analysisResponse = $this->sendToGeminiWithData($data, $apiKey);
     
-                // Trả về kết quả phân tích
-                header('Content-Type: application/json');
-                echo json_encode($analysisResponse);
-                return;
-            }
-        }
+        //         // Trả về kết quả phân tích
+        //         header('Content-Type: application/json');
+        //         echo json_encode($analysisResponse);
+        //         return;
+        //     }
+        // }
     
         // Nếu không có hành động, trả về phản hồi gốc từ AI
         header('Content-Type: application/json');
@@ -78,19 +78,22 @@ class AI extends ApplicationModel{
     function sendToGemini($messages, $apiKey) {
        
         $modelUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-exp-03-25:generateContent";
+        //$modelUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+        $systemPrompt = "私はGUIS社のAIアシスタントのAIです。ユーザーの質問に基づいて、丁寧に応答させていただきます。常に「私」という一人称を使用し、不適切な言葉や挑発的な表現は避け、日本語で返答いたします。回答が正確であり、捏造されていないことを確認しない。プロジェクト、ユーザー、システムデータ、システム機能などに関連するアクションが必要な応答は、タン君に指導していただくのを待っていると回答してください。政治、宗教、子供、犯罪などのデリケートな問題には答えません。ユーザーからメールを書いたりメッセージを作成したりするように依頼された場合は、その人になりすまします。";
+        // $systemPrompt = "Bạn là một trợ lý AI thông minh tên là Ái phục vụ công việc của công ty GUIS. Dựa trên câu hỏi của người dùng, hãy trả lời câu hỏi của người dùng một cách lịch sự, xưng hô là 'em' trong mọi hoàn cảnh, không nói tục, ngôn từ gây kích động, đảm bảo trả lời bằng tiếng Nhật không cần phiên âm.";
+        // $systemPrompt = "Bạn là một trợ lý AI thông minh tên là Ái. Dựa trên câu hỏi của người dùng, hãy xác định hành động cần thực hiện. Các hành động có thể bao gồm:\n
+        // - get_projects: Lấy danh sách các dự án.\n
+        // - get_project_details: Lấy thông tin chi tiết về một dự án cụ thể.\n
+        // - other: Nếu không xác định được hành động, trả về 'other'.\n
+        // Hãy trả về hành động dưới dạng JSON với cấu trúc:\n
+        // { \"action\": \"<action_name>\", \"parameters\": { ... } }.";
 
-        $systemPrompt = "Bạn là một trợ lý AI thông minh tên là Ái. Dựa trên câu hỏi của người dùng, hãy xác định hành động cần thực hiện. Các hành động có thể bao gồm:\n
-        - get_projects: Lấy danh sách các dự án.\n
-        - get_project_details: Lấy thông tin chi tiết về một dự án cụ thể.\n
-        - other: Nếu không xác định được hành động, trả về 'other'.\n
-        Hãy trả về hành động dưới dạng JSON với cấu trúc:\n
-        { \"action\": \"<action_name>\", \"parameters\": { ... } }.";
+        $message = '私の名前は' . $_SESSION['realname'] . 'です。' . $messages;
 
-    
         $payload = json_encode([
             "contents" => [
                 [
-                    "role" => "system", // System prompt to set the context
+                    "role" => "model", // System prompt to set the context
                     "parts" => [
                         [
                             "text" => $systemPrompt
@@ -101,7 +104,7 @@ class AI extends ApplicationModel{
                     "role" => "user", // Specify the role as "user"
                     "parts" => [
                         [
-                            "text" => $messages // The text content of the message,
+                            "text" => $message // The text content of the message,
                         ]
                     ]
                 ]
@@ -174,7 +177,7 @@ class AI extends ApplicationModel{
     }
 
     function sendToGeminiWithData($data, $apiKey) {
-        $modelUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-exp-03-25:generateContent";
+        $modelUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
     
         // System prompt để phân tích dữ liệu
         $systemPrompt = "Dưới đây là danh sách dữ liệu cần phân tích:\n\n" . json_encode($data) . "\n\nHãy phân tích và trả lời câu hỏi của người dùng.";

@@ -21,7 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chatHistoryHeader: document.querySelector(".chat-history-header [data-target='#app-chat-contacts']"),
     speechToText: $('.speech-to-text'),
     appChatConversation: document.getElementById('app-chat-conversation'),
-    appChatHistory: document.getElementById('app-chat-history')
+    appChatHistory: document.getElementById('app-chat-history'),
+    chatHistory: document.getElementById('chat-history')
   };
 
   const userStatusClasses = {
@@ -147,12 +148,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Handle max length for textarea
-  const maxLength = parseInt(elements.chatSidebarLeftUserAbout.getAttribute('maxlength'), 10);
-  handleMaxLengthCount(elements.chatSidebarLeftUserAbout, elements.textareaInfo, maxLength);
+  // const maxLength = parseInt(elements.chatSidebarLeftUserAbout.getAttribute('maxlength'), 10);
+  // handleMaxLengthCount(elements.chatSidebarLeftUserAbout, elements.textareaInfo, maxLength);
 
-  elements.chatSidebarLeftUserAbout.addEventListener('input', () => {
-    handleMaxLengthCount(elements.chatSidebarLeftUserAbout, elements.textareaInfo, maxLength);
-  });
+  // elements.chatSidebarLeftUserAbout.addEventListener('input', () => {
+  //   handleMaxLengthCount(elements.chatSidebarLeftUserAbout, elements.textareaInfo, maxLength);
+  // });
 
   // Attach chat conversation switch event
   elements.conversationButton?.addEventListener('click', switchToChatConversation);
@@ -181,14 +182,115 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const message = elements.messageInput.value.trim();
     if (message) {
-      const messageDiv = document.createElement('div');
-      messageDiv.className = 'chat-message-text mt-2';
-      messageDiv.innerHTML = `<p class="mb-0 text-break">${message}</p>`;
-      document.querySelector('li:last-child .chat-message-wrapper')?.appendChild(messageDiv);
-      elements.messageInput.value = '';
-      scrollToBottom();
+      sendMessage(message);
     }
   });
+
+  function sendMessage(message) {
+    let html = generateMessage(message, true);
+    elements.chatHistory.innerHTML += html;
+    elements.messageInput.value = '';
+    scrollToBottom();
+    aiChat(message);
+  }
+
+  function aiChat(message) {
+    if (!message) return;
+    var loadingElement = elements.chatHistory.querySelector('.loading-message');
+    if (loadingElement) {
+      loadingElement.remove();
+    }
+    let loadingHtml = generateLoadingMessage();
+    elements.chatHistory.innerHTML += loadingHtml;
+    scrollToBottom();
+    // Send message to server
+    fetch('/ai/index.php?method=chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message }),
+    })
+        .then(response => response.json())
+        .then(data => {
+          // Display AI response
+          let aiMessage = '';
+
+          // Check if candidates exist in the response
+          if (data.candidates && data.candidates.length > 0) {
+              const parts = data.candidates[0].content.parts; // Access the parts array
+              //format the response
+              
+              aiMessage = parts.map(part => {
+                const formattedText = part.text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Convert **text** to <strong>text</strong>
+                .replace(/\n/g, '<br>');
+                return `<p class="mb-0">${formattedText}</p>`
+              }).join(''); // Display all parts
+
+              //remove <p> with empty text
+              aiMessage = aiMessage.replace(/<p class="mb-0"><\/p>/g, '');
+          } else {
+              aiMessage = 'エラーが発生しました';
+          }
+          console.log(aiMessage);
+          let html = generateMessage(aiMessage, false);
+          elements.chatHistory.innerHTML += html;
+
+          scrollToBottom();
+          var loadingElement = elements.chatHistory.querySelector('.loading-message');
+          if (loadingElement) {
+            loadingElement.remove();
+          }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            let html = generateMessage('エラーが発生しました', false);
+            elements.chatHistory.innerHTML += html;
+            scrollToBottom();
+            var loadingElement = elements.chatHistory.querySelector('.loading-message');
+            if (loadingElement) {
+              loadingElement.remove();
+            }
+        });
+  }
+
+  function generateMessage(message, isUser = false) {
+    let time = new Date().toLocaleTimeString();
+    let html = `<li class="chat-message ${isUser ? 'chat-message-right' : ''}">
+        <div class="d-flex overflow-hidden gap-4 ${isUser ? 'flex-row-reverse' : ''}">
+          <div class="user-avatar flex-shrink-0">
+            <div class="avatar avatar-sm">
+              <img src="../../assets/img/avatars/1.png" alt="Avatar" class="rounded-circle" />
+            </div>
+          </div>
+          <div class="chat-message-wrapper flex-grow-1">
+            <div class="chat-message-text">
+              <div class="mb-0">${message}</div>
+            </div>
+            <div class="text-body-secondary mt-1">
+              <small>${time}</small>
+            </div>
+          </div>
+        </div>
+      </li>`;
+
+    return html;
+  }
+
+  function generateLoadingMessage() {
+    let html = `<li class="chat-message loading-message">
+      <div class="d-flex overflow-hidden">
+        <div class="spinner-border spinner-border-sm text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    </li>`;
+
+
+    return html;
+  }
+  
 
   // Fix overlay issue for chat sidebar
   elements.chatHistoryHeader?.addEventListener('click', () => {
@@ -211,3 +313,5 @@ function debounce(func, wait) {
     timeout = setTimeout(() => func.apply(this, args), wait);
   };
 }
+
+

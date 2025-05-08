@@ -7,7 +7,7 @@ class ApplicationView extends View {
 	var $user = array();
 	var $folder = array();
 	
-	function ApplicationView($hash = null) {
+	function __construct($hash = null) {
 	
 		if (isset($hash['group']) && is_array($hash['group'])) {
 			$this->group = $hash['group'];
@@ -55,12 +55,11 @@ class ApplicationView extends View {
 			$type = '';
 		}
 ?>
-		<select name="<?=$level?>_level" onchange="App.permitlevel(this, '<?=$level?>'<?=$type?>)"><?=$string?></select>&nbsp;
-		<span class="operator" id="<?=$level?>search" onclick="App.permitlevel(this, '<?=$level?>'<?=$type?>)"<?=$style?>>検索</span>
+		<div class="d-flex flex-column gap-2 mb-2"><select class="form-select" name="<?=$level?>_level" onchange="App.permitlevel(this, '<?=$level?>'<?=$type?>)"><?=$string?></select>
+		<span class="operator flex-shrink-0 btn btn-outline-primary" id="<?=$level?>search" onclick="App.permitlevel(this, '<?=$level?>'<?=$type?>)"<?=$style?>>検索</span></div>
 <?php
 		echo $this->parse($level, 'group', $data);
 		echo $this->parse($level, 'user', $data);
-		
 	}
 	
 	function parse($level, $type, $data) {
@@ -155,7 +154,7 @@ class ApplicationView extends View {
 		}
 ?>
 		<div class="folder">
-			<div class="foldercaption">カテゴリ</div>
+			<h5 class="foldercaption">カテゴリ</h5>
 			<ul class="folderlist">
 				<li<?=$current[0]?>><a href="<?=$url?>">トップ</a></li>
 <?php
@@ -169,7 +168,7 @@ class ApplicationView extends View {
 			</ul>
 <?php
 		if ($this->authorize('administrator', 'manager', 'editor')) {
-			echo '<div class="folderoperate"><a href="../folder/category.php?type='.$type.'">編集</a></div>';
+			echo '<div class="folderoperate"><a class="btn btn-primary" href="../folder/category.php?type='.$type.'">編集</a></div>';
 		}
 		echo '</div>';
 		

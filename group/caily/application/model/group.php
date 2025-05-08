@@ -81,6 +81,12 @@ class Group extends ApplicationModel {
 		
 	}
 
+	function getList() {
+		$query = "SELECT id, group_name FROM ".DB_PREFIX."group WHERE id <> ".RETIRE_GROUP." ORDER BY group_order,id";
+		$hash['list'] = $this->fetchAll($query);
+		return $hash;
+	}
+
 }
 
 ?>

@@ -5,19 +5,19 @@ class General extends ApplicationModel {
 	
 	function index() {
 		
-		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-			if (isset($_POST['timecard_open']) || isset($_POST['timecard_close']) || isset($_POST['timecard_interval'])) {
-				require_once(DIR_MODEL.'timecard.php');
-				$timecard = new Timecard;
-				$timecard->handler = $this->handler;
-				$timecard->add();
-			} elseif (isset($_POST['folder']) && $_POST['folder'] == 'complete') {
-				require_once(DIR_MODEL.'todo.php');
-				$todo = new Todo;
-				$todo->handler = $this->handler;
-				$todo->move();
-			}
-		}
+		// if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+		// 	if (isset($_POST['timecard_open']) || isset($_POST['timecard_close']) || isset($_POST['timecard_interval'])) {
+		// 		require_once(DIR_MODEL.'timecard.php');
+		// 		$timecard = new Timecard;
+		// 		$timecard->handler = $this->handler;
+		// 		$timecard->add();
+		// 	} elseif (isset($_POST['folder']) && $_POST['folder'] == 'complete') {
+		// 		require_once(DIR_MODEL.'todo.php');
+		// 		$todo = new Todo;
+		// 		$todo->handler = $this->handler;
+		// 		$todo->move();
+		// 	}
+		// }
 		$sessionuserid = $this->quote($_SESSION['userid']);
 		$hash['year'] = date('Y');
 		$hash['month'] = date('n');
@@ -36,9 +36,9 @@ class General extends ApplicationModel {
 		// $field = "*";
 		// $query = sprintf("SELECT %s FROM %sschedule WHERE %s ORDER BY schedule_allday,schedule_time,schedule_endtime", $field, DB_PREFIX, implode(" AND ", $where));
 		// $hash['schedule'] = $this->fetchAll($query);
-		// $field = "*";
-		// $query = sprintf("SELECT %s FROM %stimecard WHERE (timecard_date = '%s') AND (owner = '%s')", $field, DB_PREFIX, date('Y-m-d'), $sessionuserid);
-		// $hash['timecard'] = $this->fetchOne($query);
+		$field = "*";
+		$query = sprintf("SELECT %s FROM %stimecard WHERE (timecard_date = '%s') AND (owner = '%s')", $field, DB_PREFIX, date('Y-m-d'), $sessionuserid);
+		$hash['timecard'] = $this->fetchOne($query);
 		// $field = "*";
 		// $query = sprintf("SELECT %s FROM %stodo WHERE (owner = '%s') AND (todo_complete = 0) ORDER BY todo_noterm, todo_term", $field, DB_PREFIX, $sessionuserid);
 		// $hash['todo'] = $this->fetchLimit($query, 0, 5);

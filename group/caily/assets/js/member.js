@@ -7,9 +7,9 @@ var memberList = [];
 var dt_user = null;
 var groupList = [];
 var configList = [];
-var user_role = 'user';
-if (typeof userRole !== 'undefined') {
-  user_role = userRole;
+var user_role = 'member';
+if (typeof USER_ROLE !== 'undefined') {
+  user_role = USER_ROLE;
 }
 
 async function get_member() {
@@ -442,7 +442,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             },
             {
               targets: -1,
-              title: 'Actions',
+              title: '操作',
               searchable: false,
               orderable: false,
               render: (data, type, full, meta) => {
@@ -461,6 +461,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                       ${full['is_suspend'] == 1 ? `<a href="javascript:;" data-id="${full['id']}" data-realname="${full['realname']}" class="dropdown-item item-active">アクティブする</a>` : ''}
                       ${full['group_name'] != '退職者' ? `<a href="javascript:;" data-id="${full['id']}" data-realname="${full['realname']}" class="dropdown-item item-resign">退職者へ変更</a>` : ''}
                      <!-- <a href="javascript:;" data-id="${full['id']}" data-realname="${full['realname']}" class="dropdown-item item-delete">削除</a> -->
+                      <a href="javascript:;" data-id="${full['id']}" data-realname="${full['realname']}" class="dropdown-item item-change-password">パスワードを変更</a>
                       </div>
                   </div>
                   `;
@@ -592,6 +593,31 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           }else{
             showMessage(response.data.error, true);
           }
+        }
+
+        if (e.target.closest('.item-change-password')) {
+          e.preventDefault();
+          const id = e.target.closest('.item-change-password').dataset.id;
+          const realname = e.target.closest('.item-change-password').dataset.realname;
+          document.getElementById('change-password-id').value = id;
+          Swal.fire({
+            title: realname + 'さんのアカウントのパスワードを変更しますか？',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'はい、変更します',
+            cancelButtonText: 'キャンセル',
+            customClass: {
+              confirmButton: 'btn btn-primary',
+              cancelButton: 'btn btn-label-secondary'
+            },
+            buttonsStyling: false
+          }).then(function (result) {
+            if (result.value) {
+              const changePasswordModal = new bootstrap.Modal(document.getElementById('modalChangePassword'));
+              changePasswordModal.show();
+            }
+          });
+          
         }
 
         if (e.target.closest('.item-suspend')) {
@@ -1046,6 +1072,57 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           .catch(function (error) {
             handleErrors(error);
             $('#modalEditUser').modal('hide');
+          });
+      }
+    });
+  });
+
+  const changePasswordForm = document.getElementById('changePasswordForm');
+  const fvChangePassword = FormValidation.formValidation(changePasswordForm, {
+    fields: {
+      password: {
+        validators: {
+          notEmpty: {
+            message: 'パスワードを入力してください'
+          },
+          stringLength: {
+            min: 6,
+            message: '6文字以上入力してください'
+          }
+        }
+      }
+    },
+    plugins: {
+      trigger: new FormValidation.plugins.Trigger(),
+      bootstrap5: new FormValidation.plugins.Bootstrap5({
+        eleValidClass: '',
+        rowSelector: '.form-control-validation'
+      }),
+    },
+  });
+  changePasswordForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    fvChangePassword.validate().then(function (status) {
+      if (status === 'Valid') {
+        displayHourglass();
+        const formData = new FormData(changePasswordForm);
+        axios.post('/api/index.php?model=member&method=change_password_api', formData)
+          .then(function (response) {
+            if (response.status === 200 && response.data && response.data.status === 'success') {
+              showMessage('パスワードを変更しました');
+              changePasswordForm.reset();
+            } else {
+              if(response.data.message_code){
+                showMessage(response.data.message_code, true);
+              }else{
+                showMessage('パスワードを変更できませんでした', true);
+              }
+            }
+            $('#modalChangePassword').modal('hide'); 
+          })
+          .catch(function (error) {
+            handleErrors(error);
+            $('#modalChangePassword').modal('hide');
           });
       }
     });

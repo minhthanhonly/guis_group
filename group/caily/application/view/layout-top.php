@@ -27,13 +27,33 @@
             <!-- Dashboards -->
             <li class="menu-item <?php if($directory == 'top') echo 'active'; ?>">
               <a href="<?=$root?>" class="menu-link">
-                <i class="menu-icon icon-base ti tabler-smart-home"></i>
+                <i class="menu-icon icon-base ti tabler-home"></i>
                 <div data-i18n="ホーム">ホーム</div>
                 <!-- <div class="badge text-bg-danger rounded-pill ms-auto">5</div> -->
               </a>
             </li>
 
             <!-- Layouts -->
+            <li class="menu-item <?php if($directory == 'project') echo 'active open'; ?>">
+              <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base ti tabler-briefcase"></i>
+                <div>プロジェクト</div>
+              </a>
+              <ul class="menu-sub">
+                <li class="menu-item <?php if($directory == 'project' && $page == 'index') echo 'active'; ?>">
+                  <a href="<?=$root?>project/" class="menu-link" data-pjax>
+                    <div>一覧</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php if($directory == 'project' && $page == 'task') echo 'active'; ?>">
+                  <a href="<?=$root?>project/task.php" class="menu-link" data-pjax>
+                    <div>マイタスク</div>
+                  </a>
+                </li>
+              </ul>
+            </li>
+
+            <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager'){ ?>
             <li class="menu-item <?php if($directory == 'timecard') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base ti tabler-calendar"></i>
@@ -46,25 +66,30 @@
                     <div>タイムカード</div>
                   </a>
                 </li>
+                <?php if($_SESSION['authority'] == 'administrator'){ ?>
                 <li class="menu-item <?php if($directory == 'timecard' && $page == 'holiday') echo 'active'; ?>">
                   <a href="<?=$root?>timecard/holiday.php" class="menu-link" data-pjax>
                     <div>休日設定</div>
                   </a>
                 </li>
+                <?php } ?>
+                <?php if($_SESSION['authority'] == 'administrator'){ ?>
                 <li class="menu-item <?php if($directory == 'timecard' && ($page == 'config' || $page == 'add_config')) echo 'active'; ?>">
                   <a href="<?=$root?>timecard/config.php" class="menu-link" data-pjax>
                     <div>タイムカード設定</div>
                   </a>
                 </li>
+                <?php } ?>
+                <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager'){ ?>
                 <li class="menu-item <?php if($directory == 'timecard' && $page == 'group') echo 'active'; ?>">
                   <a href="<?=$root?>timecard/group.php" class="menu-link" data-pjax>
                     <div>時間合計</div>
                   </a>
                 </li>
+                <?php } ?>
               </ul>
             </li>
-
-            <li class="menu-item <?php if($directory == 'member') echo 'active open'; ?>">
+            <li class="menu-item <?php if($directory == 'member' || $directory == 'administration') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base ti tabler-users"></i>
                 <div>メンバー</div>
@@ -75,16 +100,18 @@
                     <div>一覧</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'member' && $page == 'config') echo 'active'; ?>">
-                  <a href="<?=$root?>member/config.php" class="menu-link" data-pjax>
-                    <div>設定</div>
+                <?php if($_SESSION['authority'] == 'administrator'){ ?>
+                <li class="menu-item <?php if($directory == 'administration') echo 'active'; ?>">
+                  <a href="<?=$root?>group/" class="menu-link" data-pjax>
+                    <div>グループ設定</div>
                   </a>
                 </li>
+                <?php } ?>
               </ul>
             </li>
-            <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
+            <li class="menu-item <?php if($directory == 'addressbook' || $directory == 'folder') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base ti tabler-users"></i>
+                <i class="menu-icon icon-base ti tabler-address-book"></i>
                 <div>アドレス帳</div>
               </a>
               <ul class="menu-sub">
@@ -93,7 +120,7 @@
                     <div>一覧</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'folder' && $page == 'category') echo 'active'; ?>">
+                <li class="menu-item <?php if($directory == 'addressbook' && str_contains($page, 'category')) echo 'active'; ?>">
                   <a href="<?=$root?>folder/category.php?type=addressbook" class="menu-link" data-pjax>
                     <div>カテゴリ管理</div>
                   </a>
@@ -101,25 +128,37 @@
               </ul>
             </li>
 
-            <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
-              <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base ti tabler-users"></i>
-                <div>スケジュール</div>
-              </a>
-              <ul class="menu-sub">
-                <li class="menu-item <?php if($directory == 'schedule' && $page == 'index') echo 'active'; ?>">
-                  <a href="<?=$root?>schedule/" class="menu-link" data-pjax>
-                    <div>カレンダー</div>
-                  </a>
-                </li>
-                <li class="menu-item <?php if($directory == 'schedule' && $page == 'groupweek') echo 'active'; ?>">
-                  <a href="<?=$root?>schedule/groupweek.php" class="menu-link" data-pjax>
-                    <div>グループ</div>
-                  </a>
-                </li>
-              </ul>
-            </li>
+            <?php } ?>
 
+            <?php if($_SESSION['authority'] != 'administrator' && $_SESSION['authority'] != 'manager'){ 
+              // member menu
+              ?>
+              <li class="menu-item <?php if($directory == 'timecard') echo 'active'; ?>">
+                <a href="<?=$root?>timecard/" class="menu-link">
+                  <i class="menu-icon icon-base ti tabler-calendar"></i>
+                  <div data-i18n="タイムカード">タイムカード</div>
+                </a>
+              </li>
+              <li class="menu-item <?php if($directory == 'member') echo 'active'; ?>">
+                <a href="<?=$root?>member/" class="menu-link">
+                  <i class="menu-icon icon-base ti tabler-users"></i>
+                  <div data-i18n="メンバー">メンバー</div>
+                </a>
+              </li>
+              <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
+                <a href="<?=$root?>addressbook/" class="menu-link">
+                  <i class="menu-icon icon-base ti tabler-address-book"></i>
+                  <div>アドレス帳</div>
+                </a>
+              </li>
+            <?php } ?>
+
+            <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
+              <a href="<?=$root?>schedule/" class="menu-link">
+                <i class="menu-icon icon-base ti tabler-calendar-event"></i>
+                <div>カレンダー</div>
+              </a>
+            </li>
           </ul>
         </aside>
 
@@ -158,7 +197,7 @@
 
               <ul class="navbar-nav flex-row align-items-center ms-md-auto">
                 <!-- Style Switcher -->
-                <li class="nav-item dropdown">
+                <li class="nav-item dropdown me-3 me-xl-2">
                   <a
                     class="nav-link dropdown-toggle hide-arrow btn btn-icon btn-text-secondary rounded-pill"
                     id="nav-theme"
@@ -208,7 +247,7 @@
                 <!-- / Style Switcher-->
 
                 <!-- Quick links  -->
-                <!-- <li class="nav-item dropdown-shortcuts navbar-dropdown dropdown">
+                <li class="nav-item dropdown-shortcuts navbar-dropdown dropdown me-3 me-xl-2">
                   <a
                     class="nav-link dropdown-toggle hide-arrow btn btn-icon btn-text-secondary rounded-pill"
                     href="javascript:void(0);"
@@ -220,86 +259,66 @@
                   <div class="dropdown-menu dropdown-menu-end p-0">
                     <div class="dropdown-menu-header border-bottom">
                       <div class="dropdown-header d-flex align-items-center py-3">
-                        <h6 class="mb-0 me-auto">Shortcuts</h6>
-                        <a
-                          href="javascript:void(0)"
-                          class="dropdown-shortcuts-add py-2 btn btn-text-secondary rounded-pill btn-icon"
-                          data-bs-toggle="tooltip"
-                          data-bs-placement="top"
-                          title="Add shortcuts"
-                          ><i class="icon-base ti tabler-plus icon-20px text-heading"></i
-                        ></a>
+                        <h6 class="mb-0 me-auto">ショートカット</h6>
+                        
                       </div>
                     </div>
                     <div class="dropdown-shortcuts-list scrollable-container">
-                      <div class="row row-bordered overflow-visible g-0">
+                      <div class="row row-bordered overflow-visible">
                         <div class="dropdown-shortcuts-item col">
                           <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                            <i class="icon-base ti tabler-calendar icon-26px text-heading"></i>
+                            <i class="icon-base ti tabler-tool icon-26px text-heading"></i>
                           </span>
-                          <a href="app-calendar.html" class="stretched-link">Calendar</a>
-                          <small>Appointments</small>
+                          <a href="http://tools.caily.com.vn/?lang=ja" target="_blank" class="stretched-link">CAILYツール</a>
                         </div>
                         <div class="dropdown-shortcuts-item col">
                           <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                            <i class="icon-base ti tabler-file-dollar icon-26px text-heading"></i>
+                            <i class="icon-base ti tabler-server icon-26px text-heading"></i>
                           </span>
-                          <a href="app-invoice-list.html" class="stretched-link">Invoice App</a>
-                          <small>Manage Accounts</small>
-                        </div>
-                      </div>
-                      <div class="row row-bordered overflow-visible g-0">
-                        <div class="dropdown-shortcuts-item col">
-                          <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                            <i class="icon-base ti tabler-user icon-26px text-heading"></i>
-                          </span>
-                          <a href="app-user-list.html" class="stretched-link">User App</a>
-                          <small>Manage Users</small>
-                        </div>
-                        <div class="dropdown-shortcuts-item col">
-                          <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                            <i class="icon-base ti tabler-users icon-26px text-heading"></i>
-                          </span>
-                          <a href="app-access-roles.html" class="stretched-link">Role Management</a>
-                          <small>Permission</small>
-                        </div>
-                      </div>
-                      <div class="row row-bordered overflow-visible g-0">
-                        <div class="dropdown-shortcuts-item col">
-                          <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                            <i class="icon-base ti tabler-device-desktop-analytics icon-26px text-heading"></i>
-                          </span>
-                          <a href="index.html" class="stretched-link">Dashboard</a>
-                          <small>User Dashboard</small>
-                        </div>
-                        <div class="dropdown-shortcuts-item col">
-                          <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                            <i class="icon-base ti tabler-settings icon-26px text-heading"></i>
-                          </span>
-                          <a href="pages-account-settings-account.html" class="stretched-link">Setting</a>
-                          <small>Account Settings</small>
-                        </div>
-                      </div>
-                      <div class="row row-bordered overflow-visible g-0">
-                        <div class="dropdown-shortcuts-item col">
-                          <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                            <i class="icon-base ti tabler-help-circle icon-26px text-heading"></i>
-                          </span>
-                          <a href="pages-faq.html" class="stretched-link">FAQs</a>
-                          <small>FAQs & Articles</small>
-                        </div>
-                        <div class="dropdown-shortcuts-item col">
-                          <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                            <i class="icon-base ti tabler-square icon-26px text-heading"></i>
-                          </span>
-                          <a href="modal-examples.html" class="stretched-link">Modals</a>
-                          <small>Useful Popups</small>
+                          <a href="http://caily.ddns.net:9000/" target="_blank" class="stretched-link">CAILY NAS</a>
                         </div>
                       </div>
                     </div>
                   </div>
-                </li> -->
+                </li>
                 <!-- Quick links -->
+
+                <!-- Change log -->
+                <li class="nav-item dropdown-notifications navbar-dropdown dropdown me-3 me-xl-2">
+                  <a
+                    class="nav-link dropdown-toggle hide-arrow btn btn-icon btn-text-secondary rounded-pill"
+                    href="javascript:void(0);"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false">
+                    <i class="icon-base ti tabler-history icon-22px text-heading"></i>
+                  </a>
+                  <ul class="dropdown-menu dropdown-menu-end p-0">
+                    <li class="dropdown-menu-header border-bottom">
+                      <div class="dropdown-header d-flex align-items-center py-3">
+                        <h6 class="mb-0 me-auto">変更履歴</h6>
+                      </div>
+                    </li>
+                    <li class="dropdown-notifications-list scrollable-container">
+                      <ul class="list-group list-group-flush">
+                        <li class="list-group-item list-group-item-action dropdown-notifications-item">
+                          <div class="d-flex">
+                            <div class="flex-grow-1">
+                              <h6 class="small mb-1">2025年5月21日</h6>
+                              <small class="mb-1 d-block text-body">
+                                <ul>
+                                  <li>
+                                    <p>UIを変更しました。</p>
+                                  </li>
+                                </ul>
+                              </small>
+                            </div>
+                          </div>
+                        </li>
+                      </ul>
+                    </li>
+                  </ul>
+                </li>
 
                 <!-- Notification -->
                 <li class="nav-item dropdown-notifications navbar-dropdown dropdown me-3 me-xl-2">
@@ -317,7 +336,7 @@
                   <ul class="dropdown-menu dropdown-menu-end p-0">
                     <li class="dropdown-menu-header border-bottom">
                       <div class="dropdown-header d-flex align-items-center py-3">
-                        <h6 class="mb-0 me-auto">Notification</h6>
+                        <h6 class="mb-0 me-auto">通知</h6>
                         <div class="d-flex align-items-center h6 mb-0">
                           <!-- <span class="badge bg-label-primary me-2">8 New</span> -->
                           <a
@@ -341,8 +360,8 @@
                               </div>
                             </div>
                             <div class="flex-grow-1">
-                              <h6 class="small mb-1">No items 🎉</h6>
-                              <small class="mb-1 d-block text-body">under contruction...</small>
+                              <h6 class="small mb-1">通知はありません 🎉</h6>
+                              <small class="mb-1 d-block text-body">作成中...</small>
                               <!-- <small class="text-body-secondary">1h ago</small> -->
                             </div>
                             <div class="flex-shrink-0 dropdown-notifications-actions">
@@ -355,198 +374,13 @@
                             </div>
                           </div>
                         </li>
-                        <!-- <li class="list-group-item list-group-item-action dropdown-notifications-item">
-                          <div class="d-flex">
-                            <div class="flex-shrink-0 me-3">
-                              <div class="avatar">
-                                <span class="avatar-initial rounded-circle bg-label-danger">CF</span>
-                              </div>
-                            </div>
-                            <div class="flex-grow-1">
-                              <h6 class="mb-1 small">Charles Franklin</h6>
-                              <small class="mb-1 d-block text-body">Accepted your connection</small>
-                              <small class="text-body-secondary">12hr ago</small>
-                            </div>
-                            <div class="flex-shrink-0 dropdown-notifications-actions">
-                              <a href="javascript:void(0)" class="dropdown-notifications-read"
-                                ><span class="badge badge-dot"></span
-                              ></a>
-                              <a href="javascript:void(0)" class="dropdown-notifications-archive"
-                                ><span class="icon-base ti tabler-x"></span
-                              ></a>
-                            </div>
-                          </div>
-                        </li>
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                          <div class="d-flex">
-                            <div class="flex-shrink-0 me-3">
-                              <div class="avatar">
-                                <img src="<?=$root?>assets/img/avatars/2.png" alt class="rounded-circle" />
-                              </div>
-                            </div>
-                            <div class="flex-grow-1">
-                              <h6 class="mb-1 small">New Message ✉️</h6>
-                              <small class="mb-1 d-block text-body">You have new message from Natalie</small>
-                              <small class="text-body-secondary">1h ago</small>
-                            </div>
-                            <div class="flex-shrink-0 dropdown-notifications-actions">
-                              <a href="javascript:void(0)" class="dropdown-notifications-read"
-                                ><span class="badge badge-dot"></span
-                              ></a>
-                              <a href="javascript:void(0)" class="dropdown-notifications-archive"
-                                ><span class="icon-base ti tabler-x"></span
-                              ></a>
-                            </div>
-                          </div>
-                        </li>
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item">
-                          <div class="d-flex">
-                            <div class="flex-shrink-0 me-3">
-                              <div class="avatar">
-                                <span class="avatar-initial rounded-circle bg-label-success"
-                                  ><i class="icon-base ti tabler-shopping-cart"></i
-                                ></span>
-                              </div>
-                            </div>
-                            <div class="flex-grow-1">
-                              <h6 class="mb-1 small">Whoo! You have new order 🛒</h6>
-                              <small class="mb-1 d-block text-body">ACME Inc. made new order $1,154</small>
-                              <small class="text-body-secondary">1 day ago</small>
-                            </div>
-                            <div class="flex-shrink-0 dropdown-notifications-actions">
-                              <a href="javascript:void(0)" class="dropdown-notifications-read"
-                                ><span class="badge badge-dot"></span
-                              ></a>
-                              <a href="javascript:void(0)" class="dropdown-notifications-archive"
-                                ><span class="icon-base ti tabler-x"></span
-                              ></a>
-                            </div>
-                          </div>
-                        </li>
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                          <div class="d-flex">
-                            <div class="flex-shrink-0 me-3">
-                              <div class="avatar">
-                                <img src="<?=$root?>assets/img/avatars/9.png" alt class="rounded-circle" />
-                              </div>
-                            </div>
-                            <div class="flex-grow-1">
-                              <h6 class="mb-1 small">Application has been approved 🚀</h6>
-                              <small class="mb-1 d-block text-body"
-                                >Your ABC project application has been approved.</small
-                              >
-                              <small class="text-body-secondary">2 days ago</small>
-                            </div>
-                            <div class="flex-shrink-0 dropdown-notifications-actions">
-                              <a href="javascript:void(0)" class="dropdown-notifications-read"
-                                ><span class="badge badge-dot"></span
-                              ></a>
-                              <a href="javascript:void(0)" class="dropdown-notifications-archive"
-                                ><span class="icon-base ti tabler-x"></span
-                              ></a>
-                            </div>
-                          </div>
-                        </li>
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                          <div class="d-flex">
-                            <div class="flex-shrink-0 me-3">
-                              <div class="avatar">
-                                <span class="avatar-initial rounded-circle bg-label-success"
-                                  ><i class="icon-base ti tabler-chart-pie"></i
-                                ></span>
-                              </div>
-                            </div>
-                            <div class="flex-grow-1">
-                              <h6 class="mb-1 small">Monthly report is generated</h6>
-                              <small class="mb-1 d-block text-body">July monthly financial report is generated </small>
-                              <small class="text-body-secondary">3 days ago</small>
-                            </div>
-                            <div class="flex-shrink-0 dropdown-notifications-actions">
-                              <a href="javascript:void(0)" class="dropdown-notifications-read"
-                                ><span class="badge badge-dot"></span
-                              ></a>
-                              <a href="javascript:void(0)" class="dropdown-notifications-archive"
-                                ><span class="icon-base ti tabler-x"></span
-                              ></a>
-                            </div>
-                          </div>
-                        </li>
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                          <div class="d-flex">
-                            <div class="flex-shrink-0 me-3">
-                              <div class="avatar">
-                                <img src="<?=$root?>assets/img/avatars/5.png" alt class="rounded-circle" />
-                              </div>
-                            </div>
-                            <div class="flex-grow-1">
-                              <h6 class="mb-1 small">Send connection request</h6>
-                              <small class="mb-1 d-block text-body">Peter sent you connection request</small>
-                              <small class="text-body-secondary">4 days ago</small>
-                            </div>
-                            <div class="flex-shrink-0 dropdown-notifications-actions">
-                              <a href="javascript:void(0)" class="dropdown-notifications-read"
-                                ><span class="badge badge-dot"></span
-                              ></a>
-                              <a href="javascript:void(0)" class="dropdown-notifications-archive"
-                                ><span class="icon-base ti tabler-x"></span
-                              ></a>
-                            </div>
-                          </div>
-                        </li>
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item">
-                          <div class="d-flex">
-                            <div class="flex-shrink-0 me-3">
-                              <div class="avatar">
-                                <img src="<?=$root?>assets/img/avatars/6.png" alt class="rounded-circle" />
-                              </div>
-                            </div>
-                            <div class="flex-grow-1">
-                              <h6 class="mb-1 small">New message from Jane</h6>
-                              <small class="mb-1 d-block text-body">Your have new message from Jane</small>
-                              <small class="text-body-secondary">5 days ago</small>
-                            </div>
-                            <div class="flex-shrink-0 dropdown-notifications-actions">
-                              <a href="javascript:void(0)" class="dropdown-notifications-read"
-                                ><span class="badge badge-dot"></span
-                              ></a>
-                              <a href="javascript:void(0)" class="dropdown-notifications-archive"
-                                ><span class="icon-base ti tabler-x"></span
-                              ></a>
-                            </div>
-                          </div>
-                        </li>
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                          <div class="d-flex">
-                            <div class="flex-shrink-0 me-3">
-                              <div class="avatar">
-                                <span class="avatar-initial rounded-circle bg-label-warning"
-                                  ><i class="icon-base ti tabler-alert-triangle"></i
-                                ></span>
-                              </div>
-                            </div>
-                            <div class="flex-grow-1">
-                              <h6 class="mb-1 small">CPU is running high</h6>
-                              <small class="mb-1 d-block text-body"
-                                >CPU Utilization Percent is currently at 88.63%,</small
-                              >
-                              <small class="text-body-secondary">5 days ago</small>
-                            </div>
-                            <div class="flex-shrink-0 dropdown-notifications-actions">
-                              <a href="javascript:void(0)" class="dropdown-notifications-read"
-                                ><span class="badge badge-dot"></span
-                              ></a>
-                              <a href="javascript:void(0)" class="dropdown-notifications-archive"
-                                ><span class="icon-base ti tabler-x"></span
-                              ></a>
-                            </div>
-                          </div>
-                        </li> -->
+                       
                       </ul>
                     </li>
                     <li class="border-top">
                       <div class="d-grid p-4">
                         <a class="btn btn-primary btn-sm d-flex" href="javascript:void(0);">
-                          <small class="align-middle">View all notifications</small>
+                          <small class="align-middle">すべての通知を表示</small>
                         </a>
                       </div>
                     </li>
@@ -627,18 +461,18 @@
 
           <!-- / Navbar -->
           <!-- AI Chat Widget -->
-          <!-- <div id="ai-chat-widget" style="position: fixed; z-index: 9999; bottom: 20px; right: 20px; width: 300px; height: 400px; background: white; border: 1px solid #ccc; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); display: none; flex-direction: column;">
-              <div id="ai-chat-header" style="background: #007bff; color: white; padding: 10px; cursor: pointer; border-top-left-radius: 10px; border-top-right-radius: 10px;">
-                  AI Assistant
-                  <span id="ai-chat-close" style="float: right; cursor: pointer;">&times;</span>
-              </div>
-              <div id="ai-chat-body" style="flex: 1; padding: 10px; overflow-y: auto;"></div>
-              <div id="ai-chat-footer" style="padding: 10px; border-top: 1px solid #ccc;">
-                  <input id="ai-chat-input" type="text" placeholder="Type a message..." style="width: calc(100% - 50px); padding: 5px;" />
-                  <button id="ai-chat-send" style="width: 40px; background: #007bff; color: white; border: none; border-radius: 5px;">Send</button>
+          <div class="modal fade" id="modalAI" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-simple modal-dialog-centered modal-chat-w">
+              <div class="modal-content p-0">
+                <div class="modal-body1">
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                  <?php include_once $_SERVER['DOCUMENT_ROOT'].'/chat.php'; ?>
+                </div>
               </div>
             </div>
-          <button id="ai-chat-toggle" style="position: fixed; z-index: 9998; bottom: 20px; right: 20px; background: #007bff; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">AI</button> -->
+          </div>
+
+          <button  data-bs-toggle="modal" data-bs-target="#modalAI" id="ai-chat-toggle" class="btn btn-primary rounded-circle position-fixed"><i class="icon-base ti tabler-message-circle-2 icon-md"></i></button>
           <!-- Content wrapper -->
           <div class="content-wrapper">
 

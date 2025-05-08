@@ -126,8 +126,13 @@ class Timecard extends ApplicationModel {
 		}
 
 
-		$hash['config'] = $this->getConfigStatus();
+		$hash['config'] = $this->getConfigStatusByUser($hash['owner']['userid']);
 		return $hash;
+	}
+
+	function getConfigStatusByUser($userid){
+		$config = new Config($this->handler);
+		return $config->getConfigTimeCardByUser($userid);
 	}
 
 	/*API*/
@@ -272,7 +277,7 @@ class Timecard extends ApplicationModel {
 		}
 		if($userName == ''){
 			$hash['status'] = 'error';
-			$hash['message_code'] = '22';
+			$hash['message_code'] = 'ユーザーが見つかりません。';
 			return $hash;
 		}
 		$thisDay = date('j');
@@ -292,10 +297,10 @@ class Timecard extends ApplicationModel {
 				$sql02 = "UPDATE `groupware_timecard` SET timecard_open = '$hour', timecard_originalopen = '$hour' WHERE id = $timecard_id";
 				$this->query($sql02);
 				$hash['status'] = 'success';
-				$hash['message_code'] = '21';
+				$hash['message_code'] = '完了しました。';
 			} else{
 				$hash['status'] = 'error';
-				$hash['message_code'] = '22';
+				$hash['message_code'] = 'エラーが発生しました。';
 			}
 		} else{
 			$sql = "INSERT INTO `groupware_timecard` (`timecard_year`, `timecard_month`, `timecard_day`, `timecard_date`, `owner`, `created`, `timecard_open` , `timecard_originalopen`) 
@@ -304,11 +309,11 @@ class Timecard extends ApplicationModel {
 			$timecard_id = $this->insertid();
 			if ($timecard_id != 0) {
 				$hash['status'] = 'success';
-				$hash['message_code'] = '21';
+				$hash['message_code'] = '完了しました。';
 			}
 			else{
 				$hash['status'] = 'error';
-				$hash['message_code'] = '22';
+				$hash['message_code'] = 'エラーが発生しました。';
 			}
 		}
 
@@ -325,7 +330,7 @@ class Timecard extends ApplicationModel {
 		}
 		if($userName == ''){
 			$hash['status'] = 'error';
-			$hash['message_code'] = '22';
+			$hash['message_code'] = 'ユーザーが見つかりません。';
 			return $hash;
 		}
 		$id = $_POST['id'];
@@ -333,19 +338,19 @@ class Timecard extends ApplicationModel {
 
 		if($userName == '' || $id == '' || $open == ''){
 			$hash['status'] = 'error';
-			$hash['message_code'] = '22';
+			$hash['message_code'] = 'ユーザーが見つかりません。';
 			return $hash;
 		}
 		$hour = date("H:i");
 		$result = $this->sumAdd($open, $hour, date("Y-m-d"), $userName);
 		$query = sprintf("UPDATE %stimecard SET timecard_close = '%s', timecard_originalclose = '%s', timecard_time = '%s', timecard_timeover = '%s', timecard_timeinterval = '%s', update_time='%s' WHERE id = %s", DB_PREFIX, $hour, $hour, $result["timecard_time"], $result["timecard_timeover"], $result["timecard_timeinterval"], date('Y-m-d H:i:s'), $id);
-		$data = $this->query($query);
-		if(count($data) > 0){
+		$data = $this->update_query($query);
+		if($data > 0){
 			$hash['status'] = 'success';
-			$hash['message_code'] = '23';
+			$hash['message_code'] = '完了しました。';
 		} else{
 			$hash['status'] = 'error';
-			$hash['message_code'] = '22';
+			$hash['message_code'] = 'エラーが発生しました。';
 		}
 		return $hash;
 	}
@@ -381,7 +386,93 @@ class Timecard extends ApplicationModel {
 		$hash['list'] = $this->fetchAll($query);
 		$hash['list'] = $this->recalculate($hash['list']);
 		$hash['status'] = 'success';
-		$hash['message_code'] = '25';
+		$hash['message_code'] = '再計算しました';
+		return $hash;
+	}
+
+	function edit_timecard(){
+		$date = $_POST['date'];
+		$userid = $_POST['userid'];
+		$open = $_POST['timecard_open'];
+		$close = $_POST['timecard_close'];
+		$comment = $_POST['timecard_comment'];
+
+		$column = ['timecard_open', 'timecard_close', 'timecard_comment'];
+		$array = [];
+		foreach($_POST as $key => $value){
+			if(in_array($key, $column)){
+				$array[$key] = $value;
+			}
+		}
+		//check if the timecard is already exists
+		$query = sprintf("SELECT id FROM %stimecard WHERE timecard_date = '%s' AND owner = '%s'", DB_PREFIX, $date, $userid);
+		$data = $this->fetchAll($query);
+		$owner = $userid;
+		$array['owner'] = $owner;
+
+		if($array['timecard_close'] != ''){
+			$result = $this->sumAdd($array['timecard_open'], $array['timecard_close'], $date, $userid);
+			$array['timecard_time'] = $result['timecard_time'];
+			$array['timecard_timeover'] = $result['timecard_timeover'];
+			$array['timecard_timeinterval'] = $result['timecard_timeinterval'];
+		} else{
+			$array['timecard_time'] = '';
+			$array['timecard_timeover'] = '';
+			$array['timecard_timeinterval'] = '';
+		}
+		
+		if(count($data) > 0){
+			$array['updated'] = date('Y-m-d H:i:s');
+			$array['editor'] = $_SESSION['userid'];
+			$id = $data[0]['id'];
+			$term = '';
+			foreach($array as $key => $value){
+				$term .= $key . " = '" . $value . "', ";
+			}
+			$term = rtrim($term, ', ');
+			$query = sprintf("UPDATE %stimecard SET %s WHERE id = %s", DB_PREFIX, $term , $id);
+			$response = $this->query($query);
+		} else{
+			$dateStr = date('Y-m-d', strtotime($date));
+			$array['timecard_year'] = date('Y', strtotime($dateStr));
+			$array['timecard_month'] = date('n', strtotime($dateStr));
+			$array['timecard_day'] = date('j', strtotime($dateStr));
+			$array['timecard_date'] = $date;
+			$array['created'] = date('Y-m-d H:i:s');
+			$array['timecard_originalopen'] = $open;
+			$array['timecard_originalclose'] = $close;
+			$keys = implode(',', array_keys($array));
+			$values = implode(',', array_values($array));
+			$query = sprintf("INSERT INTO %stimecard (%s) VALUES (%s)", DB_PREFIX, $keys, $values);
+			$response = $this->query($query);
+		}	
+		if($response){
+			$hash['status'] = 'success';
+			$hash['message_code'] = '更新しました';
+		}else{
+			$hash['status'] = 'error';
+			$hash['message_code'] = '更新に失敗しました';
+		}
+		return $hash;
+	}
+
+	function get_timecard_by_id() {
+		$date = $_POST['date'];
+		$userid = $_POST['userid'];
+		if(!$date || !$userid){
+			$hash['status'] = 'error';
+			$hash['message_code'] = 'データが見つかりません。';
+			return $hash;
+		}
+		$query = sprintf("SELECT * FROM %stimecard WHERE timecard_date = '%s' AND owner = '%s'", DB_PREFIX, $date, $userid);
+		$data = $this->fetchOne($query);
+		if(count($this->error) > 0){
+			$hash['status'] = 'error';
+			$hash['message_code'] = $this->error;
+			return $hash;
+		}
+		$hash['data'] = $data;
+		$hash['status'] = 'success';
 		return $hash;
 	}
 

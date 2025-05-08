@@ -3,12 +3,18 @@
 var isSameUser = false;
 var dt_table = null
 var timecard_start_date = $('html').attr('data-timecard-start');
+var USER_LIST = [];
+var GROUP_LIST = [];
 var sum = {
   timecard_time: 0,
   timecard_timeover: 0,
   timecard_timeholiday: 0,
   work_days: 0,
   total_days: 0
+}
+var user_role = 'member';
+if (typeof USER_ROLE !== 'undefined') {
+  user_role = USER_ROLE;
 }
 var holidayList = [];
 
@@ -24,6 +30,11 @@ function updateAnalytics(data){
   work_days.innerHTML = `${data.work_days} / ${data.total_days}`;
 }
 
+function findUsername(userid){
+  const user = USER_LIST.find(user => user.userid === userid);
+  return user ? user.realname : userid;
+}
+
 async function get_timecard(user, year, month) {
   holidayList = [];
   isSameUser = false;
@@ -35,6 +46,14 @@ async function get_timecard(user, year, month) {
     total_days: 0
   }
   const response = await axios.get(`/api/index.php?model=timecard&method=timecardlist&member=${user}&year=${year}&month=${month}`);
+  const timcard_type = document.getElementById('timecard_type');
+  const timecard_title = document.getElementById('timecard_title');
+  if(timcard_type && response.data.config){
+    timcard_type.innerHTML = response.data.config.config_name;
+  }
+  if(timecard_title && response.data.owner){
+    timecard_title.innerHTML = response.data.owner.realname;
+  }
   // check if the response is successful
   if (response.status !== 200 || !response.data || !response.data.list) {
     handleErrors(response.data);
@@ -125,54 +144,121 @@ async function get_users() {
   if (response.status !== 200 || !response.data || !response.data.list) {
     handleErrors(response.data);
   }
-  // loop through the day in that month, check if not exist then add it
-  const list = response.data.list;
-  return list;
+ 
+  return response.data.list;
 }
 
-async function fetchUser(){
+async function get_groups() {
+  const response = await axios.get(`/api/index.php?model=group&method=getList`);
+  // check if the response is successful
+  if (response.status !== 200 || !response.data || !response.data.list) {
+    handleErrors(response.data);
+  }
+  response.data.list;
+  return response.data.list;
+}
+
+async function fetchUser(group_id){
   const slUser = document.getElementById('selectpickerUser');
+
+  if(!slUser){
+    return;
+  }
+
+  // Destroy existing selectpicker before clearing innerHTML
+  $(slUser).selectpicker('destroy');
+  
   slUser.innerHTML = '';
-  const userList = await get_users();
+  if(USER_LIST.length == 0){
+    USER_LIST = await get_users();
+  }
   const currentUser = slUser.getAttribute('data-current-user');
-  userList.forEach(user => {
-    // check if the user is the current user
-    if (currentUser === user.userid) {
-      slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}" selected>${user.realname}</option>`;
-    } else{
-      slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}">${user.realname}</option>`;
+  USER_LIST.forEach(user => {
+    if(group_id == user.user_group){
+      if (currentUser === user.userid) {
+        slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}" selected>${user.realname}</option>`;
+      } else{
+        slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}">${user.realname}</option>`;
+      }
     }
   });
 
-  // Initialize the selectpicker
-  $(slUser).selectpicker('refresh');
+  // Reinitialize selectpicker after updating options
+  $(slUser).selectpicker();
+}
+
+async function fetchGroup(){
+  const slGroup = document.getElementById('selectpickerGroup');
+  if(!slGroup){
+    return;
+  }
+  slGroup.innerHTML = '';
+  if(GROUP_LIST.length == 0){
+    GROUP_LIST = await get_groups();
+  }
+  const currentGroup = slGroup.getAttribute('data-current-group');
+
+  GROUP_LIST.forEach(group => {
+    if (currentGroup === group.id) {
+      slGroup.innerHTML += `<option data-icon="icon-base ti tabler-users-group" value="${group.id}" selected>${group.group_name}</option>`;
+    } else{
+      slGroup.innerHTML += `<option data-icon="icon-base ti tabler-users-group" value="${group.id}">${group.group_name}</option>`;
+    }
+  });
+
+  $(slGroup).selectpicker('refresh');
+
+  fetchUser(currentGroup);
   
 }
 
 //add event listener for selectpicker
 function addEvent(){
   const slUser = document.getElementById('selectpickerUser');
+  const slGroup = document.getElementById('selectpickerGroup');
   const monthInput = document.getElementById('timecard-month-input');
   const recalc = document.querySelector('[data-recalculation]');
   // Add event listener for the selectpicker
-  slUser.addEventListener('change', async function () {
-    changeData()
-  });
-
+  if(slUser){
+    slUser.addEventListener('change', async function () {
+      changeData()
+    });
+  }
+  if(slGroup){
+    slGroup.addEventListener('change', async function () {
+      fetchUser(slGroup.value);
+      changeData()
+    });
+  }
   // Add event listener for the month input
-  monthInput.addEventListener('change', async function () {
-    changeData()
-  });
-
+  if(monthInput){
+    monthInput.addEventListener('change', async function () {
+      changeData()
+    });
+  }
+  const viewModal = new bootstrap.Modal(document.getElementById('modalViewTimecard'));
+  const editModal = new bootstrap.Modal(document.getElementById('modalEditTimecard'));
+  const viewTimecardForm = document.getElementById('viewTimecardForm');
+  const editTimecardForm = document.getElementById('editTimecardForm');
   recalc.addEventListener('click', async function () {
-    const user = slUser.value;
+    const user = USER_ID;
+    if(slUser && slUser.value != ''){
+      user = slUser.value;
+    }
     var date = new Date(monthInput.value);
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
     recalculation(user, year, month);
   });
 
-  document.querySelector('.datatables-timecard').addEventListener('click', function (e) {
+  document.getElementById('modalViewTimecard').addEventListener('hide.bs.modal', async function () {
+    viewTimecardForm.reset();
+  });
+  document.getElementById('modalEditTimecard').addEventListener('hide.bs.modal', async function () {
+    editTimecardForm.reset();
+  });
+
+  document.querySelector('.datatables-timecard').addEventListener('click', async function (e) {
     if (e.target.closest('[data-checkin]')) {
       e.preventDefault();
       const owner = e.target.dataset.owner;
@@ -186,22 +272,168 @@ function addEvent(){
       checkout(id, open, owner);
     }
 
-     // if (e.target.closest('.item-edit')) {
-    //   e.preventDefault();
+    if (e.target.closest('.item-view')) {
+      e.preventDefault();
+      const date = e.target.closest('.item-view').dataset.date;
+      const userid = e.target.closest('.item-view').dataset.userid;
+      const response = await axios.post('/api/index.php?model=timecard&method=get_timecard_by_id', {
+        date: date,
+        userid: userid
+      }, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+      if(response.status === 200 && response.data && response.data.status === 'success'){
+        // Open the modal
+        var timecardinfo = response.data.data;
+        document.getElementById('modalViewTimecardTitle').innerHTML = findUsername(userid);
+        if(timecardinfo.id){
+          document.getElementById('viewTimecardId').value = timecardinfo.id;
+        }
+        document.getElementById('viewTimecardDate').value = date;
+        if(timecardinfo.timecard_open){
+          document.getElementById('viewTimecardOpen').value = timecardinfo.timecard_open;
+        }
+        if(timecardinfo.timecard_close){
+          document.getElementById('viewTimecardClose').value = timecardinfo.timecard_close;
+        }
+        if(timecardinfo.timecard_comment){
+          document.getElementById('viewTimecardNote').value = timecardinfo.timecard_comment;
+        }
 
-    //   // Get the row data (assuming DataTable is used)
-    //   const row = dt_table.row(e.target.closest('tr')).data();
+        
+        document.getElementById('viewTimecardOriginOpenText').style.display = 'none';
+        document.getElementById('viewTimecardOriginalCloseText').style.display = 'none';
 
-    //   // Populate the modal with the row data
-    //   document.querySelector('#modalEditID').value = row.id;
-    //   document.querySelector('#modalEditDate').value = row.date;
-    //   document.querySelector('#modalEditDateOld').value = row.date;
-    //   document.querySelector('#modalEditName').value = row.name;
+        if(timecardinfo.timecard_originalopen){
+          if(timecardinfo.timecard_originalopen != '' && timecardinfo.timecard_originalopen != timecardinfo.timecard_open){
+            document.getElementById('viewTimecardOriginOpenText').style.display = 'block';
+            document.getElementById('viewTimecardOriginOpen').innerHTML = timecardinfo.timecard_originalopen;
+          }
+        }
+        if(timecardinfo.timecard_originalclose){
+          if(timecardinfo.timecard_originalclose != '' && timecardinfo.timecard_originalclose != timecardinfo.timecard_close){
+            document.getElementById('viewTimecardOriginalCloseText').style.display = 'block';
+            document.getElementById('viewTimecardOriginalClose').innerHTML = timecardinfo.timecard_originalclose;
+          }
+        }
 
-    //   // Open the modal
-    //   const editModal = new bootstrap.Modal(document.getElementById('editRoleModal'));
-    //   editModal.show();
-    // }
+        if(timecardinfo.editor && timecardinfo.editor != ''){
+          document.getElementById('viewTimecardLastEdit').style.display = 'block';
+          document.getElementById('viewTimecardLastEditTime').innerHTML = findUsername(timecardinfo.editor) + ' ' + timecardinfo.updated;
+        }else{
+          document.getElementById('viewTimecardLastEdit').style.display = 'none';
+        }
+        
+        viewModal.show();
+      }else{
+        showMessage(response.data.error, true);
+      }
+    }
+
+    if (e.target.closest('.item-edit')) {
+      e.preventDefault();
+      const date = e.target.closest('.item-edit').dataset.date;
+      const userid = e.target.closest('.item-edit').dataset.userid;
+      const response = await axios.post('/api/index.php?model=timecard&method=get_timecard_by_id', {
+        date: date,
+        userid: userid
+      }, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+      if(response.status === 200 && response.data && response.data.status === 'success'){
+        // Open the modal
+        var timecardinfo = response.data.data;
+        document.getElementById('modalEditTimecardTitle').innerHTML = findUsername(userid);
+        if(timecardinfo.id){
+          document.getElementById('editTimecardId').value = timecardinfo.id;
+        }
+        document.getElementById('editTimecardDate').value = date;
+        document.getElementById('editTimecardUserid').value = userid;
+        if(timecardinfo.timecard_open){
+          document.getElementById('editTimecardOpen').value = timecardinfo.timecard_open;
+        }
+        if(timecardinfo.timecard_close){
+          document.getElementById('editTimecardClose').value = timecardinfo.timecard_close;
+        }
+        if(timecardinfo.timecard_comment){
+          document.getElementById('editTimecardNote').value = timecardinfo.timecard_comment;
+        }
+
+        editModal.show();
+      }else{
+        showMessage(response.data.message_code, true);
+      }
+    }
+
+  });
+
+
+  const fvEdit = FormValidation.formValidation(editTimecardForm, {
+    fields: {
+      timecard_open: {
+        validators: {
+          stringLength: {
+            min: 4,
+            message: '4文字以上入力してください'
+          }
+        }
+      },
+      timecard_close: {
+        validators: {
+          stringLength: {
+            min: 4,
+            message: '4文字以上入力してください'
+          }
+        }
+      },
+      timecard_comment: {
+        validators: {
+          stringLength: {
+            min: 4,
+            message: '4文字以上入力してください'
+          }
+        }
+      },
+    },
+    plugins: {
+      trigger: new FormValidation.plugins.Trigger(),
+      bootstrap5: new FormValidation.plugins.Bootstrap5({
+        eleValidClass: '',
+        rowSelector: '.form-control-validation'
+      }),
+    },
+  });
+
+  editTimecardForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    fvEdit.validate().then(function (status) {
+      if (status === 'Valid') {
+        displayHourglass();
+        const formData = new FormData(editTimecardForm);
+        axios.post('/api/index.php?model=timecard&method=edit_timecard', formData)
+          .then(function (response) {
+            if (response.status === 200 && response.data && response.data.status === 'success') {
+              showMessage('タイムカードを編集しました');
+              changeData();
+            } else {
+              if(response.data.message_code){
+                showMessage(response.data.message_code, true);
+              }else{
+                showMessage('タイムカードを編集できませんでした', true);
+              }
+            }
+            $('#modalEditTimecard').modal('hide'); 
+          })
+          .catch(function (error) {
+            handleErrors(error);
+            $('#modalEditTimecard').modal('hide');
+          });
+      }
+    });
   });
 }
 
@@ -282,7 +514,10 @@ async function changeData(){
   const slUser = document.getElementById('selectpickerUser');
   const monthInput = document.getElementById('timecard-month-input');
 
-  const user = slUser.value;
+  let user = USER_ID;
+  if(slUser && slUser.value != ''){
+    user = slUser.value;
+  }
   var date = new Date(monthInput.value);
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
@@ -304,17 +539,28 @@ function drawTable(data){
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+
+  flatpickr("#timecard-month-input", {
+    plugins: [new monthSelectPlugin({
+      monthSelector: true,
+      dateFormat: "Y-m",
+      locale: "ja"
+    })],
+    dateFormat: "Y-m",
+    locale: "ja"
+  });
   const dt_timecard_table = document.querySelector('.datatables-timecard');
   const monthInput = document.getElementById('timecard-month-input');
-
+  var startDate = $('html').attr('data-timecard-start');
   const today = new Date();
-  if(today.getDate() >= 21){
+  if(today.getDate() >= startDate && startDate != '1'){
     today.setMonth(today.getMonth() + 1);
   }
   // Format the current month as YYYY-MM
   const currentMonth = today.toISOString().slice(0, 7);
   // Set the default value to the current month
   monthInput.value = currentMonth;
+
   // Set the max attribute to disallow future months
   monthInput.max = currentMonth;
   // Variable declaration for table
@@ -336,7 +582,8 @@ document.addEventListener('DOMContentLoaded', function () {
         { data: 'timecard_timeholiday', title: '休日出勤' },
         { data: 'timecard_comment', title: '備考' },
         { data: 'id', title: 'ID', visible: false },
-        { data: 'owner', title: 'Owner', visible: true },
+        { data: 'owner', title: 'Owner', visible: false },
+        { title: '操作', visible: true },
       ],
       columnDefs: [
         {
@@ -347,6 +594,9 @@ document.addEventListener('DOMContentLoaded', function () {
               if(!data){
                 return `<button type="button" class="btn btn-primary btn-sm" data-id="${full.id}" data-owner="${full.owner}" data-checkin>出社</button>`;
               }
+            }
+            if(full.timecard_originalopen != '' && full.timecard_originalopen != full.timecard_open){
+              return `<span class="badge bg-label-danger">${data}</span>`;
             }
             return data;
           }
@@ -359,6 +609,9 @@ document.addEventListener('DOMContentLoaded', function () {
               if(!data && full.timecard_open){
                 return `<button type="button" class="btn btn-primary btn-sm" data-id="${full.id}" data-owner="${full.owner}" data-open="${full.timecard_open}" data-checkout>退社</button>`;
               }
+            }
+            if(full.timecard_originalclose != '' && full.timecard_originalclose != full.timecard_close){
+              return `<span class="badge bg-label-danger">${data}</span>`;
             }
             return data;
           }
@@ -379,6 +632,25 @@ document.addEventListener('DOMContentLoaded', function () {
               return `<span class="badge bg-label-danger day-label">${dayWeekName[dayWeek]}</span>&nbsp;${month}/${day}`;
             }
             return `<span class="badge bg-label-primary day-label">${dayWeekName[dayWeek]}</span>&nbsp;${month}/${day}`;
+          }
+        },
+        {
+          targets: -1,
+          searchable: false,
+          orderable: false,
+          render: (data, type, full, meta) => {
+              return `
+              <div class="d-flex align-items-center">
+                  <a href="javascript:;" class="btn btn-text-secondary rounded-pill waves-effect btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
+                    <i class="icon-base ti tabler-dots-vertical icon-22px"></i>
+                  </a>
+                  <div class="dropdown-menu dropdown-menu-end m-0">
+                  <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="dropdown-item item-view"><i class="icon-base ti tabler-eye me-0 me-sm-1 icon-16px"></i> 確認</a>
+                  <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="dropdown-item item-edit"><i class="icon-base ti tabler-pencil me-0 me-sm-1 icon-16px"></i> 編集</a>
+                 
+                  </div>
+              </div>
+              `;
           }
         }
       ],
@@ -403,7 +675,7 @@ document.addEventListener('DOMContentLoaded', function () {
         emptyTable: 'データがありません',
       }
     });
-    fetchUser();
+    fetchGroup();
     initTable();
     addEvent();
   }

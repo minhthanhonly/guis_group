@@ -83,6 +83,12 @@ class View {
 		}
 		return $string;
 	}
+
+	function success($string = '') {
+		if (strlen($string) > 0) {
+			echo  '<div class="alert alert-outline-success">'.$string.'</div>';
+		}
+	}
 	
 	function style($value, $string, $display = 'block') {
 	

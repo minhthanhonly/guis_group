@@ -13,17 +13,17 @@ $view->heading('セクシュアリティ');
 								class="icon-base ti tabler-users icon-sm me-1_5"></i> アカウント</a>
 					</li>
 					<li class="nav-item">
-						<a class="nav-link active waves-effect waves-light" href="change_password.php"><i
+						<a class="nav-link waves-effect waves-light active" href="change_password.php"><i
 								class="icon-base ti tabler-lock icon-sm me-1_5"></i> セクシュアリティ</a>
 					</li>
 				</ul>
 			</div>
 			<form class="content" method="post" action="" enctype="multipart/form-data">
 				<?php if(isset($hash['error']) && count($hash['error']) > 0){
-					$view->error($hash['error']);
+					echo $view->error($hash['error']);
 				}?>
                 <?php if(isset($hash['data']['message'])){
-					echo $hash['data']['message'];
+					echo $view->success($hash['data']['message']);
 				}?>
 				<div class="card mb-6">
                     <h5 class="card-header">パスワードの変更</h5>

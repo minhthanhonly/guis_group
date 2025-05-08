@@ -9,7 +9,7 @@ define('APP_TYPE', 'group');
  * 制限設定
  */
 //表示件数
-define('APP_LIMIT', '10');
+define('APP_LIMIT', '50');
 //最大表示件数
 define('APP_LIMITMAX', '1000');
 //アップロードファイル

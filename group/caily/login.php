@@ -45,7 +45,7 @@ $view->heading('ログイン', 'login');
 
 		<form id="formAuthentication" class="mb-6" action="login.php" name="login" method="POST">
 			<?php if($view->error($error) != '') { 
-				echo '<div class="alert alert-danger" role="alert">'.$view->error($error).'</div>';
+				echo ''.$view->error($error).'';
 			} ?>
 			<div class="mb-6 form-control-validation">
 				<label for="userid" class="form-label">ユーザー名</label>
@@ -55,7 +55,7 @@ $view->heading('ログイン', 'login');
 					id="userid"
 					name="userid" class="logininput" value="<?=$view->escape($_POST['userid'])?>"
 					placeholder="ユーザー名を入力してください"
-					autocomplete="username"
+					autocomplete="off"
 					autofocus />
 			</div>
 			<div class="mb-6 form-password-toggle form-control-validation">

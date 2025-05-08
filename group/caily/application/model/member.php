@@ -271,6 +271,48 @@ class Member extends ApplicationModel {
 		return $hash;
 	}
 
+	/*API*/
+	function change_password_api() {
+		$id = $_POST['id'];
+		$password = md5(trim($_POST['password']));
+		if(!$id){
+			$hash['status'] = 'error';
+			$hash['message_code'] = 'idが指定されていません';
+			return $hash;
+		}
+		if(!$password){
+			$hash['status'] = 'error';
+			$hash['message_code'] = 'パスワードが指定されていません';
+			return $hash;
+		}
+		$hash['data'] = $this->permitFindApi('edit');
+		if(count($this->error) > 0){
+			$hash['status'] = 'error';
+			$hash['message_code'] = $this->error;
+			return $hash;
+		}
+		
+		$date = date('Y-m-d H:i:s');
+		$editor = $_SESSION['userid'];
+
+		$query = sprintf(
+			"UPDATE groupware_user SET password = '%s', editor = '%s', updated = '%s' WHERE id = '%s'",
+			$password,
+			$editor,
+			$date,
+			$id,
+		);
+		$response = $this->update_query($query);
+		if($response > 0){
+			$hash['status'] = 'success';
+			$hash['message_code'] = $response;
+		} else{
+			$hash['status'] = 'error';
+			$hash['message_code'] = $response;
+		}
+		return $hash;
+	}
+
 	function delete_member() {
 		$id = $_POST['id'];
 		$hash['data'] = $this->permitFindApi('edit');
@@ -376,9 +418,7 @@ class Member extends ApplicationModel {
 				}
 				$query = sprintf("UPDATE %s SET %s WHERE userid = '%s'", $this->table, implode(",", $array), $this->quote($_SESSION['userid']));
 				$this->response = $this->update_query($query);
-				echo $this->response. "<br>".'aaa';
 				if ($this->response == '1') {
-					
 					$check = TRUE;
 				}
 			}
@@ -393,8 +433,8 @@ class Member extends ApplicationModel {
 
 	function edit() {
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+			$this->post['userid'] = $_SESSION['userid'];
 			$this->validateSchema('update');
-			//$this->validate();
 			$this->post['editor'] = $_SESSION['userid'];
 			$this->post['updated'] = date('Y-m-d H:i:s');
 			if(isset($_FILES['user_image']) && $_FILES['user_image']['name'] != '') {
@@ -426,6 +466,8 @@ class Member extends ApplicationModel {
 	
 	}
 
+	
+
 	function uploadAvatar($filename){
 		//help me upload file to /assets/upload/avatar/
 		if (isset($_FILES['user_image']) && $_FILES['user_image']['error'] == UPLOAD_ERR_OK) {
@@ -435,6 +477,46 @@ class Member extends ApplicationModel {
 			if (in_array($ext, $allowed)) {
 				//move file to /assets/upload/avatar/
 				move_uploaded_file($_FILES['user_image']['tmp_name'], '../assets/upload/avatar/'.$filename);
+				
+				// Resize image to 100px width
+				$source_path = '../assets/upload/avatar/'.$filename;
+				list($width, $height) = getimagesize($source_path);
+				$new_width = 100;
+				$new_height = ($height/$width) * $new_width;
+				
+				$new_image = imagecreatetruecolor($new_width, $new_height);
+				
+				switch($ext) {
+					case 'jpg':
+					case 'jpeg':
+						$source = imagecreatefromjpeg($source_path);
+						break;
+					case 'png':
+						$source = imagecreatefrompng($source_path);
+						break;
+					case 'gif':
+						$source = imagecreatefromgif($source_path);
+						break;
+				}
+				
+				imagecopyresampled($new_image, $source, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
+				
+				switch($ext) {
+					case 'jpg':
+					case 'jpeg':
+						imagejpeg($new_image, $source_path);
+						break;
+					case 'png':
+						imagepng($new_image, $source_path);
+						break;
+					case 'gif':
+						imagegif($new_image, $source_path);
+						break;
+				}
+				
+				imagedestroy($new_image);
+				imagedestroy($source);
+				
 			} else {
 				$this->error[] = '画像ファイルを選択してください。';
 			}

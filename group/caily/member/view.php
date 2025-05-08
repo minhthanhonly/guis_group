@@ -8,6 +8,7 @@ $view->heading('メンバー詳細');
 		<div class="col-md-12">
 			<div class="nav-align-top">
 				<ul class="nav nav-pills flex-column flex-md-row mb-6 gap-md-0 gap-2">
+					<?php if ($hash['data']['userid'] == $_SESSION['userid'] ) { ?>
 					<li class="nav-item">
 						<a class="nav-link active waves-effect waves-light" href="view.php"><i
 								class="icon-base ti tabler-users icon-sm me-1_5"></i> アカウント</a>
@@ -16,6 +17,7 @@ $view->heading('メンバー詳細');
 						<a class="nav-link waves-effect waves-light" href="change_password.php"><i
 								class="icon-base ti tabler-lock icon-sm me-1_5"></i> セクシュアリティ</a>
 					</li>
+					<?php } ?>
 				</ul>
 			</div>
 			<div class="card mb-6">

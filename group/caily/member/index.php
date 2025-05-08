@@ -193,6 +193,31 @@ $view->heading('メンバー一覧');
   </div>
 </div>
 
+<!-- Modal to change password -->
+<div class="modal fade" id="modalChangePassword" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-simple modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body">
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+        <div class="text-center mb-6">
+          <h4 class="modal-title">パスワードを変更</h4>
+        </div>
+        <form class="pt-0" id="changePasswordForm">
+          <input type="hidden" id="change-password-id" name="id" />
+          <div class="form-group row">
+            <div class="col-md-12 mb-4 form-control-validation">
+              <label class="form-label" for="change-password-password">パスワード</label>
+              <input type="password" class="form-control" id="change-password-password" placeholder="" name="password"/>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary me-3 data-submit">変更</button>
+          <button type="reset" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <?php
 $view->footing();
