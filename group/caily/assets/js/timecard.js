@@ -18,7 +18,9 @@ if (typeof USER_ROLE !== 'undefined') {
 }
 var holidayList = [];
 
-function updateAnalytics(data){
+
+
+function updateAnalytics(data) {
   const timecard_time = document.getElementById('work_time');
   const timecard_timeover = document.getElementById('over_time');
   const timecard_timeholiday = document.getElementById('holiday_time');
@@ -30,7 +32,7 @@ function updateAnalytics(data){
   work_days.innerHTML = `${data.work_days} / ${data.total_days}`;
 }
 
-function findUsername(userid){
+function findUsername(userid) {
   const user = USER_LIST.find(user => user.userid === userid);
   return user ? user.realname : userid;
 }
@@ -48,10 +50,10 @@ async function get_timecard(user, year, month) {
   const response = await axios.get(`/api/index.php?model=timecard&method=timecardlist&member=${user}&year=${year}&month=${month}`);
   const timcard_type = document.getElementById('timecard_type');
   const timecard_title = document.getElementById('timecard_title');
-  if(timcard_type && response.data.config){
+  if (timcard_type && response.data.config) {
     timcard_type.innerHTML = response.data.config.config_name;
   }
-  if(timecard_title && response.data.owner){
+  if (timecard_title && response.data.owner) {
     timecard_title.innerHTML = response.data.owner.realname;
   }
   // check if the response is successful
@@ -64,9 +66,9 @@ async function get_timecard(user, year, month) {
   isSameUser = response.data.isSameUser;
   let days = {};
   // Parse the start date using timecard_start_date, year, and month
-  
+
   let start = new Date(`${year}-${month}-${timecard_start_date}`);
-  if(timecard_start_date != '1'){
+  if (timecard_start_date != '1') {
     start.setMonth(start.getMonth() - 1); // Set the start date to the first day of the month
   }
   let end = new Date(start);
@@ -83,27 +85,27 @@ async function get_timecard(user, year, month) {
       return parseInt(item.timecard_day) === day
     });
     if (foundItem) {
-      if(foundItem.holiday == 1){
+      if (foundItem.holiday == 1) {
         foundItem.timecard_timeinterval = '';
         foundItem.timecard_timeover = '';
         foundItem.timecard_timeholiday = foundItem.timecard_time;
         foundItem.timecard_time = '';
         var timeHoliday = foundItem.timecard_timeholiday.split(':');
         sum.timecard_timeholiday += parseInt(timeHoliday[0]) * 60 + parseInt(timeHoliday[1]);
-      } else{
+      } else {
         foundItem.timecard_timeholiday = '';
       }
       days[i] = foundItem;
 
-      if(foundItem.timecard_open){
+      if (foundItem.timecard_open) {
         countWorkDays++;
       }
 
-      if(foundItem.timecard_time){
+      if (foundItem.timecard_time) {
         var time = foundItem.timecard_time.split(':');
         sum.timecard_time += parseInt(time[0]) * 60 + parseInt(time[1]);
       }
-      if(foundItem.timecard_timeover){
+      if (foundItem.timecard_timeover) {
         var timeover = foundItem.timecard_timeover.split(':');
         sum.timecard_timeover += parseInt(timeover[0]) * 60 + parseInt(timeover[1]);
       }
@@ -144,7 +146,7 @@ async function get_users() {
   if (response.status !== 200 || !response.data || !response.data.list) {
     handleErrors(response.data);
   }
- 
+
   return response.data.list;
 }
 
@@ -158,26 +160,26 @@ async function get_groups() {
   return response.data.list;
 }
 
-async function fetchUser(group_id){
+async function fetchUser(group_id) {
   const slUser = document.getElementById('selectpickerUser');
 
-  if(!slUser){
+  if (!slUser) {
     return;
   }
 
   // Destroy existing selectpicker before clearing innerHTML
   $(slUser).selectpicker('destroy');
-  
+
   slUser.innerHTML = '';
-  if(USER_LIST.length == 0){
+  if (USER_LIST.length == 0) {
     USER_LIST = await get_users();
   }
   const currentUser = slUser.getAttribute('data-current-user');
   USER_LIST.forEach(user => {
-    if(group_id == user.user_group){
+    if (group_id == user.user_group) {
       if (currentUser === user.userid) {
         slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}" selected>${user.realname}</option>`;
-      } else{
+      } else {
         slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}">${user.realname}</option>`;
       }
     }
@@ -187,13 +189,13 @@ async function fetchUser(group_id){
   $(slUser).selectpicker();
 }
 
-async function fetchGroup(){
+async function fetchGroup() {
   const slGroup = document.getElementById('selectpickerGroup');
-  if(!slGroup){
+  if (!slGroup) {
     return;
   }
   slGroup.innerHTML = '';
-  if(GROUP_LIST.length == 0){
+  if (GROUP_LIST.length == 0) {
     GROUP_LIST = await get_groups();
   }
   const currentGroup = slGroup.getAttribute('data-current-group');
@@ -201,7 +203,7 @@ async function fetchGroup(){
   GROUP_LIST.forEach(group => {
     if (currentGroup === group.id) {
       slGroup.innerHTML += `<option data-icon="icon-base ti tabler-users-group" value="${group.id}" selected>${group.group_name}</option>`;
-    } else{
+    } else {
       slGroup.innerHTML += `<option data-icon="icon-base ti tabler-users-group" value="${group.id}">${group.group_name}</option>`;
     }
   });
@@ -209,29 +211,29 @@ async function fetchGroup(){
   $(slGroup).selectpicker('refresh');
 
   fetchUser(currentGroup);
-  
+
 }
 
 //add event listener for selectpicker
-function addEvent(){
+function addEvent() {
   const slUser = document.getElementById('selectpickerUser');
   const slGroup = document.getElementById('selectpickerGroup');
   const monthInput = document.getElementById('timecard-month-input');
   const recalc = document.querySelector('[data-recalculation]');
   // Add event listener for the selectpicker
-  if(slUser){
+  if (slUser) {
     slUser.addEventListener('change', async function () {
       changeData()
     });
   }
-  if(slGroup){
+  if (slGroup) {
     slGroup.addEventListener('change', async function () {
       fetchUser(slGroup.value);
       changeData()
     });
   }
   // Add event listener for the month input
-  if(monthInput){
+  if (monthInput) {
     monthInput.addEventListener('change', async function () {
       changeData()
     });
@@ -242,7 +244,7 @@ function addEvent(){
   const editTimecardForm = document.getElementById('editTimecardForm');
   recalc.addEventListener('click', async function () {
     let user = USER_ID;
-    if(slUser && slUser.value != ''){
+    if (slUser && slUser.value != '') {
       user = slUser.value;
     }
     var date = new Date(monthInput.value);
@@ -284,50 +286,50 @@ function addEvent(){
           'Content-Type': 'application/x-www-form-urlencoded'
         }
       });
-      if(response.status === 200 && response.data && response.data.status === 'success'){
+      if (response.status === 200 && response.data && response.data.status === 'success') {
         // Open the modal
         var timecardinfo = response.data.data;
         document.getElementById('modalViewTimecardTitle').innerHTML = findUsername(userid);
-        if(timecardinfo.id){
+        if (timecardinfo.id) {
           document.getElementById('viewTimecardId').value = timecardinfo.id;
         }
         document.getElementById('viewTimecardDate').value = date;
-        if(timecardinfo.timecard_open){
+        if (timecardinfo.timecard_open) {
           document.getElementById('viewTimecardOpen').value = timecardinfo.timecard_open;
         }
-        if(timecardinfo.timecard_close){
+        if (timecardinfo.timecard_close) {
           document.getElementById('viewTimecardClose').value = timecardinfo.timecard_close;
         }
-        if(timecardinfo.timecard_comment){
+        if (timecardinfo.timecard_comment) {
           document.getElementById('viewTimecardNote').value = timecardinfo.timecard_comment;
         }
 
-        
+
         document.getElementById('viewTimecardOriginOpenText').style.display = 'none';
         document.getElementById('viewTimecardOriginalCloseText').style.display = 'none';
 
-        if(timecardinfo.timecard_originalopen){
-          if(timecardinfo.timecard_originalopen != '' && timecardinfo.timecard_originalopen != timecardinfo.timecard_open){
+        if (timecardinfo.timecard_originalopen) {
+          if (timecardinfo.timecard_originalopen != '' && timecardinfo.timecard_originalopen != timecardinfo.timecard_open) {
             document.getElementById('viewTimecardOriginOpenText').style.display = 'block';
             document.getElementById('viewTimecardOriginOpen').innerHTML = timecardinfo.timecard_originalopen;
           }
         }
-        if(timecardinfo.timecard_originalclose){
-          if(timecardinfo.timecard_originalclose != '' && timecardinfo.timecard_originalclose != timecardinfo.timecard_close){
+        if (timecardinfo.timecard_originalclose) {
+          if (timecardinfo.timecard_originalclose != '' && timecardinfo.timecard_originalclose != timecardinfo.timecard_close) {
             document.getElementById('viewTimecardOriginalCloseText').style.display = 'block';
             document.getElementById('viewTimecardOriginalClose').innerHTML = timecardinfo.timecard_originalclose;
           }
         }
 
-        if(timecardinfo.editor && timecardinfo.editor != ''){
+        if (timecardinfo.editor && timecardinfo.editor != '') {
           document.getElementById('viewTimecardLastEdit').style.display = 'block';
           document.getElementById('viewTimecardLastEditTime').innerHTML = findUsername(timecardinfo.editor) + ' ' + timecardinfo.updated;
-        }else{
+        } else {
           document.getElementById('viewTimecardLastEdit').style.display = 'none';
         }
-        
+
         viewModal.show();
-      }else{
+      } else {
         showMessage(response.data.error, true);
       }
     }
@@ -344,27 +346,27 @@ function addEvent(){
           'Content-Type': 'application/x-www-form-urlencoded'
         }
       });
-      if(response.status === 200 && response.data && response.data.status === 'success'){
+      if (response.status === 200 && response.data && response.data.status === 'success') {
         // Open the modal
         var timecardinfo = response.data.data;
         document.getElementById('modalEditTimecardTitle').innerHTML = findUsername(userid);
-        if(timecardinfo.id){
+        if (timecardinfo.id) {
           document.getElementById('editTimecardId').value = timecardinfo.id;
         }
         document.getElementById('editTimecardDate').value = date;
         document.getElementById('editTimecardUserid').value = userid;
-        if(timecardinfo.timecard_open){
+        if (timecardinfo.timecard_open) {
           document.getElementById('editTimecardOpen').value = timecardinfo.timecard_open;
         }
-        if(timecardinfo.timecard_close){
+        if (timecardinfo.timecard_close) {
           document.getElementById('editTimecardClose').value = timecardinfo.timecard_close;
         }
-        if(timecardinfo.timecard_comment){
+        if (timecardinfo.timecard_comment) {
           document.getElementById('editTimecardNote').value = timecardinfo.timecard_comment;
         }
 
         editModal.show();
-      }else{
+      } else {
         showMessage(response.data.message_code, true);
       }
     }
@@ -420,13 +422,13 @@ function addEvent(){
               showMessage('タイムカードを編集しました');
               changeData();
             } else {
-              if(response.data.message_code){
+              if (response.data.message_code) {
                 showMessage(response.data.message_code, true);
-              }else{
+              } else {
                 showMessage('タイムカードを編集できませんでした', true);
               }
             }
-            $('#modalEditTimecard').modal('hide'); 
+            $('#modalEditTimecard').modal('hide');
           })
           .catch(function (error) {
             handleErrors(error);
@@ -435,9 +437,12 @@ function addEvent(){
       }
     });
   });
+
+
+ 
 }
 
- async function recalculation(user, year, month){
+async function recalculation(user, year, month) {
   displayHourglass();
   const response = await axios.get(`/api/index.php?model=timecard&method=recalculateApi&member=${user}&year=${year}&month=${month}`);
   // check if the response is successful
@@ -448,6 +453,8 @@ function addEvent(){
 
   handleSuccess(response.data.message_code);
   changeData();
+
+
 }
 
 
@@ -507,13 +514,13 @@ function checkout(id = '', open = '', owner = '') {
 
 
 
-async function changeData(){
+async function changeData() {
   displayHourglass();
   const slUser = document.getElementById('selectpickerUser');
   const monthInput = document.getElementById('timecard-month-input');
 
   let user = USER_ID;
-  if(slUser && slUser.value != ''){
+  if (slUser && slUser.value != '') {
     user = slUser.value;
   }
   var date = new Date(monthInput.value);
@@ -525,12 +532,12 @@ async function changeData(){
 }
 
 //add event listener for selectpicker
-async function initTable(){
+async function initTable() {
   changeData();
 }
 
 
-function drawTable(data){
+function drawTable(data) {
   if (dt_table) {
     dt_table.clear().rows.add(Object.values(data)).draw();
   }
@@ -551,7 +558,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const monthInput = document.getElementById('timecard-month-input');
   var startDate = $('html').attr('data-timecard-start');
   const today = new Date();
-  if(today.getDate() >= startDate && startDate != '1'){
+  if (today.getDate() >= startDate && startDate != '1') {
     today.setMonth(today.getMonth() + 1);
   }
   // Format the current month as YYYY-MM
@@ -562,7 +569,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // Set the max attribute to disallow future months
   monthInput.max = currentMonth;
   // Variable declaration for table
-  
+
   // Users datatable
   if (dt_timecard_table) {
     dt_table = new DataTable(dt_timecard_table, {
@@ -588,12 +595,12 @@ document.addEventListener('DOMContentLoaded', function () {
           // Add custom rendering for the "出社" column
           targets: 1,
           render: function (data, type, full, meta) {
-            if(today.getDate() == full.timecard_day && isSameUser){
-              if(!data){
+            if (today.getDate() == full.timecard_day && isSameUser) {
+              if (!data) {
                 return `<button type="button" class="btn btn-primary btn-sm" data-id="${full.id}" data-owner="${full.owner}" data-checkin>出社</button>`;
               }
             }
-            if(full.timecard_originalopen != '' && full.timecard_originalopen != full.timecard_open){
+            if (full.timecard_originalopen != '' && full.timecard_originalopen != full.timecard_open) {
               return `<span class="badge bg-label-danger">${data}</span>`;
             }
             return data;
@@ -603,12 +610,12 @@ document.addEventListener('DOMContentLoaded', function () {
           // Add custom rendering for the "出社" column
           targets: 2,
           render: function (data, type, full, meta) {
-            if(today.getDate() == full.timecard_day && isSameUser){
-              if(!data && full.timecard_open){
+            if (today.getDate() == full.timecard_day && isSameUser) {
+              if (!data && full.timecard_open) {
                 return `<button type="button" class="btn btn-primary btn-sm" data-id="${full.id}" data-owner="${full.owner}" data-open="${full.timecard_open}" data-checkout>退社</button>`;
               }
             }
-            if(full.timecard_originalclose != '' && full.timecard_originalclose != full.timecard_close){
+            if (full.timecard_originalclose != '' && full.timecard_originalclose != full.timecard_close) {
               return `<span class="badge bg-label-danger">${data}</span>`;
             }
             return data;
@@ -622,11 +629,11 @@ document.addEventListener('DOMContentLoaded', function () {
             var day = date.getDate();
             var month = date.getMonth() + 1;
             var dayWeek = date.getDay();
-            var dayWeekName = ['日','月', '火', '水', '木', '金', '土'];
-            if(dayWeek == 6){
+            var dayWeekName = ['日', '月', '火', '水', '木', '金', '土'];
+            if (dayWeek == 6) {
               return `<span class="badge bg-label-warning day-label">${dayWeekName[dayWeek]}</span>&nbsp;${month}/${day}`;
             }
-            if(dayWeek == 0){
+            if (dayWeek == 0) {
               return `<span class="badge bg-label-danger day-label">${dayWeekName[dayWeek]}</span>&nbsp;${month}/${day}`;
             }
             return `<span class="badge bg-label-primary day-label">${dayWeekName[dayWeek]}</span>&nbsp;${month}/${day}`;
@@ -637,7 +644,7 @@ document.addEventListener('DOMContentLoaded', function () {
           searchable: false,
           orderable: false,
           render: (data, type, full, meta) => {
-              return `
+            return `
               <div class="d-flex align-items-center">
                   <a href="javascript:;" class="btn btn-text-secondary rounded-pill waves-effect btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
                     <i class="icon-base ti tabler-dots-vertical icon-22px"></i>
@@ -656,13 +663,13 @@ document.addEventListener('DOMContentLoaded', function () {
       createdRow: function (row, data, dataIndex) {
         var dayString = data.timecard_date.split('-');
         var xdayString = dayString[0] + '-' + addLeadingZero(dayString[1]) + '-' + addLeadingZero(dayString[2]);
-       
+
         var date = new Date(data.timecard_date);
         var dayWeek = date.getDay();
         if (dayWeek === 0 || dayWeek === 6) {
           $(row).addClass('table-warning');
         }
-        if(holidayList.includes(xdayString)){
+        if (holidayList.includes(xdayString)) {
           $(row).addClass('table-danger');
           $(row).find('.day-label').addClass('bg-label-warning');
         }

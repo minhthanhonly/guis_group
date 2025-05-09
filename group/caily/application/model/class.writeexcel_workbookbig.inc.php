@@ -1,7 +1,7 @@
 <?php
 
-/**
- * Copyleft 2002 Johann Hanne.
+/*
+ * Copyleft 2002 Johann Hanne
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,26 +19,37 @@
  * Suite 330, Boston, MA  02111-1307 USA
  */
 
-/**
+/*
  * This is the Spreadsheet::WriteExcel Perl package ported to PHP
- * Spreadsheet::WriteExcel was written by John McNamara, jmcnamara@cpan.org.
+ * Spreadsheet::WriteExcel was written by John McNamara, jmcnamara@cpan.org
  */
-class writeexcel_workbookbig extends writeexcel_workbook
-{
-    public function _store_OLE_file()
-    {
-        $file = new ole_pps_file(asc2ucs('Book'));
+
+require_once "class.writeexcel_workbook.inc.php";
+require_once "class.ole_pps_root.php";
+require_once "class.ole_pps_file.php";
+
+class writeexcel_workbookbig extends writeexcel_workbook {
+
+    function writeexcel_workbookbig($filename) {
+        $this->writeexcel_workbook($filename);
+    }
+
+    function _store_OLE_file() {
+        $file=new ole_pps_file(asc2ucs("Book"));
         $file->append($this->_data);
 
-        for ($c = 0; $c < sizeof($this->_worksheets); ++$c) {
-            $worksheet = &$this->_worksheets[$c];
-            while ($data = $worksheet->get_data()) {
+        for ($c=0;$c<sizeof($this->_worksheets);$c++) {
+            $worksheet=&$this->_worksheets[$c];
+            while ($data=$worksheet->get_data()) {
                 $file->append($data);
             }
             $worksheet->cleanup();
         }
 
-        $ole = new ole_pps_root(false, false, array($file));
+        $ole=new ole_pps_root(false, false, array($file));
         $ole->save($this->_filename);
     }
+
 }
+
+?>

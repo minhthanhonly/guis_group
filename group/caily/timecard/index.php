@@ -94,10 +94,14 @@ $view->heading('タイムカード');
           <span><i class="icon-base ti tabler-calculator me-0 me-sm-1 icon-16px"></i><span
               class="d-none d-sm-inline-block">再計算</span></span>
         </button>
-        <a href="excel.php?year=2025&month=5" class="btn btn-success rounded-2 waves-effect waves-light" type="button" data-recalculation>
+        <a href="csv.php?year=2025&month=5&userid=<?= $_SESSION['userid'] ?>" class="btn btn-success rounded-2 waves-effect waves-light" type="button" data-export-csv>
+          <span><i class="icon-base ti tabler-file-spreadsheet me-0 me-sm-1 icon-16px"></i><span
+              class="d-none d-sm-inline-block">CSV出力</span></span>
+        </a>
+        <!-- <a href="javascript:void(0);" class="btn btn-success rounded-2 waves-effect waves-light" type="button" data-export-excel>
           <span><i class="icon-base ti tabler-file-spreadsheet me-0 me-sm-1 icon-16px"></i><span
               class="d-none d-sm-inline-block">Excel出力</span></span>
-        </a>
+        </a> -->
       </div>
     </div>
     <div class="card-datatable">
