@@ -273,3 +273,49 @@
 	}
 }
 
+
+
+#ai-image{
+	cursor: pointer;
+	position: relative;
+}
+#ai-image:hover{
+	filter: brightness(1.1);
+}
+
+.speech-bubble {
+	position: absolute;
+	top: -20px;
+	right: 20px;
+	background: #fff;
+	padding: 8px 12px;
+	border-radius: 12px;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	max-width: 200px;
+  }
+  .typing-text {
+	white-space: nowrap;
+	overflow: hidden;
+	animation: typing 4s infinite 3s;
+	font-size: 10px;
+  }
+  .bubble-arrow {
+	position: absolute;
+	bottom: -8px;
+	right: 30px;
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+	border-top: 12px solid #fff;
+  }
+  @keyframes typing {
+	from { width: 0 }
+	to { width: 100% }
+  }
+
+table.fc-col-header,
+.fc-daygrid-body.fc-daygrid-body-unbalanced,
+.fc-daygrid-body.fc-daygrid-body-unbalanced table{
+  width: 100%!important;
+}

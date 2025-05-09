@@ -25,13 +25,17 @@
 <script src="<?=$root?>assets/vendor/libs/notiflix/notiflix.js"></script>
 <script src="<?=$root?>assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
 <script src="<?=$root?>assets/js/imask.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/style.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ja.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/index.js"></script>
 
+<!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/style.css"> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ja.js"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/index.js"></script> -->
+<link rel="stylesheet" href="<?=$root?>assets/vendor/libs/flatpickr/flatpickr.css" />
+<link rel="stylesheet" href="<?=$root?>assets/vendor/libs/flatpickr/monthSelect.css">
 <script src="<?=$root?>assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js"></script>
+<script src="<?=$root?>assets/vendor/libs/flatpickr/flatpickr.js"></script>
+<script src="<?=$root?>assets/vendor/libs/flatpickr/monthSelect.js"></script>
+<script src="<?=$root?>assets/vendor/libs/flatpickr/ja.js"></script> 
 
 
 

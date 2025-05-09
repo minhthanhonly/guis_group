@@ -402,13 +402,12 @@ class Timecard extends ApplicationModel {
 		$userid = $_POST['userid'];
 		$open = $_POST['timecard_open'];
 		$close = $_POST['timecard_close'];
-		$comment = $_POST['timecard_comment'];
 
 		$column = ['timecard_open', 'timecard_close', 'timecard_comment'];
 		$array = [];
 		foreach($_POST as $key => $value){
 			if(in_array($key, $column)){
-				$array[$key] = $value;
+				$array[$key] = htmlspecialchars(stripcslashes(trim($value)), ENT_QUOTES, 'UTF-8');
 			}
 		}
 		//check if the timecard is already exists
@@ -449,7 +448,9 @@ class Timecard extends ApplicationModel {
 			$array['timecard_originalopen'] = $open;
 			$array['timecard_originalclose'] = $close;
 			$keys = implode(',', array_keys($array));
-			$values = implode(',', array_values($array));
+			$values = implode("','", array_values($array));
+			$values = "'" . $values . "'";
+
 			$query = sprintf("INSERT INTO %stimecard (%s) VALUES (%s)", DB_PREFIX, $keys, $values);
 			$response = $this->query($query);
 		}	
@@ -478,6 +479,11 @@ class Timecard extends ApplicationModel {
 			$hash['message_code'] = $this->error;
 			return $hash;
 		}
+		// foreach($data as $key => $value){
+		// 	if($key == 'timecard_comment'){
+		// 		$data[$key] = html_entity_decode($value);
+		// 	}
+		// }	
 		$hash['data'] = $data;
 		$hash['status'] = 'success';
 		return $hash;

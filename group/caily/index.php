@@ -48,8 +48,14 @@ if ($current_hour >= 6 && $current_hour < 12) {
             </div>
           </div>
           <div class="col-5 text-center text-sm-left">
-            <div class="card-body pb-0 px-0 px-md-4">
-              <img src="<?=$root?>assets/img/illustrations/card-advance-sale.png" height="140" alt="view sales">
+            <div class="card-body pb-0 px-0 px-md-4" id="ai-image" data-bs-toggle="modal" data-bs-target="#modalAI">
+              <img src="<?=$root?>assets/img/illustrations/girl-with-laptop.png" height="140" alt="view sales" >
+              <div class="speech-bubble">
+                <div class="typing-text">
+                  AIチャットで何でも聞いてください！
+                </div>
+                <div class="bubble-arrow"></div>
+              </div>
             </div>
           </div>
         </div>

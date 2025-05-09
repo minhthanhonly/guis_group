@@ -188,11 +188,11 @@ $view->heading('タイムカード');
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="viewTimecardOpen">チェックイン</label>
-              <input type="text" class="form-control" id="editTimecardOpen" placeholder="" name="timecard_open"/>
+              <input type="time" class="form-control" id="editTimecardOpen" placeholder="" name="timecard_open"/>
             </div>
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="editTimecardClose">チェックアウト</label>
-              <input type="text" class="form-control" id="editTimecardClose" placeholder="" name="timecard_close"/>
+              <input type="time" class="form-control" id="editTimecardClose" placeholder="" name="timecard_close"/>
             </div>
           </div>
           <div class="form-group row">

@@ -152,7 +152,7 @@
                   </div>
                   <div class="chat-message-wrapper flex-grow-1">
                     <div class="chat-message-text">
-                      <p class="mb-0">こんにちは、私はGUIS社のアシスタントです。</p>
+                      <p class="mb-0">私はGUIS社のアシスタントです。</p>
                     </div>
                     <div class="chat-message-text mt-2">
                       <p class="mb-0">何かお手伝いできることはありますか？</p>
@@ -169,7 +169,7 @@
           <!-- Chat message form -->
           <div class="chat-history-footer shadow-xs">
             <form class="form-send-message d-flex justify-content-between align-items-center ">
-              <input class="form-control message-input border-0 me-4 shadow-none" placeholder="メッセージを入力してください..." />
+              <input class="form-control message-input border-0 me-4 shadow-none" placeholder="メッセージを入力してください..." autofocus />
               <div class="message-actions d-flex align-items-center">
                 <!-- <span class="btn btn-text-secondary btn-icon rounded-pill cursor-pointer">
                   <i class="speech-to-text icon-base ti tabler-microphone icon-22px text-heading"></i>

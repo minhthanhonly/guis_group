@@ -8,7 +8,7 @@
             <a href="index.html" class="app-brand-link">
               <span class="app-brand-logo demo">
                 <span class="text-primary">
-                  <img src="assets/img/<?=APP_LOGO?>" alt="" width="30"
+                  <img src="<?=ROOT?>assets/img/<?=APP_LOGO?>" alt="" width="30"
                   data-app-light-img="<?=APP_LOGO?>"
                   data-app-dark-img="<?=APP_LOGO_DARK?>" />
                 </span>
@@ -473,7 +473,7 @@
             </div>
           </div>
 
-          <button  data-bs-toggle="modal" data-bs-target="#modalAI" id="ai-chat-toggle" class="btn btn-primary rounded-circle position-fixed"><i class="icon-base ti tabler-message-circle-2 icon-md"></i></button>
+          <button data-bs-toggle="modal" data-bs-target="#modalAI" id="ai-chat-toggle" class="btn btn-primary rounded-circle position-fixed"><i class="icon-base ti tabler-message-circle-2 icon-md"></i></button>
           <!-- Content wrapper -->
           <div class="content-wrapper">
 

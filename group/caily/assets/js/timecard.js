@@ -214,6 +214,14 @@ async function fetchGroup() {
 
 }
 
+function decodeHtmlEntities(str) {
+  return str.replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'");
+}
+
 //add event listener for selectpicker
 function addEvent() {
   const slUser = document.getElementById('selectpickerUser');
@@ -301,7 +309,7 @@ function addEvent() {
           document.getElementById('viewTimecardClose').value = timecardinfo.timecard_close;
         }
         if (timecardinfo.timecard_comment) {
-          document.getElementById('viewTimecardNote').value = timecardinfo.timecard_comment;
+          document.getElementById('viewTimecardNote').value = decodeHtmlEntities(timecardinfo.timecard_comment);
         }
 
 
@@ -362,7 +370,7 @@ function addEvent() {
           document.getElementById('editTimecardClose').value = timecardinfo.timecard_close;
         }
         if (timecardinfo.timecard_comment) {
-          document.getElementById('editTimecardNote').value = timecardinfo.timecard_comment;
+          document.getElementById('editTimecardNote').value = decodeHtmlEntities(timecardinfo.timecard_comment);
         }
 
         editModal.show();
@@ -373,6 +381,7 @@ function addEvent() {
 
   });
 
+  
 
   const fvEdit = FormValidation.formValidation(editTimecardForm, {
     fields: {
@@ -381,6 +390,10 @@ function addEvent() {
           stringLength: {
             min: 4,
             message: '4文字以上入力してください'
+          },
+          regex: {
+            regex: /^[0-9]{2}:[0-9]{2}$/,
+            message: '時間を正しく入力してください'
           }
         }
       },
@@ -389,6 +402,10 @@ function addEvent() {
           stringLength: {
             min: 4,
             message: '4文字以上入力してください'
+          },
+          regex: {
+            regex: /^[0-9]{2}:[0-9]{2}$/,
+            message: '時間を正しく入力してください'
           }
         }
       },
@@ -656,6 +673,13 @@ document.addEventListener('DOMContentLoaded', function () {
                   </div>
               </div>
               `;
+          }
+        },
+        {
+          targets: 7,
+          orderable: false,
+          render: (data, type, full, meta) => {
+            return decodeHtmlEntities(data);
           }
         }
       ],

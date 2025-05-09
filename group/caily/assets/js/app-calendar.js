@@ -228,12 +228,13 @@ document.addEventListener('DOMContentLoaded', function () {
     // Init FullCalendar
     // ------------------------------------------------
     let calendar = new Calendar(calendarEl, {
+      locale: 'ja',
       initialView: 'dayGridMonth',
       events: fetchEvents,
       plugins: [dayGridPlugin, interactionPlugin, listPlugin, timegridPlugin],
       editable: true,
       dragScroll: true,
-      dayMaxEvents: 2,
+      dayMaxEvents: 4,
       eventResizableFromStart: true,
       customButtons: {
         sidebarToggle: {
@@ -544,5 +545,6 @@ document.addEventListener('DOMContentLoaded', function () {
       appCalendarSidebar.classList.remove('show');
       appOverlay.classList.remove('show');
     });
+
   })();
 });

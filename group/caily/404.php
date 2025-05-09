@@ -64,7 +64,7 @@
         <a href="<?=$root?>" class="btn btn-primary mb-10">Back to home</a>
         <div class="mt-4">
           <img
-            src="<?=$root?>assets/img/illustrations/page-misc-error.png"
+            src="<?=$root?>assets/img/illustrations/page-misc-under-maintenance.png"
             alt="page-misc-error-light"
             width="225"
             class="img-fluid" />
