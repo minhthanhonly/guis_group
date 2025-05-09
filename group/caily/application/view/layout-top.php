@@ -466,7 +466,8 @@
               <div class="modal-content p-0">
                 <div class="modal-body1">
                   <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
-                  <?php include_once $_SERVER['DOCUMENT_ROOT'].'/chat.php'; ?>
+                  <?php $view = new View(); ?>
+                  <?php $view->chat(); ?>
                 </div>
               </div>
             </div>

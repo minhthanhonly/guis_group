@@ -1,6 +1,5 @@
 <?php
 
-
 class Timecard extends ApplicationModel {
 	var $holidays = array();
 	function __construct() {
@@ -309,6 +308,8 @@ class Timecard extends ApplicationModel {
 			$timecard_id = $this->insertid();
 			if ($timecard_id != 0) {
 				$hash['status'] = 'success';
+				$hash['timecard_id'] = $timecard_id;
+				$hash['timecard_open'] = $hour;
 				$hash['message_code'] = '完了しました。';
 			}
 			else{
@@ -348,6 +349,12 @@ class Timecard extends ApplicationModel {
 		if($data > 0){
 			$hash['status'] = 'success';
 			$hash['message_code'] = '完了しました。';
+			$hash['timecard_id'] = $id;
+			$hash['timecard_close'] = $hour;
+			$hash['timecard_open'] = $open;
+			$hash['timecard_time'] = $result["timecard_time"];
+			$hash['timecard_timeover'] = $result["timecard_timeover"];
+			$hash['timecard_timeinterval'] = $result["timecard_timeinterval"];
 		} else{
 			$hash['status'] = 'error';
 			$hash['message_code'] = 'エラーが発生しました。';
@@ -1153,6 +1160,255 @@ class Timecard extends ApplicationModel {
 			}
 		}
 		return array('owner'=>$result, 'user'=>$user);
+
+	}
+
+
+	function excel() {
+		if($_SESSION['authority'] == 'member'){
+			if($_GET['userid'] != $_SESSION['userid']){
+				$this->died('権限がありません。');
+			}
+		} else {
+			$this->authorize('editor','manager','administrator');
+		}
+		require_once "class.writeexcel_biffwriter.inc.php";
+		require_once "class.writeexcel_formula.inc.php";
+		require_once "class.writeexcel_format.inc.php";
+		require_once "class.writeexcel_olewriter.inc.php";
+		require_once "class.writeexcel_worksheet.inc.php";
+		require_once "class.writeexcel_workbook.inc.php";
+		$fname = tempnam("/tmp", "timecard.xlsx");
+		$options = array('temp_dir' => $fname);
+		$workbook = new writeexcel_workbook($options);
+		# Some common formats
+		# Create a border format
+		$border1 =& $workbook->addformat();
+		$border1->set_color('black');
+		$border1->set_bold();
+		$border1->set_size(15);
+		$border1->set_pattern(0x1);
+		$border1->set_fg_color('white');
+		$border1->set_border_color('black');
+
+		$border1->set_align('center');
+		$border1->set_align('vcenter');
+		$border1->set_merge(); # This is the key feature
+
+	
+		$border2 =& $workbook->addformat();
+		$border2->set_color('black');
+		$border2->set_bold();
+		$border2->set_size(15);
+		$border2->set_pattern(0x1);
+		$border2->set_fg_color('white');
+		$border2->set_border_color('black');
+
+		$border2->set_align('center');
+		$border2->set_align('vcenter');
+		$border2->set_merge(); # This is the key feature
+		
+		$border3 =& $workbook->addformat();
+		$border3->set_color('black');
+		$border3->set_bold();
+
+		$border3->set_pattern(0x1);
+		$border3->set_fg_color('white');
+		$border3->set_border_color('black');
+		
+		$border3->set_align('center');
+		$border3->set_align('vcenter');
+		$border3->set_merge(); # This is the key feature 
+
+	
+		$border4 =& $workbook->addformat();
+		$border4->set_color('black');
+		$border4->set_bold();
+	
+		$border4->set_pattern(0x1);
+		$border4->set_fg_color('white');
+		$border4->set_border_color('black');
+		
+		$border4->set_align('center');
+		$border4->set_align('vcenter');
+		$border4->set_merge(); # This is the key feature
+		
+		$border5 =& $workbook->addformat();
+		$border5->set_fg_color('white');
+		$border5->set_border_color('black');
+		$border5->set_align('center');
+		$border5->set_align('vcenter');
+		$border5->set_merge();
+		
+		/*$border6 =& $workbook->addformat();
+		$border6->set_color('red');
+		$border6->set_align('center');
+		$border6->set_border_color('black');*/
+		
+		$center  =& $workbook->addformat(array('align' => 'center','font'=>"Arial"));
+		$heading =& $workbook->addformat(array('align' => 'center', 'bold' => 1,'font'=>"Arial"));
+		$border =& $workbook->addformat(array('align' => 'center', 'border'   => 1));
+		$border_over =& $workbook->addformat(array('align' => 'center', 'border'   => 1, 'color' => 'red'));
+		$border_sat =& $workbook->addformat(array('align' => 'center', 'border'   => 1, 'fg_color'   => 41));
+		$border_sun =& $workbook->addformat(array('align' => 'center', 'border'   => 1,'fg_color'   => 45));
+		$heading_border =& $workbook->addformat(array('align' => 'center', 'border'   => 1,'fg_color'   => 'black' , 'color'=>'white'));
+
+		$query = "SELECT realname FROM groupware_user WHERE userid='".$_GET['userid']."'";
+		$real_name = $this->fetchAll($query);
+		$real_name = $real_name[0]['realname'];
+
+
+
+		$worksheet1 = $workbook->addworksheet($_GET['userid']);
+
+		$worksheet1->set_column(0, 5, 12);
+
+		$worksheet1->write(0, 0, mb_convert_encoding($real_name, 'SJIS', 'auto'),$border1);
+		$worksheet1->write(0, 1,'',$border2);
+		$worksheet1->write(0, 2,'',$border2);
+		$worksheet1->write(0, 3,'',$border2);
+		$worksheet1->write(0, 4,'',$border2);
+		$worksheet1->write(0, 5,'',$border2);
+		
+		$worksheet1->write(1, 0, mb_convert_encoding($_GET['month'].'/'.$_GET['year'], 'SJIS', 'auto'), $border3);
+		$worksheet1->write(1, 1,'',$border4);
+		$worksheet1->write(1, 2,'',$border4);
+		$worksheet1->write(1, 3,'',$border4);
+		$worksheet1->write(1, 4,'',$border4);
+		$worksheet1->write(1, 5,'',$border4);
+		$worksheet1->write(2, 0,'',$border4);
+		$worksheet1->write(2, 1,'',$border4);
+		$worksheet1->write(2, 2,'',$border4);
+		$worksheet1->write(2, 3,'',$border4);
+		$worksheet1->write(2, 4,'',$border4);
+		$worksheet1->write(2, 5,'',$border4);
+		
+		$worksheet1->write(3, 0, mb_convert_encoding('Date', 'SJIS', 'auto'), $heading_border);
+		$worksheet1->write(3, 1, mb_convert_encoding('In', 'SJIS', 'auto'), $heading_border);
+		$worksheet1->write(3, 2, mb_convert_encoding('Out', 'SJIS', 'auto'), $heading_border);
+		$worksheet1->write(3, 3, mb_convert_encoding('Worktime', 'SJIS', 'auto'), $heading_border);
+		$worksheet1->write(3, 4, mb_convert_encoding('Overtime', 'SJIS', 'auto'), $heading_border);
+		$worksheet1->write(3, 5, mb_convert_encoding('Note', 'SJIS', 'auto'), $heading_border);
+		
+		
+		$query = sprintf("SELECT * FROM groupware_timecard WHERE (timecard_year = %d) AND (((timecard_month = %d) AND (timecard_day BETWEEN '0' AND '31')))  AND (owner = '%s') ORDER BY timecard_date", $_GET['year'],$_GET['month'],  $_GET['userid']);
+		$list = $this->fetchAll($query);
+		$field = $this->schematize();
+		
+		if (is_array($list) && count($list) > 0) {
+		
+			$timestamp = mktime(0, 0, 0, $_GET['month'], 1, $_GET['year']);
+			$lastday = date('t', $timestamp);
+			$weekday = date('w', $timestamp);
+			$week = array('日', '月', '火', '水', '木', '金', '土');
+			$j=1;
+			foreach ($list as $row) {
+				if ($temp == $row['timecard_day'])
+				{
+					$data[$row['timecard_day']][$j] = $row;
+					$j++;
+				} else {
+					$data[$row['timecard_day']][0] = $row;
+					$j=1;
+				}
+				$temp = $row['timecard_day'];
+			}
+
+			$sum = 0;
+			$sum_over = 0;
+			$mt =$_GET['month'];
+			$dt = 1;
+			
+			for ($i = 1; $i <= $lastday; $i++) {
+				if(!isset($data[$i])){
+					continue;
+				}
+				$timeaday = count($data[$i]);
+				if ($timeaday == 0) {
+					if (strlen($data[$dt]['timecard_time']) > 0) {
+						$array = explode(':', $data[$dt]['timecard_time']);
+						$sum += intval($array[0]) * 60 + intval($array[1]);
+					}
+					if (strlen($data[$dt]['timecard_timeover']) > 0) {
+						$array = explode(':', $data[$dt]['timecard_timeover']);
+						$sum_over += intval($array[0]) * 60 + intval($array[1]);
+					}
+					$border_style = $border;
+					if($weekday == 0){
+						$border_style = $border_sun;
+					}elseif($weekday == 6){
+						$border_style = $border_sat;
+					}
+					
+				
+					$worksheet1->write($dt + 3, 0, $i.'/'.$mt.' ('.$week[$weekday].')', $border_style);
+					$worksheet1->write($dt + 3, 1, mb_convert_encoding($data[$i][$j]['timecard_open'], 'SJIS', 'auto'), $border_style);
+					$worksheet1->write($dt + 3, 2, mb_convert_encoding($data[$i][$j]['timecard_close'], 'SJIS', 'auto'), $border_style);
+					$worksheet1->write($dt + 3, 3, mb_convert_encoding($data[$i][$j]['timecard_time'], 'SJIS', 'auto'), $border_style);
+					$worksheet1->write($dt + 3, 4, mb_convert_encoding($data[$i][$j]['timecard_timeover'], 'SJIS', 'auto'),$border_style);
+					$worksheet1->write($dt + 3, 5, mb_convert_encoding($data[$i][$j]['timecard_comment'], 'SJIS', 'auto'), $border_style);
+					$dt++;
+				}
+				$temp_sum_over = 0;
+				/* calculate timeover first */
+				for($j= 0; $j < $timeaday; $j++) {
+					$array = explode(':', $data[$i][$j]['timecard_timeover']);
+					$temp_sum_over += intval($array[0]) * 60 + intval($array[1]);
+				}
+				
+				for ($j=0; $j < $timeaday; $j++ ) {
+
+					if (strlen($data[$i][$j]['timecard_time']) > 0) {
+						$array = explode(':', $data[$i][$j]['timecard_time']);
+						$sum += intval($array[0]) * 60 + intval($array[1]);
+					}
+					if ($j == ($timeaday-1)){
+						if ($temp_sum_over > 29){
+							$temp_sum_over = ($temp_sum_over - ($temp_sum_over%30));
+							$sum_over += $temp_sum_over ;
+						}	
+					}	
+					$border_style = $border;
+					if($weekday == 0){
+						$border_style = $border_sun;
+					}elseif($weekday == 6){
+						$border_style = $border_sat;
+					}
+					if($timeaday == 1) 
+						$worksheet1->write($dt + 3, 0, $i.'/'.$mt.' ('.$week[$weekday].')', $border_style);
+					elseif($j == 0 && $timeaday > 1) $worksheet1->write($dt + 3, 0, $i.'/'.$mt.' ('.$week[$weekday].')', $border5);
+					elseif($j >= 1 && $timeaday > 1) $worksheet1->write($dt + 3, 0,'', $border5);
+					
+					$worksheet1->write($dt + 3, 1, mb_convert_encoding($data[$i][$j]['timecard_open'], 'SJIS', 'auto'), $border_style);
+					$worksheet1->write($dt + 3, 2, mb_convert_encoding($data[$i][$j]['timecard_close'], 'SJIS', 'auto'), $border_style);
+					$worksheet1->write($dt + 3, 3, mb_convert_encoding($data[$i][$j]['timecard_time'], 'SJIS', 'auto'), $border_style);
+					if ($temp_sum_over > 29)
+					    $worksheet1->write($dt + 3, 4, mb_convert_encoding($data[$i][$j]['timecard_timeover'], 'SJIS', 'auto'),$border_over);
+					else
+						$worksheet1->write($dt + 3, 4, mb_convert_encoding($data[$i][$j]['timecard_timeover'], 'SJIS', 'auto'),$border_style);
+					$worksheet1->write($dt + 3, 5, mb_convert_encoding($data[$i][$j]['timecard_comment'], 'SJIS', 'auto'), $border_style);
+					$dt++;
+					
+				}
+				$weekday = ($weekday + 1) % 7;
+			}
+			
+			$worksheet1->write($lastday + 4 , 0, mb_convert_encoding('Total worktime', 'SJIS', 'auto'), $heading_border);
+			$worksheet1->write($lastday + 4 , 1, mb_convert_encoding(sprintf('%d:%02d', (($sum - ($sum % 60)) / 60), ($sum % 60)), 'SJIS', 'auto'), $border);
+			$worksheet1->write($lastday + 5 , 0, mb_convert_encoding('Total overtime', 'SJIS', 'auto'),$heading_border);
+			$worksheet1->write($lastday + 5 , 1, mb_convert_encoding(sprintf('%d:%02d', (($sum_over - ($sum_over % 60)) / 60), ($sum_over % 60)), 'SJIS', 'auto'), $border);
+		
+			$workbook->close();
+			header('Content-Type: application/x-msexcel; name=timecard_'.$_GET['userid'].'_'.$_GET['year'].'_'.$_GET['month'].'.xlsx');
+			header('Content-Disposition: inline; filename=timecard_'.$_GET['userid'].'_'.$_GET['year'].'_'.$_GET['month'].'.xlsx');
+			$fh=fopen($fname, "rb");
+			fpassthru($fh);
+			unlink($fname);
+			exit();
+			
+		} else {
+			$this->died('No data.');
+		}
 
 	}
 

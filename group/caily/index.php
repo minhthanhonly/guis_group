@@ -12,6 +12,7 @@ $today = $hash['year'].'年'.$hash['month'].'月'.$hash['day'].'日('.$week[$has
 $current_hour = date('H');
 $welcome_message = $_SESSION['realname'].'さん、';
 $today_message = '今日は'.$today.'です。';
+if(!isset($hash['timecard']['timecard_close']) || $hash['timecard']['timecard_close'] == '') { 
 if ($current_hour >= 6 && $current_hour < 12) {
     $welcome_message .= 'おはようございます！';
 } elseif ($current_hour >= 12 && $current_hour < 18) {
@@ -19,26 +20,31 @@ if ($current_hour >= 6 && $current_hour < 12) {
 } else {
     $welcome_message .= 'こんばんは！';
 }
-
+}
 ?>
 
 <!-- Content -->
 <div class="container-xxl flex-grow-1 container-p-y">
 	<div class="row g-6">
     <!-- View sales -->
-    <div class="col-xl-4">
+    <div class="col-xl-4 col-md-6">
       <div class="card">
-        <div class="d-flex align-items-center row">
+        <div class="d-flex align-items-end row">
           <div class="col-7">
             <div class="card-body text-nowrap">
               <h5 class="card-title mb-0"><?=$welcome_message?></h5>
               <p class="mb-4"><?=$today_message?></p>
-			  <?php if($hash['timecard'] && $hash['timecard']['timecard_open'] == ''){ ?>
-              <a href="javascript:;" class="btn btn-primary waves-effect waves-light" id="checkin">チェックイン</a>
-			  <?php } ?>
-			  <?php if($hash['timecard'] && $hash['timecard']['timecard_open'] != '' && $hash['timecard']['timecard_close'] == ''){ ?>
-              <a href="javascript:;" class="btn btn-primary waves-effect waves-light" id="checkout">チェックアウト</a>
-			  <?php } ?>
+              <button <?php if(isset($hash['timecard']['timecard_open']) && $hash['timecard']['timecard_open']!= ''){ echo 'disabled'; }?> class="me-2 btn btn-primary waves-effect waves-light" id="checkin">出社</button>
+              <button <?php if(isset($hash['timecard']['timecard_close']) && $hash['timecard']['timecard_close'] != '') { echo 'disabled'; }?> class="btn btn-warning waves-effect waves-light" id="checkout" data-id="<?=$hash['timecard']['id']?>" data-open="<?=$hash['timecard']['timecard_open']?>">退社</button>
+              <div id="timecard-result" class="mt-3">
+                <?php if(isset($hash['timecard']['timecard_close']) && $hash['timecard']['timecard_close'] != '') { ?>
+                  <p class="text-success mb-0">お疲れ様でした！<br>勤務時間は<?=$hash['timecard']['timecard_time']?>です。
+                  <?php if(isset($hash['timecard']['timecard_timeover']) && $hash['timecard']['timecard_timeover'] != '0:00') { ?>
+                    時間外は<?=$hash['timecard']['timecard_timeover']?>です。
+                  <?php } ?>
+                </p> 
+                <?php } ?>
+              </div>
             </div>
           </div>
           <div class="col-5 text-center text-sm-left">
@@ -112,3 +118,4 @@ if ($current_hour >= 6 && $current_hour < 12) {
 <?php
 $view->footing();
 ?>
+<script src="<?=ROOT?>assets/js/top.js"></script>

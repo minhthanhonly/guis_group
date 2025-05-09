@@ -233,7 +233,13 @@ class View {
 			$string = mb_convert_encoding($string, 'SJIS', 'SJIS, UTF-8');
 		}
 		return $string;
-		
+	}
+
+	
+	public function chat() {
+		$model = new ApplicationModel();
+		$user_list = $model->user_list;
+		require_once(DIR_VIEW.'chat.php');
 	}
 
 

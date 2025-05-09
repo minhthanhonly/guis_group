@@ -2,7 +2,14 @@
 
 
 class ApplicationModel extends Model {
-	
+
+	public $user_list = [];
+	function __construct() {
+		parent::__construct();
+		if($this->user_list == null){
+			$this->user_list = $this->findAllActiveUser();
+		}
+	}
 	function authorize() {
 		
 		$this->connect();
@@ -343,6 +350,14 @@ class ApplicationModel extends Model {
 			return '?'.implode('&', $result);
 		}
 		
+	}
+
+	function findAllActiveUser() {
+		$this->connect();
+		$retrict_group = array(RETIRE_GROUP);
+		$query = "SELECT userid, realname, user_groupname, user_image, authority FROM groupware_user WHERE (`is_suspend` IS NULL OR is_suspend = '0') and user_group NOT IN ('".implode("','", $retrict_group)."') ORDER BY user_order,id";
+		$data = $this->fetchAll($query);
+		return $data;
 	}
 }
 

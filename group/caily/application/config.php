@@ -76,7 +76,7 @@ define('APP_COMPANY', 'GUIS Co.,Ltd');
 
 define('APP_VERSION', '1.0.0');
 
-define('APP_LOGO', 'logo-site-white.png');
+define('APP_LOGO', 'logo-site-dark.png');
 
 define('APP_LOGO_DARK', 'logo-site-white.png');
 

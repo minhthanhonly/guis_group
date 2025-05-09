@@ -241,7 +241,7 @@ function addEvent(){
   const viewTimecardForm = document.getElementById('viewTimecardForm');
   const editTimecardForm = document.getElementById('editTimecardForm');
   recalc.addEventListener('click', async function () {
-    const user = USER_ID;
+    let user = USER_ID;
     if(slUser && slUser.value != ''){
       user = slUser.value;
     }
@@ -464,7 +464,6 @@ function checkin(owner = '') {
     }
   })
     .then(function (response) {
-      _log(response)
       if (response.status === 200 && response.data && response.data.status === 'success') {
         handleSuccess(response.data.message_code);
         // delete row from datatable
@@ -493,7 +492,6 @@ function checkout(id = '', open = '', owner = '') {
     }
   })
     .then(function (response) {
-      _log(response)
       if (response.status === 200 && response.data && response.data.status === 'success') {
         handleSuccess(response.data.message_code);
         // delete row from datatable

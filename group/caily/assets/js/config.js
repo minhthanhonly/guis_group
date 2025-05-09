@@ -11,6 +11,7 @@
 */
 window.config = {
   // global color variables for charts except chartjs
+
   colors: {
     primary: window.Helpers.getCssVar('primary'),
     secondary: window.Helpers.getCssVar('secondary'),
@@ -40,6 +41,7 @@ window.config = {
   fontFamily: window.Helpers.getCssVar('font-family-base'),
   enableMenuLocalStorage: true // Enable menu state with local storage support
 };
+
 
 window.assetsPath = document.documentElement.getAttribute('data-assets-path');
 window.templateName = document.documentElement.getAttribute('data-template');
@@ -73,7 +75,7 @@ if (typeof TemplateCustomizer !== 'undefined') {
   window.templateCustomizer = new TemplateCustomizer({
     displayCustomizer: true,
     lang: localStorage.getItem('templateCustomizer-' + templateName + '--Lang') || 'en', // Set default language here
-    // defaultPrimaryColor: '#D11BB4',
+    defaultPrimaryColor: '#EB3D63',
     // defaultSkin: 1,
     // defaultTheme: 'system',
     // defaultSemiDark: true,

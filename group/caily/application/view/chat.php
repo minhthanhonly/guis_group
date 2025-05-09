@@ -3,11 +3,11 @@
       <!-- Sidebar Left -->
       <div class="col app-chat-sidebar-left app-sidebar overflow-hidden" id="app-chat-sidebar-left">
         <div class="chat-sidebar-left-user sidebar-header d-flex flex-column justify-content-center align-items-center flex-wrap px-6 pt-12">
-          <div class="avatar avatar-xl avatar-online chat-sidebar-avatar">
+          <div class="avatar avatar-xl avatar-online chat-sidebar-avatar" id="user_avatar">
             <?php if($_SESSION['user_image'] != '') {
-                echo '<img src="'.$root.'assets/upload/avatar/'.$_SESSION['user_image'].'" alt class="rounded-circle" />';
+                echo '<img src="'.ROOT.'assets/upload/avatar/'.$_SESSION['user_image'].'" alt class="rounded-circle" />';
             } else{
-                echo '<img src="'.$root.'assets/img/avatars/1.png" alt class="rounded-circle" />';
+                echo '<img src="'.ROOT.'assets/img/avatars/1.png" alt class="rounded-circle" />';
             }?>
           </div>
           <h5 class="mt-4 mb-0"><?=$realname?></h5>
@@ -25,11 +25,15 @@
         <div class="sidebar-header h-px-75 px-5 border-bottom d-flex align-items-center">
           <div class="d-flex align-items-center me-6 me-lg-0">
             <div class="flex-shrink-0 avatar avatar-online me-4" data-bs-toggle="sidebar" data-overlay="app-overlay-ex" data-target="#app-chat-sidebar-left">
-              <img class="user-avatar rounded-circle cursor-pointer" src="../../assets/img/avatars/1.png" alt="Avatar" />
+              <?php if($_SESSION['user_image'] != '') {
+                echo '<img src="'.ROOT.'assets/upload/avatar/'.$_SESSION['user_image'].'" alt class="user-avatar rounded-circle cursor-pointer" />';
+              } else{
+                  echo '<img src="'.ROOT.'assets/img/avatars/1.png" alt class="user-avatar rounded-circle cursor-pointer" />';
+              }?>
             </div>
             <div class="flex-grow-1 input-group input-group-merge">
               <span class="input-group-text" id="basic-addon-search31"><i class="icon-base ti tabler-search icon-xs"></i></span>
-              <input type="text" class="form-control chat-search-input" placeholder="Search..." aria-label="Search..." aria-describedby="basic-addon-search31" />
+              <input type="text" class="form-control chat-search-input" placeholder="検索..." aria-label="検索..." aria-describedby="basic-addon-search31" />
             </div>
           </div>
           <i class="icon-base ti tabler-x icon-lg cursor-pointer position-absolute top-50 end-0 translate-middle d-lg-none d-block" data-overlay data-bs-toggle="sidebar" data-target="#app-chat-contacts"></i>
@@ -38,15 +42,15 @@
           <!-- Chats -->
           <ul class="list-unstyled chat-contact-list py-2 mb-0" id="chat-list">
             <li class="chat-contact-list-item chat-contact-list-item-title mt-0">
-              <h5 class="text-primary mb-0">Chats</h5>
+              <h5 class="text-primary mb-0">チャット</h5>
             </li>
             <li class="chat-contact-list-item chat-list-item-0 d-none">
-              <h6 class="text-body-secondary mb-0">No Chats Found</h6>
+              <h6 class="text-body-secondary mb-0">チャットが見つかりません</h6>
             </li>
             <li class="chat-contact-list-item mb-1">
               <a class="d-flex align-items-center">
                 <div class="flex-shrink-0 avatar avatar-online">
-                  <img src="<?=$root?>assets/img/avatars/1.png" alt="Avatar" class="rounded-circle" />
+                  <img src="<?=ROOT?>assets/img/avatars/ai.png" alt="Avatar" class="rounded-circle" />
                 </div>
                 <div class="chat-contact-info flex-grow-1 ms-4">
                   <div class="d-flex justify-content-between align-items-center">
@@ -60,34 +64,30 @@
           <!-- Contacts -->
           <ul class="list-unstyled chat-contact-list mb-0 py-2" id="contact-list">
             <li class="chat-contact-list-item chat-contact-list-item-title mt-0">
-              <h5 class="text-primary mb-0">Contacts</h5>
+              <h5 class="text-primary mb-0">連絡先</h5>
             </li>
             <li class="chat-contact-list-item contact-list-item-0 d-none">
-              <h6 class="text-body-secondary mb-0">No Contacts Found</h6>
+              <h6 class="text-body-secondary mb-0">連絡先が見つかりません</h6>
             </li>
+
+            <?php foreach($user_list as $user){ ?>
             <li class="chat-contact-list-item">
               <a class="d-flex align-items-center">
                 <div class="flex-shrink-0 avatar">
-                  <img src="<?=$root?>assets/img/avatars/1.png" alt="Avatar" class="rounded-circle" />
+                  <?php if($user['user_image'] != '') {
+                      echo '<img src="'.ROOT.'assets/upload/avatar/'.$user['user_image'].'" alt="Avatar" class="rounded-circle" />';
+                  } else{
+                      echo '<img src="'.ROOT.'assets/img/avatars/1.png" alt="Avatar" class="rounded-circle" />';
+                  }?>
                 </div>
                 <div class="chat-contact-info flex-grow-1 ms-4">
-                  <h6 class="chat-contact-name text-truncate m-0 fw-normal">Natalie Maxwell</h6>
-                  <small class="chat-contact-status text-truncate">UI/UX Designer</small>
+                  <h6 class="chat-contact-name text-truncate m-0 fw-normal"><?=$user['realname']?></h6>
+                  <small class="chat-contact-status text-truncate"><?=$user['user_groupname']?></small>
                 </div>
               </a>
             </li>
+            <?php } ?>
            
-            <li class="chat-contact-list-item mb-0">
-              <a class="d-flex align-items-center">
-                <div class="flex-shrink-0 avatar">
-                  <img src="<?=$root?>assets/img/avatars/1.png" alt="Avatar" class="rounded-circle" />
-                </div>
-                <div class="chat-contact-info flex-grow-1 ms-4">
-                  <h6 class="chat-contact-name text-truncate m-0 fw-normal">William Stephens</h6>
-                  <small class="chat-contact-status text-truncate">Backend Developer</small>
-                </div>
-              </a>
-            </li>
           </ul>
         </div>
       </div>
@@ -98,8 +98,8 @@
         <div class="bg-label-primary p-8 rounded-circle">
           <i class="icon-base ti tabler-message-2 icon-50px"></i>
         </div>
-        <p class="my-4">Select a contact to start a conversation.</p>
-        <button class="btn btn-primary app-chat-conversation-btn" id="app-chat-conversation-btn">Select Contact</button>
+        <p class="my-4">連絡先を選択してチャットを開始してください。</p>
+        <button class="btn btn-primary app-chat-conversation-btn" id="app-chat-conversation-btn">連絡先を選択</button>
       </div>
       <!-- /Chat conversation -->
 
@@ -111,7 +111,7 @@
               <div class="d-flex overflow-hidden align-items-center">
                 <i class="icon-base ti tabler-menu-2 icon-lg cursor-pointer d-lg-none d-block me-4" data-bs-toggle="sidebar" data-overlay data-target="#app-chat-contacts"></i>
                 <div class="flex-shrink-0 avatar avatar-online">
-                  <img src="<?=$root?>assets/img/avatars/1.png" alt="Avatar" class="rounded-circle" data-bs-toggle="sidebar" data-overlay data-target="#app-chat-sidebar-right" />
+                  <img src="<?=ROOT?>assets/img/avatars/ai.png" alt="Avatar" class="rounded-circle" data-bs-toggle="sidebar" data-overlay data-target="#app-chat-sidebar-right" />
                 </div>
                 <div class="chat-contact-info flex-grow-1 ms-4">
                   <h6 class="m-0 fw-normal">AIちゃん</h6>
@@ -147,7 +147,7 @@
                 <div class="d-flex overflow-hidden">
                   <div class="user-avatar flex-shrink-0 me-4">
                     <div class="avatar avatar-sm">
-                      <img src="<?=$root?>assets/img/avatars/1.png" alt="Avatar" class="rounded-circle" />
+                      <img src="<?=ROOT?>assets/img/avatars/ai.png" alt="Avatar" class="rounded-circle" />
                     </div>
                   </div>
                   <div class="chat-message-wrapper flex-grow-1">
@@ -191,10 +191,10 @@
       <!-- /Chat History -->
 
       <!-- Sidebar Right -->
-      <div class="col app-chat-sidebar-right app-sidebar overflow-hidden" id="app-chat-sidebar-right">
+      <!-- <div class="col app-chat-sidebar-right app-sidebar overflow-hidden" id="app-chat-sidebar-right">
         <div class="sidebar-header d-flex flex-column justify-content-center align-items-center flex-wrap px-6 pt-12">
           <div class="avatar avatar-xl avatar-online chat-sidebar-avatar">
-            <img src="../../assets/img/avatars/4.png" alt="Avatar" class="rounded-circle" />
+            <img src="<?=ROOT?>assets/img/avatars/ai.png" alt="Avatar" class="rounded-circle" />
           </div>
           <h5 class="mt-4 mb-0">Felecia Rower</h5>
           <span>NextJS Developer</span>
@@ -247,7 +247,7 @@
             <button class="btn btn-danger w-100" data-bs-toggle="sidebar" data-overlay data-target="#app-chat-sidebar-right">Delete Contact<i class="icon-base ti tabler-trash icon-16px ms-2"></i></button>
           </div>
         </div>
-      </div>
+      </div> -->
       <!-- /Sidebar Right -->
 
       <div class="app-overlay"></div>

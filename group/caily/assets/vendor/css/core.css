@@ -188,6 +188,14 @@
   --bs-form-invalid-border-color: #ff4c51;
 }
 
+:root, [data-bs-theme=light], [data-bs-theme=dark] {
+  --bs-primary: #EB3D63;
+  --bs-primary-rgb: 235, 61, 99;
+  --bs-primary-bg-subtle: color-mix(in sRGB, var(--bs-paper-bg) 84%, #EB3D63);
+  --bs-primary-border-subtle: rgba(235, 61, 99, 0.39);
+  --bs-primary-contrast: #fff
+}
+
 *,
 *::before,
 *::after {
@@ -8085,6 +8093,7 @@ textarea.form-control-lg {
   --bs-box-shadow-xl: 0 0.3125rem 1.875rem 0 rgba(19, 17, 32, 0.24);
   --bs-floating-component-shadow: 0 0.31rem 1.25rem 0 rgba(47, 51, 73, 0.4);
 }
+
 
 /*
 ? styles specifically for apex-chart dark variant */

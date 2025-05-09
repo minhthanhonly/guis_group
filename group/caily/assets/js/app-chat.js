@@ -22,7 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     speechToText: $('.speech-to-text'),
     appChatConversation: document.getElementById('app-chat-conversation'),
     appChatHistory: document.getElementById('app-chat-history'),
-    chatHistory: document.getElementById('chat-history')
+    chatHistory: document.getElementById('chat-history'),
+    userAvatar: document.querySelector('#user_avatar img')
   };
 
   const userStatusClasses = {
@@ -233,7 +234,6 @@ document.addEventListener('DOMContentLoaded', () => {
           } else {
               aiMessage = 'エラーが発生しました';
           }
-          console.log(aiMessage);
           let html = generateMessage(aiMessage, false);
           elements.chatHistory.innerHTML += html;
 
@@ -261,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="d-flex overflow-hidden gap-4 ${isUser ? 'flex-row-reverse' : ''}">
           <div class="user-avatar flex-shrink-0">
             <div class="avatar avatar-sm">
-              <img src="../../assets/img/avatars/1.png" alt="Avatar" class="rounded-circle" />
+              <img src="${isUser ? elements.userAvatar.src : '/assets/img/avatars/ai.png'}" alt="Avatar" class="rounded-circle" />
             </div>
           </div>
           <div class="chat-message-wrapper flex-grow-1">
