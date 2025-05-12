@@ -49,6 +49,88 @@ class Schedule extends ApplicationModel {
 		}
 		
 	}
+
+	function get_event(){
+		$start = $_GET['start'];
+		$end = $_GET['end'];
+		$data = array();
+
+		$queryHoliday = sprintf("SELECT * FROM %s WHERE date BETWEEN '%s' AND '%s'", "groupware_holiday", $start, $end);
+		$holiday = $this->fetchAll($queryHoliday);
+		foreach ($holiday as $row) {
+			$data[] = array(
+				// 'id' => $row['id'],
+				'title' => $row['name'],
+				'start' => $row['date'],
+				'allDay' => "true",
+				'display' => 'background',
+				'extendedProps' => array(
+					'calendar' => '休日',
+					'can_edit' => 'false',
+					'type' => 'holiday',
+					'id' => $row['id'],
+				)
+			);
+		}
+		$owner = $_SESSION['userid'];
+		$arrayWhere = array(
+			"schedule_type = 0",
+			"schedule_date BETWEEN '".$start."' AND '".$end."'",
+			"(public_level = 0 OR (public_level = 1 AND owner = '".$this->quote($owner)."'))"
+		);
+
+		$schedule = $this->fetchAll("SELECT * FROM groupware_schedule WHERE ".implode(" AND ", $arrayWhere));
+
+		foreach ($schedule as $row) {
+			$data[] = array(
+				// 'id' => 'schedule_'.$row['id'],
+				'title' => $row['schedule_title'],
+				'start' => trim($row['schedule_date'] . ' ' . $row['schedule_time']),
+				'end' => trim($row['schedule_date_end'] != '' ? $row['schedule_date_end'] . ' ' . $row['schedule_endtime'] : $row['schedule_date'] . ' ' . $row['schedule_endtime']),
+				'allDay' => $row['schedule_allday'] == 1 ? 'true' : 'false',
+				'extendedProps' => array(
+					'calendar' => $row['schedule_category'] != '' ? $row['schedule_category'] : '勤怠',
+					'comment' => $row['schedule_comment'],
+					'owner' => $row['owner'],
+					'editor' => $row['editor'],
+					'updated' => $row['updated'],
+					'created' => $row['created'],
+					'can_edit' => $_SESSION['userid'] == $row['owner'] || $_SESSION['authority'] == 'administrator' ? 'true' : 'false',
+					'type' => 'schedule',
+					'id' => $row['id'],
+					'public_level' => $row['public_level']
+				)
+			);
+		}
+		return $data;
+	}
+
+	function update_event() {
+		
+		$id = $_GET['id'];
+		if($id == null) {
+			return array('status' => 'error', 'message' => 'IDが指定されていません。');
+		}
+		$title = $_POST['title'];
+		$start_date = $_POST['start_date'];
+		$start_time = $_POST['start_time'];
+		$end_date = $_POST['end_date'];
+		$end_time = $_POST['end_time'];
+		$allDay = $_POST['allDay'];
+		$comment = $_POST['comment'];
+		$public_level = $_POST['public_level'];
+		$editor = $_SESSION['userid'];
+		$updated = date('Y-m-d H:i:s');
+
+		$query = sprintf("UPDATE %s SET schedule_title = '%s', schedule_date = '%s', schedule_time = '%s', schedule_date_end = '%s', schedule_endtime = '%s', schedule_allday = '%s', schedule_comment = '%s', public_level = '%s', editor = '%s', updated = '%s' WHERE id = %d", "groupware_schedule", $title, $start_date, $start_time, $end_date, $end_time, $allDay, $comment, $public_level, $editor, $updated, $id);
+		
+		$result = $this->update_query($query);
+		if ($result) {
+			return array('status' => 'success', 'message' => '更新しました。');
+		} else {
+			return array('status' => 'error', 'message' => '更新に失敗しました。');
+		}
+	}
 	
 	function validate() {
 		

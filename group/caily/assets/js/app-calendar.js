@@ -11,9 +11,9 @@
 
 'use strict';
 
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
   const direction = isRtl ? 'rtl' : 'ltr';
-  (function () {
+  (async function () {
     // DOM Elements
     const calendarEl = document.getElementById('calendar');
     const appCalendarSidebar = document.querySelector('.app-calendar-sidebar');
@@ -27,38 +27,49 @@ document.addEventListener('DOMContentLoaded', function () {
     const eventTitle = document.getElementById('eventTitle');
     const eventStartDate = document.getElementById('eventStartDate');
     const eventEndDate = document.getElementById('eventEndDate');
-    const eventUrl = document.getElementById('eventURL');
-    const eventLocation = document.getElementById('eventLocation');
-    const eventDescription = document.getElementById('eventDescription');
+    const eventPublic = document.getElementById('eventPublic');
+    const eventComment = document.getElementById('eventComment');
     const allDaySwitch = document.querySelector('.allDay-switch');
     const selectAll = document.querySelector('.select-all');
+    const eventLastUpdate = document.getElementById('eventLastUpdate');
+    const eventLastUpdateTime = document.getElementById('eventLastUpdateTime');
     const filterInputs = Array.from(document.querySelectorAll('.input-filter'));
-    const inlineCalendar = document.querySelector('.inline-calendar');
+    const eventBtn = document.getElementById('eventBtn');
 
     // Calendar settings
     const calendarColors = {
-      Business: 'primary',
-      Holiday: 'success',
-      Personal: 'danger',
-      Family: 'warning',
-      ETC: 'info'
+      '仕事': 'primary',
+      '勤怠': 'warning',
+      '休日': 'danger',
+      '個人': 'info',
+      'その他': 'success'
     };
 
     // External jQuery Elements
     const eventLabel = $('#eventLabel'); // ! Using jQuery vars due to select2 jQuery dependency
-    const eventGuests = $('#eventGuests'); // ! Using jQuery vars due to select2 jQuery dependency
+
+    let eventList = [];
+    let forceUpdate = false;
+    async function getEventList(start, end){
+      eventList = [];
+      const response = await axios.get(`/api/index.php?model=schedule&method=get_event&start=${start}&end=${end}`);
+      // check if the response is successful
+      if (response.status !== 200 || !response.data) {
+        handleErrors(response.data);
+      }
+      return response.data;
+    }
+
 
     // Event Data
-    let currentEvents = events; // Assuming events are imported from app-calendar-events.js
+    let currentEvents = eventList; // Assuming events are imported from app-calendar-events.js
     let isFormValid = false;
     let eventToUpdate = null;
-    let inlineCalInstance = null;
 
     // Offcanvas Instance
     const bsAddEventSidebar = new bootstrap.Offcanvas(addEventSidebar);
 
-    //! TODO: Update Event label and guest code to JS once select removes jQuery dependency
-    // Initialize Select2 with custom templates
+
     if (eventLabel.length) {
       function renderBadges(option) {
         if (!option.id) {
@@ -82,29 +93,29 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Render guest avatars
-    if (eventGuests.length) {
-      function renderGuestAvatar(option) {
-        if (!option.id) return option.text;
-        return `
-    <div class='d-flex flex-wrap align-items-center'>
-      <div class='avatar avatar-xs me-2'>
-        <img src='${assetsPath}img/avatars/${$(option.element).data('avatar')}'
-          alt='avatar' class='rounded-circle' />
-      </div>
-      ${option.text}
-    </div>`;
-      }
-      eventGuests.wrap('<div class="position-relative"></div>').select2({
-        placeholder: 'Select value',
-        dropdownParent: eventGuests.parent(),
-        closeOnSelect: false,
-        templateResult: renderGuestAvatar,
-        templateSelection: renderGuestAvatar,
-        escapeMarkup: function (es) {
-          return es;
-        }
-      });
-    }
+    // if (eventGuests.length) {
+    //   function renderGuestAvatar(option) {
+    //     if (!option.id) return option.text;
+    //     return `
+    // <div class='d-flex flex-wrap align-items-center'>
+    //   <div class='avatar avatar-xs me-2'>
+    //     <img src='${assetsPath}img/avatars/${$(option.element).data('avatar')}'
+    //       alt='avatar' class='rounded-circle' />
+    //   </div>
+    //   ${option.text}
+    // </div>`;
+    //   }
+    //   eventGuests.wrap('<div class="position-relative"></div>').select2({
+    //     placeholder: 'Select value',
+    //     dropdownParent: eventGuests.parent(),
+    //     closeOnSelect: false,
+    //     templateResult: renderGuestAvatar,
+    //     templateSelection: renderGuestAvatar,
+    //     escapeMarkup: function (es) {
+    //       return es;
+    //     }
+    //   });
+    // }
 
     // Event start (flatpicker)
     if (eventStartDate) {
@@ -113,6 +124,8 @@ document.addEventListener('DOMContentLoaded', function () {
         static: true,
         enableTime: true,
         altFormat: 'Y-m-dTH:i:S',
+        defaultHour: '09:00',
+        time_24hr: true,
         onReady: function (selectedDates, dateStr, instance) {
           if (instance.isMobile) {
             instance.mobileInput.setAttribute('step', null);
@@ -128,6 +141,8 @@ document.addEventListener('DOMContentLoaded', function () {
         static: true,
         enableTime: true,
         altFormat: 'Y-m-dTH:i:S',
+        defaultHour: '09:00',
+        time_24hr: true,
         onReady: function (selectedDates, dateStr, instance) {
           if (instance.isMobile) {
             instance.mobileInput.setAttribute('step', null);
@@ -136,17 +151,12 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    // Inline sidebar calendar (flatpicker)
-    if (inlineCalendar) {
-      inlineCalInstance = inlineCalendar.flatpickr({
-        monthSelectorType: 'static',
-        static: true,
-        inline: true
-      });
-    }
 
     // Event click function
     function eventClick(info) {
+      if(info.event.extendedProps.type == 'holiday'){
+        return;
+      }
       eventToUpdate = info.event;
       if (eventToUpdate.url) {
         info.jsEvent.preventDefault();
@@ -155,30 +165,70 @@ document.addEventListener('DOMContentLoaded', function () {
       bsAddEventSidebar.show();
       // For update event set offcanvas title text: Update Event
       if (offcanvasTitle) {
-        offcanvasTitle.innerHTML = 'Update Event';
+        offcanvasTitle.innerHTML = '予定更新';
       }
-      btnSubmit.innerHTML = 'Update';
+      btnSubmit.innerHTML = '更新';
       btnSubmit.classList.add('btn-update-event');
       btnSubmit.classList.remove('btn-add-event');
       btnDeleteEvent.classList.remove('d-none');
 
       eventTitle.value = eventToUpdate.title;
-      start.setDate(eventToUpdate.start, true, 'Y-m-d');
-      eventToUpdate.allDay === true ? (allDaySwitch.checked = true) : (allDaySwitch.checked = false);
-      eventToUpdate.end !== null
-        ? end.setDate(eventToUpdate.end, true, 'Y-m-d')
-        : end.setDate(eventToUpdate.start, true, 'Y-m-d');
+      // start.setDate(eventToUpdate.start, true, 'Y-m-d H:i');
+      // eventToUpdate.end !== null
+      // ? end.setDate(eventToUpdate.end, true, 'Y-m-d H:i')
+      // : end.setDate(eventToUpdate.start, true, 'Y-m-d H:i');
+
+      if(eventToUpdate.allDay == true){
+        // set flatpickr to all day
+        start.setDate(eventToUpdate.start, false, 'Y-m-d');
+        end.setDate(eventToUpdate.end, false, 'Y-m-d');
+        start.set('enableTime', false);
+        end.set('enableTime', false);
+        start.redraw();
+        end.redraw();
+      }
+      // } else{
+      //   start.setDate(eventToUpdate.start, true, 'Y-m-d H:i');
+      //   end.setDate(eventToUpdate.end, true, 'Y-m-d H:i');
+      //   start.set('enableTime', true);
+      //   end.set('enableTime', true);
+      // }
+      eventToUpdate.allDay == true ? (allDaySwitch.checked = true) : (allDaySwitch.checked = false);
       eventLabel.val(eventToUpdate.extendedProps.calendar).trigger('change');
-      eventToUpdate.extendedProps.location !== undefined
-        ? (eventLocation.value = eventToUpdate.extendedProps.location)
+      eventToUpdate.extendedProps.comment != undefined
+        ? (eventComment.value = eventToUpdate.extendedProps.comment)
         : null;
-      eventToUpdate.extendedProps.guests !== undefined
-        ? eventGuests.val(eventToUpdate.extendedProps.guests).trigger('change')
+      eventToUpdate.extendedProps.public != undefined
+        ? (eventPublic.value = eventToUpdate.extendedProps.public)
         : null;
-      eventToUpdate.extendedProps.description !== undefined
-        ? (eventDescription.value = eventToUpdate.extendedProps.description)
-        : null;
+      if(eventToUpdate.extendedProps.editor != ''){
+        eventLastUpdate.classList.remove('d-none');
+        eventLastUpdateTime.innerHTML = eventToUpdate.extendedProps.editor + ' ' + moment(eventToUpdate.extendedProps.updated).format('YYYY/MM/DD HH:mm');
+      } else{
+        eventLastUpdate.classList.add('d-none');
+      }
+
+      if(eventToUpdate.extendedProps.can_edit == 'true'){
+        eventBtn.classList.remove('d-none');
+        eventBtn.classList.add('d-flex');
+      } else{
+        eventBtn.classList.remove('d-flex');
+        eventBtn.classList.add('d-none');
+      }
     }
+
+    allDaySwitch.addEventListener('change', function(){
+      let startDate = new Date(eventStartDate.value);
+      let endDate = new Date(eventEndDate.value);
+      if(allDaySwitch.checked){
+        eventStartDate.value = moment(startDate).format('YYYY-MM-DD');
+        eventEndDate.value = moment(endDate).format('YYYY-MM-DD');
+      } else{
+        start.setDate(startDate, true, 'Y-m-d H:i');
+        end.setDate(endDate, true, 'Y-m-d H:i');
+      }
+    });
+
 
     // Modify sidebar toggler
     function modifyToggler() {
@@ -209,20 +259,20 @@ document.addEventListener('DOMContentLoaded', function () {
       return selected;
     }
 
-    // --------------------------------------------------------------------------------------------------
-    // AXIOS: fetchEvents
-    // * This will be called by fullCalendar to fetch events. Also this can be used to refetch events.
-    // --------------------------------------------------------------------------------------------------
-    function fetchEvents(info, successCallback) {
+    let currentStart = null;
+
+    async function fetchEvents(info, successCallback) {
+      if (currentStart === null || moment(info.start).format('YYYY-MM-DD') !== currentStart || forceUpdate) {
+        currentStart = moment(info.start).format('YYYY-MM-DD');
+        currentEvents = await getEventList(currentStart, moment(info.end).format('YYYY-MM-DD'));
+        forceUpdate = false;
+      }
+      const events = currentEvents;
       let calendars = selectedCalendars();
-      // We are reading event object from app-calendar-events.js file directly by including that file above app-calendar file.
-      // You should make an API call, look into above commented API call for reference
-      let selectedEvents = currentEvents.filter(function (event) {
+      let selectedEvents = events.filter(function (event) {
         return calendars.includes(event.extendedProps.calendar.toLowerCase());
       });
-      // if (selectedEvents.length > 0) {
       successCallback(selectedEvents);
-      // }
     }
 
     // Init FullCalendar
@@ -235,24 +285,44 @@ document.addEventListener('DOMContentLoaded', function () {
       editable: true,
       dragScroll: true,
       dayMaxEvents: 4,
+      defaultAllDay: true,
       eventResizableFromStart: true,
       customButtons: {
         sidebarToggle: {
           text: 'Sidebar'
         }
       },
+      firstDay: 1,
       headerToolbar: {
         start: 'sidebarToggle, prev,next, title',
         end: 'dayGridMonth,timeGridWeek,timeGridDay,listMonth'
       },
       direction: direction,
       initialDate: new Date(),
-      navLinks: true, // can click day/week names to navigate views
+      showNonCurrentDates: false,
+      // navLinks: true, // can click day/week names to navigate views
       eventClassNames: function ({ event: calendarEvent }) {
         const colorName = calendarColors[calendarEvent._def.extendedProps.calendar];
         // Background Color
         return ['bg-label-' + colorName];
       },
+      
+      eventAllow: function(dropInfo, draggedEvent) {
+        // If can_edit is 'true', disallow drag/resize
+        if (draggedEvent.extendedProps.can_edit != 'true') {
+          return false;
+        }
+        return true;
+      },
+
+      // eventDataTransform: function(event) {
+      //   if (event.allDay && event.end) {
+      //       event.end = new Date(event.end.getTime() - 24 * 60 * 60 * 1000);
+      //   }
+      //   return event;
+      // },
+    
+      
       dateClick: function (info) {
         let date = moment(info.date).format('YYYY-MM-DD');
         resetValues();
@@ -260,28 +330,45 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // For new event set offcanvas title text: Add Event
         if (offcanvasTitle) {
-          offcanvasTitle.innerHTML = 'Add Event';
+          offcanvasTitle.innerHTML = '予定追加';
         }
-        btnSubmit.innerHTML = 'Add';
+        btnSubmit.innerHTML = '追加';
         btnSubmit.classList.remove('btn-update-event');
         btnSubmit.classList.add('btn-add-event');
         btnDeleteEvent.classList.add('d-none');
         eventStartDate.value = date;
         eventEndDate.value = date;
+        eventBtn.classList.add('d-flex');
+        eventBtn.classList.remove('d-none');
       },
       eventClick: function (info) {
         eventClick(info);
       },
-      datesSet: function () {
-        modifyToggler();
-      },
       viewDidMount: function () {
         modifyToggler();
-      }
+      },
+      
+      eventDrop: function(info) {
+        if(info.event.extendedProps.can_edit == 'true') {
+          updateEvent(info.event);
+        }
+      },
+
+      eventResize: function(info) {
+        if(info.event.extendedProps.can_edit == 'true') {
+          updateEvent(info.event);
+        }
+      },
     });
 
+
+    
     // Render calendar
     calendar.render();
+
+    calendar.on('datesSet', function (info) {
+      modifyToggler();
+    });
     // Modify sidebar toggler
     modifyToggler();
 
@@ -357,19 +444,32 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Update Event
     // ------------------------------------------------
-    function updateEvent(eventData) {
-      // ? Update existing event data to current events object and refetch it to display on calender
-      // ? You can write below code to AJAX call success response
-      eventData.id = parseInt(eventData.id);
-      currentEvents[currentEvents.findIndex(el => el.id === eventData.id)] = eventData; // Update event by id
+    async function updateEvent(eventData) {
+      var data = {
+        title: eventData.title,
+        start_date: moment(eventData.start).format('YYYY-MM-DD'),
+        start_time: moment(eventData.start).format('HH:mm'),
+        end_date: eventData.end != null ? moment(eventData.end).format('YYYY-MM-DD') : "",
+        end_time: eventData.end != null ? moment(eventData.end).format('HH:mm') : "",
+        allDay: eventData.allDay,
+        comment: eventData.extendedProps.comment,
+        public_level: eventData.extendedProps.public_level
+      }
+
+      const response = await axios.post(`/api/index.php?model=schedule&method=update_event&id=${eventData.extendedProps.id}`, data,
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }
+      );
+      if(response.status !== 200 || response.data.status != 'success') {
+        handleErrors(response.data);
+      }
+      forceUpdate = true;
       calendar.refetchEvents();
-
-      // ? To update event directly to calender (won't update currentEvents object)
-      // let propsToUpdate = ['id', 'title', 'url'];
-      // let extendedPropsToUpdate = ['calendar', 'guests', 'location', 'description'];
-
-      // updateEventInCalendar(eventData, propsToUpdate, extendedPropsToUpdate);
     }
+
 
     // Remove Event
     // ------------------------------------------------
@@ -441,9 +541,7 @@ document.addEventListener('DOMContentLoaded', function () {
               description: eventDescription.value
             }
           };
-          if (eventUrl.value) {
-            newEvent.url = eventUrl.value;
-          }
+        
           if (allDaySwitch.checked) {
             newEvent.allDay = true;
           }
@@ -487,13 +585,16 @@ document.addEventListener('DOMContentLoaded', function () {
     // ------------------------------------------------
     function resetValues() {
       eventEndDate.value = '';
-      eventUrl.value = '';
       eventStartDate.value = '';
       eventTitle.value = '';
-      eventLocation.value = '';
-      allDaySwitch.checked = false;
-      eventGuests.val('').trigger('change');
-      eventDescription.value = '';
+      // eventLocation.value = '';
+      allDaySwitch.checked = true;
+      // eventGuests.val('').trigger('change');
+      eventComment.value = '';
+      eventPublic.value = '0';
+      eventLastUpdate.classList.add('d-none');
+      eventBtn.classList.remove('d-flex');
+      eventBtn.classList.add('d-none');
     }
 
     // When modal hides reset input values
@@ -504,9 +605,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Hide left sidebar if the right sidebar is open
     btnToggleSidebar.addEventListener('click', e => {
       if (offcanvasTitle) {
-        offcanvasTitle.innerHTML = 'Add Event';
+        offcanvasTitle.innerHTML = '予定追加';
       }
-      btnSubmit.innerHTML = 'Add';
+      btnSubmit.innerHTML = '追加';
       btnSubmit.classList.remove('btn-update-event');
       btnSubmit.classList.add('btn-add-event');
       btnDeleteEvent.classList.add('d-none');
@@ -538,13 +639,6 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    // Jump to date on sidebar(inline) calendar change
-    inlineCalInstance.config.onChange.push(function (date) {
-      calendar.changeView(calendar.view.type, moment(date[0]).format('YYYY-MM-DD'));
-      modifyToggler();
-      appCalendarSidebar.classList.remove('show');
-      appOverlay.classList.remove('show');
-    });
 
   })();
 });

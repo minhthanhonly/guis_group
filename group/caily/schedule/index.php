@@ -20,45 +20,45 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
         <div class="border-bottom p-6 my-sm-0 mb-4">
           <button class="btn btn-primary btn-toggle-sidebar w-100" data-bs-toggle="offcanvas" data-bs-target="#addEventSidebar" aria-controls="addEventSidebar">
             <i class="icon-base ti tabler-plus icon-16px me-2"></i>
-            <span class="align-middle">Add Event</span>
+            <span class="align-middle">予定追加</span>
           </button>
         </div>
-        <div class="px-3 pt-2">
-          <!-- inline calendar (flatpicker) -->
-          <div class="inline-calendar"></div>
-        </div>
-        <hr class="mb-6 mx-n4 mt-3" />
-        <div class="px-6 pb-2">
+        <!-- <div class="px-3 pt-2">
+          
+        </div> -->
+        <!-- <hr class="mb-6 mx-n4 mt-3" /> -->
+        <div class="px-6 pb-2 pt-3">
           <!-- Filter -->
           <div>
-            <h5>Event Filters</h5>
+            <h5>予定のフィルター</h5>
           </div>
 
           <div class="form-check form-check-secondary mb-5 ms-2">
             <input class="form-check-input select-all" type="checkbox" id="selectAll" data-value="all" checked />
-            <label class="form-check-label" for="selectAll">View All</label>
+            <label class="form-check-label" for="selectAll">全て表示</label>
           </div>
 
           <div class="app-calendar-events-filter text-heading">
-            <div class="form-check form-check-danger mb-5 ms-2">
-              <input class="form-check-input input-filter" type="checkbox" id="select-personal" data-value="personal" checked />
-              <label class="form-check-label" for="select-personal">Personal</label>
-            </div>
-            <div class="form-check mb-5 ms-2">
-              <input class="form-check-input input-filter" type="checkbox" id="select-business" data-value="business" checked />
-              <label class="form-check-label" for="select-business">Business</label>
+            
+            <div class="form-check form-check-primary mb-5 ms-2">
+              <input class="form-check-input input-filter" type="checkbox" id="select-business" data-value="仕事" checked />
+              <label class="form-check-label" for="select-business">仕事</label>
             </div>
             <div class="form-check form-check-warning mb-5 ms-2">
-              <input class="form-check-input input-filter" type="checkbox" id="select-family" data-value="family" checked />
-              <label class="form-check-label" for="select-family">Family</label>
+              <input class="form-check-input input-filter" type="checkbox" id="select-off" data-value="勤怠" checked />
+              <label class="form-check-label" for="select-off">勤怠</label>
+            </div>
+            <div class="form-check form-check-danger mb-5 ms-2 d-none">
+              <input class="form-check-input input-filter" type="checkbox" id="select-holiday" data-value="休日" checked />
+              <label class="form-check-label" for="select-holiday">休日</label>
+            </div>
+            <div class="form-check form-check-info mb-5 ms-2">
+              <input class="form-check-input input-filter" type="checkbox" id="select-personal" data-value="個人" checked />
+              <label class="form-check-label" for="select-personal">個人</label>
             </div>
             <div class="form-check form-check-success mb-5 ms-2">
-              <input class="form-check-input input-filter" type="checkbox" id="select-holiday" data-value="holiday" checked />
-              <label class="form-check-label" for="select-holiday">Holiday</label>
-            </div>
-            <div class="form-check form-check-info ms-2">
-              <input class="form-check-input input-filter" type="checkbox" id="select-etc" data-value="etc" checked />
-              <label class="form-check-label" for="select-etc">ETC</label>
+              <input class="form-check-input input-filter" type="checkbox" id="select-etc" data-value="その他" checked />
+              <label class="form-check-label" for="select-etc">その他</label>
             </div>
           </div>
         </div>
@@ -83,62 +83,53 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
           <div class="offcanvas-body">
             <form class="event-form pt-0" id="eventForm" onsubmit="return false">
               <div class="mb-5 form-control-validation">
-                <label class="form-label" for="eventTitle">Title</label>
-                <input type="text" class="form-control" id="eventTitle" name="eventTitle" placeholder="Event Title" />
+                <label class="form-label" for="eventTitle">タイトル</label>
+                <input type="text" class="form-control" id="eventTitle" name="eventTitle" placeholder="タイトル" />
               </div>
               <div class="mb-5">
-                <label class="form-label" for="eventLabel">Label</label>
+                <label class="form-label" for="eventLabel">予定の種類</label>
                 <select class="select2 select-event-label form-select" id="eventLabel" name="eventLabel">
-                  <option data-label="primary" value="Business" selected>Business</option>
-                  <option data-label="danger" value="Personal">Personal</option>
-                  <option data-label="warning" value="Family">Family</option>
-                  <option data-label="success" value="Holiday">Holiday</option>
-                  <option data-label="info" value="ETC">ETC</option>
+                  <option data-label="primary" value="仕事" selected>仕事</option>
+                  <option data-label="warning" value="勤怠">勤怠</option>
+                  <option data-label="info" value="個人">個人</option>
+                  <option data-label="success" value="その他">その他</option>
                 </select>
               </div>
               <div class="mb-5 form-control-validation">
-                <label class="form-label" for="eventStartDate">Start Date</label>
-                <input type="text" class="form-control" id="eventStartDate" name="eventStartDate" placeholder="Start Date" />
+                <label class="form-label" for="eventStartDate">開始日</label>
+                <input type="text" class="form-control" id="eventStartDate" name="eventStartDate" placeholder="開始日" />
               </div>
               <div class="mb-5 form-control-validation">
-                <label class="form-label" for="eventEndDate">End Date</label>
-                <input type="text" class="form-control" id="eventEndDate" name="eventEndDate" placeholder="End Date" />
+                <label class="form-label" for="eventEndDate">終了日</label>
+                <input type="text" class="form-control" id="eventEndDate" name="eventEndDate" placeholder="終了日" />
               </div>
               <div class="mb-5">
                 <div class="form-check form-switch">
                   <input type="checkbox" class="form-check-input allDay-switch" id="allDaySwitch" />
-                  <label class="form-check-label" for="allDaySwitch">All Day</label>
+                  <label class="form-check-label" for="allDaySwitch">終日</label>
                 </div>
               </div>
-              <div class="mb-5">
-                <label class="form-label" for="eventURL">Event URL</label>
-                <input type="url" class="form-control" id="eventURL" name="eventURL" placeholder="https://www.google.com" />
-              </div>
-              <div class="mb-4 select2-primary">
-                <label class="form-label" for="eventGuests">Add Guests</label>
-                <select class="select2 select-event-guests form-select" id="eventGuests" name="eventGuests" multiple>
-                  <option data-avatar="1.png" value="Jane Foster">Jane Foster</option>
-                  <option data-avatar="1.png" value="Donna Frank">Donna Frank</option>
-                  <option data-avatar="1.png" value="Gabrielle Robertson">Gabrielle Robertson</option>
-                  <option data-avatar="3.png" value="Lori Spears">Lori Spears</option>
-                  <option data-avatar="4.png" value="Sandy Vega">Sandy Vega</option>
-                  <option data-avatar="5.png" value="Cheryl May">Cheryl May</option>
+              
+              <div class="mb-4">
+                <label class="form-label" for="eventPublic">公開設定</label>
+                <select class="form-select" id="eventPublic" name="eventPublic">
+                  <option value="0">公開</option>
+                  <option value="1">非公開</option>
                 </select>
               </div>
               <div class="mb-5">
-                <label class="form-label" for="eventLocation">Location</label>
-                <input type="text" class="form-control" id="eventLocation" name="eventLocation" placeholder="Enter Location" />
+                <label class="form-label" for="eventComment">コメント</label>
+                <textarea class="form-control" name="eventComment" id="eventComment"></textarea>
               </div>
-              <div class="mb-5">
-                <label class="form-label" for="eventDescription">Description</label>
-                <textarea class="form-control" name="eventDescription" id="eventDescription"></textarea>
-              </div>
-              <div class="d-flex justify-content-sm-between justify-content-start mt-6 gap-2">
+              <div class="d-flex justify-content-sm-between justify-content-start mt-6 gap-2" id="eventBtn">
                 <div class="d-flex">
-                  <button type="submit" id="addEventBtn" class="btn btn-primary btn-add-event me-4">Add</button>
-                  <button type="reset" class="btn btn-label-secondary btn-cancel me-sm-0 me-1" data-bs-dismiss="offcanvas">Cancel</button>
+                  <button type="submit" id="addEventBtn" class="btn btn-primary btn-add-event me-4">追加</button>
+                  <button type="reset" class="btn btn-label-secondary btn-cancel me-sm-0 me-1" data-bs-dismiss="offcanvas">キャンセル</button>
                 </div>
-                <button class="btn btn-label-danger btn-delete-event d-none">Delete</button>
+                <button class="btn btn-label-danger btn-delete-event d-none">削除</button>
+              </div>
+              <div class="mt-3">
+                <p id="eventLastUpdate" class="text-muted d-none">最終更新： <span id="eventLastUpdateTime"></span></p>
               </div>
             </form>
           </div>
@@ -155,5 +146,4 @@ $view->footing();
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/css/pages/app-calendar.css" />
 <script src="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.js"></script>
-<script src="<?=ROOT?>assets/js/app-calendar-events.js"></script>
 <script src="<?=ROOT?>assets/js/app-calendar.js"></script>
