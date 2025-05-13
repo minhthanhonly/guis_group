@@ -349,3 +349,10 @@ td.fc-day-sat{
 .fc .fc-view-harness .fc-event{
 	padding-inline: 0.25rem!important;
 }
+[data-bs-theme="dark"] .flatpickr-monthSelect-month{
+	color: #fff!important;
+}
+
+#calendar .fc-view-harness{
+	min-block-size: 0px!important;
+}

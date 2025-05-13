@@ -102,4 +102,118 @@ function doCheckout(button) {
             $(button).prop('disabled', false);
         });
 }
+
+// 今週のスケジュール
+document.addEventListener('DOMContentLoaded', async function () {
+    const direction = isRtl ? 'rtl' : 'ltr';
+    const calendarEl = document.getElementById('calendar');
+    // Calendar settings
+    const calendarColors = {
+        '仕事': 'primary',
+        '勤怠': 'warning',
+        '休日': 'danger',
+        '個人': 'info',
+        'その他': 'success'
+    };
+
+    let currentStart = null;
+
+    async function getEventList(start, end){
+    eventList = [];
+        const response = await axios.get(`/api/index.php?model=schedule&method=get_event&start=${start}&end=${end}`);
+        // check if the response is successful
+        if (response.status !== 200 || !response.data) {
+            handleErrors(response.data);
+        }
+        return response.data;
+    }
+
+    async function fetchEvents(info, successCallback) {
+      if (currentStart === null || moment(info.start).format('YYYY-MM-DD') !== currentStart) {
+        currentStart = moment(info.start).format('YYYY-MM-DD');
+        currentEvents = await getEventList(currentStart, moment(info.end).format('YYYY-MM-DD'));
+      }
+      successCallback(currentEvents);
+    }
+
+    let calendar = new Calendar(calendarEl, {
+        locale: 'ja',
+        initialView: 'listWeek',
+        events: fetchEvents,
+        plugins: [listPlugin],
+        editable: false,
+        dragScroll: true,
+        dayMaxEvents: 4,
+        defaultAllDay: true,
+       
+        firstDay: 1,
+        headerToolbar: {
+          start: 'title',
+          end: 'prev,next, schedulePage'
+        },
+        customButtons: {
+          schedulePage: {
+            text: 'もっと見る',
+            click: function() {
+              window.location.href = '/schedule';
+            }
+          }
+        },
+        allDayText: '終日',
+        noEventsText: '予定がありません',
+        buttonText: {
+          today: '今日',
+          month: '月',
+          week: '週',
+          day: '日',
+        },
+        direction: direction,
+        initialDate: new Date(),
+        showNonCurrentDates: false,
+        //set height
+        height: 'auto',
+        // navLinks: true, // can click day/week names to navigate views
+        eventClassNames: function ({ event: calendarEvent }) {
+          const colorName = calendarColors[calendarEvent._def.extendedProps.calendar];
+          // Background Color
+          return ['bg-label-' + colorName];
+        },
+        
+        eventDidMount: function(info) {
+            if (info.event.extendedProps.public_level == 1) {
+                const badge = document.createElement('span');
+                badge.className = 'badge badge-pill bg-label-warning me-1';
+                badge.innerHTML = '非公開';
+                
+                if (info.view.type === 'listWeek' || info.view.type === 'listMonth') {
+                    const listEventEl = info.el.querySelector('.fc-list-event-title a');
+                    if (listEventEl) {
+                        listEventEl.insertAdjacentElement('beforebegin', badge);
+                    }
+                } else {
+                    const titleEl = info.el.querySelector('.fc-event-title');
+                    if (titleEl) {
+                        titleEl.insertAdjacentElement('beforebegin', badge);
+                    }
+                }
+            }
+        },
+        viewDidMount: function () {
+            modifySchedulePageButton();
+          },
+      });
   
+  
+      
+    // Render calendar
+    calendar.render();
+    modifySchedulePageButton();
+
+    function modifySchedulePageButton() {
+        const schedulePageButton = document.querySelector('.fc-schedulePage-button');
+        schedulePageButton.classList.remove('fc-button-primary');
+        schedulePageButton.classList.remove('fc-button');
+        schedulePageButton.classList.add('btn', 'btn-primary');
+    }
+
+});

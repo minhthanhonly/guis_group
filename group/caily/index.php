@@ -62,10 +62,21 @@ if ($current_hour >= 6 && $current_hour < 12) {
       </div>
     </div>
     <!-- View sales -->
-
+  </div>
+  <div class="row g-6 mt-4">                
     <!-- Statistics -->
-    <!-- <div class="col-xl-8 col-md-12">
+    <div class="col-xl-6 col-md-8">
       <div class="card h-100">
+        <div class="card-header d-flex justify-content-between">
+          <h5 class="card-title mb-0">今週のスケジュール</h5>
+        </div>
+        <div class="card-body pb-0 app-calendar-wrapper">
+          <div id="calendar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-6 col-md-8">
+      <!-- <div class="card h-100">
         <div class="card-header d-flex justify-content-between">
           <h5 class="card-title mb-0">今期の統計</h5>
           <small class="text-body-secondary">更新日：<?=$today?></small>
@@ -112,9 +123,8 @@ if ($current_hour >= 6 && $current_hour < 12) {
             </div>
           </div>
         </div>
-      </div>
-    </div> -->
-    <!--/ Statistics -->
+      </div> -->
+    </div>
 
 	</div>
 
@@ -124,4 +134,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
 <?php
 $view->footing();
 ?>
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/css/pages/app-calendar.css" />
+<script src="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.js"></script>
 <script src="<?=ROOT?>assets/js/top.js"></script>

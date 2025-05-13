@@ -61,7 +61,7 @@ $view->heading('セクシュアリティ');
                         </ul>
                         <div class="mt-6">
                             <button type="submit" class="btn btn-primary me-3 waves-effect waves-light">編集</button>
-                            <button type="reset" class="btn btn-label-secondary waves-effect">キャンセル</button>
+                            <a href="view.php" class="btn btn-label-secondary waves-effect">戻る</a>
                         </div>
                     </div>
                 </div>

@@ -5,7 +5,7 @@
 
         <aside id="layout-menu" class="layout-menu menu-vertical menu">
           <div class="app-brand demo">
-            <a href="index.html" class="app-brand-link">
+            <a href="/" class="app-brand-link">
               <span class="app-brand-logo demo">
                 <span class="text-primary">
                   <img src="<?=ROOT?>assets/img/<?=APP_LOGO?>" alt="" width="30"
@@ -52,6 +52,14 @@
                 </li>
               </ul>
             </li>
+
+            <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
+              <a href="<?=$root?>schedule/" class="menu-link">
+                <i class="menu-icon icon-base ti tabler-calendar-event"></i>
+                <div>カレンダー</div>
+              </a>
+            </li>
+            
 
             <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager'){ ?>
             <li class="menu-item <?php if($directory == 'timecard') echo 'active open'; ?>">
@@ -153,12 +161,7 @@
               </li>
             <?php } ?>
 
-            <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
-              <a href="<?=$root?>schedule/" class="menu-link">
-                <i class="menu-icon icon-base ti tabler-calendar-event"></i>
-                <div>カレンダー</div>
-              </a>
-            </li>
+            
           </ul>
         </aside>
 
@@ -204,7 +207,7 @@
                     href="javascript:void(0);"
                     data-bs-toggle="dropdown">
                     <i class="icon-base ti tabler-sun icon-22px theme-icon-active text-heading"></i>
-                    <span class="d-none ms-2" id="nav-theme-text">Toggle theme</span>
+                    <span class="d-none ms-2" id="nav-theme-text">テーマ</span>
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="nav-theme-text">
                     <li>
@@ -213,7 +216,7 @@
                         class="dropdown-item align-items-center active"
                         data-bs-theme-value="light"
                         aria-pressed="false">
-                        <span><i class="icon-base ti tabler-sun icon-22px me-3" data-icon="sun"></i>Light</span>
+                        <span><i class="icon-base ti tabler-sun icon-22px me-3" data-icon="sun"></i>ライト</span>
                       </button>
                     </li>
                     <li>
@@ -224,7 +227,7 @@
                         aria-pressed="true">
                         <span
                           ><i class="icon-base ti tabler-moon-stars icon-22px me-3" data-icon="moon-stars"></i
-                          >Dark</span
+                          >ダーク</span
                         >
                       </button>
                     </li>
@@ -238,7 +241,7 @@
                           ><i
                             class="icon-base ti tabler-device-desktop-analytics icon-22px me-3"
                             data-icon="device-desktop-analytics"></i
-                          >System</span
+                          >システム</span
                         >
                       </button>
                     </li>

@@ -133,6 +133,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         altFormat: 'Y-m-d',
         defaultHour: '00:00',
         time_24hr: true,
+        locale: 'ja',
         onReady: function (selectedDates, dateStr, instance) {
           if (instance.isMobile) {
             instance.mobileInput.setAttribute('step', null);
@@ -149,6 +150,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         altFormat: 'Y-m-dTH:i:S',
         defaultHour: '09:00',
         time_24hr: true,
+        locale: 'ja',
         onReady: function (selectedDates, dateStr, instance) {
           if (instance.isMobile) {
             instance.mobileInput.setAttribute('step', null);
@@ -166,6 +168,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         altFormat: 'Y-m-d',
         defaultHour: '00:00',
         time_24hr: true,
+        locale: 'ja',
         onReady: function (selectedDates, dateStr, instance) {
           if (instance.isMobile) {
             instance.mobileInput.setAttribute('step', null);
@@ -186,6 +189,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         altFormat: 'Y-m-dTH:i:S',
         defaultHour: '09:00',
         time_24hr: true,
+        locale: 'ja',
         onReady: function (selectedDates, dateStr, instance) {
           if (instance.isMobile) {
             instance.mobileInput.setAttribute('step', null);
@@ -216,7 +220,7 @@ document.addEventListener('DOMContentLoaded', async function () {
       btnSubmit.classList.remove('btn-add-event');
       btnDeleteEvent.classList.remove('d-none');
 
-      eventTitle.value = eventToUpdate.title;
+      eventTitle.value = decodeHtmlEntities(eventToUpdate.title);
 
       if(eventToUpdate.allDay == true){
         // set flatpickr to all day
@@ -239,7 +243,7 @@ document.addEventListener('DOMContentLoaded', async function () {
       eventToUpdate.allDay == true ? (allDaySwitch.checked = true) : (allDaySwitch.checked = false);
       eventLabel.val(eventToUpdate.extendedProps.calendar).trigger('change');
       eventToUpdate.extendedProps.comment != undefined
-        ? (eventComment.value = eventToUpdate.extendedProps.comment)
+        ? (eventComment.value = decodeHtmlEntities(eventToUpdate.extendedProps.comment))
         : null;
       eventToUpdate.extendedProps.public_level != undefined
         ? (eventPublic.value = eventToUpdate.extendedProps.public_level)
@@ -347,6 +351,13 @@ document.addEventListener('DOMContentLoaded', async function () {
           text: 'Sidebar'
         }
       },
+      buttonText: {
+        today: '今日',
+        month: '月',
+        week: '週',
+        day: '日',
+        list: 'リスト'
+      },
       firstDay: 1,
       headerToolbar: {
         start: 'sidebarToggle, prev,next, title',
@@ -415,10 +426,18 @@ document.addEventListener('DOMContentLoaded', async function () {
             const badge = document.createElement('span');
             badge.className = 'badge badge-pill bg-label-warning me-1';
             badge.innerHTML = '非公開';
-            titleEl.insertAdjacentElement('beforebegin', badge);
+            if (info.view.type === 'listWeek' || info.view.type === 'listMonth') {
+              const listEventEl = info.el.querySelector('.fc-list-event-title');
+              console.log(listEventEl);
+              if (listEventEl) {
+                listEventEl.insertAdjacentElement('beforebegin', badge);
+              }
+            } else {
+              titleEl.insertAdjacentElement('beforebegin', badge);
+            }
           }
         }
-      }
+      },
     });
 
 

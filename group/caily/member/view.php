@@ -98,7 +98,7 @@ $view->heading('メンバー詳細');
 							<span><?=$hash['data']['user_addressruby']?></span>
 						  </li>
 						  <li class="mb-2">
-							<span class="h6">スカイプID:</span>
+							<span class="h6">Teams ID:</span>
 							<span><?=$hash['data']['user_skype']?></span>
 						  </li>
 						</ul>
