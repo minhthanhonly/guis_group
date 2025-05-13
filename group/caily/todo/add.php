@@ -18,7 +18,7 @@ if ($hash['data']['todo_noterm'] == 1) {
 <form class="content" method="post" action="">
 	<?=$view->error($hash['error'])?>
 	<table class="form" cellspacing="0">
-		<tr><th>タイトル<span class="necessary">(必須)</span></th><td><input type="text" name="todo_title" class="inputtitle" value="<?=$hash['data']['todo_title']?>" /></td></tr>
+		<tr><th>タイトル<span class="badge bg-label-danger mx-1">(必須)</span></th><td><input type="text" name="todo_title" class="inputtitle" value="<?=$hash['data']['todo_title']?>" /></td></tr>
 		<tr><th>期限</th><td>
 			<select name="todo_year"<?=$disabled?>><?=$helper->option(2000, 2030, date('Y', $timestamp))?></select>年&nbsp;
 			<select name="todo_month"<?=$disabled?>><?=$helper->option(1, 12, date('n', $timestamp))?></select>月&nbsp;

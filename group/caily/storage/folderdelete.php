@@ -34,7 +34,7 @@ if ($hash['data']['add_level'] == 2) {
 			<div class="container py-12">
 				<form class="content" method="post" action="">
 					<?=$view->error($hash['error'], '下記のフォルダを削除します。<br />フォルダを削除するとフォルダ内のデータはすべて削除されます。')?>
-					<table class="table table-bordered table-striped mb-4" cellspacing="0">
+					<table class="table table-bordered  mb-4" cellspacing="0">
 						<tr><th>フォルダ名</th><td><?=$hash['data']['storage_title']?>&nbsp;</td></tr>
 						<tr><th>場所</th><td><?=$hash['folder']['storage_title']?>&nbsp;</td></tr>
 						<tr><th>名前</th><td><?=$hash['data']['storage_name']?>&nbsp;</td></tr>

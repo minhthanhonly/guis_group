@@ -380,13 +380,3 @@ li.storageprevious {
     background-image: url(/assets/images/previous.gif);
     background-repeat: no-repeat;
 }
-.storagefile {
-    padding: 1px 0px 2px 20px;
-    background-image: url(/assets/images/file.gif);
-    background-repeat: no-repeat;
-}
-.storagefolder {
-    padding: 3px 0px 0px 20px;
-    background-image: url(/assets/images/folder.gif);
-    background-repeat: no-repeat;
-}

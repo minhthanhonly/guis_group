@@ -38,7 +38,7 @@ if(isset($hash['folder']['storage_title'])){
 					<input name="MAX_FILE_SIZE" value="<?=APP_FILESIZE?>" type="hidden" />
 					<?=$view->error($hash['error'])?>
 					<table class="form" cellspacing="0">
-						<tr><th>ファイル<span class="necessary">(必須)</span></th><td>
+						<tr><th>ファイル<span class="badge bg-label-danger mx-1">(必須)</span></th><td>
 				<?php
 				if (strlen($hash['data']['storage_file']) > 0) {
 					echo '<input type="checkbox" name="uploadedfile[]" id="uploadedfile" value="'.$hash['data']['storage_file'].'" checked="checked" onclick="Storage.uploadfile(this)" /><label for="uploadedfile">'.$hash['data']['storage_file'].'</label>';
@@ -47,7 +47,7 @@ if(isset($hash['folder']['storage_title'])){
 				}
 				?>
 						</td></tr>
-						<tr><th>タイトル<span class="necessary">(必須)</span></th><td><input type="text" name="storage_title" class="inputtitle form-control" value="<?=$hash['data']['storage_title']?>" /></td></tr>
+						<tr><th>タイトル<span class="badge bg-label-danger mx-1">(必須)</span></th><td><input type="text" name="storage_title" class="inputtitle form-control" value="<?=$hash['data']['storage_title']?>" /></td></tr>
 						<tr><th>内容</th><td><textarea name="storage_comment" class="inputcomment form-control" rows="5"><?=$hash['data']['storage_comment']?></textarea></td></tr>
 						<tr><th>場所</th><td><?=$title?></td></tr>
 						<tr><th>公開設定<?=$view->explain('public')?></th><td><?=$view->permit($hash['data'])?></td></tr>

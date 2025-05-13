@@ -2,3 +2,4 @@ UPDATE `groupware_schedule` SET `public_level`='1' WHERE `schedule_title` like "
 ALTER TABLE `groupware_schedule` ADD `schedule_date_end` VARCHAR(50) NULL AFTER `schedule_date`;
 
 UPDATE `groupware_schedule` SET `schedule_category`='勤怠' WHERE 1
+UPDATE `groupware_user` SET `is_suspend`='1' WHERE user_group=5

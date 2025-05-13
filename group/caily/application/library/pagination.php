@@ -36,7 +36,12 @@ class Pagination {
 			$limit = $this->recordlimit;
 		}
 		$pagecount = ceil($count/$limit);
-		$result[0] = $this->createlink('前ページ', $previous, $_REQUEST['sort'], $_REQUEST['desc']);
+		if ($pagecount <= 1) {
+			return '';
+		}
+		if ($previous > 1) {
+			$result[0] = $this->createlink('前ページ', $previous, $_REQUEST['sort'], $_REQUEST['desc']);
+		}
 		if ($page <= 5 || $pagecount <= 10) {
 			$begin = 1;
 			$end = $pagecount;
@@ -62,7 +67,9 @@ class Pagination {
 		if (strlen($result[1]) <= 0) {
 			$result[1] = $this->createlink(1, 1, $_REQUEST['sort'], $_REQUEST['desc'], 'active');
 		}
-		$result[2] = $this->createlink('次ページ', $next, $_REQUEST['sort'], $_REQUEST['desc']);
+		if ($next <= $pagecount) {
+			$result[2] = $this->createlink('次ページ', $next, $_REQUEST['sort'], $_REQUEST['desc']);
+		}
 		return implode('',$result);
 	
 	}

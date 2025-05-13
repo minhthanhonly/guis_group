@@ -21,7 +21,11 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 				<div class="d-flex row">
 					<div class="col-md-6">
 						<form method="post" class="searchform" action="<?=$_SERVER['SCRIPT_NAME']?><?=$view->positive(array('folder'=>$_GET['folder']))?>">
-							<input type="text" name="search" id="search" class="inputsearch" value="<?=$view->escape($_REQUEST['search'])?>" /><input type="submit" value="検索" />
+							<div class="input-group input-group-merge">
+								<span class="input-group-text" id="basic-addon-search31"><i class="icon-base ti tabler-search"></i></span>
+								<input type="text" name="search" class="form-control" placeholder="検索..." aria-label="検索..." value="<?=$view->escape($_REQUEST['search'])?>">
+								<button class="input-group-text" type="submit" id="button-addon2"><i class="icon-base ti tabler-search"></i></button>
+							</div>
 						</form>
 					</div>
 					<div class="col-md-6">
@@ -70,16 +74,34 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 					<?php
 					if (is_array($hash['list']) && count($hash['list']) > 0) {
 						foreach ($hash['list'] as $row) {
+							$fileext = '';
 							if ($row['storage_type'] == 'file') {
+								$fileext = strtolower(substr(strrchr($row['storage_file'], '.'), 1));
+								if ($fileext == 'pdf') {
+									$fileext = 'file-type-pdf';
+								} elseif ($fileext == 'mp4') {
+									$fileext = 'file-video';
+								} elseif ($fileext == 'mp3') {
+									$fileext = 'file-music';
+								} elseif ($fileext == 'zip' || $fileext == 'rar' || $fileext == '7z' || $fileext == 'tar' || $fileext == 'gz' || $fileext == 'bz2') {
+									$fileext = 'file-type-zip';
+								} elseif ($fileext == 'doc' || $fileext == 'docx') {
+									$fileext = 'file-type-doc';
+								} elseif ($fileext == 'xls' || $fileext == 'xlsx') {
+									$fileext = 'file-type-xls';
+								} elseif ($fileext == 'ppt' || $fileext == 'pptx') {
+									$fileext = 'file-type-ppt';
+								}
 								$url = 'view.php?id='.$row['id'];
 								$file = '<a href="download.php?id='.$row['id'].'&file='.urlencode($row['storage_file']).'">'.$row['storage_file'].'</a>';
 								$property = $url;
 							} else {
+								$fileext = 'folder tabler-filled';
 								$url = 'index.php?folder='.$row['id'];
 								$property = 'folderview.php?id='.$row['id'];
 							}
 					?>
-							<tr><td><a class="storage<?=$row['storage_type']?>" href="<?=$url?>"><?=$row['storage_title']?></a>&nbsp;</td>
+							<tr><td><a class="storage<?=$row['storage_type']?> <?=$fileext?>" href="<?=$url?>"><i class="icon-base ti tabler-<?=$fileext?> me-2 text-info"></i><?=$row['storage_title']?></a>&nbsp;</td>
 							<td><?=$file?></a>&nbsp;</td>
 							<td><?=$row['storage_size']?>&nbsp;</td>
 							<td><?=$row['storage_name']?>&nbsp;</td>
@@ -92,7 +114,7 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 						</table>
 						<?=$view->pagination($pagination, $hash['count']);?>
 						<?php
-						if ($view->permitted($hash['parent'], 'edit')) {
+						if (isset($hash['parent']['id']) && $view->permitted($hash['parent'], 'edit')) {
 						?>
 						<div class="mt-4 d-flex gap-2 justify-content-end">
 							<a href="folderedit.php?id=<?=$hash['parent']['id']?>" class="btn btn-label-primary">フォルダ編集</a>
