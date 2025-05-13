@@ -59,6 +59,12 @@
                 <div>カレンダー</div>
               </a>
             </li>
+            <li class="menu-item <?php if($directory == 'storage') echo 'active open'; ?>">
+              <a href="<?=$root?>storage/" class="menu-link">
+                <i class="menu-icon icon-base ti tabler-file-text"></i>
+                <div>ファイル</div>
+              </a>
+            </li>
             
 
             <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager'){ ?>
