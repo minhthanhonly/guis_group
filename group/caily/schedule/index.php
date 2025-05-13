@@ -77,7 +77,7 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
         <!-- FullCalendar Offcanvas -->
         <div class="offcanvas offcanvas-end event-sidebar" tabindex="-1" id="addEventSidebar" aria-labelledby="addEventSidebarLabel">
           <div class="offcanvas-header border-bottom">
-            <h5 class="offcanvas-title" id="addEventSidebarLabel">Add Event</h5>
+            <h5 class="offcanvas-title" id="addEventSidebarLabel">予定追加</h5>
             <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
           </div>
           <div class="offcanvas-body">
@@ -95,17 +95,26 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
                   <option data-label="success" value="その他">その他</option>
                 </select>
               </div>
-              <div class="mb-5 form-control-validation">
+              <div class="mb-5 form-control-validation" id="eventStartDateDiv">
                 <label class="form-label" for="eventStartDate">開始日</label>
                 <input type="text" class="form-control" id="eventStartDate" name="eventStartDate" placeholder="開始日" />
               </div>
-              <div class="mb-5 form-control-validation">
+              <div class="mb-5 form-control-validation" id="eventEndDateDiv">
                 <label class="form-label" for="eventEndDate">終了日</label>
                 <input type="text" class="form-control" id="eventEndDate" name="eventEndDate" placeholder="終了日" />
+                <input type="text" class="form-control d-none" id="eventEndDateHidden" name="eventEndDateHidden"/>
+              </div>
+              <div class="mb-5 form-control-validation d-none" id="eventStartDateDiv2">
+                <label class="form-label" for="eventStartDate2">開始日</label>
+                <input type="text" class="form-control" id="eventStartDate2" name="eventStartDate" placeholder="開始日" />
+              </div>
+              <div class="mb-5 form-control-validation d-none" id="eventEndDateDiv2">
+                <label class="form-label" for="eventEndDate2">終了日</label>
+                <input type="text" class="form-control" id="eventEndDate2" name="eventEndDate" placeholder="終了日" />
               </div>
               <div class="mb-5">
                 <div class="form-check form-switch">
-                  <input type="checkbox" class="form-check-input allDay-switch" id="allDaySwitch" />
+                  <input type="checkbox" class="form-check-input allDay-switch" id="allDaySwitch" checked />
                   <label class="form-check-label" for="allDaySwitch">終日</label>
                 </div>
               </div>

@@ -26,7 +26,14 @@ document.addEventListener('DOMContentLoaded', async function () {
     const btnCancel = document.querySelector('.btn-cancel');
     const eventTitle = document.getElementById('eventTitle');
     const eventStartDate = document.getElementById('eventStartDate');
+    const eventStartDate2 = document.getElementById('eventStartDate2');
     const eventEndDate = document.getElementById('eventEndDate');
+    const eventEndDate2 = document.getElementById('eventEndDate2');
+    const eventStartDateDiv = document.getElementById('eventStartDateDiv');
+    const eventEndDateDiv = document.getElementById('eventEndDateDiv');
+    const eventStartDateDiv2 = document.getElementById('eventStartDateDiv2');
+    const eventEndDateDiv2 = document.getElementById('eventEndDateDiv2');
+    const eventEndDateHidden = document.getElementById('eventEndDateHidden');
     const eventPublic = document.getElementById('eventPublic');
     const eventComment = document.getElementById('eventComment');
     const allDaySwitch = document.querySelector('.allDay-switch');
@@ -122,6 +129,22 @@ document.addEventListener('DOMContentLoaded', async function () {
       var start = eventStartDate.flatpickr({
         monthSelectorType: 'static',
         static: true,
+        enableTime: false,
+        altFormat: 'Y-m-d',
+        defaultHour: '00:00',
+        time_24hr: true,
+        onReady: function (selectedDates, dateStr, instance) {
+          if (instance.isMobile) {
+            instance.mobileInput.setAttribute('step', null);
+          }
+        }
+      });
+    }
+
+    if (eventStartDate2) {
+      var start2 = eventStartDate2.flatpickr({
+        monthSelectorType: 'static',
+        static: true,
         enableTime: true,
         altFormat: 'Y-m-dTH:i:S',
         defaultHour: '09:00',
@@ -139,6 +162,26 @@ document.addEventListener('DOMContentLoaded', async function () {
       var end = eventEndDate.flatpickr({
         monthSelectorType: 'static',
         static: true,
+        enableTime: false,
+        altFormat: 'Y-m-d',
+        defaultHour: '00:00',
+        time_24hr: true,
+        onReady: function (selectedDates, dateStr, instance) {
+          if (instance.isMobile) {
+            instance.mobileInput.setAttribute('step', null);
+          }
+        },
+        onChange(selectedDates, dateStr, instance) {
+          const next = moment(selectedDates[0]).add(1, 'day').format('YYYY-MM-DD');
+          eventEndDateHidden.value = next;
+        }
+      });
+    }
+
+    if (eventEndDate2) {
+      var end2 = eventEndDate2.flatpickr({
+        monthSelectorType: 'static',
+        static: true,
         enableTime: true,
         altFormat: 'Y-m-dTH:i:S',
         defaultHour: '09:00',
@@ -148,6 +191,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             instance.mobileInput.setAttribute('step', null);
           }
         }
+        
       });
     }
 
@@ -173,33 +217,32 @@ document.addEventListener('DOMContentLoaded', async function () {
       btnDeleteEvent.classList.remove('d-none');
 
       eventTitle.value = eventToUpdate.title;
-      // start.setDate(eventToUpdate.start, true, 'Y-m-d H:i');
-      // eventToUpdate.end !== null
-      // ? end.setDate(eventToUpdate.end, true, 'Y-m-d H:i')
-      // : end.setDate(eventToUpdate.start, true, 'Y-m-d H:i');
 
       if(eventToUpdate.allDay == true){
         // set flatpickr to all day
-        start.setDate(eventToUpdate.start, false, 'Y-m-d');
-        end.setDate(eventToUpdate.end, false, 'Y-m-d');
-        start.set('enableTime', false);
-        end.set('enableTime', false);
-        start.redraw();
-        end.redraw();
+        start.setDate(eventToUpdate.start, true, 'Y-m-d');
+        const prev = moment(eventToUpdate.end).subtract(1, 'day').format('YYYY-MM-DD');
+        end.setDate(prev, true, 'Y-m-d');
+        eventEndDateHidden.value = moment(eventToUpdate.end).format('YYYY-MM-DD');
+        eventEndDateDiv.classList.remove('d-none');
+        eventStartDateDiv.classList.remove('d-none');
+        eventEndDateDiv2.classList.add('d-none');
+        eventStartDateDiv2.classList.add('d-none');
+      } else{
+        start2.setDate(eventToUpdate.start, true, 'Y-m-d H:i');
+        end2.setDate(eventToUpdate.end, true, 'Y-m-d H:i');
+        eventEndDateDiv.classList.add('d-none');
+        eventStartDateDiv.classList.add('d-none');
+        eventEndDateDiv2.classList.remove('d-none');
+        eventStartDateDiv2.classList.remove('d-none');
       }
-      // } else{
-      //   start.setDate(eventToUpdate.start, true, 'Y-m-d H:i');
-      //   end.setDate(eventToUpdate.end, true, 'Y-m-d H:i');
-      //   start.set('enableTime', true);
-      //   end.set('enableTime', true);
-      // }
       eventToUpdate.allDay == true ? (allDaySwitch.checked = true) : (allDaySwitch.checked = false);
       eventLabel.val(eventToUpdate.extendedProps.calendar).trigger('change');
       eventToUpdate.extendedProps.comment != undefined
         ? (eventComment.value = eventToUpdate.extendedProps.comment)
         : null;
-      eventToUpdate.extendedProps.public != undefined
-        ? (eventPublic.value = eventToUpdate.extendedProps.public)
+      eventToUpdate.extendedProps.public_level != undefined
+        ? (eventPublic.value = eventToUpdate.extendedProps.public_level)
         : null;
       if(eventToUpdate.extendedProps.editor != ''){
         eventLastUpdate.classList.remove('d-none');
@@ -218,14 +261,26 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     allDaySwitch.addEventListener('change', function(){
-      let startDate = new Date(eventStartDate.value);
-      let endDate = new Date(eventEndDate.value);
       if(allDaySwitch.checked){
-        eventStartDate.value = moment(startDate).format('YYYY-MM-DD');
-        eventEndDate.value = moment(endDate).format('YYYY-MM-DD');
+        let startDate = new Date(eventStartDate2.value);
+        let endDate = new Date(eventEndDate2.value);
+        start.setDate(startDate, true, 'Y-m-d');
+        end.setDate(endDate, true, 'Y-m-d');
+        const next = moment(endDate).add(1, 'day').format('YYYY-MM-DD');
+        eventEndDateHidden.value = moment(next).format('YYYY-MM-DD');
+        eventEndDateDiv.classList.remove('d-none');
+        eventStartDateDiv.classList.remove('d-none');
+        eventEndDateDiv2.classList.add('d-none');
+        eventStartDateDiv2.classList.add('d-none');
       } else{
-        start.setDate(startDate, true, 'Y-m-d H:i');
-        end.setDate(endDate, true, 'Y-m-d H:i');
+        let startDate = new Date(eventStartDate.value);
+        let endDate = new Date(eventEndDate.value);
+        start2.setDate(startDate, true, 'Y-m-d H:i');
+        end2.setDate(endDate, true, 'Y-m-d H:i');
+        eventEndDateDiv.classList.add('d-none');
+        eventStartDateDiv.classList.add('d-none');
+        eventEndDateDiv2.classList.remove('d-none');
+        eventStartDateDiv2.classList.remove('d-none');
       }
     });
 
@@ -314,14 +369,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
         return true;
       },
-
-      // eventDataTransform: function(event) {
-      //   if (event.allDay && event.end) {
-      //       event.end = new Date(event.end.getTime() - 24 * 60 * 60 * 1000);
-      //   }
-      //   return event;
-      // },
-    
       
       dateClick: function (info) {
         let date = moment(info.date).format('YYYY-MM-DD');
@@ -336,8 +383,9 @@ document.addEventListener('DOMContentLoaded', async function () {
         btnSubmit.classList.remove('btn-update-event');
         btnSubmit.classList.add('btn-add-event');
         btnDeleteEvent.classList.add('d-none');
-        eventStartDate.value = date;
-        eventEndDate.value = date;
+        start.setDate(date, true, 'Y-m-d');
+        end.setDate(date, true, 'Y-m-d');
+        eventEndDateHidden.value = moment(date).add(1, 'day').format('YYYY-MM-DD');
         eventBtn.classList.add('d-flex');
         eventBtn.classList.remove('d-none');
       },
@@ -359,6 +407,18 @@ document.addEventListener('DOMContentLoaded', async function () {
           updateEvent(info.event);
         }
       },
+
+      eventDidMount: function(info) {
+        if (info.event.extendedProps.public_level == 1) {
+          const titleEl = info.el.querySelector('.fc-event-title');
+          if (titleEl) {
+            const badge = document.createElement('span');
+            badge.className = 'badge badge-pill bg-label-warning me-1';
+            badge.innerHTML = '非公開';
+            titleEl.insertAdjacentElement('beforebegin', badge);
+          }
+        }
+      }
     });
 
 
@@ -382,20 +442,20 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
           }
         },
-        eventStartDate: {
-          validators: {
-            notEmpty: {
-              message: 'Please enter start date '
-            }
-          }
-        },
-        eventEndDate: {
-          validators: {
-            notEmpty: {
-              message: 'Please enter end date '
-            }
-          }
-        }
+        // eventStartDate: {
+        //   validators: {
+        //     notEmpty: {
+        //       message: 'Please enter start date '
+        //     }
+        //   }
+        // },
+        // eventEndDate: {
+        //   validators: {
+        //     notEmpty: {
+        //       message: 'Please enter end date '
+        //     }
+        //   }
+        // }
       },
       plugins: {
         trigger: new FormValidation.plugins.Trigger(),
@@ -431,15 +491,31 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // Add Event
     // ------------------------------------------------
-    function addEvent(eventData) {
-      // ? Add new event data to current events object and refetch it to display on calender
-      // ? You can write below code to AJAX call success response
+    async function addEvent(eventData) {
+      var data = {
+        title: eventData.title,
+        start_date: moment(eventData.start).format('YYYY-MM-DD'),
+        start_time: moment(eventData.start).format('HH:mm'),
+        end_date: eventData.end != null ? moment(eventData.end).format('YYYY-MM-DD') : "",
+        end_time: eventData.end != null ? moment(eventData.end).format('HH:mm') : "",
+        allDay: eventData.allDay,
+        comment: eventData.extendedProps.comment,
+        public_level: eventData.extendedProps.public_level,
+        calendar: eventData.extendedProps.calendar
+      }
 
-      currentEvents.push(eventData);
+      const response = await axios.post(`/api/index.php?model=schedule&method=add_event`, data,
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }
+      );
+      if(response.status !== 200 || response.data.status != 'success') {
+        handleErrors(response.data);
+      }
+      forceUpdate = true;
       calendar.refetchEvents();
-
-      // ? To add event directly to calender (won't update currentEvents object)
-      // calendar.addEvent(eventData);
     }
 
     // Update Event
@@ -453,7 +529,8 @@ document.addEventListener('DOMContentLoaded', async function () {
         end_time: eventData.end != null ? moment(eventData.end).format('HH:mm') : "",
         allDay: eventData.allDay,
         comment: eventData.extendedProps.comment,
-        public_level: eventData.extendedProps.public_level
+        public_level: eventData.extendedProps.public_level,
+        calendar: eventData.extendedProps.calendar
       }
 
       const response = await axios.post(`/api/index.php?model=schedule&method=update_event&id=${eventData.extendedProps.id}`, data,
@@ -475,77 +552,37 @@ document.addEventListener('DOMContentLoaded', async function () {
     // ------------------------------------------------
 
     function removeEvent(eventId) {
-      // ? Delete existing event data to current events object and refetch it to display on calender
-      // ? You can write below code to AJAX call success response
       currentEvents = currentEvents.filter(function (event) {
-        return event.id != eventId;
+        return event.extendedProps.id != eventId;
       });
       calendar.refetchEvents();
-
-      // ? To delete event directly to calender (won't update currentEvents object)
-      // removeEventInCalendar(eventId);
     }
 
-    // (Update Event In Calendar (UI Only)
-    // ------------------------------------------------
-    const updateEventInCalendar = (updatedEventData, propsToUpdate, extendedPropsToUpdate) => {
-      const existingEvent = calendar.getEventById(updatedEventData.id);
-
-      // --- Set event properties except date related ----- //
-      // ? Docs: https://fullcalendar.io/docs/Event-setProp
-      // dateRelatedProps => ['start', 'end', 'allDay']
-      // eslint-disable-next-line no-plusplus
-      for (var index = 0; index < propsToUpdate.length; index++) {
-        var propName = propsToUpdate[index];
-        existingEvent.setProp(propName, updatedEventData[propName]);
-      }
-
-      // --- Set date related props ----- //
-      // ? Docs: https://fullcalendar.io/docs/Event-setDates
-      existingEvent.setDates(updatedEventData.start, updatedEventData.end, {
-        allDay: updatedEventData.allDay
-      });
-
-      // --- Set event's extendedProps ----- //
-      // ? Docs: https://fullcalendar.io/docs/Event-setExtendedProp
-      // eslint-disable-next-line no-plusplus
-      for (var index = 0; index < extendedPropsToUpdate.length; index++) {
-        var propName = extendedPropsToUpdate[index];
-        existingEvent.setExtendedProp(propName, updatedEventData.extendedProps[propName]);
-      }
-    };
-
-    // Remove Event In Calendar (UI Only)
-    // ------------------------------------------------
-    function removeEventInCalendar(eventId) {
-      calendar.getEventById(eventId).remove();
-    }
 
     // Add new event
     // ------------------------------------------------
     btnSubmit.addEventListener('click', e => {
       if (btnSubmit.classList.contains('btn-add-event')) {
         if (isFormValid) {
-          let newEvent = {
-            id: calendar.getEvents().length + 1,
+          let eventData = {
             title: eventTitle.value,
-            start: eventStartDate.value,
-            end: eventEndDate.value,
-            startStr: eventStartDate.value,
-            endStr: eventEndDate.value,
-            display: 'block',
+            allDay: allDaySwitch.checked ? true : false,
             extendedProps: {
-              location: eventLocation.value,
-              guests: eventGuests.val(),
               calendar: eventLabel.val(),
-              description: eventDescription.value
-            }
+              comment: eventComment.value,
+              public_level: eventPublic.value
+            },
           };
-        
-          if (allDaySwitch.checked) {
-            newEvent.allDay = true;
+
+          if(allDaySwitch.checked){
+            eventData.start = eventStartDate.value;
+            eventData.end = eventEndDateHidden.value;
+          } else{
+            eventData.start = eventStartDate2.value;
+            eventData.end = eventEndDate2.value;
           }
-          addEvent(newEvent);
+        
+          addEvent(eventData);
           bsAddEventSidebar.hide();
         }
       } else {
@@ -553,20 +590,23 @@ document.addEventListener('DOMContentLoaded', async function () {
         // ------------------------------------------------
         if (isFormValid) {
           let eventData = {
-            id: eventToUpdate.id,
             title: eventTitle.value,
-            start: eventStartDate.value,
-            end: eventEndDate.value,
-            url: eventUrl.value,
+            allDay: allDaySwitch.checked ? true : false,
             extendedProps: {
-              location: eventLocation.value,
-              guests: eventGuests.val(),
+              id: eventToUpdate.extendedProps.id,
               calendar: eventLabel.val(),
-              description: eventDescription.value
+              comment: eventComment.value,
+              public_level: eventPublic.value
             },
-            display: 'block',
-            allDay: allDaySwitch.checked ? true : false
           };
+
+          if(allDaySwitch.checked){
+            eventData.start = eventStartDate.value;
+            eventData.end = eventEndDateHidden.value;
+          } else{
+            eventData.start = eventStartDate2.value;
+            eventData.end = eventEndDate2.value;
+          }
 
           updateEvent(eventData);
           bsAddEventSidebar.hide();
@@ -576,9 +616,46 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // Call removeEvent function
     btnDeleteEvent.addEventListener('click', e => {
-      removeEvent(parseInt(eventToUpdate.id));
-      // eventToUpdate.remove();
-      bsAddEventSidebar.hide();
+      Swal.fire({
+        title: '予定を削除しますか？',
+        text: '予定を削除すると元に戻すことはできません。',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'はい、削除します',
+        cancelButtonText: 'キャンセル',
+        customClass: {
+          confirmButton: 'btn btn-primary',
+          cancelButton: 'btn btn-label-secondary'
+        },
+        buttonsStyling: false
+      }).then(function (result) {
+        if (result.value) {
+          displayHourglass();
+          axios({
+            method: 'post',
+            url: '/api/index.php?model=schedule&method=delete_event',
+            data: {
+              id: eventToUpdate.extendedProps.id,
+            },
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }
+          })
+            .then(function (response) {
+              if (response.status === 200 && response.data && response.data.status === 'success') {
+                showMessage('予定を削除しました');
+                removeEvent(parseInt(eventToUpdate.extendedProps.id));
+                eventToUpdate.remove();
+                bsAddEventSidebar.hide();
+              } else {
+                showMessage('予定を削除できませんでした', true);
+              }
+            }).catch(function (error) {
+              handleErrors(error);
+            });
+          
+        }
+      });
     });
 
     // Reset event form inputs values
@@ -595,6 +672,10 @@ document.addEventListener('DOMContentLoaded', async function () {
       eventLastUpdate.classList.add('d-none');
       eventBtn.classList.remove('d-flex');
       eventBtn.classList.add('d-none');
+      eventEndDateDiv.classList.remove('d-none');
+      eventStartDateDiv.classList.remove('d-none');
+      eventEndDateDiv2.classList.add('d-none');
+      eventStartDateDiv2.classList.add('d-none');
     }
 
     // When modal hides reset input values

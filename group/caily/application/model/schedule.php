@@ -62,7 +62,7 @@ class Schedule extends ApplicationModel {
 				// 'id' => $row['id'],
 				'title' => $row['name'],
 				'start' => $row['date'],
-				'allDay' => "true",
+				'allDay' => TRUE,
 				'display' => 'background',
 				'extendedProps' => array(
 					'calendar' => '休日',
@@ -87,7 +87,7 @@ class Schedule extends ApplicationModel {
 				'title' => $row['schedule_title'],
 				'start' => trim($row['schedule_date'] . ' ' . $row['schedule_time']),
 				'end' => trim($row['schedule_date_end'] != '' ? $row['schedule_date_end'] . ' ' . $row['schedule_endtime'] : $row['schedule_date'] . ' ' . $row['schedule_endtime']),
-				'allDay' => $row['schedule_allday'] == 1 ? 'true' : 'false',
+				'allDay' => $row['schedule_allday'] == 1 ? TRUE : FALSE,
 				'extendedProps' => array(
 					'calendar' => $row['schedule_category'] != '' ? $row['schedule_category'] : '勤怠',
 					'comment' => $row['schedule_comment'],
@@ -116,13 +116,14 @@ class Schedule extends ApplicationModel {
 		$start_time = $_POST['start_time'];
 		$end_date = $_POST['end_date'];
 		$end_time = $_POST['end_time'];
-		$allDay = $_POST['allDay'];
+		$allDay = $_POST['allDay']  == 'true' ? 1 : 0;
 		$comment = $_POST['comment'];
 		$public_level = $_POST['public_level'];
+		$calendar = $_POST['calendar'];
 		$editor = $_SESSION['userid'];
 		$updated = date('Y-m-d H:i:s');
 
-		$query = sprintf("UPDATE %s SET schedule_title = '%s', schedule_date = '%s', schedule_time = '%s', schedule_date_end = '%s', schedule_endtime = '%s', schedule_allday = '%s', schedule_comment = '%s', public_level = '%s', editor = '%s', updated = '%s' WHERE id = %d", "groupware_schedule", $title, $start_date, $start_time, $end_date, $end_time, $allDay, $comment, $public_level, $editor, $updated, $id);
+		$query = sprintf("UPDATE %s SET schedule_title = '%s', schedule_date = '%s', schedule_time = '%s', schedule_date_end = '%s', schedule_endtime = '%s', schedule_allday = '%s', schedule_comment = '%s', public_level = '%s', editor = '%s', updated = '%s', schedule_category = '%s' WHERE id = %d", "groupware_schedule", $title, $start_date, $start_time, $end_date, $end_time, $allDay, $comment, $public_level, $editor, $updated, $calendar, $id);
 		
 		$result = $this->update_query($query);
 		if ($result) {
@@ -131,6 +132,41 @@ class Schedule extends ApplicationModel {
 			return array('status' => 'error', 'message' => '更新に失敗しました。');
 		}
 	}
+
+	function add_event() {
+		
+		$title = $_POST['title'];
+		$start_date = $_POST['start_date'];
+		$start_time = $_POST['start_time'];
+		$end_date = $_POST['end_date'];
+		$end_time = $_POST['end_time'];
+		$allDay = $_POST['allDay']  == 'true' ? 1 : 0;
+		$comment = $_POST['comment'];
+		$public_level = $_POST['public_level'];
+		$calendar = $_POST['calendar'];
+		$created = date('Y-m-d H:i:s');
+		$owner = $_SESSION['userid'];
+		$query = sprintf("INSERT INTO %s (schedule_title, schedule_date, schedule_time, schedule_date_end, schedule_endtime, schedule_allday, schedule_comment, public_level, created, schedule_category, owner) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')", "groupware_schedule", $title, $start_date, $start_time, $end_date, $end_time, $allDay, $comment, $public_level, $created, $calendar, $owner);
+		
+		$result = $this->query($query);
+		if ($result) {
+			return array('status' => 'success', 'message' => '追加しました。');
+		} else {
+			return array('status' => 'error', 'message' => '追加に失敗しました。');
+		}
+	}
+
+	function delete_event() {
+		$id = $_POST['id'];
+		$query = sprintf("DELETE FROM %s WHERE id = %d", "groupware_schedule", $id);
+		$result = $this->update_query($query);
+		if ($result) {
+			return array('status' => 'success', 'message' => '削除しました。');
+		} else {
+			return array('status' => 'error', 'message' => '削除に失敗しました。');
+		}
+	}
+
 	
 	function validate() {
 		

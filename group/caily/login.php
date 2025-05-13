@@ -76,7 +76,7 @@ $view->heading('ログイン', 'login');
 			<div class="my-8">
 				<div class="d-flex justify-content-between">
 					<div class="form-check mb-0 ms-2">
-						<input class="form-check-input" name="remember_me" type="checkbox" id="remember-me" />
+						<input class="form-check-input" name="remember_me" type="checkbox" id="remember-me" checked />
 						<label class="form-check-label" for="remember-me"> Remember Me </label>
 					</div>
 					<!-- <a href="auth-forgot-password-cover.html">

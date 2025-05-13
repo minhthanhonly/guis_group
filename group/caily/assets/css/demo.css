@@ -333,3 +333,19 @@ td.fc-day-sat{
 .fc .fc-bg-event .fc-event-title{
 	margin-left: 2.5em;
 }
+
+.flatpickr-calendar .numInputWrapper span{
+	padding: 5px;
+}
+.flatpickr-calendar .numInputWrapper span.arrowUp{
+	inset-block-start: 3px!important;
+}
+
+.badge-pill{
+	border-radius: 100vmax;
+	font-size: 10px;
+	padding: 0.2rem 0.3rem;
+}
+.fc .fc-view-harness .fc-event{
+	padding-inline: 0.25rem!important;
+}
