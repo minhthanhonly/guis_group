@@ -32,7 +32,7 @@ class Storage extends ApplicationModel {
 		$this->where[] = "(storage_folder = '".intval($_GET['folder'])."')";
 		$hash += $this->permitList('storage_type DESC, storage_date', 1);
 		if ($_GET['folder'] > 0) {
-			$query = sprintf("SELECT id, storage_title FROM %s WHERE (storage_folder = %d) AND (storage_type = 'folder') AND %s ORDER BY storage_title", $this->table, intval($folder['storage_folder']), $this->permitWhere());
+			$query = sprintf("SELECT id, storage_title FROM %s WHERE (storage_folder = %d) AND (storage_type = 'folder') AND %s ORDER BY storage_title", $this->table, intval($_GET['folder']), $this->permitWhere());
 			$data = $this->fetchAll($query);
 			$hash['folder'] = array();
 			if (is_array($data) && count($data) > 0) {
@@ -129,7 +129,9 @@ class Storage extends ApplicationModel {
 	}
 	
 	function folderadd() {
-	
+		if(!isset($_GET['folder'])){
+			$_GET['folder'] = 0;
+		}
 		$hash['folder'] = $this->permitFolder($_GET['folder']);
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$this->schema['storage_type']['fix'] = 'folder';
@@ -197,8 +199,8 @@ class Storage extends ApplicationModel {
 	}
 	
 	function permitFolder($id) {
-	
-		if ($id > 0) {
+		
+		if ($id >= 0) {
 			$data = $this->permitFind('public', $id);
 			if ($this->permitted($data, 'add')) {
 				return $data;

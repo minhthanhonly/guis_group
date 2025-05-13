@@ -335,7 +335,9 @@ class Calendar{
 	}
 
 	function permitted($data, $level = 'public') {
-
+		if($_SESSION['userid'] == 'admin'){
+			return true;
+		}
 		$permission = false;
 		if ($data[$level.'_level'] == 0) {
 			$permission = true;

@@ -2,6 +2,11 @@
 
 require_once('../application/loader.php');
 $view->heading('ファイルアップロード');
+$title = "ルート";
+if(isset($hash['folder']['storage_title'])){
+	$title = $hash['folder']['storage_title'];
+}
+
 ?>
 <h1>ファイルアップロード</h1>
 <ul class="operate">
@@ -22,7 +27,7 @@ if (strlen($hash['data']['storage_file']) > 0) {
 		</td></tr>
 		<tr><th>タイトル<span class="necessary">(必須)</span></th><td><input type="text" name="storage_title" class="inputtitle" value="<?=$hash['data']['storage_title']?>" /></td></tr>
 		<tr><th>内容</th><td><textarea name="storage_comment" class="inputcomment" rows="5"><?=$hash['data']['storage_comment']?></textarea></td></tr>
-		<tr><th>場所</th><td><?=$hash['folder']['storage_title']?></td></tr>
+		<tr><th>場所</th><td><?=$title?></td></tr>
 		<tr><th>公開設定<?=$view->explain('public')?></th><td><?=$view->permit($hash['data'])?></td></tr>
 		<tr><th>編集設定<?=$view->explain('edit')?></th><td><?=$view->permit($hash['data'], 'edit')?></td></tr>
 	</table>

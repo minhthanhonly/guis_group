@@ -19,6 +19,9 @@ class ApplicationView extends View {
 	}
 	
 	function permitted($data, $level = 'public') {
+		if($_SESSION['userid'] == 'admin'){
+			return true;
+		}
 		$permission = false;
 		if ($data[$level.'_level'] == 0) {
 			$permission = true;
@@ -88,7 +91,7 @@ class ApplicationView extends View {
 	}
 	
 	function property($data) {
-		
+		$string = '';
 		if ($data['created']) {
 			$created = '&nbsp;('.date('Y/m/d H:i:s', strtotime($data['created'])).')';
 		}
