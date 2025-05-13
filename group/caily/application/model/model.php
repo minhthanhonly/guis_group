@@ -141,10 +141,10 @@ class Model extends Connection {
 	}
 	
 	function insertPost() {
-		
 		$this->response = false;
 		if (count($this->error) <= 0 && count($this->post) > 0) {
 			$field = $this->schematize('insert');
+			print_r($field);
 			if (is_array($field) && count($field) > 0) {
 				if(!isset($this->post['owner'])){
 					$this->post['owner'] = $_SESSION['userid'];

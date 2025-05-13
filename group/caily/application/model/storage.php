@@ -67,6 +67,7 @@ class Storage extends ApplicationModel {
 			$this->permitValidate();
 			$prefix = $_SESSION['userid'].'_'.strtotime($this->post['storage_date']);
 			$this->post['storage_file'] = $this->uploadfile('storage', $prefix);
+
 			$this->post['storage_size'] = $this->uploadfilesize($prefix.'_'.$this->post['storage_file'], 'storage');
 			$this->insertPost();
 			$this->redirect('index.php'.$this->parameter(array('folder'=>$_GET['folder'])));

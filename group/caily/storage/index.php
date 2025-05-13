@@ -91,8 +91,17 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 					?>
 						</table>
 						<?=$view->pagination($pagination, $hash['count']);?>
+						<?php
+						if ($view->permitted($hash['parent'], 'edit')) {
+						?>
+						<div class="mt-4 d-flex gap-2 justify-content-end">
+							<a href="folderedit.php?id=<?=$hash['parent']['id']?>" class="btn btn-label-primary">フォルダ編集</a>
+							<a href="folderdelete.php?id=<?=$hash['parent']['id']?>" class="btn btn-label-warning">フォルダ削除</a>
+						</div>
+						<?php
+						}
+						?>
 					</div>
-					
 				</div>
 			</div>
 		</div>
