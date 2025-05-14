@@ -90,7 +90,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
                   if(date('Y-m-d H:i:s', strtotime($row['created'])) > date('Y-m-d H:i:s', strtotime('-1 week'))){
                     echo '<span class="badge bg-label-info me-2">NEW</span>';
                   }
-                  ?><a href="view.php?id=<?=$row['id']?>"><?=$row['forum_title']?></a></td>
+                  ?><a href="/forum/view.php?id=<?=$row['id']?>"><?=$row['forum_title']?></a></td>
                   <td><?=$row['forum_name']?></td>
                </tr>
             <?php
@@ -112,4 +112,4 @@ $view->footing();
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/css/pages/app-calendar.css" />
 <script src="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.js"></script>
-<script src="<?=ROOT?>assets/js/top.js"></script>
+<script src="<?=ROOT?>assets/js/top.js?v=<?=CACHE_VERSION?>"></script>

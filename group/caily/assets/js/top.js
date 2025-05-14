@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     async function getEventList(start, end){
     eventList = [];
-        const response = await axios.get(`/api/index.php?model=schedule&method=get_event&start=${start}&end=${end}`);
+        const response = await axios.get(`/api/index.php?model=schedule&method=get_event&start=${start}&end=${end}&isTop=1`);
         // check if the response is successful
         if (response.status !== 200 || !response.data) {
             handleErrors(response.data);

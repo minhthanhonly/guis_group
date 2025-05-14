@@ -53,6 +53,7 @@ class Schedule extends ApplicationModel {
 	function get_event(){
 		$start = $_GET['start'];
 		$end = $_GET['end'];
+		$isTop = $_GET['isTop'];
 		$data = array();
 
 		$queryHoliday = sprintf("SELECT * FROM %s WHERE date BETWEEN '%s' AND '%s'", "groupware_holiday", $start, $end);
@@ -63,7 +64,7 @@ class Schedule extends ApplicationModel {
 				'title' => $row['name'],
 				'start' => $row['date'],
 				'allDay' => TRUE,
-				'display' => 'background',
+				'display' => $isTop != 1 ? 'background' : 'auto',
 				'extendedProps' => array(
 					'calendar' => '休日',
 					'can_edit' => 'false',
@@ -104,6 +105,8 @@ class Schedule extends ApplicationModel {
 		}
 		return $data;
 	}
+
+	
 
 	function update_event() {
 		
