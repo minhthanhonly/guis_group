@@ -228,6 +228,25 @@ function addEvent() {
   const slGroup = document.getElementById('selectpickerGroup');
   const monthInput = document.getElementById('timecard-month-input');
   const recalc = document.querySelector('[data-recalculation]');
+
+  let editTimecardOpen = flatpickr("#editTimecardOpen", {
+    dateFormat: "H:i",
+    locale: "ja",
+    time_24hr: true,
+    enableTime: true,
+    noCalendar: true,
+    inline: true,
+    minuteIncrement: 1,
+  });
+  let editTimecardClose = flatpickr("#editTimecardClose", {
+    dateFormat: "H:i",
+    locale: "ja",
+    time_24hr: true,
+    enableTime: true,
+    noCalendar: true,
+    inline: true,
+    minuteIncrement: 1,
+  });
   // Add event listener for the selectpicker
   if (slUser) {
     slUser.addEventListener('change', async function () {
@@ -364,10 +383,12 @@ function addEvent() {
         document.getElementById('editTimecardDate').value = date;
         document.getElementById('editTimecardUserid').value = userid;
         if (timecardinfo.timecard_open) {
-          document.getElementById('editTimecardOpen').value = timecardinfo.timecard_open;
+          editTimecardOpen.setDate(timecardinfo.timecard_open);
+         // document.getElementById('editTimecardOpen').value = timecardinfo.timecard_open;
         }
         if (timecardinfo.timecard_close) {
-          document.getElementById('editTimecardClose').value = timecardinfo.timecard_close;
+          editTimecardClose.setDate(timecardinfo.timecard_close);
+          // document.getElementById('editTimecardClose').value = timecardinfo.timecard_close;
         }
         if (timecardinfo.timecard_comment) {
           document.getElementById('editTimecardNote').value = decodeHtmlEntities(timecardinfo.timecard_comment);
@@ -561,12 +582,12 @@ function drawTable(data) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-
+  
   flatpickr("#timecard-month-input", {
     plugins: [new monthSelectPlugin({
       monthSelector: true,
       dateFormat: "Y-m",
-      locale: "ja"
+      locale: "ja",
     })],
     dateFormat: "Y-m",
     locale: "ja"
