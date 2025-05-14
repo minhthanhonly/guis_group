@@ -29,7 +29,7 @@
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/node-waves/node-waves.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/pickr/pickr-themes.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/css/core.css" />
-    <link rel="stylesheet" href="<?=$root?>assets/css/demo.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/css/demo.css?v=1" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/@form-validation/form-validation.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/datatables-bs5/datatables.bootstrap5.css" />

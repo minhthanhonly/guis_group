@@ -10,7 +10,7 @@ $view->heading('ログイン', 'login');
 	<a href="index.html" class="app-brand auth-cover-brand">
 		<span class="app-brand-logo demo">
 			<span class="text-primary">
-				<img src="assets/img/<?=APP_LOGO?>" alt="" width="80"
+				<img src="assets/img/<?=APP_LOGO_DARK?>" alt="" width="80"
 				data-app-light-img="<?=APP_LOGO?>"
 				data-app-dark-img="<?=APP_LOGO_DARK?>" />
 			</span>

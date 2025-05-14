@@ -8,7 +8,7 @@
             <a href="/" class="app-brand-link">
               <span class="app-brand-logo demo">
                 <span class="text-primary">
-                  <img src="<?=ROOT?>assets/img/<?=APP_LOGO?>" alt="" width="30"
+                  <img src="<?=ROOT?>assets/img/<?=APP_LOGO_DARK?>" alt="" width="30"
                   data-app-light-img="<?=APP_LOGO?>"
                   data-app-dark-img="<?=APP_LOGO_DARK?>" />
                 </span>
@@ -64,7 +64,7 @@
             <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager'){ ?>
             <li class="menu-item <?php if($directory == 'timecard') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base ti tabler-calendar"></i>
+                <i class="menu-icon icon-base ti tabler-clock"></i>
                 <div>勤怠管理</div>
               </a>
 
@@ -74,6 +74,13 @@
                     <div>タイムカード</div>
                   </a>
                 </li>
+                <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager'){ ?>
+                <li class="menu-item <?php if($directory == 'timecard' && $page == 'group') echo 'active'; ?>">
+                  <a href="<?=$root?>timecard/group.php" class="menu-link" data-pjax>
+                    <div>時間合計</div>
+                  </a>
+                </li>
+                <?php } ?>
                 <?php if($_SESSION['authority'] == 'administrator'){ ?>
                 <li class="menu-item <?php if($directory == 'timecard' && $page == 'holiday') echo 'active'; ?>">
                   <a href="<?=$root?>timecard/holiday.php" class="menu-link" data-pjax>
@@ -85,13 +92,6 @@
                 <li class="menu-item <?php if($directory == 'timecard' && ($page == 'config' || $page == 'add_config')) echo 'active'; ?>">
                   <a href="<?=$root?>timecard/config.php" class="menu-link" data-pjax>
                     <div>タイムカード設定</div>
-                  </a>
-                </li>
-                <?php } ?>
-                <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager'){ ?>
-                <li class="menu-item <?php if($directory == 'timecard' && $page == 'group') echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/group.php" class="menu-link" data-pjax>
-                    <div>時間合計</div>
                   </a>
                 </li>
                 <?php } ?>
@@ -163,7 +163,7 @@
 
             <li class="menu-item <?php if($directory == 'storage') echo 'active open'; ?>">
               <a href="<?=$root?>storage/" class="menu-link">
-                <i class="menu-icon icon-base ti tabler-file-text"></i>
+                <i class="menu-icon icon-base ti tabler-server-2"></i>
                 <div>ファイル</div>
               </a>
             </li>

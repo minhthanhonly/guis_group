@@ -14,6 +14,7 @@
 
 .app-brand-text.demo {
   font-size: 1.375rem;
+  white-space: nowrap;
 }
 
 /* ! For .layout-navbar-fixed added fix padding top to .layout-page */
@@ -355,6 +356,9 @@ td.fc-day-sat{
 
 #calendar .fc-view-harness{
 	min-block-size: 0px!important;
+}
+#calendar.schedule-calendar .fc-view-harness{
+	min-block-size: 800px!important;
 }
 
 

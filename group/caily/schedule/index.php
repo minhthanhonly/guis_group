@@ -70,7 +70,7 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
         <div class="card shadow-none border-0">
           <div class="card-body pb-0">
             <!-- FullCalendar -->
-            <div id="calendar"></div>
+            <div id="calendar" class="schedule-calendar"></div>
           </div>
         </div>
         <div class="app-overlay"></div>
