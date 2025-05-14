@@ -44,7 +44,7 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 		<div class="card-body">
 			<div class="container py-12">
 				<div class="row">
-					<div class="col-md-3">
+					<div class="col-md-3 col-lg-2">
 						<div class="folder">
 							<h5 class="foldercaption">フォルダ</h5>
 							<ul class="folderlist">
@@ -63,7 +63,7 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 							</ul>
 						</div>
 					</div>
-					<div class="col-md-9">
+					<div class="col-md-9 col-lg-10">
 						<table class="list table table-bordered table-striped" cellspacing="0">
 							<tr><th><?=$pagination->sortby('storage_title', 'タイトル')?></th>
 							<th><?=$pagination->sortby('storage_file', 'ファイル名')?></th>

@@ -180,7 +180,7 @@ class View {
 		if (strlen($string) > 0) {
 			$array = explode(',', $string);
 			if (is_array($array) && count($array) > 0) {
-				$element = '<div><input type="checkbox" name="uploadedfile[]" id="uploadedfile%s" value="%s" checked="checked" /><label for="uploadedfile%s">%s</label></div>';
+				$element = '<div class="my-2"><input type="checkbox" name="uploadedfile[]" id="uploadedfile%s" value="%s" checked="checked" class="d-none" /><label for="uploadedfile%s">%s</label></div>';
 				foreach ($array as $key => $value) {
 					if (strlen($value) > 0) {
 						$value = $this->escape($value);
@@ -189,7 +189,7 @@ class View {
 				}
 			}
 		}
-		$result .= '<div><span class="operator" onclick="App.uploadfile(this)">ファイルを添付</span></div>';
+		$result .= '<div><a href="javascript:void(0)" class="operator" onclick="App.uploadfile(this)">ファイルを添付</a></div>';
 		return $result;
 	
 	}
@@ -197,6 +197,7 @@ class View {
 	function attachment($id, $directory, $prefix, $filelist) {
 		
 		if (strlen($filelist) > 0) {
+			echo '<hr><h5>添付ファイル</h4>';
 			$array = explode(',', $filelist);
 			if (is_array($array) && count($array) > 0) {
 				$helper = new Helper;
@@ -228,7 +229,6 @@ class View {
 	}
 	
 	function uploadencode($string) {
-		
 		if (stristr(PHP_OS, 'win')) {
 			$string = mb_convert_encoding($string, 'SJIS', 'SJIS, UTF-8');
 		}

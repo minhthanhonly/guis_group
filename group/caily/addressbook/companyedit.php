@@ -21,7 +21,7 @@ $hash['folder'] = array('&nbsp;') + $hash['folder'];
 <form class="content" method="post" name="addressbook" action="">
 	<?=$view->error($hash['error'])?>
 	<table class="form" cellspacing="0">
-		<tr><th>会社名<span class="badge bg-label-danger mx-1">(必須)</span></th><td><input type="text" name="addressbook_company" class="inputvalue" value="<?=$hash['data']['addressbook_company']?>" /></td></tr>
+		<tr><th>会社名<span class="badge bg-label-danger mx-1">必須</span></th><td><input type="text" name="addressbook_company" class="inputvalue" value="<?=$hash['data']['addressbook_company']?>" /></td></tr>
 		<tr><th>会社名（かな）</th><td><input type="text" name="addressbook_companyruby" class="inputvalue" value="<?=$hash['data']['addressbook_companyruby']?>" /></td></tr>
 		<tr><th>部署</th><td><input type="text" name="addressbook_department" class="inputvalue" value="<?=$hash['data']['addressbook_department']?>" /></td></tr>
 		<tr><th>郵便番号</th><td>

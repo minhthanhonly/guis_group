@@ -29,7 +29,6 @@
               <a href="<?=$root?>" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-home"></i>
                 <div data-i18n="ホーム">ホーム</div>
-                <!-- <div class="badge text-bg-danger rounded-pill ms-auto">5</div> -->
               </a>
             </li>
 
@@ -59,12 +58,7 @@
                 <div>カレンダー</div>
               </a>
             </li>
-            <li class="menu-item <?php if($directory == 'storage') echo 'active open'; ?>">
-              <a href="<?=$root?>storage/" class="menu-link">
-                <i class="menu-icon icon-base ti tabler-file-text"></i>
-                <div>ファイル</div>
-              </a>
-            </li>
+            
             
 
             <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager'){ ?>
@@ -166,6 +160,19 @@
                 </a>
               </li>
             <?php } ?>
+
+            <li class="menu-item <?php if($directory == 'storage') echo 'active open'; ?>">
+              <a href="<?=$root?>storage/" class="menu-link">
+                <i class="menu-icon icon-base ti tabler-file-text"></i>
+                <div>ファイル</div>
+              </a>
+            </li>
+            <li class="menu-item <?php if($directory == 'forum') echo 'active open'; ?>">
+              <a href="<?=$root?>forum/" class="menu-link">
+                <i class="menu-icon icon-base ti tabler-news"></i>
+                <div>お知らせ</div>
+              </a>
+            </li>
 
             
           </ul>

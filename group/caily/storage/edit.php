@@ -33,7 +33,7 @@ $view->heading('ファイル編集');
 					<input name="MAX_FILE_SIZE" value="<?=APP_FILESIZE?>" type="hidden" />
 					<?=$view->error($hash['error'])?>
 					<table class="form table table-bordered table-striped mb-4" cellspacing="0">
-						<tr><th>タイトル<span class="badge bg-label-danger mx-1">(必須)</span></th><td><input type="text" name="storage_title" class="inputtitle form-control" value="<?=$hash['data']['storage_title']?>" /></td></tr>
+						<tr><th>タイトル<span class="badge bg-label-danger mx-1">必須</span></th><td><input type="text" name="storage_title" class="inputtitle form-control" value="<?=$hash['data']['storage_title']?>" /></td></tr>
 						<tr><th>ファイル名</th><td><?=$hash['data']['storage_file']?></td></tr>
 						<tr><th>ファイルサイズ</th><td><?=$hash['data']['storage_size']?></td></tr>
 						<tr><th>内容</th><td><textarea name="storage_comment" class="inputcomment form-control" rows="5"><?=$hash['data']['storage_comment']?></textarea></td></tr>

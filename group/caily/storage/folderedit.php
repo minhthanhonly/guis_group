@@ -33,7 +33,7 @@ $view->heading('ファイル編集');
 				<form class="content" method="post" action="">
 					<?=$view->error($hash['error'])?>
 					<table class="form table table-bordered mb-4" cellspacing="0">
-						<tr><th>フォルダ名<span class="badge bg-label-danger mx-1">(必須)</span></th><td><input type="text" name="storage_title" class="inputtitle form-control" value="<?=$hash['data']['storage_title']?>" /></td></tr>
+						<tr><th>フォルダ名<span class="badge bg-label-danger mx-1">必須</span></th><td><input type="text" name="storage_title" class="inputtitle form-control" value="<?=$hash['data']['storage_title']?>" /></td></tr>
 						<tr><th>場所</th><td><?=$hash['folder']['storage_title']?></td></tr>
 						<tr><th>書き込み権限<?=$view->explain('storageadd')?></th><td><?=$view->permit($hash['data'], 'add')?></td></tr>
 						<tr><th>公開設定<?=$view->explain('public')?></th><td><?=$view->permit($hash['data'])?></td></tr>

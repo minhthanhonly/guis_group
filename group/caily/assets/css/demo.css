@@ -380,3 +380,12 @@ li.storageprevious {
     background-image: url(/assets/images/previous.gif);
     background-repeat: no-repeat;
 }
+.cmt_reply{
+	display: none;
+}
+.fs-small{
+	font-size: 0.8em;
+}
+.custom_editor_textarea{
+	display: none;
+}

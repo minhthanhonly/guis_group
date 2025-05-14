@@ -49,16 +49,24 @@ class Forum extends ApplicationModel {
 			$this->where[] = "(forum_parent = ".intval($_REQUEST['id']).")";
 
 			$hash += $this->findLimit('forum_date', 1);
-
+			
 			$hash += $this->findUser($hash['parent']);
+			$user_list = array();
 			if(count($hash['list'])  > 0){
 				foreach ($hash['list'] as $key => $value) {
 					$this->where[0] = "(forum_parent = ".intval($value['id']).")";
 					$list = $this->findLimit('forum_date', 0); // 0 = asc
-					//print_r($list);
 					$hash['list'][$key]['comment'] = $list['list'];
-
+					$user_list[] = $value['owner'];
+					foreach ($list['list'] as $key => $value2) {
+						$user_list[] = $value2['owner'];
+					}
 				}
+			}
+			$hash['user_image'] = array();
+			$user_image = $this->findUserImage($user_list);
+			foreach ($user_image as $key => $value) {
+				$hash['user_image'][$value['userid']] = $value['user_image'];
 			}
 			return $hash;
 		} else {
@@ -134,9 +142,7 @@ class Forum extends ApplicationModel {
 	}
 
 	function edit() {
-		
 		$hash['data'] = $this->permitOwner();
-		$post_id = $_GET['post_id'];
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$hash += $this->permitCategory('forum', $_POST['folder_id'], 'add');
 			$this->validateSchema('update');
@@ -144,11 +150,10 @@ class Forum extends ApplicationModel {
 			$this->post['forum_file'] = $this->uploadfile('forum', $hash['data']['owner'].'_'.strtotime($hash['data']['forum_date']), $hash['data']['forum_file']);
 			$this->updatePost();
 			if ($_POST['forum_parent'] <= 0) {
-				$this->redirect('view.php?id='.$post_id);
-				//$this->redirect('view.php?id='.$_POST['id']);
+				$this->redirect('view.php?id='.$_POST['id']);
 			} else {
-				$this->redirect('view.php?id='.$post_id);
-				//$this->redirect('view.php?id='.$_POST['forum_parent']);
+				//$this->redirect('view.php?id='.$post_id);
+				$this->redirect('view.php?id='.$_POST['forum_parent']);
 			}
 			$hash['data'] = $this->post;
 		} elseif ($hash['data']['forum_parent'] <= 0) {

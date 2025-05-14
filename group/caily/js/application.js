@@ -267,7 +267,7 @@ App.uploadfile = function (object) {
 	if (object.parentNode) {
 		var parent = object.parentNode;
 		var element = document.createElement('div');
-		element.innerHTML = '<input type="file" name="uploadfile[]" class="inputfile" size="70" />&nbsp;<span class="operator" onclick="App.removefile(this)">削除</span>';
+		element.innerHTML = '<div class="d-flex gap-1 my-2"><input type="file" name="uploadfile[]" size="70" class="form-control" />&nbsp;<a href="javascript:void(0)" class="operator btn btn-danger flex-shrink-0" onclick="App.removefile(this)">削除</span>';
 		parent.insertBefore(element, object);
 	}
 	

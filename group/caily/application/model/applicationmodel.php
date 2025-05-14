@@ -206,15 +206,16 @@ class ApplicationModel extends Model {
 	}
 	
 	function permitOwner($id = 0) {
-		
 		if ($id <= 0) {
 			$id = $_REQUEST['id'];
 		}
 		if ($id > 0) {
 			$field = implode(',', $this->schematize());
-			$data = $this->fetchOne("SELECT ".$field." FROM ".$this->table." WHERE (id = ".intval($id).") AND (owner = '".$this->quote($_SESSION['userid'])."')");
+			$query = "SELECT ".$field." FROM ".$this->table." WHERE (id = ".intval($id).") AND (owner = '".$this->quote($_SESSION['userid'])."')";
+			$data = $this->fetchOne($query);
 			return $data;
 		}
+
 		
 	}
 	
@@ -264,17 +265,25 @@ class ApplicationModel extends Model {
 		}
 		$array = array_unique($array);
 		$user = array();
+		$user_image = array();
 		if (is_array($array) && count($array) > 0) {
-			$query = "SELECT userid, realname FROM ".DB_PREFIX."user WHERE userid IN ('".implode("','", $array)."') ORDER BY user_order,id";
+			$query = "SELECT userid, realname, user_image FROM ".DB_PREFIX."user WHERE userid IN ('".implode("','", $array)."') ORDER BY user_order,id";
 			$data = $this->fetchAll($query);
 			if (is_array($data) && count($data) > 0) {
 				foreach ($data as $row) {
 					$user[$row['userid']] = $row['realname'];
+					$user_image[$row['userid']] = $row['user_image'];
 				}
 			}
 		}
-		return array('group'=>$group, 'user'=>$user);
+		return array('group'=>$group, 'user'=>$user, 'user_image'=>$user_image);
 	
+	}
+
+	function findUserImage($array) {
+		$query = "SELECT userid, user_image FROM ".DB_PREFIX."user WHERE userid IN ('".implode("','", $array)."') ORDER BY user_order,id";
+		$data = $this->fetchAll($query);
+		return $data;
 	}
 	
 	function permitCategory($type, $id = 0, $level = 'public') {

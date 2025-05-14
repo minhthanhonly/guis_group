@@ -24,7 +24,7 @@ $view->heading('グループ編集', 'administration');
 		<table class="table table-bordered">
 			<tbody>
 				<tr>
-					<th class="w-25">グループ名<span class="badge bg-label-danger mx-1">(必須)</span></th>
+					<th class="w-25">グループ名<span class="badge bg-label-danger mx-1">必須</span></th>
 					<td><input type="text" name="group_name" class="form-control" value="<?=$hash['data']['group_name']?>" /></td>
 				</tr>
 				<tr>
