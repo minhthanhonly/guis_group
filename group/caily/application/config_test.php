@@ -65,13 +65,12 @@ define('DB_FILE', DIR_PATH.'database/group.sqlite2');
 define('DB_POSTCODE', DIR_PATH.'database/KEN_ALL.CSV');
 
 define('ROOT_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
+
 define('ROOT', '/');
 
 define('APP_NAME', 'GUISシステム');
 
 define('APP_COMPANY', 'GUIS Co.,Ltd');
-
-define('APP_VERSION', '1.0.0');
 
 define('APP_LOGO', 'logo-site-dark.png');
 
@@ -84,6 +83,8 @@ define('ADMIN_GROUP', '4');
 define('RETIRE_GROUP', '5');
 
 define('RETIRE_GROUP_NAME', '退職者');
+
+require_once 'version.php';
 
 error_reporting(E_ERROR | E_PARSE);
 ?>

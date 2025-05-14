@@ -35,9 +35,9 @@
 
 
 
-<script src="<?=$root?>assets/js/main.js"></script>
-<script src="<?=$root?>assets/js/app-chat.js"></script>
-<link rel="stylesheet" href="<?=$root?>assets/css/app-chat.css">
+<script src="<?=$root?>assets/js/main.js?v=<?=CACHE_VERSION?>"></script>
+<script src="<?=$root?>assets/js/app-chat.js?v=<?=CACHE_VERSION?>"></script>
+<link rel="stylesheet" href="<?=$root?>assets/css/app-chat.css?v=<?=CACHE_VERSION?>">
 <script src="<?=$root?>assets/js/forms-tagify.js"></script>
 <?php
 if(isset($_SESSION['userid'])) {
@@ -56,7 +56,7 @@ if(isset($_SESSION['userid'])) {
 ?>
 
 <script type="text/javascript" src="<?=$root?>js/library/jquery-ui.min.js"></script>
-<script type="text/javascript" src="<?=$root?>js/application.js"></script>
+<script type="text/javascript" src="<?=$root?>js/application.js?v=<?=CACHE_VERSION?>"></script>
 
 </body>
 </html>

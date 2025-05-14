@@ -151,6 +151,22 @@ document.addEventListener('DOMContentLoaded', async function () {
           start: 'title',
           end: 'prev,next, schedulePage'
         },
+        titleFormat: function(date) {
+          if (date.start && date.end) {
+            // listWeekやweek view
+            const start = moment(date.start).format('M月D日');
+            // FullCalendarのendは次の日の0時なので1日前にする
+            const end = moment(date.end).subtract(1, 'days').format('M月D日');
+            return `今週のスケジュール: ${start} ～ ${end}`;
+          } else if (date.date) {
+            // day view
+            return moment(date.date).format('YYYY年M月D日');
+          } else if (date.start) {
+            // month view
+            return moment(date.start).format('YYYY年M月');
+          }
+          return '';
+        },
         customButtons: {
           schedulePage: {
             text: 'もっと見る',
@@ -213,7 +229,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         const schedulePageButton = document.querySelector('.fc-schedulePage-button');
         schedulePageButton.classList.remove('fc-button-primary');
         schedulePageButton.classList.remove('fc-button');
-        schedulePageButton.classList.add('btn', 'btn-primary');
+        schedulePageButton.classList.add('btn', 'btn-primary', 'btn-sm');
     }
 
 });

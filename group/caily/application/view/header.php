@@ -28,8 +28,8 @@
     <link rel="stylesheet" href="<?=$root?>assets/vendor/fonts/iconify-icons.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/node-waves/node-waves.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/pickr/pickr-themes.css" />
-    <link rel="stylesheet" href="<?=$root?>assets/vendor/css/core.css" />
-    <link rel="stylesheet" href="<?=$root?>assets/css/demo.css?v=1" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/css/core.css?v=<?=CACHE_VERSION?>" />
+    <link rel="stylesheet" href="<?=$root?>assets/css/demo.css?v=<?=CACHE_VERSION?>" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/@form-validation/form-validation.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/datatables-bs5/datatables.bootstrap5.css" />
@@ -45,16 +45,9 @@
     <?=$style?>
     <!-- Helpers -->
      
-    <script src="<?=$root?>assets/vendor/js/template-customizer.js"></script>
-    <script src="<?=$root?>assets/vendor/js/helpers.js"></script>
-    <script src="<?=$root?>assets/js/config.js"></script>
-
-    <!-- <link href="<?=$root?>css/default.css" rel="stylesheet" type="text/css" />
-    <link href="<?=$root?>css/control.css" rel="stylesheet" type="text/css" />
-    <link href="<?=$root?>css/application.css" rel="stylesheet" type="text/css" />
-    <link href="<?=$root?>css/style.css" rel="stylesheet" type="text/css" /> -->
-
-   
+    <script src="<?=$root?>assets/vendor/js/template-customizer.js?v=<?=CACHE_VERSION?>"></script>
+    <script src="<?=$root?>assets/vendor/js/helpers.js?v=<?=CACHE_VERSION?>"></script>
+    <script src="<?=$root?>assets/js/config.js?v=<?=CACHE_VERSION?>"></script>
     
   </head>
 

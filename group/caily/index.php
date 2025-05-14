@@ -27,7 +27,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
 <div class="container-xxl flex-grow-1 container-p-y">
 	<div class="row g-6">
     <!-- View sales -->
-    <div class="col-xl-4 col-md-6">
+    <div class="col-md-8 col-lg-6 col-xl-4" style="min-width: 420px;">
       <div class="card">
         <div class="d-flex align-items-end row">
           <div class="col-7">
@@ -63,67 +63,42 @@ if ($current_hour >= 6 && $current_hour < 12) {
     </div>
     <!-- View sales -->
   </div>
-  <div class="row g-6 mt-4">                
+  <div class="row g-6 mt-1">                
     <!-- Statistics -->
     <div class="col-xl-6 col-md-8">
       <div class="card h-100">
-        <div class="card-header d-flex justify-content-between">
-          <h5 class="card-title mb-0">今週のスケジュール</h5>
-        </div>
         <div class="card-body pb-0 app-calendar-wrapper">
           <div id="calendar"></div>
         </div>
       </div>
     </div>
     <div class="col-xl-6 col-md-8">
-      <!-- <div class="card h-100">
+      <div class="card h-100">
         <div class="card-header d-flex justify-content-between">
-          <h5 class="card-title mb-0">今期の統計</h5>
-          <small class="text-body-secondary">更新日：<?=$today?></small>
+          <h5 class="card-title mb-0">お知らせ</h5>
+          <a class="btn btn-sm btn-primary" href="<?=$root?>forum/index.php">もっと見る</a>
         </div>
-        <div class="card-body d-flex align-items-end">
-          <div class="w-100">
-            <div class="row gy-3">
-              <div class="col-md-3 col-6">
-                <div class="d-flex align-items-center">
-                  <div class="badge rounded bg-label-primary me-4 p-2"><i class="icon-base ti tabler-briefcase icon-lg"></i></div>
-                  <div class="card-info">
-                    <h5 class="mb-0">999k</h5>
-                    <small>案件</small>
-                  </div>
-                </div>
-              </div>
-              <div class="col-md-3 col-6">
-                <div class="d-flex align-items-center">
-                  <div class="badge rounded bg-label-info me-4 p-2"><i class="icon-base ti tabler-list-check icon-lg"></i></div>
-                  <div class="card-info">
-                    <h5 class="mb-0">999k</h5>
-                    <small>タスク</small>
-                  </div>
-                </div>
-              </div>
-              <div class="col-md-3 col-6">
-                <div class="d-flex align-items-center">
-                  <div class="badge rounded bg-label-success me-4 p-2"><i class="icon-base ti tabler-list-check icon-lg"></i></div>
-                  <div class="card-info">
-                    <h5 class="mb-0">999k</h5>
-                    <small>品質</small>
-                  </div>
-                </div>
-              </div>
-              <div class="col-md-3 col-6">
-                <div class="d-flex align-items-center">
-                  <div class="badge rounded bg-label-warning me-4 p-2"><i class="icon-base ti tabler-currency-yen icon-lg"></i></div>
-                  <div class="card-info">
-                    <h5 class="mb-0">99,999万円</h5>
-                    <small>収益</small>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div class="card-body">
+          <table class="table table-bordered">
+            <?php
+            if (is_array($hash['forum']) && count($hash['forum']) > 0) {
+              foreach ($hash['forum'] as $row) {
+            ?>
+                <tr>
+                  <td class="w-20 fs-small text-nowrap"><?=date('Y年m月d日 H:i', strtotime($row['forum_lastupdate']))?></td>
+                  <td><?php 
+                  if(date('Y-m-d H:i:s', strtotime($row['created'])) > date('Y-m-d H:i:s', strtotime('-1 week'))){
+                    echo '<span class="badge bg-label-info me-2">NEW</span>';
+                  }
+                  ?><a href="view.php?id=<?=$row['id']?>"><?=$row['forum_title']?></a></td>
+                  <td><?=$row['forum_name']?></td>
+               </tr>
+            <?php
+              }
+            }?>
+          </table>
         </div>
-      </div> -->
+      </div>
     </div>
 
 	</div>
