@@ -10,7 +10,7 @@ if (file_exists($envPath)) {
 }
 if (function_exists( 'date_default_timezone_set' ) )
 {
-	date_default_timezone_set('Asia/Saigon');
+	date_default_timezone_set('Asia/Tokyo');
 }
 require(dirname(__FILE__).'/controller.php');
 $controller = new Controller;
