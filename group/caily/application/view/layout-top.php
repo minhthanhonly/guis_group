@@ -124,7 +124,7 @@
               </a>
               <ul class="menu-sub">
                 <li class="menu-item <?php if($directory == 'addressbook' && $page == 'index') echo 'active'; ?>">
-                  <a href="<?=$root?>addressbook/" class="menu-link" data-pjax>
+                  <a href="<?=$root?>addressbook/?folder=all" class="menu-link" data-pjax>
                     <div>アドレス帳</div>
                   </a>
                 </li>
@@ -154,7 +154,7 @@
                 </a>
               </li>
               <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
-                <a href="<?=$root?>addressbook/" class="menu-link">
+                <a href="<?=$root?>addressbook/?folder=all" class="menu-link">
                   <i class="menu-icon icon-base ti tabler-address-book"></i>
                   <div>アドレス帳</div>
                 </a>

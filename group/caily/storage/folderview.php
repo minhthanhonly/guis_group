@@ -27,7 +27,7 @@ $view->heading('フォルダ情報');
 						<ul class="operate d-flex gap-2 list-unstyled justify-content-end">
 							<li><a class="btn btn-info" href="index.php<?=$view->positive(array('folder'=>$hash['data']['storage_folder']))?>">一覧に戻る</a></li>
 							<?php
-							if ($view->permitted($hash['folder'], 'add') && $view->permitted($hash['data'], 'edit')) {
+							if ($view->permitted($hash['data'], 'edit')) {
 								echo '<li><a class="btn btn-primary" href="folderedit.php?id='.$hash['data']['id'].'">編集</a></li>';
 								echo '<li><a class="btn btn-danger" href="folderdelete.php?id='.$hash['data']['id'].'">削除</a></li>';
 							}

@@ -211,12 +211,12 @@ class ApplicationModel extends Model {
 		}
 		if ($id > 0) {
 			$field = implode(',', $this->schematize());
-			$query = "SELECT ".$field." FROM ".$this->table." WHERE (id = ".intval($id).") AND (owner = '".$this->quote($_SESSION['userid'])."')";
+			// $query = "SELECT ".$field." FROM ".$this->table." WHERE (id = ".intval($id).") AND (owner = '".$this->quote($_SESSION['userid'])."')";
+			$query = "SELECT ".$field." FROM ".$this->table." WHERE (id = ".intval($id).")";
 			$data = $this->fetchOne($query);
 			return $data;
 		}
 
-		
 	}
 	
 	function findGroup() {

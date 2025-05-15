@@ -4,8 +4,9 @@
 class Group extends ApplicationModel {
 	
 	function __construct() {
-		
-		$this->authorize('administrator');
+		if (basename($_SERVER['SCRIPT_NAME']) != 'feedApi.php' && basename($_SERVER['SCRIPT_NAME']) != 'feed.php' && $_SERVER['SCRIPT_NAME'] != '/api/index.php') {
+			$this->authorize('administrator');
+		}
 		$this->schema = array(
 		'group_name'=>array('グループ名', 'notnull', 'length:100'),
 		'group_order'=>array('順序', 'numeric', 'length:10', 'except'=>array('search')),
@@ -66,7 +67,7 @@ class Group extends ApplicationModel {
 		$this->checkGroupuser($_REQUEST['id']);
 		$hash['data'] = $this->permitFind('edit');
 		$this->deletePost();
-		$this->redirect();
+		$this->redirect('index.php');
 		$hash += $this->findUser($hash['data']);
 		return $hash;
 

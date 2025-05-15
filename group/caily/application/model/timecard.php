@@ -265,6 +265,24 @@ class Timecard extends ApplicationModel {
 		return $hash;
 	}
 
+
+	function delete_timecard() {
+		$this->authorizeApi('administrator', 'manager');
+		$id = $_POST['id'];
+		if(!$id){
+			$hash['status'] = 'error';
+			$hash['message_code'] = 15;
+			return $hash;
+		}
+		$query = sprintf("DELETE FROM %stimecard WHERE id = %s", DB_PREFIX, $id);
+		$response = $this->query($query);
+		if($response){
+			$hash['status'] = 'success';
+			$hash['message_code'] = 12;
+		}
+		return $hash;
+	}
+
 	/*API*/
 	function checkin() {
 		/*時間取得*/
@@ -403,6 +421,12 @@ class Timecard extends ApplicationModel {
 		$open = $_POST['timecard_open'];
 		$close = $_POST['timecard_close'];
 
+		if($open == '00:00'){
+			$open = '';
+		}
+		if($close == '00:00'){
+			$close = '';
+		}
 		$column = ['timecard_open', 'timecard_close', 'timecard_comment'];
 		$array = [];
 		foreach($_POST as $key => $value){

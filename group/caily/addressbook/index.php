@@ -20,7 +20,7 @@ $pagination = new Pagination(array('folder' => $_GET['folder']));
 					<div class="col-md-6">
 						<ul class="operate d-flex gap-2 list-unstyled justify-content-end">
 							<?php
-							if ($view->permitted($hash['category'], 'add')) {
+							if (!isset($hash['category']) || $view->permitted($hash['category'], 'add')) {
 								echo '<li><a class="btn btn-primary" href="add.php' . $view->parameter(array('folder' => $_GET['folder'])) . '">アドレス追加</a></li>';
 							}
 							if (count($hash['list']) <= 0) {

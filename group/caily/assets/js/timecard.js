@@ -144,9 +144,9 @@ async function get_users() {
   const response = await axios.get(`/api/index.php?model=user&method=getList`);
   // check if the response is successful
   if (response.status !== 200 || !response.data || !response.data.list) {
+
     handleErrors(response.data);
   }
-
   return response.data.list;
 }
 
@@ -237,6 +237,7 @@ function addEvent() {
     noCalendar: true,
     inline: true,
     minuteIncrement: 1,
+    defaultHour: 0,
   });
   let editTimecardClose = flatpickr("#editTimecardClose", {
     dateFormat: "H:i",
@@ -246,6 +247,7 @@ function addEvent() {
     noCalendar: true,
     inline: true,
     minuteIncrement: 1,
+    defaultHour: 0,
   });
   // Add event listener for the selectpicker
   if (slUser) {
@@ -389,10 +391,16 @@ function addEvent() {
         document.getElementById('editTimecardUserid').value = userid;
         if (timecardinfo.timecard_open) {
           editTimecardOpen.setDate(timecardinfo.timecard_open);
+        } else {
+          editTimecardOpen.clear();
         }
+
         if (timecardinfo.timecard_close) {
           editTimecardClose.setDate(timecardinfo.timecard_close);
+        } else {
+          editTimecardClose.clear();
         }
+
         if (timecardinfo.timecard_comment) {
           document.getElementById('editTimecardNote').value = decodeHtmlEntities(timecardinfo.timecard_comment);
         }
@@ -418,7 +426,7 @@ function addEvent() {
       if (response.status === 200 && response.data && response.data.status === 'success') {
         // Open the modal
         var timecardinfo = response.data.data;
-        document.getElementById('modalEditTimecardNoteTitle').innerHTML = findUsername(userid);
+        document.getElementById('modalEditTimecardNoteTitle').innerHTML = '備考';
         if (timecardinfo.id) {
           document.getElementById('editTimecardNoteId').value = timecardinfo.id;
         }
@@ -432,6 +440,51 @@ function addEvent() {
       } else {
         showMessage(response.data.message_code, true);
       }
+    }
+
+    if (e.target.closest('.item-delete')) {
+      e.preventDefault();
+      const id = e.target.closest('.item-delete').dataset.id;
+      const date = e.target.closest('.item-delete').dataset.date;
+      Swal.fire({
+        title: date + 'のを削除しますか？',
+        text: 'タイムカードを削除すると元に戻すことはできません。',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'はい、削除します',
+        cancelButtonText: 'キャンセル',
+        customClass: {
+          confirmButton: 'btn btn-primary',
+          cancelButton: 'btn btn-label-secondary'
+        },
+        buttonsStyling: false
+      }).then(function (result) {
+        if (result.value) {
+
+          displayHourglass();
+          axios({
+            method: 'post',
+            url: '/api/index.php?model=timecard&method=delete_timecard',
+            data: {
+              id: id,
+            },
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }
+          })
+            .then(function (response) {
+              if (response.status === 200 && response.data && response.data.status === 'success') {
+                showMessage('タイムカードを削除しました');
+                changeData();
+              } else {
+                showMessage('タイムカードを削除できませんでした', true);
+              }
+            }).catch(function (error) {
+              handleErrors(error);
+            });
+          
+        }
+      });
     }
 
   });
@@ -768,6 +821,7 @@ document.addEventListener('DOMContentLoaded', function () {
           searchable: false,
           orderable: false,
           render: (data, type, full, meta) => {
+            console.log(full);
             return `
               <div class="d-flex align-items-center justify-content-start">
                 <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="btn btn-text-secondary rounded-pill waves-effect btn-icon item-view"><i class="icon-base ti tabler-eye me-0 me-sm-1"></i></a>
@@ -777,6 +831,7 @@ document.addEventListener('DOMContentLoaded', function () {
                   </a>
                   <div class="dropdown-menu dropdown-menu-end m-0">
                   <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="dropdown-item item-edit"><i class="icon-base ti tabler-pencil me-0 me-sm-1 icon-16px"></i> 編集</a>
+                  ${ full.id ? `<a href="javascript:;" data-date="${full['timecard_date']}" data-id="${full['id']}" class="dropdown-item item-delete"><i class="icon-base ti tabler-trash me-0 me-sm-1 icon-16px"></i> 削除</a>` : ''}
                   </div>` : ''}
               </div>
               `;

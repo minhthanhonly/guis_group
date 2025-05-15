@@ -18,7 +18,7 @@ if ($hash['data']['addressbook_parent'] > 0) {
 			<div class="col-md-6 d-flex justify-content-end gap-4">
 				<div><a href="index.php<?=$view->positive(array('folder'=>$hash['data']['folder_id']))?>" class="btn btn-info">一覧に戻る</a></div>
 				<?php
-				if ($view->permitted($hash['category'], 'add') && $view->permitted($hash['data'], 'edit')) {
+				if ($view->permitted($hash['data'], 'edit')) {
 					echo '<div><a href="edit.php?id='.$hash['data']['id'].'" class="btn btn-primary">編集</a></div>';
 					echo '<div><a href="delete.php?id='.$hash['data']['id'].'" class="btn btn-danger">削除</a></div>';
 				}

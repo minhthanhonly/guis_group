@@ -286,7 +286,7 @@
 
 .speech-bubble {
 	position: absolute;
-	top: -20px;
+	top: -16px;
 	right: -32px;
 	background: #fff;
 	padding: 8px 12px;
@@ -303,7 +303,7 @@
   .bubble-arrow {
 	position: absolute;
 	bottom: -8px;
-	nav-left: 30px;
+	left: 60px;
 	width: 0;
 	height: 0;
 	border-left: 8px solid transparent;

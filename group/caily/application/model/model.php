@@ -10,6 +10,8 @@ class Model extends Connection {
 	var $error = array();
 	var $response;
 	var $validation;
+
+	var $donotquote = array('add_level', 'edit_level', 'public_level', 'user_order', 'user_group', 'addressbook_parent', 'addressbook_type', 'folder_id', 'bookmark_order', 'folder_order', 'forum_node', 'forum_parent','group_order', 'schedule_level', 'storage_folder');
 	
 	function connect() {
 		if (!$this->handler) {
@@ -151,12 +153,12 @@ class Model extends Connection {
 					$this->post['owner'] = $_SESSION['userid'];
 				}
 				$this->post['created'] = date('Y-m-d H:i:s');
-				$donotquote = array('add_level', 'edit_level', 'public_level');
+				
 				$fields = array_values($field);
 				foreach ($this->post as $key => $value) {
 					if (in_array($key, $fields)) {
 						$keys[] = $key;
-						if(!in_array($key, $donotquote)){
+						if(!in_array($key, $this->donotquote)){
 							$values[] = "'".$this->quote($this->post[$key])."'";
 						}else{
 							if($this->post[$key] == '' || $this->post[$key] == null) $this->post[$key] = 0;
@@ -165,6 +167,7 @@ class Model extends Connection {
 					}
 				}
 				$query = "INSERT INTO ".$this->table." (".implode(",", $keys).") VALUES (".implode(",", $values).")";
+				echo $query;
 				$this->response = $this->query($query);
 				return $this->response;
 			}
@@ -179,12 +182,20 @@ class Model extends Connection {
 		$this->response = false;
 		if (count($this->error) <= 0 && count($this->post) > 0 && $_POST['id'] > 0) {
 			$field = $this->schematize('update');
+			$array = array();
 			if (is_array($field) && count($field) > 0) {
 				$this->post['editor'] = $_SESSION['userid'];
 				$this->post['updated'] = date('Y-m-d H:i:s');
-				foreach ($field as $key) {
-					if (array_key_exists($key, $this->post)) {
-						$array[] = $key." = '".$this->quote($this->post[$key])."'";
+				$fields = array_values($field);
+
+				foreach ($this->post as $key => $value) {
+					if (in_array($key, $fields)) {
+						if(!in_array($key, $this->donotquote)){
+							$array[] = $key." = '".$this->quote($this->post[$key])."'";
+						}else{
+							if($this->post[$key] == '' || $this->post[$key] == null) $this->post[$key] = 0;
+							$array[] = $key." = ".$this->quote($this->post[$key]);
+						}
 					}
 				}
 				$query = "UPDATE ".$this->table." SET ".implode(",", $array)." WHERE id = ".intval($_POST['id']);

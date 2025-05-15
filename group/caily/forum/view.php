@@ -34,7 +34,7 @@ if ($hash['parent']['public_level'] == 2) {
 				<ul class="operate d-flex gap-2 list-unstyled justify-content-end">
 					<li><a class="btn btn-info" href="index.php<?=$view->positive(array('folder'=>$hash['parent']['folder_id']))?>">一覧に戻る</a></li>
 					<?php
-					if ($hash['parent']['owner'] == $_SESSION['userid']) {
+					if ($hash['parent']['owner'] == $_SESSION['userid'] || $_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') {
 						echo '<li><a class="btn btn-primary" href="edit.php?id='.$hash['parent']['id'].'">編集</a></li>';
 					}
 					?>

@@ -31,10 +31,8 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 					<div class="col-md-6">
 						<ul class="operate d-flex gap-2 list-unstyled justify-content-end">
 							<?php
-							if (isset($hash['parent']) && $view->permitted($hash['parent'], 'add')) {
 								echo '<li><a class="btn btn-primary" href="add.php' . $view->positive(array('folder'=>$_GET['folder'])) . '">ファイルアップロード</a></li>';
 								echo '<li><a class="btn btn-info" href="folderadd.php' . $view->positive(array('folder'=>$_GET['folder'])) . '">フォルダ追加</a></li>';
-							}
 							?>
 						</ul>
 					</div>
@@ -73,7 +71,9 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 							<th class="listlink">&nbsp;</th></tr>
 					<?php
 					if (is_array($hash['list']) && count($hash['list']) > 0) {
+						
 						foreach ($hash['list'] as $row) {
+							$type = 'info';
 							$fileext = '';
 							if ($row['storage_type'] == 'file') {
 								$fileext = strtolower(substr(strrchr($row['storage_file'], '.'), 1));
@@ -99,9 +99,10 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 								$fileext = 'folder tabler-filled';
 								$url = 'index.php?folder='.$row['id'];
 								$property = 'folderview.php?id='.$row['id'];
+								$type = 'warning';
 							}
 					?>
-							<tr><td><a class="storage<?=$row['storage_type']?> <?=$fileext?>" href="<?=$url?>"><i class="icon-base ti tabler-<?=$fileext?> me-2 text-info"></i><?=$row['storage_title']?></a>&nbsp;</td>
+							<tr><td><a class="storage<?=$row['storage_type']?> <?=$fileext?>" href="<?=$url?>"><i class="icon-base ti tabler-<?=$fileext?> me-2 text-<?=$type?>"></i><?=$row['storage_title']?></a>&nbsp;</td>
 							<td><?=$file?></a>&nbsp;</td>
 							<td><?=$row['storage_size']?>&nbsp;</td>
 							<td><?=$row['storage_name']?>&nbsp;</td>

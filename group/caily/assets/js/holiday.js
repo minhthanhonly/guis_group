@@ -492,6 +492,11 @@ function whenContainerReady() {
                   showMessage('休日を追加しました');
                   formAddNewRecord.reset();
                   changeData();
+                  // Close the modal
+                  const addRoleModal = bootstrap.Modal.getInstance(document.getElementById('addRoleModal'));
+                  if (addRoleModal) {
+                    addRoleModal.hide();
+                  }
                 } else {
                   showMessage('休日を追加できませんでした', true);
                 }

@@ -22,7 +22,7 @@ $view->heading('ファイル情報');
 					<div class="col-md-6">
 						<ul class="operate d-flex gap-2 list-unstyled justify-content-end">
 							<?php
-							if ($view->permitted($hash['folder'], 'add') && $view->permitted($hash['data'], 'edit')) {
+							if ($view->permitted($hash['data'], 'edit')) {
 								echo '<li><a class="btn btn-primary" href="edit.php?id='.$hash['data']['id'].'">編集</a></li>';
 								echo '<li><a class="btn btn-danger" href="delete.php?id='.$hash['data']['id'].'">削除</a></li>';
 							}

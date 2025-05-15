@@ -236,7 +236,7 @@ class User extends ApplicationModel {
 
 	function getList() {
 		$retrict_group = array(RETIRE_GROUP);
-		$query = "SELECT userid, realname, user_group FROM ".$this->table." WHERE (`is_suspend` IS NULL OR is_suspend = '0') and user_group NOT IN ('".implode("','", $retrict_group)."') ORDER BY user_order,id";
+		$query = "SELECT userid, realname, user_group FROM ".$this->table." WHERE (`is_suspend` = '' OR`is_suspend` IS NULL OR is_suspend = '0') and user_group NOT IN ('".implode("','", $retrict_group)."') ORDER BY user_order,id";
 		$hash['list'] = $this->fetchAll($query);
 		return $hash;
 	}

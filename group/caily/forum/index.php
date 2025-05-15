@@ -26,10 +26,9 @@ if (strlen($_GET['folder']) <= 0 || $_GET['folder'] == 'all') {
 					<div class="col-md-6">
 						<ul class="operate d-flex gap-2 list-unstyled justify-content-end">
 							<?php
-							if ($view->permitted($hash['category'], 'add')) {
+							if (!isset($hash['category']) || $view->permitted($hash['category'], 'add')) {
 								echo '<li><a class="btn btn-primary" href="add.php' . $view->parameter(array('folder' => $_GET['folder'])) . '">スレッド作成</a></li>';
 							}
-						
 							?>
 						</ul>
 					</div>
@@ -53,7 +52,7 @@ if (strlen($_GET['folder']) <= 0 || $_GET['folder'] == 'all') {
 						}
 						echo '</ul>';
 						if ($view->authorize('administrator', 'manager', 'editor')) {
-							echo '<div class="folderoperate"><a class="btn btn-primary" href="../folder/category.php?type=forum">編集</a></div>';
+							echo '<div class="folderoperate"><a class="btn btn-label-primary" href="../folder/category.php?type=forum">カテゴリ設定</a></div>';
 						}
 						?>
 							</div>

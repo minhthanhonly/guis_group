@@ -171,7 +171,7 @@ class ApplicationView extends View {
 			</ul>
 <?php
 		if ($this->authorize('administrator', 'manager', 'editor')) {
-			echo '<div class="folderoperate"><a class="btn btn-primary" href="../folder/category.php?type='.$type.'">編集</a></div>';
+			echo '<div class="folderoperate"><a class="btn btn-label-primary" href="../folder/category.php?type='.$type.'">カテゴリ設定</a></div>';
 		}
 		echo '</div>';
 		
