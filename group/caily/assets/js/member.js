@@ -960,7 +960,6 @@ document.addEventListener('DOMContentLoaded', async function (e) {
               showMessage('メンバーを追加しました');
               addNewUserForm.reset();
               changeData();
-              
             } else {
               if(response.data.error){
                 showMessage(response.data.error, true);
@@ -968,10 +967,25 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                 showMessage('メンバーを追加できませんでした', true);
               }
             }
-            $('#modalAddUser').modal('hide'); 
+            $('#modalAddUser').modal('hide');
           })
           .catch(function (error) {
-            handleErrors(error);
+            console.error('Error:', error);
+            if (error.response) {
+              // Server responded with error status
+              console.error('Response data:', error.response.data);
+              console.error('Response status:', error.response.status);
+              console.error('Response headers:', error.response.headers);
+              showMessage('サーバーエラーが発生しました (500)', true);
+            } else if (error.request) {
+              // Request made but no response received
+              console.error('Request:', error.request);
+              showMessage('サーバーに接続できませんでした', true);
+            } else {
+              // Error in request setup
+              console.error('Error message:', error.message);
+              showMessage('リクエストエラーが発生しました', true);
+            }
             $('#modalAddUser').modal('hide');
           });
       }

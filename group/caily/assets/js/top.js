@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             const start = moment(date.start).format('M月D日');
             // FullCalendarのendは次の日の0時なので1日前にする
             const end = moment(date.end).subtract(1, 'days').format('M月D日');
-            return `今週のスケジュール: ${start} ～ ${end}`;
+            return `スケジュール: ${start} ～ ${end}`;
           } else if (date.date) {
             // day view
             return moment(date.date).format('YYYY年M月D日');

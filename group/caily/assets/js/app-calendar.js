@@ -358,6 +358,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         day: '日',
         list: 'リスト'
       },
+      allDayText: '終日',
       firstDay: 1,
       headerToolbar: {
         start: 'sidebarToggle, prev,next, title',

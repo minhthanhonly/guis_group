@@ -179,6 +179,7 @@ class Member extends ApplicationModel {
 		return $hash;
 	}
 
+
 	function edit_member() {
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$this->validateSchema('update');
