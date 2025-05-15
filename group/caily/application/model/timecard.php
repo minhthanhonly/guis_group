@@ -464,6 +464,58 @@ class Timecard extends ApplicationModel {
 		return $hash;
 	}
 
+	function edit_timecard_note(){
+		$date = $_POST['date'];
+		$userid = $_POST['userid'];
+
+		$column = ['timecard_comment'];
+		$array = [];
+		foreach($_POST as $key => $value){
+			if(in_array($key, $column)){
+				$array[$key] = htmlspecialchars(stripcslashes(trim($value)), ENT_QUOTES, 'UTF-8');
+			}
+		}
+		//check if the timecard is already exists
+		$query = sprintf("SELECT id FROM %stimecard WHERE timecard_date = '%s' AND owner = '%s'", DB_PREFIX, $date, $userid);
+		$data = $this->fetchAll($query);
+		$owner = $userid;
+		$array['owner'] = $owner;
+
+		if(count($data) > 0){
+			$array['updated'] = date('Y-m-d H:i:s');
+			$array['editor'] = $_SESSION['userid'];
+			$id = $data[0]['id'];
+			$term = '';
+			foreach($array as $key => $value){
+				$term .= $key . " = '" . $value . "', ";
+			}
+			$term = rtrim($term, ', ');
+			$query = sprintf("UPDATE %stimecard SET %s WHERE id = %s", DB_PREFIX, $term , $id);
+			$response = $this->query($query);
+		} else{
+			$dateStr = date('Y-m-d', strtotime($date));
+			$array['timecard_year'] = date('Y', strtotime($dateStr));
+			$array['timecard_month'] = date('n', strtotime($dateStr));
+			$array['timecard_day'] = date('j', strtotime($dateStr));
+			$array['timecard_date'] = $date;
+			$array['created'] = date('Y-m-d H:i:s');
+			$keys = implode(',', array_keys($array));
+			$values = implode("','", array_values($array));
+			$values = "'" . $values . "'";
+
+			$query = sprintf("INSERT INTO %stimecard (%s) VALUES (%s)", DB_PREFIX, $keys, $values);
+			$response = $this->query($query);
+		}	
+		if($response){
+			$hash['status'] = 'success';
+			$hash['message_code'] = '更新しました';
+		}else{
+			$hash['status'] = 'error';
+			$hash['message_code'] = '更新に失敗しました';
+		}
+		return $hash;
+	}
+
 	function get_timecard_by_id() {
 		$date = $_POST['date'];
 		$userid = $_POST['userid'];

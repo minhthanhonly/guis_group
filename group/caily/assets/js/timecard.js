@@ -267,8 +267,10 @@ function addEvent() {
   }
   const viewModal = new bootstrap.Modal(document.getElementById('modalViewTimecard'));
   const editModal = new bootstrap.Modal(document.getElementById('modalEditTimecard'));
+  const editModalNote = new bootstrap.Modal(document.getElementById('modalEditTimecardNote'));
   const viewTimecardForm = document.getElementById('viewTimecardForm');
   const editTimecardForm = document.getElementById('editTimecardForm');
+  const editTimecardNoteForm = document.getElementById('editTimecardNoteForm');
   recalc.addEventListener('click', async function () {
     let user = USER_ID;
     if (slUser && slUser.value != '') {
@@ -285,6 +287,9 @@ function addEvent() {
   });
   document.getElementById('modalEditTimecard').addEventListener('hide.bs.modal', async function () {
     editTimecardForm.reset();
+  });
+  document.getElementById('modalEditTimecardNote').addEventListener('hide.bs.modal', async function () {
+    editTimecardNoteForm.reset();
   });
 
   document.querySelector('.datatables-timecard').addEventListener('click', async function (e) {
@@ -398,6 +403,37 @@ function addEvent() {
       }
     }
 
+    if (e.target.closest('.item-note')) {
+      e.preventDefault();
+      const date = e.target.closest('.item-note').dataset.date;
+      const userid = e.target.closest('.item-note').dataset.userid;
+      const response = await axios.post('/api/index.php?model=timecard&method=get_timecard_by_id', {
+        date: date,
+        userid: userid
+      }, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+      if (response.status === 200 && response.data && response.data.status === 'success') {
+        // Open the modal
+        var timecardinfo = response.data.data;
+        document.getElementById('modalEditTimecardNoteTitle').innerHTML = findUsername(userid);
+        if (timecardinfo.id) {
+          document.getElementById('editTimecardNoteId').value = timecardinfo.id;
+        }
+        document.getElementById('editTimecardNoteDate').value = date;
+        document.getElementById('editTimecardNoteUserid').value = userid;
+        if (timecardinfo.timecard_comment) {
+          document.getElementById('editTimecardNoteNote').value = decodeHtmlEntities(timecardinfo.timecard_comment);
+        }
+
+        editModalNote.show();
+      } else {
+        showMessage(response.data.message_code, true);
+      }
+    }
+
   });
 
   
@@ -469,6 +505,58 @@ function addEvent() {
           .catch(function (error) {
             handleErrors(error);
             $('#modalEditTimecard').modal('hide');
+          });
+      }
+    });
+  });
+
+  const fvEditNote = FormValidation.formValidation(editTimecardNoteForm, {
+    fields: {
+      timecard_comment: {
+        validators: {
+          stringLength: {
+            min: 4,
+            message: '4文字以上入力してください'
+          },
+          regex: {
+            regex: /^[0-9]{2}:[0-9]{2}$/,
+            message: '時間を正しく入力してください'
+          }
+        }
+      },
+    },
+    plugins: {
+      trigger: new FormValidation.plugins.Trigger(),
+      bootstrap5: new FormValidation.plugins.Bootstrap5({
+        eleValidClass: '',
+        rowSelector: '.form-control-validation'
+      }),
+    },
+  });
+
+  editTimecardNoteForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    fvEditNote.validate().then(function (status) {
+      if (status === 'Valid') {
+        displayHourglass();
+        const formData = new FormData(editTimecardNoteForm);
+        axios.post('/api/index.php?model=timecard&method=edit_timecard_note', formData)
+          .then(function (response) {
+            if (response.status === 200 && response.data && response.data.status === 'success') {
+              showMessage('タイムカードの備考を編集しました');
+              changeData();
+            } else {
+              if (response.data.message_code) {
+                showMessage(response.data.message_code, true);
+              } else {
+                showMessage('タイムカードの備考を編集できませんでした', true);
+              }
+            }
+            $('#modalEditTimecardNote').modal('hide');
+          })
+          .catch(function (error) {
+            handleErrors(error);
+            $('#modalEditTimecardNote').modal('hide');
           });
       }
     });
@@ -682,7 +770,8 @@ document.addEventListener('DOMContentLoaded', function () {
           render: (data, type, full, meta) => {
             return `
               <div class="d-flex align-items-center justify-content-start">
-                <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="btn btn-text-secondary rounded-pill waves-effect btn-icon item-view"><i class="icon-base ti tabler-eye me-0 me-sm-1 icon-16px"></i></a>
+                <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="btn btn-text-secondary rounded-pill waves-effect btn-icon item-view"><i class="icon-base ti tabler-eye me-0 me-sm-1"></i></a>
+                <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="btn btn-text-secondary rounded-pill waves-effect btn-icon item-note"><i class="icon-base ti tabler-edit me-0 me-sm-1"></i></a>
                 ${user_role != 'member' ? `<a href="javascript:;" class="btn btn-text-secondary rounded-pill waves-effect btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
                     <i class="icon-base ti tabler-dots-vertical icon-22px"></i>
                   </a>

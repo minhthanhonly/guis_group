@@ -40,7 +40,7 @@ $view->heading('ログイン', 'login');
 	<!-- Login -->
 	<div class="d-flex col-12 col-xl-4 align-items-center authentication-bg p-sm-12 p-6">
 		<div class="w-px-400 mx-auto mt-12 pt-5">
-		<h4 class="mb-1">GUIS HUBへようこそ！ 👋</h4>
+		<h4 class="mb-1"><?=APP_NAME?>へようこそ！ 👋</h4>
 		<p class="mb-6">アカウントにサインインして、冒険を始めてください。</p>
 
 		<form id="formAuthentication" class="mb-6" action="login.php" name="login" method="POST">

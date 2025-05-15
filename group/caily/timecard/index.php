@@ -213,6 +213,39 @@ $view->heading('タイムカード');
   </div>
 </div>
 <!-- / Content -->
+
+<!-- Modal edit timecard -->
+<div class="modal fade" id="modalEditTimecardNote" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-simple modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body">
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+        <div class="text-center mb-6">
+          <h4 class="modal-title" id="modalEditTimecardNoteTitle"></h4>
+        </div>
+        <form class="pt-0" id="editTimecardNoteForm">
+          <input type="hidden" id="editTimecardNoteId" name="id" />
+          <input type="hidden" id="editTimecardNoteUserid" name="userid" />
+          <div class="form-group row">
+            <div class="col-md-12 mb-4 form-control-validation">
+              <label class="form-label" for="editTimecardNoteDate">日付</label>
+              <input type="text" class="form-control" id="editTimecardNoteDate" placeholder="" name="date" readonly/>
+            </div>
+          </div>
+          <div class="form-group row">
+            <div class="col-md-12 mb-4 form-control-validation">
+              <label class="form-label" for="editTimecardNoteNote">備考</label>
+              <textarea class="form-control" id="editTimecardNoteNote" placeholder="" name="timecard_comment"></textarea>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary me-3 data-submit">送信</button>
+          <button type="button" class="btn btn-secondary data-submit" data-bs-dismiss="modal">キャンセル</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- / Content -->
 <?php
 $view->footing();
 ?>
