@@ -31,7 +31,7 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 					<div class="col-md-6">
 						<ul class="operate d-flex gap-2 list-unstyled justify-content-end">
 							<?php
-							if ($view->permitted($hash['parent'], 'add')) {
+							if (isset($hash['parent']) && $view->permitted($hash['parent'], 'add')) {
 								echo '<li><a class="btn btn-primary" href="add.php' . $view->positive(array('folder'=>$_GET['folder'])) . '">ファイルアップロード</a></li>';
 								echo '<li><a class="btn btn-info" href="folderadd.php' . $view->positive(array('folder'=>$_GET['folder'])) . '">フォルダ追加</a></li>';
 							}

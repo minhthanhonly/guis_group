@@ -14,7 +14,7 @@ $view->heading('メンバー一覧');
 			</div>
 		</div>
 		<div class="card-header border-bottom">
-			<h5 class="card-title mb-0">Filters</h5>
+			<h5 class="card-title mb-0">フィルター</h5>
 			<div class="d-flex justify-content-between align-items-center row pt-4 gap-4 gap-md-0">
 				
 				<div class="col-md-3 user_role">
@@ -223,4 +223,4 @@ $view->heading('メンバー一覧');
 $view->footing();
 ?>
 
-<script src="<?=ROOT?>assets/js/member.js"></script>
+<script src="<?=ROOT?>assets/js/member.js?v=<?=CACHE_VERSION?>"></script>

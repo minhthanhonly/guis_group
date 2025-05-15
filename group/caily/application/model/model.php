@@ -110,7 +110,7 @@ class Model extends Connection {
 	}
 	
 	function schematize($string = '') {
-		
+		$array = array();
 		if ($string) {
 			foreach ($this->schema as $key => $row) {
 				if (!isset($row['except']) || !in_array($string, $row['except'])) {
@@ -143,19 +143,28 @@ class Model extends Connection {
 	function insertPost() {
 		$this->response = false;
 		if (count($this->error) <= 0 && count($this->post) > 0) {
+			$keys = array();
+			$values = array();
 			$field = $this->schematize('insert');
 			if (is_array($field) && count($field) > 0) {
 				if(!isset($this->post['owner'])){
 					$this->post['owner'] = $_SESSION['userid'];
 				}
 				$this->post['created'] = date('Y-m-d H:i:s');
-				foreach ($field as $key) {
-					if (array_key_exists($key, $this->post)) {
+				$donotquote = array('add_level', 'edit_level', 'public_level');
+				$fields = array_values($field);
+				foreach ($this->post as $key => $value) {
+					if (in_array($key, $fields)) {
 						$keys[] = $key;
-						$values[] = $this->quote($this->post[$key]);
+						if(!in_array($key, $donotquote)){
+							$values[] = "'".$this->quote($this->post[$key])."'";
+						}else{
+							if($this->post[$key] == '' || $this->post[$key] == null) $this->post[$key] = 0;
+							$values[] = $this->quote($this->post[$key]);
+						}
 					}
 				}
-				$query = "INSERT INTO ".$this->table." (".implode(",", $keys).") VALUES ('".implode("','", $values)."')";
+				$query = "INSERT INTO ".$this->table." (".implode(",", $keys).") VALUES (".implode(",", $values).")";
 				$this->response = $this->query($query);
 				return $this->response;
 			}

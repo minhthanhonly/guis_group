@@ -27,7 +27,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
 <div class="container-xxl flex-grow-1 container-p-y">
 	<div class="row g-6">
     <!-- View sales -->
-    <div class="col-md-8 col-lg-6 col-xl-4" style="min-width: 420px;">
+    <div class="col-md-8 col-lg-6 col-xl-4" style="min-width: 440px;">
       <div class="card">
         <div class="d-flex align-items-end row">
           <div class="col-7">

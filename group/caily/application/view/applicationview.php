@@ -23,11 +23,11 @@ class ApplicationView extends View {
 			return true;
 		}
 		$permission = false;
-		if ($data[$level.'_level'] == 0) {
+		if (isset($data[$level.'_level']) && $data[$level.'_level'] == 0) {
 			$permission = true;
-		} elseif ($data['owner'] == $_SESSION['userid']) {
+		} elseif (isset($data['owner']) && $data['owner'] == $_SESSION['userid']) {
 			$permission = true;
-		} elseif ($data[$level.'_level'] == 2 && (stristr($data[$level.'_group'], '['.$_SESSION['group'].']') || stristr($data[$level.'_user'], '['.$_SESSION['userid'].']'))) {
+		} elseif (isset($data[$level.'_level']) && $data[$level.'_level'] == 2 && (stristr($data[$level.'_group'], '['.$_SESSION['group'].']') || stristr($data[$level.'_user'], '['.$_SESSION['userid'].']'))) {
 			$permission = true;
 		}
 		return $permission;

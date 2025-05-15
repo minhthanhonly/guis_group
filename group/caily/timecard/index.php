@@ -217,4 +217,4 @@ $view->heading('タイムカード');
 $view->footing();
 ?>
 
-<script src="<?=ROOT?>assets/js/timecard.js"></script>
+<script src="<?=ROOT?>assets/js/timecard.js?v=<?=CACHE_VERSION?>"></script>

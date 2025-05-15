@@ -19,9 +19,9 @@ if(isset($hash['folder']['storage_title'])){
 			<div class="col-md-6">
 				<div class="d-flex row">
 					<div class="col-md-6">
-						<form method="post" class="searchform" action="<?=$_SERVER['SCRIPT_NAME']?><?=$view->positive(array('folder'=>$_GET['folder']))?>">
+						<!-- <form method="post" class="searchform" action="<?=$_SERVER['SCRIPT_NAME']?><?=$view->positive(array('folder'=>$_GET['folder']))?>">
 							<input type="text" name="search" id="search" class="inputsearch" value="<?=$view->escape($_REQUEST['search'])?>" /><input type="submit" value="検索" />
-						</form>
+						</form> -->
 					</div>
 					<div class="col-md-6">
 						<ul class="operate d-flex gap-2 list-unstyled justify-content-end">

@@ -1,7 +1,7 @@
 <?php
 
 require_once('../application/loader.php');
-$view->heading('フォーラム');
+$view->heading('お知らせ');
 $pagination = new Pagination(array('folder'=>$_GET['folder']));
 if (strlen($_GET['folder']) <= 0 || $_GET['folder'] == 'all') {
 	$current['all'] = ' class="current"';
@@ -16,7 +16,7 @@ if (strlen($_GET['folder']) <= 0 || $_GET['folder'] == 'all') {
 			class="card-header bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
 			<div class="col-md-6">
 				<h4 class="card-title mb-0">
-					<span>フォーラム<?=$view->caption($hash['folder'], array(0=>'全般'))?></span></h4>
+					<span>お知らせ <?=$view->caption($hash['folder'], array(0=>'全般'))?></span></h4>
 			</div>
 			<div class="col-md-6">
 				<div class="d-flex justify-content-end">

@@ -155,4 +155,4 @@ $view->footing();
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/css/pages/app-calendar.css" />
 <script src="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.js"></script>
-<script src="<?=ROOT?>assets/js/app-calendar.js"></script>
+<script src="<?=ROOT?>assets/js/app-calendar.js?v=<?=CACHE_VERSION?>"></script>

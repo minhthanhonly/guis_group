@@ -14,7 +14,7 @@ class Forum extends ApplicationModel {
 		'forum_file'=>array(),
 		'forum_parent'=>array('フォーラムID', 'numeric', 'except'=>array('search', 'update')),
 		'forum_lastupdate'=>array('fix'=>date('Y-m-d H:i:s'), 'except'=>array('search', 'update')),
-		'forum_node'=>array('except'=>array('search', 'update')),
+		'forum_node'=>array('except'=>array('search', 'update', 'insert')),
 		'public_level'=>array('except'=>array('search')),
 		'public_group'=>array('except'=>array('search')),
 		'public_user'=>array('except'=>array('search')),

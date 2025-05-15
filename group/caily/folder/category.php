@@ -1,9 +1,9 @@
 <?php
 
 require_once('../application/loader.php');
-$view->heading('カテゴリ', $_GET['type']);
+$view->heading('カテゴリ管理', $_GET['type']);
 $pagination = new Pagination(array('type'=>$_GET['type']));
-$type = array('forum'=>'フォーラム', 'addressbook'=>'アドレス帳', 'bookmark'=>'ブックマーク', 'facility'=>'施設予約', 'project'=>'プロジェクト');
+$type = array('forum'=>'お知らせページ', 'addressbook'=>'アドレス帳', 'bookmark'=>'ブックマーク', 'facility'=>'施設予約', 'project'=>'プロジェクト');
 if (strlen($_GET['type']) > 0) {
 ?>
 <!-- Content -->
@@ -12,7 +12,7 @@ if (strlen($_GET['type']) > 0) {
 	<div class="card" id="option-block">
 		<div class="card-header bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
 			<div class="col-md-6">
-				<h4 class="card-title mb-0"><span id="timecard_title">カテゴリ</h4>
+				<h4 class="card-title mb-0"><span id="timecard_title">カテゴリ管理</h4>
             </div>
 			<div class="col-md-6 d-flex justify-content-end gap-4">
 

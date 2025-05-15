@@ -22,7 +22,9 @@ async function get_member() {
     memberList = response.data.list;
     groupList = response.data.group;
     configList = response.data.list_config;
-
+    if(user_role == 'member'){
+      memberList = memberList.filter(member => member.group_name != '退職者');
+    }
     return memberList;
 }
 
@@ -34,18 +36,22 @@ function generateGroupList(){
     const addTypeListElement = document.getElementById('add-user-type');
     const editTypeListElement = document.getElementById('edit-user-type');
     Object.entries(groupList).forEach(([key, value]) => {
-        const option = document.createElement('option');
-        option.value = key;
-        option.textContent = value;
-        const option2 = document.createElement('option');
-        option2.value = key;
-        option2.textContent = value;
-        const option3 = document.createElement('option');
-        option3.value = key;
-        option3.textContent = value;
-        groupListElement.appendChild(option);
-        addGroupListElement.appendChild(option2);
-        editGroupListElement.appendChild(option3);
+      if(user_role == 'member' && value == '退職者'){
+        return;
+      }
+      const option = document.createElement('option');
+      option.value = key;
+      option.textContent = value;
+      const option2 = document.createElement('option');
+      option2.value = key;
+      option2.textContent = value;
+      const option3 = document.createElement('option');
+      option3.value = key;
+      option3.textContent = value;
+      groupListElement.appendChild(option);
+      addGroupListElement.appendChild(option2);
+      editGroupListElement.appendChild(option3);
+      
     });
     Object.entries(configList).forEach(([key, value]) => {
         const option = document.createElement('option');
@@ -125,7 +131,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-printer me-1"></i>印刷</span>`,
           className: 'dropdown-item',
           exportOptions: {
-              columns: [1,2,3,4,5,6],
+              columns: [1,2,3,4,5],
               format: {
               body: function (inner, coldex, rowdex) {
                   if (inner.length <= 0) return inner;
@@ -177,7 +183,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-text me-1"></i>Csv</span>`,
           className: 'dropdown-item',
           exportOptions: {
-              columns: [1,2,3,4,5,6],
+              columns: [1,2,3,4,5],
               format: {
               body: function (inner, coldex, rowdex) {
                   if (inner.length <= 0) return inner;
@@ -214,7 +220,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-spreadsheet me-1"></i>Excel</span>`,
           className: 'dropdown-item',
           exportOptions: {
-              columns: [1,2,3,4,5,6],
+              columns: [1,2,3,4,5],
               format: {
               body: function (inner, coldex, rowdex) {
                   if (inner.length <= 0) return inner;
@@ -251,7 +257,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           // text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-description me-1"></i>Pdf</span>`,
           // className: 'dropdown-item',
           // exportOptions: {
-          //     columns: [1,2,3,4,5,6],
+          //     columns: [1,2,3,4,5],
           //     format: {
           //     body: function (inner, coldex, rowdex) {
           //         if (inner.length <= 0) return inner;

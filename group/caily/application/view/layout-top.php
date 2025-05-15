@@ -105,7 +105,7 @@
               <ul class="menu-sub">
                 <li class="menu-item <?php if($directory == 'member' && $page == 'index') echo 'active'; ?>">
                   <a href="<?=$root?>member/" class="menu-link" data-pjax>
-                    <div>一覧</div>
+                    <div>メンバー一覧</div>
                   </a>
                 </li>
                 <?php if($_SESSION['authority'] == 'administrator'){ ?>
@@ -125,7 +125,7 @@
               <ul class="menu-sub">
                 <li class="menu-item <?php if($directory == 'addressbook' && $page == 'index') echo 'active'; ?>">
                   <a href="<?=$root?>addressbook/" class="menu-link" data-pjax>
-                    <div>一覧</div>
+                    <div>アドレス帳</div>
                   </a>
                 </li>
                 <li class="menu-item <?php if($directory == 'addressbook' && str_contains($page, 'category')) echo 'active'; ?>">
@@ -150,7 +150,7 @@
               <li class="menu-item <?php if($directory == 'member') echo 'active'; ?>">
                 <a href="<?=$root?>member/" class="menu-link">
                   <i class="menu-icon icon-base ti tabler-users"></i>
-                  <div data-i18n="メンバー">メンバー</div>
+                  <div data-i18n="メンバー一覧">メンバー一覧</div>
                 </a>
               </li>
               <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
@@ -164,7 +164,7 @@
             <li class="menu-item <?php if($directory == 'storage') echo 'active open'; ?>">
               <a href="<?=$root?>storage/" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-server-2"></i>
-                <div>ファイル</div>
+                <div>ファイル共有</div>
               </a>
             </li>
             <li class="menu-item <?php if($directory == 'forum') echo 'active open'; ?>">

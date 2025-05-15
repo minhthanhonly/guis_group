@@ -150,7 +150,6 @@ class Schedule extends ApplicationModel {
 		$created = date('Y-m-d H:i:s');
 		$owner = $_SESSION['userid'];
 		$query = sprintf("INSERT INTO %s (schedule_title, schedule_date, schedule_time, schedule_date_end, schedule_endtime, schedule_allday, schedule_comment, public_level, created, schedule_category, owner) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')", "groupware_schedule", $title, $start_date, $start_time, $end_date, $end_time, $allDay, $comment, $public_level, $created, $calendar, $owner);
-		
 		$result = $this->query($query);
 		if ($result) {
 			return array('status' => 'success', 'message' => '追加しました。');

@@ -46,9 +46,7 @@ if(isset($_SESSION['userid'])) {
     const USER_ID = '<?= isset($_SESSION['userid']) ? $_SESSION['userid'] : '' ?>';
     const USER_GROUP = '<?= isset($_SESSION['group']) ? $_SESSION['group'] : '' ?>';
     <?php 
-    if(isset($_SESSION['authority']) && $_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') {
         echo 'const USER_ROLE = "'.$_SESSION['authority'].'";'; 
-    }
     ?>
 </script>
 <?php

@@ -384,11 +384,9 @@ function addEvent() {
         document.getElementById('editTimecardUserid').value = userid;
         if (timecardinfo.timecard_open) {
           editTimecardOpen.setDate(timecardinfo.timecard_open);
-         // document.getElementById('editTimecardOpen').value = timecardinfo.timecard_open;
         }
         if (timecardinfo.timecard_close) {
           editTimecardClose.setDate(timecardinfo.timecard_close);
-          // document.getElementById('editTimecardClose').value = timecardinfo.timecard_close;
         }
         if (timecardinfo.timecard_comment) {
           document.getElementById('editTimecardNote').value = decodeHtmlEntities(timecardinfo.timecard_comment);
@@ -683,15 +681,14 @@ document.addEventListener('DOMContentLoaded', function () {
           orderable: false,
           render: (data, type, full, meta) => {
             return `
-              <div class="d-flex align-items-center">
-                  <a href="javascript:;" class="btn btn-text-secondary rounded-pill waves-effect btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
+              <div class="d-flex align-items-center justify-content-start">
+                <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="btn btn-text-secondary rounded-pill waves-effect btn-icon item-view"><i class="icon-base ti tabler-eye me-0 me-sm-1 icon-16px"></i></a>
+                ${user_role != 'member' ? `<a href="javascript:;" class="btn btn-text-secondary rounded-pill waves-effect btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
                     <i class="icon-base ti tabler-dots-vertical icon-22px"></i>
                   </a>
                   <div class="dropdown-menu dropdown-menu-end m-0">
-                  <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="dropdown-item item-view"><i class="icon-base ti tabler-eye me-0 me-sm-1 icon-16px"></i> 確認</a>
                   <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="dropdown-item item-edit"><i class="icon-base ti tabler-pencil me-0 me-sm-1 icon-16px"></i> 編集</a>
-                 
-                  </div>
+                  </div>` : ''}
               </div>
               `;
           }
@@ -700,7 +697,13 @@ document.addEventListener('DOMContentLoaded', function () {
           targets: 7,
           orderable: false,
           render: (data, type, full, meta) => {
-            return decodeHtmlEntities(data);
+            var dayString = full.timecard_date.split('-');
+            var xdayString = dayString[0] + '-' + addLeadingZero(dayString[1]) + '-' + addLeadingZero(dayString[2]);
+            if (holidayList.includes(xdayString)) {
+              return `<span class="badge bg-label-warning me-1">休日</span>`+ decodeHtmlEntities(data);
+            } else{
+              return decodeHtmlEntities(data);
+            }
           }
         }
       ],
