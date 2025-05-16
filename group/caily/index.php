@@ -65,14 +65,14 @@ if ($current_hour >= 6 && $current_hour < 12) {
   </div>
   <div class="row g-6 mt-1">                
     <!-- Statistics -->
-    <div class="col-xl-6 col-md-8">
+    <div class="col-xl-6 col-md-12">
       <div class="card h-100">
         <div class="card-body pb-0 app-calendar-wrapper">
           <div id="calendar"></div>
         </div>
       </div>
     </div>
-    <div class="col-xl-6 col-md-8">
+    <div class="col-xl-6 col-md-12">
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between">
           <h5 class="card-title mb-0">お知らせ</h5>
@@ -85,13 +85,12 @@ if ($current_hour >= 6 && $current_hour < 12) {
               foreach ($hash['forum'] as $row) {
             ?>
                 <tr>
-                  <td class="w-20 fs-small text-nowrap"><?=date('Y年m月d日 H:i', strtotime($row['forum_lastupdate']))?></td>
-                  <td><?php 
+                  <td class="w-20 fs-small text-nowrap px-0"><?=date('Y年m月d日 H:i', strtotime($row['forum_lastupdate']))?><br><span class="badge bg-label-info me-1"><?=$row['forum_name']?></span><?php 
                   if(date('Y-m-d H:i:s', strtotime($row['created'])) > date('Y-m-d H:i:s', strtotime('-1 week'))){
-                    echo '<span class="badge bg-label-info me-2">NEW</span>';
+                    echo '<span class="badge bg-label-danger me-2">NEW</span>';
                   }
-                  ?><a href="/forum/view.php?id=<?=$row['id']?>"><?=$row['forum_title']?></a></td>
-                  <td><?=$row['forum_name']?></td>
+                  ?></td>
+                  <td><a href="/forum/view.php?id=<?=$row['id']?>"><?=$row['forum_title']?></a></td>
                </tr>
             <?php
               }
