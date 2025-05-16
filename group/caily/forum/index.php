@@ -68,7 +68,7 @@ if (strlen($_GET['folder']) <= 0 || $_GET['folder'] == 'all') {
 					?>
 							<tr><td><?php 
 							if(date('Y-m-d H:i:s', strtotime($row['created'])) > date('Y-m-d H:i:s', strtotime('-1 week'))){
-								echo '<span class="badge bg-label-info me-2">NEW</span>';
+								echo '<span class="badge bg-label-danger me-2">NEW</span>';
 							}
 							?><a href="view.php?id=<?=$row['id']?>"><?=$row['forum_title']?></a>&nbsp;</td>
 							<td><?=$row['forum_name']?>&nbsp;</td>
