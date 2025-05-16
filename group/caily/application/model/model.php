@@ -187,7 +187,6 @@ class Model extends Connection {
 				$this->post['editor'] = $_SESSION['userid'];
 				$this->post['updated'] = date('Y-m-d H:i:s');
 				$fields = array_values($field);
-
 				foreach ($this->post as $key => $value) {
 					if (in_array($key, $fields)) {
 						if(!in_array($key, $this->donotquote)){
@@ -257,8 +256,9 @@ class Model extends Connection {
 				$this->error[] = 'IDが取得できません。';
 			}
 		}
+
 		foreach ($this->schema as $field => $row) {
-			if (is_array($row) && (!isset($row['except']) || !in_array($string, $row['except']))) {
+			if (in_array($field, array_keys($_POST)) && is_array($row) && (!isset($row['except']) || !in_array($string, $row['except']))) {
 				if (isset($row['fix']) && strlen($row['fix']) > 0) {
 					$this->post[$field] = $row['fix'];
 				} else {
@@ -267,6 +267,7 @@ class Model extends Connection {
 				}
 			}
 		}
+
 	}
 	
 	function validator($field, $caption, $rule) {

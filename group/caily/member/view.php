@@ -26,9 +26,9 @@ $view->heading('メンバー詳細');
 					<div class="user-avatar-section">
 						<div class="d-flex align-items-center flex-row">
 							<?php if(isset($hash['data']['user_image']) && $hash['data']['user_image'] != '') {
-								echo '<img id="uploadedAvatar" class="img-fluid w-px-100 h-px-100 rounded me-4" src="../../assets/upload/avatar/'.$hash['data']['user_image'].'" height="120" width="120" alt="User avatar">';
+								echo '<img id="uploadedAvatar" class="img-fluid object-fit-cover w-px-100 h-px-100 rounded me-4" src="../../assets/upload/avatar/'.$hash['data']['user_image'].'" height="120" width="120" alt="User avatar">';
 							} else {
-								echo '<img id="uploadedAvatar" class="img-fluid w-px-100 h-px-100 rounded me-4" src="../../assets/img/avatars/1.png" height="120" width="120" alt="User avatar">';
+								echo '<img id="uploadedAvatar" class="img-fluid object-fit-cover w-px-100 h-px-100 rounded me-4" src="../../assets/img/avatars/1.png" height="120" width="120" alt="User avatar">';
 							} ?>
 						  <div class="user-info text-left">
 							<h5><?=$hash['data']['realname']?></h5>

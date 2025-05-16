@@ -22,7 +22,7 @@ $view->heading('グループ追加', 'administration');
 	<div class="container">
 		<div class="row mb-3">
 			<div class="col-md-3">
-				<label class="form-label">グループ名 (必須) <span class="necessary"></span></label>
+				<label >グループ名 (必須) <span class="necessary"></span></label>
 			</div>
 			<div class="col-md-9">
 				<input type="text" name="group_name" class="inputvalue form-control" value="<?=$hash['data']['group_name']?>" />
@@ -30,7 +30,7 @@ $view->heading('グループ追加', 'administration');
 		</div>
 		<div class="row mb-3">
 			<div class="col-md-3">
-				<label class="form-label">順序</label>
+				<label >順序</label>
 			</div>
 			<div class="col-md-9">
 				<input type="text" name="group_order" class="inputnumeric form-control" value="<?=$hash['data']['group_order']?>" />
@@ -38,7 +38,7 @@ $view->heading('グループ追加', 'administration');
 		</div>
 		<div class="row mb-3">
 			<div class="col-md-3">
-				<label class="form-label">権限 <?=$view->explain('groupadd')?></label>
+				<label >権限 <?=$view->explain('groupadd')?></label>
 			</div>
 			<div class="col-md-9">
 				<?=$view->permit($hash['data'], 'add')?>
@@ -46,7 +46,7 @@ $view->heading('グループ追加', 'administration');
 		</div>
 		<div class="row mb-3">
 			<div class="col-md-3">
-				<label class="form-label">編集 <?=$view->explain('groupedit')?></label>
+				<label >編集 <?=$view->explain('groupedit')?></label>
 			</div>
 			<div class="col-md-9">
 				<?=$view->permit($hash['data'], 'edit')?>

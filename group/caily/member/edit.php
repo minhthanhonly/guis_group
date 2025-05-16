@@ -29,9 +29,9 @@ $view->heading('個人設定');
 						<div class="user-avatar-section">
 							<div class="d-flex align-items-center flex-row">
 								<?php if($hash['data']['user_image'] != '') {
-									echo '<img id="uploadedAvatar" class="img-fluid w-px-100 h-px-100 rounded me-4" src="../../assets/upload/avatar/'.$hash['data']['user_image'].'" height="120" width="120" alt="User avatar">';
+									echo '<img id="uploadedAvatar" class="img-fluid object-fit-cover w-px-100 h-px-100 rounded me-4" src="../../assets/upload/avatar/'.$hash['data']['user_image'].'" height="120" width="120" alt="User avatar">';
 								} else {
-									echo '<img id="uploadedAvatar" class="img-fluid w-px-100 h-px-100 rounded me-4" src="../../assets/img/avatars/1.png" height="120" width="120" alt="User avatar">';
+									echo '<img id="uploadedAvatar" class="img-fluid object-fit-cover w-px-100 h-px-100 rounded me-4" src="../../assets/img/avatars/1.png" height="120" width="120" alt="User avatar">';
 								} ?>
 								
 								<div class="user-info text-left">
@@ -61,6 +61,7 @@ $view->heading('個人設定');
 					<div class="card-body pt-4">
 						<form id="formAccountSettings" method="GET" onsubmit="return false"
 							class="fv-plugins-bootstrap5 fv-plugins-framework" novalidate="novalidate">
+							<input type="hidden" name="reset_image" id="reset_image" value="0">
 							<div class="row gy-4 gx-6 mb-6">
 								<div class="col-md-6 form-control-validation fv-plugins-icon-container">
 									<label for="realname" class="form-label">名前</label>

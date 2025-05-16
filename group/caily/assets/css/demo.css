@@ -393,3 +393,6 @@ li.storageprevious {
 .custom_editor_textarea{
 	display: none;
 }
+.avatar img{
+	object-fit: cover;
+}

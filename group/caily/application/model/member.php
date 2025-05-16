@@ -438,9 +438,24 @@ class Member extends ApplicationModel {
 			$this->validateSchema('update');
 			$this->post['editor'] = $_SESSION['userid'];
 			$this->post['updated'] = date('Y-m-d H:i:s');
+			$reset_image = $_POST['reset_image'];
 			if(isset($_FILES['user_image']) && $_FILES['user_image']['name'] != '') {
 				$this->post['user_image'] = $_SESSION['userid'].'_'.$_FILES['user_image']['name'];
 				$this->uploadAvatar($_SESSION['userid'].'_'.$_FILES['user_image']['name']);
+				if($_SESSION['user_image'] != '' && count($this->error) <= 0){
+					try{
+						$old_image = '../assets/upload/avatar/'.$_SESSION['user_image'];
+						if(file_exists($old_image)){
+							unlink($old_image);
+						}
+					} catch (Exception $e) {
+						
+					}
+				}
+			}
+			if($reset_image == 1) {
+				$this->post['user_image'] = '';
+				$_SESSION['user_image'] = '';
 			}
 			if (count($this->error) <= 0) {
 				$field = $this->schematize('update');

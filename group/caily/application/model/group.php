@@ -52,7 +52,7 @@ class Group extends ApplicationModel {
 				$query = sprintf("UPDATE %s SET user_groupname = '%s' WHERE user_group = %s", DB_PREFIX.'user', $this->quote($this->post['group_name']), intval($_POST['id']));
 				$this->response = $this->query($query);
 			}
-			$this->redirect();
+			$this->redirect('view.php?id='.$_POST['id']);
 			$hash['data'] = $this->post;
 		} else {
 			$hash['data'] = $this->findView();

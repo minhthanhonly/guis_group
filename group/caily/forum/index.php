@@ -42,7 +42,6 @@ if (strlen($_GET['folder']) <= 0 || $_GET['folder'] == 'all') {
 						<div class="folder">
 							<h5 class="foldercaption">カテゴリ</h5>
 								<ul class="folderlist">
-									<li<?=$current['all']?>><a href="index.php">最新一覧</a></li>
 									<li<?=$current[0]?>><a href="index.php?folder=0">全般</a></li>
 						<?php
 						if (is_array($hash['folder']) && count($hash['folder']) > 0) {
