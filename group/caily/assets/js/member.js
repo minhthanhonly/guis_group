@@ -581,7 +581,8 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             var userinfo = response.data.data;
             document.getElementById('edit-user-id').value = userinfo.id;
             document.getElementById('edit-user-userName').value = userinfo.userid;
-            document.getElementById('edit-user-fullname').value = userinfo.realname;
+            document.getElementById('edit-user-lastname').value = userinfo.lastname;
+            document.getElementById('edit-user-firstname').value = userinfo.firstname;
             document.getElementById('edit-user-email').value = userinfo.user_email;
             document.getElementById('edit-user-contact').value = userinfo.user_phone;
             document.getElementById('edit-user-role').value = userinfo.authority;
@@ -902,10 +903,17 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           }
         }
       },
-      realname: {
+      lastname: {
         validators: {
           notEmpty: {
-            message: '氏名を入力してください'
+            message: '姓を入力してください'
+          }
+        }
+      },
+      firstname: {
+        validators: {
+          notEmpty: {
+            message: '名を入力してください'
           }
         }
       },
@@ -966,6 +974,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
               showMessage('メンバーを追加しました');
               addNewUserForm.reset();
               changeData();
+              $('#modalAddUser').modal('hide');
             } else {
               if(response.data.error){
                 showMessage(response.data.error, true);
@@ -973,7 +982,6 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                 showMessage('メンバーを追加できませんでした', true);
               }
             }
-            $('#modalAddUser').modal('hide');
           })
           .catch(function (error) {
             console.error('Error:', error);
@@ -992,7 +1000,6 @@ document.addEventListener('DOMContentLoaded', async function (e) {
               console.error('Error message:', error.message);
               showMessage('リクエストエラーが発生しました', true);
             }
-            $('#modalAddUser').modal('hide');
           });
       }
     });
@@ -1015,10 +1022,17 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           }
         }
       },
-      realname: {
+      lastname: {
         validators: {
           notEmpty: {
-            message: '氏名を入力してください'
+            message: '姓を入力してください'
+          }
+        }
+      },
+      firstname: {
+        validators: {
+          notEmpty: {
+            message: '名を入力してください'
           }
         }
       },

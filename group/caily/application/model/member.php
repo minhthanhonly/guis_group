@@ -10,6 +10,8 @@ class Member extends ApplicationModel {
 		'userid'=>array('ユーザーID', 'notnull', 'userid', 'length:100', 'distinct'),
 		'user_group'=>array('except'=>array('search')),
 		'user_groupname'=>array('except'=>array('search')),
+		'lastname'=>array('姓', 'notnull', 'length:100'),
+		'firstname'=>array('名', 'length:100'),
 		'realname'=>array('名前', 'notnull', 'length:100'),
 		'user_ruby'=>array('かな', 'length:100'),
 		'authority'=>array('権限', 'length:20'),
@@ -166,6 +168,10 @@ class Member extends ApplicationModel {
 			if (method_exists($this, 'validateAdd')) {
 				$this->validateAdd();
 			}
+			$this->post['realname'] = $this->post['lastname'];
+			if($this->post['firstname'] != '') {
+				$this->post['realname'] .= ' '.$this->post['firstname'];
+			}
 			$this->insertPost();
 		}
 		if(count($this->error) > 0){
@@ -186,6 +192,10 @@ class Member extends ApplicationModel {
 			$this->permitValidate();
 			if (method_exists($this, 'validateEdit')) {
 				$this->validateEdit();
+			}
+			$this->post['realname'] = $this->post['lastname'];
+			if($this->post['firstname'] != '') {
+				$this->post['realname'] .= ' '.$this->post['firstname'];
 			}
 			$this->updatePost();
 		}
@@ -457,6 +467,10 @@ class Member extends ApplicationModel {
 				$this->post['user_image'] = '';
 				$_SESSION['user_image'] = '';
 			}
+			$this->post['realname'] = $this->post['lastname'];
+			if($this->post['firstname'] != '') {
+				$this->post['realname'] .= ' '.$this->post['firstname'];
+			}
 			if (count($this->error) <= 0) {
 				$field = $this->schematize('update');
 				foreach ($field as $key) {
@@ -471,6 +485,15 @@ class Member extends ApplicationModel {
 				$_SESSION['user_image'] = $_SESSION['userid'].'_'.$_FILES['user_image']['name'];
 				$hash['data']['user_image'] = $_SESSION['user_image'];
 			}
+			if($this->response) {
+				$_SESSION['firstname'] = $this->post['firstname'];
+				$_SESSION['lastname'] = $this->post['lastname'];
+				$_SESSION['realname'] = $this->post['lastname'];
+				if($this->post['firstname'] != '') {
+					$_SESSION['realname'] .= ' '.$this->post['firstname'];
+				}
+			}
+
 			$this->redirect();
 			$hash['data'] = $this->post;
 			

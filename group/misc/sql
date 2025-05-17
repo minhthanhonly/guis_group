@@ -3,3 +3,30 @@ ALTER TABLE `groupware_schedule` ADD `schedule_date_end` VARCHAR(50) NULL AFTER 
 
 UPDATE `groupware_schedule` SET `schedule_category`='勤怠' WHERE 1
 UPDATE `groupware_user` SET `is_suspend`='1' WHERE user_group=5
+
+
+UPDATE groupware_user
+SET
+    firstname =
+        CASE
+            -- Trường hợp 1: Có khoảng trắng tiếng Anh (dấu cách thông thường)
+            WHEN LOCATE(' ', realname) > 0 THEN SUBSTRING(realname, LOCATE(' ', realname) + 1)
+            -- Trường hợp 2: Có khoảng trắng tiếng Nhật (full-width space '　')
+            -- Lưu ý: Với tên Nhật, 'firstname' (tên riêng) thường là phần SAU khoảng trắng.
+            WHEN LOCATE('　', realname) > 0 THEN SUBSTRING(realname, LOCATE('　', realname) + 1)
+            -- Trường hợp 3: Không có khoảng trắng nào được phát hiện
+            ELSE '' -- Giả sử toàn bộ realname là firstname nếu không có khoảng trắng để tách
+        END,
+    lastname =
+        CASE
+            -- Trường hợp 1: Có khoảng trắng tiếng Anh (dấu cách thông thường)
+            -- 'lastname' là phần SAU khoảng trắng.
+            WHEN LOCATE(' ', realname) > 0 THEN SUBSTRING_INDEX(realname, ' ', 1)
+            -- Trường hợp 2: Có khoảng trắng tiếng Nhật (full-width space '　')
+            -- 'lastname' (họ) thường là phần ĐẦU TIÊN của chuỗi.
+            WHEN LOCATE('　', realname) > 0 THEN SUBSTRING_INDEX(realname, '　', 1)
+            -- Trường hợp 3: Không có khoảng trắng nào được phát hiện
+            ELSE realname -- Để trống lastname nếu không có khoảng trắng để tách họ
+        END
+WHERE
+    realname IS NOT NULL AND realname != '';
