@@ -434,7 +434,7 @@
                           </div>
                           <div class="flex-grow-1">
                             <h6 class="mb-0"><?=$realname?></h6>
-                            <small class="text-body-secondary"><?=$groupname?></small>
+                            <!-- <small class="text-body-secondary"><?=$_SESSION['user_groupname']?></small> -->
                           </div>
                         </div>
                       </a>
