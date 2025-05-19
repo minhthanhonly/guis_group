@@ -107,14 +107,14 @@ if ($current_hour >= 6 && $current_hour < 12) {
     </div>
 
 	</div>
-
+ <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') { ?>
   <div class="row g-6 mt-1">
     <div class="col-md-6 col-lg-6 col-xl-6">
       <div class="card">
         <div class="card-header d-flex justify-content-between">
           <h5 class="card-title mb-0">勤怠統計</h5>
           <div class="d-flex justify-content-end align-items-center gap-2">
-            <select class="form-select" id="timecard-statistic-select">
+            <select class="form-select select2" id="timecard-statistic-select" data-placeholder="メンバーを選択">
               <option value="">すべて</option>
               <?php
               foreach ($memberList as $member) {
@@ -122,7 +122,9 @@ if ($current_hour >= 6 && $current_hour < 12) {
               }
               ?>
             </select>
-            <button class="btn btn-primary text-nowrap flex-shrink-0" id="generate-statistic">更新</button>
+            <?php if($_SESSION['authority'] == 'administrator') { ?>
+              <button class="btn btn-primary text-nowrap flex-shrink-0" id="generate-statistic">更新</button>
+            <?php } ?>
           </div>
         </div>
         <div class="card-body">
@@ -133,7 +135,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
     </div>
     <!-- View sales -->
   </div>
-
+<?php } ?>
 	
 </div>
 <!-- / Content -->

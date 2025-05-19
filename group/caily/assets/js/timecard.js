@@ -18,8 +18,6 @@ if (typeof USER_ROLE !== 'undefined') {
 }
 var holidayList = [];
 
-
-
 function updateAnalytics(data) {
   const timecard_time = document.getElementById('work_time');
   const timecard_timeover = document.getElementById('over_time');
@@ -84,6 +82,7 @@ async function get_timecard(user, year, month) {
     let foundItem = list.find(item => {
       return parseInt(item.timecard_day) === day
     });
+    let date = moment(thisDay).format('YYYY-MM-DD');
     if (foundItem) {
       if (foundItem.holiday == 1 && foundItem.timecard_time != '') {
         foundItem.timecard_timeinterval = '';
@@ -116,7 +115,7 @@ async function get_timecard(user, year, month) {
         timecard_year: year,
         timecard_month: month,
         timecard_day: day,
-        timecard_date: `${year}-${month}-${day}`,
+        timecard_date: date,
         timecard_open: '',
         timecard_close: '',
         timecard_interval: '',
@@ -772,7 +771,8 @@ document.addEventListener('DOMContentLoaded', function () {
           // Add custom rendering for the "出社" column
           targets: 1,
           render: function (data, type, full, meta) {
-            if (today.getDate() == full.timecard_day && isSameUser) {
+            let today = moment().format('YYYY-MM-DD');
+            if (today == full.timecard_date && isSameUser) {
               if (!data) {
                 return `<button type="button" class="btn btn-primary btn-sm" data-id="${full.id}" data-owner="${full.owner}" data-checkin>出社</button>`;
               }
@@ -787,7 +787,8 @@ document.addEventListener('DOMContentLoaded', function () {
           // Add custom rendering for the "出社" column
           targets: 2,
           render: function (data, type, full, meta) {
-            if (today.getDate() == full.timecard_day && isSameUser) {
+            let today = moment().format('YYYY-MM-DD');
+            if (today == full.timecard_date && isSameUser) {
               if (!data && full.timecard_open) {
                 return `<button type="button" class="btn btn-primary btn-sm" data-id="${full.id}" data-owner="${full.owner}" data-open="${full.timecard_open}" data-checkout>退社</button>`;
               }

@@ -91,7 +91,6 @@ class Timecard extends ApplicationModel {
 		$end->modify('+1 month'); // Set the end date to one month after the start date
 		$end->modify('-1 day'); // Subtract one day to get the correct end date
 
-		/*20日締め対応*/
 		$query = sprintf(
 			"SELECT %s FROM %s WHERE STR_TO_DATE(timecard_date, '%%Y-%%m-%%d') BETWEEN '%s' AND '%s' AND owner = '%s' ORDER BY timecard_date",
 			$field,
@@ -388,6 +387,44 @@ class Timecard extends ApplicationModel {
 		$data = $this->fetchAll($query);
 		$result = array();
 		$result_user = array();
+
+		// Allユーザー
+		foreach($data as $row) {
+			if(TIMECARD_START_DATE == 1){
+				$yearMonth = date('Y-n', strtotime($row['timecard_date']));
+			} else{
+				if(date('j', strtotime($row['timecard_date'])) < TIMECARD_START_DATE){
+					$yearMonth = date('Y-n', strtotime($row['timecard_date']));
+				} else{
+					$yearMonth = date('Y-n', strtotime($row['timecard_date'] . ' +1 month'));
+				}
+			}
+			if(!isset($result[$yearMonth])) {
+				$result[$yearMonth] = array();
+			}
+			$result[$yearMonth][] = $row;
+		}
+
+		$delete_statistic_user = sprintf("DELETE FROM %sstatistic WHERE type = 'timecard_user' AND scope = 'monthly'", DB_PREFIX);
+		$this->query($delete_statistic_user);
+		$delete_statistic = sprintf("DELETE FROM %sstatistic WHERE type = 'timecard_all' AND scope = 'monthly'", DB_PREFIX);
+		$this->query($delete_statistic);
+
+		foreach($result as $key => $value){
+			$sum = $this->statistic($value);
+			$sumString = json_encode($sum);
+			$name = $key;
+			if(TIMECARD_START_DATE == 1){
+				$time = $key.'-'.TIMECARD_START_DATE;
+			} else{
+				$time = date('Y-n', strtotime($key . ' -1 month')) . '-'.TIMECARD_START_DATE;
+			}
+
+			$insert_statistic = sprintf("INSERT INTO %sstatistic (type, scope, time, value, name, updated) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')", DB_PREFIX, 'timecard_all', 'monthly', $time, $sumString, $name, date('Y-m-d H:i:s'));
+			$this->query($insert_statistic);
+		}
+
+
 		// ユーザーごと
 		foreach($data as $row) {
 			if(TIMECARD_START_DATE == 1){
@@ -414,54 +451,26 @@ class Timecard extends ApplicationModel {
 			}
 			$result_user[$row['owner']][$yearMonth][] = $row;
 		}
+		
+		
 		foreach($result_user as $key => $value){
 			foreach($value as $key2 => $value2){
+
 				$sum = $this->statistic($value2);
 				$name = $key2;
 				if(TIMECARD_START_DATE == 1){
 					$time = $key2.'-'.TIMECARD_START_DATE;
 				} else{
-					$time = date('Y-m', strtotime($key2 . ' -1 month')) . '-'.TIMECARD_START_DATE;
+					$time = date('Y-n', strtotime($key2 . ' -1 month')) . '-'.TIMECARD_START_DATE;
 				}
 				$sumString = json_encode($sum);
-				$delete_statistic = sprintf("DELETE FROM %sstatistic WHERE type = 'timecard_user' AND scope = 'monthly' AND time = '%s' AND userid = '%s'", DB_PREFIX, $time, $key);
-				$this->query($delete_statistic);
+				
 				$insert_statistic = sprintf("INSERT INTO %sstatistic (type, scope, time, value, userid, name, updated) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')", DB_PREFIX, 'timecard_user', 'monthly', $time, $sumString, $key, $name, date('Y-m-d H:i:s'));
 				$this->query($insert_statistic);
 			}
 		}
 
-
-		// Allユーザー
-		foreach($data as $row) {
-			if(TIMECARD_START_DATE == 1){
-				$yearMonth = date('Y-n', strtotime($row['timecard_date']));
-			} else{
-				if(date('j', strtotime($row['timecard_date'])) < TIMECARD_START_DATE){
-					$yearMonth = date('Y-n', strtotime($row['timecard_date']));
-				} else{
-					$yearMonth = date('Y-n', strtotime($row['timecard_date'] . ' +1 month'));
-				}
-			}
-			if(!isset($result[$yearMonth])) {
-				$result[$yearMonth] = array();
-			}
-			$result[$yearMonth][] = $row;
-		}
-		foreach($result as $key => $value){
-			$sum = $this->statistic($value);
-			$sumString = json_encode($sum);
-			$name = $key;
-			if(TIMECARD_START_DATE == 1){
-				$time = $key.'-'.TIMECARD_START_DATE;
-			} else{
-				$time = date('Y-m', strtotime($key . ' -1 month')) . '-'.TIMECARD_START_DATE;
-			}
-			$delete_statistic = sprintf("DELETE FROM %sstatistic WHERE type = 'timecard_all' AND scope = 'monthly' AND time = '%s'", DB_PREFIX, $time);
-			$this->query($delete_statistic);
-			$insert_statistic = sprintf("INSERT INTO %sstatistic (type, scope, time, value, name, updated) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')", DB_PREFIX, 'timecard_all', 'monthly', $time, $sumString, $name, date('Y-m-d H:i:s'));
-			$this->query($insert_statistic);
-		}
+		
 		$hash['status'] = 'success';
 		$hash['message_code'] = '完了しました。';
 		return $hash;
@@ -1337,6 +1346,9 @@ class Timecard extends ApplicationModel {
 			);
 			
 			$hash['list'] = $this->fetchAll($query);
+			foreach($hash['list'] as $key => $value){
+				$hash['list'][$key]['holiday'] = $this->checkWeekendAndHoliday($value['timecard_date']);
+			}
 		}
 		$hash['group'] = $this->findGroup();
 		$config = new Config($this->handler);

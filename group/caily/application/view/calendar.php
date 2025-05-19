@@ -1,6 +1,6 @@
 <?php
 
-
+require_once(DIR_MODEL . "timecard.php");
 class Calendar{
 	var $holidays = array();
 	function Calendar() {
@@ -71,17 +71,10 @@ class Calendar{
 	}
 
 	function getHolidays(){
-		$filename = DIR_MODEL . "holidays.txt";
-		$handle = fopen($filename, "r") or die("Unable to open file!");
-		$contents = fread($handle, filesize($filename));
-		fclose($handle);
-		$holidays = explode(',', $contents);
-		for ($i = 0; $i < count($holidays); $i++) {
-			$holidays[$i] = trim($holidays[$i]);
-		}
+		$timecard = new Timecard();
+		$holidays = $timecard->getHolidays();
 		return $holidays;
 	}
-
 	function prepare($data, $year, $month, $day, $endyear, $endmonth, $endday) {
 
 		$result = array();
@@ -356,14 +349,12 @@ class Calendar{
 			return true;
 		} elseif ($weekday == 6) {
 			return true;
-		} else {
-			return false;
 		}
 		return false;
 	}
 
 	function selector($name, $user, $group, $owner) {
-
+		$string = '';
 		if (is_array($user) && count($user) > 0) {
 			$string .= '<optgroup label="ユーザー">';
 			foreach ($user as $key => $value) {

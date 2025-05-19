@@ -321,8 +321,9 @@ document.addEventListener('DOMContentLoaded', async function () {
     generateStatisticTimecard();
     function generateStatisticChart(data) {
         if(data.length == 0) {
-            showMessage('データがありません', 'error');
-            barChart.updateSeries([]);
+            if(barChart) {
+                barChart.updateSeries([]);
+            }
             return;
         }
         // create new chart
@@ -330,6 +331,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             'timecard_time': '勤務時間',
             'timecard_timeover': '時間外',
             'timecard_timeholiday': '休日出勤',
+            'timecard_total': '合計'
         };
         const updated = document.getElementById('timecard-statistic-updated');
 
@@ -369,31 +371,12 @@ document.addEventListener('DOMContentLoaded', async function () {
                 })
             };
         });
+     
+        // Define explicit colors instead of using config references
+        const chartColors = ['#4e73df', '#f6c23e', '#e74a3b', '#36b9cc', '#1cc88a'];
+        const borderColor = 'rgba(224,224,224,0.2)';
+        const labelColor = '#6c757d';
 
-        var chartColors = {
-            column: {
-                series1: "#24B364",
-                series2: "#53D28C",
-                series3: "#7EDDA9",
-                series4: "#A9E9C5"
-            },
-            line: {
-                series1: "#24B364",
-                series2: "#53D28C",
-                series3: "#7EDDA9",
-                series4: "#A9E9C5"
-            },
-            legend: {
-                bg: '#007bff',
-            },
-            border: {
-                bg: config.colors.borderColor,
-            },
-            label: {
-                bg: config.colors.textMuted,
-            }
-        }
-        
         const barChartEl = statistic,
             barChartConfig = {
                 chart: {
@@ -402,7 +385,30 @@ document.addEventListener('DOMContentLoaded', async function () {
                     stacked: false,
                     parentHeightOffset: 0,
                     toolbar: {
-                        show: false
+                        show: true,
+                        tools: {
+                            download: true,
+                            selection: true,
+                            zoom: true,
+                            zoomin: true,
+                            zoomout: true,
+                            pan: true,
+                            reset: true
+                        },
+                        export: {
+                            svg: {
+                                filename: 'timecard-chart-svg',
+                            },
+                            png: {
+                                filename: 'timecard-chart-png',
+                            },
+                            csv: {
+                                filename: 'timecard-chart-data',
+                                columnDelimiter: ',',
+                                headerCategory: 'Month',
+                                headerValue: 'Value'
+                            }
+                        }
                     }
                 },
                 plotOptions: {
@@ -418,17 +424,17 @@ document.addEventListener('DOMContentLoaded', async function () {
                     position: 'top',
                     horizontalAlign: 'start',
                     labels: {
-                        colors: config.colors.textMuted,
+                        colors: labelColor,
                         useSeriesColors: false
                     },
                 },
-                colors: [config.colors.primary, config.colors.warning, config.colors.danger],
+                colors: chartColors, // Use explicit array
                 stroke: {
                     show: true,
                     colors: ['transparent']
                 },
                 grid: {
-                    borderColor: chartColors.border.bg,
+                    borderColor: borderColor,
                     xaxis: {
                         lines: {
                             show: true
@@ -440,12 +446,45 @@ document.addEventListener('DOMContentLoaded', async function () {
                     enabled: true,
                     shared: true,
                     intersect: false,
-                    y: {
-                        formatter: function(value) {
-                            return value + 'h';
-                        }
-                    },
+                    custom: function({series, seriesIndex, dataPointIndex, w}) {
+                        // Calculate total of all series at this data point
+                        let total = 0;
+                        series.forEach(s => {
+                            // Make sure we're adding a number
+                            const value = parseFloat(s[dataPointIndex] || 0);
+                            if (!isNaN(value)) {
+                                total += value;
+                            }
+                        });
+                        
+                        // Build tooltip content
+                        let content = '<div class="apexcharts-tooltip-title" style="font-weight:bold;margin-bottom:5px;">' + 
+                                    w.globals.labels[dataPointIndex] + '</div>';
+                        
+                        // Add each series
+                        var count = 0;
+                        series.forEach((s, i) => {
+                            const value = parseFloat(s[dataPointIndex] || 0);
+                            if (!isNaN(value)) {
+                                content += '<div class="apexcharts-tooltip-series-group" style="display:flex;align-items:center;margin:4px 0;">' +
+                                        '<span class="apexcharts-tooltip-marker" style="display:inline-block;width:10px;height:10px;margin-right:5px;border-radius:50%;background-color:' + 
+                                        w.globals.colors[i] + '"></span>' +
+                                        '<span class="apexcharts-tooltip-text">' + 
+                                        w.globals.seriesNames[i] + ': ' + value.toFixed(1) + 'h</span></div>';
+                                count++;
+                            }
+                        });
+                        
+                        // For the total row, use a fixed color like #777 instead of dynamic color
+                        content += '<div class="apexcharts-tooltip-series-group" style="display:flex;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #e0e0e0;">' +
+                                '<span class="apexcharts-tooltip-marker" style="display:inline-block;width:10px;height:10px;margin-right:5px;border-radius:50%;background-color:#777"></span>' +
+                                '<span class="apexcharts-tooltip-text" style="font-weight:bold;">' + 
+                                '合計: ' + total.toFixed(1) + 'h</span></div>';
+                        
+                        return content;
+                    }
                 },
+                
                 xaxis: {
                     categories: categories,
                     axisBorder: {
@@ -456,7 +495,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                     },
                     labels: {
                         style: {
-                            colors: chartColors.label.bg,
+                            colors: labelColor,
                             fontSize: '13px'
                         }
                     }
@@ -466,7 +505,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                     tickAmount: 10,
                     labels: {
                         style: {
-                            colors: chartColors.label.bg,
+                            colors: labelColor,
                             fontSize: '13px'
                         }
                     }

@@ -43,12 +43,13 @@ $weekday = date('w', $timestamp);
 				<table class="table table-striped">
 					<tr><th>名前</th><th>勤務日数</th><th>勤務時間合計</th><th>時間外合計</th><th>休日出勤</th></tr>
 				<?php
+				$data = array();
 				if (is_array($hash['list']) && count($hash['list']) > 0) {
 					foreach ($hash['list'] as $row) {
 						$timestamp = mktime(0, 0, 0, $row['timecard_month'], $row['timecard_day'], $row['timecard_year']);
 						$lastday = date('t', $timestamp);
 						$weekday = date('w', $timestamp);
-						if ($row['timecard_open'] && $row['timecard_close'] && $row['timecard_time'] && !$calendar->checkHoliday($row['timecard_year'], $row['timecard_month'], $row['timecard_day'], $weekday, $lastday)) {
+						if ($row['timecard_open'] && $row['timecard_close'] && $row['timecard_time'] && !$row['holiday']) {
 							$array = explode(':', $row['timecard_time']);
 							$data[$row['owner']]['sum'][$row['timecard_day']] = intval($array[0]) * 60 + intval($array[1]);
 							$array = explode(':', $row['timecard_timeover']);
@@ -58,6 +59,7 @@ $weekday = date('w', $timestamp);
 							$data[$row['owner']]['sum2'][$row['timecard_day']] = intval($array[0]) * 60 + intval($array[1]);
 						}
 					}
+
 				}
 				if (is_array($hash['user']) && count($hash['user']) > 0) {
 					foreach ($hash['user'] as $key => $value) {
