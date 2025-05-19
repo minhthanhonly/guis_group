@@ -76,7 +76,7 @@ class Schedule extends ApplicationModel {
 		$owner = $_SESSION['userid'];
 		$arrayWhere = array(
 			"schedule_type = 0",
-			"schedule_date BETWEEN '".$start."' AND '".$end."'",
+			"(schedule_date BETWEEN '".$start."' AND '".$end."') OR (schedule_date_end BETWEEN '".$start."' AND '".$end."')",
 			"(public_level = 0 OR (public_level = 1 AND owner = '".$this->quote($owner)."'))"
 		);
 
