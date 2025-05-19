@@ -80,7 +80,9 @@ if ($current_hour >= 6 && $current_hour < 12) {
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between">
           <h5 class="card-title mb-0">お知らせ</h5>
-          <a class="btn btn-sm btn-primary" href="<?=$root?>forum/index.php">もっと見る</a>
+          <div class="d-flex justify-content-end">
+            <a class="btn btn-sm btn-primary" href="<?=$root?>forum/index.php">もっと見る</a>
+          </div>
         </div>
         <div class="card-body">
           <table class="table table-bordered">
@@ -105,6 +107,32 @@ if ($current_hour >= 6 && $current_hour < 12) {
     </div>
 
 	</div>
+
+  <div class="row g-6 mt-1">
+    <div class="col-md-6 col-lg-6 col-xl-6">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between">
+          <h5 class="card-title mb-0">勤怠統計</h5>
+          <div class="d-flex justify-content-end align-items-center gap-2">
+            <select class="form-select" id="timecard-statistic-select">
+              <option value="">すべて</option>
+              <?php
+              foreach ($memberList as $member) {
+                echo '<option value="'.$member['id'].'">'.$member['name'].'</option>';
+              }
+              ?>
+            </select>
+            <button class="btn btn-primary text-nowrap flex-shrink-0" id="generate-statistic">更新</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <p class="text-end mb-0"><small class="text-body-secondary" id="timecard-statistic-updated">Updated 1 month ago</small></p>
+          <div id="timecard-statistic"></div>
+        </div>
+      </div>
+    </div>
+    <!-- View sales -->
+  </div>
 
 	
 </div>

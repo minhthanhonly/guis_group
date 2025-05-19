@@ -232,4 +232,256 @@ document.addEventListener('DOMContentLoaded', async function () {
         schedulePageButton.classList.add('btn', 'btn-primary', 'btn-sm');
     }
 
+
+    // 勤怠統計
+    const generateStatisticButton = document.getElementById('generate-statistic');
+    if(generateStatisticButton) {
+        generateStatisticButton.addEventListener('click', function() {
+            generateStatistic();
+        });
+    }
+    function generateStatistic() {
+        showLoading(generateStatisticButton);
+        axios.get('/api/index.php?model=timecard&method=generateStatistic')
+            .then(function (response) {
+                hideLoading(generateStatisticButton);
+                handleSuccess(response.data.message_code);
+                $(generateStatisticButton).prop('disabled', false);
+                changeStatistic();
+            })
+            .catch(function (error) {
+                handleErrors(error);
+                console.log(error, error.response);
+                hideLoading(generateStatisticButton);
+                $(generateStatisticButton).prop('disabled', false);
+            });
+    }
+
+    // 勤怠統計
+    let barChart = null;
+    const memberListSelect = document.getElementById('timecard-statistic-select');
+    const statistic = document.getElementById('timecard-statistic');
+    async function generateStatisticTimecard() {
+        
+        const memberList = await getMember();
+       
+        memberListSelect.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'すべて';
+        memberListSelect.appendChild(option);
+        memberList.forEach(member => {
+            const option = document.createElement('option');
+            option.value = member.userid;
+            option.textContent = member.realname;
+            memberListSelect.appendChild(option);
+
+        });
+        if(statistic) {
+            changeStatistic();
+        }
+    }
+
+    memberListSelect.addEventListener('change', function() {
+        changeStatistic();
+    });
+
+    function changeStatistic() {
+        const type = 'timecard_all';
+        const scope = 'monthly';
+        const time = moment().format('YYYY-MM');
+        const userid = memberListSelect.value;
+        axios.get('/api/index.php?model=timecard&method=getStatistic&type=' + type + '&scope=' + scope + '&time=' + time + '&userid=' + userid)
+            .then(function (response) {
+                if(response.data.list) {
+                    const data = response.data.list;
+                    generateStatisticChart(data);
+                } else{
+                    generateStatisticChart([]);
+                }
+            })
+            .catch(function (error) {
+                handleErrors(error);
+            });
+    }
+
+    let memberList = [];
+    async function getMember() {
+        memberList = [];
+        const response = await axios.get(`/api/index.php?model=member&method=get_member`);
+        // check if the response is successful
+        if (response.status !== 200 || !response.data || !response.data.list) {
+          handleErrors(response.data);
+        }
+        memberList = response.data.list;
+        memberList = memberList.filter(member => member.group_name != '退職者');
+        return memberList;
+    }
+
+    generateStatisticTimecard();
+    function generateStatisticChart(data) {
+        if(data.length == 0) {
+            showMessage('データがありません', 'error');
+            barChart.updateSeries([]);
+            return;
+        }
+        // create new chart
+        var catLabel = {
+            'timecard_time': '勤務時間',
+            'timecard_timeover': '時間外',
+            'timecard_timeholiday': '休日出勤',
+        };
+        const updated = document.getElementById('timecard-statistic-updated');
+
+        // First, sort the list by time in ascending order
+        const sortedList = data.sort((a, b) => new Date(a.time) - new Date(b.time));
+        updated.innerHTML = '更新時間: ' + moment(sortedList[0].updated).format('YYYY-MM-DD HH:mm');
+
+        // // Get unique keys from value objects (timecard_time, timecard_timeover)
+        const valueKeys = [...new Set(sortedList.map(item => 
+        {
+            let value = {};
+            try {
+                const decodedValue = item.value.replace(/&quot;/g, '"');
+                value = JSON.parse(decodedValue);
+            } catch (e) {
+                console.error('Failed to parse JSON:', item.value);
+                return {};
+            }
+            return Object.keys(value);
+        }
+        ))].flat();
+        // remove duplicate keys
+        const uniqueValueKeys = [...new Set(valueKeys)];
+
+        const categories = sortedList.map(item => item.name);
+
+        const series = uniqueValueKeys.map(key => {
+            const label = catLabel[key];
+            return {
+                name: label,
+                data: sortedList.map(item => {
+                    const decodedValue = item.value.replace(/&quot;/g, '"');
+                    const value = JSON.parse(decodedValue)[key];
+                    // Convert time format (HH:mm) to decimal hours for chart
+                    const [hours, minutes] = value.split(':').map(Number);
+                    return parseFloat((hours + minutes / 60).toFixed(1));
+                })
+            };
+        });
+
+        var chartColors = {
+            column: {
+                series1: "#24B364",
+                series2: "#53D28C",
+                series3: "#7EDDA9",
+                series4: "#A9E9C5"
+            },
+            line: {
+                series1: "#24B364",
+                series2: "#53D28C",
+                series3: "#7EDDA9",
+                series4: "#A9E9C5"
+            },
+            legend: {
+                bg: '#007bff',
+            },
+            border: {
+                bg: config.colors.borderColor,
+            },
+            label: {
+                bg: config.colors.textMuted,
+            }
+        }
+        
+        const barChartEl = statistic,
+            barChartConfig = {
+                chart: {
+                    height: 400,
+                    type: 'bar',
+                    stacked: false,
+                    parentHeightOffset: 0,
+                    toolbar: {
+                        show: false
+                    }
+                },
+                plotOptions: {
+                    bar: {
+                        columnWidth: '40%',
+                    }
+                },
+                dataLabels: {
+                    enabled: false
+                },
+                legend: {
+                    show: true,
+                    position: 'top',
+                    horizontalAlign: 'start',
+                    labels: {
+                        colors: config.colors.textMuted,
+                        useSeriesColors: false
+                    },
+                },
+                colors: [config.colors.primary, config.colors.warning, config.colors.danger],
+                stroke: {
+                    show: true,
+                    colors: ['transparent']
+                },
+                grid: {
+                    borderColor: chartColors.border.bg,
+                    xaxis: {
+                        lines: {
+                            show: true
+                        }
+                    }
+                },
+                series: series,
+                tooltip: {
+                    enabled: true,
+                    shared: true,
+                    intersect: false,
+                    y: {
+                        formatter: function(value) {
+                            return value + 'h';
+                        }
+                    },
+                },
+                xaxis: {
+                    categories: categories,
+                    axisBorder: {
+                        show: false
+                    },
+                    axisTicks: {
+                        show: false
+                    },
+                    labels: {
+                        style: {
+                            colors: chartColors.label.bg,
+                            fontSize: '13px'
+                        }
+                    }
+                },
+                yaxis: {
+                    min: 0,
+                    tickAmount: 10,
+                    labels: {
+                        style: {
+                            colors: chartColors.label.bg,
+                            fontSize: '13px'
+                        }
+                    }
+                },
+                fill: {
+                    opacity: 1
+                }
+            };
+        
+        if (typeof barChartEl !== undefined && barChartEl !== null && barChart === null) {
+            barChart = new ApexCharts(barChartEl, barChartConfig);
+            barChart.render();
+        } else {
+            barChart.updateOptions(barChartConfig);
+        }
+    }
+
 });

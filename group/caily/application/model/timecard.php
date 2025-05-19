@@ -364,6 +364,7 @@ class Timecard extends ApplicationModel {
 		$result = $this->sumAdd($open, $hour, date("Y-m-d"), $userName);
 		$query = sprintf("UPDATE %stimecard SET timecard_close = '%s', timecard_originalclose = '%s', timecard_time = '%s', timecard_timeover = '%s', timecard_timeinterval = '%s', update_time='%s' WHERE id = %s", DB_PREFIX, $hour, $hour, $result["timecard_time"], $result["timecard_timeover"], $result["timecard_timeinterval"], date('Y-m-d H:i:s'), $id);
 		$data = $this->update_query($query);
+		
 		if($data > 0){
 			$hash['status'] = 'success';
 			$hash['message_code'] = '完了しました。';
@@ -379,6 +380,153 @@ class Timecard extends ApplicationModel {
 		}
 		return $hash;
 	}
+
+	function generateStatistic(){
+		$date = date('Y-m-d', strtotime('-6 month'));
+		$start = date('Y-m-d', strtotime(date('Y-m', strtotime($date)) . '-' . TIMECARD_START_DATE));
+		$query = sprintf("SELECT * FROM %stimecard WHERE timecard_date >= DATE('%s')", DB_PREFIX, $start);
+		$data = $this->fetchAll($query);
+		$result = array();
+		$result_user = array();
+		// ユーザーごと
+		foreach($data as $row) {
+			if(TIMECARD_START_DATE == 1){
+				$yearMonth = date('Y-n', strtotime($row['timecard_date']));
+			} else{
+				if(date('j', strtotime($row['timecard_date'])) < TIMECARD_START_DATE){
+					$yearMonth = date('Y-n', strtotime($row['timecard_date']));
+				} else{
+					$year = date('Y', strtotime($row['timecard_date']));
+					$month = date('n', strtotime($row['timecard_date']));
+					$month = $month + 1;
+					if($month > 12){
+						$year = $year + 1;
+						$month = 1;
+					}
+					$yearMonth = $year . '-' . $month;
+				}
+			}
+			if(!isset($result_user[$row['owner']])) {
+				$result_user[$row['owner']] = array();
+			}
+			if(!isset($result_user[$row['owner']][$yearMonth])) {
+				$result_user[$row['owner']][$yearMonth] = array(); 
+			}
+			$result_user[$row['owner']][$yearMonth][] = $row;
+		}
+		foreach($result_user as $key => $value){
+			foreach($value as $key2 => $value2){
+				$sum = $this->statistic($value2);
+				$name = $key2;
+				if(TIMECARD_START_DATE == 1){
+					$time = $key2.'-'.TIMECARD_START_DATE;
+				} else{
+					$time = date('Y-m', strtotime($key2 . ' -1 month')) . '-'.TIMECARD_START_DATE;
+				}
+				$sumString = json_encode($sum);
+				$delete_statistic = sprintf("DELETE FROM %sstatistic WHERE type = 'timecard_user' AND scope = 'monthly' AND time = '%s' AND userid = '%s'", DB_PREFIX, $time, $key);
+				$this->query($delete_statistic);
+				$insert_statistic = sprintf("INSERT INTO %sstatistic (type, scope, time, value, userid, name, updated) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')", DB_PREFIX, 'timecard_user', 'monthly', $time, $sumString, $key, $name, date('Y-m-d H:i:s'));
+				$this->query($insert_statistic);
+			}
+		}
+
+
+		// Allユーザー
+		foreach($data as $row) {
+			if(TIMECARD_START_DATE == 1){
+				$yearMonth = date('Y-n', strtotime($row['timecard_date']));
+			} else{
+				if(date('j', strtotime($row['timecard_date'])) < TIMECARD_START_DATE){
+					$yearMonth = date('Y-n', strtotime($row['timecard_date']));
+				} else{
+					$yearMonth = date('Y-n', strtotime($row['timecard_date'] . ' +1 month'));
+				}
+			}
+			if(!isset($result[$yearMonth])) {
+				$result[$yearMonth] = array();
+			}
+			$result[$yearMonth][] = $row;
+		}
+		foreach($result as $key => $value){
+			$sum = $this->statistic($value);
+			$sumString = json_encode($sum);
+			$name = $key;
+			if(TIMECARD_START_DATE == 1){
+				$time = $key.'-'.TIMECARD_START_DATE;
+			} else{
+				$time = date('Y-m', strtotime($key . ' -1 month')) . '-'.TIMECARD_START_DATE;
+			}
+			$delete_statistic = sprintf("DELETE FROM %sstatistic WHERE type = 'timecard_all' AND scope = 'monthly' AND time = '%s'", DB_PREFIX, $time);
+			$this->query($delete_statistic);
+			$insert_statistic = sprintf("INSERT INTO %sstatistic (type, scope, time, value, name, updated) VALUES ('%s', '%s', '%s', '%s', '%s', '%s')", DB_PREFIX, 'timecard_all', 'monthly', $time, $sumString, $name, date('Y-m-d H:i:s'));
+			$this->query($insert_statistic);
+		}
+		$hash['status'] = 'success';
+		$hash['message_code'] = '完了しました。';
+		return $hash;
+	}
+
+	function getStatistic(){
+		$this->authorizeApi('administrator', 'manager');
+		$scope = $_GET['scope'];
+		$time = date('Y-m-d');
+		$duration = isset($_GET['duration']) ? $_GET['duration'] : '6';
+		$start = date('Y-m-d', strtotime('-' . $duration . ' month'));
+		$start = date('Y-m-d', strtotime(date('Y-m', strtotime($start)) . '-' . TIMECARD_START_DATE));
+		$userid = isset($_GET['userid']) && $_GET['userid'] != '' ? $_GET['userid'] : '';
+		$query = sprintf("SELECT * FROM %sstatistic WHERE scope = '%s' AND time >= DATE('%s') AND time <= DATE('%s')", DB_PREFIX, $scope, $start, $time);
+		if($userid != ''){
+			$query .= " AND userid = '$userid'";
+			$query .= " AND type = 'timecard_user'";
+		} else{
+			$query .= " AND type = 'timecard_all'";
+		}
+		
+		$data = $this->fetchAll($query);
+		
+		if(count($data) > 0){	
+			$hash['status'] = 'success';
+			$hash['message_code'] = '完了しました。';
+			$hash['list'] = $data;
+		} else{
+			$hash['status'] = 'error';
+			$hash['message_code'] = 'データが見つかりません。';
+		}
+		return $hash;
+	}
+
+	function statistic($data) {
+		$sum = array();
+		$sum['timecard_time'] = 0;
+		$sum['timecard_timeover'] = 0;
+		$sum['timecard_timeholiday'] = 0;
+		
+		if (is_array($data) && count($data) > 0) {
+			foreach ($data as $key => $row) {
+				$date = date('Y-m-d', strtotime($row['timecard_date']));
+				$checkWeekendAndHoliday = $this->checkWeekendAndHoliday($date);
+				if ($checkWeekendAndHoliday) {
+					if (strlen($row['timecard_close']) > 0) {
+						$array = explode(':', $row['timecard_time']);
+						$sum['timecard_timeholiday'] += intval($array[0]) * 60 + intval($array[1]);
+					}
+				} else{
+					if (strlen($row['timecard_close']) > 0) {
+						$array = explode(':', $row['timecard_time']);
+						$sum['timecard_time'] += intval($array[0]) * 60 + intval($array[1]);
+						$array = explode(':', $row['timecard_timeover']);
+						$sum['timecard_timeover'] += intval($array[0]) * 60 + intval($array[1]);
+					}
+				}
+			}
+		}
+		$sum['timecard_time'] = sprintf('%d:%02d', (($sum['timecard_time'] - ($sum['timecard_time'] % 60)) / 60), ($sum['timecard_time'] % 60));
+		$sum['timecard_timeover'] = sprintf('%d:%02d', (($sum['timecard_timeover'] - ($sum['timecard_timeover'] % 60)) / 60), ($sum['timecard_timeover'] % 60));
+		$sum['timecard_timeholiday'] = sprintf('%d:%02d', (($sum['timecard_timeholiday'] - ($sum['timecard_timeholiday'] % 60)) / 60), ($sum['timecard_timeholiday'] % 60));
+		return $sum;
+	}
+
 
 	function recalculateApi(){
 		/*オーナー特定*/
@@ -1010,22 +1158,7 @@ class Timecard extends ApplicationModel {
 		return $data;
 	}
 
-	function statistic($data) {
-		$hash = $this->findOwner($_GET['member']);
-		if (is_array($data) && count($data) > 0) {
-			foreach ($data as $key => $row) {
-				if (strlen($row['timecard_close']) > 0) {
-					$array = $this->sumAdd($row['timecard_open'], $row['timecard_close'], $row['timecard_date'], $row['owner']);
-					$this->record($array, $hash, $row['timecard_year'], $row['timecard_month'], $row['timecard_day']);
-					$data[$key]['timecard_time'] = $array['timecard_time'];
-					$data[$key]['timecard_timeover'] = $array['timecard_timeover'];
-					$data[$key]['timecard_timeinterval'] = $array['timecard_timeinterval'];
-				}
-			}
-		}
-		return $data;
-
-	}
+	
 
 	function config() {
 		$this->authorize('administrator', 'manager');

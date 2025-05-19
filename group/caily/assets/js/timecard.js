@@ -85,7 +85,7 @@ async function get_timecard(user, year, month) {
       return parseInt(item.timecard_day) === day
     });
     if (foundItem) {
-      if (foundItem.holiday == 1) {
+      if (foundItem.holiday == 1 && foundItem.timecard_time != '') {
         foundItem.timecard_timeinterval = '';
         foundItem.timecard_timeover = '';
         foundItem.timecard_timeholiday = foundItem.timecard_time;
