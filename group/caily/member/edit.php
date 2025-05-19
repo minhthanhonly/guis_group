@@ -64,9 +64,17 @@ $view->heading('個人設定');
 							<input type="hidden" name="reset_image" id="reset_image" value="0">
 							<div class="row gy-4 gx-6 mb-6">
 								<div class="col-md-6 form-control-validation fv-plugins-icon-container">
-									<label for="realname" class="form-label">名前</label>
-									<input class="form-control" type="text" id="realname" name="realname"
-										value="<?=$hash['data']['realname']?>">
+									<label for="lastname" class="form-label">姓</label>
+									<input class="form-control" type="text" id="lastname" name="lastname"
+										value="<?=$hash['data']['lastname']?>">
+									<div
+										class="fv-plugins-message-container fv-plugins-message-container--enabled invalid-feedback">
+									</div>
+								</div>
+								<div class="col-md-6 form-control-validation fv-plugins-icon-container">
+									<label for="firstname" class="form-label">名</label>
+									<input class="form-control" type="text" id="firstname" name="firstname"
+										value="<?=$hash['data']['firstname']?>">
 									<div
 										class="fv-plugins-message-container fv-plugins-message-container--enabled invalid-feedback">
 									</div>

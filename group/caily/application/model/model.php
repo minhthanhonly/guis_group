@@ -167,7 +167,6 @@ class Model extends Connection {
 					}
 				}
 				$query = "INSERT INTO ".$this->table." (".implode(",", $keys).") VALUES (".implode(",", $values).")";
-				echo $query;
 				$this->response = $this->query($query);
 				return $this->response;
 			}

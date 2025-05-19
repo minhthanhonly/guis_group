@@ -10,7 +10,11 @@ $week = array('日', '月', '火', '水', '木', '金', '土');
 $today = $hash['year'].'年'.$hash['month'].'月'.$hash['day'].'日('.$week[$hash['weekday']].')';
 
 $current_hour = date('H');
-$welcome_message = $_SESSION['realname'].'さん、';
+if($_SESSION['firstname'] == '社長') {
+  $welcome_message = $_SESSION['lastname'].'社長、';
+} else {
+  $welcome_message = $_SESSION['lastname'].'さん、';
+}
 $today_message = '今日は'.$today.'です。';
 if(!isset($hash['timecard']['timecard_close']) || $hash['timecard']['timecard_close'] == '') { 
 if ($current_hour >= 6 && $current_hour < 12) {

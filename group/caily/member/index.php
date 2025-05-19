@@ -73,19 +73,25 @@ $view->heading('メンバー一覧');
           </div>
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
-              <label class="form-label" for="add-user-fullname">氏名</label>
-              <input type="text" class="form-control" id="add-user-fullname" placeholder="" name="realname"/>
+              <label class="form-label" for="add-user-lastname">姓</label>
+              <input type="text" class="form-control" id="add-user-lastname" placeholder="" name="lastname"/>
             </div>
             <div class="col-md-6 mb-4 form-control-validation">
-              <label class="form-label" for="add-user-email">メールアドレス</label>
-              <input type="text" id="add-user-email" class="form-control" placeholder="" name="user_email" />
+              <label class="form-label" for="add-user-firstname">名</label>
+              <input type="text" class="form-control" id="add-user-firstname" placeholder="" name="firstname"/>
             </div>
           </div>
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-email">メールアドレス</label>
+              <input type="text" id="add-user-email" class="form-control" placeholder="" name="user_email" />
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="add-user-contact">電話番号</label>
               <input type="text" id="add-user-contact" class="form-control phone-mask" placeholder="" name="user_phone" />
             </div>
+          </div>
+          <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="user-role">制限</label>
               <select id="user-role" class="form-select" name="authority">
@@ -143,19 +149,25 @@ $view->heading('メンバー一覧');
           </div>
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
-              <label class="form-label" for="edit-user-fullname">氏名</label>
-              <input type="text" class="form-control" id="edit-user-fullname" placeholder="" name="realname"/>
+              <label class="form-label" for="edit-user-lastname">姓</label>
+              <input type="text" class="form-control" id="edit-user-lastname" placeholder="" name="lastname"/>
             </div>
             <div class="col-md-6 mb-4 form-control-validation">
-              <label class="form-label" for="edit-user-email">メールアドレス</label>
-              <input type="text" id="edit-user-email" class="form-control" placeholder="" name="user_email" />
+              <label class="form-label" for="edit-user-firstname">名</label>
+              <input type="text" class="form-control" id="edit-user-firstname" placeholder="" name="firstname"/>
             </div>
           </div>
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-email">メールアドレス</label>
+              <input type="text" id="edit-user-email" class="form-control" placeholder="" name="user_email" />
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="edit-user-contact">電話番号</label>
               <input type="text" id="edit-user-contact" class="form-control phone-mask" placeholder="" name="user_phone" />
             </div>
+          </div>
+          <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="user-role">制限</label>
               <select id="edit-user-role" class="form-select" name="authority">
