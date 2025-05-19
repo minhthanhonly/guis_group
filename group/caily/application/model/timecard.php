@@ -50,7 +50,7 @@ class Timecard extends ApplicationModel {
 		$hash['list'] = $this->fetchAll($query);
 		$holidays = [];
 		foreach ($hash['list'] as $key => $value) {
-			$holidays[] = $value['date'];
+			$holidays[] = date('Y-m-d', strtotime($value['date']));
 		}
 		return $holidays;
 	}
@@ -575,7 +575,7 @@ class Timecard extends ApplicationModel {
 	}
 
 	function checkWeekendAndHoliday($date) {
-		$date = date($date);
+		$date = date('Y-m-d', strtotime($date));
 		$timestamp = strtotime($date);
 		$weekday = date('w', $timestamp);
 
@@ -999,6 +999,22 @@ class Timecard extends ApplicationModel {
 		if (is_array($data) && count($data) > 0) {
 			foreach ($data as $key => $row) {
 				if (strlen($row['timecard_close']) > 0) {
+					$array = $this->sumAdd($row['timecard_open'], $row['timecard_close'], date('Y-m-d', strtotime($row['timecard_date'])), $row['owner']);
+					$this->record($array, $hash, $row['timecard_year'], $row['timecard_month'], $row['timecard_day']);
+					$data[$key]['timecard_time'] = $array['timecard_time'];
+					$data[$key]['timecard_timeover'] = $array['timecard_timeover'];
+					$data[$key]['timecard_timeinterval'] = $array['timecard_timeinterval'];
+				}
+			}
+		}
+		return $data;
+	}
+
+	function statistic($data) {
+		$hash = $this->findOwner($_GET['member']);
+		if (is_array($data) && count($data) > 0) {
+			foreach ($data as $key => $row) {
+				if (strlen($row['timecard_close']) > 0) {
 					$array = $this->sumAdd($row['timecard_open'], $row['timecard_close'], $row['timecard_date'], $row['owner']);
 					$this->record($array, $hash, $row['timecard_year'], $row['timecard_month'], $row['timecard_day']);
 					$data[$key]['timecard_time'] = $array['timecard_time'];
@@ -1064,30 +1080,35 @@ class Timecard extends ApplicationModel {
 		$field = implode(',', $this->schematize());
 
 		/*1月対応*/
-		$syr = $yr = $_GET['year'];
 		$mt = $_GET['month'];
-		$smt = $mt - 1;
-
-		/*1月(年越し)対応*/
-		if(strcmp($mt,'1') == 0){
-			$smt = $mt + 11;
-			$syr = $yr - 1;
+		$yr = $_GET['year'];
+	
+		$start = DateTime::createFromFormat('Y-m-d', "$yr-$mt-" . TIMECARD_START_DATE);
+		if(TIMECARD_START_DATE != 1){
+			$start->modify('-1 month');
 		}
+		$end = clone $start; // Clone $start to create a new DateTime object
+		$end->modify('+1 month'); // Set the end date to one month after the start date
+		$end->modify('-1 day'); // Subtract one day to get the correct end date
 
-		/*20日締め対応*/
-		$query = sprintf("SELECT %s FROM %s WHERE (((timecard_year = %d) AND (timecard_month = %d) AND (timecard_day BETWEEN '21' AND '31')) OR ((timecard_year = %d) AND (timecard_month = %d) AND (timecard_day BETWEEN '01' AND '20')))  AND (owner = '%s') ORDER BY timecard_date", $field, $this->table, $syr, $smt, $yr, $mt, $this->quote($_SESSION['userid']));
+		$countDays = $end->diff($start)->days;
+		$countDays = $countDays + 1;
 
-		/*$query = sprintf("SELECT %s FROM %s WHERE (timecard_year = %d) AND (timecard_month = %d) AND (owner = '%s') ORDER BY timecard_date", $field, $this->table, $_GET['year'], $_GET['month'], $this->quote($_SESSION['userid']));*/
 
+		$query = sprintf(
+			"SELECT %s FROM %s WHERE STR_TO_DATE(timecard_date, '%%Y-%%m-%%d') BETWEEN '%s' AND '%s' AND owner = '%s' ORDER BY timecard_date",
+			$field,
+			$this->table,
+			$start->format('Y-m-d'), // Định dạng ngày bắt đầu
+			$end->format('Y-m-d'),
+			$_SESSION['userid']
+		);
+		
 		$list = $this->fetchAll($query);
 		if (is_array($list) && count($list) > 0) {
 			$csv = $yr.'年'.$mt.'月'."\n";
 			$csv .= '"日付","出社","退社","勤務時間","時間外","休日出勤","備考"'."\n";
 
-			$timestamp = mktime(0, 0, 0, $_GET['month']-1, 21, $_GET['year']);
-			/*$timestamp = mktime(0, 0, 0, $smt, 1, $syr);*/
-			$lastday = date('t', $timestamp);
-			$weekday = date('w', $timestamp);
 			$week = array('日', '月', '火', '水', '木', '金', '土');
 			foreach ($list as $row) {
 				$data[$row['timecard_day']] = $row;
@@ -1097,19 +1118,16 @@ class Timecard extends ApplicationModel {
 			$sum_holiday = 0;
 			$dt =0;
 
-			for ($i = 1; $i <= $lastday; $i++) {
+			for ($i = 0; $i < $countDays; $i++) {
+				$dateCurrent = clone $start;
+				$dateCurrent->modify('+'.$i.' day');
+				$date = $dateCurrent->format('Y-m-d');
+				$dt = $dateCurrent->format('j');
+				$smt = $dateCurrent->format('n');
+				$syr = $dateCurrent->format('Y');
+				$weekday = $dateCurrent->format('w');
 
-				/*21日始まり対応*/
-				if($i <= ($lastday - 20)){
-					$dt = $i+20;
-				}else{
-					$dt = $i - ($lastday - 20);
-					if($dt == 1){
-						$syr = $yr;
-						$smt = $mt;
-					}
-				}
-				$checkholiday = $this->checkWeekendAndHoliday($syr, $smt, $dt, $weekday, $lastday);
+				$checkholiday = $this->checkWeekendAndHoliday($date);
 				if (strlen($data[$dt]['timecard_time']) > 0 && $checkholiday) {
 					$array = explode(':', $data[$dt]['timecard_time']);
 					$sum_holiday += intval($array[0]) * 60 + intval($array[1]);
@@ -1136,7 +1154,6 @@ class Timecard extends ApplicationModel {
 					$csv .= '","';
 				}
 				$csv .= $data[$dt]['timecard_comment'].'"'."\n";
-				$weekday = ($weekday + 1) % 7;
 			}
 			$csv .= '"勤務時間合計","'.sprintf('%d:%02d', (($sum - ($sum % 60)) / 60), ($sum % 60)).'"'."\n";
 			$csv .= '"時間外合計","'.sprintf('%d:%02d', (($sum_over - ($sum_over % 60)) / 60), ($sum_over % 60)).'"'."\n";

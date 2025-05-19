@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         initialDate: new Date(),
         showNonCurrentDates: false,
         //set height
-        height: 'auto',
+        height: '400px',
         // navLinks: true, // can click day/week names to navigate views
         eventClassNames: function ({ event: calendarEvent }) {
           const colorName = calendarColors[calendarEvent._def.extendedProps.calendar];

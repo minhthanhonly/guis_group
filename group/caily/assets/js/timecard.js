@@ -821,7 +821,6 @@ document.addEventListener('DOMContentLoaded', function () {
           searchable: false,
           orderable: false,
           render: (data, type, full, meta) => {
-            console.log(full);
             return `
               <div class="d-flex align-items-center justify-content-start">
                 <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="btn btn-text-secondary rounded-pill waves-effect btn-icon item-view"><i class="icon-base ti tabler-eye me-0 me-sm-1"></i></a>

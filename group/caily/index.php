@@ -10,7 +10,7 @@ $week = array('日', '月', '火', '水', '木', '金', '土');
 $today = $hash['year'].'年'.$hash['month'].'月'.$hash['day'].'日('.$week[$hash['weekday']].')';
 
 $current_hour = date('H');
-if($_SESSION['firstname'] == '社長') {
+if(str_contains($_SESSION['firstname'], '社長') || str_contains($_SESSION['lastname'], '社長')) {
   $welcome_message = $_SESSION['lastname'].'社長、';
 } else {
   $welcome_message = $_SESSION['lastname'].'さん、';

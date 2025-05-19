@@ -41,7 +41,7 @@ class General extends ApplicationModel {
 		$where[] = $this->permitWhere();
 		$field = "*";
 		$query = sprintf("SELECT %s FROM %sforum WHERE %s ORDER BY forum_lastupdate DESC", $field, DB_PREFIX, implode(" AND ", $where));
-		$hash['forum'] = $this->fetchLimit($query, 0, 8);
+		$hash['forum'] = $this->fetchLimit($query, 0, 5);
 		// $where = array();
 		// $category = $this->permitCategory('bookmark');
 		// $where[] = $this->folderWhere($category['folder']);
