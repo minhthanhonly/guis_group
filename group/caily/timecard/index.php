@@ -129,32 +129,36 @@ $view->heading('タイムカード');
         </div>
         <form class="pt-0" id="viewTimecardForm">
           <input type="hidden" id="viewTimecardId" name="id" />
-          <div class="form-group row">
-            <div class="col-md-12 mb-4 form-control-validation">
-              <label class="form-label" for="viewTimecardDate">日付</label>
-              <input type="text" class="form-control" id="viewTimecardDate" placeholder="" name="date" readonly/>
-            </div>
-          </div>
+          <table class="table w-100">
+            <tr>
+              <th><label class="form-label" for="viewTimecardOpen">日付</label></th>
+              <td><span id="viewTimecardDate"></span></td>
+            </tr>
+            <tr>
+              <th><label class="form-label" for="viewTimecardOpen">チェックイン</label></th>
+              <td><span id="viewTimecardOpen"></span></td>
+            </tr>
+            <tr>
+              <th><label class="form-label" for="viewTimecardClose">チェックアウト</label></th>
+              <td><span id="viewTimecardClose"></span></td>
+            </tr>
+            <tr id="viewTimecardOriginOpenText">
+              <th><label class="form-label" for="viewTimecardOriginOpen">編集前の時刻</label></th>
+              <td><span id="viewTimecardOriginOpen"></span></td>
+            </tr>
+            <tr id="viewTimecardOriginalCloseText">
+              <th><label class="form-label" for="viewTimecardOriginalClose">編集前の時刻</label></th>
+              <td><span id="viewTimecardOriginalClose"></span></td>
+            </tr>
+            <tr>
+              <th><label class="form-label" for="viewTimecardNote">備考</label></th>
+              <td><div id="viewTimecardNote"></div></td>
+            </tr>
+          </table>
 
-          <div class="form-group row">
-            <div class="col-md-6 mb-4 form-control-validation">
-              <label class="form-label" for="viewTimecardOpen">チェックイン</label>
-              <input type="text" class="form-control" id="viewTimecardOpen" placeholder="" name="open" readonly/>
-              <p class="mt-2" id="viewTimecardOriginOpenText">編集前の時刻: <span id="viewTimecardOriginOpen"></span></p>
-            </div>
-            <div class="col-md-6 mb-4 form-control-validation">
-              <label class="form-label" for="viewTimecardClose">チェックアウト</label>
-              <input type="text" class="form-control" id="viewTimecardClose" placeholder="" name="close" readonly/>
-              <p class="mt-2" id="viewTimecardOriginalCloseText">編集前の時刻: <span id="viewTimecardOriginalClose"></span></p>
-            </div>
+          <div class="form-group">
+            <button type="button" class="btn btn-primary me-3 data-submit" data-bs-dismiss="modal">閉じる</button>
           </div>
-          <div class="form-group row">
-            <div class="col-md-12 mb-4 form-control-validation">
-              <label class="form-label" for="viewTimecardNote">備考</label>
-              <textarea class="form-control" id="viewTimecardNote" placeholder="" name="note" readonly></textarea>
-            </div>
-          </div>
-          <button type="button" class="btn btn-primary me-3 data-submit" data-bs-dismiss="modal">閉じる</button>
           <div class="form-group row mt-4">
             <div class="col-md-12 form-control-validation">
               <p class="text-info" id="viewTimecardLastEdit">最終編集: <span id="viewTimecardLastEditTime"></span></p>
@@ -188,13 +192,13 @@ $view->heading('タイムカード');
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="editTimecardOpen">チェックイン</label>
-              <div class="input-group timecard-time-input border rounded-2">
+              <div class="input-group timecard-time-input border ps-1 rounded-2">
                 <input type="text" class="form-control timecard-time-input-field d-none" id="editTimecardOpen" placeholder="" name="timecard_open" readonly />
               </div>
             </div>
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="editTimecardClose">チェックアウト</label>
-              <div class="input-group timecard-time-input border rounded-2">
+              <div class="input-group timecard-time-input border ps-1 rounded-2">
                 <input type="text" class="form-control timecard-time-input-field d-none" id="editTimecardClose" placeholder="" name="timecard_close" readonly />
               </div>
             </div>

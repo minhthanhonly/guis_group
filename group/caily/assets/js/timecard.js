@@ -322,19 +322,19 @@ function addEvent() {
       if (response.status === 200 && response.data && response.data.status === 'success') {
         // Open the modal
         var timecardinfo = response.data.data;
-        document.getElementById('modalViewTimecardTitle').innerHTML = findUsername(userid);
+        document.getElementById('modalViewTimecardTitle').innerHTML = '詳細';
         if (timecardinfo.id) {
           document.getElementById('viewTimecardId').value = timecardinfo.id;
         }
-        document.getElementById('viewTimecardDate').value = date;
+        document.getElementById('viewTimecardDate').innerHTML = moment(date).format('YYYY年MM月DD日');
         if (timecardinfo.timecard_open) {
-          document.getElementById('viewTimecardOpen').value = timecardinfo.timecard_open;
+          document.getElementById('viewTimecardOpen').innerHTML = timecardinfo.timecard_open;
         }
         if (timecardinfo.timecard_close) {
-          document.getElementById('viewTimecardClose').value = timecardinfo.timecard_close;
+          document.getElementById('viewTimecardClose').innerHTML = timecardinfo.timecard_close;
         }
         if (timecardinfo.timecard_comment) {
-          document.getElementById('viewTimecardNote').value = decodeHtmlEntities(timecardinfo.timecard_comment);
+          document.getElementById('viewTimecardNote').innerHTML = decodeHtmlEntities(timecardinfo.timecard_comment);
         }
 
 
@@ -343,13 +343,13 @@ function addEvent() {
 
         if (timecardinfo.timecard_originalopen) {
           if (timecardinfo.timecard_originalopen != '' && timecardinfo.timecard_originalopen != timecardinfo.timecard_open) {
-            document.getElementById('viewTimecardOriginOpenText').style.display = 'block';
+            $('#viewTimecardOriginOpenText').show();
             document.getElementById('viewTimecardOriginOpen').innerHTML = timecardinfo.timecard_originalopen;
           }
         }
         if (timecardinfo.timecard_originalclose) {
           if (timecardinfo.timecard_originalclose != '' && timecardinfo.timecard_originalclose != timecardinfo.timecard_close) {
-            document.getElementById('viewTimecardOriginalCloseText').style.display = 'block';
+            $('#viewTimecardOriginalCloseText').show();
             document.getElementById('viewTimecardOriginalClose').innerHTML = timecardinfo.timecard_originalclose;
           }
         }
@@ -382,7 +382,7 @@ function addEvent() {
       if (response.status === 200 && response.data && response.data.status === 'success') {
         // Open the modal
         var timecardinfo = response.data.data;
-        document.getElementById('modalEditTimecardTitle').innerHTML = findUsername(userid);
+        document.getElementById('modalEditTimecardTitle').innerHTML = '編集';
         if (timecardinfo.id) {
           document.getElementById('editTimecardId').value = timecardinfo.id;
         }
