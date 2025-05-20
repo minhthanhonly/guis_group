@@ -48,9 +48,11 @@ class Controller {
 		$class = ucfirst($directory);
 		$method = str_replace('.php', '', basename($_SERVER['SCRIPT_NAME']));
 		$hash = array();
+		
 		if (file_exists($modelfile)) {
 			require_once($modelfile);
 			if (class_exists($class)) {
+				
 				$model = new $class;
 				$model->checkSuspend();
 				if (method_exists($model, $method)) {

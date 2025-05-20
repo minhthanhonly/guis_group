@@ -26,6 +26,10 @@ class User extends ApplicationModel {
 		'is_suspend'=>array('ステータス', 'numeric', 'length:1'),
 		);
 	}
+
+	function isLoggedIn() {
+		return isset($_SESSION['userid']) && isset($_SESSION['authority']);
+	}
 	
 	function validate() {
 		

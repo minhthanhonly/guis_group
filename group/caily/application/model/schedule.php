@@ -2,9 +2,7 @@
 
 
 class Schedule extends ApplicationModel {
-	
 	function __construct() {
-	
 		$this->schema = array(
 		'schedule_type'=>array('分類', 'notnull', 'numeric'),
 		'schedule_title'=>array('タイトル', 'notnull', 'length:1000'),
@@ -307,37 +305,36 @@ class Schedule extends ApplicationModel {
 
 	}
 	
-	function add() {
+	// function add() {
 		
-		$hash = $this->permitCategory('facility', $_POST['facility'], 'add');
-		$hash['data'] = $this->permitInsert('index.php'.$this->parameter(array('year'=>$_POST['schedule_year'], 'month'=>$_POST['schedule_month'])));
-		$hash += $this->findUser($hash['data']);
-		return $hash;
+	// 	$hash = $this->permitCategory('facility', $_POST['facility'], 'add');
+	// 	$hash['data'] = $this->permitInsert('index.php'.$this->parameter(array('year'=>$_POST['schedule_year'], 'month'=>$_POST['schedule_month'])));
+	// 	$hash += $this->findUser($hash['data']);
+	// 	return $hash;
 	
-	}
+	// }
 
-	function edit() {
+	// function edit() {
 	
-		$hash['data'] = $this->permitEdit();
-		$hash += $this->permitCategory('facility', $_POST['schedule_facility'], 'add');
-		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-			$hash['data'] = $this->permitUpdate('index.php'.$this->parameter(array('year'=>$_POST['schedule_year'], 'month'=>$_POST['schedule_month'])));
-		}
-		$hash += $this->findUser($hash['data']);
-		return $hash;
+	// 	$hash['data'] = $this->permitEdit();
+	// 	$hash += $this->permitCategory('facility', $_POST['schedule_facility'], 'add');
+	// 	if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+	// 		$hash['data'] = $this->permitUpdate('index.php'.$this->parameter(array('year'=>$_POST['schedule_year'], 'month'=>$_POST['schedule_month'])));
+	// 	}
+	// 	$hash += $this->findUser($hash['data']);
+	// 	return $hash;
 	
-	}
+	// }
 
-	function delete() {
-	
-		$hash['data'] = $this->permitEdit();
-		$this->deletePost();
-		$this->redirect('index.php'.$this->parameter(array('year'=>$hash['data']['schedule_year'], 'month'=>$hash['data']['schedule_month'])));
-		$hash += $this->findUser($hash['data']);
-		$hash['facility'] = $this->fetchOne("SELECT folder_caption FROM ".DB_PREFIX."folder WHERE (folder_type = 'facility') AND (folder_id = ".intval($hash['data']['schedule_facility']).")");
-		return $hash;
+	// function delete() {
+	// 	$hash['data'] = $this->permitEdit();
+	// 	$this->deletePost();
+	// 	$this->redirect('index.php'.$this->parameter(array('year'=>$hash['data']['schedule_year'], 'month'=>$hash['data']['schedule_month'])));
+	// 	$hash += $this->findUser($hash['data']);
+	// 	$hash['facility'] = $this->fetchOne("SELECT folder_caption FROM ".DB_PREFIX."folder WHERE (folder_type = 'facility') AND (folder_id = ".intval($hash['data']['schedule_facility']).")");
+	// 	return $hash;
 
-	}
+	// }
 	
 	function permitEdit() {
 		

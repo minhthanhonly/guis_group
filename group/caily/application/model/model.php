@@ -541,7 +541,49 @@ class Model extends Connection {
 		
 	}
 
-	
+	function query_insert($data) {
+		$keys = array();
+		$values = array();
+		foreach ($data as $key => $value) {
+			$keys[] = $key;
+			if(!in_array($key, $this->donotquote)){
+				$values[] = "'".$this->quote($value)."'";
+			} else {
+				if($value == '' || $value == null) $value = 0;
+				$values[] = $this->quote($value);
+			}
+		}
+		$query = "INSERT INTO ".$this->table." (".implode(",", $keys).") VALUES (".implode(",", $values).")";
+		$result = $this->query($query);
+		return $result ? $this->insertid() : false;
+	}
+
+	function query_update($data, $where) {
+		$array = array();
+		foreach ($data as $key => $value) {
+			if(!in_array($key, $this->donotquote)){
+				$array[] = $key." = '".$this->quote($value)."'";
+			} else {
+				if($value == '' || $value == null) $value = 0;
+				$array[] = $key." = ".$this->quote($value);
+			}
+		}
+		$whereClause = array();
+		foreach ($where as $key => $value) {
+			$whereClause[] = $key." = ".intval($value);
+		}
+		$query = "UPDATE ".$this->table." SET ".implode(",", $array)." WHERE ".implode(" AND ", $whereClause);
+		return $this->update_query($query);
+	}
+
+	function query_delete($where) {
+		$whereClause = array();
+		foreach ($where as $key => $value) {
+			$whereClause[] = $key." = ".intval($value);
+		}
+		$query = "DELETE FROM ".$this->table." WHERE ".implode(" AND ", $whereClause);
+		return $this->query($query);
+	}
 
 }
 

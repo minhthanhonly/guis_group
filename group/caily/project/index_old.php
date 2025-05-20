@@ -34,26 +34,138 @@ $view->heading('プロジェクト管理');
                         </button>
                     </div>
 
-                    <div class="table-responsive text-nowrap">
-                        <table class="datatables-project table table-striped">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
                                     <th>プロジェクト名</th>
                                     <th>カテゴリー</th>
-                                    <th>開始日</th>
-                                    <th>終了日</th>
-                                    <th>見積時間</th>
+                                    <th>メンバー</th>
                                     <th>ステータス</th>
+                                    <th>進捗</th>
+                                    <th>期間</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
-                            <tbody class="table-border-bottom-0"></tbody>
+                            <tbody>
+                                <tr v-for="project in projects" :key="project.id">
+                                    <td>
+                                        <a :href="'/project/view.php?id=' + project.id">{{ project.name }}</a>
+                                    </td>
+                                    <td>{{ project.category_name }}</td>
+                                    <td>{{ project.member_count }}人</td>
+                                    <td>
+                                        <span :class="'badge bg-' + getStatusColor(project.status)">
+                                            {{ getStatusText(project.status) }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="progress">
+                                            <div class="progress-bar" :style="{ width: project.progress + '%' }">
+                                                {{ project.progress }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {{ formatDate(project.start_date) }} - {{ formatDate(project.end_date) }}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newProjectModal" @click="editProject(project)">
+                                                <i class="icon-base ti tabler-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" @click="deleteProject(project)">
+                                                <i class="icon-base ti tabler-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
                         </table>
                     </div>
                 </div>
 
                 
+            </div>
+        </div>
+
+        <!-- Project Details -->
+        <div class="col-md-4" v-if="selectedProject">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">プロジェクト詳細</h5>
+                    <button class="btn-close" @click="selectedProject = null"></button>
+                </div>
+                <div class="card-body">
+                    <h6>{{ selectedProject.name }}</h6>
+                    <p class="text-muted">{{ selectedProject.description }}</p>
+
+                    <div class="mb-3">
+                        <label class="form-label">ステータス</label>
+                        <select class="form-select" v-model="selectedProject.status" @change="updateProjectStatus">
+                            <option value="draft">下書き</option>
+                            <option value="new">新規</option>
+                            <option value="in_progress">進行中</option>
+                            <option value="completed">完了</option>
+                            <option value="paused">一時停止</option>
+                        </select>
+                    </div>
+
+                    <!-- Project Members -->
+                    <div class="mb-3">
+                        <h6>メンバー</h6>
+                        <div class="list-group">
+                            <div v-for="member in projectMembers" :key="member.user_id" 
+                                    class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ member.realname }}</strong>
+                                    <small class="text-muted d-block">{{ member.role }}</small>
+                                </div>
+                                <button class="btn btn-sm btn-outline-danger" 
+                                        @click="removeMember(member.user_id)">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="input-group mt-2">
+                            <select class="form-select" v-model="newMemberId">
+                                <option value="">メンバーを選択...</option>
+                                <option v-for="user in availableUsers" :key="user.userid" :value="user.userid">
+                                    {{ user.realname }}
+                                </option>
+                            </select>
+                            <button class="btn btn-primary" @click="addMember">
+                                <i class="bi bi-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Project Tasks -->
+                    <div class="mb-3">
+                        <h6>タスク</h6>
+                        <div class="list-group">
+                            <div v-for="task in projectTasks" :key="task.id" 
+                                    class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ task.name }}</strong>
+                                        <small class="text-muted d-block">
+                                            担当者: {{ task.assignee_name || '未割り当て' }}
+                                        </small>
+                                    </div>
+                                    <span :class="'badge bg-' + getStatusColor(task.status)">
+                                        {{ getStatusText(task.status) }}
+                                    </span>
+                                </div>
+                                <div class="progress mt-2">
+                                    <div class="progress-bar" :style="{ width: task.progress + '%' }">
+                                        {{ task.progress }}%
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -87,13 +199,13 @@ $view->heading('プロジェクト管理');
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">開始日</label>
-                                        <input type="datetime-local" class="form-control" v-model="newProject.start_date">
+                                        <input type="date" class="form-control" v-model="newProject.start_date">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">終了日</label>
-                                        <input type="datetime-local" class="form-control" v-model="newProject.end_date">
+                                        <input type="date" class="form-control" v-model="newProject.end_date">
                                     </div>
                                 </div>
                             </div>
@@ -118,14 +230,6 @@ $view->heading('プロジェクト管理');
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">担当者</label>
-                                <select class="form-select" v-model="newProject.responsible_members" multiple>
-                                    <option v-for="user in users" :key="user.userid" :value="user.userid">
-                                        {{ user.realname }}
-                                    </option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
                                 <label class="form-label">メンバー</label>
                                 <select class="form-select" v-model="newProject.members" multiple>
                                     <option v-for="user in users" :key="user.userid" :value="user.userid">
@@ -144,12 +248,6 @@ $view->heading('プロジェクト管理');
         </div>
     </div>
 
-   
-
-<?php
-$view->footing();
-?>
-
     <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
@@ -159,6 +257,7 @@ $view->footing();
             data() {
                 return {
                     currentCategory: null,
+                    projects: [],
                     categories: [],
                     users: [],
                     selectedProject: null,
@@ -171,14 +270,12 @@ $view->footing();
                         end_date: '',
                         estimated_hours: 0,
                         status: 'new',
-                        members: [],
-                        responsible_members: []
+                        members: []
                     },
                     projectMembers: [],
                     projectTasks: [],
                     newMemberId: '',
-                    eventSource: null,
-                    dataTable: null
+                    eventSource: null
                 }
             },
             computed: {
@@ -189,6 +286,19 @@ $view->footing();
                 }
             },
             methods: {
+                async loadProjects() {
+                    try {
+                        let url = '/api/index.php?model=project&method=list';
+                        if (this.currentCategory) {
+                            url += '&category_id=' + this.currentCategory;
+                        }
+                        const response = await axios.get(url);
+                        this.projects = response.data;
+                    } catch (error) {
+                        console.error('Error loading projects:', error);
+                        alert('プロジェクトの読み込みに失敗しました。');
+                    }
+                },
                 async loadCategories() {
                     try {
                         const response = await axios.get('/api/index.php?model=category&method=list');
@@ -203,7 +313,6 @@ $view->footing();
                         console.error('Error loading categories:', error);
                     }
                 },
-                
                 async loadUsers() {
                     try {
                         const response = await axios.get('/api/index.php?model=user&method=getList');
@@ -234,7 +343,10 @@ $view->footing();
                         alert('プロジェクトの保存に失敗しました。');
                     }
                 },
-                
+                async viewProject(project) {
+                    this.selectedProject = project;
+                    await this.loadProjectDetails(project.id);
+                },
                 async loadProjectDetails(projectId) {
                     try {
                         const [membersResponse, tasksResponse] = await Promise.all([
@@ -354,122 +466,20 @@ $view->footing();
                         end_date: project.end_date,
                         estimated_hours: project.estimated_hours,
                         status: project.status,
-                        members: project.members || []
+                        members: project.members
                     };
-                    $('#newProjectModal').modal('show');
-                },
-
-                async loadProjects() {
-                    try {
-                        let url = '/api/index.php?model=project&method=list';
-                        if (this.currentCategory) {
-                            url += '&category_id=' + this.currentCategory;
-                        }
-                        const response = await axios.get(url);
-                        
-                        if (this.dataTable) {
-                            this.dataTable.destroy();
-                        }
-
-                        this.dataTable = new DataTable('.datatables-project', {
-                            data: response.data,
-                            columns: [
-                                { 
-                                    data: 'id',
-                                    visible: true
-                                },
-                                { 
-                                    data: 'name',
-                                    render: function(data, type, row) {
-                                        return `<a href="#" class="view-project">${data}</a>`;
-                                    }
-                                },
-                                { data: 'category_name' },
-                                { 
-                                    data: 'start_date',
-                                    render: function(data) {
-                                        return data ? new Date(data).toLocaleDateString('ja-JP') : '';
-                                    }
-                                },
-                                { 
-                                    data: 'end_date',
-                                    render: function(data) {
-                                        return data ? new Date(data).toLocaleDateString('ja-JP') : '';
-                                    }
-                                },
-                                { data: 'estimated_hours' },
-                                { 
-                                    data: 'status',
-                                    render: function(data) {
-                                        const colors = {
-                                            'draft': 'secondary',
-                                            'new': 'primary',
-                                            'in_progress': 'info',
-                                            'completed': 'success',
-                                            'paused': 'warning'
-                                        };
-                                        const texts = {
-                                            'draft': '下書き',
-                                            'new': '新規',
-                                            'in_progress': '進行中',
-                                            'completed': '完了',
-                                            'paused': '一時停止'
-                                        };
-                                        return `<span class="badge bg-${colors[data] || 'secondary'}">${texts[data] || data}</span>`;
-                                    }
-                                },
-                                {
-                                    data: null,
-                                    render: function(data) {
-                                        return `
-                                            <div class="btn-group btn-group-sm">
-                                                <button class="btn btn-outline-primary edit-project">
-                                                    <i class="ti tabler-pencil"></i>
-                                                </button>
-                                                <button class="btn btn-outline-danger delete-project">
-                                                    <i class="ti tabler-trash"></i>
-                                                </button>
-                                            </div>
-                                        `;
-                                    }
-                                }
-                            ],
-                            language: {
-                                url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/ja.json'
-                            },
-                            order: [[0, 'desc']],
-                            pageLength: 25,
-                            responsive: true
-                        });
-
-                        // Add event listeners after table is initialized
-                        // this.dataTable.on('click', '.view-project', (e) => {
-                        //     e.preventDefault();
-                        //     const data = this.dataTable.row(e.target.closest('tr')).data();
-                        //     this.viewProject(data);
-                        // });
-
-                        this.dataTable.on('click', '.edit-project', (e) => {
-                            const data = this.dataTable.row(e.target.closest('tr')).data();
-                            this.editProject(data);
-                        });
-
-                        this.dataTable.on('click', '.delete-project', (e) => {
-                            const data = this.dataTable.row(e.target.closest('tr')).data();
-                            this.deleteProject(data);
-                        });
-
-                    } catch (error) {
-                        console.error('Error loading projects:', error);
-                        // alert('プロジェクトの読み込みに失敗しました。');
-                    }
+                    this.showNewProjectModal = true;
                 }
             },
             mounted() {
+                this.loadProjects();
                 this.loadCategories();
-                //await this.loadProjects();
                 this.loadUsers();
                 //this.setupSSE();
             }
         }).mount('#app');
     </script>
+
+<?php
+$view->footing();
+?>

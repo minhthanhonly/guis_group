@@ -33,7 +33,7 @@
             </li>
 
             <!-- Layouts -->
-            <!-- <li class="menu-item <?php if($directory == 'project') echo 'active open'; ?>">
+            <li class="menu-item <?php if($directory == 'project') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base ti tabler-briefcase"></i>
                 <div>プロジェクト</div>
@@ -41,7 +41,7 @@
               <ul class="menu-sub">
                 <li class="menu-item <?php if($directory == 'project' && $page == 'index') echo 'active'; ?>">
                   <a href="<?=$root?>project/" class="menu-link" data-pjax>
-                    <div>一覧</div>
+                    <div>プロジェクト一覧</div>
                   </a>
                 </li>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'task') echo 'active'; ?>">
@@ -49,8 +49,13 @@
                     <div>マイタスク</div>
                   </a>
                 </li>
+                <li class="menu-item <?php if($directory == 'project' && $page == 'setting') echo 'active'; ?>">
+                  <a href="<?=$root?>project/setting.php" class="menu-link" data-pjax>
+                    <div>設定</div>
+                  </a>
+                </li>
               </ul>
-            </li> -->
+            </li>
 
             <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
               <a href="<?=$root?>schedule/" class="menu-link">
