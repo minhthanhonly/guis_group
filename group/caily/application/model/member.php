@@ -7,7 +7,7 @@ class Member extends ApplicationModel {
 		
 		$this->table = DB_PREFIX.'user';
 		$this->schema = array(
-		'userid'=>array('ユーザーID', 'notnull', 'userid', 'length:100', 'distinct'),
+		'userid'=>array('ユーザーID', 'notnull', 'userid', 'length:100', 'distinct', 'except'=>array('update')),
 		'user_group'=>array('except'=>array('search')),
 		'user_groupname'=>array('except'=>array('search')),
 		'lastname'=>array('姓', 'notnull', 'length:100'),
