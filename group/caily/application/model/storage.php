@@ -231,6 +231,7 @@ class Storage extends ApplicationModel {
 			$hash['folder'] = $this->permitFind('public', $data['storage_folder']);
 		}
 		if (stristr($data['storage_file'], $_REQUEST['file'])) {
+			
 			$this->attachment('storage', $data['owner'].'_'.strtotime($data['storage_date']), $_REQUEST['file'], 'attachment');
 		} else {
 			$this->died('ファイルが見つかりません。');

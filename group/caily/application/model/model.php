@@ -477,8 +477,8 @@ class Model extends Connection {
 	}
 	
 	function attachment($directory, $prefix, $filename, $type = '') {
-		
 		$file = DIR_UPLOAD.$directory.'/'.$prefix.'_'.$this->uploadencode($filename);
+		
 		if (file_exists($file)) {
 			$filing = new Filing;
 			if (preg_match('/.+\.(jpeg|jpg|gif|png)$/', $filename) && $type != 'attachment') {

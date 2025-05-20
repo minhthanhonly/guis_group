@@ -694,6 +694,7 @@ async function changeData() {
   displayHourglass();
   const slUser = document.getElementById('selectpickerUser');
   const monthInput = document.getElementById('timecard-month-input');
+  const exportButton = document.querySelector('[data-export-csv]');
 
   let user = USER_ID;
   if (slUser && slUser.value != '') {
@@ -703,6 +704,7 @@ async function changeData() {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
   const data = await get_timecard(user, year, month);
+  exportButton.href = `csv.php?member=${user}&year=${year}&month=${month}`;
   drawTable(data);
   hideHourglass();
 }
