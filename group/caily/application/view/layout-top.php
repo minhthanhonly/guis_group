@@ -40,7 +40,7 @@
               </a>
               <ul class="menu-sub">
                 <li class="menu-item <?php if($directory == 'project' && $page == 'index') echo 'active'; ?>">
-                  <a href="<?=$root?>project/" class="menu-link" data-pjax>
+                  <a href="<?=$root?>project/" class="menu-link">
                     <div>一覧</div>
                   </a>
                 </li>
