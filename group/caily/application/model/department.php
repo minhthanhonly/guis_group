@@ -1,8 +1,8 @@
 <?php
 
-class Category extends ApplicationModel {
+class Department extends ApplicationModel {
     function __construct() {
-        $this->table = DB_PREFIX . 'categories';
+        $this->table = DB_PREFIX . 'departments';
         $this->schema = array(
             'id' => array('except' => array('search')),
             'name' => array(),
@@ -16,7 +16,7 @@ class Category extends ApplicationModel {
     function list() {
         $query = sprintf(
             "SELECT c.*, 
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE category_id = c.id) as project_count
+            (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE department_id = c.id) as project_count
             FROM {$this->table} c
             ORDER BY c.name ASC"
         );
@@ -24,7 +24,6 @@ class Category extends ApplicationModel {
     }
 
     function add() {
-        print_r($_POST);
         $data = array(
             'name' => $_POST['name'],
             'description' => $_POST['description'],
@@ -48,13 +47,13 @@ class Category extends ApplicationModel {
         $id = $_GET['id'];
         // Check if category is in use
         $query = sprintf(
-            "SELECT COUNT(*) as count FROM " . DB_PREFIX . "projects WHERE category_id = %d",
+            "SELECT COUNT(*) as count FROM " . DB_PREFIX . "projects WHERE department_id = %d",
             intval($id)
         );
         $result = $this->fetchOne($query);
         
         if ($result['count'] > 0) {
-            throw new Exception('このカテゴリーは使用中のため削除できません。');
+            throw new Exception('この部署は使用中のため削除できません。');
         }
 
         $query = sprintf("DELETE FROM {$this->table} WHERE id = %d", intval($id));
@@ -65,7 +64,7 @@ class Category extends ApplicationModel {
         $id = $_GET['id'];
         $query = sprintf(
             "SELECT c.*, 
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE category_id = c.id) as project_count
+            (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE department_id = c.id) as project_count
             FROM {$this->table} c
             WHERE c.id = %d",
             intval($id)

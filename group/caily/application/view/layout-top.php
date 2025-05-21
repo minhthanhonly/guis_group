@@ -127,8 +127,8 @@
 
               <ul class="menu-sub">
                 <li class="menu-item <?php echo $active1; ?>">
-                  <a href="<?=$root?>setting/company.php" class="menu-link">
-                    <div>会社設定</div>
+                  <a href="<?=$root?>setting/branch.php" class="menu-link">
+                    <div>支社設定</div>
                   </a>
                 </li>
                 <li class="menu-item <?php echo $active2; ?>">
