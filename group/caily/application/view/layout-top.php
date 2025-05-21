@@ -64,107 +64,26 @@
               </a>
             </li>
             
-            
-
-            <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager'){ ?>
-            <li class="menu-item <?php if($directory == 'timecard') echo 'active open'; ?>">
-              <a href="javascript:void(0);" class="menu-link menu-toggle">
+           
+            <li class="menu-item <?php if($directory == 'timecard' && ($page == 'index' || $page == 'group')) echo 'active'; ?>">
+              <a href="<?=$root?>timecard/" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-clock"></i>
-                <div>勤怠管理</div>
+                <div data-i18n="タイムカード">タイムカード</div>
               </a>
-
-              <ul class="menu-sub">
-                <li class="menu-item <?php if($directory == 'timecard' && $page == 'index') echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/" class="menu-link">
-                    <div>タイムカード</div>
-                  </a>
-                </li>
-                <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager'){ ?>
-                <li class="menu-item <?php if($directory == 'timecard' && $page == 'group') echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/group.php" class="menu-link">
-                    <div>時間合計</div>
-                  </a>
-                </li>
-                <?php } ?>
-                <?php if($_SESSION['authority'] == 'administrator'){ ?>
-                <li class="menu-item <?php if($directory == 'timecard' && $page == 'holiday') echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/holiday.php" class="menu-link">
-                    <div>休日設定</div>
-                  </a>
-                </li>
-                <?php } ?>
-                <?php if($_SESSION['authority'] == 'administrator'){ ?>
-                <li class="menu-item <?php if($directory == 'timecard' && ($page == 'config' || $page == 'add_config')) echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/config.php" class="menu-link">
-                    <div>タイムカード設定</div>
-                  </a>
-                </li>
-                <?php } ?>
-              </ul>
             </li>
-            <li class="menu-item <?php if($directory == 'member' || $directory == 'administration') echo 'active open'; ?>">
-              <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base ti tabler-users"></i>
-                <div>メンバー</div>
-              </a>
-              <ul class="menu-sub">
-                <li class="menu-item <?php if($directory == 'member' && $page == 'index') echo 'active'; ?>">
-                  <a href="<?=$root?>member/" class="menu-link">
-                    <div>メンバー一覧</div>
-                  </a>
-                </li>
-                <?php if($_SESSION['authority'] == 'administrator'){ ?>
-                <li class="menu-item <?php if($directory == 'administration') echo 'active'; ?>">
-                  <a href="<?=$root?>group/" class="menu-link">
-                    <div>グループ設定</div>
-                  </a>
-                </li>
-                <?php } ?>
-              </ul>
-            </li>
-            <li class="menu-item <?php if($directory == 'addressbook' || $directory == 'folder') echo 'active open'; ?>">
-              <a href="javascript:void(0);" class="menu-link menu-toggle">
+            <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
+              <a href="<?=$root?>addressbook/" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-address-book"></i>
                 <div>アドレス帳</div>
               </a>
-              <ul class="menu-sub">
-                <li class="menu-item <?php if($directory == 'addressbook' && $page == 'index') echo 'active'; ?>">
-                  <a href="<?=$root?>addressbook/" class="menu-link">
-                    <div>アドレス帳</div>
-                  </a>
-                </li>
-                <li class="menu-item <?php if($directory == 'addressbook' && str_contains($page, 'category')) echo 'active'; ?>">
-                  <a href="<?=$root?>folder/category.php?type=addressbook" class="menu-link">
-                    <div>カテゴリ管理</div>
-                  </a>
-                </li>
-              </ul>
             </li>
 
-            <?php } ?>
-
-            <?php if($_SESSION['authority'] != 'administrator' && $_SESSION['authority'] != 'manager'){ 
-              // member menu
-              ?>
-              <li class="menu-item <?php if($directory == 'timecard') echo 'active'; ?>">
-                <a href="<?=$root?>timecard/" class="menu-link">
-                  <i class="menu-icon icon-base ti tabler-calendar"></i>
-                  <div data-i18n="タイムカード">タイムカード</div>
-                </a>
-              </li>
-              <li class="menu-item <?php if($directory == 'member') echo 'active'; ?>">
-                <a href="<?=$root?>member/" class="menu-link">
-                  <i class="menu-icon icon-base ti tabler-users"></i>
-                  <div data-i18n="メンバー一覧">メンバー一覧</div>
-                </a>
-              </li>
-              <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
-                <a href="<?=$root?>addressbook/" class="menu-link">
-                  <i class="menu-icon icon-base ti tabler-address-book"></i>
-                  <div>アドレス帳</div>
-                </a>
-              </li>
-            <?php } ?>
+            <li class="menu-item <?php if($directory == 'member') echo 'active'; ?>">
+              <a href="<?=$root?>member/" class="menu-link">
+                <i class="menu-icon icon-base ti tabler-users"></i>
+                <div data-i18n="ユーザー一覧">ユーザー一覧</div>
+              </a>
+            </li>
 
             <li class="menu-item <?php if($directory == 'storage') echo 'active open'; ?>">
               <a href="<?=$root?>storage/" class="menu-link">
@@ -179,22 +98,57 @@
               </a>
             </li>
 
-            <?php if($_SESSION['authority'] == 'administrator'){ ?>
-            <li class="menu-item <?php if($directory == 'setting') echo 'active open'; ?>">
+            <?php if($_SESSION['authority'] == 'administrator'){
+              $active = '';
+              if($directory == 'setting') {
+                $active = 'active open';
+                if($page == 'company') $active1 = 'active';
+                if($page == 'department') $active2 = 'active';
+              }
+              if($directory == 'administration'){
+                $active = 'active open';
+                $active3 = 'active';
+              }
+              if($directory == 'timecard' && $page == 'holiday'){
+                $active = 'active open';
+                $active4 = 'active';
+              }
+              if($directory == 'timecard' && ($page == 'config' || $page == 'add_config')){
+                $active = 'active open';
+                $active5 = 'active';
+              }
+
+              ?>
+            <li class="menu-item <?php echo $active; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base ti tabler-settings"></i>
-                <div>設定</div>
+                <div>共通設定</div>
               </a>
 
               <ul class="menu-sub">
-                <li class="menu-item <?php if($directory == 'setting' && $page == 'company') echo 'active'; ?>">
+                <li class="menu-item <?php echo $active1; ?>">
                   <a href="<?=$root?>setting/company.php" class="menu-link">
                     <div>会社設定</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'setting' && $page == 'department') echo 'active'; ?>">
+                <li class="menu-item <?php echo $active2; ?>">
                   <a href="<?=$root?>setting/department.php" class="menu-link">
                     <div>部署設定</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php echo $active3; ?>">
+                  <a href="<?=$root?>group/" class="menu-link">
+                    <div>グループ設定</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php echo $active4; ?>">
+                  <a href="<?=$root?>timecard/holiday.php" class="menu-link">
+                    <div>休日設定</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php echo $active5; ?>">
+                  <a href="<?=$root?>timecard/config.php" class="menu-link">
+                    <div>タイムカード設定</div>
                   </a>
                 </li>
               </ul>
