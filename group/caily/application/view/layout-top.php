@@ -102,7 +102,7 @@
               $active = '';
               if($directory == 'setting') {
                 $active = 'active open';
-                if($page == 'company') $active1 = 'active';
+                if($page == 'branch') $active1 = 'active';
                 if($page == 'department') $active2 = 'active';
               }
               if($directory == 'administration'){

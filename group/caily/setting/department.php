@@ -44,14 +44,16 @@ $view->heading('部署設定');
                             <thead>
                                 <tr>
                                     <th>部署名</th>
-                                    <th class="d-none">説明</th>
+                                    <th>従業員数</th>
+                                    <th>案件数</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr v-for="department in departments" :key="department.id">
                                     <td>{{ department.name }}</td>
-                                    <td class="d-none">{{ department.description }}</td>
+                                    <td>{{ department.num_employees }}</td>
+                                    <td>{{ department.project_count }}</td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#departmentModal" @click="editDepartment(department)">

@@ -44,6 +44,7 @@ $view->heading('支社設定');
                             <thead>
                                 <tr>
                                     <th>支社名</th>
+                                    <th>タイプ</th>
                                     <th>従業員数</th>
                                     <th>操作</th>
                                 </tr>
@@ -51,6 +52,7 @@ $view->heading('支社設定');
                             <tbody>
                                 <tr v-for="branch in branches" :key="branch.id">
                                     <td>{{ branch.name }}</td>
+                                    <td>{{ branch.type == 1 ? '本社' : '支社' }}</td>
                                     <td>{{ branch.num_employees }}</td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
@@ -84,13 +86,13 @@ $view->heading('支社設定');
                                 <label class="form-label">支社名</label>
                                 <input type="text" class="form-control" v-model="newBranch.name" required>
                             </div>  
-                            <div class="mb-3 d-none">
+                            <div class="mb-3">
                                 <label class="form-label">支社名(ふりがな)</label>
                                 <input type="text" class="form-control" v-model="newBranch.name_kana" required>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">タイプ</label>
-                                <select class="form-control" v-model="newBranch.type" required>
+                                <select class="form-select" v-model="newBranch.type" required>
                                     <option value="1">本社</option>
                                     <option value="2">支社</option>
                                 </select>

@@ -16,7 +16,8 @@ class Department extends ApplicationModel {
     function list() {
         $query = sprintf(
             "SELECT c.*, 
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE department_id = c.id) as project_count
+            (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE department_id = c.id) as project_count,
+            (SELECT COUNT(*) FROM " . DB_PREFIX . "user_department WHERE department_id = c.id) as num_employees
             FROM {$this->table} c
             ORDER BY c.name ASC"
         );
