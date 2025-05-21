@@ -219,7 +219,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             if(comment) {
                 // Replace newline characters with <br> for HTML line breaks
                 const formattedComment = comment.replace(/\n/g, '<br>');
-                console.log('Formatted Comment:', formattedComment);
                 eventEl.setAttribute('data-bs-toggle', 'tooltip');
                 eventEl.setAttribute('data-bs-placement', 'top');
                 eventEl.setAttribute('data-bs-custom-class', 'tooltip-dark');
@@ -229,13 +228,15 @@ document.addEventListener('DOMContentLoaded', async function () {
 
                 // Hide other tooltips when this one is shown
                 eventEl.addEventListener('show.bs.tooltip', function () {
-                    const tooltipElements = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-                    tooltipElements.forEach(el => {
-                        if (el !== eventEl) {
-                            const otherTooltipInstance = bootstrap.Tooltip.getInstance(el);
-                            if (otherTooltipInstance) {
-                                otherTooltipInstance.hide();
-                            }
+                    // Remove all .tooltip elements except this tooltip
+                    document.querySelectorAll('.tooltip').forEach(function(tooltipEl) {
+                        // Find the tooltip instance for this event element
+                        const thisTooltip = bootstrap.Tooltip.getInstance(eventEl);
+                        // The tooltip element for this event
+                        const thisTooltipEl = thisTooltip && thisTooltip._element ? thisTooltip._element : eventEl;
+                        // If this .tooltip is not the one for this event, remove it
+                        if (!eventEl.contains(tooltipEl) && tooltipEl !== thisTooltipEl) {
+                            tooltipEl.parentNode && tooltipEl.parentNode.removeChild(tooltipEl);
                         }
                     });
                 });
