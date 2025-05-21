@@ -30,7 +30,7 @@ $view->heading('プロジェクト管理');
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2>プロジェクト一覧</h2>
                         <button class="btn btn-primary" @click="showNewProjectModal = true" data-bs-toggle="modal" data-bs-target="#newProjectModal">
-                            <i class="bi bi-plus"></i> 新規プロジェクト
+                            <i class="bi bi-plus"></i> <span>新規プロジェクト</span>
                         </button>
                     </div>
 
@@ -59,79 +59,191 @@ $view->heading('プロジェクト管理');
 
         <!-- New Project Modal -->
         <div class="modal fade" id="newProjectModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">新規プロジェクト</h5>
+                        <h5 class="modal-title"><span v-if="!isEdit">新規プロジェクト</span><span v-if="isEdit">プロジェクト編集</span></h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
                         <form @submit.prevent="saveProject">
                             <div class="mb-3">
-                                <label class="form-label">プロジェクト名</label>
+                                <label class="form-label">お施主様名</label>
                                 <input type="text" class="form-control" v-model="newProject.name" required>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">説明</label>
-                                <textarea class="form-control" v-model="newProject.description" rows="3"></textarea>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">会社名</label>
+                                        <input type="text" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">支店名</label>
+                                        <input type="text" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">担当者名</label>
+                                        <input type="text" class="form-control">
+                                    </div>
+                                </div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">カテゴリー</label>
-                                <select class="form-select" v-model="newProject.category_id" required readonly>
-                                    <option v-for="category in categories" :key="category.id" :value="category.id">
-                                        {{ category.name }}
-                                    </option>
-                                </select>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">建物規模</label>
+                                        <input type="text" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">建物種類</label>
+                                        <input type="text" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">案件番号</label>
+                                        <input type="text" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">連絡番号</label>
+                                        <input type="text" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">受注形態</label>
+                                        <select class="form-select" required>
+                                            <option value="新規">新規</option>
+                                            <option value="修正">修正</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">カテゴリー</label>
+                                        <select class="form-select" v-model="newProject.category_id" required readonly disabled>
+                                            <option v-for="category in categories" :key="category.id" :value="category.id">
+                                                {{ category.name }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">開始日</label>
-                                        <input type="datetime-local" class="form-control" v-model="newProject.start_date">
+                                        <input type="text" class="form-control" v-model="newProject.start_date">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">終了日</label>
-                                        <input type="datetime-local" class="form-control" v-model="newProject.end_date">
+                                        <input type="text" class="form-control" v-model="newProject.end_date">
                                     </div>
                                 </div>
                             </div>
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label">見積時間</label>
-                                        <input type="number" class="form-control" v-model="newProject.estimated_hours" min="0" step="0.5">
+                                        <label class="form-label">GUIS担当者</label>
+                                        <select class="form-select" v-model="newProject.members" multiple>
+                                            <option v-for="user in users" :key="user.userid" :value="user.userid">
+                                                {{ user.realname }}
+                                            </option>
+                                        </select>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label">ステータス</label>
-                                        <select class="form-select" v-model="newProject.status" required>
-                                            <option value="draft">下書き</option>
-                                            <option value="new">新規</option>
-                                            <option value="in_progress">進行中</option>
-                                            <option value="completed">完了</option>
-                                            <option value="paused">一時停止</option>
+                                        <label class="form-label">メンバー</label>
+                                        <select class="form-select" v-model="newProject.members" multiple>
+                                            <option v-for="user in users" :key="user.userid" :value="user.userid">
+                                                {{ user.realname }}
+                                            </option>
                                         </select>
                                     </div>
                                 </div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">担当者</label>
-                                <select class="form-select" v-model="newProject.responsible_members" multiple>
-                                    <option v-for="user in users" :key="user.userid" :value="user.userid">
-                                        {{ user.realname }}
-                                    </option>
-                                </select>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">案件状況</label>
+                                        <select class="form-select" v-model="newProject.status" required>
+                                            <option value="draft">下書き</option>
+                                            <option value="new">新規</option>
+                                            <!-- <option value="in_progress">進行中</option>
+                                            <option value="completed">完了</option>
+                                            <option value="paused">一時停止</option>
+                                            <option value="stop">停止</option> -->
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">優先度</label>
+                                        <select class="form-select" required>
+                                            <option value="1">低</option>
+                                            <option value="2">中</option>
+                                            <option value="3">高</option>
+                                            <option value="4">緊急</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <!-- <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">受注状況</label>
+                                        <select class="form-select" required>
+                                            <option value=""></option>
+                                            <option value="">見積まだ</option>
+                                            <option value="">見積送付済み</option>
+                                            <option value="">注文</option>
+                                            <option value="">請求書送付済み</option>
+                                            <option value="">支払済み</option>
+                                        </select>
+                                    </div>
+                                </div> -->
                             </div>
+                            <!-- <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">実納品日</label>
+                                        <input type="text" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">請求書送付日</label>
+                                        <input type="text" class="form-control">
+                                    </div>
+                                </div>
+                            </div> -->
+                            <!-- <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">金額</label>
+                                        <input type="text" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">予定時間</label>
+                                        <input type="text" class="form-control">
+                                    </div>
+                                </div>
+                            </div> -->
                             <div class="mb-3">
-                                <label class="form-label">メンバー</label>
-                                <select class="form-select" v-model="newProject.members" multiple>
-                                    <option v-for="user in users" :key="user.userid" :value="user.userid">
-                                        {{ user.realname }}
-                                    </option>
-                                </select>
+                                <label class="form-label">メモ</label>
+                                <textarea class="form-control" v-model="newProject.description" rows="3"></textarea>
                             </div>
                         </form>
                     </div>
@@ -158,6 +270,7 @@ $view->footing();
         createApp({
             data() {
                 return {
+                    isEdit: false,
                     currentCategory: null,
                     categories: [],
                     users: [],
@@ -172,7 +285,6 @@ $view->footing();
                         estimated_hours: 0,
                         status: 'new',
                         members: [],
-                        responsible_members: []
                     },
                     projectMembers: [],
                     projectTasks: [],
@@ -356,6 +468,7 @@ $view->footing();
                         status: project.status,
                         members: project.members || []
                     };
+                    this.isEdit = true;
                     $('#newProjectModal').modal('show');
                 },
 
@@ -435,19 +548,13 @@ $view->footing();
                                 }
                             ],
                             language: {
-                                url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/ja.json'
+                                url: '/assets/vendor/libs/datatables-bs5/ja.json'
                             },
                             order: [[0, 'desc']],
                             pageLength: 25,
                             responsive: true
                         });
 
-                        // Add event listeners after table is initialized
-                        // this.dataTable.on('click', '.view-project', (e) => {
-                        //     e.preventDefault();
-                        //     const data = this.dataTable.row(e.target.closest('tr')).data();
-                        //     this.viewProject(data);
-                        // });
 
                         this.dataTable.on('click', '.edit-project', (e) => {
                             const data = this.dataTable.row(e.target.closest('tr')).data();
