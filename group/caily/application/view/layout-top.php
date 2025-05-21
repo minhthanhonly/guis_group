@@ -41,11 +41,11 @@
               <ul class="menu-sub">
                 <li class="menu-item <?php if($directory == 'project' && $page == 'index') echo 'active'; ?>">
                   <a href="<?=$root?>project/" class="menu-link" data-pjax>
-                    <div>プロジェクト一覧</div>
+                    <div>一覧</div>
                   </a>
                 </li>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'task') echo 'active'; ?>">
-                  <a href="<?=$root?>project/task.php" class="menu-link" data-pjax>
+                  <a href="<?=$root?>project/task.php" class="menu-link">
                     <div>マイタスク</div>
                   </a>
                 </li>
@@ -75,27 +75,27 @@
 
               <ul class="menu-sub">
                 <li class="menu-item <?php if($directory == 'timecard' && $page == 'index') echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/" class="menu-link" data-pjax>
+                  <a href="<?=$root?>timecard/" class="menu-link">
                     <div>タイムカード</div>
                   </a>
                 </li>
                 <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager'){ ?>
                 <li class="menu-item <?php if($directory == 'timecard' && $page == 'group') echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/group.php" class="menu-link" data-pjax>
+                  <a href="<?=$root?>timecard/group.php" class="menu-link">
                     <div>時間合計</div>
                   </a>
                 </li>
                 <?php } ?>
                 <?php if($_SESSION['authority'] == 'administrator'){ ?>
                 <li class="menu-item <?php if($directory == 'timecard' && $page == 'holiday') echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/holiday.php" class="menu-link" data-pjax>
+                  <a href="<?=$root?>timecard/holiday.php" class="menu-link">
                     <div>休日設定</div>
                   </a>
                 </li>
                 <?php } ?>
                 <?php if($_SESSION['authority'] == 'administrator'){ ?>
                 <li class="menu-item <?php if($directory == 'timecard' && ($page == 'config' || $page == 'add_config')) echo 'active'; ?>">
-                  <a href="<?=$root?>timecard/config.php" class="menu-link" data-pjax>
+                  <a href="<?=$root?>timecard/config.php" class="menu-link">
                     <div>タイムカード設定</div>
                   </a>
                 </li>
@@ -109,13 +109,13 @@
               </a>
               <ul class="menu-sub">
                 <li class="menu-item <?php if($directory == 'member' && $page == 'index') echo 'active'; ?>">
-                  <a href="<?=$root?>member/" class="menu-link" data-pjax>
+                  <a href="<?=$root?>member/" class="menu-link">
                     <div>メンバー一覧</div>
                   </a>
                 </li>
                 <?php if($_SESSION['authority'] == 'administrator'){ ?>
                 <li class="menu-item <?php if($directory == 'administration') echo 'active'; ?>">
-                  <a href="<?=$root?>group/" class="menu-link" data-pjax>
+                  <a href="<?=$root?>group/" class="menu-link">
                     <div>グループ設定</div>
                   </a>
                 </li>
@@ -129,12 +129,12 @@
               </a>
               <ul class="menu-sub">
                 <li class="menu-item <?php if($directory == 'addressbook' && $page == 'index') echo 'active'; ?>">
-                  <a href="<?=$root?>addressbook/" class="menu-link" data-pjax>
+                  <a href="<?=$root?>addressbook/" class="menu-link">
                     <div>アドレス帳</div>
                   </a>
                 </li>
                 <li class="menu-item <?php if($directory == 'addressbook' && str_contains($page, 'category')) echo 'active'; ?>">
-                  <a href="<?=$root?>folder/category.php?type=addressbook" class="menu-link" data-pjax>
+                  <a href="<?=$root?>folder/category.php?type=addressbook" class="menu-link">
                     <div>カテゴリ管理</div>
                   </a>
                 </li>
@@ -178,6 +178,28 @@
                 <div>お知らせ</div>
               </a>
             </li>
+
+            <?php if($_SESSION['authority'] == 'administrator'){ ?>
+            <li class="menu-item <?php if($directory == 'setting') echo 'active open'; ?>">
+              <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base ti tabler-settings"></i>
+                <div>設定</div>
+              </a>
+
+              <ul class="menu-sub">
+                <li class="menu-item <?php if($directory == 'setting' && $page == 'company') echo 'active'; ?>">
+                  <a href="<?=$root?>setting/company.php" class="menu-link">
+                    <div>会社設定</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php if($directory == 'setting' && $page == 'department') echo 'active'; ?>">
+                  <a href="<?=$root?>setting/department.php" class="menu-link">
+                    <div>部署設定</div>
+                  </a>
+                </li>
+              </ul>
+            </li>
+            <?php } ?>
 
             
           </ul>
