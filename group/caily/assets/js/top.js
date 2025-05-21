@@ -213,10 +213,57 @@ document.addEventListener('DOMContentLoaded', async function () {
                     }
                 }
             }
+            // Add Bootstrap tooltip for event comment
+            const eventEl = info.el;
+            const comment = info.event.extendedProps.comment || '';
+            if(comment) {
+                // Replace newline characters with <br> for HTML line breaks
+                const formattedComment = comment.replace(/\n/g, '<br>');
+                console.log('Formatted Comment:', formattedComment);
+                eventEl.setAttribute('data-bs-toggle', 'tooltip');
+                eventEl.setAttribute('data-bs-placement', 'top');
+                eventEl.setAttribute('data-bs-custom-class', 'tooltip-dark');
+                eventEl.setAttribute('title', formattedComment);
+                // Initialize new tooltip
+                const tooltipInstance = new bootstrap.Tooltip(eventEl, { html: true });
+
+                // Hide other tooltips when this one is shown
+                eventEl.addEventListener('show.bs.tooltip', function () {
+                    const tooltipElements = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+                    tooltipElements.forEach(el => {
+                        if (el !== eventEl) {
+                            const otherTooltipInstance = bootstrap.Tooltip.getInstance(el);
+                            if (otherTooltipInstance) {
+                                otherTooltipInstance.hide();
+                            }
+                        }
+                    });
+                });
+            }
         },
         viewDidMount: function () {
             modifySchedulePageButton();
           },
+        eventContent: function(arg) {
+            // Create a container for the event content
+            let contentEl = document.createElement('div');
+            
+            // Add the event title
+            let titleEl = document.createElement('div');
+            titleEl.innerHTML = arg.event.title;
+            contentEl.appendChild(titleEl);
+
+            // Add the truncated comment
+            let comment = arg.event.extendedProps.comment || '';
+            if (comment.length > 20) {
+                comment = comment.substring(0, 20) + '...';
+            }
+            let commentEl = document.createElement('div');
+            commentEl.innerHTML = `<small>${comment}</small>`;
+            contentEl.appendChild(commentEl);
+
+            return { domNodes: [contentEl] };
+        },
       });
   
   

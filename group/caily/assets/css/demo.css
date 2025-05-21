@@ -394,4 +394,7 @@ li.storageprevious {
 	display: none;
 }
 
-
+.tooltip-inner{
+	text-align: left !important;
+	max-width: 400px !important;
+}
