@@ -37,6 +37,8 @@ class ApplicationModel extends Model {
 		if($data['is_suspend'] == 1) {
 			$authority = new Authority;
 			$authority->sessionDestroy();
+			//clear cookie
+			setcookie('remember_me', '', time() - 3600, '/');
 			$this->died('アカウントが無効化されています。');
 		}
 	}

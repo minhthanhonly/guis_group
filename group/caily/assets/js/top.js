@@ -213,10 +213,58 @@ document.addEventListener('DOMContentLoaded', async function () {
                     }
                 }
             }
+            // Add Bootstrap tooltip for event comment
+            const eventEl = info.el;
+            const comment = info.event.extendedProps.comment || '';
+            if(comment) {
+                // Replace newline characters with <br> for HTML line breaks
+                const formattedComment = comment.replace(/\n/g, '<br>');
+                eventEl.setAttribute('data-bs-toggle', 'tooltip');
+                eventEl.setAttribute('data-bs-placement', 'top');
+                eventEl.setAttribute('data-bs-custom-class', 'tooltip-dark');
+                eventEl.setAttribute('title', formattedComment);
+                // Initialize new tooltip
+                const tooltipInstance = new bootstrap.Tooltip(eventEl, { html: true });
+
+                // Hide other tooltips when this one is shown
+                eventEl.addEventListener('show.bs.tooltip', function () {
+                    // Remove all .tooltip elements except this tooltip
+                    document.querySelectorAll('.tooltip').forEach(function(tooltipEl) {
+                        // Find the tooltip instance for this event element
+                        const thisTooltip = bootstrap.Tooltip.getInstance(eventEl);
+                        // The tooltip element for this event
+                        const thisTooltipEl = thisTooltip && thisTooltip._element ? thisTooltip._element : eventEl;
+                        // If this .tooltip is not the one for this event, remove it
+                        if (!eventEl.contains(tooltipEl) && tooltipEl !== thisTooltipEl) {
+                            tooltipEl.parentNode && tooltipEl.parentNode.removeChild(tooltipEl);
+                        }
+                    });
+                });
+            }
         },
         viewDidMount: function () {
             modifySchedulePageButton();
           },
+        eventContent: function(arg) {
+            // Create a container for the event content
+            let contentEl = document.createElement('div');
+            
+            // Add the event title
+            let titleEl = document.createElement('div');
+            titleEl.innerHTML = arg.event.title;
+            contentEl.appendChild(titleEl);
+
+            // Add the truncated comment
+            let comment = arg.event.extendedProps.comment || '';
+            if (comment.length > 20) {
+                comment = comment.substring(0, 20) + '...';
+            }
+            let commentEl = document.createElement('div');
+            commentEl.innerHTML = `<small>${comment}</small>`;
+            contentEl.appendChild(commentEl);
+
+            return { domNodes: [contentEl] };
+        },
       });
   
   

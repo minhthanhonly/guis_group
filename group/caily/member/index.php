@@ -144,7 +144,7 @@ $view->heading('メンバー一覧');
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="edit-user-userName">ユーザー名</label>
-              <input type="text" class="form-control" id="edit-user-userName" placeholder="" name="userid"/>
+              <input type="text" class="form-control" id="edit-user-userName" placeholder="" name="userid" readonly/>
             </div>
           </div>
           <div class="form-group row">

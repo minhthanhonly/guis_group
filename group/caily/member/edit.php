@@ -122,7 +122,7 @@ $view->heading('個人設定');
 										value="<?=$hash['data']['user_addressruby']?>" placeholder="">
 								</div>
 								<div class="col-md-6">
-									<label for="user_skype" class="form-label">スカイプID</label>
+									<label for="user_skype" class="form-label">Teams ID</label>
 									<input type="text" class="form-control" id="user_skype" name="user_skype" placeholder=""
 										value="<?=$hash['data']['user_skype']?>">
 								</div>

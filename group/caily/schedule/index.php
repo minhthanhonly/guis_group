@@ -128,7 +128,7 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
               </div>
               <div class="mb-5">
                 <label class="form-label" for="eventComment">コメント</label>
-                <textarea class="form-control" name="eventComment" id="eventComment"></textarea>
+                <textarea class="form-control" name="eventComment" id="eventComment" rows="7"></textarea>
               </div>
               <div class="d-flex justify-content-sm-between justify-content-start mt-6 gap-2" id="eventBtn">
                 <div class="d-flex">

@@ -109,7 +109,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
 	</div>
  <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') { ?>
   <div class="row g-6 mt-1">
-    <div class="col-md-6 col-lg-6 col-xl-6">
+    <div class="col-md-12 col-lg-12 col-xl-6">
       <div class="card">
         <div class="card-header d-flex justify-content-between">
           <h5 class="card-title mb-0">勤怠統計</h5>

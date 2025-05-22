@@ -1224,7 +1224,7 @@ class Timecard extends ApplicationModel {
 		/*1月対応*/
 		$mt = $_GET['month'];
 		$yr = $_GET['year'];
-	
+		$member = isset($_GET['member']) ? $_GET['member'] : $_SESSION['userid'];
 		$start = DateTime::createFromFormat('Y-m-d', "$yr-$mt-" . TIMECARD_START_DATE);
 		if(TIMECARD_START_DATE != 1){
 			$start->modify('-1 month');
@@ -1243,7 +1243,7 @@ class Timecard extends ApplicationModel {
 			$this->table,
 			$start->format('Y-m-d'), // Định dạng ngày bắt đầu
 			$end->format('Y-m-d'),
-			$_SESSION['userid']
+			$member
 		);
 		
 		$list = $this->fetchAll($query);
@@ -1301,8 +1301,8 @@ class Timecard extends ApplicationModel {
 			$csv .= '"時間外合計","'.sprintf('%d:%02d', (($sum_over - ($sum_over % 60)) / 60), ($sum_over % 60)).'"'."\n";
 			$csv .= '"休日出勤合計","'.sprintf('%d:%02d', (($sum_holiday - ($sum_holiday % 60)) / 60), ($sum_holiday % 60)).'"'."\n";
 
-			header('Content-Disposition: attachment; filename=timecard'.date('Ymd').'.csv');
-			header('Content-Type: application/octet-stream; name=timecard'.date('Ymd').'.csv');
+			header('Content-Disposition: attachment; filename='.$member.'_timecard'.date('Ymd').'.csv');
+			header('Content-Type: application/octet-stream; name='.$member.'_timecard'.date('Ymd').'.csv');
 			echo mb_convert_encoding($csv, 'SJIS', 'UTF-8');
 			exit();
 		} else {
