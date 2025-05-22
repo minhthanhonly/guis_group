@@ -29,7 +29,9 @@ class Member extends ApplicationModel {
 		'edit_user'=>array('except'=>array('search')),
 		'member_type'=>array('従業員の種類', 'length:100'),
 		'is_suspend'=>array('ステータス', 'numeric', 'length:1','except'=>array('search', 'update')),
-	);
+		'position'=>array('役職', 'length:100'),
+		'branch_id'=>array('支店', 'numeric', 'length:10'),
+		);
 		
 	}
 	
@@ -138,7 +140,7 @@ class Member extends ApplicationModel {
 
 	function get_member() {
 		$config = new Config($this->handler);
-		$query = "SELECT groupware_user.id as `id`, `userid`, `password`, `password_default`, `realname`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend` , groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
+		$query = "SELECT groupware_user.id as `id`, `userid`, `realname`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend`, branch_id , groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
 		$hash['list'] = $this->fetchAll($query);
 		$hash['group'] = $this->findGroup();
 
@@ -154,6 +156,7 @@ class Member extends ApplicationModel {
 			} else{
 				$hash['list'][$key]["member_type_name"] = $arr_config[$value["member_type"]];
 			}
+			$hash['list'][$key]["department_id"] = $this->getDepartment($value["userid"]);
 		}
 		return $hash;
 	
@@ -173,6 +176,9 @@ class Member extends ApplicationModel {
 				$this->post['realname'] .= ' '.$this->post['firstname'];
 			}
 			$this->insertPost();
+			if($_POST['department_id']){
+				$this->updateDepartment($_POST['userid'], $_POST['department_id']);
+			}
 		}
 		if(count($this->error) > 0){
 			$hash['status'] = 'error';
@@ -198,6 +204,10 @@ class Member extends ApplicationModel {
 				$this->post['realname'] .= ' '.$this->post['firstname'];
 			}
 			$this->updatePost();
+
+			if($_POST['department_id']){
+				$this->updateDepartment($_POST['userid'], $_POST['department_id']);
+			}
 		}
 		if(count($this->error) > 0){
 			$hash['status'] = 'error';
@@ -210,6 +220,14 @@ class Member extends ApplicationModel {
 		return $hash;
 	}
 
+	function updateDepartment($user_id, $department_ids){
+		$query = sprintf("DELETE FROM groupware_user_department WHERE userid = '%s'", $user_id);
+		$this->query($query);
+		foreach($department_ids as $department_id){
+			$query = sprintf("INSERT INTO groupware_user_department (userid, department_id) VALUES ('%s', '%s')", $user_id, $department_id);
+			$this->query($query);
+		}
+	}
 
 
 	/*API*/
@@ -363,6 +381,8 @@ class Member extends ApplicationModel {
 		}
 		$hash['data'] = $this->permitFindApi('edit');
 		$hash += $this->findUser($hash['data']);
+
+		$hash['data']['department_id'] = $this->getDepartment($hash['data']['userid']);
 		if(count($this->error) > 0){
 			$hash['status'] = 'error';
 			$hash['message_code'] = '12';
@@ -372,6 +392,16 @@ class Member extends ApplicationModel {
 		$hash['error'] = $this->error;
 		$hash['status'] = 'success';
 		return $hash;
+	}
+
+	function getDepartment($userid){
+		$query = sprintf("SELECT department_id FROM groupware_user_department WHERE userid = '%s'", $userid);
+		$result = $this->fetchAll($query);
+		$department_ids = array();
+		foreach($result as $row){
+			$department_ids[] = $row['department_id'];
+		}
+		return $department_ids;
 	}
 
 	/*API*/

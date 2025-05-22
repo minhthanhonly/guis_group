@@ -880,3 +880,18 @@ function appParse($level, $type, $data, $element) {
   var $selected = $element.querySelector(`.selected_items`);
   $selected.innerHTML = $string;
 }
+
+
+$(function() {
+  var select2 = $('.select2');
+  if (select2.length) {
+    select2.each(function() {
+      var $this = $(this);
+      $this.wrap('<div class="position-relative"></div>').select2({
+        placeholder: '選択してください',
+        dropdownParent: $this.parent(),
+        minimumResultsForSearch: Infinity,
+      });
+    });
+  }
+});

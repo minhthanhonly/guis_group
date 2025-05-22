@@ -7,6 +7,7 @@ class Department extends ApplicationModel {
             'id' => array('except' => array('search')),
             'name' => array(),
             'description' => array(),
+            'can_project' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search'))
         );
@@ -28,6 +29,7 @@ class Department extends ApplicationModel {
         $data = array(
             'name' => $_POST['name'],
             'description' => $_POST['description'],
+            'can_project' => $_POST['can_project'],
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
@@ -39,6 +41,7 @@ class Department extends ApplicationModel {
         $data = array(
             'name' => $_POST['name'],
             'description' => $_POST['description'],
+            'can_project' => $_POST['can_project'],
             'updated_at' => date('Y-m-d H:i:s')
         );
         return $this->query_update($data, ['id' => $id]);

@@ -93,8 +93,12 @@ $view->heading('メンバー一覧');
           </div>
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
-              <label class="form-label" for="user-role">制限</label>
-              <select id="user-role" class="form-select" name="authority">
+              <label class="form-label" for="add-user-position">役職</label>
+              <input type="text" class="form-control" id="add-user-position" placeholder="" name="position"/>
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-role">制限</label>
+              <select id="add-user-role" class="form-select select2" name="authority">
                 <option value="">選択してください</option>
                 <option value="administrator">administrator</option>
                 <option value="manager">manager</option>
@@ -106,14 +110,27 @@ $view->heading('メンバー一覧');
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="add-user-group">グループ</label>
-              <select id="add-user-group" class="form-select" name="user_group">
-                <option value="">選択してください</option>
+              <select id="add-user-group" class="form-select select2" name="user_group">
+              <option value="">選択してください</option>
               </select>
             </div>
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="add-user-type">従業員の種類</label>
-              <select id="add-user-type" class="form-select" name="member_type">
-                <option value="">選択してください</option>
+              <select id="add-user-type" class="form-select select2" name="member_type">
+              <option value="">選択してください</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-branch">支店</label>
+              <select id="add-user-branch" class="form-select select2" name="branch_id">
+              <option value="">選択してください</option>
+              </select>
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-department">部署</label>
+              <select id="add-user-department" class="form-select select2" name="department_id[]" multiple>
               </select>
             </div>
           </div>
@@ -169,8 +186,12 @@ $view->heading('メンバー一覧');
           </div>
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
-              <label class="form-label" for="user-role">制限</label>
-              <select id="edit-user-role" class="form-select" name="authority">
+              <label class="form-label" for="edit-user-position">役職</label>
+              <input type="text" class="form-control" id="edit-user-position" placeholder="" name="position"/>
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-role">制限</label>
+              <select id="edit-user-role" class="form-select select2" name="authority">
                 <option value="">選択してください</option>
                 <option value="administrator">administrator</option>
                 <option value="manager">manager</option>
@@ -182,14 +203,27 @@ $view->heading('メンバー一覧');
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="edit-user-group">グループ</label>
-              <select id="edit-user-group" class="form-select" name="user_group">
+              <select id="edit-user-group" class="form-select select2" name="user_group">
                 <option value="">選択してください</option>
               </select>
             </div>
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="edit-user-type">従業員の種類</label>
-              <select id="edit-user-type" class="form-select" name="member_type">
+              <select id="edit-user-type" class="form-select select2" name="member_type">
                 <option value="">選択してください</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-branch">支店</label>
+              <select id="edit-user-branch" class="form-select select2" name="branch_id">
+                <option value="">選択してください</option>
+              </select>
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-department">部署</label>
+              <select id="edit-user-department" class="form-select select2" name="department_id[]" multiple>
               </select>
             </div>
           </div>

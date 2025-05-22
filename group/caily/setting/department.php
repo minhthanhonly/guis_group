@@ -46,6 +46,7 @@ $view->heading('部署設定');
                                     <th>部署名</th>
                                     <th>従業員数</th>
                                     <th>案件数</th>
+                                    <th>案件一覧</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
@@ -54,6 +55,7 @@ $view->heading('部署設定');
                                     <td>{{ department.name }}</td>
                                     <td>{{ department.num_employees }}</td>
                                     <td>{{ department.project_count }}</td>
+                                    <td>{{ department.can_project == 1 ? '有効' : '無効' }}</td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#departmentModal" @click="editDepartment(department)">
@@ -85,6 +87,13 @@ $view->heading('部署設定');
                             <div class="mb-3">
                                 <label class="form-label">部署名</label>
                                 <input type="text" class="form-control" v-model="newDepartment.name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">案件一覧</label>
+                                <select class="form-control" v-model="newDepartment.can_project">
+                                    <option value="1">有効</option>
+                                    <option value="0">無効</option>
+                                </select>
                             </div>
                             <div class="mb-3 d-none">
                                 <label class="form-label">説明</label>
@@ -119,6 +128,7 @@ $view->footing();
                     editingDepartment: null,
                     newDepartment: {
                         name: '',
+                        can_project: 1,
                         description: ''
                     }
                 }
@@ -172,8 +182,7 @@ $view->footing();
                             });
                         }
                         this.showNewDepartmentModal = false;
-                        this.editingDepartment = null;
-                        this.newDepartment = { name: '', description: '' };
+                        this.resetDepartmentData();
                         $('#departmentModal').modal('hide');
                         showMessage('部署を保存しました。');
                         this.loadDepartments();
@@ -184,7 +193,7 @@ $view->footing();
                 },
                 resetDepartmentData() {
                     this.editingDepartment = null;
-                    this.newDepartment = { name: '', description: '' };
+                    this.newDepartment = { name: '', description: '', can_project: 1 };
                 }
             },
             mounted() {

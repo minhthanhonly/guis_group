@@ -7,6 +7,8 @@ var memberList = [];
 var dt_user = null;
 var groupList = [];
 var configList = [];
+var branchList = [];
+var departmentList = [];
 var user_role = 'member';
 if (typeof USER_ROLE !== 'undefined') {
   user_role = USER_ROLE;
@@ -28,6 +30,30 @@ async function get_member() {
     return memberList;
 }
 
+async function loadBranches() {
+  branchList = [];
+  try {
+      const response = await axios.get('/api/index.php?model=branch&method=list');
+      branchList = response.data;
+  } catch (error) {
+      console.error('Error loading branches:', error);
+      showMessage('支社の読み込みに失敗しました。', true);
+  }
+  return branchList;
+}
+
+async function loadDepartments() {
+  departmentList = [];
+  try {
+      const response = await axios.get('/api/index.php?model=department&method=list');
+      departmentList = response.data;
+  } catch (error) {
+      console.error('Error loading departments:', error);
+      showMessage('部署の読み込みに失敗しました。', true);
+  }
+  return departmentList;
+}
+
 function generateGroupList(){
     const groupListElement = document.getElementById('UserGroup');
     const roleListElement = document.getElementById('UserRole');
@@ -35,6 +61,10 @@ function generateGroupList(){
     const editGroupListElement = document.getElementById('edit-user-group');
     const addTypeListElement = document.getElementById('add-user-type');
     const editTypeListElement = document.getElementById('edit-user-type');
+    const addBranchListElement = document.getElementById('add-user-branch');
+    const editBranchListElement = document.getElementById('edit-user-branch');
+    const addDepartmentListElement = document.getElementById('add-user-department');
+    const editDepartmentListElement = document.getElementById('edit-user-department');
     Object.entries(groupList).forEach(([key, value]) => {
       if(user_role == 'member' && value == '退職者'){
         return;
@@ -76,8 +106,29 @@ function generateGroupList(){
         var text = e.target.options[e.target.selectedIndex].text;
         dt_user.column(3).search(text).draw();
       }
-  });
+    });
 
+    branchList.forEach(branch => {
+      const option = document.createElement('option');
+      const option2 = document.createElement('option');
+      option.value = branch.id;
+      option.textContent = branch.name;
+      option2.value = branch.id;
+      option2.textContent = branch.name;
+      addBranchListElement.appendChild(option);
+      editBranchListElement.appendChild(option2);
+    });
+
+    departmentList.forEach(department => {
+      const option = document.createElement('option');
+      const option2 = document.createElement('option');
+      option.value = department.id;
+      option.textContent = department.name;
+      option2.value = department.id;
+      option2.textContent = department.name;
+      addDepartmentListElement.appendChild(option);
+      editDepartmentListElement.appendChild(option2);
+    });
 }
 
 function drawTable(data){
@@ -89,6 +140,7 @@ function drawTable(data){
 async function changeData(){
     displayHourglass();
     const data = await get_member();
+    
     drawTable(data);
     hideHourglass();
     return data;
@@ -104,22 +156,8 @@ document.addEventListener('DOMContentLoaded', async function (e) {
 
   // Variable declaration for table
   const dt_user_table = document.querySelector('.datatables-users'),
-    userView = '/member/view.php',
-    statusObj = {
-      1: { title: 'Pending', class: 'bg-label-warning' },
-      2: { title: 'Active', class: 'bg-label-success' },
-      3: { title: 'Inactive', class: 'bg-label-secondary' }
-    };
-  var select2 = $('.select2');
-
-  if (select2.length) {
-    var $this = select2;
-    $this.wrap('<div class="position-relative"></div>').select2({
-      placeholder: 'Select Country',
-      dropdownParent: $this.parent()
-    });
-  }
-
+    userView = '/member/view.php';
+   
   let featureButtons = [
     {
       extend: 'collection',
@@ -351,9 +389,23 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             { data: 'realname' },
             { data: 'authority' },
             { data: 'group_name' },
-            { data: 'member_type_name' },
-            { data: 'status' },
-            { data: 'action' }
+            { 
+              data: 'branch_id',
+              title: '支店'
+            },
+            { 
+              data: 'department_id',
+              title: '部署'
+            },
+            { data: 'member_type_name',
+              title: '種類'
+             },
+            { data: 'status',
+              title: 'ステータス'
+            },
+            { data: 'action',
+              title: '操作'
+            }
         ],
         columnDefs: [
             {
@@ -426,25 +478,44 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             }
             },
             {
-            // Plans
-            targets: 3,
-            render: function (data, type, full, meta) {
-                const plan = full['group_name'];
+              // Group
+              targets: 3,
+              render: function (data, type, full, meta) {
+                  const plan = full['group_name'];
 
-                return '<span class="text-heading">' + plan + '</span>';
-            }
+                  return '<span class="text-heading">' + plan + '</span>';
+              }
             },
             {
-            // User Status
-            targets: 5,
-            render: function (data, type, full, meta) {
-                const status = full['is_suspend'];
-                if(status == 1){
-                return '<span class="badge bg-label-warning">停止</span>';
-                }else{
-                return '<span class="badge bg-label-success">アクティブ</span>';
-                }
-            }
+              // Branch
+              targets: 4,
+              render: function (data, type, full, meta) {
+                const branch = branchList.find(branch => branch.id == data)?.name || '';
+                return branch;
+              }
+            },
+            {
+              // Department
+              targets: 5,
+              render: function (data, type, full, meta) {
+                const departmentL = data.map(department => {
+                  const departmentName = departmentList.find(d => d.id == department)?.name || '';
+                  return departmentName;
+                });
+                return departmentL.join(', ');
+              }
+            },
+            {
+              // User Status
+              targets: 7,
+              render: function (data, type, full, meta) {
+                  const status = full['is_suspend'];
+                  if(status == 1){
+                  return '<span class="badge bg-label-warning">停止</span>';
+                  }else{
+                  return '<span class="badge bg-label-success">アクティブ</span>';
+                  }
+              }
             },
             {
               targets: -1,
@@ -585,10 +656,17 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             document.getElementById('edit-user-firstname').value = userinfo.firstname;
             document.getElementById('edit-user-email').value = userinfo.user_email;
             document.getElementById('edit-user-contact').value = userinfo.user_phone;
-            document.getElementById('edit-user-role').value = userinfo.authority;
-            document.getElementById('edit-user-group').value = userinfo.user_group;
-            document.getElementById('edit-user-type').value = userinfo.member_type;
+            $('#edit-user-role').val(userinfo.authority).trigger('change');
+            $('#edit-user-group').val(userinfo.user_group).trigger('change');
+            $('#edit-user-type').val(userinfo.member_type).trigger('change');
+            document.getElementById('edit-user-position').value = userinfo.position;
             document.getElementById('edit-user-permit').innerHTML = '';
+
+            $('#edit-user-branch').val(userinfo.branch_id).trigger('change');
+            const departmentSelect = document.getElementById('edit-user-department');
+            // For multiple select, pass an array of values
+            $(departmentSelect).val(userinfo.department_id).trigger('change');
+
             const permitData = {};
             permitData.edit_level = userinfo.edit_level;
             permitData.edit_group = response.data.group;
@@ -821,11 +899,30 @@ document.addEventListener('DOMContentLoaded', async function (e) {
 
     // Initial event binding
     bindEvent();
-
-  
+    await loadBranches();
+    await loadDepartments();
     await changeData();
     generateGroupList();
   }
+
+  $('#modalEditUser').on('hidden.bs.modal', function () {
+     //reset form
+     document.getElementById('editUserForm').reset();
+     $('#edit-user-department').val('').trigger('change');
+     $('#edit-user-role').val('').trigger('change');
+     $('#edit-user-branch').val('').trigger('change');
+     $('#edit-user-group').val('').trigger('change');
+     $('#edit-user-type').val('').trigger('change');
+  });
+  $('#modalAddUser').on('hidden.bs.modal', function () {
+    //reset form
+    document.getElementById('addNewUserForm').reset();
+    $('#add-user-department').val('').trigger('change');
+    $('#add-user-role').val('').trigger('change');
+    $('#add-user-branch').val('').trigger('change');
+    $('#add-user-group').val('').trigger('change');
+    $('#add-user-type').val('').trigger('change');
+  });
 
   // Filter form control to default size
   // ? setTimeout used for user-list table initialization
@@ -903,6 +1000,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           }
         }
       },
+      
       lastname: {
         validators: {
           notEmpty: {
@@ -919,18 +1017,46 @@ document.addEventListener('DOMContentLoaded', async function (e) {
       },
       user_email: {
         validators: {
+          notEmpty: {
+            message: 'メールアドレスを入力してください'
+          },
           emailAddress: {
             message: 'メールアドレスが不正です'
           }
         }
       },
-      // gender: {
-      //   validators: {
-      //     notEmpty: {
-      //       message: '性別を選択してください'
-      //     }
-      //   }
-      // },
+      user_phone: {
+        validators: {
+          notEmpty: {
+            message: '電話番号を入力してください'
+          }
+        }
+      },
+      position: {
+        validators: {
+          stringLength: {
+            min: 2,
+            message: '2文字以上入力してください'
+          },
+          notEmpty: {
+            message: '役職を入力してください'
+          }
+        }
+      },
+      branch_id: {
+        validators: {
+          notEmpty: {
+            message: '支社を選択してください'
+          }
+        }
+      },
+      'department_id[]': {
+        validators: {
+          notEmpty: {
+            message: '部署を選択してください'
+          }
+        }
+      },
       user_group: {
         validators: {
           notEmpty: {
@@ -1038,18 +1164,46 @@ document.addEventListener('DOMContentLoaded', async function (e) {
       },
       user_email: {
         validators: {
+          notEmpty: {
+            message: 'メールアドレスを入力してください'
+          },
           emailAddress: {
             message: 'メールアドレスが不正です'
           }
         }
       },
-      // gender: {
-      //   validators: {
-      //     notEmpty: {
-      //       message: '性別を選択してください'
-      //     }
-      //   }
-      // },
+      user_phone: {
+        validators: {
+          notEmpty: {
+            message: '電話番号を入力してください'
+          }
+        }
+      },
+      position: {
+        validators: {
+          stringLength: {
+            min: 2,
+            message: '2文字以上入力してください'
+          },
+          notEmpty: {
+            message: '役職を入力してください'
+          }
+        }
+      },
+      branch_id: {
+        validators: {
+          notEmpty: {
+            message: '支社を選択してください'
+          }
+        }
+      },
+      'department_id[]': {
+        validators: {
+          notEmpty: {
+            message: '部署を選択してください'
+          }
+        }
+      },
       user_group: {
         validators: {
           notEmpty: {
@@ -1102,6 +1256,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
               }
             }
             $('#modalEditUser').modal('hide'); 
+            
           })
           .catch(function (error) {
             handleErrors(error);
@@ -1160,5 +1315,6 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           });
       }
     });
+
   });
 });
