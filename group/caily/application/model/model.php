@@ -173,6 +173,30 @@ class Model extends Connection {
 		}
 
 	}
+
+	// function insertPost() {
+	// 	$this->response = false;
+	// 	if (count($this->error) <= 0 && count($this->post) > 0) {
+	// 		$field = $this->schematize('insert');
+	// 		if (is_array($field) && count($field) > 0) {
+	// 			if(!isset($this->post['owner'])){
+	// 				$this->post['owner'] = $_SESSION['userid'];
+	// 			}
+	// 			$this->post['created'] = date('Y-m-d H:i:s');
+	// 			print_r($this->post);
+	// 			exit();
+	// 			foreach ($field as $key) {
+	// 				if (array_key_exists($key, $this->post)) {
+	// 					$keys[] = $key;
+	// 					$values[] = $this->quote($this->post[$key]);
+	// 				}
+	// 			}
+	// 			$query = "INSERT INTO ".$this->table." (".implode(",", $keys).") VALUES ('".implode("','", $values)."')";
+	// 			$this->response = $this->query($query);
+	// 			return $this->response;
+	// 		}
+	// 	}
+	// }
 	function inssertComment() {
 		
 	}
@@ -257,7 +281,8 @@ class Model extends Connection {
 		}
 
 		foreach ($this->schema as $field => $row) {
-			if (in_array($field, array_keys($_POST)) && is_array($row) && (!isset($row['except']) || !in_array($string, $row['except']))) {
+			// if (in_array($field, array_keys($_POST)) && is_array($row) && (!isset($row['except']) || !in_array($string, $row['except']))) {
+			if (is_array($row) && (!isset($row['except']) || !in_array($string, $row['except']))) {
 				if (isset($row['fix']) && strlen($row['fix']) > 0) {
 					$this->post[$field] = $row['fix'];
 				} else {

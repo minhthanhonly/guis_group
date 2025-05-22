@@ -12,7 +12,7 @@ class Member extends ApplicationModel {
 		'user_groupname'=>array('except'=>array('search')),
 		'lastname'=>array('姓', 'notnull', 'length:100'),
 		'firstname'=>array('名', 'length:100'),
-		'realname'=>array('名前', 'notnull', 'length:100'),
+		'realname'=>array('名前', 'length:100'),
 		'user_ruby'=>array('かな', 'length:100'),
 		'authority'=>array('権限', 'length:20'),
 		'user_postcode'=>array('郵便番号', 'postcode', 'length:8'),
@@ -193,10 +193,16 @@ class Member extends ApplicationModel {
 			if (method_exists($this, 'validateEdit')) {
 				$this->validateEdit();
 			}
-			$this->post['realname'] = $this->post['lastname'];
-			if($this->post['firstname'] != '') {
-				$this->post['realname'] .= ' '.$this->post['firstname'];
-			}
+			//remve user_groupname from post
+			unset($this->post['user_ruby']);
+			unset($this->post['id']);
+			unset($this->post['user_postcode']);
+			unset($this->post['user_address']);
+			unset($this->post['user_addressruby']);
+			unset($this->post['user_mobile']);
+			unset($this->post['user_image']);
+			unset($this->post['user_skype']);
+
 			$this->updatePost();
 		}
 		if(count($this->error) > 0){
