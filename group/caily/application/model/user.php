@@ -13,7 +13,7 @@ class User extends ApplicationModel {
 		'userid'=>array('ユーザーID', 'notnull', 'userid', 'length:100', 'distinct'),
 		'password'=>array('パスワード', 'alphaNumeric', 'length:4:32', 'except'=>array('search', 'update')),
 		'password_default'=>array('except'=>array('search', 'update')),
-		'lastname'=>array('姓', 'notnull', 'length:100'),
+		'lastname'=>array('姓', 'length:100'),
 		'firstname'=>array('名', 'length:100'),
 		'user_group'=>array('グループ', 'numeric', 'length:100', 'except'=>array('search')),
 		'user_groupname'=>array(),
