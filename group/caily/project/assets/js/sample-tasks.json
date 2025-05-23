@@ -1,0 +1,163 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "name": "Website Redesign Project",
+      "description": "Complete overhaul of company website",
+      "start_date": "2024-03-01",
+      "due_date": "2024-06-30",
+      "progress": 35,
+      "priority": "high",
+      "status": "in_progress",
+      "assignee_id": 1,
+      "assignee_name": "John Doe",
+      "project_id": 1,
+      "project_name": "Website Modernization",
+      "subtasks": [
+        {
+          "id": 2,
+          "name": "Design Phase",
+          "description": "Create new design mockups",
+          "start_date": "2024-03-01",
+          "due_date": "2024-04-15",
+          "progress": 80,
+          "priority": "high",
+          "status": "review",
+          "assignee_id": 2,
+          "assignee_name": "Jane Smith",
+          "project_id": 1,
+          "project_name": "Website Modernization",
+          "parent_id": 1,
+          "subtasks": [
+            {
+              "id": 3,
+              "name": "Homepage Design",
+              "description": "Design new homepage layout",
+              "start_date": "2024-03-01",
+              "due_date": "2024-03-15",
+              "progress": 100,
+              "priority": "medium",
+              "status": "completed",
+              "assignee_id": 2,
+              "assignee_name": "Jane Smith",
+              "project_id": 1,
+              "project_name": "Website Modernization",
+              "parent_id": 2
+            },
+            {
+              "id": 4,
+              "name": "Product Pages Design",
+              "description": "Design product page templates",
+              "start_date": "2024-03-16",
+              "due_date": "2024-04-15",
+              "progress": 60,
+              "priority": "medium",
+              "status": "in_progress",
+              "assignee_id": 2,
+              "assignee_name": "Jane Smith",
+              "project_id": 1,
+              "project_name": "Website Modernization",
+              "parent_id": 2
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "name": "Development Phase",
+          "description": "Implement new design",
+          "start_date": "2024-04-16",
+          "due_date": "2024-06-15",
+          "progress": 10,
+          "priority": "high",
+          "status": "in_progress",
+          "assignee_id": 3,
+          "assignee_name": "Bob Wilson",
+          "project_id": 1,
+          "project_name": "Website Modernization",
+          "parent_id": 1,
+          "subtasks": [
+            {
+              "id": 6,
+              "name": "Frontend Development",
+              "description": "Implement frontend components",
+              "start_date": "2024-04-16",
+              "due_date": "2024-05-31",
+              "progress": 15,
+              "priority": "high",
+              "status": "in_progress",
+              "assignee_id": 3,
+              "assignee_name": "Bob Wilson",
+              "project_id": 1,
+              "project_name": "Website Modernization",
+              "parent_id": 5
+            },
+            {
+              "id": 7,
+              "name": "Backend Integration",
+              "description": "Integrate with backend services",
+              "start_date": "2024-05-01",
+              "due_date": "2024-06-15",
+              "progress": 5,
+              "priority": "high",
+              "status": "new",
+              "assignee_id": 4,
+              "assignee_name": "Alice Brown",
+              "project_id": 1,
+              "project_name": "Website Modernization",
+              "parent_id": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Content Migration",
+      "description": "Migrate content to new website",
+      "start_date": "2024-05-15",
+      "due_date": "2024-06-30",
+      "progress": 0,
+      "priority": "medium",
+      "status": "new",
+      "assignee_id": 5,
+      "assignee_name": "Charlie Davis",
+      "project_id": 1,
+      "project_name": "Website Modernization",
+      "subtasks": []
+    }
+  ],
+  "projects": [
+    {
+      "id": 1,
+      "name": "Website Modernization",
+      "description": "Modernize company website with new design and features"
+    }
+  ],
+  "users": [
+    {
+      "userid": 1,
+      "realname": "John Doe",
+      "email": "john@example.com"
+    },
+    {
+      "userid": 2,
+      "realname": "Jane Smith",
+      "email": "jane@example.com"
+    },
+    {
+      "userid": 3,
+      "realname": "Bob Wilson",
+      "email": "bob@example.com"
+    },
+    {
+      "userid": 4,
+      "realname": "Alice Brown",
+      "email": "alice@example.com"
+    },
+    {
+      "userid": 5,
+      "realname": "Charlie Davis",
+      "email": "charlie@example.com"
+    }
+  ]
+}
