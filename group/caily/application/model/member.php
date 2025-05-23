@@ -193,6 +193,10 @@ class Member extends ApplicationModel {
 			if (method_exists($this, 'validateEdit')) {
 				$this->validateEdit();
 			}
+			$this->post['realname'] = $this->post['lastname'];
+            if($this->post['firstname'] != '') {
+                $this->post['realname'] .= ' '.$this->post['firstname'];
+            }
 			//remve user_groupname from post
 			unset($this->post['user_ruby']);
 			unset($this->post['id']);
