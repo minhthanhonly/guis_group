@@ -3,7 +3,8 @@ require_once('../application/loader.php');
 $view->heading('支社設定');
 
 ?>
-    <div id="app">
+
+    <div id="app" v-cloak>
         <!-- <nav class="navbar navbar-expand-lg bg-dark mb-12">
             <div class="container-fluid">
             <span class="navbar-brand" href="javascript:void(0)"><i class="icon-base ti tabler-settings"></i></span>

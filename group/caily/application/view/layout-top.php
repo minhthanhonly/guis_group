@@ -78,6 +78,13 @@
               </a>
             </li>
 
+            <li class="menu-item <?php if($directory == 'customer') echo 'active open'; ?>">
+              <a href="<?=$root?>customer/" class="menu-link">
+                <i class="menu-icon icon-base ti tabler-users"></i>
+                <div>顧客情報</div>
+              </a>
+            </li>
+
             <li class="menu-item <?php if($directory == 'member') echo 'active'; ?>">
               <a href="<?=$root?>member/" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-users"></i>

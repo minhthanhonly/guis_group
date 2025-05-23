@@ -20,7 +20,16 @@ class Department extends ApplicationModel {
             (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE department_id = c.id) as project_count,
             (SELECT COUNT(*) FROM " . DB_PREFIX . "user_department WHERE department_id = c.id) as num_employees
             FROM {$this->table} c
-            ORDER BY c.name ASC"
+            ORDER BY c.id ASC"
+        );
+        return $this->fetchAll($query);
+    }
+
+    function list_department() {
+        $query = sprintf(
+            "SELECT c.*
+            FROM {$this->table} c
+            ORDER BY c.id ASC"
         );
         return $this->fetchAll($query);
     }

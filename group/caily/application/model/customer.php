@@ -1,256 +1,410 @@
 <?php
 
 class Customer extends ApplicationModel {
+    public $table_category;
+    public $schema_category;
+    public $table_company;
+    public $schema_company;
     function __construct() {
-        $this->table = DB_PREFIX . 'company';
+        $this->table = DB_PREFIX . 'customer';
         $this->schema = array(
+            'id' => array('except' => array('search', 'update')),
+            'company_name' => array(),
+            'company_name_kana' => array(),
+            'name' => array(),
+            'name_kana' => array(),
+            'department' => array(),
+            'position' => array(),
+            'tel' => array(),
+            'fax' => array(),
+            'email' => array(),
+            'zip' => array(),
+            'address1' => array(),
+            'address2' => array(),
+            'title' => array(),
+            'category_id' => array(),
+            'company_id' => array(),
+            'guis_department' => array(),
+            'created_at' => array('except' => array('search', 'update')),
+            'updated_at' => array(),
+            'updated_by' => array(),
+            'created_by' => array('except' => array('search', 'update')),
+            'status' => array(),
+            'memo' => array(),
+        );
+
+        $this->table_category = DB_PREFIX . 'customer_category';
+        $this->schema_category = array(
             'id' => array('except' => array('search')),
             'name' => array(),
-            'type' => array(),
-            'address' => array(),
-            'phone' => array(),
-            'created_at' => array()
+            'name_kana' => array(),
+            'memo' => array(),
         );
+
         $this->connect();
     }
 
-    function index(){
-
-    }
-
-    function list() {
-        $query = "SELECT * FROM {$this->table} ORDER BY created_at DESC";
+    function list_category() {
+        $query = sprintf(
+            "SELECT c.*, 
+            (SELECT COUNT(*) FROM " . DB_PREFIX . "customer WHERE category_id = c.id) as num_customers
+            FROM " . DB_PREFIX . "customer_category c
+            ORDER BY c.id ASC"
+        );
         return $this->fetchAll($query);
     }
 
-    function add() {
-        // Check if company exists by name
-        $companyQuery = sprintf("SELECT id FROM {$this->table} WHERE name = '%s'", $this->quote($_POST['name']));
-        $company = $this->fetchOne($companyQuery);
-        
-        if ($company) {
-            $hash['status'] = 'error';
-            $hash['message_code'] = 7; // Company with this name already exists
-            return $hash;
-        }
-        $query = sprintf(
-            "INSERT INTO {$this->table} (name, type, address, phone, created_at) VALUES ('%s', '%s', '%s', '%s', NOW())",
-            $this->quote($_POST['name']),
-            $this->quote($_POST['type']),
-            $this->quote($_POST['address']),
-            $this->quote($_POST['phone'])
+    function add_category() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
         );
-        $result = $this->query($query);
-        $hash['status'] = $result ? 'success' : 'error';
-        $hash['message_code'] = $result ? 1 : 0;
-        return $hash;
-    }
-
-    function edit($id = null) {
-        if(isset($_GET['id'])){
-            $id = $_GET['id'];
-        }
-        if (!$id) {
-            $hash['status'] = 'error';
-            $hash['message_code'] = 0;
-            return $hash;
-        }
-        // Check if company exists by name
-        $companyQuery = sprintf("SELECT id FROM {$this->table} WHERE name = '%s' AND id != %d", $this->quote($_POST['name']), intval($id));
-        $company = $this->fetchOne($companyQuery);
-        
-        if ($company) {
-            $hash['status'] = 'error';
-            $hash['message_code'] = 7; // Company with this name already exists
-            return $hash;
-        }
-        
-        $query = sprintf(
-            "UPDATE {$this->table} SET name = '%s', type = '%s', address = '%s', phone = '%s' WHERE id = %d",
-            $this->quote($_POST['name']),
-            $this->quote($_POST['type']),
-            $this->quote($_POST['address']),
-            $this->quote($_POST['phone']),
-            intval($id)
-        );
-        $result = $this->query($query);
-        $hash['status'] = $result ? 'success' : 'error';
-        $hash['message_code'] = $result ? 2 : 0;
-        return $hash;
-    }
-
-    function delete($id = null) {
-        if(isset($_GET['id'])){
-            $id = $_GET['id'];
-        }
-        if (!$id) {
-            $hash['status'] = 'error';
-            $hash['message_code'] = 0;
-            return $hash;
-        }
-        $query = sprintf("DELETE FROM {$this->table} WHERE id = %d", intval($id));
-        $result = $this->query($query);
-        $hash['status'] = $result ? 'success' : 'error';
-        $hash['message_code'] = $result ? 3 : 0;
-        return $hash;
-    }
-
-    function get($id = '') {
-        if(isset($_GET['id'])){
-            $id = $_GET['id'];
-        }
-        if (!$id) {
-            $hash['status'] = 'error';
-            $hash['message_code'] = 0;
-            return $hash;
-        }
-        $query = sprintf("SELECT * FROM {$this->table} WHERE id = %d", intval($id));
-        $hash['data'] = $this->fetchOne($query);
-        return $hash;
-    }
-
-    function listRepresentatives($companyId = null) {
-        if(isset($_GET['company_id'])){
-            $companyId = $_GET['company_id'];
-        }
-        if (!$companyId) {
-            $hash['status'] = 'error';
-            $hash['message_code'] = 0;
-            return $hash;
-        }
-        $query = sprintf("SELECT * FROM groupware_representatives WHERE company_id = %d ORDER BY created_at DESC", intval($companyId));
-        $hash['list'] = $this->fetchAll($query);
-        return $hash;
-    }
-
-    function addRepresentative() {
-        // Check if representative exists by name
-        $repQuery = sprintf("SELECT id FROM groupware_representatives WHERE name = '%s'", $this->quote($_POST['name']));
-        $rep = $this->fetchOne($repQuery);
-        
-        if ($rep) {
-            $hash['status'] = 'error';
-            $hash['message_code'] = 8; // Representative with this name already exists
-            return $hash;
-        }
-
-        $query = sprintf(
-            "INSERT INTO groupware_representatives (company_id, name, email, phone, created_at) VALUES (%d, '%s', '%s', '%s', NOW())",
-            intval($_POST['company_id']),
-            $this->quote($_POST['name']),
-            $this->quote($_POST['email']),
-            $this->quote($_POST['phone'])
-        );
-        $result = $this->query($query);
-        $hash['status'] = $result ? 'success' : 'error';
-        $hash['message_code'] = $result ? 4 : 0;
-        return $hash;
-    }
-
-    function deleteRepresentative($id = null) {
-        if(isset($_GET['id'])){
-            $id = $_GET['id'];
-        }
-        if (!$id) {
-            $hash['status'] = 'error';
-            $hash['message_code'] = 0;
-            return $hash;
-        }
-        $query = sprintf("DELETE FROM groupware_representatives WHERE id = %d", intval($id));
-        $result = $this->query($query);
-        $hash['status'] = $result ? 'success' : 'error';
-        $hash['message_code'] = $result ? 5 : 0;
-        return $hash;
-    }
-
-    function editRepresentative($id = null) {
-        if(isset($_GET['id'])){
-            $id = $_GET['id'];
-        }
-        if (!$id) {
-            $hash['status'] = 'error';
-            $hash['message_code'] = 0;
-            return $hash;
-        }
-
-        // Check if representative exists by name (excluding current record)
-        $repQuery = sprintf("SELECT id FROM groupware_representatives WHERE name = '%s' AND id != %d", 
-            $this->quote($_POST['name']), 
-            intval($id)
-        );
-        $rep = $this->fetchOne($repQuery);
-        
-        if ($rep) {
-            $hash['status'] = 'error';
-            $hash['message_code'] = 8; // Representative with this name already exists
-            return $hash;
-        }
-
-        $query = sprintf(
-            "UPDATE groupware_representatives SET name = '%s', email = '%s', phone = '%s' WHERE id = %d",
-            $this->quote($_POST['name']),
-            $this->quote($_POST['email']),
-            $this->quote($_POST['phone']),
-            intval($id)
-        );
-        $result = $this->query($query);
-        $hash['status'] = $result ? 'success' : 'error';
-        $hash['message_code'] = $result ? 6 : 0;
-        return $hash;
-    }
-
-    function getRepresentative($id = '') {
-        if(isset($_GET['id'])){
-            $id = $_GET['id'];
-        }
-        if (!$id) {
-            $hash['status'] = 'error';
-            $hash['message_code'] = 0;
-            return $hash;
-        }
-        $query = sprintf("SELECT * FROM groupware_representatives WHERE id = %d", intval($id));
-        $hash['data'] = $this->fetchOne($query);
-        return $hash;
-    }
-
-    function listWithRepresentatives() {
-        $query = "SELECT c.*, 
-                         r.id AS representative_id, 
-                         r.name AS representative_name, 
-                         r.email AS representative_email, 
-                         r.phone AS representative_phone 
-                  FROM {$this->table} c 
-                  LEFT JOIN groupware_representatives r ON c.id = r.company_id 
-                  ORDER BY c.created_at DESC, r.created_at DESC";
-        $result = $this->fetchAll($query);
-
-        $companies = [];
-        foreach ($result as $row) {
-            $companyId = $row['id'];
-            if (!isset($companies[$companyId])) {
-                $companies[$companyId] = [
-                    'id' => $row['id'],
-                    'name' => $row['name'],
-                    'type' => $row['type'],
-                    'address' => $row['address'],
-                    'phone' => $row['phone'],
-                    'created_at' => $row['created_at'],
-                    'representatives' => []
-                ];
+        try {
+            $data = array(
+                'name' => $_POST['name'],
+                'name_kana' => $_POST['name_kana'],
+                'memo' => $_POST['memo'],
+            );
+            $result = $this->query_insert($data, $this->table_category);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+            } else {
+                throw new Exception('カテゴリの追加に失敗しました。');
             }
-
-            if (!empty($row['representative_id'])) {
-                $companies[$companyId]['representatives'][] = [
-                    'id' => $row['representative_id'],
-                    'name' => $row['representative_name'],
-                    'email' => $row['representative_email'],
-                    'phone' => $row['representative_phone']
-                ];
-            }
+        } catch (Exception $e) {
+            $hash['message_code'] = $e->getMessage();
         }
-        $hash['list'] = $companies;
         return $hash;
     }
-}
 
-?>
+    function edit_category() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $id = $_GET['id'];
+            $data = array(
+                'name' => $_POST['name'],
+                'name_kana' => $_POST['name_kana'],
+                'memo' => $_POST['memo'],
+            );
+            $result = $this->query_update($data, ['id' => $_GET['id']], $this->table_category);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+            } else {
+                throw new Exception('カテゴリの更新に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    function delete_category() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $id = $_GET['id'];
+            // Check if customer is in use
+            $query = sprintf(
+                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "customer WHERE category_id = %d",
+                intval($id)
+            );
+            $result = $this->fetchOne($query);
+            
+            if ($result['count'] > 0) {
+                throw new Exception('使用中のため削除できません。');
+            }
+            $result = $this->query_delete(['id' => $id], $this->table_category);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+            } else {
+                throw new Exception('カテゴリの削除に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    function add_customer() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        $guis_department = implode(',', $_POST['guis_department']);
+        try {
+            $data = array(
+                'name' => $_POST['name'],
+                'name_kana' => $_POST['name_kana'],
+                'department' => $_POST['department'],
+                'position' => $_POST['position'],
+                'tel' => $_POST['tel'],
+                'fax' => $_POST['fax'],
+                'email' => $_POST['email'],
+                'zip' => $_POST['zip'],
+                'address1' => $_POST['address1'],
+                'address2' => $_POST['address2'],
+                'title' => $_POST['title'],
+                'company_name' => $_POST['company_name'],
+                'company_name_kana' => $_POST['company_name_kana'],
+                'category_id' => $_POST['category_id'],
+                'guis_department' => $guis_department,
+                'status' => $_POST['status'],
+                'created_at' => date('Y-m-d H:i:s'),
+                'created_by' => $_SESSION['user_id'],
+                'memo' => $_POST['memo']
+            );
+            $result = $this->query_insert($data);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+            }
+        } catch (Exception $e) {
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    function edit_customer() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        $guis_department = implode(',', $_POST['guis_department']);
+        try {
+            $id = $_GET['id'];
+            $data = array(
+                'name' => $_POST['name'],
+                'name_kana' => $_POST['name_kana'],
+                'department' => $_POST['department'],
+                'position' => $_POST['position'],
+                'tel' => $_POST['tel'],
+                'fax' => $_POST['fax'],
+                'email' => $_POST['email'],
+                'zip' => $_POST['zip'],
+                'address1' => $_POST['address1'],
+                'address2' => $_POST['address2'],
+                'title' => $_POST['title'],
+                'category_id' => $_POST['category_id'],
+                'company_name' => $_POST['company_name'],
+                'company_name_kana' => $_POST['company_name_kana'],
+                'guis_department' => $guis_department,
+                'status' => $_POST['status'],
+                'updated_at' => date('Y-m-d H:i:s'),
+                'updated_by' => $_SESSION['user_id'],
+                'memo' => $_POST['memo']
+            );
+            $result = $this->query_update($data, ['id' => $id]);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+            } else {
+                throw new Exception('顧客の更新に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    function delete_customer() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $id = $_GET['id'];
+            // Check if customer is in use
+            $query = sprintf(
+                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "projects WHERE customer_id = %d",
+                intval($id)
+            );
+            $result = $this->fetchOne($query);
+            
+            if ($result['count'] > 0) {
+                throw new Exception('使用中のため削除できません。');
+            }
+            $result = $this->query_delete(['id' => $id]);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+            } else {
+                throw new Exception('顧客の削除に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    function get() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $id = $_GET['id'];
+            $query = sprintf(
+                "SELECT c.*, 
+                FROM {$this->table} c
+                WHERE c.id = %d",
+                intval($id)
+            );
+            $result = $this->fetchOne($query);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                $hash['data'] = $result;
+            } else {
+                throw new Exception('顧客の取得に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    function list_customer() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $category_id = $_GET['category_id'];
+            $query = sprintf(
+                "SELECT c.*
+                FROM {$this->table} c
+                WHERE c.category_id = %d
+                ORDER BY c.id ASC",
+                intval($category_id)
+            );
+            $result = $this->fetchAll($query);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                $hash['data'] = $result;
+            } else {
+                throw new Exception('担当者の取得に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['data'] = [];
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+
+    // 会社
+    // function list_company() {
+    //     $category_id = $_GET['category_id'];
+    //     $query = sprintf(
+    //         "SELECT c.*, 
+    //         (SELECT COUNT(*) FROM " . DB_PREFIX . "customer WHERE company_id = c.id) as num_customers
+    //         FROM " . DB_PREFIX . "customer_company c
+    //         WHERE c.category_id = %d
+    //         ORDER BY c.id ASC",
+    //         intval($category_id)
+    //     );
+    //     return $this->fetchAll($query);
+    // }
+
+    // function add_company() {
+    //     $hash = array(
+    //         'status' => 'error',
+    //         'message_code' => 'error',
+    //     );
+    //     try {
+    //         $data = array(
+    //             'name' => $_POST['name'],
+    //             'name_kana' => $_POST['name_kana'],
+    //             'tel' => $_POST['tel'],
+    //             'fax' => $_POST['fax'],
+    //             'email' => $_POST['email'],
+    //             'zip' => $_POST['zip'],
+    //             'address1' => $_POST['address1'],
+    //             'address2' => $_POST['address2'],
+    //             'memo' => $_POST['memo'],
+    //             'category_id' => $_POST['category_id'],
+    //         );
+    //         $result = $this->query_insert($data, $this->table_company);
+    //         if ($result) {
+    //             $hash['status'] = 'success';
+    //             $hash['message_code'] = 'success';
+    //         } else {
+    //             throw new Exception('会社の追加に失敗しました。');
+    //         }
+    //     } catch (Exception $e) {
+    //         $hash['message_code'] = $e->getMessage();
+    //     }
+    //     return $hash;
+    // }
+
+    // function edit_company() {
+    //     $hash = array(
+    //         'status' => 'error',
+    //         'message_code' => 'error',
+    //     );
+    //     try {
+    //         $id = $_GET['id'];
+    //         $data = array(
+    //             'name' => $_POST['name'],
+    //             'name_kana' => $_POST['name_kana'],
+    //             'tel' => $_POST['tel'],
+    //             'fax' => $_POST['fax'],
+    //             'email' => $_POST['email'],
+    //             'zip' => $_POST['zip'],
+    //             'address1' => $_POST['address1'],
+    //             'address2' => $_POST['address2'],
+    //             'memo' => $_POST['memo'],
+    //             'category_id' => $_POST['category_id'],
+    //         );
+    //         $result = $this->query_update($data, ['id' => $_GET['id']], $this->table_company);
+    //         if ($result) {
+    //             $hash['status'] = 'success';
+    //             $hash['message_code'] = 'success';
+    //         } else {
+    //             throw new Exception('会社の更新に失敗しました。');
+    //         }
+    //     } catch (Exception $e) {
+    //         $hash['message_code'] = $e->getMessage();
+    //     }
+    //     return $hash;
+    // }
+
+    // function delete_company() {
+    //     $hash = array(
+    //         'status' => 'error',
+    //         'message_code' => 'error',
+    //     );
+    //     try {
+    //         $id = $_GET['id'];
+    //         // Check if customer is in use
+    //         $query = sprintf(
+    //             "SELECT COUNT(*) as count FROM " . DB_PREFIX . "customer WHERE company_id = %d",
+    //             intval($id)
+    //         );
+    //         $result = $this->fetchOne($query);
+            
+    //         if ($result['count'] > 0) {
+    //             throw new Exception('使用中のため削除できません。');
+    //         }
+    //         $result = $this->query_delete(['id' => $id], $this->table_company);
+    //         if ($result) {
+    //             $hash['status'] = 'success';
+    //             $hash['message_code'] = 'success';
+    //         } else {
+    //             throw new Exception('会社の削除に失敗しました。');
+    //         }
+    //     } catch (Exception $e) {
+    //         $hash['message_code'] = $e->getMessage();
+    //     }
+    //     return $hash;
+    // }
+} 

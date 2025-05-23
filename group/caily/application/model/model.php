@@ -566,7 +566,10 @@ class Model extends Connection {
 		
 	}
 
-	function query_insert($data) {
+	function query_insert($data, $table = null) {
+		if($table){
+			$this->table = $table;
+		}
 		$keys = array();
 		$values = array();
 		foreach ($data as $key => $value) {
@@ -583,7 +586,10 @@ class Model extends Connection {
 		return $result ? $this->insertid() : false;
 	}
 
-	function query_update($data, $where) {
+	function query_update($data, $where, $table = null) {
+		if($table){
+			$this->table = $table;
+		}
 		$array = array();
 		foreach ($data as $key => $value) {
 			if(!in_array($key, $this->donotquote)){
@@ -601,7 +607,10 @@ class Model extends Connection {
 		return $this->update_query($query);
 	}
 
-	function query_delete($where) {
+	function query_delete($where, $table = null) {
+		if($table){
+			$this->table = $table;
+		}
 		$whereClause = array();
 		foreach ($where as $key => $value) {
 			$whereClause[] = $key." = ".intval($value);
