@@ -3,7 +3,7 @@ const { createApp } = Vue;
 createApp({
     data() {
         return {
-            tasks: [],
+            flatTasks: [], // Store tasks in flat array
             users: [],
             selectedTask: null,
             editingTask: null,
@@ -12,140 +12,131 @@ createApp({
                 description: '',
                 start_date: '',
                 due_date: '',
-                assignee_id: null,
+                assignees: [],
                 priority: 'medium',
                 parent_id: null,
                 progress: 0
             },
             expandedTasks: new Set(),
-            taskModal: null,
-            dataTable: null
+            taskModal: null
         }
     },
     computed: {
-        flattenedTasks() {
-            const flattened = [];
-            const flatten = (tasks, level = 0) => {
-                tasks.forEach(task => {
-                    const taskCopy = { ...task, level };
-                    flattened.push(taskCopy);
-                    if (task.subtasks && task.subtasks.length > 0) {
-                        flatten(task.subtasks, level + 1);
-                    }
-                });
+        // Build hierarchical structure from flat tasks
+        hierarchicalTasks() {
+            // Get root tasks (tasks with no parent)
+            const rootTasks = this.flatTasks.filter(task => task.parent_id === null);
+            
+            // Build hierarchy by adding subtasks property to each task
+            const buildHierarchy = (task) => {
+                const subtasks = this.getChildTasks(task.id);
+                return {
+                    ...task,
+                    subtasks: subtasks.map(buildHierarchy)
+                };
             };
-            flatten(this.tasks);
-            return flattened;
+
+            return rootTasks.map(buildHierarchy);
         },
+
+        displayTasks() {
+            const renderTasks = (tasks, level = 0) => {
+                return tasks.map(task => {
+                    const hasSubtasks = this.getChildTasks(task.id).length > 0;
+                    const isExpanded = this.expandedTasks.has(task.id);
+                    const result = [{
+                        ...task,
+                        level,
+                        hasSubtasks,
+                        isExpanded
+                    }];
+                    
+                    if (hasSubtasks && isExpanded) {
+                        const children = this.getChildTasks(task.id);
+                        result.push(...renderTasks(children, level + 1));
+                    }
+                    return result;
+                }).flat();
+            };
+            return renderTasks(this.hierarchicalTasks);
+        },
+
         availableParentTasks() {
             const currentTaskId = this.editingTask ? this.editingTask.id : null;
-            return this.tasks.filter(task => task.id !== currentTaskId);
+            // A task cannot be its own parent or a child of itself
+            return this.flatTasks.filter(task => {
+                if (task.id === currentTaskId) return false;
+                if (!currentTaskId) return true;
+                
+                // Check if task is a child of current task
+                let parentId = task.parent_id;
+                while (parentId) {
+                    if (parentId === currentTaskId) return false;
+                    const parent = this.flatTasks.find(t => t.id === parentId);
+                    parentId = parent ? parent.parent_id : null;
+                }
+                return true;
+            });
         }
     },
     methods: {
+        // Get all child tasks for a given task
+        getChildTasks(taskId) {
+            return this.flatTasks.filter(task => task.parent_id === taskId);
+        },
+
+        // Calculate progress for a task based on its direct children
+        calculateTaskProgress(taskId) {
+            const children = this.getChildTasks(taskId);
+            if (children.length === 0) return null; // No children, use own progress
+
+            const totalProgress = children.reduce((sum, child) => sum + child.progress, 0);
+            return Math.round(totalProgress / children.length);
+        },
+
+        // Update progress for a task and all its ancestors
+        updateTaskAndAncestorsProgress(taskId) {
+            let currentId = taskId;
+            while (currentId) {
+                const task = this.flatTasks.find(t => t.id === currentId);
+                if (!task) break;
+
+                const calculatedProgress = this.calculateTaskProgress(task.id);
+                if (calculatedProgress !== null) {
+                    task.progress = calculatedProgress;
+                }
+
+                currentId = task.parent_id;
+            }
+        },
+
         async loadData() {
             try {
-                const response = await fetch('assets/js/sample-tasks.json');
+                const response = await fetch('./assets/js/sample-tasks.json');
                 const data = await response.json();
-                this.tasks = data.tasks;
+                this.flatTasks = data.tasks;
                 this.users = data.users;
-                this.initializeDataTable();
+                
+                // Update progress for all tasks
+                this.flatTasks.forEach(task => {
+                    if (this.getChildTasks(task.id).length > 0) {
+                        this.updateTaskAndAncestorsProgress(task.id);
+                    }
+                });
             } catch (error) {
                 console.error('Error loading data:', error);
                 alert('データの読み込みに失敗しました。');
             }
         },
-        initializeDataTable() {
-            if (this.dataTable) {
-                this.dataTable.destroy();
+        toggleTask(taskId) {
+            if (this.expandedTasks.has(taskId)) {
+                this.expandedTasks.delete(taskId);
+            } else {
+                this.expandedTasks.add(taskId);
             }
-
-            this.dataTable = $('#taskTable').DataTable({
-                data: this.flattenedTasks,
-                responsive: true,
-                language: {
-                },
-                columns: [
-                    {
-                        data: 'name',
-                        render: (data, type, row) => {
-                            const padding = '&nbsp;'.repeat(row.level * 4);
-                            const hasSubtasks = row.subtasks && row.subtasks.length > 0;
-                            const icon = hasSubtasks ? '<i class="bi bi-folder"></i>' : '<i class="bi bi-file-text"></i>';
-                            return `${padding}${icon} <a href="#" onclick="app.viewTask(${row.id})">${data}</a>`;
-                        }
-                    },
-                    { 
-                        data: 'assignee_name' 
-                    },
-                    {
-                        data: 'priority',
-                        render: (data) => {
-                            const colors = {
-                                'low': 'success',
-                                'medium': 'warning',
-                                'high': 'danger'
-                            };
-                            const texts = {
-                                'low': '低',
-                                'medium': '中',
-                                'high': '高'
-                            };
-                            return `<span class="badge bg-${colors[data]}">${texts[data]}</span>`;
-                        }
-                    },
-                    {
-                        data: 'status',
-                        render: (data) => {
-                            const colors = {
-                                'new': 'primary',
-                                'in_progress': 'info',
-                                'review': 'warning',
-                                'completed': 'success'
-                            };
-                            const texts = {
-                                'new': '新規',
-                                'in_progress': '進行中',
-                                'review': 'レビュー中',
-                                'completed': '完了'
-                            };
-                            return `<span class="badge bg-${colors[data]}">${texts[data]}</span>`;
-                        }
-                    },
-                    {
-                        data: 'progress',
-                        render: (data) => {
-                            const color = data >= 100 ? 'bg-success' : 
-                                        data >= 70 ? 'bg-info' :
-                                        data >= 30 ? 'bg-warning' : 'bg-danger';
-                            return `
-                                <div class="progress" style="height: 8px;">
-                                    <div class="progress-bar ${color}" style="width: ${data}%" title="${data}%"></div>
-                                </div>
-                                <small class="text-muted">${data}%</small>
-                            `;
-                        }
-                    },
-                    {
-                        data: null,
-                        render: (data) => {
-                            return `
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-primary" onclick="app.editTask(${data.id})">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                    <button class="btn btn-outline-danger" onclick="app.deleteTask(${data.id})">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </div>
-                            `;
-                        }
-                    }
-                ]
-            });
         },
         hasSubtasks(task) {
-            return task.subtasks && task.subtasks.length > 0;
+            return this.getChildTasks(task.id).length > 0;
         },
         openNewTaskModal() {
             this.editingTask = null;
@@ -154,7 +145,7 @@ createApp({
                 description: '',
                 start_date: '',
                 due_date: '',
-                assignee_id: null,
+                assignees: [],
                 priority: 'medium',
                 parent_id: null,
                 progress: 0
@@ -177,63 +168,59 @@ createApp({
                 modal.show();
             }
         },
+
+        // Find a task and its parent chain
+        findTaskAndParents(taskId) {
+            const task = this.flatTasks.find(t => t.id === taskId);
+            if (!task) return null;
+
+            const parents = [];
+            let currentId = task.parent_id;
+            while (currentId) {
+                const parent = this.flatTasks.find(t => t.id === currentId);
+                if (!parent) break;
+                parents.push(parent);
+                currentId = parent.parent_id;
+            }
+
+            return { task, parents };
+        },
+
         findTask(taskId) {
-            const searchTask = (tasks) => {
-                for (let task of tasks) {
-                    if (task.id === taskId) return task;
-                    if (task.subtasks) {
-                        const found = searchTask(task.subtasks);
-                        if (found) return found;
-                    }
-                }
-                return null;
-            };
-            return searchTask(this.tasks);
+            return this.flatTasks.find(task => task.id === taskId);
         },
         saveTask() {
             if (this.editingTask) {
                 // Update existing task
-                const updateTask = (tasks) => {
-                    for (let i = 0; i < tasks.length; i++) {
-                        if (tasks[i].id === this.editingTask.id) {
-                            tasks[i] = { ...tasks[i], ...this.taskForm };
-                            return true;
-                        }
-                        if (tasks[i].subtasks && updateTask(tasks[i].subtasks)) {
-                            return true;
-                        }
+                const taskIndex = this.flatTasks.findIndex(t => t.id === this.editingTask.id);
+                if (taskIndex !== -1) {
+                    const oldParentId = this.flatTasks[taskIndex].parent_id;
+                    Object.assign(this.flatTasks[taskIndex], this.taskForm);
+                    
+                    // If parent changed, update progress for both old and new parent chains
+                    if (oldParentId !== this.taskForm.parent_id) {
+                        if (oldParentId) this.updateTaskAndAncestorsProgress(oldParentId);
+                        if (this.taskForm.parent_id) this.updateTaskAndAncestorsProgress(this.taskForm.parent_id);
+                    } else if (this.taskForm.parent_id) {
+                        // If parent didn't change but exists, update its chain
+                        this.updateTaskAndAncestorsProgress(this.taskForm.parent_id);
                     }
-                    return false;
-                };
-                updateTask(this.tasks);
+                }
             } else {
                 // Add new task
                 const newTask = {
                     ...this.taskForm,
-                    id: Date.now(),
-                    subtasks: []
+                    id: Date.now()
                 };
                 
+                this.flatTasks.push(newTask);
+                
+                // Update parent's progress if this task has a parent
                 if (newTask.parent_id) {
-                    const addToParent = (tasks) => {
-                        for (let task of tasks) {
-                            if (task.id === newTask.parent_id) {
-                                task.subtasks.push(newTask);
-                                return true;
-                            }
-                            if (task.subtasks && addToParent(task.subtasks)) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    };
-                    addToParent(this.tasks);
-                } else {
-                    this.tasks.push(newTask);
+                    this.updateTaskAndAncestorsProgress(newTask.parent_id);
                 }
             }
             
-            this.initializeDataTable();
             const modal = bootstrap.Modal.getInstance(document.getElementById('taskModal'));
             modal.hide();
         },
@@ -242,56 +229,54 @@ createApp({
                 return;
             }
             
-            const removeTask = (tasks) => {
-                for (let i = 0; i < tasks.length; i++) {
-                    if (tasks[i].id === taskId) {
-                        tasks.splice(i, 1);
-                        return true;
-                    }
-                    if (tasks[i].subtasks && removeTask(tasks[i].subtasks)) {
-                        return true;
-                    }
+            const taskToDelete = this.findTask(taskId);
+            if (taskToDelete) {
+                const parentId = taskToDelete.parent_id;
+                
+                // Remove all child tasks recursively
+                const removeChildren = (parentId) => {
+                    const children = this.flatTasks.filter(t => t.parent_id === parentId);
+                    children.forEach(child => {
+                        removeChildren(child.id);
+                        const index = this.flatTasks.findIndex(t => t.id === child.id);
+                        if (index !== -1) this.flatTasks.splice(index, 1);
+                    });
+                };
+                
+                removeChildren(taskId);
+                
+                // Remove the task itself
+                const index = this.flatTasks.findIndex(t => t.id === taskId);
+                if (index !== -1) {
+                    this.flatTasks.splice(index, 1);
                 }
-                return false;
-            };
-            
-            removeTask(this.tasks);
-            this.initializeDataTable();
-            if (this.selectedTask && this.selectedTask.id === taskId) {
-                this.selectedTask = null;
+
+                // Update parent's progress if task had a parent
+                if (parentId) {
+                    this.updateTaskAndAncestorsProgress(parentId);
+                }
+
+                if (this.selectedTask && this.selectedTask.id === taskId) {
+                    this.selectedTask = null;
+                }
             }
         },
         updateTaskStatus() {
-            const updateStatus = (tasks) => {
-                for (let task of tasks) {
-                    if (task.id === this.selectedTask.id) {
-                        task.status = this.selectedTask.status;
-                        return true;
-                    }
-                    if (task.subtasks && updateStatus(task.subtasks)) {
-                        return true;
-                    }
-                }
-                return false;
-            };
-            updateStatus(this.tasks);
-            this.initializeDataTable();
+            const task = this.findTask(this.selectedTask.id);
+            if (task) {
+                task.status = this.selectedTask.status;
+            }
         },
         updateTaskProgress() {
-            const updateProgress = (tasks) => {
-                for (let task of tasks) {
-                    if (task.id === this.selectedTask.id) {
-                        task.progress = parseInt(this.selectedTask.progress);
-                        return true;
-                    }
-                    if (task.subtasks && updateProgress(task.subtasks)) {
-                        return true;
-                    }
+            const task = this.findTask(this.selectedTask.id);
+            if (task) {
+                task.progress = parseInt(this.selectedTask.progress);
+                
+                // If task has a parent, update the parent chain
+                if (task.parent_id) {
+                    this.updateTaskAndAncestorsProgress(task.parent_id);
                 }
-                return false;
-            };
-            updateProgress(this.tasks);
-            this.initializeDataTable();
+            }
         },
         formatDate(date) {
             if (!date) return '';

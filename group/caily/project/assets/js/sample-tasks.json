@@ -9,106 +9,156 @@
       "progress": 35,
       "priority": "high",
       "status": "in_progress",
-      "assignee_id": 1,
-      "assignee_name": "John Doe",
-      "project_id": 1,
-      "project_name": "Website Modernization",
-      "subtasks": [
+      "assignees": [
         {
-          "id": 2,
-          "name": "Design Phase",
-          "description": "Create new design mockups",
-          "start_date": "2024-03-01",
-          "due_date": "2024-04-15",
-          "progress": 80,
-          "priority": "high",
-          "status": "review",
-          "assignee_id": 2,
-          "assignee_name": "Jane Smith",
-          "project_id": 1,
-          "project_name": "Website Modernization",
-          "parent_id": 1,
-          "subtasks": [
-            {
-              "id": 3,
-              "name": "Homepage Design",
-              "description": "Design new homepage layout",
-              "start_date": "2024-03-01",
-              "due_date": "2024-03-15",
-              "progress": 100,
-              "priority": "medium",
-              "status": "completed",
-              "assignee_id": 2,
-              "assignee_name": "Jane Smith",
-              "project_id": 1,
-              "project_name": "Website Modernization",
-              "parent_id": 2
-            },
-            {
-              "id": 4,
-              "name": "Product Pages Design",
-              "description": "Design product page templates",
-              "start_date": "2024-03-16",
-              "due_date": "2024-04-15",
-              "progress": 60,
-              "priority": "medium",
-              "status": "in_progress",
-              "assignee_id": 2,
-              "assignee_name": "Jane Smith",
-              "project_id": 1,
-              "project_name": "Website Modernization",
-              "parent_id": 2
-            }
-          ]
+          "id": 1,
+          "name": "John Doe",
+          "avatar": "assets/images/avatars/1.png"
         },
         {
-          "id": 5,
-          "name": "Development Phase",
-          "description": "Implement new design",
-          "start_date": "2024-04-16",
-          "due_date": "2024-06-15",
-          "progress": 10,
-          "priority": "high",
-          "status": "in_progress",
-          "assignee_id": 3,
-          "assignee_name": "Bob Wilson",
-          "project_id": 1,
-          "project_name": "Website Modernization",
-          "parent_id": 1,
-          "subtasks": [
-            {
-              "id": 6,
-              "name": "Frontend Development",
-              "description": "Implement frontend components",
-              "start_date": "2024-04-16",
-              "due_date": "2024-05-31",
-              "progress": 15,
-              "priority": "high",
-              "status": "in_progress",
-              "assignee_id": 3,
-              "assignee_name": "Bob Wilson",
-              "project_id": 1,
-              "project_name": "Website Modernization",
-              "parent_id": 5
-            },
-            {
-              "id": 7,
-              "name": "Backend Integration",
-              "description": "Integrate with backend services",
-              "start_date": "2024-05-01",
-              "due_date": "2024-06-15",
-              "progress": 5,
-              "priority": "high",
-              "status": "new",
-              "assignee_id": 4,
-              "assignee_name": "Alice Brown",
-              "project_id": 1,
-              "project_name": "Website Modernization",
-              "parent_id": 5
-            }
-          ]
+          "id": 2,
+          "name": "Jane Smith",
+          "avatar": "assets/images/avatars/2.png"
         }
-      ]
+      ],
+      "project_id": 1,
+      "project_name": "Website Modernization",
+      "parent_id": null
+    },
+    {
+      "id": 2,
+      "name": "Design Phase",
+      "description": "Create new design mockups",
+      "start_date": "2024-03-01",
+      "due_date": "2024-04-15",
+      "progress": 80,
+      "priority": "high",
+      "status": "review",
+      "assignees": [
+        {
+          "id": 2,
+          "name": "Jane Smith",
+          "avatar": "assets/images/avatars/2.png"
+        },
+        {
+          "id": 3,
+          "name": "Bob Wilson",
+          "avatar": "assets/images/avatars/3.png"
+        }
+      ],
+      "project_id": 1,
+      "project_name": "Website Modernization",
+      "parent_id": 1
+    },
+    {
+      "id": 3,
+      "name": "Homepage Design",
+      "description": "Design new homepage layout",
+      "start_date": "2024-03-01",
+      "due_date": "2024-03-15",
+      "progress": 100,
+      "priority": "medium",
+      "status": "completed",
+      "assignees": [
+        {
+          "id": 2,
+          "name": "Jane Smith",
+          "avatar": "assets/images/avatars/2.png"
+        }
+      ],
+      "project_id": 1,
+      "project_name": "Website Modernization",
+      "parent_id": 2
+    },
+    {
+      "id": 4,
+      "name": "Product Pages Design",
+      "description": "Design product page templates",
+      "start_date": "2024-03-16",
+      "due_date": "2024-04-15",
+      "progress": 60,
+      "priority": "medium",
+      "status": "in_progress",
+      "assignees": [
+        {
+          "id": 2,
+          "name": "Jane Smith",
+          "avatar": "assets/images/avatars/2.png"
+        },
+        {
+          "id": 4,
+          "name": "Alice Brown",
+          "avatar": "assets/images/avatars/4.png"
+        }
+      ],
+      "project_id": 1,
+      "project_name": "Website Modernization",
+      "parent_id": 2
+    },
+    {
+      "id": 5,
+      "name": "Development Phase",
+      "description": "Implement new design",
+      "start_date": "2024-04-16",
+      "due_date": "2024-06-15",
+      "progress": 10,
+      "priority": "high",
+      "status": "in_progress",
+      "assignees": [
+        {
+          "id": 3,
+          "name": "Bob Wilson",
+          "avatar": "assets/images/avatars/3.png"
+        },
+        {
+          "id": 4,
+          "name": "Alice Brown",
+          "avatar": "assets/images/avatars/4.png"
+        }
+      ],
+      "project_id": 1,
+      "project_name": "Website Modernization",
+      "parent_id": 1
+    },
+    {
+      "id": 6,
+      "name": "Frontend Development",
+      "description": "Implement frontend components",
+      "start_date": "2024-04-16",
+      "due_date": "2024-05-31",
+      "progress": 15,
+      "priority": "high",
+      "status": "in_progress",
+      "assignees": [
+        {
+          "id": 3,
+          "name": "Bob Wilson",
+          "avatar": "assets/images/avatars/3.png"
+        }
+      ],
+      "project_id": 1,
+      "project_name": "Website Modernization",
+      "parent_id": 5
+    },
+    {
+      "id": 7,
+      "name": "Backend Integration",
+      "description": "Integrate with backend services",
+      "start_date": "2024-05-01",
+      "due_date": "2024-06-15",
+      "progress": 5,
+      "priority": "high",
+      "status": "new",
+      "assignees": [
+        {
+          "id": 4,
+          "name": "Alice Brown",
+          "avatar": "assets/images/avatars/4.png"
+        }
+      ],
+      "project_id": 1,
+      "project_name": "Website Modernization",
+      "parent_id": 5
     },
     {
       "id": 8,
@@ -119,45 +169,48 @@
       "progress": 0,
       "priority": "medium",
       "status": "new",
-      "assignee_id": 5,
-      "assignee_name": "Charlie Davis",
+      "assignees": [
+        {
+          "id": 5,
+          "name": "Charlie Davis",
+          "avatar": "assets/images/avatars/5.png"
+        }
+      ],
       "project_id": 1,
       "project_name": "Website Modernization",
-      "subtasks": []
-    }
-  ],
-  "projects": [
-    {
-      "id": 1,
-      "name": "Website Modernization",
-      "description": "Modernize company website with new design and features"
+      "parent_id": null
     }
   ],
   "users": [
     {
       "userid": 1,
       "realname": "John Doe",
-      "email": "john@example.com"
+      "email": "john@example.com",
+      "avatar": "assets/images/avatars/1.png"
     },
     {
       "userid": 2,
       "realname": "Jane Smith",
-      "email": "jane@example.com"
+      "email": "jane@example.com",
+      "avatar": "assets/images/avatars/2.png"
     },
     {
       "userid": 3,
       "realname": "Bob Wilson",
-      "email": "bob@example.com"
+      "email": "bob@example.com",
+      "avatar": "assets/images/avatars/3.png"
     },
     {
       "userid": 4,
       "realname": "Alice Brown",
-      "email": "alice@example.com"
+      "email": "alice@example.com",
+      "avatar": "assets/images/avatars/4.png"
     },
     {
       "userid": 5,
       "realname": "Charlie Davis",
-      "email": "charlie@example.com"
+      "email": "charlie@example.com",
+      "avatar": "assets/images/avatars/5.png"
     }
   ]
 }
