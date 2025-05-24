@@ -5,36 +5,61 @@ class Project extends ApplicationModel {
         $this->table = DB_PREFIX . 'projects';
         $this->schema = array(
             'id' => array('except' => array('search')),
+            'project_number' => array(),
             'name' => array(),
             'description' => array(),
-            'status' => array(),
-            'start_date' => array(),
-            'end_date' => array(),
-            'created_by' => array('type' => 'int'),
-            'created_at' => array('except' => array('search')),
-            'updated_at' => array('except' => array('search')),
-            'category_id' => array('type' => 'int'),
-            'progress' => array('type' => 'int'),
-            'estimated_hours' => array('type' => 'int')
+            'priority' => array(), //low, medium, high, urgent
+            'status' => array(), //draft, open, in_progress, completed, paused, cancelled
+            'start_date' => array(), //timestamp
+            'end_date' => array(), //timestamp
+            'actual_start_date' => array(), //timestamp
+            'actual_end_date' => array(), //timestamp
+            'created_by' => array(), //userid
+            'created_at' => array('except' => array('search')), //timestamp
+            'department_id' => array(), //
+            'progress' => array(), //0-100
+            'estimated_hours' => array(), //float
+            'actual_hours' => array(), //float
+            'customer_id' => array(),
+            'building_size' => array(), //string
+            'building_type' => array(), //string
+            'buiding_number' => array(), //list of category_id
+            'project_order_type' => array(), //edit, new, custom
+            'project_estimate_id' => array(), 
+            'amount' => array(), //edit, new, custom
         );
         $this->connect();
     }
 
     function list() {
-        $where = '';
-        if (isset($_GET['category_id'])) {
-            $where = sprintf(" WHERE p.category_id = %d", intval($_GET['category_id']));
+        $perPage = isset($_GET['perPage']) ? intval($_GET['perPage']) : 20;
+        $currentPage = isset($_GET['currentPage']) ? intval($_GET['currentPage']) : 1;
+        $offset = ($currentPage - 1) * $perPage;
+        $whereArr = [];
+        if (isset($_GET['department_id'])) {
+            $whereArr[] = sprintf("p.department_id = %d", intval($_GET['department_id']));
+        }
+        if (isset($_GET['status']) && $_GET['status'] != 'all') {
+            $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
+        }
+        $where = implode(" AND ", $whereArr);
+
+        if (!empty($where)) {
+            $where = " WHERE " . $where;
         }
 
         $query = sprintf(
-            "SELECT p.*, c.name as category_name, 
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "tasks WHERE project_id = p.id) as task_count,
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "project_members WHERE project_id = p.id) as member_count
+            "SELECT p.*,
+            (SELECT user_id FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
+            (SELECT user_id FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
+            (SELECT user_id FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id
             FROM {$this->table} p 
-            LEFT JOIN " . DB_PREFIX . "categories c ON p.category_id = c.id 
             %s
-            ORDER BY p.created_at DESC",
-            $where
+            ORDER BY p.created_at DESC
+            LIMIT %d, %d",
+            $where,
+            $offset,
+            $perPage
         );
         return $this->fetchAll($query);
     }
