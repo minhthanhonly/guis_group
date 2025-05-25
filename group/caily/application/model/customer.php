@@ -3,8 +3,6 @@
 class Customer extends ApplicationModel {
     public $table_category;
     public $schema_category;
-    public $table_company;
-    public $schema_company;
     function __construct() {
         $this->table = DB_PREFIX . 'customer';
         $this->schema = array(
@@ -300,6 +298,138 @@ class Customer extends ApplicationModel {
         return $hash;
     }
 
+    // Get all customer categories
+    function list_categories() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $query = "SELECT * FROM " . DB_PREFIX . "customer_category ORDER BY id ASC";
+            $result = $this->fetchAll($query);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                $hash['data'] = $result;
+            } else {
+                throw new Exception('カテゴリの取得に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['data'] = [];
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    // Get unique company names
+    function list_companies() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $query = "SELECT DISTINCT company_name FROM " . DB_PREFIX . "customer WHERE company_name IS NOT NULL AND company_name != '' ORDER BY company_name ASC";
+            $result = $this->fetchAll($query);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                $hash['data'] = $result;
+            } else {
+                throw new Exception('会社名の取得に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['data'] = [];
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    // Get all customer contacts
+    function list_contacts() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $query = "SELECT id, name FROM " . DB_PREFIX . "customer WHERE name IS NOT NULL AND name != '' ORDER BY name ASC";
+            $result = $this->fetchAll($query);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                $hash['data'] = $result;
+            } else {
+                throw new Exception('担当者名の取得に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['data'] = [];
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    // Get companies by category
+    function list_companies_by_category() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $category_id = $_GET['category_id'];
+            $query = sprintf(
+                "SELECT DISTINCT company_name 
+                FROM %scustomer 
+                WHERE category_id = %d 
+                AND company_name IS NOT NULL 
+                AND company_name != '' 
+                ORDER BY id ASC",
+                DB_PREFIX,
+                intval($category_id)
+            );
+            $result = $this->fetchAll($query);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                $hash['data'] = $result;
+            } else {
+                throw new Exception('会社名の取得に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['data'] = [];
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    // Get contacts by company
+    function list_contacts_by_company() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $company_name = $_GET['company_name'];
+            $query = sprintf(
+                "SELECT id, name 
+                FROM %scustomer 
+                WHERE company_name = '%s' 
+                ORDER BY id ASC",
+                DB_PREFIX,
+                $company_name
+            );
+            $result = $this->fetchAll($query);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                $hash['data'] = $result;
+            } else {
+                throw new Exception('担当者名の取得に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['data'] = [];
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
 
     // 会社
     // function list_company() {

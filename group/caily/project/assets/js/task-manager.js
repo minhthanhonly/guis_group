@@ -1,290 +1,406 @@
 const { createApp } = Vue;
 
-createApp({
+const TaskApp = createApp({
     data() {
         return {
-            flatTasks: [], // Store tasks in flat array
-            users: [],
+            projectId: null,
+            projectInfo: {},
+            tasks: [],
+            taskTable: null,
             selectedTask: null,
-            editingTask: null,
             taskForm: {
-                name: '',
+                title: '',
                 description: '',
+                status: 'new',
+                priority: 'medium',
                 start_date: '',
                 due_date: '',
-                assignees: [],
-                priority: 'medium',
+                assigned_to: null,
                 parent_id: null,
+                category_id: null,
+                estimated_hours: 0,
                 progress: 0
             },
-            expandedTasks: new Set(),
-            taskModal: null
+            editingTask: null,
+            users: [],
+            categories: [],
+            taskStatuses: [
+                { value: 'new', label: '新規', color: 'secondary' },
+                { value: 'in_progress', label: '進行中', color: 'primary' },
+                { value: 'review', label: 'レビュー中', color: 'warning' },
+                { value: 'completed', label: '完了', color: 'success' }
+            ],
+            taskPriorities: [
+                { value: 'low', label: '低', color: 'secondary' },
+                { value: 'medium', label: '中', color: 'primary' },
+                { value: 'high', label: '高', color: 'warning' },
+                { value: 'urgent', label: '緊急', color: 'danger' }
+            ]
         }
     },
+    
     computed: {
-        // Build hierarchical structure from flat tasks
-        hierarchicalTasks() {
-            // Get root tasks (tasks with no parent)
-            const rootTasks = this.flatTasks.filter(task => task.parent_id === null);
-            
-            // Build hierarchy by adding subtasks property to each task
-            const buildHierarchy = (task) => {
-                const subtasks = this.getChildTasks(task.id);
-                return {
-                    ...task,
-                    subtasks: subtasks.map(buildHierarchy)
-                };
-            };
-
-            return rootTasks.map(buildHierarchy);
-        },
-
-        displayTasks() {
-            const renderTasks = (tasks, level = 0) => {
-                return tasks.map(task => {
-                    const hasSubtasks = this.getChildTasks(task.id).length > 0;
-                    const isExpanded = this.expandedTasks.has(task.id);
-                    const result = [{
-                        ...task,
-                        level,
-                        hasSubtasks,
-                        isExpanded
-                    }];
-                    
-                    if (hasSubtasks && isExpanded) {
-                        const children = this.getChildTasks(task.id);
-                        result.push(...renderTasks(children, level + 1));
-                    }
-                    return result;
-                }).flat();
-            };
-            return renderTasks(this.hierarchicalTasks);
-        },
-
         availableParentTasks() {
-            const currentTaskId = this.editingTask ? this.editingTask.id : null;
-            // A task cannot be its own parent or a child of itself
-            return this.flatTasks.filter(task => {
-                if (task.id === currentTaskId) return false;
-                if (!currentTaskId) return true;
-                
-                // Check if task is a child of current task
-                let parentId = task.parent_id;
-                while (parentId) {
-                    if (parentId === currentTaskId) return false;
-                    const parent = this.flatTasks.find(t => t.id === parentId);
-                    parentId = parent ? parent.parent_id : null;
-                }
-                return true;
-            });
+            if (!this.editingTask) {
+                return this.tasks.filter(t => !t.parent_id);
+            }
+            // Không cho phép task là parent của chính nó hoặc con của nó
+            return this.tasks.filter(t => 
+                !t.parent_id && 
+                t.id !== this.editingTask.id &&
+                !this.isDescendant(t.id, this.editingTask.id)
+            );
         }
     },
+    
+    mounted() {
+        // Lấy project ID từ URL
+        const urlParams = new URLSearchParams(window.location.search);
+        this.projectId = urlParams.get('project_id');
+        
+        if (!this.projectId) {
+            alert('プロジェクトIDが指定されていません。');
+            window.location.href = 'index.php';
+            return;
+        }
+        
+        this.loadProjectInfo();
+        this.loadTasks();
+        this.loadUsers();
+        this.loadCategories();
+        this.initializeDataTable();
+    },
+    
     methods: {
-        // Get all child tasks for a given task
-        getChildTasks(taskId) {
-            return this.flatTasks.filter(task => task.parent_id === taskId);
-        },
-
-        // Calculate progress for a task based on its direct children
-        calculateTaskProgress(taskId) {
-            const children = this.getChildTasks(taskId);
-            if (children.length === 0) return null; // No children, use own progress
-
-            const totalProgress = children.reduce((sum, child) => sum + child.progress, 0);
-            return Math.round(totalProgress / children.length);
-        },
-
-        // Update progress for a task and all its ancestors
-        updateTaskAndAncestorsProgress(taskId) {
-            let currentId = taskId;
-            while (currentId) {
-                const task = this.flatTasks.find(t => t.id === currentId);
-                if (!task) break;
-
-                const calculatedProgress = this.calculateTaskProgress(task.id);
-                if (calculatedProgress !== null) {
-                    task.progress = calculatedProgress;
-                }
-
-                currentId = task.parent_id;
-            }
-        },
-
-        async loadData() {
+        async loadProjectInfo() {
             try {
-                const response = await fetch('./assets/js/sample-tasks.json');
-                const data = await response.json();
-                this.flatTasks = data.tasks;
-                this.users = data.users;
-                
-                // Update progress for all tasks
-                this.flatTasks.forEach(task => {
-                    if (this.getChildTasks(task.id).length > 0) {
-                        this.updateTaskAndAncestorsProgress(task.id);
-                    }
-                });
+                const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
+                this.projectInfo = response.data;
             } catch (error) {
-                console.error('Error loading data:', error);
-                alert('データの読み込みに失敗しました。');
+                console.error('Error loading project info:', error);
             }
         },
-        toggleTask(taskId) {
-            if (this.expandedTasks.has(taskId)) {
-                this.expandedTasks.delete(taskId);
-            } else {
-                this.expandedTasks.add(taskId);
+        
+        async loadTasks() {
+            try {
+                const response = await axios.get(`/api/index.php?model=task&method=list&project_id=${this.projectId}&include_subtasks=1`);
+                this.tasks = response.data || [];
+                this.updateDataTable();
+            } catch (error) {
+                console.error('Error loading tasks:', error);
+                this.showMessage('タスクの読み込みに失敗しました。', true);
             }
         },
-        hasSubtasks(task) {
-            return this.getChildTasks(task.id).length > 0;
+        
+        async loadUsers() {
+            try {
+                const response = await axios.get('/api/index.php?model=user&method=getList');
+                this.users = response.data.list || [];
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
         },
+        
+        async loadCategories() {
+            try {
+                const response = await axios.get('/api/index.php?model=category&method=list');
+                this.categories = response.data || [];
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        },
+        
+        initializeDataTable() {
+            const self = this;
+            this.taskTable = $('#taskTable').DataTable({
+                data: [],
+                columns: [
+                    {
+                        data: 'title',
+                        render: function(data, type, row) {
+                            let indent = '';
+                            if (row.parent_id) {
+                                indent = '<span style="margin-left: 20px;">↳ </span>';
+                            }
+                            return `${indent}<a href="#" class="task-link" data-id="${row.id}">${data}</a>`;
+                        }
+                    },
+                    {
+                        data: 'assigned_to_name',
+                        render: function(data) {
+                            return data || '-';
+                        }
+                    },
+                    {
+                        data: 'priority',
+                        render: function(data) {
+                            const priority = self.taskPriorities.find(p => p.value === data);
+                            return `<span class="badge bg-${priority?.color || 'secondary'}">${priority?.label || data}</span>`;
+                        }
+                    },
+                    {
+                        data: 'status',
+                        render: function(data) {
+                            const status = self.taskStatuses.find(s => s.value === data);
+                            return `<span class="badge bg-${status?.color || 'secondary'}">${status?.label || data}</span>`;
+                        }
+                    },
+                    {
+                        data: 'progress',
+                        render: function(data) {
+                            const color = data === 100 ? 'success' : 'primary';
+                            return `<div class="progress" style="width: 80px;">
+                                        <div class="progress-bar bg-${color}" style="width: ${data}%"></div>
+                                    </div>
+                                    <small>${data}%</small>`;
+                        }
+                    },
+                    {
+                        data: null,
+                        render: function(data, type, row) {
+                            return `<div class="btn-group btn-group-sm">
+                                        <button class="btn btn-primary btn-edit-task" data-id="${row.id}">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-danger btn-delete-task" data-id="${row.id}">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>`;
+                        }
+                    }
+                ],
+                language: {
+                    search: "検索:",
+                    lengthMenu: "_MENU_ 件表示",
+                    info: " _TOTAL_ 件中 _START_ から _END_ まで表示",
+                    paginate: {
+                        first: "先頭",
+                        previous: "前",
+                        next: "次",
+                        last: "最終"
+                    },
+                    emptyTable: "タスクがありません"
+                },
+                order: [[0, 'asc']],
+                pageLength: 25
+            });
+            
+            // イベントハンドラー
+            $('#taskTable').on('click', '.task-link', (e) => {
+                e.preventDefault();
+                const id = $(e.target).data('id');
+                const task = this.tasks.find(t => t.id == id);
+                if (task) {
+                    this.selectedTask = task;
+                }
+            });
+            
+            $('#taskTable').on('click', '.btn-edit-task', (e) => {
+                const id = $(e.target).closest('button').data('id');
+                const task = this.tasks.find(t => t.id == id);
+                if (task) {
+                    this.editTask(task);
+                }
+            });
+            
+            $('#taskTable').on('click', '.btn-delete-task', (e) => {
+                const id = $(e.target).closest('button').data('id');
+                this.deleteTask(id);
+            });
+        },
+        
+        updateDataTable() {
+            if (this.taskTable) {
+                // Sắp xếp tasks: parent tasks trước, sau đó subtasks
+                const sortedTasks = [];
+                const parentTasks = this.tasks.filter(t => !t.parent_id);
+                
+                parentTasks.forEach(parent => {
+                    sortedTasks.push(parent);
+                    const subtasks = this.tasks.filter(t => t.parent_id == parent.id);
+                    sortedTasks.push(...subtasks);
+                });
+                
+                this.taskTable.clear();
+                this.taskTable.rows.add(sortedTasks);
+                this.taskTable.draw();
+            }
+        },
+        
         openNewTaskModal() {
             this.editingTask = null;
+            this.resetTaskForm();
+            this.taskForm.project_id = this.projectId;
+            const modal = new bootstrap.Modal(document.getElementById('taskModal'));
+            modal.show();
+        },
+        
+        editTask(task) {
+            this.editingTask = task;
             this.taskForm = {
-                name: '',
-                description: '',
-                start_date: '',
-                due_date: '',
-                assignees: [],
-                priority: 'medium',
-                parent_id: null,
-                progress: 0
+                title: task.title || '',
+                description: task.description || '',
+                status: task.status || 'new',
+                priority: task.priority || 'medium',
+                start_date: task.start_date || '',
+                due_date: task.due_date || '',
+                assigned_to: task.assigned_to || null,
+                parent_id: task.parent_id || null,
+                category_id: task.category_id || null,
+                estimated_hours: task.estimated_hours || 0,
+                progress: task.progress || 0,
+                project_id: this.projectId
             };
             const modal = new bootstrap.Modal(document.getElementById('taskModal'));
             modal.show();
         },
-        viewTask(taskId) {
-            const task = this.findTask(taskId);
-            if (task) {
-                this.selectedTask = task;
-            }
-        },
-        editTask(taskId) {
-            const task = this.findTask(taskId);
-            if (task) {
-                this.editingTask = task;
-                this.taskForm = { ...task };
-                const modal = new bootstrap.Modal(document.getElementById('taskModal'));
-                modal.show();
-            }
-        },
-
-        // Find a task and its parent chain
-        findTaskAndParents(taskId) {
-            const task = this.flatTasks.find(t => t.id === taskId);
-            if (!task) return null;
-
-            const parents = [];
-            let currentId = task.parent_id;
-            while (currentId) {
-                const parent = this.flatTasks.find(t => t.id === currentId);
-                if (!parent) break;
-                parents.push(parent);
-                currentId = parent.parent_id;
-            }
-
-            return { task, parents };
-        },
-
-        findTask(taskId) {
-            return this.flatTasks.find(task => task.id === taskId);
-        },
-        saveTask() {
-            if (this.editingTask) {
-                // Update existing task
-                const taskIndex = this.flatTasks.findIndex(t => t.id === this.editingTask.id);
-                if (taskIndex !== -1) {
-                    const oldParentId = this.flatTasks[taskIndex].parent_id;
-                    Object.assign(this.flatTasks[taskIndex], this.taskForm);
-                    
-                    // If parent changed, update progress for both old and new parent chains
-                    if (oldParentId !== this.taskForm.parent_id) {
-                        if (oldParentId) this.updateTaskAndAncestorsProgress(oldParentId);
-                        if (this.taskForm.parent_id) this.updateTaskAndAncestorsProgress(this.taskForm.parent_id);
-                    } else if (this.taskForm.parent_id) {
-                        // If parent didn't change but exists, update its chain
-                        this.updateTaskAndAncestorsProgress(this.taskForm.parent_id);
+        
+        async saveTask() {
+            try {
+                const formData = new FormData();
+                formData.append('model', 'task');
+                formData.append('method', this.editingTask ? 'edit' : 'add');
+                
+                if (this.editingTask) {
+                    formData.append('id', this.editingTask.id);
+                }
+                
+                Object.keys(this.taskForm).forEach(key => {
+                    if (this.taskForm[key] !== null && this.taskForm[key] !== '') {
+                        formData.append(key, this.taskForm[key]);
                     }
-                }
-            } else {
-                // Add new task
-                const newTask = {
-                    ...this.taskForm,
-                    id: Date.now()
-                };
+                });
                 
-                this.flatTasks.push(newTask);
+                formData.append('project_id', this.projectId);
                 
-                // Update parent's progress if this task has a parent
-                if (newTask.parent_id) {
-                    this.updateTaskAndAncestorsProgress(newTask.parent_id);
+                const response = await axios.post('/api/index.php', formData);
+                
+                if (response.data) {
+                    this.showMessage(this.editingTask ? 'タスクを更新しました。' : 'タスクを作成しました。');
+                    bootstrap.Modal.getInstance(document.getElementById('taskModal')).hide();
+                    this.loadTasks();
+                    this.resetTaskForm();
                 }
+            } catch (error) {
+                console.error('Error saving task:', error);
+                this.showMessage('タスクの保存に失敗しました。', true);
             }
-            
-            const modal = bootstrap.Modal.getInstance(document.getElementById('taskModal'));
-            modal.hide();
         },
-        deleteTask(taskId) {
-            if (!confirm('このタスクを削除してもよろしいですか？')) {
+        
+        async deleteTask(id) {
+            if (!confirm('本当にこのタスクを削除しますか？')) {
                 return;
             }
             
-            const taskToDelete = this.findTask(taskId);
-            if (taskToDelete) {
-                const parentId = taskToDelete.parent_id;
+            try {
+                const formData = new FormData();
+                formData.append('model', 'task');
+                formData.append('method', 'delete');
+                formData.append('id', id);
                 
-                // Remove all child tasks recursively
-                const removeChildren = (parentId) => {
-                    const children = this.flatTasks.filter(t => t.parent_id === parentId);
-                    children.forEach(child => {
-                        removeChildren(child.id);
-                        const index = this.flatTasks.findIndex(t => t.id === child.id);
-                        if (index !== -1) this.flatTasks.splice(index, 1);
-                    });
-                };
+                const response = await axios.post('/api/index.php', formData);
                 
-                removeChildren(taskId);
-                
-                // Remove the task itself
-                const index = this.flatTasks.findIndex(t => t.id === taskId);
-                if (index !== -1) {
-                    this.flatTasks.splice(index, 1);
+                if (response.data) {
+                    this.showMessage('タスクを削除しました。');
+                    this.loadTasks();
+                    if (this.selectedTask && this.selectedTask.id == id) {
+                        this.selectedTask = null;
+                    }
                 }
-
-                // Update parent's progress if task had a parent
-                if (parentId) {
-                    this.updateTaskAndAncestorsProgress(parentId);
-                }
-
-                if (this.selectedTask && this.selectedTask.id === taskId) {
-                    this.selectedTask = null;
+            } catch (error) {
+                console.error('Error deleting task:', error);
+                if (error.response?.data?.error) {
+                    this.showMessage(error.response.data.error, true);
+                } else {
+                    this.showMessage('タスクの削除に失敗しました。', true);
                 }
             }
         },
-        updateTaskStatus() {
-            const task = this.findTask(this.selectedTask.id);
-            if (task) {
-                task.status = this.selectedTask.status;
-            }
-        },
-        updateTaskProgress() {
-            const task = this.findTask(this.selectedTask.id);
-            if (task) {
-                task.progress = parseInt(this.selectedTask.progress);
+        
+        async updateTaskStatus() {
+            if (!this.selectedTask) return;
+            
+            try {
+                const formData = new FormData();
+                formData.append('model', 'task');
+                formData.append('method', 'updateStatus');
+                formData.append('id', this.selectedTask.id);
+                formData.append('status', this.selectedTask.status);
                 
-                // If task has a parent, update the parent chain
-                if (task.parent_id) {
-                    this.updateTaskAndAncestorsProgress(task.parent_id);
+                const response = await axios.post('/api/index.php', formData);
+                
+                if (response.data) {
+                    this.showMessage('ステータスを更新しました。');
+                    this.loadTasks();
                 }
+            } catch (error) {
+                console.error('Error updating task status:', error);
+                this.showMessage('ステータスの更新に失敗しました。', true);
             }
         },
+        
+        async updateTaskProgress() {
+            if (!this.selectedTask) return;
+            
+            try {
+                const formData = new FormData();
+                formData.append('model', 'task');
+                formData.append('method', 'updateProgress');
+                formData.append('id', this.selectedTask.id);
+                formData.append('progress', this.selectedTask.progress);
+                
+                const response = await axios.post('/api/index.php', formData);
+                
+                if (response.data) {
+                    this.showMessage('進捗を更新しました。');
+                    this.loadTasks();
+                }
+            } catch (error) {
+                console.error('Error updating task progress:', error);
+                this.showMessage('進捗の更新に失敗しました。', true);
+            }
+        },
+        
+        resetTaskForm() {
+            this.taskForm = {
+                title: '',
+                description: '',
+                status: 'new',
+                priority: 'medium',
+                start_date: '',
+                due_date: '',
+                assigned_to: null,
+                parent_id: null,
+                category_id: null,
+                estimated_hours: 0,
+                progress: 0
+            };
+        },
+        
+        hasSubtasks(task) {
+            return task && this.tasks.some(t => t.parent_id == task.id);
+        },
+        
+        isDescendant(taskId, potentialAncestorId) {
+            const task = this.tasks.find(t => t.id == taskId);
+            if (!task || !task.parent_id) return false;
+            if (task.parent_id == potentialAncestorId) return true;
+            return this.isDescendant(task.parent_id, potentialAncestorId);
+        },
+        
         formatDate(date) {
-            if (!date) return '';
-            return new Date(date).toLocaleDateString('ja-JP');
+            if (!date) return '-';
+            return moment(date).format('YYYY/MM/DD');
+        },
+        
+        showMessage(message, isError = false) {
+            // Simple alert for now
+            alert(message);
         }
-    },
-    mounted() {
-        this.loadData();
-        window.app = this;
     }
-}).mount('#app');
+});
+
+// Mount the app when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    TaskApp.mount('#app');
+});
