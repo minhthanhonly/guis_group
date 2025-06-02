@@ -13,22 +13,12 @@ class Team extends ApplicationModel {
 			'description'=>array('説明'),
 			'created_at'=>array('作成日', 'except'=>array('search')),
 			'updated_at'=>array('更新日', 'except'=>array('search')),
+			'is_active'=>array('ステータス'),
 		);
 		
 		$this->connect();
 	}
 	
-
-
-	function getDepartment($userid){
-		$query = sprintf("SELECT department_id FROM groupware_user_department WHERE userid = '%s'", $userid);
-		$result = $this->fetchAll($query);
-		$department_ids = array();
-		foreach($result as $row){
-			$department_ids[] = $row['department_id'];
-		}
-		return $department_ids;
-	}
 
 	function list() {
 		$query = sprintf(
@@ -37,6 +27,7 @@ class Team extends ApplicationModel {
 			(SELECT COUNT(*) FROM " . DB_PREFIX . "team_members WHERE team_id = t.id) as member_count
 			FROM {$this->table} t
 			LEFT JOIN " . DB_PREFIX . "departments d ON t.department_id = d.id
+			WHERE t.is_active = 1
 			ORDER BY t.id ASC"
 		);
 		return $this->fetchAll($query);
@@ -111,10 +102,7 @@ class Team extends ApplicationModel {
 
 	function delete() {
 		$id = $_GET['id'];
-		// Delete team members first
-		$this->query("DELETE FROM " . DB_PREFIX . "team_members WHERE team_id = " . intval($id));
-		// Then delete team
-		return $this->query("DELETE FROM {$this->table} WHERE id = " . intval($id));
+		return $this->query_update(['is_active' => 0], ['id' => $id]);
 	}
 
 	function get() {

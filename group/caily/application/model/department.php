@@ -9,7 +9,8 @@ class Department extends ApplicationModel {
             'description' => array(),
             'can_project' => array(),
             'created_at' => array('except' => array('search')),
-            'updated_at' => array('except' => array('search'))
+            'updated_at' => array('except' => array('search')),
+            'is_active' => array()
         );
         $this->connect();
     }
@@ -20,6 +21,7 @@ class Department extends ApplicationModel {
             (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE department_id = c.id) as project_count,
             (SELECT COUNT(*) FROM " . DB_PREFIX . "user_department WHERE department_id = c.id) as num_employees
             FROM {$this->table} c
+            WHERE c.is_active = 1
             ORDER BY c.id ASC"
         );
         return $this->fetchAll($query);
@@ -29,6 +31,7 @@ class Department extends ApplicationModel {
         $query = sprintf(
             "SELECT c.*
             FROM {$this->table} c
+            WHERE c.is_active = 1
             ORDER BY c.id ASC"
         );
         return $this->fetchAll($query);
@@ -68,9 +71,9 @@ class Department extends ApplicationModel {
         if ($result['count'] > 0) {
             throw new Exception('この部署は使用中のため削除できません。');
         }
-
-        $query = sprintf("DELETE FROM {$this->table} WHERE id = %d", intval($id));
-        return $this->query($query);
+        $query = sprintf("DELETE FROM groupware_user_department WHERE department_id = %d", intval($id));
+        $this->query($query);
+        return $this->query_update(['is_active' => 0], ['id' => $id]);
     }
 
     function get() {
