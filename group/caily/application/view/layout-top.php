@@ -49,11 +49,12 @@
                     <div>マイタスク</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'project' && $page == 'setting') echo 'active'; ?>">
-                  <a href="<?=$root?>project/setting.php" class="menu-link" data-pjax>
-                    <div>設定</div>
+                <li class="menu-item <?php if($directory == 'project' && $page == 'task') echo 'active'; ?>">
+                  <a href="<?=$root?>project/task.php" class="menu-link">
+                    <div>マイタスク</div>
                   </a>
                 </li>
+                
               </ul>
             </li>
 
@@ -111,6 +112,7 @@
                 $active = 'active open';
                 if($page == 'branch') $active1 = 'active';
                 if($page == 'department') $active2 = 'active';
+                if($page == 'team') $active6 = 'active';
               }
               if($directory == 'administration'){
                 $active = 'active open';
@@ -141,6 +143,11 @@
                 <li class="menu-item <?php echo $active2; ?>">
                   <a href="<?=$root?>setting/department.php" class="menu-link">
                     <div>部署設定</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php echo $active6; ?>">
+                  <a href="<?=$root?>setting/team.php" class="menu-link">
+                    <div>チーム設定</div>
                   </a>
                 </li>
                 <li class="menu-item <?php echo $active3; ?>">

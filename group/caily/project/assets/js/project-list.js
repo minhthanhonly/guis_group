@@ -7,11 +7,6 @@ var projectTable;
             color: 'secondary'
         },
         {
-            key: 'draft',
-            name: '下書き',
-            color: 'secondary'
-        },
-        {
             key: 'open',
             name: 'オープン',
             color: 'info'
@@ -35,7 +30,17 @@ var projectTable;
             key: 'cancelled',
             name: 'キャンセル',
             color: 'danger'
-        }
+        },
+        {
+            key: 'draft',
+            name: '下書き',
+            color: 'secondary'
+        },
+        {
+            key: 'deleted',
+            name: '削除',
+            color: 'danger'
+        },
     ];
     var priorities = [
         {
@@ -60,6 +65,9 @@ var projectTable;
         },
     ];
     $(document).ready(function() {
+
+        
+
         projectData = [];
 
         projectTable = $('#projectTable').DataTable({
@@ -247,6 +255,158 @@ var projectTable;
             const id = $(this).data('id');
             app.deleteProject(id);
         });
+
+        $('#start_date').flatpickr({    
+            dateFormat: 'Y-m-d',
+            onChange: function(date) {
+                console.log(date);
+            }
+        });
+
+        $('#end_date').flatpickr({
+            dateFormat: 'Y-m-d',
+            onChange: function(date) {
+                console.log(date);
+            }
+        });
+
+        var category_id = $('#category_id');
+        var company_name = $('#company_name');
+        var customer_id = $('#customer_id');
+        if (category_id.length) {
+            category_id.wrap('<div class="position-relative"></div>').select2({
+                placeholder: '選択してください',
+                dropdownParent: category_id.parent(),
+                allowClear: true,
+                ajax: {
+                    url: '/api/index.php?model=customer&method=list_categories',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            search: params.term,
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function(data) {
+                        return {
+                            results: data.data.map(function(item) {
+                                return {
+                                    id: item.id,
+                                    text: item.name
+                                };
+                            })
+                        };
+                    }
+                }
+            });
+
+            // Ẩn company_name và customer_id ban đầu
+            $('#company_name').closest('.form-group').hide();
+            $('#customer_id').closest('.form-group').hide();
+
+            // Kiểm tra giá trị ban đầu của company_name và customer_id
+            if (company_name.val()) {
+                $('#company_name').closest('.form-group').show();
+            }
+            if (customer_id.val()) {
+                $('#customer_id').closest('.form-group').show();
+            }
+
+            // Khi category_id thay đổi
+            category_id.on('change', function() {
+                if ($(this).val()) {
+                    // Hiện company_name khi có category_id
+                    $('#company_name').closest('.form-group').show();
+                    // Reset và refresh company_name
+                    company_name.val(null).trigger('change');
+                    // Ẩn và reset customer_id
+                    $('#customer_id').closest('.form-group').hide();
+                    customer_id.val(null).trigger('change');
+                } else {
+                    // Ẩn cả company_name và customer_id khi không có category_id
+                    $('#company_name').closest('.form-group').hide();
+                    $('#customer_id').closest('.form-group').hide();
+                    company_name.val(null).trigger('change');
+                    customer_id.val(null).trigger('change');
+                }
+            });
+        }
+        
+        if (company_name.length) {
+            company_name.wrap('<div class="position-relative"></div>').select2({
+                placeholder: '選択してください',
+                dropdownParent: company_name.parent(),
+                allowClear: true,
+                ajax: {
+                    url: '/api/index.php?model=customer&method=list_companies_by_category',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            search: params.term,
+                            page: params.page || 1,
+                            category_id: category_id.val()
+                        };
+                    },
+                    processResults: function(data) {
+                        return {
+                            results: data.data.map(function(item) {
+                                return {
+                                    id: item.company_name,
+                                    text: item.company_name
+                                };
+                            })
+                        };
+                    }
+                }
+            });
+
+            // Khi company_name thay đổi
+            company_name.on('change', function() {
+                if ($(this).val()) {
+                    // Hiện customer_id khi có company_name
+                    $('#customer_id').closest('.form-group').show();
+                    // Reset và refresh customer_id
+                    customer_id.val(null).trigger('change');
+                } else {
+                    // Ẩn và reset customer_id khi không có company_name
+                    $('#customer_id').closest('.form-group').hide();
+                    customer_id.val(null).trigger('change');
+                }
+            });
+        }
+        
+        if (customer_id.length) {
+            customer_id.wrap('<div class="position-relative"></div>').select2({
+                placeholder: '選択してください',
+                dropdownParent: customer_id.parent(),
+                allowClear: true,
+                ajax: {
+                    url: '/api/index.php?model=customer&method=list_contacts_by_company',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            search: params.term,
+                            page: params.page || 1,
+                            company_name: company_name.val()
+                        };
+                    },
+                    processResults: function(data) {
+                        return {
+                            results: data.data.map(function(item) {
+                                return {
+                                    id: item.id,
+                                    text: item.name
+                                };
+                            })
+                        };
+                    }
+                }
+            });
+        }
+        
     });
 
 
@@ -296,9 +456,9 @@ var projectTable;
             this.loadDepartments();
             this.loadUsers();
             this.loadBranches();
-            this.loadCategories();
-            this.loadCompanies();
-            this.loadContacts();
+            // this.loadCategories();
+            // this.loadCompanies();
+            // this.loadContacts();
         },
         methods: {
             async loadDepartments() {
@@ -346,7 +506,7 @@ var projectTable;
                     projectTable.ajax.reload();
                 } catch (error) {
                     console.error('Error loading projects:', error);
-                    this.showMessage('プロジェクトの読み込みに失敗しました。', true);
+                   // this.showMessage('プロジェクトの読み込みに失敗しました。', true);
                 }
             },
             openNewProjectModal() {
@@ -408,7 +568,7 @@ var projectTable;
                         }
                     });
                     
-                    const response = await axios.post('/api/index.php', formData);
+                    const response = await axios.post('/api/index.php?model=project&method=add', formData);
                     
                     if (response.data) {
                         this.showMessage(this.isEdit ? 'プロジェクトを更新しました。' : 'プロジェクトを作成しました。');
@@ -433,7 +593,7 @@ var projectTable;
                     formData.append('method', 'delete');
                     formData.append('id', this.deletingId);
                     
-                    const response = await axios.post('/api/index.php', formData);
+                    const response = await axios.post('/api/index.php?model=project&method=delete', formData);
                     
                     if (response.data) {
                         this.showMessage('プロジェクトを削除しました。');
@@ -473,10 +633,6 @@ var projectTable;
                 };
                 this.companies = [];
                 this.contacts = [];
-            },
-            showMessage(message, isError = false) {
-                // Simple alert for now, can be replaced with a better notification system
-                alert(message);
             },
             async loadCategories() {
                 try {

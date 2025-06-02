@@ -42,6 +42,8 @@ class Customer extends ApplicationModel {
         $this->connect();
     }
 
+    
+
     function list_category() {
         $query = sprintf(
             "SELECT c.*, 

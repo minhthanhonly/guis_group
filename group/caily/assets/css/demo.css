@@ -400,3 +400,10 @@ li.storageprevious {
 }
 
 [v-cloak] { display: none; }
+
+.flatpickr-calendar.open{
+	z-index: 9999!important;
+}
+.btn.active {
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}

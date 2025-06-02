@@ -132,8 +132,9 @@ $view->heading('顧客情報');
                                         <th>担当部署</th>
                                         <th>役職</th>
                                         <th>電話番号</th>
+                                        <th>携帯</th>
                                         <th>メールアドレス</th>
-                                        <th>住所</th>
+                                        <!-- <th>住所</th> -->
                                         <th>メモ</th>
                                         <th>操作</th>
                                     </tr>
@@ -146,8 +147,9 @@ $view->heading('顧客情報');
                                         <td>{{ customer.department }}</td>
                                         <td>{{ customer.position }}</td>
                                         <td>{{ customer.tel }}</td>
+                                        <td>{{ customer.phone }}</td>
                                         <td>{{ customer.email }}</td>
-                                        <td>{{ customer.zip }} {{ customer.address1 }} {{ customer.address2 }}</td>
+                                        <!-- <td>{{ customer.zip }} {{ customer.address1 }} {{ customer.address2 }}</td> -->
                                         <td>{{ customer.memo }}</td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
@@ -241,6 +243,12 @@ $view->heading('顧客情報');
                             </div>
                             <div class="row">
                                 <div class="col-md-6 mb-3">
+                                    <label class="form-label">携帯番号</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" v-model="newCustomer.phone" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
                                     <label class="form-label">郵便番号</label>
                                     <div class="input-group">
                                         <input type="text" class="form-control" v-model="newCustomer.zip" required>
@@ -325,6 +333,7 @@ $view->footing();
                         title: '',
                         tel: '',
                         fax: '',
+                        phone: '',
                         email: '',
                         zip: '',
                         address1: '',
@@ -504,7 +513,7 @@ $view->footing();
                 },
                 resetCustomerData() {
                     this.editingCustomer = null;
-                    this.newCustomer = { company_name: '', company_name_kana: '', name: '', name_kana: '', position: '', department: '', title: '', tel: '', fax: '', email: '', zip: '', address1: '', address2: '', memo: '', category_id: this.selectedCategory.id, status: 1, guis_department: [] };
+                    this.newCustomer = { company_name: '', company_name_kana: '', name: '', name_kana: '', position: '', department: '', title: '', tel: '', fax: '', phone: '', email: '', zip: '', address1: '', address2: '', memo: '', category_id: this.selectedCategory.id, status: 1, guis_department: [] };
                 },
 
                 searchAddressCustomer() {

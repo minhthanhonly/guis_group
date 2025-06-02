@@ -9,13 +9,14 @@ class Project extends ApplicationModel {
             'name' => array(),
             'description' => array(),
             'priority' => array(), //low, medium, high, urgent
-            'status' => array(), //draft, open, in_progress, completed, paused, cancelled
+            'status' => array(), //draft, open, in_progress, completed, paused, cancelled, deleted
             'start_date' => array(), //timestamp
             'end_date' => array(), //timestamp
             'actual_start_date' => array(), //timestamp
             'actual_end_date' => array(), //timestamp
             'created_by' => array(), //userid
             'created_at' => array('except' => array('search')), //timestamp
+            'updated_at' => array('except' => array('search')), //timestamp
             'department_id' => array(), //
             'progress' => array(), //0-100
             'estimated_hours' => array(), //float
@@ -59,6 +60,8 @@ class Project extends ApplicationModel {
         }
         if (isset($_GET['status']) && $_GET['status'] != 'all') {
             $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
+        } else {
+            $whereArr[] = "p.status != 'deleted'";
         }
 
         // Add search condition
@@ -179,8 +182,8 @@ class Project extends ApplicationModel {
             'description' => isset($_POST['description']) ? $_POST['description'] : '',
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
-            'start_date' => isset($_POST['start_date']) ? $_POST['start_date'] : null,
-            'end_date' => isset($_POST['end_date']) ? $_POST['end_date'] : null,
+            'start_date' => isset($_POST['start_date']) ? strtotime($_POST['start_date']) : null,
+            'end_date' => isset($_POST['end_date']) ? strtotime($_POST['end_date']) : null,
             'created_by' => isset($_POST['created_by']) ? $_POST['created_by'] : $_SESSION['user_id'],
             'department_id' => isset($_POST['department_id']) ? $_POST['department_id'] : null,
             'progress' => 0,
@@ -192,7 +195,6 @@ class Project extends ApplicationModel {
             'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
             'amount' => isset($_POST['amount']) ? $_POST['amount'] : 0,
             'created_at' => date('Y-m-d H:i:s'),
-            'updated_at' => date('Y-m-d H:i:s')
         );
         
         $project_id = $this->query_insert($data);
@@ -244,21 +246,21 @@ class Project extends ApplicationModel {
 
     function delete($id) {
         // Check if project has tasks or members
-        $query = sprintf(
-            "SELECT COUNT(*) as count FROM " . DB_PREFIX . "tasks WHERE project_id = %d",
-            intval($id)
-        );
-        $tasks = $this->fetchOne($query)['count'];
+        // $query = sprintf(
+        //     "SELECT COUNT(*) as count FROM " . DB_PREFIX . "tasks WHERE project_id = %d",
+        //     intval($id)
+        // );
+        // $tasks = $this->fetchOne($query)['count'];
 
-        if ($tasks > 0) {
-            throw new Exception('このプロジェクトにはタスクが存在するため、削除できません。');
-        }
+        // if ($tasks > 0) {
+        //     throw new Exception('このプロジェクトにはタスクが存在するため、削除できません。');
+        // }
         
         // Xóa project members
-        $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id));
+        // $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id));
         
         // Xóa project
-        return $this->query_delete(['id' => $id]);
+        return $this->query_update(['status' => 'deleted'], ['id' => $id]);
     }
 
     function getMembers($project_id) {

@@ -24,12 +24,23 @@ $view->heading('プロジェクト管理');
         </div>
     </nav>
     <div class="card">
-        <ul class="list-group list-group-flush">
-            <li class="list-group-item" v-for="status in statuses" :key="status.id">
-                <a href="#" class="nav-link" @click="filterProjectByStatus(status)" >{{ status.name }}</a>
-            </li>
-        </ul>
+        
         <div class="card-body">
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button 
+                    v-for="status in statuses" 
+                    :key="status.key"
+                    class="btn btn-sm"
+                    :class="{
+                        [`btn-label-${status.color}`]: !selectedStatus || selectedStatus?.key !== status.key,
+                        [`btn-${status.color}`]: selectedStatus?.key === status.key,
+                        'active': selectedStatus?.key === status.key
+                    }"
+                    @click="filterProjectByStatus(status)"
+                >
+                    {{ status.name }}
+                </button>
+            </div>
             <table id="projectTable" class="table table-striped">
                 
             </table>
@@ -52,9 +63,9 @@ $view->heading('プロジェクト管理');
                             </div>
                             <div class="row">
                                 <div class="col-md-4">
-                                    <div class="mb-3">
+                                    <div class="mb-3 form-group">
                                         <label class="form-label">会社名 <span class="text-danger">*</span></label>
-                                        <select class="form-select" v-model="newProject.category_id" required @change="onCategoryChange">
+                                        <select id="category_id" class="form-select select2" v-model="newProject.category_id" required @change="onCategoryChange">
                                             <option value="">選択してください</option>
                                             <option v-for="category in categories" :key="category.id" :value="category.id">
                                                 {{ category.name }}
@@ -63,9 +74,9 @@ $view->heading('プロジェクト管理');
                                     </div>
                                 </div>
                                 <div class="col-md-4">
-                                    <div class="mb-3">
+                                    <div class="mb-3 form-group">
                                         <label class="form-label">支店名 <span class="text-danger">*</span></label>
-                                        <select class="form-select" v-model="newProject.company_name" required @change="onCompanyChange">
+                                        <select id="company_name" class="form-select select2" v-model="newProject.company_name" required @change="onCompanyChange">
                                             <option value="">選択してください</option>
                                             <option v-for="company in companies" :key="company.company_name" :value="company.company_name">
                                                 {{ company.company_name }}
@@ -74,9 +85,9 @@ $view->heading('プロジェクト管理');
                                     </div>
                                 </div>
                                 <div class="col-md-4">
-                                    <div class="mb-3">
+                                    <div class="mb-3 form-group">
                                         <label class="form-label">担当者名 <span class="text-danger">*</span></label>
-                                        <select class="form-select" v-model="newProject.customer_id" required>
+                                        <select id="customer_id" class="form-select select2" v-model="newProject.customer_id" required>
                                             <option value="">選択してください</option>
                                             <option v-for="contact in contacts" :key="contact.id" :value="contact.id">
                                                 {{ contact.name }}
@@ -126,7 +137,7 @@ $view->heading('プロジェクト管理');
                                 <div class="col-md-4">
                                     <div class="mb-3">
                                         <label class="form-label">部署 <span class="text-danger">*</span></label>
-                                        <select class="form-select" v-model="newProject.department_id" required>
+                                        <select class="form-select" v-model="newProject.department_id" required disabled>
                                             <option value="">選択してください</option>
                                             <option v-for="department in departments" :key="department.id" :value="department.id">
                                                 {{ department.name }}
@@ -139,13 +150,13 @@ $view->heading('プロジェクト管理');
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">開始日</label>
-                                        <input type="date" class="form-control" v-model="newProject.start_date">
+                                        <input type="date" class="form-control" v-model="newProject.start_date" id="start_date">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">終了日</label>
-                                        <input type="date" class="form-control" v-model="newProject.end_date">
+                                        <input type="date" class="form-control" v-model="newProject.end_date" id="end_date">
                                     </div>
                                 </div>
                             </div>
@@ -158,7 +169,7 @@ $view->heading('プロジェクト管理');
                                                 {{ user.realname }}
                                             </option>
                                         </select>
-                                        <small class="text-muted">Ctrlキーを押しながらクリックで複数選択</small>
+                                        <input type="text" id="TagifyUserList" name="TagifyUserList" v-model="newProject.members">
                                     </div>
                                 </div>
                             </div>
