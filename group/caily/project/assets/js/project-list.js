@@ -443,13 +443,14 @@ var projectTable;
                     priority: 'medium',
                     start_date: '',
                     end_date: '',
+                    team: [],
                     members: [],
                     manager: [],
                     department_id: '',
                     building_size: '',
                     building_type: '',
                     project_number: '',
-                    project_order_type: 'new',
+                    project_order_type: '新規',
                     estimated_hours: '',
                     amount: '',
                     customer_id: '',
@@ -462,21 +463,125 @@ var projectTable;
                 companies: [],
                 contacts: [],
                 users: [],
+                teams: [],
                 isEdit: false,
                 perPage: 20,
                 currentPage: 1,
                 editingId: null,
-                deletingId: null
+                deletingId: null,
+                tagifyInstance: null,
+                teamTagifyInstance: null,
+                membersTagifyInstance: null
             }
         },
         mounted() {
             this.loadDepartments();
-            this.loadUsers();
-            this.loadBranches();
+            // this.loadUsers();
+            // this.loadBranches();
             // this.loadCategories();
             // this.loadCompanies();
             // this.loadContacts();
-            
+
+            // Initialize Tagify for project_order_type
+            this.$nextTick(() => {
+                const input = document.querySelector('#project_order_type');
+                if (input && window.Tagify) {
+                    this.tagifyInstance = new Tagify(input, {
+                        whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                        maxTags: 5,
+                        dropdown: {
+                            maxItems: 20,
+                            classname: "tags-look",
+                            enabled: 0,
+                            closeOnSelect: true
+                        },
+                        callbacks: {
+                            add: (e) => {
+                                const tags = this.tagifyInstance.value.map(tag => tag.value);
+                                this.newProject.project_order_type = tags;
+                            },
+                            remove: (e) => {
+                                const tags = this.tagifyInstance.value.map(tag => tag.value);
+                                this.newProject.project_order_type = tags;
+                            }
+                        }
+                    });
+
+                    // Set default value
+                    if (!this.newProject.project_order_type || this.newProject.project_order_type.length === 0) {
+                        this.tagifyInstance.addTags(['新規']);
+                    } else if (Array.isArray(this.newProject.project_order_type)) {
+                        this.tagifyInstance.addTags(this.newProject.project_order_type);
+                    }
+                }
+            });
+
+            // Load teams and initialize team Tagify
+            this.loadTeams().then(() => {
+                this.$nextTick(() => {
+                    // Initialize Tagify for team
+                    const teamInput = document.querySelector('input[name="team_tags"]');
+                    if (teamInput && window.Tagify) {
+                        this.teamTagifyInstance = new Tagify(teamInput, {
+                            whitelist: this.teams.map(team => ({
+                                id: team.id,
+                                value: team.name,
+                                name: team.name
+                            })),
+                            maxTags: 1,
+                            dropdown: {
+                                maxItems: 20,
+                                classname: "tags-look",
+                                enabled: 0,
+                                closeOnSelect: false
+                            },
+                            callbacks: {
+                                add: (e) => {
+                                    const teamId = e.detail.tag.id;
+                                    this.loadTeamMembers(teamId);
+                                },
+                                remove: (e) => {
+                                    this.newProject.members = [];
+                                    if (this.membersTagifyInstance) {
+                                        this.membersTagifyInstance.removeAllTags();
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    // Initialize Tagify for members
+                    const membersInput = document.querySelector('input[name="members_tags"]');
+                    if (membersInput && window.Tagify) {
+                        this.membersTagifyInstance = new Tagify(membersInput, {
+                            whitelist: [],
+                            maxTags: 10,
+                            dropdown: {
+                                maxItems: 20,
+                                classname: "tags-look",
+                                enabled: 0,
+                                closeOnSelect: true
+                            },
+                            callbacks: {
+                                add: (e) => {
+                                    const members = this.membersTagifyInstance.value.map(member => member.id);
+                                    this.newProject.members = members;
+                                },
+                                remove: (e) => {
+                                    const members = this.membersTagifyInstance.value.map(member => member.id);
+                                    this.newProject.members = members;
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+        },
+        beforeUnmount() {
+            // Clean up Tagify instance when component is destroyed
+            if (this.tagifyInstance) {
+                this.tagifyInstance.destroy();
+            }
         },
         methods: {
             async loadDepartments() {
@@ -509,6 +614,17 @@ var projectTable;
                     this.branches = response.data || [];
                 } catch (error) {
                     console.error('Error loading branches:', error);
+                }
+            },
+            async loadTeams() {
+                try {
+                    const response = await axios.get('/api/index.php?model=team&method=list');
+                    console.log(response.data);
+                    this.teams = response.data || [];
+                    return this.teams;
+                } catch (error) {
+                    console.error('Error loading teams:', error);
+                    return [];
                 }
             },
             viewProjects(department) {
@@ -552,7 +668,7 @@ var projectTable;
                     building_size: project.building_size || '',
                     building_type: project.building_type || '',
                     project_number: project.project_number || '',
-                    project_order_type: project.project_order_type || 'new',
+                    project_order_type: project.project_order_type || ['new'],
                     estimated_hours: project.estimated_hours || '',
                     amount: project.amount || '',
                     customer_id: project.customer_id || '',
@@ -634,12 +750,14 @@ var projectTable;
                     priority: 'medium',
                     start_date: '',
                     end_date: '',
+                    team: [],
                     members: [],
+                    manager: [],
                     department_id: '',
                     building_size: '',
                     building_type: '',
                     project_number: '',
-                    project_order_type: 'new',
+                    project_order_type: '新規',
                     estimated_hours: '',
                     amount: '',
                     customer_id: '',
@@ -650,6 +768,18 @@ var projectTable;
                 };
                 this.companies = [];
                 this.contacts = [];
+                
+                // Reset Tagify instances
+                if (this.tagifyInstance) {
+                    this.tagifyInstance.removeAllTags();
+                    this.tagifyInstance.addTags(['新規']);
+                }
+                if (this.teamTagifyInstance) {
+                    this.teamTagifyInstance.removeAllTags();
+                }
+                if (this.membersTagifyInstance) {
+                    this.membersTagifyInstance.removeAllTags();
+                }
             },
             async loadCategories() {
                 try {
@@ -728,5 +858,33 @@ var projectTable;
                 const modal = new bootstrap.Modal(document.getElementById('newCustomerModal'));
                 modal.show();
             },
+            async loadTeamMembers(teamId) {
+                try {
+                    const response = await axios.get(`/api/index.php?model=team&method=get&id=${teamId}`);
+                    if (response.data && response.data.members) {
+                        const members = response.data.members.map(member => ({
+                            id: member.user_id,
+                            value: member.user_name,
+                            name: member.user_name
+                        }));
+                        
+                        if (this.membersTagifyInstance) {
+                            this.membersTagifyInstance.whitelist = members;
+                            this.membersTagifyInstance.addTags(members);
+                            this.newProject.members = members.map(m => m.id);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error loading team members:', error);
+                }
+            },
         },
+        watch: {
+            // 'newProject': {
+            //     handler: function(newVal) {
+            //         console.log(newVal);
+            //     },
+            //     deep: true
+            // }
+        }
     }).mount('#app');

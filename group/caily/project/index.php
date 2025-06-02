@@ -4,6 +4,7 @@ require_once('../application/loader.php');
 $view->heading('プロジェクト管理');
 
 ?>
+
 <div id="app"  class="container-fluid mt-4" v-cloak>
     <nav class="navbar navbar-expand-lg bg-dark mb-12">
         <div class="container-fluid">
@@ -141,15 +142,29 @@ $view->heading('プロジェクト管理');
                                 <div class="col-md-4">
                                     <div class="mb-3">
                                         <label class="form-label">受注形態</label>
-                                        <select class="form-select select2" v-model="newProject.project_order_type" id="project_order_type">
-                                            <option value="">選択してください</option>
-                                            <option value="new" selected>新規</option>
-                                            <option value="edit">修正</option>
-                                            <option value="custom">カスタム</option>
+                                        <input type="text" class="form-control tagify" v-model="newProject.project_order_type" id="project_order_type" placeholder="選択してください">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">優先度</label>
+                                        <select class="form-select" v-model="newProject.priority">
+                                            <option value="low">低</option>
+                                            <option value="medium">中</option>
+                                            <option value="high">高</option>
+                                            <option value="urgent">緊急</option>
                                         </select>
                                     </div>
                                 </div>
-                                
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">案件状況</label>
+                                        <select class="form-select" v-model="newProject.status" required>
+                                            <option value="draft">下書き</option>
+                                            <option value="open">オープン</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                             <div class="row">
                                 <div class="col-md-6">
@@ -168,36 +183,16 @@ $view->heading('プロジェクト管理');
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label">担当者</label>
-                                        <input class="form-control" type="text" id="TagifyMangerList" name="manager" v-model="newProject.manager">
+                                        <label class="form-label">チーム</label>
+                                        <input class="form-control" type="text" name="team_tags">
+                                        <input class="form-control" type="text" name="team" v-model="newProject.team">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">メンバー</label>
-                                        <input class="form-control" type="text" id="TagifyUserList" name="members" v-model="newProject.members">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">案件状況</label>
-                                        <select class="form-select" v-model="newProject.status" required>
-                                            <option value="draft">下書き</option>
-                                            <option value="open">オープン</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">優先度</label>
-                                        <select class="form-select" v-model="newProject.priority">
-                                            <option value="low">低</option>
-                                            <option value="medium">中</option>
-                                            <option value="high">高</option>
-                                            <option value="urgent">緊急</option>
-                                        </select>
+                                        <input class="form-control" type="text" name="members_tags">
+                                        <input class="form-control" type="text" name="members" v-model="newProject.members">
                                     </div>
                                 </div>
                             </div>
