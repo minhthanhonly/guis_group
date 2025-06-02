@@ -57,9 +57,24 @@ $view->heading('プロジェクト管理');
                     </div>
                     <div class="modal-body">
                         <form @submit.prevent="saveProject">
-                            <div class="mb-3">
-                                <label class="form-label">お施主様名 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" v-model="newProject.name" required>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">お施主様名 <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" v-model="newProject.name" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">部署 <span class="text-danger">*</span></label>
+                                        <select class="form-select" v-model="newProject.department_id" required disabled>
+                                            <option value="">選択してください</option>
+                                            <option v-for="department in departments" :key="department.id" :value="department.id">
+                                                {{ department.name }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                             <div class="row">
                                 <div class="col-md-4">
@@ -115,36 +130,26 @@ $view->heading('プロジェクト管理');
                                         <input type="text" class="form-control" v-model="newProject.project_number">
                                     </div>
                                 </div> -->
-                            </div>
-                            <div class="row">
                                 <div class="col-md-4">
                                     <div class="mb-3">
                                         <label class="form-label">連絡番号</label>
                                         <input type="text" class="form-control" v-model="newProject.project_number">
                                     </div>
                                 </div>
+                            </div>
+                            <div class="row">
                                 <div class="col-md-4">
                                     <div class="mb-3">
                                         <label class="form-label">受注形態</label>
-                                        <select class="form-select" v-model="newProject.project_order_type">
+                                        <select class="form-select select2" v-model="newProject.project_order_type" id="project_order_type">
                                             <option value="">選択してください</option>
-                                            <option value="new">新規</option>
+                                            <option value="new" selected>新規</option>
                                             <option value="edit">修正</option>
                                             <option value="custom">カスタム</option>
                                         </select>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label class="form-label">部署 <span class="text-danger">*</span></label>
-                                        <select class="form-select" v-model="newProject.department_id" required disabled>
-                                            <option value="">選択してください</option>
-                                            <option v-for="department in departments" :key="department.id" :value="department.id">
-                                                {{ department.name }}
-                                            </option>
-                                        </select>
-                                    </div>
-                                </div>
+                                
                             </div>
                             <div class="row">
                                 <div class="col-md-6">
@@ -161,15 +166,16 @@ $view->heading('プロジェクト管理');
                                 </div>
                             </div>
                             <div class="row">
-                                <div class="col-md-12">
+                                <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label">プロジェクトメンバー</label>
-                                        <select class="form-select" v-model="newProject.members" multiple style="height: 150px;">
-                                            <option v-for="user in users" :key="user.userid" :value="user.userid">
-                                                {{ user.realname }}
-                                            </option>
-                                        </select>
-                                        <input type="text" id="TagifyUserList" name="TagifyUserList" v-model="newProject.members">
+                                        <label class="form-label">担当者</label>
+                                        <input class="form-control" type="text" id="TagifyMangerList" name="manager" v-model="newProject.manager">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">メンバー</label>
+                                        <input class="form-control" type="text" id="TagifyUserList" name="members" v-model="newProject.members">
                                     </div>
                                 </div>
                             </div>
@@ -180,10 +186,6 @@ $view->heading('プロジェクト管理');
                                         <select class="form-select" v-model="newProject.status" required>
                                             <option value="draft">下書き</option>
                                             <option value="open">オープン</option>
-                                            <option value="in_progress">進行中</option>
-                                            <option value="completed">完了</option>
-                                            <option value="paused">一時停止</option>
-                                            <option value="cancelled">キャンセル</option>
                                         </select>
                                     </div>
                                 </div>
@@ -199,7 +201,7 @@ $view->heading('プロジェクト管理');
                                     </div>
                                 </div>
                             </div>
-                            <div class="row">
+                            <!-- <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">予定時間</label>
@@ -212,7 +214,7 @@ $view->heading('プロジェクト管理');
                                         <input type="number" class="form-control" v-model="newProject.amount">
                                     </div>
                                 </div>
-                            </div>
+                            </div> -->
                             <div class="mb-3">
                                 <label class="form-label">メモ</label>
                                 <textarea class="form-control" v-model="newProject.description" rows="3"></textarea>

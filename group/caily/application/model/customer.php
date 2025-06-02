@@ -377,15 +377,25 @@ class Customer extends ApplicationModel {
         );
         try {
             $category_id = $_GET['category_id'];
+            $search = $_GET['search'];
+            $where = '';
+            if ($category_id) {
+                $where .= " AND category_id = '$category_id'";
+            }
+            if ($search) {
+                $where .= " AND (company_name LIKE '%$search%' OR company_name_kana LIKE '%$search%')";
+            }
+            $where = ltrim($where, ' AND');
+
             $query = sprintf(
                 "SELECT DISTINCT company_name 
                 FROM %scustomer 
-                WHERE category_id = %d 
+                WHERE %s
                 AND company_name IS NOT NULL 
                 AND company_name != '' 
                 ORDER BY id ASC",
                 DB_PREFIX,
-                intval($category_id)
+                $where
             );
             $result = $this->fetchAll($query);
             if ($result) {
@@ -410,13 +420,22 @@ class Customer extends ApplicationModel {
         );
         try {
             $company_name = $_GET['company_name'];
+            $search = $_GET['search'];
+            $where = '';
+            if ($company_name) {
+                $where .= " AND company_name = '$company_name'";
+            }
+            if ($search) {
+                $where .= " AND (name LIKE '%$search%' OR name_kana LIKE '%$search%')";
+            }
+            $where = ltrim($where, ' AND');
             $query = sprintf(
                 "SELECT id, name 
                 FROM %scustomer 
-                WHERE company_name = '%s' 
+                WHERE %s
                 ORDER BY id ASC",
                 DB_PREFIX,
-                $company_name
+                $where
             );
             $result = $this->fetchAll($query);
             if ($result) {

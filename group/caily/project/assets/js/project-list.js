@@ -338,6 +338,14 @@ var projectTable;
                 placeholder: '選択してください',
                 dropdownParent: company_name.parent(),
                 allowClear: true,
+                escapeMarkup: function(markup) {
+                    return markup;
+                },
+                language: {
+                    noResults: function() {
+                        return '見つかりません。<button class="btn btn-warning btn-sm w-50" onclick="app.openNewCustomerModal()">新規顧客を追加</button>';
+                    },
+                },
                 ajax: {
                     url: '/api/index.php?model=customer&method=list_companies_by_category',
                     dataType: 'json',
@@ -382,6 +390,14 @@ var projectTable;
                 placeholder: '選択してください',
                 dropdownParent: customer_id.parent(),
                 allowClear: true,
+                escapeMarkup: function(markup) {
+                    return markup;
+                },
+                language: {
+                    noResults: function() {
+                        return '見つかりません。<button class="btn btn-warning btn-sm w-50" onclick="app.openNewCustomerModal()">新規顧客を追加</button>';
+                    },
+                },
                 ajax: {
                     url: '/api/index.php?model=customer&method=list_contacts_by_company',
                     dataType: 'json',
@@ -428,11 +444,12 @@ var projectTable;
                     start_date: '',
                     end_date: '',
                     members: [],
+                    manager: [],
                     department_id: '',
                     building_size: '',
                     building_type: '',
                     project_number: '',
-                    project_order_type: '',
+                    project_order_type: 'new',
                     estimated_hours: '',
                     amount: '',
                     customer_id: '',
@@ -459,6 +476,7 @@ var projectTable;
             // this.loadCategories();
             // this.loadCompanies();
             // this.loadContacts();
+            
         },
         methods: {
             async loadDepartments() {
@@ -520,7 +538,6 @@ var projectTable;
                 modal.show();
             },
             editProject(project) {
-                console.log(project);
                 this.isEdit = true;
                 this.editingId = project.id;
                 this.newProject = {
@@ -535,7 +552,7 @@ var projectTable;
                     building_size: project.building_size || '',
                     building_type: project.building_type || '',
                     project_number: project.project_number || '',
-                    project_order_type: project.project_order_type || '',
+                    project_order_type: project.project_order_type || 'new',
                     estimated_hours: project.estimated_hours || '',
                     amount: project.amount || '',
                     customer_id: project.customer_id || '',
@@ -622,7 +639,7 @@ var projectTable;
                     building_size: '',
                     building_type: '',
                     project_number: '',
-                    project_order_type: '',
+                    project_order_type: 'new',
                     estimated_hours: '',
                     amount: '',
                     customer_id: '',
@@ -703,6 +720,13 @@ var projectTable;
                     this.contacts = [];
                     this.newProject.customer_id = '';
                 }
+            },
+            openNewCustomerModal() {
+                // Đóng dropdown của select2
+                $('#customer_id').select2('close');
+                // Mở modal thêm khách hàng mới
+                const modal = new bootstrap.Modal(document.getElementById('newCustomerModal'));
+                modal.show();
             },
         },
     }).mount('#app');
