@@ -588,6 +588,37 @@ var projectTable;
                         }
                     });
                 }
+
+                // Initialize Tagify for members
+                const managerInput = document.querySelector('input[name="manager_tags"]');
+                if (managerInput && window.Tagify) {
+                    this.managerTagifyInstance = new Tagify(managerInput, {
+                        whitelist: [],
+                        maxTags: 10,
+                        dropdown: {
+                            maxItems: 20,
+                            classname: "tags-look",
+                            enabled: 0,
+                            closeOnSelect: true
+                        },
+                        callbacks: {
+                            add: (e) => {
+                                const manager = this.managerTagifyInstance.value.map(manager => manager.id);
+                                this.newProject.manager = manager;
+                                if (this.formValidator) {
+                                    this.formValidator.revalidateField('manager_tags');
+                                }
+                            },
+                            remove: (e) => {
+                                const manager = this.managerTagifyInstance.value.map(manager => manager.id);
+                                this.newProject.manager = manager;
+                                if (this.formValidator) {
+                                    this.formValidator.revalidateField('manager_tags');
+                                }
+                            }
+                        }
+                    });
+                }
             });
             // Initialize form validation
             const form = document.querySelector('#newProjectModal form');
@@ -707,6 +738,16 @@ var projectTable;
                                     }
                                 }
                             }
+                        },
+                        manager_tags: {
+                            validators: {
+                                callback: {
+                                    message: 'メンバーを選択してください',
+                                    callback: function(input) {
+                                        return app.managerTagifyInstance && app.managerTagifyInstance.value.length > 0;
+                                    }
+                                }
+                            }
                         }
                     },
                     plugins: {
@@ -795,6 +836,13 @@ var projectTable;
                 this.loadUsers().then(() => {
                     if (this.membersTagifyInstance) {
                         this.membersTagifyInstance.whitelist = this.users.map(user => ({
+                            id: user.id,
+                            value: user.user_name,
+                            name: user.user_name
+                        }));
+                    }
+                    if (this.managerTagifyInstance) {
+                        this.managerTagifyInstance.whitelist = this.users.map(user => ({
                             id: user.id,
                             value: user.user_name,
                             name: user.user_name

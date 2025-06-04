@@ -200,6 +200,16 @@ $view->heading('プロジェクト管理');
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3 form-control-validation">
+                                        <label class="form-label">担当者</label>
+                                        <input class="form-control" type="text" name="manager_tags" required>
+                                        <input class="form-control" type="hidden" name="members" v-model="newProject.manager">
+                                        <div class="invalid-feedback"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="mb-3 form-control-validation">
                                         <label class="form-label">メンバー</label>
                                         <input class="form-control" type="text" name="members_tags" required>
                                         <input class="form-control" type="hidden" name="members" v-model="newProject.members">
