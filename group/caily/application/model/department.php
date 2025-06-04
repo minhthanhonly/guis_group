@@ -45,7 +45,30 @@ class Department extends ApplicationModel {
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
-        return $this->query_insert($data);
+        $department_id = $this->query_insert($data);
+        
+        // Add department members
+        if (isset($_POST['members']) && is_array($_POST['members'])) {
+            foreach ($_POST['members'] as $user_id) {
+                $member_data = array(
+                    'department_id' => $department_id,
+                    'userid' => $user_id,
+                    'project_manager' => isset($_POST['project_manager'][$user_id]) && $_POST['project_manager'][$user_id] == 'true' ? 1 : 0,
+                    'project_director' => isset($_POST['project_director'][$user_id]) && $_POST['project_director'][$user_id] == 'true' ? 1 : 0,
+                    'project_add' => isset($_POST['project_add'][$user_id]) && $_POST['project_add'][$user_id] == 'true' ? 1 : 0,
+                    'project_edit' => isset($_POST['project_edit'][$user_id]) && $_POST['project_edit'][$user_id] == 'true' ? 1 : 0,
+                    'project_delete' => isset($_POST['project_delete'][$user_id]) && $_POST['project_delete'][$user_id] == 'true' ? 1 : 0,
+                    'project_comment' => isset($_POST['project_comment'][$user_id]) && $_POST['project_comment'][$user_id] == 'true' ? 1 : 0,
+                    'task_view' => isset($_POST['task_view'][$user_id]) && $_POST['task_view'][$user_id] == 'true' ? 1 : 0,
+                    'task_add' => isset($_POST['task_add'][$user_id]) && $_POST['task_add'][$user_id] == 'true' ? 1 : 0,
+                    'task_edit' => isset($_POST['task_edit'][$user_id]) && $_POST['task_edit'][$user_id] == 'true' ? 1 : 0,
+                    'task_delete' => isset($_POST['task_delete'][$user_id]) && $_POST['task_delete'][$user_id] == 'true' ? 1 : 0
+                );
+                $this->query_insert($member_data, DB_PREFIX . 'user_department');
+            }
+        }
+        
+        return $department_id;
     }
 
     function edit() {
@@ -56,7 +79,36 @@ class Department extends ApplicationModel {
             'can_project' => $_POST['can_project'],
             'updated_at' => date('Y-m-d H:i:s')
         );
-        return $this->query_update($data, ['id' => $id]);
+        
+        // Update department info
+        $this->query_update($data, ['id' => $id]);
+        
+        // Update department members
+        if (isset($_POST['members']) && is_array($_POST['members'])) {
+            // First delete existing members
+            $this->query("DELETE FROM " . DB_PREFIX . "user_department WHERE department_id = " . intval($id));
+            
+            // Then add new members
+            foreach ($_POST['members'] as $user_id) {
+                $member_data = array(
+                    'department_id' => $id,
+                    'userid' => $user_id,
+                    'project_manager' => isset($_POST['project_manager'][$user_id]) && $_POST['project_manager'][$user_id] == 'true' ? 1 : 0,
+                    'project_director' => isset($_POST['project_director'][$user_id]) && $_POST['project_director'][$user_id] == 'true' ? 1 : 0,
+                    'project_add' => isset($_POST['project_add'][$user_id]) && $_POST['project_add'][$user_id] == 'true' ? 1 : 0,
+                    'project_edit' => isset($_POST['project_edit'][$user_id]) && $_POST['project_edit'][$user_id] == 'true' ? 1 : 0,
+                    'project_delete' => isset($_POST['project_delete'][$user_id]) && $_POST['project_delete'][$user_id] == 'true' ? 1 : 0,
+                    'project_comment' => isset($_POST['project_comment'][$user_id]) && $_POST['project_comment'][$user_id] == 'true' ? 1 : 0,
+                    'task_view' => isset($_POST['task_view'][$user_id]) && $_POST['task_view'][$user_id] == 'true' ? 1 : 0,
+                    'task_add' => isset($_POST['task_add'][$user_id]) && $_POST['task_add'][$user_id] == 'true' ? 1 : 0,
+                    'task_edit' => isset($_POST['task_edit'][$user_id]) && $_POST['task_edit'][$user_id] == 'true' ? 1 : 0,
+                    'task_delete' => isset($_POST['task_delete'][$user_id]) && $_POST['task_delete'][$user_id] == 'true' ? 1 : 0
+                );
+                $this->query_insert($member_data, DB_PREFIX . 'user_department');
+            }
+        }
+        
+        return true;
     }
 
     function delete() {
@@ -85,6 +137,36 @@ class Department extends ApplicationModel {
             WHERE c.id = %d",
             intval($id)
         );
-        return $this->fetchOne($query);
+        $department = $this->fetchOne($query);
+        
+        // Get department members with their permissions
+        if ($department) {
+            $query = sprintf(
+                "SELECT ud.userid, u.realname as user_name,
+                ud.project_manager, ud.project_director, ud.project_add, ud.project_edit, ud.project_delete, ud.project_comment,
+                ud.task_view, ud.task_add, ud.task_edit, ud.task_delete
+                FROM " . DB_PREFIX . "user_department ud
+                LEFT JOIN " . DB_PREFIX . "user u ON u.userid = ud.userid
+                WHERE ud.department_id = %d AND (u.is_suspend = 0 OR u.is_suspend IS NULL)",
+                intval($id)
+            );
+            $department['members'] = $this->fetchAll($query);
+        }
+        
+        return $department;
+    }
+
+    function get_users() {
+        $department_id = $_GET['department_id'];
+        $query = sprintf(
+            "SELECT u.id, u.realname as user_name
+            FROM " . DB_PREFIX . "user u
+            JOIN " . DB_PREFIX . "user_department ud ON u.userid = ud.userid
+            WHERE ud.department_id = %d
+            AND (u.is_suspend = 0 OR u.is_suspend IS NULL)
+            ORDER BY u.userid ASC",
+            intval($department_id)
+        );
+        return $this->fetchAll($query);
     }
 } 

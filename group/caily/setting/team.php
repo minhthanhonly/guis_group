@@ -20,7 +20,7 @@ $view->heading('チーム設定');
                             <tr>
                                 <th>チーム名</th>
                                 <th>部署</th>
-                                <th>メンバー数</th>
+                                <th>メンバー</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -28,14 +28,11 @@ $view->heading('チーム設定');
                             <tr v-for="team in teams" :key="team.id">
                                 <td>{{ team.name }}</td>
                                 <td>{{ team.department_name }}</td>
-                                <td>{{ team.member_count }}</td>
+                                <td>{{ team.members }}</td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
                                         <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#teamModal" @click="editTeam(team)">
                                             <i class="icon-base ti tabler-edit"></i>
-                                        </button>
-                                        <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#membersModal" @click="viewMembers(team)">
-                                            <i class="icon-base ti tabler-users"></i>
                                         </button>
                                         <button class="btn btn-outline-danger" @click="deleteTeam(team)">
                                             <i class="icon-base ti tabler-trash"></i>
@@ -94,8 +91,7 @@ $view->heading('チーム設定');
                                     <thead>
                                         <tr>
                                             <th>名前</th>
-                                            <th>プロジェクト権限</th>
-                                            <th>タスク権限</th>
+                                            <th>チーム担当</th>
                                             <th>操作</th>
                                         </tr>
                                     </thead>
@@ -104,34 +100,8 @@ $view->heading('チーム設定');
                                             <td>{{ member.name }}</td>
                                             <td>
                                                 <div class="form-check form-check-inline">
-                                                    <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_edit">
-                                                   編集</label>
-                                                </div>
-                                                <div class="form-check form-check-inline">
-                                                    <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_delete">
-                                                    削除</label>
-                                                </div>
-                                                <div class="form-check form-check-inline">
-                                                    <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_comment">
-                                                    コメント</label>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div class="form-check form-check-inline">
-                                                    <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.task_view">
-                                                    閲覧</label>
-                                                </div>
-                                                <div class="form-check form-check-inline">
-                                                    <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.task_add">
-                                                    追加</label>
-                                                </div>
-                                                <div class="form-check form-check-inline">
-                                                    <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.task_edit">
-                                                    編集</label>
-                                                </div>
-                                                <div class="form-check form-check-inline">
-                                                    <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.task_delete">
-                                                    削除</label>
+                                                    <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.leader">
+                                                    チーム担当</label>
                                                 </div>
                                             </td>
                                             <td>
@@ -154,49 +124,7 @@ $view->heading('チーム設定');
         </div>
     </div>
 
-    <!-- View Members Modal -->
-    <div class="modal fade" id="membersModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">チームメンバー</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="table-responsive">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>名前</th>
-                                    <th>プロジェクト権限</th>
-                                    <th>タスク権限</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="member in selectedTeamMembers" :key="member.user_id">
-                                    <td>{{ member.user_name }}</td>
-                                    <td>
-                                        <span v-if="member.project_edit == 1" class="badge bg-label-primary me-1">編集</span>
-                                        <span v-if="member.project_delete == 1" class="badge bg-label-danger me-1">削除</span>
-                                        <span v-if="member.project_comment == 1" class="badge bg-label-info me-1">コメント</span>
-                                    </td>
-                                    <td>
-                                        <span v-if="member.task_view == 1" class="badge bg-label-secondary me-1">閲覧</span>
-                                        <span v-if="member.task_add == 1" class="badge bg-label-success me-1">追加</span>
-                                        <span v-if="member.task_edit == 1" class="badge bg-label-warning me-1">編集</span>
-                                        <span v-if="member.task_delete == 1" class="badge bg-label-danger me-1">削除</span>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-                </div>
-            </div>
-        </div>
-    </div>
+  
 </div>
 
 <?php
@@ -222,13 +150,13 @@ $view->footing();
                     department_id: '',
                     description: '',
                     members: [],
-                    project_edit: {},
-                    project_delete: {},
-                    project_comment: {},
-                    task_view: {},
-                    task_add: {},
-                    task_edit: {},
-                    task_delete: {}
+                    leader: {},
+                    // project_delete: {},
+                    // project_comment: {},
+                    // task_view: {},
+                    // task_add: {},
+                    // task_edit: {},
+                    // task_delete: {}
                 }
             }
         },
@@ -277,13 +205,7 @@ $view->footing();
                         department_id: teamData.department_id,
                         description: teamData.description,
                         members: [],
-                        project_edit: {},
-                        project_delete: {},
-                        project_comment: {},
-                        task_view: {},
-                        task_add: {},
-                        task_edit: {},
-                        task_delete: {}
+                        leader: {}
                     };
 
                     // Load department users first
@@ -294,13 +216,7 @@ $view->footing();
                         this.selectedMembers = teamData.members.map(member => ({
                             id: member.user_id,
                             name: member.user_name,
-                            project_edit: member.project_edit === '1',
-                            project_delete: member.project_delete === '1',
-                            project_comment: member.project_comment === '1',
-                            task_view: member.task_view === '1',
-                            task_add: member.task_add === '1',
-                            task_edit: member.task_edit === '1',
-                            task_delete: member.task_delete === '1'
+                            leader: member.leader === '1'
                         }));
                     }
                 } catch (error) {
@@ -345,13 +261,7 @@ $view->footing();
                 this.selectedMembers.push({
                     id: this.selectedUser.id,
                     name: this.selectedUser.name,
-                    project_edit: false,
-                    project_delete: false,
-                    project_comment: true,
-                    task_view: true,
-                    task_add: true,
-                    task_edit: true,
-                    task_delete: true
+                    leader: false
                 });
 
                 // Reset selection
@@ -368,24 +278,12 @@ $view->footing();
                         department_id: this.newTeam.department_id,
                         description: this.newTeam.description,
                         members: this.selectedMembers.map(m => m.id),
-                        project_edit: {},
-                        project_delete: {},
-                        project_comment: {},
-                        task_view: {},
-                        task_add: {},
-                        task_edit: {},
-                        task_delete: {}
+                        leader: {},
                     };
 
                     // Add permissions for each member
                     this.selectedMembers.forEach(member => {
-                        teamData.project_edit[member.id] = member.project_edit;
-                        teamData.project_delete[member.id] = member.project_delete;
-                        teamData.project_comment[member.id] = member.project_comment;
-                        teamData.task_view[member.id] = member.task_view;
-                        teamData.task_add[member.id] = member.task_add;
-                        teamData.task_edit[member.id] = member.task_edit;
-                        teamData.task_delete[member.id] = member.task_delete;
+                        teamData.leader[member.id] = member.leader;
                     });
 
                     if (this.editingTeam) {
@@ -423,13 +321,7 @@ $view->footing();
                     department_id: '',
                     description: '',
                     members: [],
-                    project_edit: {},
-                    project_delete: {},
-                    project_comment: {},
-                    task_view: {},
-                    task_add: {},
-                    task_edit: {},
-                    task_delete: {}
+                    leader: {}
                 };
                 this.departmentUsers = [];
             }

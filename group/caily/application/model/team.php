@@ -24,13 +24,44 @@ class Team extends ApplicationModel {
 		$query = sprintf(
 			"SELECT t.*, 
 			d.name as department_name,
-			(SELECT COUNT(*) FROM " . DB_PREFIX . "team_members WHERE team_id = t.id) as member_count
+			(SELECT COUNT(*) FROM " . DB_PREFIX . "team_members WHERE team_id = t.id) as member_count,
+			GROUP_CONCAT(u.realname SEPARATOR ', ') as members
 			FROM {$this->table} t
 			LEFT JOIN " . DB_PREFIX . "departments d ON t.department_id = d.id
+			LEFT JOIN " . DB_PREFIX . "team_members tm ON t.id = tm.team_id
+			LEFT JOIN " . DB_PREFIX . "user u ON tm.user_id = u.id
 			WHERE t.is_active = 1
+			GROUP BY t.id
 			ORDER BY t.id ASC"
 		);
-		return $this->fetchAll($query);
+		$result = $this->fetchAll($query);
+
+		
+		// Process the members_json field
+		// foreach ($result as &$team) {
+		// 	if ($team['members_json'] && $team['members_json'] != 'null') {
+		// 		$team['members'] = json_decode($team['members_json'], true);
+		// 	} else {
+		// 		$team['members'] = [];
+		// 	}
+		// 	unset($team['members_json']);
+		// }
+		
+		return $result;
+	}
+
+	function listbydepartment() {
+		$department_id = $_GET['department_id'];
+		$query = sprintf(
+			"SELECT *
+			FROM {$this->table} t
+			WHERE t.is_active = 1 AND t.department_id = %d
+			ORDER BY t.id ASC", 
+			intval($department_id)
+		);
+		$result = $this->fetchAll($query);
+		
+		return $result;
 	}
 
 	function add() {
@@ -48,13 +79,7 @@ class Team extends ApplicationModel {
 				$member_data = array(
 					'team_id' => $team_id,
 					'user_id' => $user_id,
-					'project_edit' => isset($_POST['project_edit'][$user_id]) && $_POST['project_edit'][$user_id] == 'true' ? 1 : 0,
-					'project_delete' => isset($_POST['project_delete'][$user_id]) && $_POST['project_delete'][$user_id] == 'true' ? 1 : 0,
-					'project_comment' => isset($_POST['project_comment'][$user_id]) && $_POST['project_comment'][$user_id] == 'true' ? 1 : 0,
-					'task_view' => isset($_POST['task_view'][$user_id]) && $_POST['task_view'][$user_id] == 'true' ? 1 : 0,
-					'task_add' => isset($_POST['task_add'][$user_id]) && $_POST['task_add'][$user_id] == 'true' ? 1 : 0,
-					'task_edit' => isset($_POST['task_edit'][$user_id]) && $_POST['task_edit'][$user_id] == 'true' ? 1 : 0,
-					'task_delete' => isset($_POST['task_delete'][$user_id]) && $_POST['task_delete'][$user_id] == 'true' ? 1 : 0
+					'leader' => isset($_POST['leader'][$user_id]) && $_POST['leader'][$user_id] == 'true' ? 1 : 0
 				);
 				$this->query_insert($member_data, DB_PREFIX . 'team_members');
 			}
@@ -85,13 +110,7 @@ class Team extends ApplicationModel {
 				$member_data = array(
 					'team_id' => $id,
 					'user_id' => $user_id,
-					'project_edit' => isset($_POST['project_edit'][$user_id]) && $_POST['project_edit'][$user_id] == 'true' ? 1 : 0,
-					'project_delete' => isset($_POST['project_delete'][$user_id]) && $_POST['project_delete'][$user_id] == 'true' ? 1 : 0,
-					'project_comment' => isset($_POST['project_comment'][$user_id]) && $_POST['project_comment'][$user_id] == 'true' ? 1 : 0,
-					'task_view' => isset($_POST['task_view'][$user_id]) && $_POST['task_view'][$user_id] == 'true' ? 1 : 0,
-					'task_add' => isset($_POST['task_add'][$user_id]) && $_POST['task_add'][$user_id] == 'true' ? 1 : 0,
-					'task_edit' => isset($_POST['task_edit'][$user_id]) && $_POST['task_edit'][$user_id] == 'true' ? 1 : 0,
-					'task_delete' => isset($_POST['task_delete'][$user_id]) && $_POST['task_delete'][$user_id] == 'true' ? 1 : 0
+					'leader' => isset($_POST['leader'][$user_id]) && $_POST['leader'][$user_id] == 'true' ? 1 : 0
 				);
 				$this->query_insert($member_data, DB_PREFIX . 'team_members');
 			}
@@ -126,6 +145,16 @@ class Team extends ApplicationModel {
 				intval($id)
 			);
 			$team['members'] = $this->fetchAll($query);
+
+			$query = sprintf(
+				"SELECT u.id, u.realname as user_name
+				FROM " . DB_PREFIX . "user u
+				JOIN " . DB_PREFIX . "user_department ud ON u.userid = ud.userid
+				WHERE ud.department_id = %d
+				ORDER BY u.userid ASC",
+				intval($team['department_id'])
+			);
+			$team['whitelist'] = $this->fetchAll($query);
 		}
 		
 		return $team;

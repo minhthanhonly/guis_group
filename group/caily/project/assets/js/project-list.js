@@ -471,12 +471,13 @@ var projectTable;
                 deletingId: null,
                 tagifyInstance: null,
                 teamTagifyInstance: null,
-                membersTagifyInstance: null
+                membersTagifyInstance: null,
+                formValidator: null
             }
         },
         mounted() {
             this.loadDepartments();
-            // this.loadUsers();
+            //this.loadUsers();
             // this.loadBranches();
             // this.loadCategories();
             // this.loadCompanies();
@@ -499,10 +500,16 @@ var projectTable;
                             add: (e) => {
                                 const tags = this.tagifyInstance.value.map(tag => tag.value);
                                 this.newProject.project_order_type = tags;
+                                if (this.formValidator) {
+                                    this.formValidator.revalidateField('project_order_type');
+                                }
                             },
                             remove: (e) => {
                                 const tags = this.tagifyInstance.value.map(tag => tag.value);
                                 this.newProject.project_order_type = tags;
+                                if (this.formValidator) {
+                                    this.formValidator.revalidateField('project_order_type');
+                                }
                             }
                         }
                     });
@@ -517,65 +524,200 @@ var projectTable;
             });
 
             // Load teams and initialize team Tagify
-            this.loadTeams().then(() => {
-                this.$nextTick(() => {
-                    // Initialize Tagify for team
-                    const teamInput = document.querySelector('input[name="team_tags"]');
-                    if (teamInput && window.Tagify) {
-                        this.teamTagifyInstance = new Tagify(teamInput, {
-                            whitelist: this.teams.map(team => ({
-                                id: team.id,
-                                value: team.name,
-                                name: team.name
-                            })),
-                            maxTags: 1,
-                            dropdown: {
-                                maxItems: 20,
-                                classname: "tags-look",
-                                enabled: 0,
-                                closeOnSelect: false
+            this.$nextTick(() => {
+                // Initialize Tagify for team
+                const teamInput = document.querySelector('input[name="team_tags"]');
+                if (teamInput && window.Tagify) {
+                    this.teamTagifyInstance = new Tagify(teamInput, {
+                        whitelist: [],
+                        maxTags: 5,
+                        dropdown: {
+                            maxItems: 20,
+                            classname: "tags-look",
+                            enabled: 0,
+                            closeOnSelect: false
+                        },
+                        callbacks: {
+                            add: (e) => {
+                                const teamId = e.detail.tag.id;
+                                this.loadTeamMembers(teamId);
+                                if (this.formValidator) {
+                                    this.formValidator.revalidateField('team_tags');
+                                }
                             },
-                            callbacks: {
-                                add: (e) => {
-                                    const teamId = e.detail.tag.id;
-                                    this.loadTeamMembers(teamId);
-                                },
-                                remove: (e) => {
-                                    this.newProject.members = [];
-                                    if (this.membersTagifyInstance) {
-                                        this.membersTagifyInstance.removeAllTags();
+                            remove: (e) => {
+                                this.newProject.members = [];
+                                if (this.membersTagifyInstance) {
+                                    this.membersTagifyInstance.removeAllTags();
+                                }
+                                if (this.formValidator) {
+                                    this.formValidator.revalidateField('team_tags');
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Initialize Tagify for members
+                const membersInput = document.querySelector('input[name="members_tags"]');
+                if (membersInput && window.Tagify) {
+                    this.membersTagifyInstance = new Tagify(membersInput, {
+                        whitelist: [],
+                        maxTags: 10,
+                        dropdown: {
+                            maxItems: 20,
+                            classname: "tags-look",
+                            enabled: 0,
+                            closeOnSelect: true
+                        },
+                        callbacks: {
+                            add: (e) => {
+                                const members = this.membersTagifyInstance.value.map(member => member.id);
+                                this.newProject.members = members;
+                                if (this.formValidator) {
+                                    this.formValidator.revalidateField('members_tags');
+                                }
+                            },
+                            remove: (e) => {
+                                const members = this.membersTagifyInstance.value.map(member => member.id);
+                                this.newProject.members = members;
+                                if (this.formValidator) {
+                                    this.formValidator.revalidateField('members_tags');
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+            // Initialize form validation
+            const form = document.querySelector('#newProjectModal form');
+            if (form) {
+                this.formValidator = FormValidation.formValidation(form, {
+                    fields: {
+                        name: {
+                            validators: {
+                                notEmpty: {
+                                    message: 'お施主様名を入力してください'
+                                }
+                            }
+                        },
+                        department_id: {
+                            validators: {
+                                notEmpty: {
+                                    message: '部署を選択してください'
+                                }
+                            }
+                        },
+                        category_id: {
+                            validators: {
+                                notEmpty: {
+                                    message: '会社名を選択してください'
+                                }
+                            }
+                        },
+                        company_name: {
+                            validators: {
+                                notEmpty: {
+                                    message: '支店名を選択してください'
+                                }
+                            }
+                        },
+                        customer_id: {
+                            validators: {
+                                notEmpty: {
+                                    message: '担当者名を選択してください'
+                                }
+                            }
+                        },
+                        building_size: {
+                            validators: {
+                                notEmpty: {
+                                    message: '建物規模を入力してください'
+                                }
+                            }
+                        },
+                        building_type: {
+                            validators: {
+                                notEmpty: {
+                                    message: '建物種類を入力してください'
+                                }
+                            }
+                        },
+                        project_number: {
+                            validators: {
+                                notEmpty: {
+                                    message: '連絡番号を入力してください'
+                                }
+                            }
+                        },
+                        project_order_type: {
+                            validators: {
+                                callback: {
+                                    message: '受注形態を選択してください',
+                                    callback: function(input) {
+                                        return app.tagifyInstance && app.tagifyInstance.value.length > 0;
                                     }
                                 }
                             }
-                        });
-                    }
-
-                    // Initialize Tagify for members
-                    const membersInput = document.querySelector('input[name="members_tags"]');
-                    if (membersInput && window.Tagify) {
-                        this.membersTagifyInstance = new Tagify(membersInput, {
-                            whitelist: [],
-                            maxTags: 10,
-                            dropdown: {
-                                maxItems: 20,
-                                classname: "tags-look",
-                                enabled: 0,
-                                closeOnSelect: true
-                            },
-                            callbacks: {
-                                add: (e) => {
-                                    const members = this.membersTagifyInstance.value.map(member => member.id);
-                                    this.newProject.members = members;
-                                },
-                                remove: (e) => {
-                                    const members = this.membersTagifyInstance.value.map(member => member.id);
-                                    this.newProject.members = members;
+                        },
+                        priority: {
+                            validators: {
+                                notEmpty: {
+                                    message: '優先度を選択してください'
                                 }
                             }
-                        });
-                    }
+                        },
+                        status: {
+                            validators: {
+                                notEmpty: {
+                                    message: '案件状況を選択してください'
+                                }
+                            }
+                        },
+                        start_date: {
+                            validators: {
+                                notEmpty: {
+                                    message: '開始日を選択してください'
+                                }
+                            }
+                        },
+                        end_date: {
+                            validators: {
+                                notEmpty: {
+                                    message: '終了日を選択してください'
+                                }
+                            }
+                        },
+                        team_tags: {
+                            validators: {
+                                callback: {
+                                    message: 'チームを選択してください',
+                                    callback: function(input) {
+                                        return app.teamTagifyInstance && app.teamTagifyInstance.value.length > 0;
+                                    }
+                                }
+                            }
+                        },
+                        members_tags: {
+                            validators: {
+                                callback: {
+                                    message: 'メンバーを選択してください',
+                                    callback: function(input) {
+                                        return app.membersTagifyInstance && app.membersTagifyInstance.value.length > 0;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        trigger: new FormValidation.plugins.Trigger(),
+                        bootstrap5: new FormValidation.plugins.Bootstrap5({
+                            eleValidClass: '',
+                            rowSelector: '.form-control-validation'
+                        }),
+                    },
                 });
-            });
+            }
         },
         beforeUnmount() {
             // Clean up Tagify instance when component is destroyed
@@ -593,6 +735,7 @@ var projectTable;
                         const firstDepartment = this.departments.find(d => d.can_project == 1);
                         if (firstDepartment) {
                             this.viewProjects(firstDepartment);
+                           
                         }
                     }
                 } catch (error) {
@@ -602,24 +745,23 @@ var projectTable;
             },
             async loadUsers() {
                 try {
-                    const response = await axios.get('/api/index.php?model=user&method=getList');
-                    this.users = response.data.list || [];
+                    const response = await axios.get('/api/index.php?model=department&method=get_users&department_id=' + this.selectedDepartment.id);
+                    this.users = response.data || [];
                 } catch (error) {
                     console.error('Error loading users:', error);
                 }
             },
-            async loadBranches() {
-                try {
-                    const response = await axios.get('/api/index.php?model=branch&method=list');
-                    this.branches = response.data || [];
-                } catch (error) {
-                    console.error('Error loading branches:', error);
-                }
-            },
+            // async loadBranches() {
+            //     try {
+            //         const response = await axios.get('/api/index.php?model=branch&method=list');
+            //         this.branches = response.data || [];
+            //     } catch (error) {
+            //         console.error('Error loading branches:', error);
+            //     }
+            // },
             async loadTeams() {
                 try {
-                    const response = await axios.get('/api/index.php?model=team&method=list');
-                    console.log(response.data);
+                    const response = await axios.get('/api/index.php?model=team&method=listbydepartment&department_id=' + this.selectedDepartment.id);
                     this.teams = response.data || [];
                     return this.teams;
                 } catch (error) {
@@ -630,6 +772,35 @@ var projectTable;
             viewProjects(department) {
                 this.selectedDepartment = department;
                 this.loadProjects();
+                
+                // Reset teams and members when department changes
+                if (this.teamTagifyInstance) {
+                    this.teamTagifyInstance.removeAllTags();
+                }
+                if (this.membersTagifyInstance) {
+                    this.membersTagifyInstance.removeAllTags();
+                }
+                this.newProject.members = [];
+                
+                // Reload teams for new department
+                this.loadTeams().then(() => {
+                    if (this.teamTagifyInstance) {
+                        this.teamTagifyInstance.whitelist = this.teams.map(team => ({
+                            id: team.id,
+                            value: team.name,
+                            name: team.name
+                        }));
+                    }
+                });
+                this.loadUsers().then(() => {
+                    if (this.membersTagifyInstance) {
+                        this.membersTagifyInstance.whitelist = this.users.map(user => ({
+                            id: user.id,
+                            value: user.user_name,
+                            name: user.user_name
+                        }));
+                    }
+                });
             },
             filterProjectByStatus(status) {
                 this.selectedStatus = status;
@@ -681,37 +852,48 @@ var projectTable;
                 modal.show();
             },
             async saveProject() {
-                try {
-                    const formData = new FormData();
-                    formData.append('model', 'project');
-                    formData.append('method', this.isEdit ? 'edit' : 'add');
-                    
-                    if (this.isEdit) {
-                        formData.append('id', this.editingId);
-                    }
-                    
-                    // Append all project data
-                    Object.keys(this.newProject).forEach(key => {
-                        if (key === 'members' && Array.isArray(this.newProject[key])) {
-                            this.newProject[key].forEach(member => {
-                                formData.append('members[]', member);
-                            });
-                        } else {
-                            formData.append(key, this.newProject[key]);
+                if (!this.formValidator) {
+                    console.error('Form validator not initialized');
+                    return;
+                }
+
+                const status = await this.formValidator.validate();
+                if (status === 'Valid') {
+                    try {
+                        const formData = new FormData();
+                        formData.append('model', 'project');
+                        formData.append('method', this.isEdit ? 'edit' : 'add');
+                        
+                        if (this.isEdit) {
+                            formData.append('id', this.editingId);
                         }
-                    });
-                    
-                    const response = await axios.post('/api/index.php?model=project&method=add', formData);
-                    
-                    if (response.data) {
-                        this.showMessage(this.isEdit ? 'プロジェクトを更新しました。' : 'プロジェクトを作成しました。');
-                        bootstrap.Modal.getInstance(document.getElementById('newProjectModal')).hide();
-                        this.loadProjects();
-                        this.resetProjectForm();
+                        
+                        // Append all project data
+                        Object.keys(this.newProject).forEach(key => {
+                            if (key === 'members' && Array.isArray(this.newProject[key])) {
+                                this.newProject[key].forEach(member => {
+                                    formData.append('members[]', member);
+                                });
+                            } else if (key === 'project_order_type' && this.tagifyInstance) {
+                                const tags = this.tagifyInstance.value.map(tag => tag.value);
+                                formData.append(key, JSON.stringify(tags));
+                            } else {
+                                formData.append(key, this.newProject[key]);
+                            }
+                        });
+                        
+                        const response = await axios.post('/api/index.php?model=project&method=add', formData);
+                        
+                        if (response.data) {
+                            this.showMessage(this.isEdit ? 'プロジェクトを更新しました。' : 'プロジェクトを作成しました。');
+                            bootstrap.Modal.getInstance(document.getElementById('newProjectModal')).hide();
+                            this.loadProjects();
+                            this.resetProjectForm();
+                        }
+                    } catch (error) {
+                        console.error('Error saving project:', error);
+                        this.showMessage('プロジェクトの保存に失敗しました。', true);
                     }
-                } catch (error) {
-                    console.error('Error saving project:', error);
-                    this.showMessage('プロジェクトの保存に失敗しました。', true);
                 }
             },
             deleteProject(id) {
@@ -762,7 +944,7 @@ var projectTable;
                     amount: '',
                     customer_id: '',
                     company_name: '',
-                    category_id: '',
+                    branch_id: '',
                     contact_name: '',
                     contact_phone: ''
                 };
@@ -779,6 +961,11 @@ var projectTable;
                 }
                 if (this.membersTagifyInstance) {
                     this.membersTagifyInstance.removeAllTags();
+                }
+
+                // Reset form validation
+                if (this.formValidator) {
+                    this.formValidator.resetForm();
                 }
             },
             async loadCategories() {
@@ -861,7 +1048,7 @@ var projectTable;
             async loadTeamMembers(teamId) {
                 try {
                     const response = await axios.get(`/api/index.php?model=team&method=get&id=${teamId}`);
-                    if (response.data && response.data.members) {
+                    if (response.data && response.data.members && response.data.whitelist) {
                         const members = response.data.members.map(member => ({
                             id: member.user_id,
                             value: member.user_name,
@@ -869,9 +1056,8 @@ var projectTable;
                         }));
                         
                         if (this.membersTagifyInstance) {
-                            this.membersTagifyInstance.whitelist = members;
                             this.membersTagifyInstance.addTags(members);
-                            this.newProject.members = members.map(m => m.id);
+                            this.newProject.members = [...this.newProject.members, ...members.map(m => m.id)];
                         }
                     }
                 } catch (error) {
