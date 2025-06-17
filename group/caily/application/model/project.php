@@ -89,9 +89,9 @@ class Project extends ApplicationModel {
         // Get data for current page
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            (SELECT user_id FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
-            (SELECT user_id FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
-            (SELECT user_id FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id
+            (SELECT GROUP_CONCAT(user_id) FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
+            (SELECT GROUP_CONCAT(user_id) FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
+            (SELECT GROUP_CONCAT(user_id) FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             %s
@@ -182,8 +182,8 @@ class Project extends ApplicationModel {
             'description' => isset($_POST['description']) ? $_POST['description'] : '',
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
-            'start_date' => isset($_POST['start_date']) ? strtotime($_POST['start_date']) : null,
-            'end_date' => isset($_POST['end_date']) ? strtotime($_POST['end_date']) : null,
+            'start_date' => isset($_POST['start_date']) && !empty($_POST['start_date']) ? date('Y-m-d', strtotime($_POST['start_date'])) : null,
+            'end_date' => isset($_POST['end_date']) && !empty($_POST['end_date']) ? date('Y-m-d', strtotime($_POST['end_date'])) : null,
             'created_by' => isset($_POST['created_by']) ? $_POST['created_by'] : $_SESSION['user_id'],
             'department_id' => isset($_POST['department_id']) ? $_POST['department_id'] : null,
             'progress' => 0,
@@ -216,8 +216,8 @@ class Project extends ApplicationModel {
             'description' => isset($_POST['description']) ? $_POST['description'] : '',
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
-            'start_date' => isset($_POST['start_date']) ? $_POST['start_date'] : null,
-            'end_date' => isset($_POST['end_date']) ? $_POST['end_date'] : null,
+            'start_date' => isset($_POST['start_date']) && !empty($_POST['start_date']) ? date('Y-m-d', strtotime($_POST['start_date'])) : null,
+            'end_date' => isset($_POST['end_date']) && !empty($_POST['end_date']) ? date('Y-m-d', strtotime($_POST['end_date'])) : null,
             'department_id' => isset($_POST['department_id']) ? $_POST['department_id'] : null,
             'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
             'customer_id' => isset($_POST['customer_id']) ? $_POST['customer_id'] : null,

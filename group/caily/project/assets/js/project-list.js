@@ -301,32 +301,70 @@ var projectTable;
                 }
             });
 
-            // Ẩn company_name và customer_id ban đầu
+            // Hide company_name and customer_id initially and disable their validation
             $('#company_name').closest('.form-group').hide();
             $('#customer_id').closest('.form-group').hide();
+            
+            // Use setTimeout to ensure app.formValidator is initialized
+            setTimeout(() => {
+                if (app.formValidator) {
+                    app.formValidator.disableValidator('company_name');
+                    app.formValidator.disableValidator('customer_id');
+                }
+            }, 100);
 
-            // Kiểm tra giá trị ban đầu của company_name và customer_id
+            // Check initial values of company_name and customer_id
             if (company_name.val()) {
                 $('#company_name').closest('.form-group').show();
+                setTimeout(() => {
+                    if (app.formValidator) {
+                        app.formValidator.enableValidator('company_name');
+                    }
+                }, 100);
             }
             if (customer_id.val()) {
                 $('#customer_id').closest('.form-group').show();
+                setTimeout(() => {
+                    if (app.formValidator) {
+                        app.formValidator.enableValidator('customer_id');
+                    }
+                }, 100);
             }
 
-            // Khi category_id thay đổi
+            // When category_id changes
             category_id.on('change', function() {
-                if ($(this).val()) {
-                    // Hiện company_name khi có category_id
+                const categoryValue = $(this).val();
+                console.log('Category changed:', categoryValue);
+                
+                if (categoryValue) {
+                    // Show company_name and enable its validation when category_id has value
                     $('#company_name').closest('.form-group').show();
-                    // Reset và refresh company_name
+                    setTimeout(() => {
+                        if (app.formValidator) {
+                            app.formValidator.enableValidator('company_name');
+                            app.formValidator.revalidateField('category_id');
+                        }
+                    }, 100);
+                    // Reset and refresh company_name
                     company_name.val(null).trigger('change');
-                    // Ẩn và reset customer_id
+                    // Hide customer_id, disable its validation and reset
                     $('#customer_id').closest('.form-group').hide();
+                    setTimeout(() => {
+                        if (app.formValidator) {
+                            app.formValidator.disableValidator('customer_id');
+                        }
+                    }, 100);
                     customer_id.val(null).trigger('change');
                 } else {
-                    // Ẩn cả company_name và customer_id khi không có category_id
+                    // Hide both fields and disable their validation when no category_id
                     $('#company_name').closest('.form-group').hide();
                     $('#customer_id').closest('.form-group').hide();
+                    setTimeout(() => {
+                        if (app.formValidator) {
+                            app.formValidator.disableValidator('company_name');
+                            app.formValidator.disableValidator('customer_id');
+                        }
+                    }, 100);
                     company_name.val(null).trigger('change');
                     customer_id.val(null).trigger('change');
                 }
@@ -370,34 +408,40 @@ var projectTable;
                 }
             });
 
-            // Khi company_name thay đổi
+            // When company_name changes
             company_name.on('change', function() {
-                if ($(this).val()) {
-                    // Hiện customer_id khi có company_name
+                const companyValue = $(this).val();
+                console.log('Company changed:', companyValue);
+                
+                if (companyValue) {
+                    // Show customer_id and enable its validation when company_name has value
                     $('#customer_id').closest('.form-group').show();
-                    // Reset và refresh customer_id
+                    setTimeout(() => {
+                        if (app.formValidator) {
+                            app.formValidator.enableValidator('customer_id');
+                            app.formValidator.revalidateField('company_name');
+                        }
+                    }, 100);
+                    // Reset and refresh customer_id
                     customer_id.val(null).trigger('change');
                 } else {
-                    // Ẩn và reset customer_id khi không có company_name
+                    // Hide customer_id, disable its validation and reset when no company_name
                     $('#customer_id').closest('.form-group').hide();
+                    setTimeout(() => {
+                        if (app.formValidator) {
+                            app.formValidator.disableValidator('customer_id');
+                        }
+                    }, 100);
                     customer_id.val(null).trigger('change');
                 }
             });
         }
-        
+
         if (customer_id.length) {
             customer_id.wrap('<div class="position-relative"></div>').select2({
                 placeholder: '選択してください',
                 dropdownParent: customer_id.parent(),
                 allowClear: true,
-                escapeMarkup: function(markup) {
-                    return markup;
-                },
-                language: {
-                    noResults: function() {
-                        return '見つかりません。<button class="btn btn-warning btn-sm w-50" onclick="app.openNewCustomerModal()">新規顧客を追加</button>';
-                    },
-                },
                 ajax: {
                     url: '/api/index.php?model=customer&method=list_contacts_by_company',
                     dataType: 'json',
@@ -472,6 +516,7 @@ var projectTable;
                 tagifyInstance: null,
                 teamTagifyInstance: null,
                 membersTagifyInstance: null,
+                customerTagifyInstance: null,
                 formValidator: null
             }
         },
@@ -589,7 +634,7 @@ var projectTable;
                     });
                 }
 
-                // Initialize Tagify for members
+                // Initialize Tagify for manager
                 const managerInput = document.querySelector('input[name="manager_tags"]');
                 if (managerInput && window.Tagify) {
                     this.managerTagifyInstance = new Tagify(managerInput, {
@@ -641,22 +686,37 @@ var projectTable;
                         },
                         category_id: {
                             validators: {
-                                notEmpty: {
-                                    message: '会社名を選択してください'
+                                callback: {
+                                    message: 'カテゴリを選択してください',
+                                    callback: function(input) {
+                                        const categoryValue = $('#category_id').val();
+                                        console.log('Validating category_id:', categoryValue);
+                                        return categoryValue && categoryValue !== '';
+                                    }
                                 }
                             }
                         },
                         company_name: {
                             validators: {
-                                notEmpty: {
-                                    message: '支店名を選択してください'
+                                callback: {
+                                    message: '会社名を選択してください',
+                                    callback: function(input) {
+                                        const companyValue = $('#company_name').val();
+                                        console.log('Validating company_name:', companyValue);
+                                        return companyValue && companyValue !== '';
+                                    }
                                 }
                             }
                         },
                         customer_id: {
                             validators: {
-                                notEmpty: {
-                                    message: '担当者名を選択してください'
+                                callback: {
+                                    message: '担当者名を選択してください',
+                                    callback: function(input) {
+                                        const customerValue = $('#customer_id').val();
+                                        console.log('Validating customer_id:', customerValue);
+                                        return customerValue && customerValue !== '';
+                                    }
                                 }
                             }
                         },
@@ -781,7 +841,7 @@ var projectTable;
                     }
                 } catch (error) {
                     console.error('Error loading departments:', error);
-                    this.showMessage('部署の読み込みに失敗しました。', true);
+                    showMessage('部署の読み込みに失敗しました。', true);
                 }
             },
             async loadUsers() {
@@ -859,7 +919,7 @@ var projectTable;
                     projectTable.ajax.reload();
                 } catch (error) {
                     console.error('Error loading projects:', error);
-                   // this.showMessage('プロジェクトの読み込みに失敗しました。', true);
+                   // showMessage('プロジェクトの読み込みに失敗しました。', true);
                 }
             },
             openNewProjectModal() {
@@ -905,7 +965,30 @@ var projectTable;
                     return;
                 }
 
+                // Check field visibility and disable validation for hidden fields
+                const companyNameVisible = $('#company_name').closest('.form-group').is(':visible');
+                const customerIdVisible = $('#customer_id').closest('.form-group').is(':visible');
+
+                // Store original validation state
+                const originalValidators = {};
+                
+                if (!companyNameVisible) {
+                    originalValidators.company_name = true;
+                    this.formValidator.disableValidator('company_name');
+                }
+                if (!customerIdVisible) {
+                    originalValidators.customer_id = true;
+                    this.formValidator.disableValidator('customer_id');
+                }
+
+                // Validate the form
                 const status = await this.formValidator.validate();
+
+                // Restore original validation state
+                Object.keys(originalValidators).forEach(field => {
+                    this.formValidator.enableValidator(field);
+                });
+
                 if (status === 'Valid') {
                     try {
                         const formData = new FormData();
@@ -933,14 +1016,14 @@ var projectTable;
                         const response = await axios.post('/api/index.php?model=project&method=add', formData);
                         
                         if (response.data) {
-                            this.showMessage(this.isEdit ? 'プロジェクトを更新しました。' : 'プロジェクトを作成しました。');
+                            showMessage(this.isEdit ? 'プロジェクトを更新しました。' : 'プロジェクトを作成しました。');
                             bootstrap.Modal.getInstance(document.getElementById('newProjectModal')).hide();
                             this.loadProjects();
                             this.resetProjectForm();
                         }
                     } catch (error) {
                         console.error('Error saving project:', error);
-                        this.showMessage('プロジェクトの保存に失敗しました。', true);
+                        showMessage('プロジェクトの保存に失敗しました。', true);
                     }
                 }
             },
@@ -959,16 +1042,16 @@ var projectTable;
                     const response = await axios.post('/api/index.php?model=project&method=delete', formData);
                     
                     if (response.data) {
-                        this.showMessage('プロジェクトを削除しました。');
+                        showMessage('プロジェクトを削除しました。');
                         bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
                         this.loadProjects();
                     }
                 } catch (error) {
                     console.error('Error deleting project:', error);
                     if (error.response?.data?.error) {
-                        this.showMessage(error.response.data.error, true);
+                        showMessage(error.response.data.error, true);
                     } else {
-                        this.showMessage('プロジェクトの削除に失敗しました。', true);
+                        showMessage('プロジェクトの削除に失敗しました。', true);
                     }
                 }
             },
