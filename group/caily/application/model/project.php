@@ -278,7 +278,7 @@ class Project extends ApplicationModel {
         }
         
         $query = sprintf(
-            "SELECT pm.*, u.name as user_name 
+            "SELECT pm.*, u.realname as user_name 
             FROM " . DB_PREFIX . "project_members pm 
             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
             WHERE pm.project_id = %d 
@@ -290,7 +290,7 @@ class Project extends ApplicationModel {
 
     function getTasks($projectId) {
         $query = sprintf(
-            "SELECT t.*, u.name as assigned_to_name
+            "SELECT t.*, u.realname as assigned_to_name
             FROM " . DB_PREFIX . "tasks t 
             LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             WHERE t.project_id = %d 
@@ -389,8 +389,8 @@ class Project extends ApplicationModel {
         }
         
         $query = sprintf(
-            "SELECT c.*, u.name as user_name 
-            FROM " . DB_PREFIX . "project_comments c 
+            "SELECT c.*, u.realname as user_name 
+            FROM " . DB_PREFIX . "comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.id 
             WHERE c.project_id = %d 
             ORDER BY c.created_at DESC",
@@ -407,7 +407,7 @@ class Project extends ApplicationModel {
             'created_at' => date('Y-m-d H:i:s')
         );
         
-        $this->table = DB_PREFIX . 'project_comments';
+        $this->table = DB_PREFIX . 'comments';
         $result = $this->query_insert($commentData);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
         return $result;

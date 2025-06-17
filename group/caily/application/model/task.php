@@ -55,7 +55,7 @@ class Task extends ApplicationModel {
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
         
         $query = sprintf(
-            "SELECT t.*, p.name as project_name, u.name as assigned_to_name,
+            "SELECT t.*, p.name as project_name, u.realname as assigned_to_name,
             (SELECT COUNT(*) FROM {$this->table} WHERE parent_id = t.id) as subtask_count
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id 
@@ -80,7 +80,7 @@ class Task extends ApplicationModel {
 
     function getSubtasks($parent_id) {
         $query = sprintf(
-            "SELECT t.*, u.name as assigned_to_name
+            "SELECT t.*, u.realname as assigned_to_name
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             WHERE t.parent_id = %d 
