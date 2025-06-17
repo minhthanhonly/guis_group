@@ -247,6 +247,18 @@ class User extends ApplicationModel {
 		return $hash;
 	}
 
+	function getMembers($project_id) {
+		$query = sprintf(
+			"SELECT pm.*, u.name as user_name 
+			FROM " . DB_PREFIX . "project_members pm 
+			LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
+			WHERE pm.project_id = %d 
+			ORDER BY pm.created_at DESC",
+			intval($project_id)
+		);
+		return $this->fetchAll($query);
+	}
+
 }
 
 ?>

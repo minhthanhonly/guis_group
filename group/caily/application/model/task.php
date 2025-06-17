@@ -24,23 +24,38 @@ class Task extends ApplicationModel {
         $this->connect();
     }
 
-    function list() {
+    function list($params = null) {
         $whereArr = [];
         
-        if (isset($_GET['project_id'])) {
-            $whereArr[] = sprintf("t.project_id = %d", intval($_GET['project_id']));
-        }
-        
-        if (isset($_GET['parent_id'])) {
-            $whereArr[] = sprintf("t.parent_id = %d", intval($_GET['parent_id']));
-        } else if (!isset($_GET['include_subtasks'])) {
-            $whereArr[] = "t.parent_id IS NULL";
+        // Handle both direct parameters and params array from API
+        if (is_array($params)) {
+            if (isset($params['project_id'])) {
+                $whereArr[] = sprintf("t.project_id = %d", intval($params['project_id']));
+            }
+            
+            if (isset($params['parent_id'])) {
+                $whereArr[] = sprintf("t.parent_id = %d", intval($params['parent_id']));
+            } else if (!isset($params['include_subtasks'])) {
+                $whereArr[] = "t.parent_id IS NULL";
+            }
+            $include_subtasks = isset($params['include_subtasks']);
+        } else {
+            if (isset($_GET['project_id'])) {
+                $whereArr[] = sprintf("t.project_id = %d", intval($_GET['project_id']));
+            }
+            
+            if (isset($_GET['parent_id'])) {
+                $whereArr[] = sprintf("t.parent_id = %d", intval($_GET['parent_id']));
+            } else if (!isset($_GET['include_subtasks'])) {
+                $whereArr[] = "t.parent_id IS NULL";
+            }
+            $include_subtasks = isset($_GET['include_subtasks']);
         }
         
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
         
         $query = sprintf(
-            "SELECT t.*, p.name as project_name, u.name as assigned_to_name
+            "SELECT t.*, p.name as project_name, u.name as assigned_to_name,
             (SELECT COUNT(*) FROM {$this->table} WHERE parent_id = t.id) as subtask_count
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id 
@@ -52,7 +67,7 @@ class Task extends ApplicationModel {
         
         $tasks = $this->fetchAll($query);
         
-        if (isset($_GET['include_subtasks'])) {
+        if ($include_subtasks) {
             foreach ($tasks as &$task) {
                 if ($task['subtask_count'] > 0) {
                     $task['subtasks'] = $this->getSubtasks($task['id']);
@@ -242,7 +257,7 @@ class Task extends ApplicationModel {
     function getComments($taskId) {
         $query = sprintf(
             "SELECT c.*, u.name as user_name 
-            FROM " . DB_PREFIX . "comments c 
+            FROM " . DB_PREFIX . "task_comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.id 
             WHERE c.task_id = %d 
             ORDER BY c.created_at DESC",
@@ -267,11 +282,20 @@ class Task extends ApplicationModel {
 
     function addComment($data) {
         $data['created_at'] = date('Y-m-d H:i:s');
-                $this->table = DB_PREFIX . 'comments';        $result = $this->query_insert($data);        $this->table = DB_PREFIX . 'tasks';
+        $this->table = DB_PREFIX . 'task_comments';
+        $result = $this->query_insert($data);
+        $this->table = DB_PREFIX . 'tasks';
         return $result;
     }
 
-    function getById($id) {
+    function getById($params = null) {
+        // Handle both direct ID parameter and params array from API
+        if (is_array($params)) {
+            $id = isset($params['id']) ? $params['id'] : 0;
+        } else {
+            $id = $params;
+        }
+
         $query = sprintf(
             "SELECT t.*, p.name as project_name, u.name as assigned_to_name 
             FROM {$this->table} t 

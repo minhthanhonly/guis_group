@@ -90,9 +90,9 @@ class Project extends ApplicationModel {
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
             c.name as contact_name, c.company_name, c.department as branch_name,
-            (SELECT GROUP_CONCAT(user_id) FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
-            (SELECT GROUP_CONCAT(user_id) FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
-            (SELECT GROUP_CONCAT(user_id) FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id
+            (SELECT GROUP_CONCAT(pm.user_id) FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
+            (SELECT GROUP_CONCAT(pm.user_id) FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
+            (SELECT GROUP_CONCAT(pm.user_id) FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
@@ -155,9 +155,9 @@ class Project extends ApplicationModel {
 
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            (SELECT user_id FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
-            (SELECT user_id FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
-            (SELECT user_id FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id
+            (SELECT pm.user_id FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
+            (SELECT pm.user_id FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
+            (SELECT pm.user_id FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             %s
@@ -269,7 +269,14 @@ class Project extends ApplicationModel {
         return $this->query_update(['status' => 'deleted'], ['id' => $id]);
     }
 
-    function getMembers($project_id) {
+    function getMembers($params = null) {
+        // Handle both direct project_id parameter and params array from API
+        if (is_array($params)) {
+            $project_id = isset($params['project_id']) ? $params['project_id'] : 0;
+        } else {
+            $project_id = $params;
+        }
+        
         $query = sprintf(
             "SELECT pm.*, u.name as user_name 
             FROM " . DB_PREFIX . "project_members pm 
@@ -313,13 +320,22 @@ class Project extends ApplicationModel {
         return $result;
     }
 
-    function getById($id) {
+    function getById($params = null) {
+        // Handle both direct ID parameter and params array from API
+        if (is_array($params)) {
+            $id = isset($params['id']) ? $params['id'] : 0;
+        } else {
+            $id = $params;
+        }
+        
         $query = sprintf(
-            "SELECT p.*, d.name as department_name, 
+            "SELECT p.*, d.name as department_name,
+            c.name as contact_name, c.company_name, c.department as branch_name,
             (SELECT COUNT(*) FROM " . DB_PREFIX . "tasks WHERE project_id = p.id) as task_count,
             (SELECT COUNT(*) FROM " . DB_PREFIX . "project_members WHERE project_id = p.id) as member_count
             FROM {$this->table} p 
-            LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id 
+            LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+            LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
             WHERE p.id = %d",
             intval($id)
         );
@@ -364,11 +380,18 @@ class Project extends ApplicationModel {
         return $this->query_update($data, ['id' => $id]);
     }
 
-    function getComments($project_id) {
+    function getComments($params = null) {
+        // Handle both direct project_id parameter and params array from API
+        if (is_array($params)) {
+            $project_id = isset($params['project_id']) ? $params['project_id'] : 0;
+        } else {
+            $project_id = $params;
+        }
+        
         $query = sprintf(
-            "SELECT c.*, u.realname as user_name 
+            "SELECT c.*, u.name as user_name 
             FROM " . DB_PREFIX . "project_comments c 
-            LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
+            LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.id 
             WHERE c.project_id = %d 
             ORDER BY c.created_at DESC",
             intval($project_id)
