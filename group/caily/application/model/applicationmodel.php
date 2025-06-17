@@ -370,6 +370,25 @@ class ApplicationModel extends Model {
 		$data = $this->fetchAll($query);
 		return $data;
 	}
+
+	function Log($data, $type = 'data') {
+		$logDir = dirname(__FILE__) . '/../logs';
+		if (!file_exists($logDir)) {
+			mkdir($logDir, 0777, true);
+		}
+		
+		$filename = $logDir . '/application_' . date('Y-m-d') . '.log';
+		$timestamp = date('Y-m-d H:i:s');
+		
+		if (is_array($data) || is_object($data)) {
+			$logData = print_r($data, true);
+		} else {
+			$logData = $data;
+		}
+		
+		$logEntry = "[{$timestamp}] [{$type}] {$logData}\n";
+		file_put_contents($filename, $logEntry, FILE_APPEND | LOCK_EX);
+	}
 }
 
 ?>

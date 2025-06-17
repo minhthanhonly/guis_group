@@ -122,9 +122,7 @@ var projectTable;
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-start justify-content-start flex-column">
                                     <div class="mt-1">
-                                        <small class="text-muted d-block">会社名: ${row.company_name || '-'}</small>
-                                        <small class="text-muted d-block">支店名: ${row.branch_name || '-'}</small>
-                                        <small class="text-muted d-block">担当者: ${row.contact_name || '-'}</small>
+                                        <small class="text-muted d-block">${row.company_name || '-'}</small>
                                     </div>
                                 </div>`;
                     },
@@ -274,6 +272,7 @@ var projectTable;
         var company_name = $('#company_name');
         var customer_id = $('#customer_id');
         if (category_id.length) {
+            // Initialize Select2 for category
             category_id.wrap('<div class="position-relative"></div>').select2({
                 placeholder: '選択してください',
                 dropdownParent: category_id.parent(),
@@ -299,6 +298,12 @@ var projectTable;
                         };
                     }
                 }
+            }).on('select2:select', function(e) {
+                console.log('Category selected:', e.params.data);
+                app.newProject.category_id = e.params.data.id;
+            }).on('select2:unselect', function() {
+                console.log('Category unselected');
+                app.newProject.category_id = '';
             });
 
             // Hide company_name and customer_id initially and disable their validation
@@ -372,6 +377,7 @@ var projectTable;
         }
         
         if (company_name.length) {
+            // Initialize Select2 for company
             company_name.wrap('<div class="position-relative"></div>').select2({
                 placeholder: '選択してください',
                 dropdownParent: company_name.parent(),
@@ -406,6 +412,12 @@ var projectTable;
                         };
                     }
                 }
+            }).on('select2:select', function(e) {
+                console.log('Company selected:', e.params.data);
+                app.newProject.company_name = e.params.data.id;
+            }).on('select2:unselect', function() {
+                console.log('Company unselected');
+                app.newProject.company_name = '';
             });
 
             // When company_name changes
@@ -438,6 +450,7 @@ var projectTable;
         }
 
         if (customer_id.length) {
+            // Initialize Select2 for customer
             customer_id.wrap('<div class="position-relative"></div>').select2({
                 placeholder: '選択してください',
                 dropdownParent: customer_id.parent(),
@@ -464,6 +477,12 @@ var projectTable;
                         };
                     }
                 }
+            }).on('select2:select', function(e) {
+                console.log('Customer selected:', e.params.data);
+                app.newProject.customer_id = e.params.data.id;
+            }).on('select2:unselect', function() {
+                console.log('Customer unselected');
+                app.newProject.customer_id = '';
             });
         }
         
@@ -516,17 +535,13 @@ var projectTable;
                 tagifyInstance: null,
                 teamTagifyInstance: null,
                 membersTagifyInstance: null,
+                managerTagifyInstance: null,
                 customerTagifyInstance: null,
                 formValidator: null
             }
         },
         mounted() {
             this.loadDepartments();
-            //this.loadUsers();
-            // this.loadBranches();
-            // this.loadCategories();
-            // this.loadCompanies();
-            // this.loadContacts();
 
             // Initialize Tagify for project_order_type
             this.$nextTick(() => {
@@ -568,7 +583,7 @@ var projectTable;
                 }
             });
 
-            // Load teams and initialize team Tagify
+            // Initialize Tagify for team, members, and manager
             this.$nextTick(() => {
                 // Initialize Tagify for team
                 const teamInput = document.querySelector('input[name="team_tags"]');
@@ -665,6 +680,7 @@ var projectTable;
                     });
                 }
             });
+
             // Initialize form validation
             const form = document.querySelector('#newProjectModal form');
             if (form) {
@@ -821,9 +837,18 @@ var projectTable;
             }
         },
         beforeUnmount() {
-            // Clean up Tagify instance when component is destroyed
+            // Clean up Tagify instances when component is destroyed
             if (this.tagifyInstance) {
                 this.tagifyInstance.destroy();
+            }
+            if (this.teamTagifyInstance) {
+                this.teamTagifyInstance.destroy();
+            }
+            if (this.membersTagifyInstance) {
+                this.membersTagifyInstance.destroy();
+            }
+            if (this.managerTagifyInstance) {
+                this.managerTagifyInstance.destroy();
             }
         },
         methods: {
@@ -852,14 +877,6 @@ var projectTable;
                     console.error('Error loading users:', error);
                 }
             },
-            // async loadBranches() {
-            //     try {
-            //         const response = await axios.get('/api/index.php?model=branch&method=list');
-            //         this.branches = response.data || [];
-            //     } catch (error) {
-            //         console.error('Error loading branches:', error);
-            //     }
-            // },
             async loadTeams() {
                 try {
                     const response = await axios.get('/api/index.php?model=team&method=listbydepartment&department_id=' + this.selectedDepartment.id);
@@ -919,7 +936,6 @@ var projectTable;
                     projectTable.ajax.reload();
                 } catch (error) {
                     console.error('Error loading projects:', error);
-                   // showMessage('プロジェクトの読み込みに失敗しました。', true);
                 }
             },
             openNewProjectModal() {
@@ -999,19 +1015,71 @@ var projectTable;
                             formData.append('id', this.editingId);
                         }
                         
+                        // Get and validate Select2 values
+                        const categorySelect = $('#category_id');
+                        const companySelect = $('#company_name');
+                        const customerSelect = $('#customer_id');
+                        
+                        const categoryId = categorySelect.select2('data')[0]?.id || '';
+                        const companyName = companySelect.select2('data')[0]?.id || '';
+                        const customerId = customerSelect.select2('data')[0]?.id || '';
+                        
+                        console.log('Select2 Data:');
+                        console.log('Category:', categorySelect.select2('data'));
+                        console.log('Company:', companySelect.select2('data'));
+                        console.log('Customer:', customerSelect.select2('data'));
+                        
+                        // Update newProject with Select2 values
+                        this.newProject.category_id = categoryId;
+                        this.newProject.company_name = companyName;
+                        this.newProject.customer_id = customerId;
+                        
+                        // Get team data from Tagify
+                        const teamData = this.teamTagifyInstance ? this.teamTagifyInstance.value.map(tag => tag.id || tag.value) : [];
+                        const membersData = this.membersTagifyInstance ? this.membersTagifyInstance.value.map(tag => tag.id || tag.value) : [];
+                        const managerData = this.managerTagifyInstance ? this.managerTagifyInstance.value.map(tag => tag.id || tag.value) : [];
+                        
                         // Append all project data
                         Object.keys(this.newProject).forEach(key => {
                             if (key === 'members' && Array.isArray(this.newProject[key])) {
-                                this.newProject[key].forEach(member => {
+                                // Use membersData from Tagify instead of this.newProject.members
+                                membersData.forEach(member => {
                                     formData.append('members[]', member);
+                                });
+                            } else if (key === 'team') {
+                                // Add team data from Tagify
+                                teamData.forEach(team => {
+                                    formData.append('team[]', team);
+                                });
+                            } else if (key === 'manager') {
+                                // Add manager data from Tagify
+                                managerData.forEach(manager => {
+                                    formData.append('manager[]', manager);
                                 });
                             } else if (key === 'project_order_type' && this.tagifyInstance) {
                                 const tags = this.tagifyInstance.value.map(tag => tag.value);
                                 formData.append(key, JSON.stringify(tags));
                             } else {
-                                formData.append(key, this.newProject[key]);
+                                formData.append(key, this.newProject[key] || '');
                             }
                         });
+                        
+                        // Explicitly add Select2 values to ensure they're included
+                        if (categoryId) {
+                            formData.set('category_id', categoryId);
+                        }
+                        if (companyName) {
+                            formData.set('company_name', companyName);
+                        }
+                        if (customerId) {
+                            formData.set('customer_id', customerId);
+                        }
+
+                        console.log('newProject data:', this.newProject);
+                        console.log('FormData contents:');
+                        for (let [key, value] of formData.entries()) {
+                            console.log(`${key}: ${value}`);
+                        }
                         
                         const response = await axios.post('/api/index.php?model=project&method=add', formData);
                         
@@ -1093,10 +1161,24 @@ var projectTable;
                 if (this.membersTagifyInstance) {
                     this.membersTagifyInstance.removeAllTags();
                 }
+                if (this.managerTagifyInstance) {
+                    this.managerTagifyInstance.removeAllTags();
+                }
+
+                // Reset Select2 dropdowns
+                $('#category_id').val(null).trigger('change');
+                $('#company_name').val(null).trigger('change');
+                $('#customer_id').val(null).trigger('change');
+
+                // Hide dependent fields
+                $('#company_name').closest('.form-group').hide();
+                $('#customer_id').closest('.form-group').hide();
 
                 // Reset form validation
                 if (this.formValidator) {
                     this.formValidator.resetForm();
+                    this.formValidator.disableValidator('company_name');
+                    this.formValidator.disableValidator('customer_id');
                 }
             },
             async loadCategories() {
@@ -1170,9 +1252,9 @@ var projectTable;
                 }
             },
             openNewCustomerModal() {
-                // Đóng dropdown của select2
+                // Close dropdown of select2
                 $('#customer_id').select2('close');
-                // Mở modal thêm khách hàng mới
+                // Open new customer modal
                 const modal = new bootstrap.Modal(document.getElementById('newCustomerModal'));
                 modal.show();
             },

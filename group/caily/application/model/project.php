@@ -89,11 +89,13 @@ class Project extends ApplicationModel {
         // Get data for current page
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
+            c.name as contact_name, c.company_name, c.department as branch_name,
             (SELECT GROUP_CONCAT(user_id) FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
             (SELECT GROUP_CONCAT(user_id) FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
             (SELECT GROUP_CONCAT(user_id) FROM groupware_project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+            LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
             %s
             ORDER BY p.%s %s
             LIMIT %d, %d",
@@ -103,6 +105,8 @@ class Project extends ApplicationModel {
             $start,
             $length
         );
+
+        
         
         $data = $this->fetchAll($query);
 
@@ -184,7 +188,7 @@ class Project extends ApplicationModel {
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
             'start_date' => isset($_POST['start_date']) && !empty($_POST['start_date']) ? date('Y-m-d', strtotime($_POST['start_date'])) : null,
             'end_date' => isset($_POST['end_date']) && !empty($_POST['end_date']) ? date('Y-m-d', strtotime($_POST['end_date'])) : null,
-            'created_by' => isset($_POST['created_by']) ? $_POST['created_by'] : $_SESSION['user_id'],
+            'created_by' => $_SESSION['user_id'],
             'department_id' => isset($_POST['department_id']) ? $_POST['department_id'] : null,
             'progress' => 0,
             'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
@@ -196,6 +200,8 @@ class Project extends ApplicationModel {
             'amount' => isset($_POST['amount']) ? $_POST['amount'] : 0,
             'created_at' => date('Y-m-d H:i:s'),
         );
+
+        $this->Log($data);
         
         $project_id = $this->query_insert($data);
         
@@ -267,7 +273,7 @@ class Project extends ApplicationModel {
         $query = sprintf(
             "SELECT pm.*, u.name as user_name 
             FROM " . DB_PREFIX . "project_members pm 
-            LEFT JOIN " . DB_PREFIX . "users u ON pm.user_id = u.id 
+            LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
             WHERE pm.project_id = %d 
             ORDER BY pm.created_at DESC",
             intval($project_id)
@@ -279,7 +285,7 @@ class Project extends ApplicationModel {
         $query = sprintf(
             "SELECT t.*, u.name as assigned_to_name
             FROM " . DB_PREFIX . "tasks t 
-            LEFT JOIN " . DB_PREFIX . "users u ON t.assigned_to = u.id 
+            LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             WHERE t.project_id = %d 
             ORDER BY t.created_at DESC",
             intval($projectId)

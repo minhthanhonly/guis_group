@@ -40,12 +40,11 @@ class Task extends ApplicationModel {
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
         
         $query = sprintf(
-            "SELECT t.*, p.name as project_name, u.name as assigned_to_name, c.name as category_name,
+            "SELECT t.*, p.name as project_name, u.name as assigned_to_name
             (SELECT COUNT(*) FROM {$this->table} WHERE parent_id = t.id) as subtask_count
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id 
-            LEFT JOIN " . DB_PREFIX . "users u ON t.assigned_to = u.id 
-            LEFT JOIN " . DB_PREFIX . "categories c ON t.category_id = c.id 
+            LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             %s
             ORDER BY t.created_at DESC",
             $where
@@ -66,10 +65,9 @@ class Task extends ApplicationModel {
 
     function getSubtasks($parent_id) {
         $query = sprintf(
-            "SELECT t.*, u.name as assigned_to_name, c.name as category_name 
+            "SELECT t.*, u.name as assigned_to_name
             FROM {$this->table} t 
-            LEFT JOIN " . DB_PREFIX . "users u ON t.assigned_to = u.id 
-            LEFT JOIN " . DB_PREFIX . "categories c ON t.category_id = c.id 
+            LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             WHERE t.parent_id = %d 
             ORDER BY t.created_at ASC",
             intval($parent_id)
@@ -233,7 +231,7 @@ class Task extends ApplicationModel {
         $query = sprintf(
             "SELECT te.*, u.name as user_name 
             FROM " . DB_PREFIX . "time_entries te 
-            LEFT JOIN " . DB_PREFIX . "users u ON te.user_id = u.id 
+            LEFT JOIN " . DB_PREFIX . "user u ON te.user_id = u.id 
             WHERE te.task_id = %d 
             ORDER BY te.start_time DESC",
             intval($taskId)
@@ -245,7 +243,7 @@ class Task extends ApplicationModel {
         $query = sprintf(
             "SELECT c.*, u.name as user_name 
             FROM " . DB_PREFIX . "comments c 
-            LEFT JOIN " . DB_PREFIX . "users u ON c.user_id = u.id 
+            LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.id 
             WHERE c.task_id = %d 
             ORDER BY c.created_at DESC",
             intval($taskId)
@@ -275,11 +273,10 @@ class Task extends ApplicationModel {
 
     function getById($id) {
         $query = sprintf(
-            "SELECT t.*, p.name as project_name, u.name as assigned_to_name, c.name as category_name 
+            "SELECT t.*, p.name as project_name, u.name as assigned_to_name 
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id 
-            LEFT JOIN " . DB_PREFIX . "users u ON t.assigned_to = u.id 
-            LEFT JOIN " . DB_PREFIX . "categories c ON t.category_id = c.id 
+            LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             WHERE t.id = %d",
             intval($id)
         );
