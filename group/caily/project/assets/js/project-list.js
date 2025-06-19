@@ -12,6 +12,11 @@ var projectTable;
             color: 'info'
         },
         {
+            key: 'confirming',
+            name: '確認中',
+            color: 'warning'
+        },
+        {
             key: 'in_progress',
             name: '進行中',
             color: 'primary'

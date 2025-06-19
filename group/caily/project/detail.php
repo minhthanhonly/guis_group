@@ -88,13 +88,43 @@ if (!$project_id) {
                         <div class="col-md-6">
                             <label class="form-label">ステータス</label>
                             <div>
-                                <span class="badge" :class="getStatusBadgeClass(project.status)">{{ getStatusLabel(project.status) }}</span>
+                                <div class="btn-group">
+                                    <button type="button" class="btn dropdown-toggle waves-effect waves-light" 
+                                            :class="getStatusButtonClass(project.status)"
+                                            id="statusDropdown"
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                        {{ getStatusLabel(project.status) }}
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li v-for="status in statuses" :key="status.value">
+                                            <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                            @click="selectStatus(status.value)">
+                                                {{ status.label }}
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">優先度</label>
                             <div>
-                                <span class="badge" :class="getPriorityBadgeClass(project.priority)">{{ getPriorityLabel(project.priority) }}</span>
+                                <div class="btn-group">
+                                    <button type="button" class="btn dropdown-toggle waves-effect waves-light" 
+                                            :class="getPriorityButtonClass(project.priority)"
+                                            id="priorityDropdown"
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                        {{ getPriorityLabel(project.priority) }}
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li v-for="priority in priorities" :key="priority.value">
+                                            <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                               @click="selectPriority(priority.value)">
+                                                {{ priority.label }}
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -116,6 +146,42 @@ if (!$project_id) {
                         <div class="col-md-4">
                             <label class="form-label">金額</label>
                             <input type="text" class="form-control" :value="formatCurrency(project.amount)" readonly>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">担当者</label>
+                            <div class="d-flex align-items-center my-4" v-if="managers && managers.length > 0">
+                                <div v-for="member in managers" :key="member.user_id"
+                                    class="avatar me-2 avatar-online"
+                                    data-bs-toggle="tooltip"
+                                    data-popup="tooltip-custom"
+                                    data-bs-placement="top"
+                                    :aria-label="member.user_name"
+                                    :data-bs-original-title="member.user_name">
+                                    <img v-if="!member.avatarError" class="rounded-circle" :src="getAvatarSrc(member)" :alt="member.user_name" @error="handleAvatarError(member)">
+                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member.user_name) }}</span>
+                                </div>
+                            </div>
+                            <div v-else class="text-muted">
+                                メンバーがいません
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">プロジェクトメンバー</label>
+                            <div class="d-flex align-items-center my-4" v-if="members.length > 0">
+                                <div v-for="member in members" :key="member.user_id"
+                                    class="avatar me-2 avatar-online"
+                                    data-bs-toggle="tooltip"
+                                    data-popup="tooltip-custom"
+                                    data-bs-placement="top"
+                                    :aria-label="member.user_name"
+                                    :data-bs-original-title="member.user_name">
+                                    <img v-if="!member.avatarError" class="rounded-circle" :src="getAvatarSrc(member)" :alt="member.user_name" @error="handleAvatarError(member)">
+                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member.user_name) }}</span>
+                                </div>
+                            </div>
+                            <div v-else class="text-muted">
+                                メンバーがいません
+                            </div>
                         </div>
                         <div class="col-12">
                             <label class="form-label">進捗率</label>
@@ -142,39 +208,6 @@ if (!$project_id) {
                 </div>
             </div>
 
-            <!-- Project Members -->
-            <div class="card mt-3">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">プロジェクトメンバー</h5>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>名前</th>
-                                    <th>役割</th>
-                                    <th>参加日</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="member in members" :key="member.user_id">
-                                    <td>{{ member.user_name }}</td>
-                                    <td>
-                                        <span class="badge" :class="getRoleBadgeClass(member.role)">
-                                            {{ getRoleLabel(member.role) }}
-                                        </span>
-                                    </td>
-                                    <td>{{ formatDate(member.created_at) }}</td>
-                                </tr>
-                                <tr v-if="members.length === 0">
-                                    <td colspan="3" class="text-center text-muted">メンバーがいません</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Right Column - Stats & Comments -->
@@ -290,28 +323,7 @@ $view->footing();
 ?>
 
 <style>
-.avatar-group {
-    display: inline-flex;
-}
-.avatar-group .avatar {
-    margin-left: -0.5rem;
-}
-.avatar-sm {
-    width: 32px;
-    height: 32px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-.avatar-initial {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-weight: 500;
-}
+
 .comment-item {
     padding: 1rem;
     border-radius: 0.375rem;
@@ -326,221 +338,9 @@ $view->footing();
 }
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+<!-- Define PROJECT_ID before loading Vue and project-detail.js -->
 <script>
-const { createApp } = Vue;
-
-createApp({
-    data() {
-        return {
-            projectId: <?php echo $project_id; ?>,
-            project: null,
-            department: null,
-            members: [],
-            tasks: [],
-            comments: [],
-            newComment: '',
-            stats: {
-                totalTasks: 0,
-                completedTasks: 0,
-                timeTracked: 0,
-                totalDays: 0
-            },
-            statuses: [
-                { value: 'draft', label: '下書き', color: 'secondary' },
-                { value: 'open', label: 'オープン', color: 'info' },
-                { value: 'in_progress', label: '進行中', color: 'primary' },
-                { value: 'paused', label: '一時停止', color: 'warning' },
-                { value: 'completed', label: '完了', color: 'success' },
-                { value: 'cancelled', label: 'キャンセル', color: 'danger' }
-            ],
-            priorities: [
-                { value: 'low', label: '低', color: 'secondary' },
-                { value: 'medium', label: '中', color: 'primary' },
-                { value: 'high', label: '高', color: 'warning' },
-                { value: 'urgent', label: '緊急', color: 'danger' }
-            ]
-        }
-    },
-    methods: {
-        async loadProject() {
-            try {
-                const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
-                this.project = response.data;
-                
-                // Load department info if available
-                if (this.project.department_id) {
-                    this.loadDepartment();
-                }
-            } catch (error) {
-                console.error('Error loading project:', error);
-                alert('プロジェクトの読み込みに失敗しました。');
-            }
-        },
-        
-        async loadDepartment() {
-            try {
-                const response = await axios.get(`/api/index.php?model=department&method=get&id=${this.project.department_id}`);
-                this.department = response.data;
-            } catch (error) {
-                console.error('Error loading department:', error);
-            }
-        },
-        
-        async loadMembers() {
-            try {
-                const response = await axios.get(`/api/index.php?model=project&method=getMembers&project_id=${this.projectId}`);
-                this.members = response.data || [];
-            } catch (error) {
-                console.error('Error loading members:', error);
-            }
-        },
-        
-        async loadTasks() {
-            try {
-                const response = await axios.get(`/api/index.php?model=task&method=list&project_id=${this.projectId}`);
-                this.tasks = response.data || [];
-                this.calculateStats();
-            } catch (error) {
-                console.error('Error loading tasks:', error);
-            }
-        },
-        
-        async loadComments() {
-            try {
-                const response = await axios.get(`/api/index.php?model=project&method=getComments&project_id=${this.projectId}`);
-                this.comments = response.data || [];
-            } catch (error) {
-                console.error('Error loading comments:', error);
-            }
-        },
-        
-        calculateStats() {
-            this.stats.totalTasks = this.tasks.length;
-            this.stats.completedTasks = this.tasks.filter(t => t.status === 'completed').length;
-            
-            // Calculate time tracked (actual hours)
-            this.stats.timeTracked = this.tasks.reduce((sum, task) => sum + parseFloat(task.actual_hours || 0), 0);
-            
-            // Calculate total days
-            if (this.project && this.project.start_date) {
-                const start = new Date(this.project.start_date);
-                const end = this.project.actual_end_date ? new Date(this.project.actual_end_date) : new Date();
-                const diffTime = Math.abs(end - start);
-                this.stats.totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            }
-        },
-        
-        async addComment() {
-            if (!this.newComment.trim()) return;
-            
-            try {
-                const formData = new FormData();
-                formData.append('model', 'project');
-                formData.append('method', 'addComment');
-                formData.append('project_id', this.projectId);
-                formData.append('content', this.newComment.trim());
-                formData.append('user_id', '<?php echo $_SESSION['user_id']; ?>');
-                
-                await axios.post('/api/index.php', formData);
-                
-                this.newComment = '';
-                this.loadComments();
-            } catch (error) {
-                console.error('Error adding comment:', error);
-                alert('コメントの追加に失敗しました。');
-            }
-        },
-        
-        editProject() {
-            window.location.href = `index.php?edit=${this.projectId}`;
-        },
-        
-        async deleteProject() {
-            if (!confirm('本当にこのプロジェクトを削除しますか？')) {
-                return;
-            }
-            
-            try {
-                const formData = new FormData();
-                formData.append('model', 'project');
-                formData.append('method', 'delete');
-                formData.append('id', this.projectId);
-                
-                await axios.post('/api/index.php', formData);
-                
-                alert('プロジェクトを削除しました。');
-                window.location.href = 'index.php';
-            } catch (error) {
-                console.error('Error deleting project:', error);
-                if (error.response?.data?.error) {
-                    alert(error.response.data.error);
-                } else {
-                    alert('プロジェクトの削除に失敗しました。');
-                }
-            }
-        },
-        
-        formatDate(date) {
-            if (!date) return '-';
-            return moment(date).format('YYYY/MM/DD');
-        },
-        
-        formatDateTime(datetime) {
-            if (!datetime) return '-';
-            return moment(datetime).format('YYYY/MM/DD HH:mm');
-        },
-        
-        formatCurrency(amount) {
-            if (!amount) return '¥0';
-            return '¥' + parseInt(amount).toLocaleString();
-        },
-        
-        getStatusLabel(status) {
-            const s = this.statuses.find(s => s.value === status);
-            return s ? s.label : status;
-        },
-        
-        getStatusBadgeClass(status) {
-            const s = this.statuses.find(s => s.value === status);
-            return `bg-${s?.color || 'secondary'}`;
-        },
-        
-        getPriorityLabel(priority) {
-            const p = this.priorities.find(p => p.value === priority);
-            return p ? p.label : priority;
-        },
-        
-        getPriorityBadgeClass(priority) {
-            const p = this.priorities.find(p => p.value === priority);
-            return `bg-${p?.color || 'secondary'}`;
-        },
-        
-        getRoleLabel(role) {
-            const roles = {
-                'manager': 'マネージャー',
-                'member': 'メンバー',
-                'viewer': '閲覧者'
-            };
-            return roles[role] || role;
-        },
-        
-        getRoleBadgeClass(role) {
-            const roleColors = {
-                'manager': 'bg-primary',
-                'member': 'bg-info',
-                'viewer': 'bg-secondary'
-            };
-            return roleColors[role] || 'bg-secondary';
-        }
-    },
-    mounted() {
-        this.loadProject();
-        this.loadMembers();
-        this.loadTasks();
-        this.loadComments();
-    }
-}).mount('#app');
+const PROJECT_ID = <?php echo $project_id; ?>;
 </script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
+<script src="assets/js/project-detail.js"></script>

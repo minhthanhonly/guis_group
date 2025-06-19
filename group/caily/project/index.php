@@ -169,6 +169,11 @@ $view->heading('プロジェクト管理');
                                         <select class="form-select" v-model="newProject.status" name="status" required>
                                             <option value="draft">下書き</option>
                                             <option value="open">オープン</option>
+                                            <option value="confirming">確認中</option>
+                                            <option value="in_progress">進行中</option>
+                                            <option value="paused">一時停止</option>
+                                            <option value="completed">完了</option>
+                                            <option value="cancelled">キャンセル</option>
                                         </select>
                                         <div class="invalid-feedback"></div>
                                     </div>

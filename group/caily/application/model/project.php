@@ -211,6 +211,11 @@ class Project extends ApplicationModel {
                 $this->addMember($project_id, $user_id);
             }
         }
+        if ($project_id && isset($_POST['manager']) && is_array($_POST['manager'])) {
+            foreach ($_POST['manager'] as $user_id) {
+                $this->addMember($project_id, $user_id, 'manager');
+            }
+        }
         
         return $project_id;
     }
@@ -278,7 +283,7 @@ class Project extends ApplicationModel {
         }
         
         $query = sprintf(
-            "SELECT pm.*, u.realname as user_name 
+            "SELECT pm.*, u.realname as user_name, user_image
             FROM " . DB_PREFIX . "project_members pm 
             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
             WHERE pm.project_id = %d 
@@ -357,7 +362,15 @@ class Project extends ApplicationModel {
         return $this->query($query);
     }
 
-    function updateStatus($id, $status) {
+    function updateStatus($params = null) {
+        // Get data directly from $_POST
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $status = isset($_POST['status']) ? $_POST['status'] : '';
+        
+        if (!$id || !$status) {
+            return false;
+        }
+        
         $data = array(
             'status' => $status,
             'updated_at' => date('Y-m-d H:i:s')
@@ -376,6 +389,23 @@ class Project extends ApplicationModel {
             $data['actual_end_date'] = date('Y-m-d');
             $data['progress'] = 100;
         }
+        
+        return $this->query_update($data, ['id' => $id]);
+    }
+
+    function updatePriority($params = null) {
+        // Get data directly from $_POST
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $priority = isset($_POST['priority']) ? $_POST['priority'] : '';
+        
+        if (!$id || !$priority) {
+            return false;
+        }
+        
+        $data = array(
+            'priority' => $priority,
+            'updated_at' => date('Y-m-d H:i:s')
+        );
         
         return $this->query_update($data, ['id' => $id]);
     }
