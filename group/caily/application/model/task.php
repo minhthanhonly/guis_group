@@ -108,10 +108,15 @@ class Task extends ApplicationModel {
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
-                        $task_id = $this->query_insert($data);                if ($task_id && $data['project_id']) {            $this->updateProjectProgress($data['project_id']);        }                return $task_id;
+        $task_id = $this->query_insert($data);
+        // if ($task_id && $data['project_id']) {
+        //     $this->updateProjectProgress($data['project_id']);
+        // }
+        return $task_id;
     }
 
-    function edit($id) {
+    function edit() {
+        $id = $_POST['id'];
         $data = array(
             'project_id' => $_POST['project_id'],
             'parent_id' => isset($_POST['parent_id']) && $_POST['parent_id'] ? $_POST['parent_id'] : null,
@@ -130,7 +135,15 @@ class Task extends ApplicationModel {
         if (isset($_POST['progress'])) {
             $data['progress'] = intval($_POST['progress']);
         }
-                        $result = $this->query_update($data, ['id' => $id]);                $task = $this->getById($id);        if ($result && $task['parent_id']) {            $this->updateParentTaskProgress($task['parent_id']);        }                if ($result && $task['project_id']) {            $this->updateProjectProgress($task['project_id']);        }                return $result;
+        $result = $this->query_update($data, ['id' => $id]);
+        
+        // if ($result && $task['parent_id']) {
+        //     $this->updateParentTaskProgress($task['parent_id']);
+        // }
+        // if ($result && $task['project_id']) {
+        //     $this->updateProjectProgress($task['project_id']);
+        // }
+        return $result;
     }
 
     function delete($id) {

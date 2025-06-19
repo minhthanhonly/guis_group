@@ -255,8 +255,17 @@ createApp({
             member.avatarError = true;
         },
         getInitials(name) {
-            const initials = name.split(' ').map(n => n.charAt(0)).join('');
-            return initials.toUpperCase();
+            if (!name) return '?';
+            // Check if name contains Japanese characters
+            const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
+            if (hasJapanese) {
+                // For Japanese names, take first 2 characters
+                return name.substring(0, 2);
+            } else {
+                // For English names, take first letter of each word
+                const initials = name.split(' ').map(n => n.charAt(0)).join('');
+                return initials.toUpperCase();
+            }
         },
         initTooltips() {
             // Dispose previous tooltips to avoid duplicates

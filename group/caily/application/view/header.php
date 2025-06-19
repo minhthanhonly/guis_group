@@ -26,6 +26,7 @@
       rel="stylesheet" />
 
     <link rel="stylesheet" href="<?=$root?>assets/vendor/fonts/iconify-icons.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/fonts/fontawesome.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/node-waves/node-waves.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/pickr/pickr-themes.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/css/core.css?v=<?=CACHE_VERSION?>" />

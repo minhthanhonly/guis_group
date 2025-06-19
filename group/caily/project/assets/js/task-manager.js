@@ -24,18 +24,46 @@ const TaskApp = createApp({
             editingTask: null,
             users: [],
             categories: [],
-            taskStatuses: [
-                { value: 'new', label: '新規', color: 'secondary' },
-                { value: 'in_progress', label: '進行中', color: 'primary' },
-                { value: 'review', label: 'レビュー中', color: 'warning' },
-                { value: 'completed', label: '完了', color: 'success' }
-            ],
+            stats: {
+                total: 0,
+                completed: 0,
+                overdue: 0
+            },
             taskPriorities: [
                 { value: 'low', label: '低', color: 'secondary' },
                 { value: 'medium', label: '中', color: 'primary' },
                 { value: 'high', label: '高', color: 'warning' },
                 { value: 'urgent', label: '緊急', color: 'danger' }
-            ]
+            ],
+            taskStatuses: [
+                { value: 'todo', label: '未開始', color: 'secondary' },
+                { value: 'in-progress', label: '進行中', color: 'primary' },
+                { value: 'confirming', label: '確認中', color: 'warning' },
+                { value: 'paused', label: '一時停止', color: 'warning' },
+                { value: 'completed', label: '完了', color: 'success' },
+                { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+            ],
+            filterStatus: '',
+            filterPriority: '',
+            filterDueDate: '',
+            addingTaskInline: false,
+            inlineTasks: [],
+            newTaskInline: {
+                title: '',
+                priority: 'medium',
+                status: 'todo',
+                due_date: '',
+                assigned_to: ''
+            },
+            projectMembers: [],
+            projectManagers: [],
+            showMemberModal: false,
+            assigneeModal: {
+                show: false,
+                idx: null,
+                selected: []
+            },
+            editingInlineId: null,
         }
     },
     
@@ -50,6 +78,15 @@ const TaskApp = createApp({
                 t.id !== this.editingTask.id &&
                 !this.isDescendant(t.id, this.editingTask.id)
             );
+        },
+        filteredTasks() {
+            return this.tasks.filter(task => {
+                let match = true;
+                if (this.filterStatus && task.status !== this.filterStatus) match = false;
+                if (this.filterPriority && task.priority !== this.filterPriority) match = false;
+                //if (this.filterDueDate && task.due_date !== this.filterDueDate) match = false;
+                return match;
+            });
         }
     },
     
@@ -69,6 +106,16 @@ const TaskApp = createApp({
         this.loadUsers();
         this.loadCategories();
         this.initializeDataTable();
+        this.loadProjectMembers();
+        this.$nextTick(() => {
+            this.initFlatpickr();
+        });
+    },
+    
+    updated() {
+        this.$nextTick(() => {
+            this.initFlatpickr();
+        });
     },
     
     methods: {
@@ -85,7 +132,7 @@ const TaskApp = createApp({
             try {
                 const response = await axios.get(`/api/index.php?model=task&method=list&project_id=${this.projectId}&include_subtasks=1`);
                 this.tasks = response.data || [];
-                this.updateDataTable();
+                //this.updateDataTable();
             } catch (error) {
                 console.error('Error loading tasks:', error);
                 this.showMessage('タスクの読み込みに失敗しました。', true);
@@ -228,11 +275,23 @@ const TaskApp = createApp({
         },
         
         openNewTaskModal() {
-            this.editingTask = null;
-            this.resetTaskForm();
-            this.taskForm.project_id = this.projectId;
-            const modal = new bootstrap.Modal(document.getElementById('taskModal'));
-            modal.show();
+            this.inlineTasks.push({
+                title: '',
+                priority: 'medium',
+                status: 'todo',
+                due_date: '',
+                assignees: []
+            });
+            this.$nextTick(() => {
+                const firstInput = document.querySelector('.inline-task-input');
+                if (firstInput) firstInput.focus();
+                document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(el => {
+                    if (el._dropdownInstance) {
+                        el._dropdownInstance.dispose();
+                    }
+                    el._dropdownInstance = new (window.bootstrap ? window.bootstrap.Dropdown : bootstrap.Dropdown)(el);
+                });
+            });
         },
         
         editTask(task) {
@@ -256,34 +315,44 @@ const TaskApp = createApp({
         },
         
         async saveTask() {
+            // Validate required fields
+            if (!this.taskForm.title || !this.taskForm.title.trim()) {
+                this.showMessage('タスク名は必須です。', true);
+                return;
+            }
+            if (!this.taskForm.assigned_to) {
+                this.showMessage('担当者は必須です。', true);
+                return;
+            }
+            if (!this.taskForm.due_date || !this.taskForm.due_date.trim()) {
+                this.showMessage('期限日は必須です。', true);
+                return;
+            }
             try {
                 const formData = new FormData();
                 formData.append('model', 'task');
                 formData.append('method', this.editingTask ? 'edit' : 'add');
-                
                 if (this.editingTask) {
                     formData.append('id', this.editingTask.id);
                 }
-                
                 Object.keys(this.taskForm).forEach(key => {
                     if (this.taskForm[key] !== null && this.taskForm[key] !== '') {
                         formData.append(key, this.taskForm[key]);
                     }
                 });
-                
                 formData.append('project_id', this.projectId);
-                
                 const response = await axios.post('/api/index.php', formData);
-                
-                if (response.data) {
+                if (response.data && response.data.success !== false) {
                     this.showMessage(this.editingTask ? 'タスクを更新しました。' : 'タスクを作成しました。');
-                    bootstrap.Modal.getInstance(document.getElementById('taskModal')).hide();
+                    bootstrap.Modal.getInstance(document.getElementById('addTaskModal')).hide();
                     this.loadTasks();
                     this.resetTaskForm();
+                } else {
+                    this.showMessage(response.data && response.data.error ? response.data.error : 'タスクの保存に失敗しました。', true);
                 }
             } catch (error) {
                 console.error('Error saving task:', error);
-                this.showMessage('タスクの保存に失敗しました。', true);
+                this.showMessage(error.response?.data?.error || 'タスクの保存に失敗しました。', true);
             }
         },
         
@@ -390,12 +459,239 @@ const TaskApp = createApp({
         
         formatDate(date) {
             if (!date) return '-';
-            return moment(date).format('YYYY/MM/DD');
+            return moment(date).format('YYYY/MM/DD HH:mm');
         },
         
         showMessage(message, isError = false) {
             // Simple alert for now
-            alert(message);
+            showMessage(message, isError);
+        },
+        
+        editTaskInline(task) {
+            // Convert task to inline editable format
+            const inlineTask = {
+                id: task.id,
+                title: task.title,
+                priority: task.priority,
+                due_date: task.due_date,
+                assignees: task.assigned_to ? task.assigned_to.split(',') : [],
+                status: task.status,
+                progress: task.progress || 0
+            };
+            this.editingInlineId = task.id;
+            this.inlineTasks.push(inlineTask);
+            // Remove the task from filteredTasks temporarily
+            this.tasks = this.tasks.filter(t => t.id !== task.id);
+        },
+        
+        async saveTaskInline(idx) {
+            const inlineTask = this.inlineTasks[idx];
+            // Validate required fields
+            if (!inlineTask.title || !inlineTask.title.trim()) {
+                this.showMessage('タスク名は必須です。', true);
+                return;
+            }
+            if (!inlineTask.assignees || !inlineTask.assignees.length) {
+                this.showMessage('担当者は必須です。', true);
+                return;
+            }
+            if (!inlineTask.due_date || !inlineTask.due_date.trim()) {
+                this.showMessage('期限日は必須です。', true);
+                return;
+            }
+            try {
+                const formData = new FormData();
+                const method = inlineTask.id ? 'edit' : 'add';
+                if (inlineTask.id) {
+                    formData.append('id', inlineTask.id);
+                }
+                formData.append('project_id', this.projectId);
+                formData.append('title', inlineTask.title);
+                formData.append('priority', inlineTask.priority);
+                formData.append('due_date', inlineTask.due_date);
+                formData.append('assigned_to', inlineTask.assignees.join(','));
+                formData.append('status', inlineTask.status);
+                formData.append('progress', inlineTask.progress);
+
+                const response = await axios.post('/api/index.php??model=task&method=' + method, formData);
+                if (response.data.success) {
+                    this.showMessage(inlineTask.id ? 'タスクを更新しました。' : 'タスクを追加しました。');
+                    await this.loadTasks();
+                    this.inlineTasks.splice(idx, 1);
+                    this.editingInlineId = null;
+                } else {
+                    this.showMessage(response.data.message || 'エラーが発生しました。', true);
+                }
+            } catch (error) {
+                console.error('Error saving task:', error);
+                this.showMessage('エラーが発生しました。', true);
+            }
+        },
+        
+        cancelTaskInline(idx) {
+            const inlineTask = this.inlineTasks[idx];
+            if (inlineTask.id) {
+                // If canceling an edit, restore the original task
+                this.loadTasks();
+            }
+            this.inlineTasks.splice(idx, 1);
+            this.editingInlineId = null;
+        },
+        
+        getPriorityLabel(priority) {
+            const p = this.taskPriorities.find(p => p.value === priority);
+            return p ? p.label : priority;
+        },
+        
+        getPriorityButtonClass(priority) {
+            const p = this.taskPriorities.find(p => p.value === priority);
+            return `bg-label-${p?.color || 'secondary'}`;
+        },
+        
+        getStatusLabel(status) {
+            const s = this.taskStatuses.find(s => s.value === status);
+            return s ? s.label : status;
+        },
+        
+        getStatusButtonClass(status) {
+            const s = this.taskStatuses.find(s => s.value === status);
+            return `btn-${s?.color || 'secondary'}`;
+        },
+        
+        updateTaskPriority(task, value) {
+            task.priority = value;
+            // Gọi API cập nhật nếu cần
+        },
+        
+        updateTaskStatus(task, value) {
+            task.status = value;
+            // Gọi API cập nhật nếu cần
+        },
+        
+        closeDropdown(event) {
+            const dropdownMenu = event.target.closest('.dropdown-menu');
+            if (dropdownMenu) {
+                const dropdown = window.bootstrap
+                    ? window.bootstrap.Dropdown.getOrCreateInstance(dropdownMenu.previousElementSibling)
+                    : bootstrap.Dropdown.getOrCreateInstance(dropdownMenu.previousElementSibling);
+                dropdown.hide();
+            }
+        },
+        
+        async loadProjectMembers() {
+            try {
+                const response = await axios.get(`/api/index.php?model=project&method=getMembers&project_id=${this.projectId}`);
+                let members = response.data || [];
+                // Lọc trùng user_id
+                const seen = new Set();
+                this.projectMembers = members.filter(m => {
+                    if (!m || seen.has(m.user_id)) return false;
+                    seen.add(m.user_id);
+                    return true;
+                });
+            } catch (error) {
+                console.error('Error loading project members:', error);
+            }
+        },
+        
+        getAvatarSrc(member) {
+            if(member){
+                return member.user_image || '';
+            }
+            return '';
+        },
+        
+        handleAvatarError(member) {
+            member.avatarError = true;
+        },
+        
+        getInitials(name) {
+            if (!name) return '?';
+            // Check if name contains Japanese characters
+            const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
+            if (hasJapanese) {
+                // For Japanese names, take first 2 characters
+                return name.substring(0, 2);
+            } else {
+                // For English names, take first letter of each word
+                const initials = name.split(' ').map(n => n.charAt(0)).join('');
+                return initials.toUpperCase();
+            }
+        },
+        
+        openMemberModal() {
+            this.showMemberModal = true;
+        },
+        
+        closeMemberModal() {
+            this.showMemberModal = false;
+        },
+        
+        async addMember(userId) {
+            // Gọi API thêm member vào project
+            // Sau khi thành công, reload lại projectMembers
+            await this.loadProjectMembers();
+        },
+        
+        async removeMember(userId) {
+            // Gọi API xóa member khỏi project
+            // Sau khi thành công, reload lại projectMembers
+            await this.loadProjectMembers();
+        },
+        
+        openAssigneeModal(idx) {
+            this.assigneeModal.idx = idx;
+            this.assigneeModal.selected = [...(this.inlineTasks[idx].assignees || [])];
+            this.assigneeModal.show = true;
+        },
+        
+        closeAssigneeModal() {
+            this.assigneeModal.show = false;
+        },
+        
+        confirmAssigneeModal() {
+            if (this.assigneeModal.idx !== null) {
+                this.inlineTasks[this.assigneeModal.idx].assignees = [...this.assigneeModal.selected];
+            }
+            this.closeAssigneeModal();
+        },
+        
+        toggleAssignee(userId) {
+            const idx = this.assigneeModal.selected.indexOf(userId);
+            if (idx === -1) {
+                this.assigneeModal.selected.push(userId);
+            } else {
+                this.assigneeModal.selected.splice(idx, 1);
+            }
+        },
+        
+        assigneeNames(userIds) {
+            return userIds.map(userId => {
+                const m = this.projectMembers.find(u => u.user_id == userId);
+                return m ? m.user_name : '';
+            }).join(', ');
+        },
+        
+        initFlatpickr() {
+            if (window.flatpickr) {
+                document.querySelectorAll('.datetimepicker').forEach(el => {
+                    if (el._flatpickr) {
+                        el._flatpickr.destroy();
+                    }
+                    window.flatpickr(el, {
+                        enableTime: true,
+                        dateFormat: 'Y/m/d H:i',
+                        time_24hr: true,
+                        allowInput: true,
+                        onChange: (selectedDates, dateStr) => {
+                            const vueModel = el.getAttribute('v-model');
+                            if (vueModel) {
+                                // Không dùng được, nên sẽ đồng bộ thủ công ở template
+                            }
+                        }
+                    });
+                });
+            }
         }
     }
 });
