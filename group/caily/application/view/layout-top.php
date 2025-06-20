@@ -106,6 +106,23 @@
               </a>
             </li>
 
+            
+
+            <li class="menu-item <?php if($directory == 'form') echo 'active open'; ?>">
+              <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base ti tabler-settings"></i>
+                <div>申請・承認</div>
+              </a>
+
+              <ul class="menu-sub">
+                <li class="menu-item <?php echo $active1; ?>">
+                  <a href="<?=$root?>form/leave.php" class="menu-link">
+                    <div>休職</div>
+                  </a>
+                </li>
+              </ul>
+            </li>
+
             <?php if($_SESSION['authority'] == 'administrator'){
               $active = '';
               if($directory == 'setting') {

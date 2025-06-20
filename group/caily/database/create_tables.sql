@@ -145,6 +145,24 @@ CREATE TABLE IF NOT EXISTS `groupware_branches` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Leave Requests table
+CREATE TABLE IF NOT EXISTS `groupware_leaves` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` varchar(50) NOT NULL,
+  `start_datetime` datetime NOT NULL,
+  `end_datetime` datetime NOT NULL,
+  `days` decimal(5,2) NOT NULL,
+  `leave_type` enum('paid','unpaid') NOT NULL,
+  `paid_type` enum('full','am','pm') DEFAULT NULL,
+  `unpaid_type` enum('congratulatory','menstrual','child_nursing') DEFAULT NULL,
+  `reason` varchar(255) DEFAULT NULL,
+  `note` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Insert sample departments
 INSERT IGNORE INTO `groupware_departments` (`id`, `name`, `description`, `can_project`, `created_at`, `updated_at`) VALUES
 (1, '開発部', '開発プロジェクト担当', 1, NOW(), NOW()),

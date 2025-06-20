@@ -54,7 +54,7 @@ define('DB_USERNAME', 'root');
 // define('DB_USERNAME', 'guis2');
 //データベースパスワード
 // define('DB_PASSWORD', 'URtMzWthwqB5');
-define('DB_PASSWORD', '');
+define('DB_PASSWORD', 'mysql');
 //テーブル接頭辞
 define('DB_PREFIX', 'groupware_');
 //データベースポート番号
