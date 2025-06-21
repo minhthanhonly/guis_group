@@ -69,6 +69,8 @@ define('DB_POSTCODE', DIR_PATH.'database/KEN_ALL.CSV');
 
 define('ROOT_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
 
+define('DIR_ROOT', $_SERVER['DOCUMENT_ROOT']);
+
 define('ROOT', '/');
 
 define('APP_NAME', 'GUISシステム');

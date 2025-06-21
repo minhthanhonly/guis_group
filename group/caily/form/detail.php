@@ -136,7 +136,7 @@
     <div class="modal fade show" tabindex="-1" style="display:block; background:rgba(0,0,0,0.3);">
       <div class="modal-dialog modal-lg">
         <div class="modal-content">
-          <leave-form :key="editFormKey" :defaultData="editForm" mode="edit" @submitted="onEditSubmitted" @close="closeEditModal"></leave-form>
+          <leave-form v-if="editForm && Object.keys(editForm).length > 0" :key="'edit-' + editFormKey + '-' + JSON.stringify(editForm)" v-bind="{ defaultData: editForm, mode: 'edit' }" @submitted="onEditSubmitted" @close="closeEditModal"></leave-form>
         </div>
       </div>
     </div>
@@ -151,6 +151,9 @@ import leaveDetail from './leave-detail.js';
 import leaveForm from './leave-form.js';
 const { createApp } = Vue;
 const CURRENT_USER_ID = USER_ID || '';
+const CURRENT_USER_ROLE = USER_ROLE || '';
+
+
 createApp({
   data() {
     return {
@@ -158,10 +161,9 @@ createApp({
       loading: true,
       newComment: '',
       errorMessage: '',
-      CURRENT_USER_ROLE: USER_ROLE,
-      showEditModal: false,
-      editForm: {},
+      editForm: null,
       editFormKey: 0,
+      CURRENT_USER_ROLE: CURRENT_USER_ID,
       editSubmitting: false
     }
   },
@@ -176,7 +178,9 @@ createApp({
       return this.request.status === 'draft' && this.request.user_id === CURRENT_USER_ID;
     },
     canEdit() {
-      return this.request && (this.request.user_id === CURRENT_USER_ID || this.CURRENT_USER_ROLE === 'administrator');
+      return this.request && 
+             (this.request.user_id === CURRENT_USER_ID || CURRENT_USER_ROLE === 'administrator') &&
+             this.request.status !== 'approved';
     },
     detailComponent() {
       if (this.request.type === 'leave') return 'leave-detail';
@@ -189,6 +193,9 @@ createApp({
     sortedHistory() {
       if (!this.request.history) return [];
       return [...this.request.history].sort((a, b) => (b.time > a.time ? 1 : -1));
+    },
+    showEditModal() {
+      return this.editForm && Object.keys(this.editForm).length > 0;
     }
   },
   methods: {
@@ -295,6 +302,7 @@ createApp({
     },
     actionLabel(action) {
       switch(action) {
+        case 'pending': return '申請中';
         case 'created': return '申請';
         case 'approved': return '承認';
         case 'rejected': return '却下';
@@ -309,30 +317,19 @@ createApp({
       }
     },
     openEditModal() {
-      this.editForm = Object.assign({ id: this.request.id }, JSON.parse(JSON.stringify(this.request.data)));
+      if (!this.canEdit) {
+        return;
+      }
+      // Set the form data immediately
+      this.editForm = { ...this.request.data, id: this.request.id };
       this.editFormKey++;
-      this.showEditModal = true;
     },
     closeEditModal() {
-      this.showEditModal = false;
+      this.editForm = null;
     },
-    async onEditSubmitted(formData) {
-      this.editSubmitting = true;
-      try {
-        const res = await axios.post('/api/index.php?model=request&method=edit', {
-          id: this.request.id,
-          data: formData
-        }, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-        if (res.data && res.data.error) {
-          this.errorMessage = Array.isArray(res.data.error) ? res.data.error.join('、') : res.data.error;
-        } else {
-          this.showEditModal = false;
-          this.fetchDetail();
-        }
-      } catch (e) {
-        this.errorMessage = '編集に失敗しました。';
-      }
-      this.editSubmitting = false;
+    async onEditSubmitted(updatedData) {
+      await this.fetchDetail();
+      this.closeEditModal();
     }
   },
   mounted() {

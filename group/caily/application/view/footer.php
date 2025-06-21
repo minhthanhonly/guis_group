@@ -56,5 +56,8 @@ if(isset($_SESSION['userid'])) {
 <script type="text/javascript" src="<?=$root?>js/library/jquery-ui.min.js"></script>
 <script type="text/javascript" src="<?=$root?>js/application.js?v=<?=CACHE_VERSION?>"></script>
 
+<!-- Notification System -->
+<script src="<?=$root?>js/notification.js?v=<?=CACHE_VERSION?>"></script>
+
 </body>
 </html>

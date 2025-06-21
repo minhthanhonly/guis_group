@@ -85,7 +85,14 @@ class Request extends ApplicationModel {
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
-        return $this->query_insert($row);
+        $result = $this->query_insert($row);
+        
+        // Send Pusher notification if request was created successfully
+        if ($result && $status === 'pending') {
+            $this->sendRequestCreatedNotification($result, $type, $_SESSION['userid']);
+        }
+        
+        return $result;
     }
 
     // Lấy danh sách đơn (có thể lọc theo type, user, status)
@@ -135,11 +142,17 @@ class Request extends ApplicationModel {
             'message' => $_POST['message'],
             'date' => date('Y-m-d H:i:s')
         ];
-        $row = $this->fetchOne("SELECT comments FROM {$this->table} WHERE id = $id");
+        $row = $this->fetchOne("SELECT comments, type, user_id FROM {$this->table} WHERE id = $id");
         $comments = $row && $row['comments'] ? json_decode($row['comments'], true) : [];
         $comments[] = $comment;
-        $this->query_update(['comments' => json_encode($comments, JSON_UNESCAPED_UNICODE)], ['id' => $id]);
-        return true;
+        $result = $this->query_update(['comments' => json_encode($comments, JSON_UNESCAPED_UNICODE)], ['id' => $id]);
+        
+        // Send Pusher notification for comment added
+        if ($result && $row) {
+            $this->sendRequestCommentNotification($id, $row['type'], $row['user_id'], $_SESSION['userid']);
+        }
+        
+        return $result;
     }
 
     // Cập nhật trạng thái và lịch sử
@@ -158,6 +171,10 @@ class Request extends ApplicationModel {
         $status = $_POST['status'];
         $note = isset($_POST['note']) ? $_POST['note'] : '';
         $user = $_SESSION['userid'];
+        
+        // Get current request info for notifications
+        $currentRequest = $this->fetchOne("SELECT type, user_id FROM {$this->table} WHERE id = $id");
+        
         $row = $this->fetchOne("SELECT history FROM {$this->table} WHERE id = $id");
         $history = $row && $row['history'] ? json_decode($row['history'], true) : [];
         $history[] = [
@@ -175,7 +192,14 @@ class Request extends ApplicationModel {
             $update['approver_id'] = $user;
             $update['approved_at'] = date('Y-m-d H:i:s');
         }
-        return $this->query_update($update, ['id' => $id]);
+        $result = $this->query_update($update, ['id' => $id]);
+        
+        // Send Pusher notification for status change
+        if ($result && $currentRequest && in_array($status, ['approved', 'rejected'])) {
+            $this->sendRequestStatusNotification($id, $currentRequest['type'], $status, $currentRequest['user_id'], $user, $status);
+        }
+        
+        return $result;
     }
 
     // Lấy chi tiết đơn
@@ -287,6 +311,50 @@ class Request extends ApplicationModel {
             'history' => json_encode($history, JSON_UNESCAPED_UNICODE),
             'updated_at' => date('Y-m-d H:i:s')
         ];
-        return $this->query_update($update, ['id' => $id]);
+        $result = $this->query_update($update, ['id' => $id]);
+        
+        // Send Pusher notification for request update
+        if ($result) {
+            $this->sendRequestUpdatedNotification($id, $row['type'], $row['status'], $row['user_id']);
+        }
+        
+        return $result;
+    }
+
+    // Pusher notification methods
+    private function sendRequestCreatedNotification($requestId, $requestType, $userId) {
+        try {
+            require_once(DIR_ROOT . '/application/library/pusher_helper.php');
+            PusherHelper::requestCreated($requestId, $requestType, $userId);
+        } catch (Exception $e) {
+            error_log('Failed to send request created notification: ' . $e->getMessage());
+        }
+    }
+
+    private function sendRequestUpdatedNotification($requestId, $requestType, $status, $userId) {
+        try {
+            require_once(DIR_ROOT . '/application/library/pusher_helper.php');
+            PusherHelper::requestUpdated($requestId, $requestType, $status, $userId);
+        } catch (Exception $e) {
+            error_log('Failed to send request updated notification: ' . $e->getMessage());
+        }
+    }
+
+    private function sendRequestStatusNotification($requestId, $requestType, $status, $userId, $actionUser, $action) {
+        try {
+            require_once(DIR_ROOT . '/application/library/pusher_helper.php');
+            PusherHelper::requestStatusChanged($requestId, $requestType, $status, $userId, $actionUser, $action);
+        } catch (Exception $e) {
+            error_log('Failed to send request status notification: ' . $e->getMessage());
+        }
+    }
+
+    private function sendRequestCommentNotification($requestId, $requestType, $userId, $commentUserId) {
+        try {
+            require_once(DIR_ROOT . '/application/library/pusher_helper.php');
+            PusherHelper::requestCommentAdded($requestId, $requestType, $userId, $commentUserId);
+        } catch (Exception $e) {
+            error_log('Failed to send request comment notification: ' . $e->getMessage());
+        }
     }
 } 
