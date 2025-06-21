@@ -19,7 +19,8 @@ class Task extends ApplicationModel {
             'progress' => array('type' => 'int'),
             'category_id' => array('type' => 'int'),
             'estimated_hours' => array('type' => 'float'),
-            'actual_hours' => array('type' => 'float')
+            'actual_hours' => array('type' => 'float'),
+            'position' => array('type' => 'int')
         );
         $this->connect();
     }
@@ -61,7 +62,7 @@ class Task extends ApplicationModel {
             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id 
             LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             %s
-            ORDER BY t.created_at DESC",
+            ORDER BY t.position, t.created_at DESC",
             $where
         );
         
@@ -84,7 +85,7 @@ class Task extends ApplicationModel {
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             WHERE t.parent_id = %d 
-            ORDER BY t.created_at ASC",
+            ORDER BY t.position, t.created_at ASC",
             intval($parent_id)
         );
         return $this->fetchAll($query);
@@ -117,6 +118,14 @@ class Task extends ApplicationModel {
 
     function edit() {
         $id = $_POST['id'];
+        $currentUserId = $_SESSION['user_id'];
+        
+        if (isset($_POST['status']) || isset($_POST['progress'])) {
+            if (!$this->checkPermission($id, $currentUserId)) {
+                throw new Exception('このタスクを更新する権限がありません');
+            }
+        }
+        
         $data = array(
             'project_id' => $_POST['project_id'],
             'parent_id' => isset($_POST['parent_id']) && $_POST['parent_id'] ? $_POST['parent_id'] : null,
@@ -177,7 +186,9 @@ class Task extends ApplicationModel {
                         $result = $this->query_delete(['id' => $id]);                if ($result && $task['parent_id']) {            $this->updateParentTaskProgress($task['parent_id']);        }                if ($result && $task['project_id']) {            $this->updateProjectProgress($task['project_id']);        }                return $result;
     }
 
-    function updateStatus($id, $status) {
+    function updateStatus() {
+        $id = $_POST['id'];
+        $status = $_POST['status'];
         $data = array(
             'status' => $status,
             'updated_at' => date('Y-m-d H:i:s')
@@ -186,37 +197,28 @@ class Task extends ApplicationModel {
         if ($status == 'completed') {
             $data['progress'] = 100;
         } else if ($status == 'new') {
-                        $data['progress'] = 0;        }                $result = $this->query_update($data, ['id' => $id]);                $task = $this->getById($id);
-        if ($result && $task['parent_id']) {
-            $this->updateParentTaskProgress($task['parent_id']);
-        }
-        if ($result && $task['project_id']) {
-            $this->updateProjectProgress($task['project_id']);
-        }
+            $data['progress'] = 0;        
+        }                
+        $result = $this->query_update($data, ['id' => $id]);
+        $task = $this->getById($id);
+        // if ($result && $task['parent_id']) {
+        //     $this->updateParentTaskProgress($task['parent_id']);
+        // }
+        // if ($result && $task['project_id']) {
+        //     $this->updateProjectProgress($task['project_id']);
+        // }
         
         return $result;
     }
 
-    function updateProgress($id, $progress) {
-        $data = array(
-            'progress' => intval($progress),
-            'updated_at' => date('Y-m-d H:i:s')
-        );
+    function updateProgress() {
+        $id = $_POST['id'];
+        $progress = $_POST['progress'];
         
-        if ($progress == 100) {
-            $data['status'] = 'completed';
-        } else if ($progress > 0) {
-            $task = $this->getById($id);
-            if ($task['status'] == 'new') {
-                $data['status'] = 'in_progress';
-            }
-                }                $result = $this->query_update($data, ['id' => $id]);                $task = $this->getById($id);
-        if ($result && $task['parent_id']) {
-            $this->updateParentTaskProgress($task['parent_id']);
-        }
-        if ($result && $task['project_id']) {
-            $this->updateProjectProgress($task['project_id']);
-        }
+        $result = $this->query_update(
+            ['progress' => $progress],
+            ['id' => $id]
+        );
         
         return $result;
     }
@@ -318,5 +320,42 @@ class Task extends ApplicationModel {
             intval($id)
         );
         return $this->fetchOne($query);
+    }
+
+    private function checkPermission($taskId, $userId) {
+        $task = $this->getById($taskId);
+        if (!$task) return false;
+        
+        $isAssigned = in_array($userId, explode(',', $task['assigned_to']));
+        
+        $project = $this->fetchOne("SELECT manager_id FROM " . DB_PREFIX . "projects WHERE id = " . intval($task['project_id']));
+        $isManager = ($project && $project['manager_id'] == $userId);
+        
+        // If not manager by projects.manager_id, check groupware_project_members
+        if (!$isManager) {
+            $memberCheck = $this->fetchOne(
+                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "groupware_project_members " .
+                "WHERE project_id = " . intval($task['project_id']) . " " .
+                "AND user_id = " . intval($userId) . " " .
+                "AND role = 'manager'"
+            );
+            $isManager = ($memberCheck && $memberCheck['count'] > 0);
+        }
+        
+        return $isAssigned || $isManager;
+    }
+
+    function updateOrder() {
+        $taskIds = json_decode($_POST['task_ids'], true);
+        $projectId = $_POST['project_id'];
+        $position = 0;
+        foreach ($taskIds as $taskId) {
+            $this->query_update(
+                ['position' => $position],
+                ['id' => $taskId, 'project_id' => $projectId]
+            );
+            $position++;
+        }
+        //return true;
     }
 } 

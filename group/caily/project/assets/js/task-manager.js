@@ -109,6 +109,7 @@ const TaskApp = createApp({
         this.loadProjectMembers();
         this.$nextTick(() => {
             this.initFlatpickr();
+            this.initSortable();
         });
     },
     
@@ -119,6 +120,9 @@ const TaskApp = createApp({
     },
     
     methods: {
+        testClick() {
+            console.log('Click event works!');
+        },
         async loadProjectInfo() {
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
@@ -386,47 +390,49 @@ const TaskApp = createApp({
             }
         },
         
-        async updateTaskStatus() {
-            if (!this.selectedTask) return;
+        async updateTaskStatus(task, newStatus = null) {
+            console.log('updateTaskStatus called with task:', task, 'and newStatus:', newStatus);
+            const targetTask = task;
+            if (!targetTask) return;
+            
+            const statusToSet = newStatus !== null ? newStatus : targetTask.status;
             
             try {
                 const formData = new FormData();
-                formData.append('model', 'task');
-                formData.append('method', 'updateStatus');
-                formData.append('id', this.selectedTask.id);
-                formData.append('status', this.selectedTask.status);
+                formData.append('id', targetTask.id);
+                formData.append('status', statusToSet);
                 
-                const response = await axios.post('/api/index.php', formData);
+                const response = await axios.post(
+                    '/api/index.php?model=task&method=updateStatus',
+                    formData
+                );
                 
                 if (response.data) {
                     this.showMessage('ステータスを更新しました。');
-                    this.loadTasks();
                 }
             } catch (error) {
-                console.error('Error updating task status:', error);
-                this.showMessage('ステータスの更新に失敗しました。', true);
+                console.error('Error updating status:', error);
+                this.showMessage('ステータスの更新に失敗しました', true);
             }
         },
         
-        async updateTaskProgress() {
-            if (!this.selectedTask) return;
+        async updateTaskProgress(task = null) {
+            const targetTask = task || this.selectedTask;
+            if (!targetTask) return;
             
             try {
                 const formData = new FormData();
-                formData.append('model', 'task');
-                formData.append('method', 'updateProgress');
-                formData.append('id', this.selectedTask.id);
-                formData.append('progress', this.selectedTask.progress);
+                formData.append('id', targetTask.id);
+                formData.append('progress', targetTask.progress);
                 
-                const response = await axios.post('/api/index.php', formData);
+                const response = await axios.post(
+                    '/api/index.php?model=task&method=updateProgress',
+                    formData
+                );
                 
-                if (response.data) {
-                    this.showMessage('進捗を更新しました。');
-                    this.loadTasks();
-                }
             } catch (error) {
-                console.error('Error updating task progress:', error);
-                this.showMessage('進捗の更新に失敗しました。', true);
+                console.error('Error updating progress:', error);
+                this.showMessage('進捗の更新に失敗しました', true);
             }
         },
         
@@ -691,6 +697,50 @@ const TaskApp = createApp({
                         }
                     });
                 });
+            }
+        },
+        
+        initSortable() {
+            const taskList = document.querySelector('.task-list');
+            if (taskList) {
+                Sortable.create(taskList, {
+                    animation: 150,
+                    handle: '.drag-handle',
+                    onEnd: (evt) => {
+                        console.log('Drag ended');
+                        const taskElements = Array.from(taskList.children);
+                        console.log('Task elements:', taskElements);
+                        const newOrder = taskElements
+                            .map(el => {
+                                const id = el.getAttribute('data-id');
+                                console.log('Element:', el, 'Task ID:', id);
+                                return id;
+                            })
+                            .filter(id => id !== null);
+                        console.log('New order:', newOrder);
+                        
+                        if (newOrder.length > 0) {
+                            console.log('Calling updateTaskOrder');
+                            this.updateTaskOrder(newOrder);
+                        }
+                    }
+                });
+            }
+        },
+        
+        async updateTaskOrder(taskIds) {
+            try {
+                const formData = new FormData();
+                formData.append('task_ids', JSON.stringify(taskIds));
+                formData.append('project_id', this.projectId);
+                const response = await axios.post(
+                    '/api/index.php?model=task&method=updateOrder',
+                    formData
+                );
+                
+            } catch (error) {
+                console.error('Error updating task order:', error);
+                this.showMessage('タスク順序の更新に失敗しました', true);
             }
         }
     }

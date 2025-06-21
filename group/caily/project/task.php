@@ -36,7 +36,7 @@ if (!$project_id) {
     </nav>
 
     <div class="container-fluid mt-4">
-        <!-- Bộ lọc -->
+        <!-- ボー lọc -->
         <div class="row mb-4">
             <div class="col-md-3 mb-2">
                 <select class="form-select" v-model="filterStatus">
@@ -63,7 +63,7 @@ if (!$project_id) {
                 </button>
             </div> -->
         </div>
-        <!-- Thống kê task -->
+        <!-- 統計 task -->
         <div class="row mb-4">
             <div class="col-md-4 mb-3">
                 <div class="card border-left-primary shadow h-100 py-2">
@@ -238,9 +238,10 @@ if (!$project_id) {
                     </div>
                 </div>
             </div>
-            <div v-for="task in filteredTasks" :key="task.id" class="card mb-2">
+            <div v-for="task in filteredTasks" :key="task.id" class="card mb-2" :data-id="task.id">
                 <div class="row g-0 align-items-center">
-                    <div class="col-3">
+                    <div class="col-3 d-flex align-items-center">
+                        <span class="drag-handle" style="cursor: move;">≡</span>
                         <div class="p-2">
                             <span class="fw-bold">{{ task.title }}</span>
                         </div>
@@ -297,11 +298,11 @@ if (!$project_id) {
                     </div>
                     <div class="col-2">
                         <div class="py-2 pe-2 d-flex align-items-center">
-                            <input type="range" min="0" max="100" step="1" v-model.number="task.progress" class="w-90">
+                            <input type="range" min="0" max="100" step="1" v-model.number="task.progress" class="w-100" @change="updateTaskProgress(task)">
                             <span class="ms-2">{{ task.progress || 0 }}%</span>
                         </div>
                     </div>
-                    <div class="col-1">
+                    <div class="col-1 d-flex align-items-center justify-content-center gap-2">
                         <button class="btn btn-sm btn-outline-primary me-1" @click="editTaskInline(task)"><i class="fas fa-edit"></i></button>
                         <button class="btn btn-sm btn-outline-danger" @click="deleteTask(task)"><i class="fas fa-trash"></i></button>
                     </div>
@@ -342,7 +343,7 @@ if (!$project_id) {
                             </div>
                             <div class="mb-3">
                                 <label for="taskStatus" class="form-label">ステータス</label>
-                                <select class="form-select" id="taskStatus" v-model="taskForm.status">
+                                <select class="form-select form-select-sm" id="taskStatus" v-model="taskForm.status" @change="updateTaskStatus(taskForm)">
                                     <option value="todo">未開始</option>
                                     <option value="in-progress">進行中</option>
                                     <option value="completed">完了</option>
@@ -388,7 +389,7 @@ if (!$project_id) {
 
                 <div class="mb-3">
                     <label class="form-label">ステータス</label>
-                    <select class="form-select" v-model="selectedTask.status" @change="updateTaskStatus">
+                    <select class="form-select form-select-sm" v-model="selectedTask.status" @change="updateTaskStatus(selectedTask)">
                         <option v-for="status in taskStatuses" :key="status.value" :value="status.value">
                             {{ status.label }}
                         </option>

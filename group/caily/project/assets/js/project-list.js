@@ -1080,8 +1080,6 @@ var projectTable;
                             formData.set('customer_id', customerId);
                         }
 
-                        console.log('newProject data:', this.newProject);
-                        console.log('FormData contents:');
                         for (let [key, value] of formData.entries()) {
                             console.log(`${key}: ${value}`);
                         }
