@@ -24,7 +24,7 @@
       <div class="col app-chat-contacts app-sidebar flex-grow-0 overflow-hidden border-end" id="app-chat-contacts">
         <div class="sidebar-header h-px-75 px-5 border-bottom d-flex align-items-center">
           <div class="d-flex align-items-center me-6 me-lg-0">
-            <div class="flex-shrink-0 avatar avatar-online me-4" data-bs-toggle="sidebar" data-overlay="app-overlay-ex" data-target="#app-chat-sidebar-left">
+            <div class="flex-shrink-0 avatar avatar-online me-4" data-userid="<?=$_SESSION['userid']?>" data-bs-toggle="sidebar" data-overlay="app-overlay-ex" data-target="#app-chat-sidebar-left">
               <?php if($_SESSION['user_image'] != '') {
                 echo '<img src="'.ROOT.'assets/upload/avatar/'.$_SESSION['user_image'].'" alt class="user-avatar rounded-circle cursor-pointer" />';
               } else{
@@ -73,7 +73,7 @@
             <?php foreach($user_list as $user){ ?>
             <li class="chat-contact-list-item">
               <a class="d-flex align-items-center">
-                <div class="flex-shrink-0 avatar">
+                <div class="flex-shrink-0 avatar" data-userid="<?=$user['userid']?>">
                   <?php if($user['user_image'] != '') {
                       echo '<img src="'.ROOT.'assets/upload/avatar/'.$user['user_image'].'" alt="Avatar" class="rounded-circle" />';
                   } else{

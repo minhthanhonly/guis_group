@@ -1,6 +1,5 @@
 <?php
 
-
 class ApplicationModel extends Model {
 
 	public $user_list = [];
@@ -366,7 +365,8 @@ class ApplicationModel extends Model {
 	function findAllActiveUser() {
 		$this->connect();
 		$retrict_group = array(RETIRE_GROUP);
-		$query = "SELECT userid, realname, user_groupname, user_image, authority FROM groupware_user WHERE (`is_suspend` IS NULL OR is_suspend = '0') and user_group NOT IN ('".implode("','", $retrict_group)."') ORDER BY user_order,id";
+		$query = "SELECT userid, realname, user_groupname, user_image, authority FROM groupware_user WHERE (`is_suspend` = '' OR `is_suspend` IS NULL OR is_suspend = '0') and user_group NOT IN ('".implode("','", $retrict_group)."') ORDER BY user_order,id";
+		echo $query;
 		$data = $this->fetchAll($query);
 		return $data;
 	}
@@ -389,6 +389,28 @@ class ApplicationModel extends Model {
 		$logEntry = "[{$timestamp}] [{$type}] {$logData}\n";
 		file_put_contents($filename, $logEntry, FILE_APPEND | LOCK_EX);
 	}
+
+	
+    // Hàm gọi API create_notification
+    public function callNotificationAPI($payload) {
+		try {
+			
+			$this->Log('pay' . $payload);
+			$api = new NotificationAPI();
+			// Chuyển đổi payload sang dạng phù hợp nếu cần
+			if (is_string($payload)) {
+				$payload = json_decode($payload, true);
+			}
+		
+			// Gọi trực tiếp method createNotification
+			$result = $api->createNotification($payload);
+			$this->Log(json_encode($result));
+		} catch (Exception $e) {
+			$this->Log($e->getMessage());
+		}
+		
+        return $result;
+    }
 }
 
 ?>

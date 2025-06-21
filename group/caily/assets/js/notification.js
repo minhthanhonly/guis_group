@@ -7,8 +7,6 @@ class NotificationManager {
         this.database = null;
         this.userId = USER_ID || '';
         this.userRole = USER_ROLE || '';
-        this.channels = [];
-        
         this.init();
     }
     
@@ -30,11 +28,17 @@ class NotificationManager {
             this.firebase = firebase.initializeApp(config);
             this.database = this.firebase.database();
             
-            // Setup channels based on user role
-            this.setupChannels();
+            // Đăng ký userId vào danh sách connected_users
+            this.registerConnectedUser();
             
-            // Start listening for notifications
-            this.startListening();
+            // Lắng nghe thay đổi danh sách connected_users
+            this.listenConnectedUsers();
+            
+            // Đọc last_notification_id khi load trang
+            await this.syncLatestNotification();
+            this.renderNotificationList();
+            this.listenLastNotificationId();
+            this.setupMarkAll();
             
             console.log('Firebase Notification Manager initialized');
             
@@ -98,70 +102,52 @@ class NotificationManager {
         }
     }
     
-    setupChannels() {
-        this.channels = ['global']; // Always listen to global channel
-        
-        if (this.userId) {
-            this.channels.push('user_' + this.userId);
+    async handleNotification(notification) {
+        if (notification && notification.data.notification_id) {
+            // Kiểm tra nếu notification_id đã có trong danh sách thì không fetch lại
+            if (this.notifications.some(n => n.id == notification.data.notification_id)) {
+                return;
+            }
+            const notif = await this.fetchNotificationDetail(notification.data.notification_id);
+            if (notif) {
+                this.notifications.unshift(notif);
+                this.updateNotificationCount();
+                this.renderNotificationList();
+            }
         }
-        
-        if (this.userRole === 'administrator') {
-            this.channels.push('admins');
-        }
-        
-        console.log('Listening to channels:', this.channels);
     }
     
-    startListening() {
-        this.channels.forEach(channel => {
-            console.log('Setting up listener for channel:', channel);
-            const notificationsRef = this.database.ref('notifications/' + channel);
-            
-            notificationsRef.on('child_added', (snapshot) => {
-                const notification = snapshot.val();
-                if (notification && notification.event) {
-                    console.log('Received notification on channel', channel, ':', notification);
-                    this.handleNotification(notification);
-                }
-            });
-            
-            // Mark as connected
-            this.isConnected = true;
-        });
-        
-        // Listen for connection state changes
-        const connectedRef = this.database.ref('.info/connected');
-        connectedRef.on('value', (snap) => {
-            this.isConnected = snap.val() === true;
-            console.log('Firebase connection state:', this.isConnected ? 'connected' : 'disconnected');
-        });
+    // Lấy danh sách thông báo mới nhất từ API
+    async fetchNotificationsFromAPI() {
+        if (!this.userId) return;
+        try {
+            const response = await fetch(`/api/NotificationAPI.php?method=get_notifications&user_id=${encodeURIComponent(this.userId)}&limit=20`);
+            const result = await response.json();
+            if (result.notifications) {
+                this.notifications = result.notifications;
+                this.updateNotificationCount();
+                this.renderNotificationList();
+            }
+        } catch (e) {
+            console.error('Failed to fetch notifications from API', e);
+        }
     }
     
-    handleNotification(notification) {
-        console.log('Processing notification:', notification.event);
-        
-        // Filter notifications based on user role and permissions
-        if (!this.shouldShowNotification(notification)) {
-            return;
+    // Lấy chi tiết 1 notification từ API (theo notification_id)
+    async fetchNotificationDetail(notification_id) {
+        if (!notification_id) return null;
+        try {
+            // API get_notifications trả về list, nên lấy 1 bản ghi
+            const response = await fetch(`/api/NotificationAPI.php?method=get_notifications&user_id=${encodeURIComponent(this.userId)}&limit=1`);
+            const result = await response.json();
+            if (result.notifications && result.notifications.length > 0) {
+                // Tìm đúng notification_id
+                return result.notifications.find(n => n.id == notification_id) || result.notifications[0];
+            }
+        } catch (e) {
+            console.error('Failed to fetch notification detail', e);
         }
-        
-        // Add to notifications array
-        this.notifications.unshift({
-            id: Date.now() + Math.random(),
-            ...notification,
-            timestamp: notification.timestamp || Date.now()
-        });
-        
-        // Keep only last 50 notifications
-        if (this.notifications.length > 50) {
-            this.notifications = this.notifications.slice(0, 50);
-        }
-        
-        // Show notification
-        this.showNotification(notification);
-        
-        // Update notification count
-        this.updateNotificationCount();
+        return null;
     }
     
     shouldShowNotification(notification) {
@@ -196,128 +182,6 @@ class NotificationManager {
         return false;
     }
     
-    showNotification(notification) {
-        const event = notification.event;
-        const data = notification.data || {};
-        
-        let title = '通知';
-        let message = '';
-        let type = 'info';
-        
-        switch (event) {
-            case 'project_update':
-                title = 'プロジェクト更新';
-                message = `プロジェクト「${data.project_name || 'Unknown'}」が更新されました`;
-                type = 'info';
-                break;
-                
-            case 'task_update':
-                title = 'タスク更新';
-                message = `タスク「${data.task_name || 'Unknown'}」の状態が変更されました`;
-                type = 'info';
-                break;
-                
-            case 'form_request_update':
-                title = '申請更新';
-                message = `申請「${data.request_type || 'Unknown'}」の状態が変更されました`;
-                type = data.status === 'approved' ? 'success' : 
-                       data.status === 'rejected' ? 'error' : 'info';
-                break;
-                
-            case 'form_comment':
-                title = '新しいコメント';
-                message = `${data.commenter || 'Someone'}がコメントを追加しました`;
-                type = 'info';
-                break;
-                
-            case 'time_entry':
-                title = 'タイムエントリ';
-                message = `新しいタイムエントリが追加されました`;
-                type = 'info';
-                break;
-                
-            case 'global_notification':
-                title = data.title || '通知';
-                message = data.message || '';
-                type = data.type || 'info';
-                break;
-                
-            default:
-                title = data.title || '通知';
-                message = data.message || '';
-                type = data.type || 'info';
-        }
-        
-        this.createNotificationElement(title, message, type, data);
-    }
-    
-    createNotificationElement(title, message, type, data) {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = `alert alert-${this.getBootstrapType(type)} alert-dismissible fade show notification-toast`;
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            min-width: 300px;
-            max-width: 400px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border: none;
-            border-radius: 8px;
-            animation: slideInRight 0.3s ease-out;
-        `;
-        
-        notification.innerHTML = `
-            <div class="d-flex align-items-center">
-                <div class="flex-grow-1">
-                    <h6 class="alert-heading mb-1">${this.escapeHtml(title)}</h6>
-                    <p class="mb-0 small">${this.escapeHtml(message)}</p>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        `;
-        
-        // Add click handler for navigation
-        if (data.url) {
-            notification.style.cursor = 'pointer';
-            notification.addEventListener('click', () => {
-                window.location.href = data.url;
-            });
-        }
-        
-        // Add to page
-        document.body.appendChild(notification);
-        
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.style.animation = 'slideOutRight 0.3s ease-in';
-                setTimeout(() => {
-                    if (notification.parentNode) {
-                        notification.parentNode.removeChild(notification);
-                    }
-                }, 300);
-            }
-        }, 5000);
-    }
-    
-    getBootstrapType(type) {
-        switch (type) {
-            case 'success': return 'success';
-            case 'error': return 'danger';
-            case 'warning': return 'warning';
-            case 'info': 
-            default: return 'info';
-        }
-    }
-    
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
     updateNotificationCount() {
         const count = this.notifications.length;
         const countElement = document.getElementById('notification-count');
@@ -342,17 +206,201 @@ class NotificationManager {
         return this.isConnected;
     }
     
-    // Test method
-    async testConnection() {
-        try {
-            const response = await fetch('/api/NotificationAPI.php?method=test');
-            const result = await response.json();
-            console.log('Firebase connection test:', result);
-            return result;
-        } catch (error) {
-            console.error('Firebase connection test failed:', error);
-            return { success: false, error: error.message };
+    renderNotificationList() {
+        const list = this.notifications || [];
+        const ul = document.querySelector('#notification_list .dropdown-notifications-list ul');
+        if (!ul) return;
+        ul.innerHTML = '';
+        if (list.length === 0) {
+            ul.innerHTML = `
+                <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
+                    <div class="d-flex">
+                        <div class="flex-grow-1">
+                            <h6 class="small mb-1">通知はありません 🎉</h6>
+                            <small class="mb-1 d-block text-body">作成中...</small>
+                        </div>
+                    </div>
+                </li>
+            `;
+            this.updateNotificationDot();
+            return;
         }
+        list.forEach((n, idx) => {
+            const data = n.data ? (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) : {};
+            const li = document.createElement('li');
+            li.className = `list-group-item list-group-item-action dropdown-notifications-item${n.is_read == 1 ? ' marked-as-read' : ''}`;
+            li.innerHTML = `
+                <div class="d-flex">
+                    <div class="flex-shrink-0 me-3">
+                        <div class="avatar">
+                            <img src="${data.avatar || '/assets/img/avatars/1.png'}" alt class="rounded-circle" />
+                        </div>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">${this.escapeHtml(n.title || '通知')}</h6>
+                        <small class="mb-1 d-block text-body">${this.escapeHtml(n.message || '')}</small>
+                        <small class="text-body-secondary">${n.created_at ? n.created_at : ''}</small>
+                    </div>
+                    <div class="flex-shrink-0 dropdown-notifications-actions">
+                        <a href="javascript:void(0)" class="dropdown-notifications-read"
+                            ><span class="badge badge-dot"></span
+                        ></a>
+                    </div>
+                </div>
+            `;
+            // Đánh dấu đã đọc/hoặc chưa đọc khi click vào icon read
+            li.querySelector('.dropdown-notifications-read').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (n.is_read == 1) {
+                    await this.markAsUnread(n.id);
+                    n.is_read = 0;
+                    li.classList.remove('marked-as-read');
+                } else {
+                    await this.markAsRead(n.id);
+                    n.is_read = 1;
+                    li.classList.add('marked-as-read');
+                }
+                this.renderNotificationList();
+            });
+            // Đánh dấu đã đọc khi click vào notification (trừ icon read)
+            li.addEventListener('click', async (evt) => {
+                if (evt.target.classList.contains('dropdown-notifications-read')) return;
+                if (n.is_read == 0) {
+                    await this.markAsRead(n.id);
+                    n.is_read = 1;
+                    li.classList.add('marked-as-read');
+                }
+                // if (data.url) {
+                //     window.location.href = data.url;
+                // }
+            });
+            ul.appendChild(li);
+        });
+        this.updateNotificationDot();
+    }
+
+    async markAsRead(notification_id) {
+        if (!notification_id || !this.userId) return;
+        try {
+            await fetch('/api/NotificationAPI.php?method=mark_read', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `user_id=${encodeURIComponent(this.userId)}&notification_id=${encodeURIComponent(notification_id)}`
+            });
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    async markAsUnread(notification_id) {
+        if (!notification_id || !this.userId) return;
+        try {
+            await fetch('/api/NotificationAPI.php?method=mark_unread', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `user_id=${encodeURIComponent(this.userId)}&notification_id=${encodeURIComponent(notification_id)}`
+            });
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    async syncLatestNotification() {
+        if (!this.userId) return;
+        // Lấy 20 notification mới nhất từ API khi load trang
+        try {
+            const response = await fetch(`/api/NotificationAPI.php?method=get_notifications&user_id=${encodeURIComponent(this.userId)}&limit=20`);
+            const result = await response.json();
+            if (result.notifications) {
+                this.notifications = result.notifications;
+                this.updateNotificationCount();
+            } else {
+                this.notifications = [];
+                this.updateNotificationCount();
+            }
+        } catch (e) {
+            this.notifications = [];
+            this.updateNotificationCount();
+        }
+    }
+
+    listenLastNotificationId() {
+        if (!this.userId) return;
+        const ref = this.database.ref('user_meta/user_' + this.userId + '/last_notification_id');
+        ref.on('value', async (snapshot) => {
+            const lastId = snapshot && snapshot.val();
+            if (lastId && !this.notifications.some(n => n.id == lastId)) {
+                const notif = await this.fetchNotificationDetail(lastId);
+                if (notif) {
+                    this.notifications.unshift(notif);
+                    this.updateNotificationCount();
+                    this.renderNotificationList();
+                }
+            }
+        });
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Thêm sự kiện cho nút mark all
+    setupMarkAll() {
+        const btn = document.querySelector('#mark_all');
+        if (!btn) return;
+        btn.addEventListener('click', async () => {
+            const unread = this.notifications.filter(n => n.is_read == 0);
+            if (unread.length === 0) return;
+            const ids = unread.map(n => n.id);
+            // Gọi API mark_read_multi
+            await fetch('/api/NotificationAPI.php?method=mark_read_multi', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `user_id=${encodeURIComponent(this.userId)}&notification_ids=${encodeURIComponent(ids.join(','))}`
+            });
+            for (const n of unread) {
+                n.is_read = 1;
+            }
+            this.renderNotificationList();
+        });
+    }
+
+    updateNotificationDot() {
+        const dot = document.getElementById('notification_dot');
+        if (!dot) return;
+        const hasUnread = this.notifications.some(n => n.is_read == 0);
+        dot.style.display = hasUnread ? 'inline-block' : 'none';
+    }
+
+    registerConnectedUser() {
+        if (!this.userId || !this.database) return;
+        const ref = this.database.ref('connected_users/' + this.userId);
+        ref.set(true);
+        ref.onDisconnect().remove();
+        // Đảm bảo xóa khi unload trang (trường hợp onDisconnect không kịp)
+        window.addEventListener('beforeunload', () => {
+            ref.remove();
+        });
+    }
+
+    listenConnectedUsers() {
+        if (!this.database) return;
+        const ref = this.database.ref('connected_users');
+        ref.on('value', (snapshot) => {
+            const connected = snapshot.val() || {};
+            const userIds = Object.keys(connected);
+            // Tìm tất cả .avatar có data-userid
+            document.querySelectorAll('.avatar[data-userid]').forEach(avatar => {
+                const uid = avatar.getAttribute('data-userid');
+                if (userIds.includes(uid)) {
+                    avatar.classList.add('avatar-online');
+                } else {
+                    avatar.classList.remove('avatar-online');
+                }
+            });
+        });
     }
 }
 

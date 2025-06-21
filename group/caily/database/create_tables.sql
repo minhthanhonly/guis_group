@@ -168,4 +168,32 @@ INSERT IGNORE INTO `groupware_departments` (`id`, `name`, `description`, `can_pr
 (1, '開発部', '開発プロジェクト担当', 1, NOW(), NOW()),
 (2, '営業部', '営業活動担当', 1, NOW(), NOW()),
 (3, '人事部', '人事管理担当', 0, NOW(), NOW()),
-(4, '総務部', '総務担当', 0, NOW(), NOW()); 
+(4, '総務部', '総務担当', 0, NOW(), NOW());
+
+-- Bảng notification: chỉ lưu nội dung, không lưu user nhận trực tiếp
+CREATE TABLE IF NOT EXISTS `notification` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    `event` VARCHAR(64) NOT NULL,
+    `title` VARCHAR(255) DEFAULT NULL,
+    `message` TEXT DEFAULT NULL,
+    `data` TEXT DEFAULT NULL,
+    `project_id` INT DEFAULT NULL,
+    `task_id` INT DEFAULT NULL,
+    `request_id` INT DEFAULT NULL,
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX (`event`),
+    INDEX (`project_id`),
+    INDEX (`task_id`),
+    INDEX (`request_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Bảng notification_user: mapping notification <-> user nhận, lưu trạng thái đã đọc
+CREATE TABLE IF NOT EXISTS `notification_user` (
+    `notification_id` INT UNSIGNED NOT NULL,
+    `user_id` VARCHAR(64) NOT NULL,
+    `is_read` TINYINT(1) DEFAULT 0,
+    `read_at` DATETIME DEFAULT NULL,
+    PRIMARY KEY (`notification_id`, `user_id`),
+    FOREIGN KEY (`notification_id`) REFERENCES `notification`(`id`) ON DELETE CASCADE,
+    INDEX (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4; 

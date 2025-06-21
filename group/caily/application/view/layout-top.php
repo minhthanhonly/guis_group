@@ -358,10 +358,10 @@
                     aria-expanded="false">
                     <span class="position-relative">
                       <i class="icon-base ti tabler-bell icon-22px text-heading"></i>
-                      <!-- <span class="badge rounded-pill bg-danger badge-dot badge-notifications border"></span> -->
+                      <span class="badge rounded-pill bg-danger badge-dot badge-notifications border" id="notification_dot"></span>
                     </span>
                   </a>
-                  <ul class="dropdown-menu dropdown-menu-end p-0">
+                  <ul class="dropdown-menu dropdown-menu-end p-0" id="notification_list">
                     <li class="dropdown-menu-header border-bottom">
                       <div class="dropdown-header d-flex align-items-center py-3">
                         <h6 class="mb-0 me-auto">通知</h6>
@@ -373,6 +373,7 @@
                             data-bs-toggle="tooltip"
                             data-bs-placement="top"
                             title="Mark all as read"
+                            id="mark_all"
                             ><i class="icon-base ti tabler-mail-opened text-heading"></i
                           ></a>
                         </div>
@@ -422,7 +423,7 @@
                     class="nav-link dropdown-toggle hide-arrow p-0"
                     href="javascript:void(0);"
                     data-bs-toggle="dropdown">
-                    <div class="avatar avatar-online">
+                    <div class="avatar" data-userid="<?=$_SESSION['userid']?>">
                       <?php if($_SESSION['user_image'] != '') {
                           echo '<img src="'.$root.'assets/upload/avatar/'.$_SESSION['user_image'].'" alt class="rounded-circle" />';
                         } else{
@@ -435,7 +436,7 @@
                       <a class="dropdown-item mt-0" href="<?=$root?>member/view.php?id=<?=$_SESSION['id']?>">
                         <div class="d-flex align-items-center">
                           <div class="flex-shrink-0 me-2">
-                            <div class="avatar avatar-online">
+                            <div class="avatar" data-userid="<?=$_SESSION['userid']?>">
                               <?php if($_SESSION['user_image'] != '') {
                                 echo '<img src="'.$root.'assets/upload/avatar/'.$_SESSION['user_image'].'" alt class="rounded-circle" />';
                               } else{

@@ -192,5 +192,38 @@ class FirebaseHelper {
         
         return $results;
     }
+    
+    /**
+     * Update user notification meta (last_notification_time, last_notification_id)
+     */
+    public function updateUserNotificationMeta($userId, $meta = []) {
+        if (!$this->databaseUrl) {
+            error_log('Firebase database URL not configured');
+            return false;
+        }
+        $url = $this->databaseUrl . '/user_meta/user_' . $userId . '.json';
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($meta));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Accept: application/json'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        if ($error) {
+            error_log('Firebase cURL error: ' . $error);
+            return false;
+        }
+        return $httpCode >= 200 && $httpCode < 300;
+    }
 }
 ?> 

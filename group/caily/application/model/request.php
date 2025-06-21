@@ -321,20 +321,30 @@ class Request extends ApplicationModel {
         return $result;
     }
 
-    // Firebase notification methods
+    // Firebase notification methods (NEW: dùng NotificationService)
     private function sendRequestCreatedNotification($requestId, $requestType, $userId) {
         try {
-            require_once(DIR_ROOT . '/application/library/firebase_helper.php');
-            $firebase = new FirebaseHelper();
-            
-            // Send to admins
-            $firebase->sendToAdmins('form_request_update', [
+            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            $notiService = new NotificationService();
+            // Lấy danh sách admin
+            $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
+            $admin_ids = array_map(function($a){return $a['userid'];}, $admins);
+            if (empty($admin_ids)) return;
+            $payload = [
+                'event' => 'form_request_update',
+                'title' => '申請作成',
+                'message' => '新しい申請が作成されました',
+                'data' => [
+                    'request_id' => $requestId,
+                    'request_type' => $requestType,
+                    'user_id' => $userId,
+                    'action' => 'created',
+                    'url' => "/form/detail.php?id=$requestId"
+                ],
                 'request_id' => $requestId,
-                'request_type' => $requestType,
-                'user_id' => $userId,
-                'action' => 'created',
-                'url' => "/form/detail.php?id=$requestId"
-            ]);
+                'user_ids' => $admin_ids
+            ];
+            $notiService->create($payload);
         } catch (Exception $e) {
             error_log('Failed to send request created notification: ' . $e->getMessage());
         }
@@ -342,18 +352,27 @@ class Request extends ApplicationModel {
 
     private function sendRequestUpdatedNotification($requestId, $requestType, $status, $userId) {
         try {
-            require_once(DIR_ROOT . '/application/library/firebase_helper.php');
-            $firebase = new FirebaseHelper();
-            
-            // Send to admins
-            $firebase->sendToAdmins('form_request_update', [
+            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            $notiService = new NotificationService();
+            $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
+            $admin_ids = array_map(function($a){return $a['userid'];}, $admins);
+            if (empty($admin_ids)) return;
+            $payload = [
+                'event' => 'form_request_update',
+                'title' => '申請更新',
+                'message' => '申請が更新されました',
+                'data' => [
+                    'request_id' => $requestId,
+                    'request_type' => $requestType,
+                    'status' => $status,
+                    'user_id' => $userId,
+                    'action' => 'updated',
+                    'url' => "/form/detail.php?id=$requestId"
+                ],
                 'request_id' => $requestId,
-                'request_type' => $requestType,
-                'status' => $status,
-                'user_id' => $userId,
-                'action' => 'updated',
-                'url' => "/form/detail.php?id=$requestId"
-            ]);
+                'user_ids' => $admin_ids
+            ];
+            $notiService->create($payload);
         } catch (Exception $e) {
             error_log('Failed to send request updated notification: ' . $e->getMessage());
         }
@@ -361,29 +380,33 @@ class Request extends ApplicationModel {
 
     private function sendRequestStatusNotification($requestId, $requestType, $status, $userId, $actionUser, $action) {
         try {
-            require_once(DIR_ROOT . '/application/library/firebase_helper.php');
-            $firebase = new FirebaseHelper();
-            
-            // Send to the request owner
-            $firebase->sendToUser($userId, 'form_request_update', [
+            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            $notiService = new NotificationService();
+            // Gửi cho chủ đơn
+            $payload_user = [
+                'event' => 'form_request_update',
+                'title' => '申請ステータス',
+                'message' => '申請のステータスが変更されました',
+                'data' => [
+                    'request_id' => $requestId,
+                    'request_type' => $requestType,
+                    'status' => $status,
+                    'action_user' => $actionUser,
+                    'action' => $action,
+                    'url' => "/form/detail.php?id=$requestId"
+                ],
                 'request_id' => $requestId,
-                'request_type' => $requestType,
-                'status' => $status,
-                'action_user' => $actionUser,
-                'action' => $action,
-                'url' => "/form/detail.php?id=$requestId"
-            ]);
-            
-            // Also send to admins
-            $firebase->sendToAdmins('form_request_update', [
-                'request_id' => $requestId,
-                'request_type' => $requestType,
-                'status' => $status,
-                'user_id' => $userId,
-                'action_user' => $actionUser,
-                'action' => $action,
-                'url' => "/form/detail.php?id=$requestId"
-            ]);
+                'user_ids' => [$userId]
+            ];
+            $notiService->create($payload_user);
+            // Gửi cho admin
+            $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
+            $admin_ids = array_map(function($a){return $a['userid'];}, $admins);
+            if (!empty($admin_ids)) {
+                $payload_admin = $payload_user;
+                $payload_admin['user_ids'] = $admin_ids;
+                $notiService->create($payload_admin);
+            }
         } catch (Exception $e) {
             error_log('Failed to send request status notification: ' . $e->getMessage());
         }
@@ -391,29 +414,48 @@ class Request extends ApplicationModel {
 
     private function sendRequestCommentNotification($requestId, $requestType, $userId, $commentUserId) {
         try {
-            require_once(DIR_ROOT . '/application/library/firebase_helper.php');
-            $firebase = new FirebaseHelper();
-            
-            // Send to the request owner (if comment is from someone else)
+            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            $notiService = new NotificationService();
+            // Gửi cho chủ đơn nếu người comment khác chủ đơn
             if ($userId !== $commentUserId) {
-                $firebase->sendToUser($userId, 'form_comment', [
+                $payload_user = [
+                    'event' => 'form_comment',
+                    'title' => '新しいコメント',
+                    'message' => '申請に新しいコメントが追加されました',
+                    'data' => [
+                        'request_id' => $requestId,
+                        'request_type' => $requestType,
+                        'comment_user_id' => $commentUserId,
+                        'url' => "/form/detail.php?id=$requestId"
+                    ],
                     'request_id' => $requestId,
-                    'request_type' => $requestType,
-                    'comment_user_id' => $commentUserId,
-                    'url' => "/form/detail.php?id=$requestId"
-                ]);
+                    'user_ids' => [$userId]
+                ];
+                $notiService->create($payload_user);
             }
-            
-            // Send to admins
-            $firebase->sendToAdmins('form_comment', [
-                'request_id' => $requestId,
-                'request_type' => $requestType,
-                'user_id' => $userId,
-                'comment_user_id' => $commentUserId,
-                'url' => "/form/detail.php?id=$requestId"
-            ]);
+            // Gửi cho admin
+            $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
+            $admin_ids = array_map(function($a){return $a['userid'];}, $admins);
+            if (!empty($admin_ids)) {
+                $payload_admin = [
+                    'event' => 'form_comment',
+                    'title' => '新しいコメント',
+                    'message' => '申請に新しいコメントが追加されました',
+                    'data' => [
+                        'request_id' => $requestId,
+                        'request_type' => $requestType,
+                        'user_id' => $userId,
+                        'comment_user_id' => $commentUserId,
+                        'url' => "/form/detail.php?id=$requestId"
+                    ],
+                    'request_id' => $requestId,
+                    'user_ids' => $admin_ids
+                ];
+                $notiService->create($payload_admin);
+            }
         } catch (Exception $e) {
             error_log('Failed to send request comment notification: ' . $e->getMessage());
         }
     }
+
 } 
