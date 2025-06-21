@@ -1,89 +1,76 @@
 <?php
-require_once('../application/loader.php');
-require_once('../env_config.php');
+require_once '../application/loader.php';
+require_once '../application/library/firebase_helper.php';
 
-// Get Pusher configuration from environment variables
-$pusher_config = EnvConfig::getPusherConfig();
-
-// Initialize Pusher
-require_once('../application/library/pusher-php-server/src/Pusher.php');
-$pusher = new Pusher\Pusher(
-    $pusher_config['key'],
-    $pusher_config['secret'],
-    $pusher_config['app_id'],
-    [
-        'cluster' => $pusher_config['cluster'],
-        'useTLS' => $pusher_config['useTLS']
-    ]
-);
-
-$action = isset($_GET['action']) ? $_GET['action'] : '';
-
-switch ($action) {
-    case 'config':
-        // Provide Pusher configuration to client (without secret)
-        header('Content-Type: application/json');
-        echo json_encode([
-            'key' => $pusher_config['key'],
-            'cluster' => $pusher_config['cluster'],
-            'useTLS' => $pusher_config['useTLS']
-        ]);
-        break;
+class NotificationAPI {
+    private $firebase;
+    
+    public function __construct() {
+        $this->firebase = new FirebaseHelper();
+    }
+    
+    public function handleRequest() {
+        $method = $_GET['method'] ?? '';
         
-    case 'auth':
-        // Handle Pusher authentication
-        $channel_name = $_POST['channel_name'] ?? '';
-        $socket_id = $_POST['socket_id'] ?? '';
+        switch ($method) {
+            case 'test':
+                return $this->testConnection();
+            case 'send':
+                return $this->sendNotification();
+            case 'get_config':
+                return $this->getConfig();
+            default:
+                return ['error' => 'Invalid method'];
+        }
+    }
+    
+    private function testConnection() {
+        $result = $this->firebase->testConnection();
+        return $result;
+    }
+    
+    private function sendNotification() {
+        $input = json_decode(file_get_contents('php://input'), true);
         
-        if (empty($channel_name) || empty($socket_id)) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Missing channel_name or socket_id']);
-            exit;
+        if (!$input) {
+            $input = $_POST;
         }
         
-        // Authenticate the channel
-        $auth = $pusher->socket_auth($channel_name, $socket_id);
-        echo $auth;
-        break;
+        $channel = $input['channel'] ?? 'global';
+        $event = $input['event'] ?? 'notification';
+        $data = $input['data'] ?? [];
         
-    case 'trigger':
-        // Trigger a notification event
-        $channel = $_POST['channel'] ?? '';
-        $event = $_POST['event'] ?? '';
-        $data = $_POST['data'] ?? [];
+        $success = $this->firebase->sendNotification($channel, $event, $data);
         
-        if (empty($channel) || empty($event)) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Missing channel or event']);
-            exit;
+        if ($success) {
+            return ['success' => true, 'message' => 'Notification sent'];
+        } else {
+            return ['error' => 'Failed to send notification'];
         }
+    }
+    
+    private function getConfig() {
+        $config = EnvConfig::getFirebaseConfig();
         
-        try {
-            $result = $pusher->trigger($channel, $event, $data);
-            echo json_encode(['success' => true, 'result' => $result]);
-        } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(['error' => $e->getMessage()]);
-        }
-        break;
-        
-    case 'webhook':
-        // Handle Pusher webhooks (optional, for advanced features)
-        $input = file_get_contents('php://input');
-        $data = json_decode($input, true);
-        
-        if ($data) {
-            // Process webhook data
-            // You can log events, update database, etc.
-            error_log('Pusher webhook received: ' . json_encode($data));
-        }
-        
-        echo json_encode(['success' => true]);
-        break;
-        
-    default:
-        header('Content-Type: application/json');
-        echo json_encode(['error' => 'Invalid action']);
-        break;
+        // Only return public config (no sensitive data)
+        return [
+            'apiKey' => $config['apiKey'],
+            'authDomain' => $config['authDomain'],
+            'projectId' => $config['projectId'],
+            'storageBucket' => $config['storageBucket'],
+            'messagingSenderId' => $config['messagingSenderId'],
+            'appId' => $config['appId'],
+            'databaseURL' => $config['databaseURL']
+        ];
+    }
+}
+
+// Handle the request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $api = new NotificationAPI();
+    $result = $api->handleRequest();
+    
+    header('Content-Type: application/json');
+    echo json_encode($result);
 }
 ?> 

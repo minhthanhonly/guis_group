@@ -57,7 +57,7 @@ if(isset($_SESSION['userid'])) {
 <script type="text/javascript" src="<?=$root?>js/application.js?v=<?=CACHE_VERSION?>"></script>
 
 <!-- Notification System -->
-<script src="<?=$root?>js/notification.js?v=<?=CACHE_VERSION?>"></script>
+<script src="<?=$root?>assets/js/notification.js?v=<?=CACHE_VERSION?>"></script>
 
 </body>
 </html>

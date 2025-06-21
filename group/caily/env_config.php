@@ -13,63 +13,64 @@
  */
 
 class EnvConfig {
-    private static $env = [];
-    
-    public static function load($envFile = '.env') {
-        if (!file_exists($envFile)) {
-            error_log("Environment file not found: $envFile");
-            return false;
-        }
-        
-        $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        
-        foreach ($lines as $line) {
-            // Skip comments
-            if (strpos(trim($line), '#') === 0) {
-                continue;
-            }
-            
-            // Parse key=value pairs
-            if (strpos($line, '=') !== false) {
-                list($key, $value) = explode('=', $line, 2);
-                $key = trim($key);
-                $value = trim($value);
-                
-                // Remove quotes if present
-                if ((substr($value, 0, 1) === '"' && substr($value, -1) === '"') ||
-                    (substr($value, 0, 1) === "'" && substr($value, -1) === "'")) {
-                    $value = substr($value, 1, -1);
-                }
-                
-                self::$env[$key] = $value;
-            }
-        }
-        
-        return true;
-    }
+    private static $config = null;
     
     public static function get($key, $default = null) {
-        // Check environment variables first (for production)
-        $envValue = getenv($key);
-        if ($envValue !== false) {
-            return $envValue;
+        if (self::$config === null) {
+            self::loadConfig();
         }
         
-        // Then check loaded .env values
-        return isset(self::$env[$key]) ? self::$env[$key] : $default;
+        return isset(self::$config[$key]) ? self::$config[$key] : $default;
     }
     
-    public static function getPusherConfig() {
+    private static function loadConfig() {
+        self::$config = [];
+        
+        // Load from .env file if exists
+        $envFile = __DIR__ . '/.env';
+        if (file_exists($envFile)) {
+            $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            foreach ($lines as $line) {
+                if (strpos($line, '=') !== false && strpos($line, '#') !== 0) {
+                    $parts = explode('=', $line, 2);
+                    if (count($parts) === 2) {
+                        $envKey = trim($parts[0]);
+                        $envValue = trim($parts[1]);
+                        self::$config[$envKey] = $envValue;
+                    }
+                }
+            }
+        }
+        
+        // Override with system environment variables
+        $envVars = [
+            'FIREBASE_API_KEY',
+            'FIREBASE_AUTH_DOMAIN', 
+            'FIREBASE_PROJECT_ID',
+            'FIREBASE_STORAGE_BUCKET',
+            'FIREBASE_MESSAGING_SENDER_ID',
+            'FIREBASE_APP_ID',
+            'FIREBASE_DATABASE_URL'
+        ];
+        
+        foreach ($envVars as $var) {
+            $value = getenv($var);
+            if ($value !== false) {
+                self::$config[$var] = $value;
+            }
+        }
+    }
+    
+    public static function getFirebaseConfig() {
         return [
-            'app_id' => self::get('PUSHER_APP_ID', 'your_app_id'),
-            'key' => self::get('PUSHER_KEY', 'your_key'),
-            'secret' => self::get('PUSHER_SECRET', 'your_secret'),
-            'cluster' => self::get('PUSHER_CLUSTER', 'ap1'),
-            'useTLS' => self::get('PUSHER_USE_TLS', 'true') === 'true'
+            'apiKey' => self::get('FIREBASE_API_KEY'),
+            'authDomain' => self::get('FIREBASE_AUTH_DOMAIN'),
+            'projectId' => self::get('FIREBASE_PROJECT_ID'),
+            'storageBucket' => self::get('FIREBASE_STORAGE_BUCKET'),
+            'messagingSenderId' => self::get('FIREBASE_MESSAGING_SENDER_ID'),
+            'appId' => self::get('FIREBASE_APP_ID'),
+            'databaseURL' => self::get('FIREBASE_DATABASE_URL')
         ];
     }
 }
-
-// Auto-load environment variables
-EnvConfig::load();
 ?> 

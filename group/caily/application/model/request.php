@@ -321,11 +321,20 @@ class Request extends ApplicationModel {
         return $result;
     }
 
-    // Pusher notification methods
+    // Firebase notification methods
     private function sendRequestCreatedNotification($requestId, $requestType, $userId) {
         try {
-            require_once(DIR_ROOT . '/application/library/pusher_helper.php');
-            PusherHelper::requestCreated($requestId, $requestType, $userId);
+            require_once(DIR_ROOT . '/application/library/firebase_helper.php');
+            $firebase = new FirebaseHelper();
+            
+            // Send to admins
+            $firebase->sendToAdmins('form_request_update', [
+                'request_id' => $requestId,
+                'request_type' => $requestType,
+                'user_id' => $userId,
+                'action' => 'created',
+                'url' => "/form/detail.php?id=$requestId"
+            ]);
         } catch (Exception $e) {
             error_log('Failed to send request created notification: ' . $e->getMessage());
         }
@@ -333,8 +342,18 @@ class Request extends ApplicationModel {
 
     private function sendRequestUpdatedNotification($requestId, $requestType, $status, $userId) {
         try {
-            require_once(DIR_ROOT . '/application/library/pusher_helper.php');
-            PusherHelper::requestUpdated($requestId, $requestType, $status, $userId);
+            require_once(DIR_ROOT . '/application/library/firebase_helper.php');
+            $firebase = new FirebaseHelper();
+            
+            // Send to admins
+            $firebase->sendToAdmins('form_request_update', [
+                'request_id' => $requestId,
+                'request_type' => $requestType,
+                'status' => $status,
+                'user_id' => $userId,
+                'action' => 'updated',
+                'url' => "/form/detail.php?id=$requestId"
+            ]);
         } catch (Exception $e) {
             error_log('Failed to send request updated notification: ' . $e->getMessage());
         }
@@ -342,8 +361,29 @@ class Request extends ApplicationModel {
 
     private function sendRequestStatusNotification($requestId, $requestType, $status, $userId, $actionUser, $action) {
         try {
-            require_once(DIR_ROOT . '/application/library/pusher_helper.php');
-            PusherHelper::requestStatusChanged($requestId, $requestType, $status, $userId, $actionUser, $action);
+            require_once(DIR_ROOT . '/application/library/firebase_helper.php');
+            $firebase = new FirebaseHelper();
+            
+            // Send to the request owner
+            $firebase->sendToUser($userId, 'form_request_update', [
+                'request_id' => $requestId,
+                'request_type' => $requestType,
+                'status' => $status,
+                'action_user' => $actionUser,
+                'action' => $action,
+                'url' => "/form/detail.php?id=$requestId"
+            ]);
+            
+            // Also send to admins
+            $firebase->sendToAdmins('form_request_update', [
+                'request_id' => $requestId,
+                'request_type' => $requestType,
+                'status' => $status,
+                'user_id' => $userId,
+                'action_user' => $actionUser,
+                'action' => $action,
+                'url' => "/form/detail.php?id=$requestId"
+            ]);
         } catch (Exception $e) {
             error_log('Failed to send request status notification: ' . $e->getMessage());
         }
@@ -351,8 +391,27 @@ class Request extends ApplicationModel {
 
     private function sendRequestCommentNotification($requestId, $requestType, $userId, $commentUserId) {
         try {
-            require_once(DIR_ROOT . '/application/library/pusher_helper.php');
-            PusherHelper::requestCommentAdded($requestId, $requestType, $userId, $commentUserId);
+            require_once(DIR_ROOT . '/application/library/firebase_helper.php');
+            $firebase = new FirebaseHelper();
+            
+            // Send to the request owner (if comment is from someone else)
+            if ($userId !== $commentUserId) {
+                $firebase->sendToUser($userId, 'form_comment', [
+                    'request_id' => $requestId,
+                    'request_type' => $requestType,
+                    'comment_user_id' => $commentUserId,
+                    'url' => "/form/detail.php?id=$requestId"
+                ]);
+            }
+            
+            // Send to admins
+            $firebase->sendToAdmins('form_comment', [
+                'request_id' => $requestId,
+                'request_type' => $requestType,
+                'user_id' => $userId,
+                'comment_user_id' => $commentUserId,
+                'url' => "/form/detail.php?id=$requestId"
+            ]);
         } catch (Exception $e) {
             error_log('Failed to send request comment notification: ' . $e->getMessage());
         }
