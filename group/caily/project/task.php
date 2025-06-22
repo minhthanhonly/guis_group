@@ -287,10 +287,8 @@ if (!$project_id) {
                                     {{ getStatusLabel(task.status) }}
                                 </button>
                                 <ul class="dropdown-menu">
-                                    <li v-for="status in taskStatuses" :key="status.value">
-                                        <a class="dropdown-item waves-effect" href="#" @click.prevent="updateTaskStatus(task, status.value); closeDropdown($event)">
-                                            {{ status.label }}
-                                        </a>
+                                    <li v-for="status in taskStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateTaskStatus(task, status.value)">
+                                        {{ status.label }}
                                     </li>
                                 </ul>
                             </div>
