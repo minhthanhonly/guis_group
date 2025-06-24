@@ -43,6 +43,7 @@
 if(isset($_SESSION['userid'])) {
 ?>
 <script>
+    const USER_AUTH_ID = '<?= isset($_SESSION['id']) ? $_SESSION['id'] : '' ?>';
     const USER_ID = '<?= isset($_SESSION['userid']) ? $_SESSION['userid'] : '' ?>';
     const USER_GROUP = '<?= isset($_SESSION['group']) ? $_SESSION['group'] : '' ?>';
     <?php 

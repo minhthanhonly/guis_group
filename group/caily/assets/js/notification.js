@@ -396,8 +396,10 @@ class NotificationManager {
                 const uid = avatar.getAttribute('data-userid');
                 if (userIds.includes(uid)) {
                     avatar.classList.add('avatar-online');
+                    avatar.classList.remove('avatar-offline');
                 } else {
                     avatar.classList.remove('avatar-online');
+                    avatar.classList.add('avatar-offline');
                 }
             });
         });

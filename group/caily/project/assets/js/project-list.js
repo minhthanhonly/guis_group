@@ -637,6 +637,7 @@ var projectTable;
                     amount: '',
                     customer_id: '',
                     company_name: '',
+                    teams: '',
                     branch_id: '',
                     contact_name: '',
                     contact_phone: ''
@@ -719,12 +720,16 @@ var projectTable;
                         callbacks: {
                             add: (e) => {
                                 const teamId = e.detail.tag.id;
+                                const teams = this.teamTagifyInstance.value.map(team => team.id);
+                                this.newProject.teams = teams;
                                 this.loadTeamMembers(teamId);
                                 if (this.formValidator) {
                                     this.formValidator.revalidateField('team_tags');
                                 }
                             },
                             remove: (e) => {
+                                const teams = this.teamTagifyInstance.value.map(team => team.id);
+                                this.newProject.teams = teams;
                                 this.newProject.members = [];
                                 if (this.membersTagifyInstance) {
                                     this.membersTagifyInstance.removeAllTags();
@@ -1085,6 +1090,7 @@ var projectTable;
                     project_order_type: project.project_order_type || ['new'],
                     estimated_hours: project.estimated_hours || '',
                     amount: project.amount || '',
+                    teams: project.teams || '',
                     customer_id: project.customer_id || '',
                     company_name: project.company_name || '',
                     branch_id: project.branch_id || '',
@@ -1197,7 +1203,7 @@ var projectTable;
                         for (let [key, value] of formData.entries()) {
                             console.log(`${key}: ${value}`);
                         }
-                        
+
                         const response = await axios.post('/api/index.php?model=project&method=add', formData);
                         
                         if (response.data.status == 'success') {

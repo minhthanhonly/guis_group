@@ -44,13 +44,8 @@
                     <div>一覧</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'project' && $page == 'task') echo 'active'; ?>">
-                  <a href="<?=$root?>project/task.php" class="menu-link">
-                    <div>マイタスク</div>
-                  </a>
-                </li>
-                <li class="menu-item <?php if($directory == 'project' && $page == 'task') echo 'active'; ?>">
-                  <a href="<?=$root?>project/task.php" class="menu-link">
+                <li class="menu-item <?php if($directory == 'project' && $page == 'mytask') echo 'active'; ?>">
+                  <a href="<?=$root?>project/mytask.php" class="menu-link">
                     <div>マイタスク</div>
                   </a>
                 </li>

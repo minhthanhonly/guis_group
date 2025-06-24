@@ -9,7 +9,7 @@ if (!$project_id) {
     exit;
 }
 ?>
-<div id="app" v-cloak>
+<div id="app" class="container-fluid mt-4" v-cloak>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container-fluid">
             <a class="navbar-brand fw-bold" href="#">タスク管理</a>
@@ -35,7 +35,7 @@ if (!$project_id) {
         </div>
     </nav>
 
-    <div class="container-fluid mt-4">
+    <div class="mt-4">
         <!-- ボー lọc -->
         <div class="row mb-4">
             <div class="col-md-3 mb-2">
@@ -228,11 +228,11 @@ if (!$project_id) {
                     </div>
                     <div class="col-2">
                         <div class="py-2 pe-2 d-flex align-items-center">
-                            <input type="range" min="0" max="100" step="1" v-model.number="inlineTask.progress" class="w-90">
+                            <input type="range" min="0" max="100" step="1" v-model.number="inlineTask.progress" class="w-100">
                             <span class="ms-2">{{ inlineTask.progress || 0 }}%</span>
                         </div>
                     </div>
-                    <div class="col-1">
+                    <div class="col-1 d-flex align-items-center justify-content-center gap-2">
                         <button class="btn btn-sm btn-success me-1" @click="saveTaskInline(idx)"><i class="fas fa-check"></i></button>
                         <button class="btn btn-sm btn-secondary" @click="cancelTaskInline(idx)"><i class="fas fa-times"></i></button>
                     </div>

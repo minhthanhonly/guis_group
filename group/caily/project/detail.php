@@ -9,33 +9,32 @@ if (!$project_id) {
     exit;
 }
 ?>
+<div id="app" class="container-fluid mt-4" v-cloak>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="#">プロジェクト詳細</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar" aria-controls="projectNavbar" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="projectNavbar">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                <a class="nav-link active" aria-current="page" href="detail.php?id=<?php echo $project_id; ?>">概要</a>
+                </li>
+                <li class="nav-item">
+                <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>">タスク</a>
+                </li>
+                <li class="nav-item">
+                <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>">ガントチャート</a>
+                </li>
+                <li class="nav-item">
+                <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>">添付ファイル</a>
+                </li>
+            </ul>
+            </div>
+        </div>
+    </nav>
 
-<nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-  <div class="container-fluid">
-    <a class="navbar-brand fw-bold" href="#">プロジェクト詳細</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar" aria-controls="projectNavbar" aria-expanded="false" aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="projectNavbar">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item">
-          <a class="nav-link active" aria-current="page" href="detail.php?id=<?php echo $project_id; ?>">概要</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>">タスク</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>">ガントチャート</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>">添付ファイル</a>
-        </li>
-      </ul>
-    </div>
-  </div>
-</nav>
-
-<div class="container-fluid mt-4" id="app">
     <div class="row">
         <!-- Back button -->
         <div class="col-12 mb-3">
@@ -59,77 +58,81 @@ if (!$project_id) {
                             </button>
                         </div>
                     </div>
+
+
                     
                     <div class="row g-3" v-if="project">
-                        <div class="col-md-6">
-                            <label class="form-label">プロジェクト番号</label>
-                            <input type="text" class="form-control" :value="project.project_number || '-'" readonly>
+                        <div class="col-md-4">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label">会社名 <span class="text-danger">*</span></label>
+                                <select id="category_id" class="form-select select2" v-model="newProject.category_id" name="category_id" required @change="onCategoryChange" >
+                                    <option value="">選択してください</option>
+                                    <option v-for="category in categories" :key="category.id" :value="category.id">
+                                        {{ category.name }}
+                                    </option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">プロジェクト名</label>
-                            <input type="text" class="form-control" :value="project.name" readonly>
+                        <div class="col-md-4">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label">支店名 <span class="text-danger">*</span></label>
+                                <select id="company_name" class="form-select select2" v-model="newProject.company_name" name="company_name" required @change="onCompanyChange" >
+                                    <option value="">選択してください</option>
+                                    <option v-for="company in companies" :key="company.company_name" :value="company.company_name">
+                                        {{ company.company_name }}
+                                    </option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">工事番号</label>
-                            <input type="text" class="form-control" :value="formatDate(project.start_date)" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">開始日</label>
-                            <input type="text" class="form-control" :value="formatDate(project.start_date)" readonly>
-                        </div><div class="col-md-6">
-                            <label class="form-label">開始日</label>
-                            <input type="text" class="form-control" :value="formatDate(project.start_date)" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">終了日</label>
-                            <input type="text" class="form-control" :value="formatDate(project.end_date)" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">実開始日</label>
-                            <input type="text" class="form-control" :value="formatDate(project.actual_start_date)" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">実終了日</label>
-                            <input type="text" class="form-control" :value="formatDate(project.actual_end_date)" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">部署</label>
-                            <input type="text" class="form-control" :value="department?.name || '-'" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">建物規模</label>
-                            <input type="text" class="form-control" :value="project.building_size || '-'" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">建物種類</label>
-                            <input type="text" class="form-control" :value="project.building_type || '-'" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">ステータス</label>
-                            <div>
-                                <div class="btn-group">
-                                    <button type="button" class="btn dropdown-toggle waves-effect waves-light" 
-                                            :class="getStatusButtonClass(project.status)"
-                                            id="statusDropdown"
-                                            data-bs-toggle="dropdown" aria-expanded="false">
-                                        {{ getStatusLabel(project.status) }}
-                                    </button>
-                                    <ul class="dropdown-menu">
-                                        <li v-for="status in statuses" :key="status.value">
-                                            <a class="dropdown-item waves-effect" href="javascript:void(0);" 
-                                            @click="selectStatus(status.value)">
-                                                {{ status.label }}
-                                            </a>
-                                        </li>
-                                    </ul>
+                        <div class="col-md-4">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label">担当者名 <span class="text-danger">*</span></label>
+                                <div class="d-flex gap-2 justify-content-between">
+                                    <select id="customer_id" class="form-select select2 flex-shrink-1" v-model="newProject.customer_id" name="customer_id" required >
+                                        <option value="">選択してください</option>
+                                        <option v-for="contact in contacts" :key="contact.id" :value="contact.id">
+                                            {{ contact.name }}
+                                        </option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
+
+                        <div class="col-md-4">
+                            <label class="form-label">プロジェクト番号</label>
+                            <input type="text" class="form-control" :value="project.project_number || '-'" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">プロジェクト名</label>
+                            <input type="text" class="form-control" :value="project.name" readonly>
+                        </div>
+                        
+                        
+                        <div class="col-md-4">
+                            <label class="form-label">部署</label>
+                            <input type="text" class="form-control" :value="department?.name || '-'" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">工事支店</label>
+                            <input type="text" class="form-control" :value="project.building_branch || '-'" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">建物規模</label>
+                            <input type="text" class="form-control" :value="project.building_size || '-'" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">建物種類</label>
+                            <input type="text" class="form-control" :value="project.building_type || '-'" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">工事番号</label>
+                            <input type="text" class="form-control" :value="project.building_number || '-'" readonly>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">優先度</label>
                             <div>
-                                <div class="btn-group">
-                                    <button type="button" class="btn dropdown-toggle waves-effect waves-light" 
+                                <div class="btn-group" v-if="isManager">
+                                    <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
                                             :class="getPriorityButtonClass(project.priority)"
                                             id="priorityDropdown"
                                             data-bs-toggle="dropdown" aria-expanded="false">
@@ -144,8 +147,36 @@ if (!$project_id) {
                                         </li>
                                     </ul>
                                 </div>
+                                <div v-else>
+                                    <span class="badge" :class="getPriorityBadgeClass(project.priority)">{{ getPriorityLabel(project.priority) }}</span>
+                                </div>
                             </div>
                         </div>
+                        <div class="col-md-4">
+                            <label class="form-label">ステータス</label>
+                            <div>
+                                <div class="btn-group" v-if="isManager">
+                                    <button type="button" class="btn tn-sm dropdown-toggle waves-effect waves-light" 
+                                            :class="getStatusButtonClass(project.status)"
+                                            id="statusDropdown"
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                        {{ getStatusLabel(project.status) }}
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li v-for="status in statuses" :key="status.value">
+                                            <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                            @click="selectStatus(status.value)">
+                                                {{ status.label }}
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div v-else>
+                                    <span class="badge" :class="getStatusBadgeClass(project.status)">{{ getStatusLabel(project.status) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                      
                         
                         <!-- <div class="col-md-4">
                             <label class="form-label">予定時間</label>
@@ -159,11 +190,21 @@ if (!$project_id) {
                             <label class="form-label">金額</label>
                             <input type="text" class="form-control" :value="formatCurrency(project.amount)" readonly>
                         </div> -->
-                        <div class="col-6">
-                            <label class="form-label">担当者</label>
-                            <div class="d-flex align-items-center my-4" v-if="managers && managers.length > 0">
-                                <div v-for="member in managers" :key="member.user_id"
-                                    class="avatar me-2 avatar-online"
+                        <div class="col-4">
+                            <label class="form-label">チーム</label>
+                            <div>
+                                <span v-if="project.team_list && project.team_list.length > 0">
+                                    <span v-for="team in project.team_list" :key="team.id" class="badge bg-info me-1">{{ team.name }}</span>
+                                </span>
+                                <span v-else class="text-muted">-</span>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">管理</label>
+                            <div class="d-flex align-items-center" v-if="managers && managers.length > 0">
+                                <div v-for="member in managers" :key="member.userid"
+                                    class="avatar me-2"
+                                    :data-userid="member.userid"
                                     data-bs-toggle="tooltip"
                                     data-popup="tooltip-custom"
                                     data-bs-placement="top"
@@ -177,12 +218,13 @@ if (!$project_id) {
                                 メンバーがいません
                             </div>
                         </div>
-                        <div class="col-6">
-                            <label class="form-label">プロジェクトメンバー</label>
-                            <div class="d-flex align-items-center my-4" v-if="members.length > 0">
-                                <div v-for="member in members" :key="member.user_id"
-                                    class="avatar me-2 avatar-online"
+                        <div class="col-4">
+                            <label class="form-label">メンバー</label>
+                            <div class="d-flex align-items-center" v-if="members.length > 0">
+                                <div v-for="member in members" :key="member.userid"
+                                    class="avatar me-2"
                                     data-bs-toggle="tooltip"
+                                    :data-userid="member.userid"
                                     data-popup="tooltip-custom"
                                     data-bs-placement="top"
                                     :aria-label="member.user_name"
@@ -195,21 +237,51 @@ if (!$project_id) {
                                 メンバーがいません
                             </div>
                         </div>
-                        <div class="col-12">
+                        <div class="col-md-4">
+                            <label class="form-label">開始日</label>
+                            <input type="text" class="form-control" :value="formatDate(project.start_date)" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">終了日</label>
+                            <input type="text" class="form-control" :value="formatDate(project.end_date)" readonly>
+                        </div>
+                        <!-- <div class="col-md-4">
+                            <label class="form-label">実開始日</label>
+                            <input type="text" class="form-control" :value="formatDate(project.actual_start_date)" readonly>
+                        </div> -->
+                        <div class="col-md-4">
+                            <label class="form-label">実終了日</label>
+                            <input type="text" class="form-control" :value="formatDate(project.actual_end_date)" readonly>
+                        </div>
+                        <div class="col-4">
                             <label class="form-label">進捗率</label>
-                            <div class="progress" style="height: 20px;">
-                                <div class="progress-bar" role="progressbar" 
-                                     :class="project.progress === 100 ? 'bg-success' : 'bg-primary'"
-                                     :style="{ width: project.progress + '%' }"
-                                     :aria-valuenow="project.progress" 
-                                     aria-valuemin="0" aria-valuemax="100">
+                            <div class="position-relative">
+                                <input
+                                    v-if="isManager"
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    v-model="project.progress"
+                                    @change="updateProgress"
+                                    class="form-range custom-progress-range"
+                                >
+                                <input
+                                    v-else
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    :value="project.progress"
+                                    class="form-range custom-progress-range"
+                                    disabled
+                                >
+                                <div class="progress-value-label text-center">
                                     {{ project.progress }}%
                                 </div>
                             </div>
                         </div>
                         <div class="col-12">
                             <label class="form-label">説明</label>
-                            <textarea class="form-control" rows="3" :value="project.description || '-'" readonly></textarea>
+                            <textarea class="form-control" rows="3" :value="project?.description || '-'" readonly></textarea>
                         </div>
                     </div>
                     <div v-else class="text-center py-5">
@@ -225,7 +297,7 @@ if (!$project_id) {
         <!-- Right Column - Stats & Comments -->
         <div class="col-md-4">
             <!-- Statistics Cards -->
-            <div class="row g-3 mb-4">
+            <!-- <div class="row g-3 mb-4">
                 <div class="col-6">
                     <div class="card bg-primary text-white text-center">
                         <div class="card-body">
@@ -270,7 +342,7 @@ if (!$project_id) {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> -->
 
             <!-- Comments Section -->
             <div class="card">
@@ -348,6 +420,7 @@ $view->footing();
     white-space: pre-wrap;
     word-break: break-word;
 }
+
 </style>
 
 <!-- Define PROJECT_ID before loading Vue and project-detail.js -->

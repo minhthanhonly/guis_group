@@ -284,6 +284,7 @@ const TaskApp = createApp({
                 priority: 'medium',
                 status: 'todo',
                 due_date: '',
+                progress: 0,
                 assignees: []
             });
             this.$nextTick(() => {
@@ -319,6 +320,7 @@ const TaskApp = createApp({
         },
         
         async saveTask() {
+            alert(true);
             // Validate required fields
             if (!this.taskForm.title || !this.taskForm.title.trim()) {
                 this.showMessage('タスク名は必須です。', true);
@@ -519,8 +521,8 @@ const TaskApp = createApp({
                 formData.append('status', inlineTask.status);
                 formData.append('progress', inlineTask.progress);
 
-                const response = await axios.post('/api/index.php??model=task&method=' + method, formData);
-                if (response.data.success) {
+                const response = await axios.post('/api/index.php?model=task&method=' + method, formData);
+                if (response.data.status == 'success') {
                     this.showMessage(inlineTask.id ? 'タスクを更新しました。' : 'タスクを追加しました。');
                     await this.loadTasks();
                     this.inlineTasks.splice(idx, 1);

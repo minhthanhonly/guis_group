@@ -30,25 +30,56 @@ createApp({
                 { value: 'medium', label: '中', color: 'primary' },
                 { value: 'high', label: '高', color: 'warning' },
                 { value: 'urgent', label: '緊急', color: 'danger' }
-            ]
+            ],
+            categories: [],
+            companies: [],
+            contacts: [],
+            newProject: {
+                category_id: '',
+                company_name: '',
+                customer_id: ''
+            }
         }
     },
     computed: {
-        // managers() {
-            
-        // }
+        isManager() {
+            if (!this.managers) return false;
+            return this.managers.some(m => String(m.user_id) === String(USER_AUTH_ID));
+        }
     },
     methods: {
         async loadProject() {
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
                 this.project = response.data;
+                if (this.project.teams) {
+                    await this.loadTeamListByIds(this.project.teams);
+                } else {
+                    this.project.team_list = [];
+                }
                 if (this.project.department_id) {
                     this.loadDepartment();
                 }
             } catch (error) {
                 console.error('Error loading project:', error);
                 alert('プロジェクトの読み込みに失敗しました。');
+            }
+        },
+        async loadTeamListByIds(teamIdsStr) {
+            try {
+                const ids = teamIdsStr.split(',').map(id => id.trim()).filter(Boolean);
+                if (ids.length === 0) {
+                    this.project.team_list = [];
+                    return;
+                }
+                const res = await axios.get(`/api/index.php?model=team&method=listbyids&ids=${ids.join(',')}`);
+                if (res.data && Array.isArray(res.data)) {
+                    this.project.team_list = res.data;
+                } else {
+                    this.project.team_list = [];
+                }
+            } catch (e) {
+                this.project.team_list = [];
             }
         },
         async loadDepartment() {
@@ -182,6 +213,10 @@ createApp({
             return roleColors[role] || 'bg-secondary';
         },
         async updateStatus() {
+            if (!this.isManager) {
+                alert('管理者のみステータスを変更できます。');
+                return;
+            }
             try {
                 const formData = new FormData();
                 formData.append('id', this.projectId);
@@ -223,6 +258,10 @@ createApp({
             this.updatePriority();
         },
         async updatePriority() {
+            if (!this.isManager) {
+                alert('管理者のみ優先度を変更できます。');
+                return;
+            }
             try {
                 const formData = new FormData();
                 formData.append('id', this.projectId);
@@ -276,10 +315,72 @@ createApp({
                 }
                 el._tooltipInstance = new bootstrap.Tooltip(el);
             });
+        },
+        async loadCategories() {
+            const res = await axios.get('/api/index.php?model=customer&method=list_categories');
+            if (res.data && res.data.data) {
+                this.categories = res.data.data;
+            }
+        },
+        async loadCompanies() {
+            if (!this.newProject.category_id) {
+                this.companies = [];
+                return;
+            }
+            const res = await axios.get(`/api/index.php?model=customer&method=list_companies_by_category&category_id=${this.newProject.category_id}`);
+            if (res.data && res.data.data) {
+                this.companies = res.data.data;
+            }
+        },
+        async loadContacts() {
+            if (!this.newProject.company_name) {
+                this.contacts = [];
+                return;
+            }
+            const res = await axios.get(`/api/index.php?model=customer&method=list_contacts_by_company&company_name=${encodeURIComponent(this.newProject.company_name)}`);
+            if (res.data && res.data.data) {
+                this.contacts = res.data.data;
+            }
+        },
+        onCategoryChange() {
+            this.newProject.company_name = '';
+            this.newProject.customer_id = '';
+            this.loadCompanies();
+            this.contacts = [];
+        },
+        onCompanyChange() {
+            this.newProject.customer_id = '';
+            this.loadContacts();
+        },
+        async updateProgress() {
+            if (!this.isManager) {
+                alert('管理者のみ進捗率を変更できます。');
+                return;
+            }
+            try {
+                const formData = new FormData();
+                formData.append('id', this.projectId);
+                formData.append('progress', this.project.progress);
+                const response = await axios.post('/api/index.php?model=project&method=updateProgress', formData);
+                if (response.data && response.data.success === false) {
+                    alert('進捗率の更新に失敗しました。');
+                }
+            } catch (error) {
+                console.error('Error updating progress:', error);
+                alert('進捗率の更新に失敗しました。');
+            }
         }
     },
-    mounted() {
-        this.loadProject();
+    async mounted() {
+        await this.loadCategories();
+        await this.loadProject();
+        if (this.project) {
+            this.newProject.category_id = this.project.category_id;
+            this.newProject.company_name = this.project.company_name;
+            this.newProject.customer_id = this.project.customer_id;
+        }
+        await this.loadCompanies();
+        await this.loadContacts();
         this.loadMembers();
         this.loadTasks();
         this.loadComments();

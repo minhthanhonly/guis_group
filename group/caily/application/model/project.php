@@ -28,6 +28,7 @@ class Project extends ApplicationModel {
             'building_branch' => array(), //list of category_id
             'project_order_type' => array(), //edit, new, custom
             'project_estimate_id' => array(), 
+            'teams' => array(), 
             'amount' => array(), //edit, new, custom
         );
         $this->connect();
@@ -90,7 +91,7 @@ class Project extends ApplicationModel {
         // Get data for current page
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name, c.department as branch_name,
+            c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
             CONCAT(gc.name, ' ', gc.title) as customer_name,
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
              FROM " . DB_PREFIX . "project_members pm 
@@ -149,9 +150,8 @@ class Project extends ApplicationModel {
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
             'start_date' => isset($_POST['start_date']) && !empty($_POST['start_date']) ? date('Y-m-d', strtotime($_POST['start_date'])) : null,
             'end_date' => isset($_POST['end_date']) && !empty($_POST['end_date']) ? date('Y-m-d', strtotime($_POST['end_date'])) : null,
-            'created_by' => $_SESSION['user_id'],
             'department_id' => isset($_POST['department_id']) ? $_POST['department_id'] : null,
-            'progress' => 0,
+            'progress' => isset($_POST['progress']) ? $_POST['progress'] : 0,
             'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
             'actual_hours' => 0,
             'customer_id' => isset($_POST['customer_id']) ? $_POST['customer_id'] : null,
@@ -161,10 +161,11 @@ class Project extends ApplicationModel {
             'building_branch' => isset($_POST['building_branch']) ? $_POST['building_branch'] : '',
             'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
             'amount' => isset($_POST['amount']) ? $_POST['amount'] : 0,
+            'teams' => isset($_POST['team']) ? implode(',',$_POST['team']) : '',
+            'created_by' => $_SESSION['user_id'],
             'created_at' => date('Y-m-d H:i:s'),
         );
 
-        $this->Log($data);
         
         $project_id = $this->query_insert($data);
         
@@ -254,7 +255,7 @@ class Project extends ApplicationModel {
         }
         
         $query = sprintf(
-            "SELECT pm.*, u.realname as user_name, user_image
+            "SELECT pm.*, u.realname as user_name, user_image, u.userid
             FROM " . DB_PREFIX . "project_members pm 
             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
             WHERE pm.project_id = %d 
@@ -306,7 +307,7 @@ class Project extends ApplicationModel {
         
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name, c.department as branch_name,
+            c.name as contact_name, c.company_name, c.department as branch_name, c.category_id as category_id, 
             (SELECT COUNT(*) FROM " . DB_PREFIX . "tasks WHERE project_id = p.id) as task_count,
             (SELECT COUNT(*) FROM " . DB_PREFIX . "project_members WHERE project_id = p.id) as member_count
             FROM {$this->table} p 
@@ -318,19 +319,15 @@ class Project extends ApplicationModel {
         return $this->fetchOne($query);
     }
 
-    function updateProgress($projectId) {
-        $query = sprintf(
-            "UPDATE {$this->table} p 
-            SET progress = (
-                SELECT COALESCE(AVG(progress), 0) 
-                FROM " . DB_PREFIX . "tasks 
-                WHERE project_id = %d
-            ) 
-            WHERE id = %d",
-            intval($projectId),
-            intval($projectId)
+    function updateProgress($params = null) {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $progress = isset($_POST['progress']) ? intval($_POST['progress']) : 0;
+        if (!$id) return false;
+        $data = array(
+            'progress' => $progress,
+            'updated_at' => date('Y-m-d H:i:s')
         );
-        return $this->query($query);
+        return $this->query_update($data, ['id' => $id]);
     }
 
     function updateStatus($params = null) {

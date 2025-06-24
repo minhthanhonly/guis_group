@@ -97,23 +97,32 @@ class Task extends ApplicationModel {
             'parent_id' => isset($_POST['parent_id']) && $_POST['parent_id'] ? $_POST['parent_id'] : null,
             'title' => $_POST['title'],
             'description' => isset($_POST['description']) ? $_POST['description'] : '',
-            'status' => isset($_POST['status']) ? $_POST['status'] : 'new',
+            'status' => isset($_POST['status']) ? $_POST['status'] : 'todo',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
             'assigned_to' => isset($_POST['assigned_to']) ? $_POST['assigned_to'] : null,
             'created_by' => isset($_POST['created_by']) ? $_POST['created_by'] : $_SESSION['user_id'],
             'due_date' => isset($_POST['due_date']) ? $_POST['due_date'] : null,
-            'category_id' => isset($_POST['category_id']) ? $_POST['category_id'] : null,
-            'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
-            'actual_hours' => isset($_POST['actual_hours']) ? $_POST['actual_hours'] : 0,
-            'progress' => 0,
+            // 'category_id' => isset($_POST['category_id']) ? $_POST['category_id'] : null,
+            // 'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
+            // 'actual_hours' => isset($_POST['actual_hours']) ? $_POST['actual_hours'] : 0,
+            'progress' => isset($_POST['progress']) ? $_POST['progress'] : null,
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
+        
         $task_id = $this->query_insert($data);
         // if ($task_id && $data['project_id']) {
         //     $this->updateProjectProgress($data['project_id']);
         // }
-        return $task_id;
+        if($task_id){
+            return [
+                'status' => 'success'
+            ];
+        }
+        
+        return [
+            'status' => 'error'
+        ];
     }
 
     function edit() {

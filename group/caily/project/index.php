@@ -5,7 +5,7 @@ $view->heading('プロジェクト管理');
 
 ?>
 
-<div id="app"  class="container-fluid mt-4" v-cloak>
+<div id="app" class="container-fluid mt-4" v-cloak>
     <nav class="navbar navbar-expand-lg bg-dark mb-12">
         <div class="container-fluid">
             <span class="navbar-brand" href="javascript:void(0)"></span>
