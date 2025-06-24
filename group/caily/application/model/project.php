@@ -410,6 +410,22 @@ class Project extends ApplicationModel {
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
         return $result;
     }
+
+    function updateTeams($params = null) {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $teams = isset($_POST['teams']) ? $_POST['teams'] : '';
+        if (!$id) return ['success' => false, 'error' => 'No project id'];
+        $data = array(
+            'teams' => $teams,
+            'updated_at' => date('Y-m-d H:i:s')
+        );
+        $result = $this->query_update($data, ['id' => $id]);
+        if ($result) {
+            return ['success' => true];
+        } else {
+            return ['success' => false, 'error' => 'Update failed'];
+        }
+    }
 }
 
 ?>

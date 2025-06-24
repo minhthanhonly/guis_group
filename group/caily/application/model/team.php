@@ -172,6 +172,19 @@ class Team extends ApplicationModel {
 		);
 		return $this->fetchAll($query);
 	}
+
+	function listbyids() {
+		$ids = isset($_GET['ids']) ? $_GET['ids'] : '';
+		if (!$ids) return [];
+		$idArr = array_map('intval', explode(',', $ids));
+		$idStr = implode(',', $idArr);
+		$query = sprintf(
+			"SELECT id, name FROM %s WHERE id IN (%s)",
+			$this->table,
+			$idStr
+		);
+		return $this->fetchAll($query);
+	}
 }
 
 ?>

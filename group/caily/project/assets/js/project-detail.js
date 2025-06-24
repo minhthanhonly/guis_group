@@ -6,9 +6,11 @@ createApp({
             projectId: PROJECT_ID,
             project: null,
             department: null,
+            managers: [],
             members: [],
             tasks: [],
             comments: [],
+            team_list: [],
             newComment: '',
             stats: {
                 totalTasks: 0,
@@ -38,11 +40,13 @@ createApp({
                 category_id: '',
                 company_name: '',
                 customer_id: ''
-            }
+            },
+            allTeams: []
         }
     },
     computed: {
         isManager() {
+            console.log(this.managers)
             if (!this.managers) return false;
             return this.managers.some(m => String(m.user_id) === String(USER_AUTH_ID));
         }
@@ -288,7 +292,7 @@ createApp({
         },
         getAvatarSrc(member) {
             // Trả về đường dẫn ảnh từ user_image, fallback nếu không có
-            return member.user_image || '';
+            return '/assets/upload/avatar/' + member.user_image || '';
         },
         handleAvatarError(member) {
             member.avatarError = true;
@@ -369,9 +373,61 @@ createApp({
                 console.error('Error updating progress:', error);
                 alert('進捗率の更新に失敗しました。');
             }
+        },
+        async loadAllTeams() {
+            try {
+                const res = await axios.get('/api/index.php?model=team&method=list');
+                if (res.data && Array.isArray(res.data)) {
+                    this.allTeams = res.data;
+                } else {
+                    this.allTeams = [];
+                }
+            } catch (e) {
+                this.allTeams = [];
+            }
+        },
+        initTagify() {
+            console.log(this.isManager)
+            if (!this.isManager) return;
+            const input = document.getElementById('team_tags');
+            
+           
+            if (!input) return;
+
+            // Gán giá trị team đã chọn
+            const tags = (this.project.team_list || []).map(t => ({ value: t.name, id: t.id }));
+            // Danh sách tất cả team cho whitelist
+            const whitelist = this.allTeams.map(t => ({ value: t.name, id: t.id }));
+            this.tagify = new Tagify(input, {
+                whitelist: whitelist,
+                enforceWhitelist: true,
+                dropdown: { enabled: 0 }
+            });
+            this.tagify.addTags(tags);
+            // Lắng nghe sự kiện thay đổi
+            this.tagify.on('change', this.onTeamTagsChange.bind(this));
+        },
+        async onTeamTagsChange(e) {
+            const selected = this.tagify.value; // [{value, id}]
+            const ids = selected.map(t => t.id).join(',');
+            try {
+                const formData = new FormData();
+                formData.append('id', this.projectId);
+                formData.append('teams', ids);
+                const res = await axios.post('/api/index.php?model=project&method=updateTeams', formData);
+                if (res.data && res.data.success !== false) {
+                    // Reload lại team_list để hiển thị badge đúng
+                    await this.loadTeamListByIds(ids);
+                } else {
+                    alert('チームの更新に失敗しました。');
+                }
+            } catch (error) {
+                alert('チームの更新に失敗しました。');
+            }
         }
     },
     async mounted() {
+        await this.loadAllTeams();
         await this.loadCategories();
         await this.loadProject();
         if (this.project) {
@@ -381,11 +437,12 @@ createApp({
         }
         await this.loadCompanies();
         await this.loadContacts();
-        this.loadMembers();
+        await this.loadMembers();
         this.loadTasks();
         this.loadComments();
         this.$nextTick(() => {
             this.initTooltips();
+            this.initTagify();
         });
     },
     updated() {

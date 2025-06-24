@@ -193,10 +193,13 @@ if (!$project_id) {
                         <div class="col-4">
                             <label class="form-label">チーム</label>
                             <div>
-                                <span v-if="project.team_list && project.team_list.length > 0">
-                                    <span v-for="team in project.team_list" :key="team.id" class="badge bg-info me-1">{{ team.name }}</span>
-                                </span>
-                                <span v-else class="text-muted">-</span>
+                                <input v-if="isManager" id="team_tags" class="form-control" />
+                                <div v-else>
+                                    <span v-if="project.team_list && project.team_list.length > 0">
+                                        <span v-for="team in project.team_list" :key="team.id" class="badge bg-info me-1">{{ team.name }}</span>
+                                    </span>
+                                    <span v-else class="text-muted">-</span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-4">
