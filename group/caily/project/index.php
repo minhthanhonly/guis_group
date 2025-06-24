@@ -19,7 +19,7 @@ $view->heading('プロジェクト管理');
                     </li>
                 </ul>
                 <button class="btn btn-primary" @click="openNewProjectModal">
-                    <i class="bi bi-plus"></i> 新規プロジェクト
+                    <i class="fa fa-plus"></i> 新規プロジェクト
                 </button>
             </div>
         </div>
@@ -137,8 +137,22 @@ $view->heading('プロジェクト管理');
                                 </div>
                                 <div class="col-md-4">
                                     <div class="mb-3 form-control-validation">
-                                        <label class="form-label">連絡番号</label>
+                                        <label class="form-label">案件番号</label>
                                         <input type="text" class="form-control" v-model="newProject.project_number" name="project_number" required>
+                                        <div class="invalid-feedback"></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3 form-control-validation">
+                                        <label class="form-label">工事番号</label>
+                                        <input type="text" class="form-control" v-model="newProject.buiding_number" name="buiding_number" required>
+                                        <div class="invalid-feedback"></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3 form-control-validation">
+                                        <label class="form-label">工事支店名</label>
+                                        <input type="text" class="form-control" v-model="newProject.building_branch" name="building_branch" required>
                                         <div class="invalid-feedback"></div>
                                     </div>
                                 </div>
@@ -205,7 +219,7 @@ $view->heading('プロジェクト管理');
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3 form-control-validation">
-                                        <label class="form-label">担当者</label>
+                                        <label class="form-label">管理</label>
                                         <input class="form-control" type="text" name="manager_tags" required>
                                         <input class="form-control" type="hidden" name="members" v-model="newProject.manager">
                                         <div class="invalid-feedback"></div>

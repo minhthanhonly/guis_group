@@ -388,7 +388,7 @@ class Customer extends ApplicationModel {
             $where = ltrim($where, ' AND');
 
             $query = sprintf(
-                "SELECT DISTINCT company_name 
+                "SELECT DISTINCT company_name, id
                 FROM %scustomer 
                 WHERE %s
                 AND company_name IS NOT NULL 

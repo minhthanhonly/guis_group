@@ -25,6 +25,7 @@ class Project extends ApplicationModel {
             'building_size' => array(), //string
             'building_type' => array(), //string
             'buiding_number' => array(), //list of category_id
+            'building_branch' => array(), //list of category_id
             'project_order_type' => array(), //edit, new, custom
             'project_estimate_id' => array(), 
             'amount' => array(), //edit, new, custom
@@ -90,12 +91,20 @@ class Project extends ApplicationModel {
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
             c.name as contact_name, c.company_name, c.department as branch_name,
-            (SELECT GROUP_CONCAT(pm.user_id) FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
-            (SELECT GROUP_CONCAT(pm.user_id) FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
+            CONCAT(gc.name, ' ', gc.title) as customer_name,
+            (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
+             FROM " . DB_PREFIX . "project_members pm 
+             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
+             WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
+            (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
+             FROM " . DB_PREFIX . "project_members pm 
+             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
+             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
             (SELECT GROUP_CONCAT(pm.user_id) FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+            LEFT JOIN " . DB_PREFIX . "customer gc ON gc.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
             %s
             ORDER BY p.%s %s
             LIMIT %d, %d",
@@ -120,54 +129,6 @@ class Project extends ApplicationModel {
 
     private function escape($str) {
         return $this->quote($str);
-    }
-
-    function list_old() {
-        $perPage = isset($_GET['perPage']) ? intval($_GET['perPage']) : 20;
-        $currentPage = isset($_GET['currentPage']) ? intval($_GET['currentPage']) : 1;
-        $offset = ($currentPage - 1) * $perPage;
-        $whereArr = [];
-        
-        // Add permission check
-        $user_id = isset($_GET['user_id']) ? $_GET['user_id'] : $_SESSION['user_id'];
-        if (strlen($user_id) > 0 && $_SESSION['authority'] != 'administrator') {
-            $whereArr[] = sprintf(
-                "(p.created_by = %d OR EXISTS (
-                    SELECT 1 FROM " . DB_PREFIX . "project_members pm 
-                    WHERE pm.project_id = p.id AND pm.user_id = %d
-                ))",
-                $user_id,
-                $user_id
-            );
-        }
-
-        if (isset($_GET['department_id'])) {
-            $whereArr[] = sprintf("p.department_id = %d", intval($_GET['department_id']));
-        }
-        if (isset($_GET['status']) && $_GET['status'] != 'all') {
-            $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
-        }
-        $where = implode(" AND ", $whereArr);
-
-        if (!empty($where)) {
-            $where = " WHERE " . $where;
-        }
-
-        $query = sprintf(
-            "SELECT p.*, d.name as department_name,
-            (SELECT pm.user_id FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
-            (SELECT pm.user_id FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
-            (SELECT pm.user_id FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id
-            FROM {$this->table} p 
-            LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
-            %s
-            ORDER BY p.created_at DESC
-            LIMIT %d, %d",
-            $where,
-            $offset,
-            $perPage
-        );
-        return $this->fetchAll($query);
     }
 
     function checkPermission($project_id, $user_id) {
@@ -196,6 +157,8 @@ class Project extends ApplicationModel {
             'customer_id' => isset($_POST['customer_id']) ? $_POST['customer_id'] : null,
             'building_size' => isset($_POST['building_size']) ? $_POST['building_size'] : '',
             'building_type' => isset($_POST['building_type']) ? $_POST['building_type'] : '',
+            'building_number' => isset($_POST['building_number']) ? $_POST['building_number'] : '',
+            'building_branch' => isset($_POST['building_branch']) ? $_POST['building_branch'] : '',
             'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
             'amount' => isset($_POST['amount']) ? $_POST['amount'] : 0,
             'created_at' => date('Y-m-d H:i:s'),
@@ -216,8 +179,16 @@ class Project extends ApplicationModel {
                 $this->addMember($project_id, $user_id, 'manager');
             }
         }
-        
-        return $project_id;
+
+        if($project_id){
+            return [
+                'status' => 'success',
+            ];
+        }
+
+        return [
+            'status' => 'error',
+        ];
     }
 
     function edit($id) {

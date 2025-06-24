@@ -113,6 +113,7 @@ var projectTable;
                     },
                     title: '案件番号'
                 },
+                
                 { 
                     data: 'name',
                     render: function(data, type, row) {
@@ -128,39 +129,117 @@ var projectTable;
                         return `<div class="d-flex align-items-start justify-content-start flex-column">
                                     <div class="mt-1">
                                         <small class="text-muted d-block">${row.company_name || '-'}</small>
+                                        <small class="text-muted d-block">${row.customer_name || '-'}</small>
                                     </div>
                                 </div>`;
                     },
                     title: '顧客情報'
                 },
+                // { 
+                //     data: 'building_type',
+                //     render: function(data, type, row) {
+                //         return `<div class="d-flex align-items-start justify-content-start flex-column">
+                //                     <span class="project-type">${row.building_type || '-'}</span>
+                //                     <span class="project-type">${row.building_size|| '-'}</span>
+                //                 </div>`;
+                //     },
+                //     title: '建物情報'
+                // },
                 { 
-                    data: 'building_type',
+                    data: 'project_order_type',
                     render: function(data, type, row) {
-                        return `<div class="d-flex align-items-start justify-content-start flex-column">
-                                    <span class="project-type">${row.building_type || '-'}</span>
-                                    <span class="project-type">${row.building_size|| '-'}</span>
-                                </div>`;
+                        if (Array.isArray(data)) {
+                            return `<ul class="mb-0 ps-3">${data.map(item => `<li>${item}</li>`).join('')}</ul>`;
+                        } else if (typeof data === 'string') {
+                            try {
+                                const decoded = decodeHtmlEntities(data);
+                                const arr = JSON.parse(decoded);
+                                if (Array.isArray(arr)) {
+                                    return `<ul class="mb-0 list-unstyled">${arr.map(item => `<li>${item}</li>`).join('')}</ul>`;
+                                }
+                            } catch (e) {
+                                return `<span>${data || '-'}</span>`;
+                            }
+                        }
+                        return `<span>-</span>`;
                     },
-                    title: '建物情報'
+                    title: '受注形態'
                 },
                 {
                     data: 'manager_id',
                     render: function(data) {
-                        return `<div class="d-flex align-items-center mt-1">
-                              <div class="avatar-wrapper me-2">
-                                  <div class="avatar avatar-xs">
-                                      <img src="/assets/img/avatars/1.png" alt="" class="rounded-circle">
-                                  </div>
-                              </div>
-                              <small class="text-nowrap text-heading">${data || '-'}</small>
-                          </div>`;
+                        if (!data) return '-';
+                        const members = data.split('|').filter(member => member.trim() !== '');
+                        if (members.length === 0) return '-';
+
+                        let html = '<div class="d-flex align-items-center avatar-group">';
+                        const maxAvatars = 3;
+                        members.slice(0, maxAvatars).forEach(member => {
+                            const [userId, realname, userImage] = member.split(':');
+                            html += `<div class="avatar avatar-sm me-1" data-bs-toggle="tooltip" title="${realname || userId}">
+                                <img src="/assets/upload/avatar/${userImage ?? 'no-image.png'}" alt="${realname || userId}" 
+                                    class="rounded-circle  pull-up" width="32" height="32" 
+                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+                                <span class="avatar-initial rounded-circle bg-label-primary pull-up">
+                                    ${getInitials(realname || userId)}
+                                </span>
+                            </div>`;
+                        });
+
+                        if (members.length > maxAvatars) {
+                            const remaining = members.slice(maxAvatars).map(member => {
+                                const [, realname,] = member.split(':');
+                                return realname;
+                            }).join(', ');
+                            html += `
+                                <span class="avatar-initial rounded-circle pull-up" 
+                                    data-bs-toggle="tooltip" title="${remaining}" 
+                                    style="display:inline-flex;">
+                                    +${members.length - maxAvatars}
+                                </span>
+                            `;
+                        }
+                        html += '</div>';
+                        return html;
                     },
-                    title: '担当者'
+                    title: '管理'
                 },
                 {
                     data: 'assignment_id',
                     render: function(data) {
-                        return data || '-';
+                        if (!data) return '-';
+                        const members = data.split('|').filter(member => member.trim() !== '');
+                        if (members.length === 0) return '-';
+
+                        let html = '<div class="d-flex align-items-center avatar-group">';
+                        const maxAvatars = 3;
+                        members.slice(0, maxAvatars).forEach(member => {
+                            const [userId, realname, userImage] = member.split(':');
+                            html += `<div class="avatar avatar-sm me-1" data-bs-toggle="tooltip" title="${realname || userId}">
+                                <img src="/assets/upload/avatar/${userImage ?? 'no-image.png'}" alt="${realname || userId}" 
+                                    class="rounded-circle pull-up" width="32" height="32" 
+                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+                                <span class="avatar-initial rounded-circle bg-label-primary pull-up">
+                                    ${getInitials(realname || userId)}
+                                </span>
+                            </div>`;
+                        });
+
+                        if (members.length > maxAvatars) {
+                            const remaining = members.slice(maxAvatars).map(member => {
+                                const [, realname,] = member.split(':');
+                                return realname;
+                            }).join(', ');
+                            html += `
+                                <span class="avatar-initial rounded-circle pull-up" 
+                                    data-bs-toggle="tooltip" title="${remaining}" 
+                                    style="display:inline-flex;">
+                                    +${members.length - maxAvatars}
+                                </span>
+                            `;
+                        }
+                        html += '</div>';
+                        return html;
                     },
                     title: 'メンバー'
                 },
@@ -212,7 +291,6 @@ var projectTable;
                     data: null,
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-center gap-1">
-                                    <button class="btn btn-sm btn-primary item-edit" data-id="${row.id}">編集</button>
                                     <button class="btn btn-sm btn-danger item-delete" data-id="${row.id}">削除</button>
                                 </div>`;
                     },
@@ -235,6 +313,20 @@ var projectTable;
                 }
             },
             
+        });
+
+        // Khởi tạo lại tooltip mỗi khi DataTable vẽ lại
+        $('#projectTable').on('draw.dt', function() {
+            if (window.bootstrap && bootstrap.Tooltip) {
+                // Bootstrap 5
+                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+            } else if ($.fn.tooltip) {
+                // Bootstrap 4 hoặc jQuery
+                $('[data-bs-toggle="tooltip"]').tooltip();
+            }
         });
 
         // イベントハンドラー
@@ -493,6 +585,26 @@ var projectTable;
         
     });
 
+    // Helper function to get initials from name
+    function getInitials(name) {
+        if (!name) return '?';
+        // Check if name contains Japanese characters
+        const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
+        if (hasJapanese) {
+            // For Japanese names, take first 2 characters
+            return name.substring(0, 2);
+        } else {
+            // For English names, take first letter of each word
+            const initials = name.split(' ').map(n => n.charAt(0)).join('');
+            return initials.toUpperCase();
+        }
+    }
+
+    function decodeHtmlEntities(str) {
+        var txt = document.createElement('textarea');
+        txt.innerHTML = str;
+        return txt.value;
+    }
 
     const { createApp } = Vue;
     const app = createApp({
@@ -517,6 +629,8 @@ var projectTable;
                     department_id: '',
                     building_size: '',
                     building_type: '',
+                    building_number: '',
+                    building_branch: '',
                     project_number: '',
                     project_order_type: '新規',
                     estimated_hours: '',
@@ -1086,11 +1200,13 @@ var projectTable;
                         
                         const response = await axios.post('/api/index.php?model=project&method=add', formData);
                         
-                        if (response.data) {
+                        if (response.data.status == 'success') {
                             showMessage(this.isEdit ? 'プロジェクトを更新しました。' : 'プロジェクトを作成しました。');
                             bootstrap.Modal.getInstance(document.getElementById('newProjectModal')).hide();
                             this.loadProjects();
                             this.resetProjectForm();
+                        } else{
+                            showMessage('プロジェクトの保存に失敗しました。', true);
                         }
                     } catch (error) {
                         console.error('Error saving project:', error);
@@ -1140,6 +1256,8 @@ var projectTable;
                     department_id: '',
                     building_size: '',
                     building_type: '',
+                    building_number: '',
+                    building_branch: '',
                     project_number: '',
                     project_order_type: '新規',
                     estimated_hours: '',

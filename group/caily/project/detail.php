@@ -40,7 +40,7 @@ if (!$project_id) {
         <!-- Back button -->
         <div class="col-12 mb-3">
             <a href="index.php" class="btn btn-outline-primary">
-                <i class="bi bi-arrow-left"></i> 戻る
+                <i class="fa fa-arrow-left"></i> 戻る
             </a>
         </div>
 
@@ -52,10 +52,10 @@ if (!$project_id) {
                         <h5 class="card-title">基本情報</h5>
                         <div>
                             <button class="btn btn-outline-primary btn-sm me-2" @click="editProject">
-                                <i class="bi bi-pencil"></i>
+                                <i class="fa fa-pencil-alt"></i>
                             </button>
                             <button class="btn btn-outline-danger btn-sm" @click="deleteProject">
-                                <i class="bi bi-trash"></i>
+                                <i class="fa fa-trash"></i>
                             </button>
                         </div>
                     </div>
@@ -70,6 +70,13 @@ if (!$project_id) {
                             <input type="text" class="form-control" :value="project.name" readonly>
                         </div>
                         <div class="col-md-6">
+                            <label class="form-label">工事番号</label>
+                            <input type="text" class="form-control" :value="formatDate(project.start_date)" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">開始日</label>
+                            <input type="text" class="form-control" :value="formatDate(project.start_date)" readonly>
+                        </div><div class="col-md-6">
                             <label class="form-label">開始日</label>
                             <input type="text" class="form-control" :value="formatDate(project.start_date)" readonly>
                         </div>
@@ -84,6 +91,18 @@ if (!$project_id) {
                         <div class="col-md-6">
                             <label class="form-label">実終了日</label>
                             <input type="text" class="form-control" :value="formatDate(project.actual_end_date)" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">部署</label>
+                            <input type="text" class="form-control" :value="department?.name || '-'" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">建物規模</label>
+                            <input type="text" class="form-control" :value="project.building_size || '-'" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">建物種類</label>
+                            <input type="text" class="form-control" :value="project.building_type || '-'" readonly>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">ステータス</label>
@@ -127,15 +146,8 @@ if (!$project_id) {
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">部署</label>
-                            <input type="text" class="form-control" :value="department?.name || '-'" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">建物種類</label>
-                            <input type="text" class="form-control" :value="project.building_type || '-'" readonly>
-                        </div>
-                        <div class="col-md-4">
+                        
+                        <!-- <div class="col-md-4">
                             <label class="form-label">予定時間</label>
                             <input type="text" class="form-control" :value="project.estimated_hours + 'h'" readonly>
                         </div>
@@ -146,7 +158,7 @@ if (!$project_id) {
                         <div class="col-md-4">
                             <label class="form-label">金額</label>
                             <input type="text" class="form-control" :value="formatCurrency(project.amount)" readonly>
-                        </div>
+                        </div> -->
                         <div class="col-6">
                             <label class="form-label">担当者</label>
                             <div class="d-flex align-items-center my-4" v-if="managers && managers.length > 0">
@@ -218,7 +230,7 @@ if (!$project_id) {
                     <div class="card bg-primary text-white text-center">
                         <div class="card-body">
                             <div class="mb-1">
-                                <i class="bi bi-list-task fs-3"></i>
+                                <i class="fa fa-list-alt fs-3"></i>
                             </div>
                             <h2 class="mb-1">{{ stats.totalTasks }}</h2>
                             <small>タスク総数</small>
@@ -229,7 +241,7 @@ if (!$project_id) {
                     <div class="card bg-success text-white text-center">
                         <div class="card-body">
                             <div class="mb-1">
-                                <i class="bi bi-check-circle fs-3"></i>
+                                <i class="fa fa-check-circle fs-3"></i>
                             </div>
                             <h2 class="mb-1">{{ stats.completedTasks }}</h2>
                             <small>完了タスク</small>
@@ -240,7 +252,7 @@ if (!$project_id) {
                     <div class="card bg-info text-white text-center">
                         <div class="card-body">
                             <div class="mb-1">
-                                <i class="bi bi-clock fs-3"></i>
+                                <i class="fa fa-clock fs-3"></i>
                             </div>
                             <h2 class="mb-1">{{ stats.timeTracked }}h</h2>
                             <small>記録時間</small>
@@ -251,7 +263,7 @@ if (!$project_id) {
                     <div class="card bg-warning text-white text-center">
                         <div class="card-body">
                             <div class="mb-1">
-                                <i class="bi bi-calendar fs-3"></i>
+                                <i class="fa fa-calendar fs-3"></i>
                             </div>
                             <h2 class="mb-1">{{ stats.totalDays }}</h2>
                             <small>日数</small>
@@ -268,7 +280,7 @@ if (!$project_id) {
                 <div class="card-body">
                     <div class="mb-4">
                         <div class="text-center py-5" v-if="comments.length === 0">
-                            <i class="bi bi-chat-text fs-1 text-muted"></i>
+                            <i class="fa fa-comment-dots fs-1 text-muted"></i>
                             <p class="text-muted">コメントはまだありません</p>
                         </div>
                         <!-- Comments List -->
@@ -307,7 +319,7 @@ if (!$project_id) {
                                 <button class="btn btn-primary" 
                                         @click="addComment"
                                         :disabled="!newComment.trim()">
-                                    <i class="bi bi-send"></i>
+                                    <i class="fa fa-paper-plane"></i>
                                 </button>
                             </div>
                         </div>
