@@ -159,7 +159,7 @@ class Department extends ApplicationModel {
     function get_users() {
         $department_id = $_GET['department_id'];
         $query = sprintf(
-            "SELECT u.id, u.realname as user_name
+            "SELECT u.id, u.realname as user_name, u.userid as user_id
             FROM " . DB_PREFIX . "user u
             JOIN " . DB_PREFIX . "user_department ud ON u.userid = ud.userid
             WHERE ud.department_id = %d

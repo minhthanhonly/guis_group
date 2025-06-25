@@ -44,16 +44,24 @@ if (!$project_id) {
         </div>
 
         <!-- Left Column - Project Details -->
-        <div class="col-md-8">
-            <div class="card">
+        <div class="col-xl-8">
+            <div class="card" :class="{ 'edit-mode': isEditMode }">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h5 class="card-title">基本情報</h5>
                         <div>
-                            <button class="btn btn-outline-primary btn-sm me-2" @click="editProject">
+                            <button v-if="!isEditMode" class="btn btn-outline-primary btn-sm me-2" @click="toggleEditMode">
                                 <i class="fa fa-pencil-alt"></i>
                             </button>
-                            <button class="btn btn-outline-danger btn-sm" @click="deleteProject">
+                            <div v-else class="d-flex gap-2">
+                                <button class="btn btn-success btn-sm" @click="saveProject">
+                                    <i class="fa fa-save"></i>
+                                </button>
+                                <button class="btn btn-secondary btn-sm" @click="cancelEdit">
+                                    <i class="fa fa-times"></i>
+                                </button>
+                            </div>
+                            <button v-if="!isEditMode" class="btn btn-outline-danger btn-sm" @click="deleteProject">
                                 <i class="fa fa-trash"></i>
                             </button>
                         </div>
@@ -65,46 +73,61 @@ if (!$project_id) {
                         <div class="col-md-4">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">会社名 <span class="text-danger">*</span></label>
-                                <select id="category_id" class="form-select select2" v-model="newProject.category_id" name="category_id" required @change="onCategoryChange" >
-                                    <option value="">選択してください</option>
-                                    <option v-for="category in categories" :key="category.id" :value="category.id">
-                                        {{ category.name }}
-                                    </option>
-                                </select>
+                                <template v-if="isEditMode">
+                                    <select id="category_id" class="form-select select2" v-model="newProject.category_id" name="category_id" required @change="onCategoryChange">
+                                        <option value="">選択してください</option>
+                                        <option v-for="category in categories" :key="category.id" :value="category.id">
+                                            {{ category.name }}
+                                        </option>
+                                    </select>
+                                </template>
+                                <template v-else>
+                                    <input type="text" class="form-control" :value="getCategoryName(newProject.category_id)" readonly>
+                                </template>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">支店名 <span class="text-danger">*</span></label>
-                                <select id="company_name" class="form-select select2" v-model="newProject.company_name" name="company_name" required @change="onCompanyChange" >
-                                    <option value="">選択してください</option>
-                                    <option v-for="company in companies" :key="company.company_name" :value="company.company_name">
-                                        {{ company.company_name }}
-                                    </option>
-                                </select>
+                                <template v-if="isEditMode">
+                                    <select id="company_name" class="form-select select2" v-model="newProject.company_name" name="company_name" required @change="onCompanyChange">
+                                        <option value="">選択してください</option>
+                                        <option v-for="company in companies" :key="company.company_name" :value="company.company_name">
+                                            {{ company.company_name }}
+                                        </option>
+                                    </select>
+                                </template>
+                                <template v-else>
+                                    <input type="text" class="form-control" :value="newProject.company_name" readonly>
+                                </template>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">担当者名 <span class="text-danger">*</span></label>
                                 <div class="d-flex gap-2 justify-content-between">
-                                    <select id="customer_id" class="form-select select2 flex-shrink-1" v-model="newProject.customer_id" name="customer_id" required >
-                                        <option value="">選択してください</option>
-                                        <option v-for="contact in contacts" :key="contact.id" :value="contact.id">
-                                            {{ contact.name }}
-                                        </option>
-                                    </select>
+                                    <template v-if="isEditMode">
+                                        <select id="customer_id" class="form-select select2 flex-shrink-1" v-model="newProject.customer_id" name="customer_id" required>
+                                            <option value="">選択してください</option>
+                                            <option v-for="contact in contacts" :key="contact.id" :value="contact.id">
+                                                {{ contact.name }}
+                                            </option>
+                                        </select>
+                                    </template>
+                                    <template v-else>
+                                        <input type="text" class="form-control" :value="getContactName(newProject.customer_id)" readonly>
+                                    </template>
                                 </div>
                             </div>
                         </div>
-
                         <div class="col-md-4">
                             <label class="form-label">プロジェクト番号</label>
-                            <input type="text" class="form-control" :value="project.project_number || '-'" readonly>
+                            <input type="text" class="form-control" v-if="isEditMode" v-model="project.project_number">
+                            <input type="text" class="form-control" v-else :value="project.project_number || '-'" readonly>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">プロジェクト名</label>
-                            <input type="text" class="form-control" :value="project.name" readonly>
+                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.name">
                         </div>
                         
                         
@@ -114,19 +137,19 @@ if (!$project_id) {
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">工事支店</label>
-                            <input type="text" class="form-control" :value="project.building_branch || '-'" readonly>
+                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.building_branch">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">建物規模</label>
-                            <input type="text" class="form-control" :value="project.building_size || '-'" readonly>
+                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.building_size">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">建物種類</label>
-                            <input type="text" class="form-control" :value="project.building_type || '-'" readonly>
+                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.building_type">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">工事番号</label>
-                            <input type="text" class="form-control" :value="project.building_number || '-'" readonly>
+                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.building_number">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">優先度</label>
@@ -156,7 +179,7 @@ if (!$project_id) {
                             <label class="form-label">ステータス</label>
                             <div>
                                 <div class="btn-group" v-if="isManager">
-                                    <button type="button" class="btn tn-sm dropdown-toggle waves-effect waves-light" 
+                                    <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
                                             :class="getStatusButtonClass(project.status)"
                                             id="statusDropdown"
                                             data-bs-toggle="dropdown" aria-expanded="false">
@@ -176,6 +199,20 @@ if (!$project_id) {
                                 </div>
                             </div>
                         </div>
+                        <div class="col-md-4">
+                            <label class="form-label">受注形態</label>
+                            <template v-if="isEditMode">
+                                <input type="text" class="form-control tagify" v-model="project.project_order_type" id="project_order_type" name="project_order_type" required>
+                            </template>
+                            <template v-else>
+                                <div style="min-height:38px;">
+                                    <span v-if="project.project_order_type && project.project_order_type.split(',').length > 0">
+                                        <span v-for="item in project.project_order_type.split(',')" :key="item.trim()" class="badge bg-primary me-1">{{ item.trim() }}</span>
+                                    </span>
+                                    <span v-else>-</span>
+                                </div>
+                            </template>
+                        </div>
                       
                         
                         <!-- <div class="col-md-4">
@@ -192,8 +229,9 @@ if (!$project_id) {
                         </div> -->
                         <div class="col-4">
                             <label class="form-label">チーム</label>
-                            <div>
-                                <input v-if="isManager" id="team_tags" class="form-control" />
+                            <div class="d-flex align-items-center gap-2">
+                                <input v-if="isEditMode" id="team_tags" class="form-control" />
+                                <button v-if="isEditMode" class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('team')" title="すべて削除"><i class="fa fa-times"></i></button>
                                 <div v-else>
                                     <span v-if="project.team_list && project.team_list.length > 0">
                                         <span v-for="team in project.team_list" :key="team.id" class="badge bg-info me-1">{{ team.name }}</span>
@@ -204,7 +242,11 @@ if (!$project_id) {
                         </div>
                         <div class="col-4">
                             <label class="form-label">管理</label>
-                            <div class="d-flex align-items-center" v-if="managers && managers.length > 0">
+                            <div v-if="isEditMode" class="d-flex align-items-center gap-2">
+                                <input class="form-control" type="text" id="manager_tags" name="manager_tags">
+                                <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('manager')" title="すべて削除"><i class="fa fa-times"></i></button>
+                            </div>
+                            <div class="d-flex align-items-center" v-else-if="managers && managers.length > 0">
                                 <div v-for="member in managers" :key="member.userid"
                                     class="avatar me-2"
                                     :data-userid="member.userid"
@@ -223,7 +265,11 @@ if (!$project_id) {
                         </div>
                         <div class="col-4">
                             <label class="form-label">メンバー</label>
-                            <div class="d-flex align-items-center" v-if="members.length > 0">
+                            <div v-if="isEditMode" class="d-flex align-items-center gap-2">
+                                <input class="form-control" type="text" id="members_tags" name="members_tags">
+                                <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('members')" title="すべて削除"><i class="fa fa-times"></i></button>
+                            </div>
+                            <div class="d-flex align-items-center" v-else-if="members.length > 0">
                                 <div v-for="member in members" :key="member.userid"
                                     class="avatar me-2"
                                     data-bs-toggle="tooltip"
@@ -242,19 +288,27 @@ if (!$project_id) {
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">開始日</label>
-                            <input type="text" class="form-control" :value="formatDate(project.start_date)" readonly>
+                            <div v-if="isEditMode" class="input-group">
+                                <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" placeholder="YYYY/MM/DD HH:mm">
+                                <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                            </div>
+                            <input v-else type="text" class="form-control" :value="formatDateTime(project.start_date)" readonly>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">終了日</label>
-                            <input type="text" class="form-control" :value="formatDate(project.end_date)" readonly>
+                            <div v-if="isEditMode" class="input-group">
+                                <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm">
+                                <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                            </div>
+                            <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" readonly>
                         </div>
-                        <!-- <div class="col-md-4">
-                            <label class="form-label">実開始日</label>
-                            <input type="text" class="form-control" :value="formatDate(project.actual_start_date)" readonly>
-                        </div> -->
                         <div class="col-md-4">
                             <label class="form-label">実終了日</label>
-                            <input type="text" class="form-control" :value="formatDate(project.actual_end_date)" readonly>
+                            <div v-if="isEditMode" class="input-group">
+                                <input type="text" class="form-control" v-model="project.actual_end_date" id="actual_end_date_picker" placeholder="YYYY/MM/DD HH:mm">
+                                <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                            </div>
+                            <input v-else type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
                         </div>
                         <div class="col-4">
                             <label class="form-label">進捗率</label>
@@ -284,7 +338,15 @@ if (!$project_id) {
                         </div>
                         <div class="col-12">
                             <label class="form-label">説明</label>
-                            <textarea class="form-control" rows="3" :value="project?.description || '-'" readonly></textarea>
+                            <template v-if="isEditMode">
+                                <div class="custom_editor">
+                                    <div class="custom_editor_content" id="quill_description"></div>
+                                    <textarea class="custom_editor_textarea d-none" v-model="project.description" id="quill_description_textarea"></textarea>
+                                </div>
+                            </template>
+                            <template v-else>
+                                <div class="form-control ql-editor" style="min-height:100px;" v-html="decodeHtmlEntities(project.description)"></div>
+                            </template>
                         </div>
                     </div>
                     <div v-else class="text-center py-5">
@@ -298,7 +360,7 @@ if (!$project_id) {
         </div>
 
         <!-- Right Column - Stats & Comments -->
-        <div class="col-md-4">
+        <div class="col-xl-4">
             <!-- Statistics Cards -->
             <!-- <div class="row g-3 mb-4">
                 <div class="col-6">
@@ -403,7 +465,37 @@ if (!$project_id) {
             </div>
         </div>
     </div>
+
+    <!-- Modal chọn member/manager -->
+    <div class="modal fade" tabindex="-1" :class="{show: showMemberModal}"  style="display: block;"  v-if="showMemberModal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ memberSelectType === 'manager' ? '管理者を選択' : 'メンバーを選択' }}</h5>
+                    <button type="button" class="btn-close" @click="showMemberModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex flex-wrap">
+                        <div v-for="user in allUsers" :key="user.userid" class="m-2 text-center" style="cursor:pointer;">
+                            <div @click="toggleMemberSelect(user.userid)" :class="{'border border-primary': memberSelected.includes(user.userid)}" style="display:inline-block;border-radius:50%;padding:2px;">
+                                <img v-if="!user.avatarError && getAvatarSrc(user)" class="rounded-circle" :src="getAvatarSrc(user)" :alt="user.user_name" width="40" height="40" @error="handleAvatarError(user)">
+                                <span v-else class="avatar-initial rounded-circle bg-label-primary" style="width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;">{{ getInitials(user.user_name) }}</span>
+                            </div>
+                            <div style="font-size:12px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ user.user_name }}</div>
+                            <input type="checkbox" class="form-check-input mt-1" :checked="memberSelected.includes(user.userid)" @change="toggleMemberSelect(user.userid)">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @click="showMemberModal = false">キャンセル</button>
+                    <button class="btn btn-primary" @click="confirmMemberSelect">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
+
 
 <?php
 $view->footing();
@@ -424,6 +516,12 @@ $view->footing();
     word-break: break-word;
 }
 
+/* Edit mode styles */
+.edit-mode .select2-selection,
+.edit-mode .form-select:not([readonly]) ,
+.edit-mode .form-control:not([readonly]) {
+    border-color: var(--bs-primary);
+}
 </style>
 
 <!-- Define PROJECT_ID before loading Vue and project-detail.js -->
@@ -431,4 +529,11 @@ $view->footing();
 const PROJECT_ID = <?php echo $project_id; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/highlight/highlight.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/katex.css" />
+<script src="<?=ROOT?>assets/vendor/libs/highlight/highlight.js"></script>
+<script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
+<script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="assets/js/project-detail.js"></script>

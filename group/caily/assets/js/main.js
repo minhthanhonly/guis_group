@@ -890,7 +890,7 @@ $(function() {
       $this.wrap('<div class="position-relative"></div>').select2({
         placeholder: '選択してください',
         dropdownParent: $this.parent(),
-        minimumResultsForSearch: Infinity,
+        minimumResultsForSearch: 0,
       });
     });
   }

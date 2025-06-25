@@ -374,6 +374,7 @@ var projectTable;
                 placeholder: '選択してください',
                 dropdownParent: category_id.parent(),
                 allowClear: true,
+                minimumResultsForSearch: 0,
                 ajax: {
                     url: '/api/index.php?model=customer&method=list_categories',
                     dataType: 'json',
@@ -487,6 +488,7 @@ var projectTable;
                         return '見つかりません。<button class="btn btn-warning btn-sm w-50" onclick="app.openNewCustomerModal()">新規顧客を追加</button>';
                     },
                 },
+                minimumResultsForSearch: 0,
                 ajax: {
                     url: '/api/index.php?model=customer&method=list_companies_by_category',
                     dataType: 'json',
@@ -552,6 +554,7 @@ var projectTable;
                 placeholder: '選択してください',
                 dropdownParent: customer_id.parent(),
                 allowClear: true,
+                minimumResultsForSearch: 0,
                 ajax: {
                     url: '/api/index.php?model=customer&method=list_contacts_by_company',
                     dataType: 'json',

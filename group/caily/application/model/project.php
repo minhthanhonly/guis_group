@@ -15,6 +15,7 @@ class Project extends ApplicationModel {
             'actual_start_date' => array(), //timestamp
             'actual_end_date' => array(), //timestamp
             'created_by' => array(), //userid
+            'updated_by' => array(), //userid
             'created_at' => array('except' => array('search')), //timestamp
             'updated_at' => array('except' => array('search')), //timestamp
             'department_id' => array(), //
@@ -192,40 +193,6 @@ class Project extends ApplicationModel {
         ];
     }
 
-    function edit($id) {
-        $data = array(
-            'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
-            'name' => $_POST['name'],
-            'description' => isset($_POST['description']) ? $_POST['description'] : '',
-            'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
-            'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
-            'start_date' => isset($_POST['start_date']) && !empty($_POST['start_date']) ? date('Y-m-d', strtotime($_POST['start_date'])) : null,
-            'end_date' => isset($_POST['end_date']) && !empty($_POST['end_date']) ? date('Y-m-d', strtotime($_POST['end_date'])) : null,
-            'department_id' => isset($_POST['department_id']) ? $_POST['department_id'] : null,
-            'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
-            'customer_id' => isset($_POST['customer_id']) ? $_POST['customer_id'] : null,
-            'building_size' => isset($_POST['building_size']) ? $_POST['building_size'] : '',
-            'building_type' => isset($_POST['building_type']) ? $_POST['building_type'] : '',
-            'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
-            'amount' => isset($_POST['amount']) ? $_POST['amount'] : 0,
-            'updated_at' => date('Y-m-d H:i:s')
-        );
-        
-        $result = $this->query_update($data, ['id' => $id]);
-        
-        // Cập nhật members nếu có
-        if ($result && isset($_POST['members']) && is_array($_POST['members'])) {
-            // Xóa members cũ
-            $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id));
-            
-            // Thêm members mới
-            foreach ($_POST['members'] as $user_id) {
-                $this->addMember($id, $user_id);
-            }
-        }
-        
-        return $result;
-    }
 
     function delete($id) {
         // Check if project has tasks or members
@@ -409,6 +376,60 @@ class Project extends ApplicationModel {
         $result = $this->query_insert($commentData);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
         return $result;
+    }
+
+    function update() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) return ['success' => false, 'error' => 'No project id'];
+        
+        $data = array(
+            'name' => isset($_POST['name']) ? $_POST['name'] : '',
+            'description' => isset($_POST['description']) ? $_POST['description'] : '',
+            'building_branch' => isset($_POST['building_branch']) ? $_POST['building_branch'] : '',
+            'building_size' => isset($_POST['building_size']) ? $_POST['building_size'] : '',
+            'building_type' => isset($_POST['building_type']) ? $_POST['building_type'] : '',
+            'building_number' => isset($_POST['building_number']) ? $_POST['building_number'] : '',
+            'progress' => isset($_POST['progress']) ? $_POST['progress'] : 0,
+            'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
+            'teams' => isset($_POST['teams']) ? $_POST['teams'] : '',
+            'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
+            'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
+            'customer_id' => isset($_POST['customer_id']) ? $_POST['customer_id'] : '',
+            'updated_at' => date('Y-m-d H:i:s'),
+            'updated_by' => $_SESSION['user_id']
+        );
+        if(isset($_POST['start_date']) && !empty($_POST['start_date'])){
+            $data['start_date'] = date('Y-m-d H:i', strtotime($_POST['start_date']));
+        }
+        if(isset($_POST['actual_end_date']) && !empty($_POST['actual_end_date'])){
+            $data['actual_end_date'] = date('Y-m-d H:i', strtotime($_POST['actual_end_date']));
+        }
+        if(isset($_POST['end_date']) && !empty($_POST['end_date'])){
+            $data['end_date'] = date('Y-m-d H:i', strtotime($_POST['end_date']));
+        }
+        $result = $this->query_update($data, ['id' => $id]);
+
+        if ($result && isset($_POST['members'])) {
+            $members = explode(',', $_POST['members']);
+            // Xóa members cũ
+            $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id));
+            // Thêm members mới
+            foreach ($members as $user_id) {
+                $this->addMember($id, $user_id);
+            }
+        }
+       
+        if ($result && isset($_POST['managers'])) {
+            $managers = explode(',', $_POST['managers']);
+            foreach ($managers as $user_id) {
+                $this->addMember($id, $user_id, 'manager');
+            }
+        }
+        if ($result) {
+            return ['success' => true];
+        } else {
+            return ['success' => false, 'error' => 'Update failed'];
+        }
     }
 
     function updateTeams($params = null) {
