@@ -388,18 +388,21 @@ if (!$project_id) {
                                 </div>
                             </template>
                             <template v-else>
-                                <template v-if="selectedCustomFieldSet">
+                                <template v-if="getCustomFieldsForView().length">
                                     <ul class="mb-0 ps-3">
-                                        <li v-for="(field, idx) in selectedCustomFieldSet.fields" :key="idx">
+                                        <li v-for="(field, idx) in getCustomFieldsForView()" :key="idx">
                                             <strong>{{ field.label }}:</strong>
                                             <template v-if="field.type === 'checkbox'">
-                                                <span v-if="getCustomFieldValue(field.label)">
-                                                    <span v-for="val in getCustomFieldValue(field.label).split(',')" :key="val.trim()" class="badge bg-primary me-1">{{ val.trim() }}</span>
+                                                <span v-if="field.value">
+                                                    <span v-for="val in field.value.split(',')" :key="val.trim()" class="badge bg-primary me-1">{{ val.trim() }}</span>
                                                 </span>
                                                 <span v-else>-</span>
                                             </template>
+                                            <template v-else-if="field.type === 'radio' || field.type === 'select' || field.type === 'text' || field.type === 'textarea'">
+                                                {{ field.value || '-' }}
+                                            </template>
                                             <template v-else>
-                                                {{ getCustomFieldValue(field.label) || '-' }}
+                                                {{ field.value || '-' }}
                                             </template>
                                         </li>
                                     </ul>

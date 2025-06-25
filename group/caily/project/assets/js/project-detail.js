@@ -633,7 +633,13 @@ createApp({
                 } else {
                     value = this.customFields[idx]?.value || '';
                 }
-                return { label: f.label, value };
+                // Save full field structure
+                return {
+                    label: f.label,
+                    type: f.type,
+                    options: f.options,
+                    value
+                };
             });
         },
         async saveProject() {
@@ -871,20 +877,30 @@ createApp({
             if (!this.project || !this.project.custom_fields) return '';
             let arr = [];
             let raw = this.project.custom_fields;
-            // Decode &quot; to " if present
             if (typeof raw === 'string' && raw.includes('&quot;')) {
                 raw = raw.replace(/&quot;/g, '"');
             }
             if (typeof raw === 'string') {
-                try {
-                    arr = JSON.parse(raw);
-                } catch (e) { arr = []; }
+                try { arr = JSON.parse(raw); } catch (e) { arr = []; }
             } else if (Array.isArray(raw)) {
                 arr = raw;
             }
-            // Compare label after trim
             const found = arr.find(f => f.label && f.label.trim() === label.trim());
             return found ? found.value : '';
+        },
+        getCustomFieldsForView() {
+            // Parse and return array of fields (with type/options/value)
+            let arr = [];
+            let raw = this.project?.custom_fields;
+            if (typeof raw === 'string' && raw.includes('&quot;')) {
+                raw = raw.replace(/&quot;/g, '"');
+            }
+            if (typeof raw === 'string') {
+                try { arr = JSON.parse(raw); } catch (e) { arr = []; }
+            } else if (Array.isArray(raw)) {
+                arr = raw;
+            }
+            return arr;
         },
     },
     watch: {
@@ -1046,19 +1062,40 @@ createApp({
         },
         'project.department_custom_fields_set_id': function(newVal) {
             if (this.isEditMode && newVal && this.selectedCustomFieldSet) {
-                // Preserve values by label if possible
-                let oldValues = Array.isArray(this.customFields) ? this.customFields : [];
-                this.customFields = this.selectedCustomFieldSet.fields.map(f => {
-                    const found = oldValues.find(v => v && v.label === f.label);
-                    if (f.type === 'checkbox') {
-                        let arr = [];
-                        if (found && found.valueArr) arr = found.valueArr;
-                        else if (found && found.value) arr = found.value.split(',').map(s => s.trim()).filter(Boolean);
-                        return { label: f.label, value: arr.join(','), valueArr: arr };
-                    } else {
-                        return { label: f.label, value: found ? found.value : '' };
-                    }
-                });
+                // Try to load from project.custom_fields (full structure)
+                let saved = [];
+                let raw = this.project.custom_fields;
+                if (typeof raw === 'string' && raw.includes('&quot;')) {
+                    raw = raw.replace(/&quot;/g, '"');
+                }
+                if (typeof raw === 'string') {
+                    try { saved = JSON.parse(raw); } catch (e) { saved = []; }
+                } else if (Array.isArray(raw)) {
+                    saved = raw;
+                }
+                // If saved has type/options, use it directly, else fallback to set
+                if (saved.length && saved[0] && saved[0].type) {
+                    this.customFields = saved.map(f => {
+                        if (f.type === 'checkbox') {
+                            let arr = [];
+                            if (f.value) arr = f.value.split(',').map(s => s.trim()).filter(Boolean);
+                            return { ...f, valueArr: arr };
+                        } else {
+                            return { ...f };
+                        }
+                    });
+                } else {
+                    this.customFields = this.selectedCustomFieldSet.fields.map(f => {
+                        const found = saved.find(v => v && v.label && v.label.trim() === f.label.trim());
+                        if (f.type === 'checkbox') {
+                            let arr = [];
+                            if (found && found.value) arr = found.value.split(',').map(s => s.trim()).filter(Boolean);
+                            return { label: f.label, type: f.type, options: f.options, value: arr.join(','), valueArr: arr };
+                        } else {
+                            return { label: f.label, type: f.type, options: f.options, value: found ? found.value : '' };
+                        }
+                    });
+                }
             }
         },
         'customFields': {
