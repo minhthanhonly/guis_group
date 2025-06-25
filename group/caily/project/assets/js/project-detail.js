@@ -908,6 +908,39 @@ createApp({
             if (newVal) {
                 this.$nextTick(() => {
                     this.initQuillEditor();
+                    // Sync customFields from project.custom_fields or set
+                    let saved = [];
+                    let raw = this.project.custom_fields;
+                    if (typeof raw === 'string' && raw.includes('&quot;')) {
+                        raw = raw.replace(/&quot;/g, '"');
+                    }
+                    if (typeof raw === 'string') {
+                        try { saved = JSON.parse(raw); } catch (e) { saved = []; }
+                    } else if (Array.isArray(raw)) {
+                        saved = raw;
+                    }
+                    if (saved.length && saved[0] && saved[0].type) {
+                        this.customFields = saved.map(f => {
+                            if (f.type === 'checkbox') {
+                                let arr = [];
+                                if (f.value) arr = f.value.split(',').map(s => s.trim()).filter(Boolean);
+                                return { ...f, valueArr: arr };
+                            } else {
+                                return { ...f };
+                            }
+                        });
+                    } else if (this.selectedCustomFieldSet) {
+                        this.customFields = this.selectedCustomFieldSet.fields.map(f => {
+                            const found = saved.find(v => v && v.label && v.label.trim() === f.label.trim());
+                            if (f.type === 'checkbox') {
+                                let arr = [];
+                                if (found && found.value) arr = found.value.split(',').map(s => s.trim()).filter(Boolean);
+                                return { label: f.label, type: f.type, options: f.options, value: arr.join(','), valueArr: arr };
+                            } else {
+                                return { label: f.label, type: f.type, options: f.options, value: found ? found.value : '' };
+                            }
+                        });
+                    }
                     // --- Add select2 initialization for detail page ---
                     // 会社名 (category_id)
                     const $category = $('#category_id');
