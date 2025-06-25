@@ -302,14 +302,14 @@ if (!$project_id) {
                             </div>
                             <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" readonly>
                         </div>
-                        <div class="col-md-4">
+                        <!-- <div class="col-md-4">
                             <label class="form-label">実終了日</label>
                             <div v-if="isEditMode" class="input-group">
                                 <input type="text" class="form-control" v-model="project.actual_end_date" id="actual_end_date_picker" placeholder="YYYY/MM/DD HH:mm">
                                 <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                             </div>
                             <input v-else type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
-                        </div>
+                        </div> -->
                         <div class="col-4">
                             <label class="form-label">進捗率</label>
                             <div class="position-relative">
@@ -346,6 +346,46 @@ if (!$project_id) {
                             </template>
                             <template v-else>
                                 <div class="form-control ql-editor" style="min-height:100px;" v-html="decodeHtmlEntities(project.description)"></div>
+                            </template>
+                        </div>
+                        <div class="col-12 mt-3">
+                            <template v-if="isEditMode">
+                                <label class="form-label">カスタム項目セット</label>
+                                <select class="form-select" v-model="project.department_custom_fields_set_id">
+                                    <option value="">選択してください</option>
+                                    <option v-for="set in departmentCustomFieldSets" :value="set.id">{{ set.name }}</option>
+                                </select>
+                                <div v-if="selectedCustomFieldSet" class="mt-3">
+                                    <div v-for="(field, idx) in selectedCustomFieldSet.fields" :key="idx" class="mb-2">
+                                        <label class="form-label">{{ field.label }}</label>
+                                        <template v-if="field.type === 'radio'">
+                                            <div>
+                                                <label v-for="opt in field.options.split(',')" :key="opt.trim()" class="me-3">
+                                                    <input type="radio" :name="'custom_radio_' + idx" :value="opt.trim()" v-model="customFields[idx].value"> {{ opt.trim() }}
+                                                </label>
+                                            </div>
+                                        </template>
+                                        <template v-else-if="field.type === 'select'">
+                                            <select class="form-select" v-model="customFields[idx].value">
+                                                <option value="">選択してください</option>
+                                                <option v-for="opt in field.options.split(',')" :key="opt.trim()" :value="opt.trim()">{{ opt.trim() }}</option>
+                                            </select>
+                                        </template>
+                                        <template v-else-if="field.type === 'checkbox'">
+                                            <div>
+                                                <label v-for="opt in field.options.split(',')" :key="opt.trim()" class="me-3">
+                                                    <input type="checkbox" :name="'custom_checkbox_' + idx" :value="opt.trim()" v-model="customFields[idx].valueArr"> {{ opt.trim() }}
+                                                </label>
+                                            </div>
+                                        </template>
+                                        <template v-else-if="field.type === 'textarea'">
+                                            <textarea class="form-control" v-model="customFields[idx].value"></textarea>
+                                        </template>
+                                        <template v-else>
+                                            <input class="form-control" v-model="customFields[idx].value" type="text">
+                                        </template>
+                                    </div>
+                                </div>
                             </template>
                         </div>
                     </div>

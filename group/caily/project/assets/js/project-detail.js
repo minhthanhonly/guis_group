@@ -57,6 +57,8 @@ createApp({
             managerTagify: null,
             quillInstance: null,
             projectOrderTypeTagify: null,
+            customFields: [],
+            departmentCustomFieldSets: [],
         }
     },
     computed: {
@@ -68,7 +70,11 @@ createApp({
         filteredTeams() {
             if (!this.project || !this.project.department_id) return this.allTeams;
             return this.allTeams.filter(team => String(team.department_id) === String(this.project.department_id));
-        }
+        },
+        selectedCustomFieldSet() {
+            if (!this.project || !this.project.department_custom_fields_set_id) return null;
+            return this.departmentCustomFieldSets.find(set => String(set.id) === String(this.project.department_custom_fields_set_id)) || null;
+        },
     },
     methods: {
         async loadProject() {
@@ -128,13 +134,13 @@ createApp({
             }
         },
         async loadTasks() {
-            try {
-                const response = await axios.get(`/api/index.php?model=task&method=list&project_id=${this.projectId}`);
-                this.tasks = response.data || [];
-                this.calculateStats();
-            } catch (error) {
-                console.error('Error loading tasks:', error);
-            }
+            // try {
+            //     const response = await axios.get(`/api/index.php?model=task&method=list&project_id=${this.projectId}`);
+            //     this.tasks = response.data || [];
+            //     this.calculateStats();
+            // } catch (error) {
+            //     console.error('Error loading tasks:', error);
+            // }
         },
         async loadComments() {
             try {
@@ -144,17 +150,17 @@ createApp({
                 console.error('Error loading comments:', error);
             }
         },
-        calculateStats() {
-            this.stats.totalTasks = this.tasks.length;
-            this.stats.completedTasks = this.tasks.filter(t => t.status === 'completed').length;
-            this.stats.timeTracked = this.tasks.reduce((sum, task) => sum + parseFloat(task.actual_hours || 0), 0);
-            if (this.project && this.project.start_date) {
-                const start = new Date(this.project.start_date);
-                const end = this.project.actual_end_date ? new Date(this.project.actual_end_date) : new Date();
-                const diffTime = Math.abs(end - start);
-                this.stats.totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            }
-        },
+        // calculateStats() {
+        //     this.stats.totalTasks = this.tasks.length;
+        //     this.stats.completedTasks = this.tasks.filter(t => t.status === 'completed').length;
+        //     this.stats.timeTracked = this.tasks.reduce((sum, task) => sum + parseFloat(task.actual_hours || 0), 0);
+        //     if (this.project && this.project.start_date) {
+        //         const start = new Date(this.project.start_date);
+        //         const end = this.project.actual_end_date ? new Date(this.project.actual_end_date) : new Date();
+        //         const diffTime = Math.abs(end - start);
+        //         this.stats.totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        //     }
+        // },
         async addComment() {
             if (!this.newComment.trim()) return;
             try {
@@ -525,7 +531,7 @@ createApp({
                     const id = instance.input.id;
                     if (id === 'start_date_picker') this.project.start_date = dateStr;
                     if (id === 'end_date_picker') this.project.end_date = dateStr;
-                    if (id === 'actual_end_date_picker') this.project.actual_end_date = dateStr;
+                    // if (id === 'actual_end_date_picker') this.project.actual_end_date = dateStr;
                 }
             };
             ['start_date_picker', 'end_date_picker', 'actual_end_date_picker'].forEach(id => {
@@ -600,13 +606,15 @@ createApp({
             } else {
                 this.project.end_date = '';
             }
-            if (this.project.actual_end_date) {
-                this.project.actual_end_date = this.formatDateTime(this.project.actual_end_date);
-            } else {
-                this.project.actual_end_date = '';
-            }
+            // if (this.project.actual_end_date) {
+            //     this.project.actual_end_date = this.formatDateTime(this.project.actual_end_date);
+            // } else {
+            //     this.project.actual_end_date = '';
+            // }
             // Lưu lại prevTeamIds khi vào edit mode
             this.prevTeamIds = (this.project.team_list || []).map(t => String(t.id)).sort();
+            // Sync custom fields
+            this.syncCustomFieldsFromProject();
             this.$nextTick(() => {
                 this.initDatePickers();
                 this.initTagify();
@@ -618,6 +626,7 @@ createApp({
             return str.replace(/\//g, '-');
         },
         async saveProject() {
+            this.syncProjectFromCustomFields();
             try {
                 const formData = new FormData();
                 formData.append('id', this.projectId);
@@ -636,9 +645,9 @@ createApp({
                 formData.append('start_date', this.toAPIDate(this.project.start_date));
                 formData.append('end_date', this.toAPIDate(this.project.end_date));
                 formData.append('project_order_type', this.project.project_order_type);
-                if(this.project.actual_end_date){
-                    formData.append('actual_end_date', this.toAPIDate(this.project.actual_end_date));
-                }
+                // if(this.project.actual_end_date){
+                //     formData.append('actual_end_date', this.toAPIDate(this.project.actual_end_date));
+                // }
                 formData.append('description', this.project.description || '');
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
                 if (response.data && response.data.success !== false) {
@@ -658,6 +667,8 @@ createApp({
             this.isEditMode = false;
             this.project = { ...this.originalProject };
             this.loadMembers(); // Restore managers and members from backend for correct avatars
+            // Sync custom fields for view mode
+            this.syncCustomFieldsFromProject();
         },
         getCategoryName(id) {
             const cat = this.categories.find(c => String(c.id) === String(id));
@@ -824,7 +835,41 @@ createApp({
             event.preventDefault();
             event.returnValue = '編集中の内容が保存されていません。本当にページを離れますか？';
             return event.returnValue;
-        }
+        },
+        
+        async loadDepartmentCustomFieldSets() {
+            if (!this.project || !this.project.department_id) {
+                this.departmentCustomFieldSets = [];
+                return;
+            }
+            try {
+                const res = await axios.get('/api/index.php?model=department&method=getCustomFields');
+                if (Array.isArray(res.data)) {
+                    this.departmentCustomFieldSets = res.data.filter(set => String(set.department_id) === String(this.project.department_id));
+                } else {
+                    this.departmentCustomFieldSets = [];
+                }
+            } catch (e) {
+                this.departmentCustomFieldSets = [];
+            }
+        },
+        getDepartmentCustomFieldSetName(id) {
+            const set = this.departmentCustomFieldSets.find(s => String(s.id) === String(id));
+            return set ? set.name : '-';
+        },
+        getCustomFieldValue(label) {
+            if (!this.project || !this.project.custom_fields) return '';
+            let arr = [];
+            if (typeof this.project.custom_fields === 'string') {
+                try {
+                    arr = JSON.parse(this.project.custom_fields);
+                } catch (e) { arr = []; }
+            } else if (Array.isArray(this.project.custom_fields)) {
+                arr = this.project.custom_fields;
+            }
+            const found = arr.find(f => f.label === label);
+            return found ? found.value : '';
+        },
     },
     watch: {
         isEditMode(newVal) {
@@ -979,7 +1024,44 @@ createApp({
                 }
                 window.removeEventListener('beforeunload', this.handleBeforeUnload);
             }
-        }
+        },
+        'project.department_id': function() {
+            this.loadDepartmentCustomFieldSets();
+        },
+        'project.department_custom_fields_set_id': function(newVal) {
+            if (this.isEditMode && newVal && this.selectedCustomFieldSet) {
+                // Preserve values by label if possible
+                let oldValues = Array.isArray(this.customFields) ? this.customFields : [];
+                this.customFields = this.selectedCustomFieldSet.fields.map(f => {
+                    const found = oldValues.find(v => v.label === f.label);
+                    if (f.type === 'checkbox') {
+                        let arr = [];
+                        if (found && found.valueArr) arr = found.valueArr;
+                        else if (found && found.value) arr = found.value.split(',').map(s => s.trim()).filter(Boolean);
+                        return { label: f.label, value: arr.join(','), valueArr: arr };
+                    } else {
+                        return { label: f.label, value: found ? found.value : '' };
+                    }
+                });
+            }
+        },
+        'customFields': {
+            handler(newVal) {
+                // Keep value and valueArr in sync for checkboxes
+                if (!this.selectedCustomFieldSet) return;
+                this.selectedCustomFieldSet.fields.forEach((f, idx) => {
+                    if (f.type === 'checkbox' && this.customFields[idx]) {
+                        // If valueArr changes, update value
+                        if (Array.isArray(this.customFields[idx].valueArr)) {
+                            this.customFields[idx].value = this.customFields[idx].valueArr.join(',');
+                        } else if (typeof this.customFields[idx].value === 'string') {
+                            this.customFields[idx].valueArr = this.customFields[idx].value.split(',').map(s => s.trim()).filter(Boolean);
+                        }
+                    }
+                });
+            },
+            deep: true
+        },
     },
     async mounted() {
         await this.loadAllTeams();
@@ -996,6 +1078,9 @@ createApp({
         this.loadTasks();
         this.loadComments();
         this.loadAllUsers();
+        // Sync custom fields for view mode
+        this.syncCustomFieldsFromProject();
+        await this.loadDepartmentCustomFieldSets();
         this.$nextTick(() => {
             this.initTooltips();
             this.initTagify();

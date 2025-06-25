@@ -49,6 +49,11 @@
                     <div>マイタスク</div>
                   </a>
                 </li>
+                <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
+                  <a href="<?=$root?>project/custom_fields.php" class="menu-link">
+                    <div>カスタムフィールド</div>
+                  </a>
+                </li>
                 
               </ul>
             </li>

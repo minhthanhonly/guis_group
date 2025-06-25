@@ -169,4 +169,38 @@ class Department extends ApplicationModel {
         );
         return $this->fetchAll($query);
     }
+
+    // --- Custom Fields Management ---
+    function saveCustomFields() {
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+        // Lưu vào 1 bảng riêng: department_custom_fields (id, department_id, fields)
+        foreach ($data['sets'] as $set) {
+            $department_id = intval($set['department_id']);
+            $name = $set['name'];
+            $fields = json_encode($set['fields'], JSON_UNESCAPED_UNICODE);
+            // Kiểm tra tồn tại
+            $exists = $this->fetchOne("SELECT id FROM " . "department_custom_fields WHERE department_id = $department_id");
+            if ($exists) {
+                $this->query_update(['fields' => $fields, 'name' => $name], ['department_id' => $department_id], 'department_custom_fields');
+            } else {
+                $this->query_insert(['department_id' => $department_id, 'fields' => $fields, 'name' => $name], 'department_custom_fields');
+            }
+        }
+        return ['success' => true];
+    }
+
+    function getCustomFields() {
+        $rows = $this->fetchAll("SELECT * FROM " . "department_custom_fields");
+        $result = [];
+        foreach ($rows as $row) {
+            $result[] = [
+                'id' => $row['id'],
+                'name' => $row['name'],
+                'department_id' => $row['department_id'],
+                'fields' => json_decode($row['fields'], true)
+            ];
+        }
+        return $result;
+    }
 } 
