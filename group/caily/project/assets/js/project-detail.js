@@ -614,7 +614,6 @@ createApp({
             // Lưu lại prevTeamIds khi vào edit mode
             this.prevTeamIds = (this.project.team_list || []).map(t => String(t.id)).sort();
             // Sync custom fields
-            this.syncCustomFieldsFromProject();
             this.$nextTick(() => {
                 this.initDatePickers();
                 this.initTagify();
@@ -625,8 +624,22 @@ createApp({
             if (!str) return '';
             return str.replace(/\//g, '-');
         },
+        prepareCustomFieldsForSave() {
+            if (!this.selectedCustomFieldSet) return [];
+            return this.selectedCustomFieldSet.fields.map((f, idx) => {
+                let value = '';
+                if (f.type === 'checkbox') {
+                    value = Array.isArray(this.customFields[idx].valueArr) ? this.customFields[idx].valueArr.join(',') : '';
+                } else {
+                    value = this.customFields[idx]?.value || '';
+                }
+                return { label: f.label, value };
+            });
+        },
         async saveProject() {
-            this.syncProjectFromCustomFields();
+            // Save custom field set id and values
+            this.project.department_custom_fields_set_id = this.project.department_custom_fields_set_id || '';
+            this.project.custom_fields = JSON.stringify(this.prepareCustomFieldsForSave());
             try {
                 const formData = new FormData();
                 formData.append('id', this.projectId);
@@ -645,9 +658,8 @@ createApp({
                 formData.append('start_date', this.toAPIDate(this.project.start_date));
                 formData.append('end_date', this.toAPIDate(this.project.end_date));
                 formData.append('project_order_type', this.project.project_order_type);
-                // if(this.project.actual_end_date){
-                //     formData.append('actual_end_date', this.toAPIDate(this.project.actual_end_date));
-                // }
+                formData.append('department_custom_fields_set_id', this.project.department_custom_fields_set_id);
+                formData.append('custom_fields', this.project.custom_fields);
                 formData.append('description', this.project.description || '');
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
                 if (response.data && response.data.success !== false) {
@@ -667,8 +679,6 @@ createApp({
             this.isEditMode = false;
             this.project = { ...this.originalProject };
             this.loadMembers(); // Restore managers and members from backend for correct avatars
-            // Sync custom fields for view mode
-            this.syncCustomFieldsFromProject();
         },
         getCategoryName(id) {
             const cat = this.categories.find(c => String(c.id) === String(id));
@@ -860,14 +870,20 @@ createApp({
         getCustomFieldValue(label) {
             if (!this.project || !this.project.custom_fields) return '';
             let arr = [];
-            if (typeof this.project.custom_fields === 'string') {
-                try {
-                    arr = JSON.parse(this.project.custom_fields);
-                } catch (e) { arr = []; }
-            } else if (Array.isArray(this.project.custom_fields)) {
-                arr = this.project.custom_fields;
+            let raw = this.project.custom_fields;
+            // Decode &quot; to " if present
+            if (typeof raw === 'string' && raw.includes('&quot;')) {
+                raw = raw.replace(/&quot;/g, '"');
             }
-            const found = arr.find(f => f.label === label);
+            if (typeof raw === 'string') {
+                try {
+                    arr = JSON.parse(raw);
+                } catch (e) { arr = []; }
+            } else if (Array.isArray(raw)) {
+                arr = raw;
+            }
+            // Compare label after trim
+            const found = arr.find(f => f.label && f.label.trim() === label.trim());
             return found ? found.value : '';
         },
     },
@@ -1033,7 +1049,7 @@ createApp({
                 // Preserve values by label if possible
                 let oldValues = Array.isArray(this.customFields) ? this.customFields : [];
                 this.customFields = this.selectedCustomFieldSet.fields.map(f => {
-                    const found = oldValues.find(v => v.label === f.label);
+                    const found = oldValues.find(v => v && v.label === f.label);
                     if (f.type === 'checkbox') {
                         let arr = [];
                         if (found && found.valueArr) arr = found.valueArr;
@@ -1078,8 +1094,6 @@ createApp({
         this.loadTasks();
         this.loadComments();
         this.loadAllUsers();
-        // Sync custom fields for view mode
-        this.syncCustomFieldsFromProject();
         await this.loadDepartmentCustomFieldSets();
         this.$nextTick(() => {
             this.initTooltips();

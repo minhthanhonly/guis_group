@@ -398,6 +398,13 @@ class Project extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => $_SESSION['user_id']
         );
+        // Save custom field set id and custom fields JSON if provided
+        if (isset($_POST['department_custom_fields_set_id'])) {
+            $data['department_custom_fields_set_id'] = $_POST['department_custom_fields_set_id'];
+        }
+        if (isset($_POST['custom_fields'])) {
+            $data['custom_fields'] = $_POST['custom_fields'];
+        }
         if(isset($_POST['start_date']) && !empty($_POST['start_date'])){
             $data['start_date'] = date('Y-m-d H:i', strtotime($_POST['start_date']));
         }
