@@ -485,6 +485,14 @@ if (!$project_id) {
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="assets/js/task-manager.js"></script>
 
+
+
 <?php
 $view->footing();
 ?>
+
+
+<script>
+const PROJECT_ID = <?php echo $project_id; ?>;
+</script>
+

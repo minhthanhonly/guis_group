@@ -39,20 +39,7 @@
 <script src="<?=$root?>assets/js/app-chat.js?v=<?=CACHE_VERSION?>"></script>
 <link rel="stylesheet" href="<?=$root?>assets/css/app-chat.css?v=<?=CACHE_VERSION?>">
 <script src="<?=$root?>assets/js/forms-tagify.js"></script>
-<?php
-if(isset($_SESSION['userid'])) {
-?>
-<script>
-    const USER_AUTH_ID = '<?= isset($_SESSION['id']) ? $_SESSION['id'] : '' ?>';
-    const USER_ID = '<?= isset($_SESSION['userid']) ? $_SESSION['userid'] : '' ?>';
-    const USER_GROUP = '<?= isset($_SESSION['group']) ? $_SESSION['group'] : '' ?>';
-    <?php 
-        echo 'const USER_ROLE = "'.$_SESSION['authority'].'";'; 
-    ?>
-</script>
-<?php
-}
-?>
+
 
 <script type="text/javascript" src="<?=$root?>js/library/jquery-ui.min.js"></script>
 <script type="text/javascript" src="<?=$root?>js/application.js?v=<?=CACHE_VERSION?>"></script>

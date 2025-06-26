@@ -50,20 +50,21 @@ if (!$project_id) {
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h5 class="card-title">基本情報</h5>
                         <div>
+                            <button class="btn btn-outline-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalComment" title="コメントを見る">
+                                <i class="fa fa-comment"></i>
+                            </button>
                             <button v-if="!isEditMode" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
                                 <i class="fa fa-copy"></i>
                             </button>
-                            <button v-if="!isEditMode" class="btn btn-outline-primary btn-sm me-2" @click="toggleEditMode">
+                            <button v-if="!isEditMode" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode">
                                 <i class="fa fa-pencil-alt"></i>
                             </button>
-                            <div v-else class="d-flex gap-2">
-                                <button class="btn btn-success btn-sm" @click="saveProject">
-                                    <i class="fa fa-save"></i>
-                                </button>
-                                <button class="btn btn-secondary btn-sm" @click="cancelEdit">
-                                    <i class="fa fa-times"></i>
-                                </button>
-                            </div>
+                            <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject">
+                                <i class="fa fa-save"></i>
+                            </button>
+                            <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit">
+                                <i class="fa fa-times"></i>
+                            </button>  
                             <button v-if="!isEditMode" class="btn btn-outline-danger btn-sm" @click="deleteProject">
                                 <i class="fa fa-trash"></i>
                             </button>
@@ -488,80 +489,8 @@ if (!$project_id) {
                 </div>
             </div> -->
 
-            <!-- Comments Section -->
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">コメント</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-4">
-                        <div class="text-center py-5" v-if="comments.length === 0">
-                            <i class="fa fa-comment-dots fs-1 text-muted"></i>
-                            <p class="text-muted">コメントはまだありません</p>
-                        </div>
-                        <!-- Comments List -->
-                        <div v-else class="position-relative">
-                            <!-- Show more comments button at the top -->
-                            <div v-if="showLoadMoreButton" class="text-center py-2">
-                                <button class="btn btn-outline-secondary btn-sm" @click="loadMoreComments">
-                                    <i class="fa fa-chevron-up"></i> 古いコメントを表示
-                                </button>
-                            </div>
-                            
-                            <!-- Loading indicator for older comments -->
-                            <div v-if="loadingOlderComments" class="text-center py-2">
-                                <div class="spinner-border spinner-border-sm" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                                <small class="text-muted ms-2">古いコメントを読み込み中...</small>
-                            </div>
-                            
-                            <ul class="list-unstyled chat-history" id="chat-history-project" 
-                                style="max-height: 400px; overflow-y: auto;"
-                                @scroll="handleScroll">
-                                <li v-for="comment in displayedComments" :key="comment.id" class="chat-message">
-                                    <div class="d-flex overflow-hidden">
-                                        <div class="user-avatar flex-shrink-0 me-4">
-                                            <div class="avatar avatar-sm" data-bs-toggle="tooltip" :data-bs-original-title="comment.user_name" :data-userid="comment.user_id">
-                                                <img v-if="!comment.avatarError" class="rounded-circle" :src="getAvatarSrc(comment)" :alt="comment.user_name" @error="handleAvatarError(comment)">
-                                                <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment.user_name) }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="chat-message-wrapper flex-grow-1">
-                                            <div class="chat-message-text bg-light rounded-3 p-2">
-                                                <p class="mb-0" v-html="renderMentions(comment.content)"></p>
-                                    </div>
-                                            <div class="text-body-secondary mt-1">
-                                                <small>{{ formatDateTime(comment.created_at) }}</small>
-                                        </div>
-                                        </div>
-                                    </div>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                    
-                    <!-- Comment Input -->
-                    <div class="d-flex gap-3">
-                        <div class="flex-grow-1 position-relative">
-                            <div class="input-group">
-                                <div class="form-control" 
-                                     contenteditable="true"
-                                     data-mention
-                                     data-html-mention
-                                     @input="onCommentInput"
-                                     placeholder="コメントを入力... @でメンション"
-                                     style="min-height: 38px; max-height: 120px; overflow-y: auto; white-space: pre-wrap;"></div>
-                                <button class="btn btn-primary" 
-                                        @click="addComment"
-                                        :disabled="!hasCommentContent()">
-                                    <i class="fa fa-paper-plane"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- Nút mở modal comment -->
+            
         </div>
     </div>
 
@@ -615,46 +544,6 @@ $view->footing();
     word-break: break-word;
 }
 
-/* Chat interface styles */
-.chat-history {
-    margin: 0;
-    padding: 0;
-}
-
-.chat-message {
-    margin-bottom: 1.5rem;
-    padding: 0;
-}
-
-.chat-message:last-child {
-    margin-bottom: 0;
-}
-
-.user-avatar {
-    margin-right: 1rem;
-}
-
-.chat-message-wrapper {
-    max-width: 80%;
-}
-
-.chat-message-text {
-    border-radius: 0.75rem;
-    padding: 0.75rem 1rem;
-    margin-bottom: 0.25rem;
-}
-
-.chat-message-text p {
-    margin: 0;
-    line-height: 1.4;
-    word-wrap: break-word;
-}
-
-.text-body-secondary small {
-    font-size: 0.75rem;
-    color: #6c757d;
-}
-
 /* Edit mode styles */
 .edit-mode .select2-selection,
 .edit-mode .form-select:not([readonly]) ,
@@ -674,9 +563,9 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/highlight/highlight.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/katex.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/css/mention.css" />
+
 <script src="<?=ROOT?>assets/vendor/libs/highlight/highlight.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
-<script src="<?=ROOT?>assets/js/mention.js"></script>
 <script src="assets/js/project-detail.js"></script>
+<?php include(dirname(__DIR__).'/view/comment-modal.php'); ?>

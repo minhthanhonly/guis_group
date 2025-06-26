@@ -420,7 +420,7 @@ class MentionManager {
         this.dropdownElement.style.top = `${inputRect.bottom + window.scrollY}px`;
         this.dropdownElement.style.left = `${inputRect.left + window.scrollX}px`;
         this.dropdownElement.style.width = `${inputRect.width}px`;
-        this.dropdownElement.style.zIndex = '1050';
+        this.dropdownElement.style.zIndex = '99999';
     }
     
     updateDropdownSelection() {
@@ -668,7 +668,12 @@ class MentionManager {
 
 // Auto-initialize for inputs with data-mention attribute
 document.addEventListener('DOMContentLoaded', () => {
-    window.mentionManager = new MentionManager();
+    if (typeof window !== 'undefined' && window.MentionManager) {
+        // Đã khai báo, không khai báo lại
+    } else {
+        window.mentionManager = new MentionManager();
+        window.MentionManager = MentionManager;
+    }
 });
 
 // Export for module systems
