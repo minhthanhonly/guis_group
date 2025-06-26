@@ -18,9 +18,9 @@ $view->heading('プロジェクト管理');
                         <a href="#" class="nav-link" @click="viewProjects(department)" >{{ department.name }}</a>
                     </li>
                 </ul>
-                <button class="btn btn-primary" @click="openNewProjectModal">
+                <a :href="createUrl" class="btn btn-primary">
                     <i class="fa fa-plus"></i> 新規プロジェクト
-                </button>
+                </a>
             </div>
         </div>
     </nav>

@@ -91,10 +91,28 @@ createApp({
                 }
                 await this.loadMembers();
                 // Ensure Tagify is updated after loading project and team_list
-                this.$nextTick(() => { this.initTagify(); });
+                this.$nextTick(() => { 
+                    this.initTagify(); 
+                    this.setConnectedUsers();
+                });
             } catch (error) {
                 console.error('Error loading project:', error);
                 alert('プロジェクトの読み込みに失敗しました。');
+            }
+        },
+        setConnectedUsers() {
+            const connectedUsers = JSON.parse(sessionStorage.getItem('connected_users'));
+            if (connectedUsers) {
+                document.querySelectorAll('.avatar[data-userid]').forEach(avatar => {
+                    const uid = avatar.getAttribute('data-userid');
+                    if (connectedUsers.includes(uid)) {
+                        avatar.classList.add('avatar-online');
+                        avatar.classList.remove('avatar-offline');
+                    } else {
+                        avatar.classList.remove('avatar-online');
+                        avatar.classList.add('avatar-offline');
+                    }
+                });
             }
         },
         async loadTeamListByIds(teamIdsStr) {
@@ -184,18 +202,52 @@ createApp({
             }
             try {
                 const formData = new FormData();
+                formData.append('model', 'project');
+                formData.append('method', 'delete');
                 formData.append('id', this.projectId);
-                await axios.post('/api/index.php?model=project&method=delete', formData);
-                alert('プロジェクトを削除しました。');
+                await axios.post('/api/index.php', formData);
+                alert('プロジェクトが削除されました。');
                 window.location.href = 'index.php';
             } catch (error) {
                 console.error('Error deleting project:', error);
-                if (error.response?.data?.error) {
-                    alert(error.response.data.error);
-                } else {
-                    alert('プロジェクトの削除に失敗しました。');
-                }
+                alert('プロジェクトの削除に失敗しました。');
             }
+        },
+        copyProject() {
+            // Prepare project data for copying
+            const projectData = {
+                category_id: this.newProject.category_id,
+                company_name: this.newProject.company_name,
+                customer_id: this.newProject.customer_id,
+                project_number: this.project.project_number,
+                name: this.project.name + ' (コピー)',
+                department_id: this.project.department_id,
+                building_branch: this.project.building_branch,
+                building_size: this.project.building_size,
+                building_type: this.project.building_type,
+                building_number: this.project.building_number,
+                priority: this.project.priority,
+                status: 'draft', // Set to draft for new copy
+                project_order_type: this.project.project_order_type,
+                start_date: this.project.start_date,
+                end_date: this.project.end_date,
+                progress: 0, // Reset progress
+                description: this.project.description,
+                department_custom_fields_set_id: this.project.department_custom_fields_set_id,
+                teams: this.project.teams,
+                managers: this.managers.map(m => m.user_id).join(','),
+                members: this.members.map(m => m.user_id).join(','),
+                custom_fields: this.customFields
+            };
+            
+            // Store the data in sessionStorage
+            sessionStorage.setItem('copyProjectData', JSON.stringify(projectData));
+            
+            // Redirect to create page with department_id if available
+            const url = this.project.department_id 
+                ? `create.php?department_id=${this.project.department_id}` 
+                : 'create.php';
+            window.location.href = url;
         },
         formatDate(date) {
             if (!date) return '-';
@@ -353,21 +405,21 @@ createApp({
             }
         },
         async loadCompanies() {
-            if (!this.newProject.category_id) {
+            if (!this.project.department_id) {
                 this.companies = [];
                 return;
             }
-            const res = await axios.get(`/api/index.php?model=customer&method=list_companies_by_category&category_id=${this.newProject.category_id}`);
+            const res = await axios.get(`/api/index.php?model=customer&method=list_companies_by_department&department_id=${this.project.department_id}`);
             if (res.data && res.data.data) {
                 this.companies = res.data.data;
             }
         },
         async loadContacts() {
-            if (!this.newProject.company_name) {
+            if (!this.project.department_id) {
                 this.contacts = [];
                 return;
             }
-            const res = await axios.get(`/api/index.php?model=customer&method=list_contacts_by_company&company_name=${encodeURIComponent(this.newProject.company_name)}`);
+            const res = await axios.get(`/api/index.php?model=customer&method=list_contacts_by_department&department_id=${this.project.department_id}`);
             if (res.data && res.data.data) {
                 this.contacts = res.data.data;
             }
@@ -375,12 +427,12 @@ createApp({
         onCategoryChange() {
             this.newProject.company_name = '';
             this.newProject.customer_id = '';
-            this.loadCompanies();
+            this.loadCompaniesByCategory();
             this.contacts = [];
         },
         onCompanyChange() {
             this.newProject.customer_id = '';
-            this.loadContacts();
+            this.loadContactsByCompany();
         },
         async updateProgress() {
             if (this.isEditMode) {
@@ -654,6 +706,7 @@ createApp({
                 formData.append('building_size', this.project.building_size || '');
                 formData.append('building_type', this.project.building_type || '');
                 formData.append('building_number', this.project.building_number || '');
+                formData.append('project_number', this.project.project_number || '');
                 formData.append('progress', this.project.progress || '');
                 formData.append('priority', this.project.priority || '');
                 formData.append('status', this.project.status || '');
@@ -668,7 +721,7 @@ createApp({
                 formData.append('custom_fields', this.project.custom_fields);
                 formData.append('description', this.project.description || '');
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
-                if (response.data && response.data.success !== false) {
+                if (response.data && response.data.status == 'success') {
                     this.isEditMode = false;
                     this.originalProject = null;
                     showMessage('プロジェクトを更新しました。');
@@ -825,16 +878,22 @@ createApp({
                 const html = this.decodeHtmlEntities(this.project.description);
                 this.quillInstance.root.innerHTML = html;
             }
+            
+            // Add debounce to prevent too frequent updates
+            let debounceTimer;
             this.quillInstance.on('text-change', () => {
-                const html = this.quillInstance.getSemanticHTML();
-                this.project.description = html;
-                // Also update hidden textarea for v-model
-                const textarea = document.getElementById('quill_description_textarea');
-                if (textarea) {
-                    textarea.value = html;
-                    const event = new Event('input', { bubbles: true });
-                    textarea.dispatchEvent(event);
-                }
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    const html = this.quillInstance.getSemanticHTML();
+                    this.project.description = html;
+                    // Also update hidden textarea for v-model
+                    const textarea = document.getElementById('quill_description_textarea');
+                    if (textarea) {
+                        textarea.value = html;
+                        const event = new Event('input', { bubbles: true });
+                        textarea.dispatchEvent(event);
+                    }
+                }, 300); // 300ms debounce
             });
         },
         destroyQuillEditor() {
@@ -901,6 +960,38 @@ createApp({
                 arr = raw;
             }
             return arr;
+        },
+        async loadCompaniesByCategory() {
+            if (!this.newProject.category_id) {
+                this.companies = [];
+                return;
+            }
+            const params = new URLSearchParams({
+                category_id: this.newProject.category_id
+            });
+            if (this.project.department_id) {
+                params.append('department_id', this.project.department_id);
+            }
+            const res = await axios.get(`/api/index.php?model=customer&method=list_companies_by_category&${params.toString()}`);
+            if (res.data && res.data.data) {
+                this.companies = res.data.data;
+            }
+        },
+        async loadContactsByCompany() {
+            if (!this.newProject.company_name) {
+                this.contacts = [];
+                return;
+            }
+            const params = new URLSearchParams({
+                company_name: this.newProject.company_name
+            });
+            if (this.project.department_id) {
+                params.append('department_id', this.project.department_id);
+            }
+            const res = await axios.get(`/api/index.php?model=customer&method=list_contacts_by_company&${params.toString()}`);
+            if (res.data && res.data.data) {
+                this.contacts = res.data.data;
+            }
         },
     },
     watch: {
@@ -989,11 +1080,15 @@ createApp({
                                 dataType: 'json',
                                 delay: 250,
                                 data: (params) => {
-                                    return {
+                                    const data = {
                                         search: params.term,
                                         page: params.page || 1,
                                         category_id: this.newProject.category_id
                                     };
+                                    if (this.project.department_id) {
+                                        data.department_id = this.project.department_id;
+                                    }
+                                    return data;
                                 },
                                 processResults: function(data) {
                                     return {
@@ -1024,11 +1119,15 @@ createApp({
                                 dataType: 'json',
                                 delay: 250,
                                 data: (params) => {
-                                    return {
+                                    const data = {
                                         search: params.term,
                                         page: params.page || 1,
                                         company_name: this.newProject.company_name
                                     };
+                                    if (this.project.department_id) {
+                                        data.department_id = this.project.department_id;
+                                    }
+                                    return data;
                                 },
                                 processResults: function(data) {
                                     return {
@@ -1092,6 +1191,15 @@ createApp({
         },
         'project.department_id': function() {
             this.loadDepartmentCustomFieldSets();
+            // Load companies and contacts for the selected department
+            if (this.project && this.project.department_id) {
+                this.loadCompanies();
+                this.loadContacts();
+            } else {
+                // Clear companies and contacts when no department is selected
+                this.companies = [];
+                this.contacts = [];
+            }
         },
         'project.department_custom_fields_set_id': function(newVal) {
             if (this.isEditMode && newVal && this.selectedCustomFieldSet) {
@@ -1132,9 +1240,13 @@ createApp({
             }
         },
         'customFields': {
-            handler(newVal) {
+            handler(newVal, oldVal) {
                 // Keep value and valueArr in sync for checkboxes
                 if (!this.selectedCustomFieldSet) return;
+                
+                // Only process if there are actual changes
+                if (JSON.stringify(newVal) === JSON.stringify(oldVal)) return;
+                
                 this.selectedCustomFieldSet.fields.forEach((f, idx) => {
                     if (f.type === 'checkbox' && this.customFields[idx]) {
                         // If valueArr changes, update value
@@ -1158,8 +1270,12 @@ createApp({
             this.newProject.company_name = this.project.company_name;
             this.newProject.customer_id = this.project.customer_id;
         }
-        await this.loadCompanies();
-        await this.loadContacts();
+        
+        // Only load companies and contacts if department is set
+        if (this.project && this.project.department_id) {
+            await this.loadCompanies();
+            await this.loadContacts();
+        }
         
         this.loadTasks();
         this.loadComments();

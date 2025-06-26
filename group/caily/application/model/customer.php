@@ -377,10 +377,14 @@ class Customer extends ApplicationModel {
         );
         try {
             $category_id = $_GET['category_id'];
+            $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
             $search = $_GET['search'];
             $where = '';
             if ($category_id) {
                 $where .= " AND category_id = '$category_id'";
+            }
+            if ($department_id) {
+                $where .= " AND FIND_IN_SET('$department_id', guis_department) > 0";
             }
             if ($search) {
                 $where .= " AND (company_name LIKE '%$search%' OR company_name_kana LIKE '%$search%')";
@@ -420,10 +424,14 @@ class Customer extends ApplicationModel {
         );
         try {
             $company_name = $_GET['company_name'];
+            $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
             $search = $_GET['search'];
             $where = '';
             if ($company_name) {
                 $where .= " AND company_name = '$company_name'";
+            }
+            if ($department_id) {
+                $where .= " AND FIND_IN_SET('$department_id', guis_department) > 0";
             }
             if ($search) {
                 $where .= " AND (name LIKE '%$search%' OR name_kana LIKE '%$search%')";
@@ -444,6 +452,98 @@ class Customer extends ApplicationModel {
                 $hash['data'] = $result;
             } else {
                 throw new Exception('担当者名の取得に失敗しました。');
+            }
+        } catch (Exception $e) {
+            $hash['data'] = [];
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    // Get companies by department
+    function list_companies_by_department() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+            $search = isset($_GET['search']) ? $_GET['search'] : '';
+            
+            if (!$department_id) {
+                throw new Exception('部署IDが必要です。');
+            }
+
+            $where = "FIND_IN_SET('$department_id', guis_department) > 0";
+            if ($search) {
+                $where .= " AND (company_name LIKE '%$search%' OR company_name_kana LIKE '%$search%')";
+            }
+
+            $query = sprintf(
+                "SELECT DISTINCT company_name, id
+                FROM %scustomer 
+                WHERE %s
+                AND company_name IS NOT NULL 
+                AND company_name != '' 
+                ORDER BY company_name ASC",
+                DB_PREFIX,
+                $where
+            );
+            $result = $this->fetchAll($query);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                $hash['data'] = $result;
+            } else {
+                $hash['data'] = [];
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+            }
+        } catch (Exception $e) {
+            $hash['data'] = [];
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    // Get contacts by department
+    function list_contacts_by_department() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+            $search = isset($_GET['search']) ? $_GET['search'] : '';
+            
+            if (!$department_id) {
+                throw new Exception('部署IDが必要です。');
+            }
+
+            $where = "FIND_IN_SET('$department_id', guis_department) > 0";
+            if ($search) {
+                $where .= " AND (name LIKE '%$search%' OR name_kana LIKE '%$search%')";
+            }
+
+            $query = sprintf(
+                "SELECT id, name, company_name
+                FROM %scustomer 
+                WHERE %s
+                AND name IS NOT NULL 
+                AND name != '' 
+                ORDER BY name ASC",
+                DB_PREFIX,
+                $where
+            );
+            $result = $this->fetchAll($query);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                $hash['data'] = $result;
+            } else {
+                $hash['data'] = [];
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
             }
         } catch (Exception $e) {
             $hash['data'] = [];

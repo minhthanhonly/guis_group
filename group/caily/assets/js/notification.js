@@ -391,6 +391,8 @@ class NotificationManager {
         ref.on('value', (snapshot) => {
             const connected = snapshot.val() || {};
             const userIds = Object.keys(connected);
+            //save to session storage
+            sessionStorage.setItem('connected_users', JSON.stringify(userIds));
             // Tìm tất cả .avatar có data-userid
             document.querySelectorAll('.avatar[data-userid]').forEach(avatar => {
                 const uid = avatar.getAttribute('data-userid');

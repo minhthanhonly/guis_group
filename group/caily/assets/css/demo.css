@@ -408,5 +408,8 @@ li.storageprevious {
     box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
 }
 .select2-container{
+	z-index: 9998!important;
+}
+.swal2-container{
 	z-index: 9999!important;
 }

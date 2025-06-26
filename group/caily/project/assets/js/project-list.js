@@ -663,6 +663,14 @@ var projectTable;
                 formValidator: null
             }
         },
+        computed: {
+            createUrl() {
+               if(this.selectedDepartment) {
+                return `create.php?department_id=${this.selectedDepartment.id}`;
+               }
+               return `create.php`;
+            }
+        },
         mounted() {
             this.loadDepartments();
 

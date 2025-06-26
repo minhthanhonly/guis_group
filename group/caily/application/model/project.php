@@ -141,19 +141,19 @@ class Project extends ApplicationModel {
         );
     }
 
-    function add() {
-        // Lấy dữ liệu từ request
+
+    function create($params = null) {
+    
+            // Get data from $_POST if no params provided
         $data = array(
             'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
-            'name' => $_POST['name'],
+            'name' => isset($_POST['name']) ? $_POST['name'] : '',
             'description' => isset($_POST['description']) ? $_POST['description'] : '',
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
-            'start_date' => isset($_POST['start_date']) && !empty($_POST['start_date']) ? date('Y-m-d', strtotime($_POST['start_date'])) : null,
-            'end_date' => isset($_POST['end_date']) && !empty($_POST['end_date']) ? date('Y-m-d', strtotime($_POST['end_date'])) : null,
-            'department_id' => isset($_POST['department_id']) ? $_POST['department_id'] : null,
-            'progress' => isset($_POST['progress']) ? $_POST['progress'] : 0,
-            'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
+            'department_id' => isset($_POST['department_id']) ? intval($_POST['department_id']) : null,
+            'progress' => isset($_POST['progress']) ? intval($_POST['progress']) : 0,
+            'estimated_hours' => isset($_POST['estimated_hours']) ? floatval($_POST['estimated_hours']) : 0,
             'actual_hours' => 0,
             'customer_id' => isset($_POST['customer_id']) ? $_POST['customer_id'] : null,
             'building_size' => isset($_POST['building_size']) ? $_POST['building_size'] : '',
@@ -161,36 +161,137 @@ class Project extends ApplicationModel {
             'building_number' => isset($_POST['building_number']) ? $_POST['building_number'] : '',
             'building_branch' => isset($_POST['building_branch']) ? $_POST['building_branch'] : '',
             'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
-            'amount' => isset($_POST['amount']) ? $_POST['amount'] : 0,
-            'teams' => isset($_POST['team']) ? implode(',',$_POST['team']) : '',
+            'amount' => isset($_POST['amount']) ? floatval($_POST['amount']) : 0,
+            'teams' => isset($_POST['teams']) ? $_POST['teams'] : '',
             'created_by' => $_SESSION['user_id'],
             'created_at' => date('Y-m-d H:i:s'),
         );
 
-        
-        $project_id = $this->query_insert($data);
-        
-        // Thêm members nếu có
-        if ($project_id && isset($_POST['members']) && is_array($_POST['members'])) {
-            foreach ($_POST['members'] as $user_id) {
-                $this->addMember($project_id, $user_id);
-            }
+        // Save custom field set id and custom fields JSON if provided
+        if (isset($_POST['department_custom_fields_set_id']) && $_POST['department_custom_fields_set_id'] != '') {
+            $data['department_custom_fields_set_id'] = $_POST['department_custom_fields_set_id'];
         }
-        if ($project_id && isset($_POST['manager']) && is_array($_POST['manager'])) {
-            foreach ($_POST['manager'] as $user_id) {
-                $this->addMember($project_id, $user_id, 'manager');
-            }
+        if (isset($_POST['custom_fields']) && $_POST['custom_fields'] != '') {
+            $data['custom_fields'] = $_POST['custom_fields'];
         }
+        if(isset($_POST['start_date']) && $_POST['start_date'] != ''){
+            $data['start_date'] = date('Y-m-d H:i', strtotime($_POST['start_date']));
+        }
+        if(isset($_POST['actual_end_date']) && $_POST['actual_end_date'] != ''){
+            $data['actual_end_date'] = date('Y-m-d H:i', strtotime($_POST['actual_end_date']));
+        }
+        if(isset($_POST['end_date']) && $_POST['end_date'] != ''){
+            $data['end_date'] = date('Y-m-d H:i', strtotime($_POST['end_date']));
+        }
+       
 
-        if($project_id){
+        // Validate required fields
+        if (empty($data['name'])) {
             return [
-                'status' => 'success',
+                'status' => 'error',
+                'message' => 'Project name is required'
             ];
         }
 
+        // Insert project data
+        $project_id = $this->query_insert($data);
+        
+        if (!$project_id) {
+            return [
+                'status' => 'error',
+                'message' => 'Failed to create project'
+            ];
+        }
+
+        // Add members if provided
+        if (isset($_POST['members']) && !empty($_POST['members'])) {
+            $members = explode(',', $_POST['members']);
+            foreach ($members as $user_id) {
+                if (!empty($user_id)) {
+                    $this->addMember($project_id, intval($user_id), 'member');
+                }
+            }
+        }
+
+        // Add managers if provided
+        if (isset($_POST['managers']) && !empty($_POST['managers'])) {
+            $managers = explode(',', $_POST['managers']);
+            foreach ($managers as $user_id) {
+                if (!empty($user_id)) {
+                    $this->addMember($project_id, intval($user_id), 'manager');
+                }
+            }
+        }
+
         return [
-            'status' => 'error',
+            'status' => 'success',
+            'project_id' => $project_id,
+            'message' => 'Project created successfully'
         ];
+    }
+
+
+    
+    function update() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) return ['status' => 'error', 'error' => 'No project id'];
+        
+        $data = array(
+            'name' => isset($_POST['name']) ? $_POST['name'] : '',
+            'description' => isset($_POST['description']) ? $_POST['description'] : '',
+            'building_branch' => isset($_POST['building_branch']) ? $_POST['building_branch'] : '',
+            'building_size' => isset($_POST['building_size']) ? $_POST['building_size'] : '',
+            'building_type' => isset($_POST['building_type']) ? $_POST['building_type'] : '',
+            'building_number' => isset($_POST['building_number']) ? $_POST['building_number'] : '',
+            'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
+            'progress' => isset($_POST['progress']) ? $_POST['progress'] : 0,
+            'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
+            'teams' => isset($_POST['teams']) ? $_POST['teams'] : '',
+            'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
+            'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
+            'customer_id' => isset($_POST['customer_id']) ? $_POST['customer_id'] : '',
+            'updated_at' => date('Y-m-d H:i:s'),
+            'updated_by' => $_SESSION['user_id']
+        );
+        // Save custom field set id and custom fields JSON if provided
+        if (isset($_POST['department_custom_fields_set_id']) && $_POST['department_custom_fields_set_id'] != '') {
+            $data['department_custom_fields_set_id'] = $_POST['department_custom_fields_set_id'];
+        }
+        if (isset($_POST['custom_fields']) && $_POST['custom_fields'] != '') {
+            $data['custom_fields'] = $_POST['custom_fields'];
+        }
+        if(isset($_POST['start_date']) && $_POST['start_date'] != ''){
+            $data['start_date'] = date('Y-m-d H:i', strtotime($_POST['start_date']));
+        }
+        if(isset($_POST['actual_end_date']) && $_POST['actual_end_date'] != ''){
+            $data['actual_end_date'] = date('Y-m-d H:i', strtotime($_POST['actual_end_date']));
+        }
+        if(isset($_POST['end_date']) && $_POST['end_date'] != ''){
+            $data['end_date'] = date('Y-m-d H:i', strtotime($_POST['end_date']));
+        }
+        $result = $this->query_update($data, ['id' => $id]);
+
+        if ($result && isset($_POST['members'])) {
+            $members = explode(',', $_POST['members']);
+            // Xóa members cũ
+            $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id));
+            // Thêm members mới
+            foreach ($members as $user_id) {
+                $this->addMember($id, $user_id);
+            }
+        }
+       
+        if ($result && isset($_POST['managers'])) {
+            $managers = explode(',', $_POST['managers']);
+            foreach ($managers as $user_id) {
+                $this->addMember($id, $user_id, 'manager');
+            }
+        }
+        if ($result) {
+            return ['status' => 'success'];
+        } else {
+            return ['status' => 'error', 'error' => 'Update failed'];
+        }
     }
 
 
@@ -376,67 +477,6 @@ class Project extends ApplicationModel {
         $result = $this->query_insert($commentData);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
         return $result;
-    }
-
-    function update() {
-        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
-        if (!$id) return ['success' => false, 'error' => 'No project id'];
-        
-        $data = array(
-            'name' => isset($_POST['name']) ? $_POST['name'] : '',
-            'description' => isset($_POST['description']) ? $_POST['description'] : '',
-            'building_branch' => isset($_POST['building_branch']) ? $_POST['building_branch'] : '',
-            'building_size' => isset($_POST['building_size']) ? $_POST['building_size'] : '',
-            'building_type' => isset($_POST['building_type']) ? $_POST['building_type'] : '',
-            'building_number' => isset($_POST['building_number']) ? $_POST['building_number'] : '',
-            'progress' => isset($_POST['progress']) ? $_POST['progress'] : 0,
-            'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
-            'teams' => isset($_POST['teams']) ? $_POST['teams'] : '',
-            'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
-            'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
-            'customer_id' => isset($_POST['customer_id']) ? $_POST['customer_id'] : '',
-            'updated_at' => date('Y-m-d H:i:s'),
-            'updated_by' => $_SESSION['user_id']
-        );
-        // Save custom field set id and custom fields JSON if provided
-        if (isset($_POST['department_custom_fields_set_id'])) {
-            $data['department_custom_fields_set_id'] = $_POST['department_custom_fields_set_id'];
-        }
-        if (isset($_POST['custom_fields'])) {
-            $data['custom_fields'] = $_POST['custom_fields'];
-        }
-        if(isset($_POST['start_date']) && !empty($_POST['start_date'])){
-            $data['start_date'] = date('Y-m-d H:i', strtotime($_POST['start_date']));
-        }
-        if(isset($_POST['actual_end_date']) && !empty($_POST['actual_end_date'])){
-            $data['actual_end_date'] = date('Y-m-d H:i', strtotime($_POST['actual_end_date']));
-        }
-        if(isset($_POST['end_date']) && !empty($_POST['end_date'])){
-            $data['end_date'] = date('Y-m-d H:i', strtotime($_POST['end_date']));
-        }
-        $result = $this->query_update($data, ['id' => $id]);
-
-        if ($result && isset($_POST['members'])) {
-            $members = explode(',', $_POST['members']);
-            // Xóa members cũ
-            $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id));
-            // Thêm members mới
-            foreach ($members as $user_id) {
-                $this->addMember($id, $user_id);
-            }
-        }
-       
-        if ($result && isset($_POST['managers'])) {
-            $managers = explode(',', $_POST['managers']);
-            foreach ($managers as $user_id) {
-                $this->addMember($id, $user_id, 'manager');
-            }
-        }
-        if ($result) {
-            return ['success' => true];
-        } else {
-            return ['success' => false, 'error' => 'Update failed'];
-        }
     }
 
     function updateTeams($params = null) {

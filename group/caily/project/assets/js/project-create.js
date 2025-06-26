@@ -1,0 +1,831 @@
+const { createApp } = Vue;
+
+createApp({
+    data() {
+        return {
+            projectId: null, // No project ID for creation
+            project: {
+                name: '',
+                project_number: '',
+                building_branch: '',
+                building_size: '',
+                building_type: '',
+                building_number: '',
+                progress: 0,
+                priority: 'medium',
+                status: 'draft',
+                department_id: '',
+                start_date: '',
+                end_date: '',
+                project_order_type: '',
+                department_custom_fields_set_id: '',
+                custom_fields: '',
+                description: ''
+            },
+            department: null,
+            managers: [],
+            members: [],
+            tasks: [],
+            comments: [],
+            team_list: [],
+            newComment: '',
+            isEditMode: true, // Always in edit mode for creation
+            originalProject: null,
+            stats: {
+                totalTasks: 0,
+                completedTasks: 0,
+                timeTracked: 0,
+                totalDays: 0
+            },
+            statuses: [
+                { value: 'draft', label: '下書き', color: 'secondary' },
+                { value: 'open', label: 'オープン', color: 'info' },
+                { value: 'confirming', label: '確認中', color: 'warning' },
+                { value: 'in_progress', label: '進行中', color: 'primary' },
+                { value: 'paused', label: '一時停止', color: 'warning' },
+                { value: 'completed', label: '完了', color: 'success' },
+                { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+            ],
+            priorities: [
+                { value: 'low', label: '低', color: 'secondary' },
+                { value: 'medium', label: '中', color: 'primary' },
+                { value: 'high', label: '高', color: 'warning' },
+                { value: 'urgent', label: '緊急', color: 'danger' }
+            ],
+            categories: [],
+            companies: [],
+            contacts: [],
+            departments: [],
+            newProject: {
+                category_id: '',
+                company_name: '',
+                customer_id: '',
+                members: '',
+                managers: '',
+                teams: '',
+            },
+            allTeams: [],
+            showMemberModal: false,
+            memberSelectType: '',
+            memberSelected: [],
+            allUsers: [],
+            departmentUsers: [],
+            membersTagify: null,
+            prevTeamIds: [],
+            managerTagify: null,
+            quillInstance: null,
+            projectOrderTypeTagify: null,
+            customFields: [],
+            departmentCustomFieldSets: [],
+        }
+    },
+    computed: {
+        isManager() {
+            if(USER_ROLE == `administrator`) return true;
+            return true; // Allow creation for all users
+        },
+        filteredTeams() {
+            if (!this.project || !this.project.department_id) return this.allTeams;
+            return this.allTeams.filter(team => String(team.department_id) === String(this.project.department_id));
+        },
+        selectedCustomFieldSet() {
+            if (!this.project || !this.project.department_custom_fields_set_id) return null;
+            return this.departmentCustomFieldSets.find(set => String(set.id) === String(this.project.department_custom_fields_set_id)) || null;
+        },
+        presetDepartmentId() {
+            return PRESET_DEPARTMENT_ID && PRESET_DEPARTMENT_ID > 0;
+        },
+    },
+    methods: {
+        async loadProject() {
+            // For creation, initialize with default values
+            this.project = {
+                name: '',
+                project_number: '',
+                building_branch: '',
+                building_size: '',
+                building_type: '',
+                building_number: '',
+                progress: 0,
+                priority: 'medium',
+                status: 'draft',
+                department_id: PRESET_DEPARTMENT_ID || '',
+                start_date: '',
+                end_date: '',
+                project_order_type: '',
+                department_custom_fields_set_id: '',
+                custom_fields: '',
+                description: ''
+            };
+            this.project.team_list = [];
+            
+            // Check for copied project data
+            this.loadCopiedProjectData();
+        },
+        loadCopiedProjectData() {
+            const copiedData = sessionStorage.getItem('copyProjectData');
+            if (copiedData) {
+                try {
+                    const data = JSON.parse(copiedData);
+                    
+                    // Populate project data
+                    this.project.name = data.name || '';
+                    this.project.project_number = data.project_number || '';
+                    this.project.building_branch = data.building_branch || '';
+                    this.project.building_size = data.building_size || '';
+                    this.project.building_type = data.building_type || '';
+                    this.project.building_number = data.building_number || '';
+                    this.project.priority = data.priority || 'medium';
+                    this.project.status = data.status || 'draft';
+                    this.project.department_id = data.department_id || PRESET_DEPARTMENT_ID || '';
+                    this.project.start_date = data.start_date || '';
+                    this.project.end_date = data.end_date || '';
+                    this.project.progress = data.progress || 0;
+                    this.project.project_order_type = data.project_order_type || '';
+                    this.project.department_custom_fields_set_id = data.department_custom_fields_set_id || '';
+                    this.project.description = data.description || '';
+                    
+                    // Populate newProject data
+                    this.newProject.category_id = data.category_id || '';
+                    this.newProject.company_name = data.company_name || '';
+                    this.newProject.customer_id = data.customer_id || '';
+                    this.newProject.teams = data.teams || '';
+                    this.newProject.managers = data.managers || '';
+                    this.newProject.members = data.members || '';
+                    
+                    // Load custom fields if available
+                    if (data.custom_fields && Array.isArray(data.custom_fields)) {
+                        this.customFields = data.custom_fields;
+                    }
+                    
+                    // Clear the copied data from sessionStorage
+                    sessionStorage.removeItem('copyProjectData');
+                    
+                    console.log('Copied project data loaded successfully');
+                } catch (error) {
+                    console.error('Error loading copied project data:', error);
+                    sessionStorage.removeItem('copyProjectData');
+                }
+            }
+        },
+        async loadCategories() {
+            const res = await axios.get('/api/index.php?model=customer&method=list_categories');
+            if (res.data && res.data.data) {
+                this.categories = res.data.data;
+            }
+        },
+        async loadCompanies() {
+            if (!this.project.department_id) {
+                this.companies = [];
+                return;
+            }
+            const res = await axios.get(`/api/index.php?model=customer&method=list_companies_by_department&department_id=${this.project.department_id}`);
+            if (res.data && res.data.data) {
+                this.companies = res.data.data;
+            }
+        },
+        async loadContacts() {
+            if (!this.project.department_id) {
+                this.contacts = [];
+                return;
+            }
+            const res = await axios.get(`/api/index.php?model=customer&method=list_contacts_by_department&department_id=${this.project.department_id}`);
+            if (res.data && res.data.data) {
+                this.contacts = res.data.data;
+            }
+        },
+        async loadCompaniesByCategory() {
+            if (!this.newProject.category_id) {
+                this.companies = [];
+                return;
+            }
+            const params = new URLSearchParams({
+                category_id: this.newProject.category_id
+            });
+            if (this.project.department_id) {
+                params.append('department_id', this.project.department_id);
+            }
+            const res = await axios.get(`/api/index.php?model=customer&method=list_companies_by_category&${params.toString()}`);
+            if (res.data && res.data.data) {
+                this.companies = res.data.data;
+            }
+        },
+        async loadContactsByCompany() {
+            if (!this.newProject.company_name) {
+                this.contacts = [];
+                return;
+            }
+            const params = new URLSearchParams({
+                company_name: this.newProject.company_name
+            });
+            if (this.project.department_id) {
+                params.append('department_id', this.project.department_id);
+            }
+            const res = await axios.get(`/api/index.php?model=customer&method=list_contacts_by_company&${params.toString()}`);
+            if (res.data && res.data.data) {
+                this.contacts = res.data.data;
+            }
+        },
+        async loadDepartments() {
+            try {
+                const res = await axios.get('/api/index.php?model=department&method=list');
+                if (res.data && Array.isArray(res.data)) {
+                    this.departments = res.data;
+                } else {
+                    this.departments = [];
+                }
+            } catch (e) {
+                this.departments = [];
+            }
+        },
+        onCategoryChange() {
+            this.newProject.company_name = '';
+            this.newProject.customer_id = '';
+            this.loadCompaniesByCategory();
+            this.contacts = [];
+        },
+        onCompanyChange() {
+            this.newProject.customer_id = '';
+            this.loadContactsByCompany();
+        },
+        onDepartmentChange() {
+            this.loadDepartmentCustomFieldSets();
+        },
+        async loadAllTeams() {
+            try {
+                const res = await axios.get('/api/index.php?model=team&method=list');
+                if (res.data && Array.isArray(res.data)) {
+                    this.allTeams = res.data;
+                } else {
+                    this.allTeams = [];
+                }
+            } catch (e) {
+                this.allTeams = [];
+            }
+        },
+        getStatusLabel(status) {
+            const s = this.statuses.find(s => s.value === status);
+            return s ? s.label : status;
+        },
+        getStatusButtonClass(status) {
+            const s = this.statuses.find(s => s.value === status);
+            return `btn-${s?.color || 'secondary'}`;
+        },
+        getPriorityLabel(priority) {
+            const p = this.priorities.find(p => p.value === priority);
+            return p ? p.label : priority;
+        },
+        getPriorityButtonClass(priority) {
+            const p = this.priorities.find(p => p.value === priority);
+            return `btn-${p?.color || 'secondary'}`;
+        },
+        selectStatus(status) {
+            this.project.status = status;
+            // Close dropdown
+            const dropdownElement = document.querySelector('#statusDropdown');
+            if (dropdownElement) {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                if (dropdown) {
+                    dropdown.hide();
+                }
+            }
+        },
+        selectPriority(priority) {
+            this.project.priority = priority;
+            // Close dropdown
+            const dropdownElement = document.querySelector('#priorityDropdown');
+            if (dropdownElement) {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                if (dropdown) {
+                    dropdown.hide();
+                }
+            }
+        },
+        toAPIDate(str) {
+            if (!str) return '';
+            return str.replace(/\//g, '-');
+        },
+        prepareCustomFieldsForSave() {
+            if (!this.selectedCustomFieldSet) return [];
+            return this.selectedCustomFieldSet.fields.map((f, idx) => {
+                let value = '';
+                if (f.type === 'checkbox') {
+                    value = Array.isArray(this.customFields[idx].valueArr) ? this.customFields[idx].valueArr.join(',') : '';
+                } else {
+                    value = this.customFields[idx]?.value || '';
+                }
+                return {
+                    label: f.label,
+                    type: f.type,
+                    options: f.options,
+                    value
+                };
+            });
+        },
+        async saveProject() {
+            // Validate required fields
+            if (!this.newProject.category_id) {
+                showMessage('会社名を選択してください。', true);
+                return;
+            }
+            if (!this.newProject.company_name) {
+                showMessage('支店名を選択してください。', true);
+                return;
+            }
+            if (!this.newProject.customer_id) {
+                showMessage('担当者名を選択してください。', true);
+                return;
+            }
+            if (!this.project.name) {
+                showMessage('プロジェクト名を入力してください。', true);
+                return;
+            }
+
+            // Save custom field set id and values
+            this.project.department_custom_fields_set_id = this.project.department_custom_fields_set_id || '';
+            this.project.custom_fields = JSON.stringify(this.prepareCustomFieldsForSave());
+            
+            try {
+                const formData = new FormData();
+                formData.append('name', this.project.name || '');
+                formData.append('building_branch', this.project.building_branch || '');
+                formData.append('building_size', this.project.building_size || '');
+                formData.append('building_type', this.project.building_type || '');
+                formData.append('building_number', this.project.building_number || '');
+                formData.append('progress', this.project.progress || '');
+                formData.append('priority', this.project.priority || '');
+                formData.append('status', this.project.status || '');
+                formData.append('category_id', this.newProject.category_id || '');
+                formData.append('company_name', this.newProject.company_name || '');
+                formData.append('customer_id', this.newProject.customer_id || '');
+                formData.append('department_id', this.project.department_id || '');
+                formData.append('members', this.newProject.members || '');
+                formData.append('managers', this.newProject.managers || '');
+                formData.append('teams', this.newProject.teams || '');
+                formData.append('start_date', this.toAPIDate(this.project.start_date));
+                formData.append('end_date', this.toAPIDate(this.project.end_date));
+                formData.append('project_order_type', this.project.project_order_type);
+                formData.append('department_custom_fields_set_id', this.project.department_custom_fields_set_id);
+                formData.append('custom_fields', this.project.custom_fields);
+                formData.append('description', this.project.description || '');
+                formData.append('project_number', this.project.project_number || '');
+                
+                const response = await axios.post('/api/index.php?model=project&method=create', formData);
+                if (response.data && response.data.status == 'success') {
+                    // Show success message with SweetAlert2
+                    Swal.fire({
+                        title: '成功',
+                        text: 'プロジェクトを作成しました。',
+                        icon: 'success',
+                        confirmButtonText: 'OK',
+                        confirmButtonColor: '#3085d6'
+                    }).then((result) => {
+                        // Redirect after user closes the message
+                        if (response.data.project_id) {
+                            window.location.href = `detail.php?id=${response.data.project_id}`;
+                        } else {
+                            window.location.href = 'index.php';
+                        }
+                    });
+                } else {
+                    showMessage('プロジェクトの作成に失敗しました。', true);
+                }
+            } catch (error) {
+                console.error('Error creating project:', error);
+                showMessage('プロジェクトの作成に失敗しました。', true);
+            }
+        },
+        async loadDepartmentCustomFieldSets() {
+            if (!this.project || !this.project.department_id) {
+                this.departmentCustomFieldSets = [];
+                return;
+            }
+            try {
+                const res = await axios.get('/api/index.php?model=department&method=getCustomFields');
+                if (Array.isArray(res.data)) {
+                    this.departmentCustomFieldSets = res.data.filter(set => String(set.department_id) === String(this.project.department_id));
+                } else {
+                    this.departmentCustomFieldSets = [];
+                }
+            } catch (e) {
+                this.departmentCustomFieldSets = [];
+            }
+        },
+        clearTagifyTags(field) {
+            if (field === 'members' && this.membersTagify) {
+                this.membersTagify.removeAllTags();
+            } else if (field === 'manager' && this.managerTagify) {
+                this.managerTagify.removeAllTags();
+            } else if (field === 'team' && this.tagify) {
+                this.tagify.removeAllTags();
+            }
+        },
+        initDatePickers() {
+            const options = {
+                enableTime: true,
+                dateFormat: "Y/m/d H:i",
+                time_24hr: true,
+                allowInput: true,
+                locale: "ja",
+                onChange: (selectedDates, dateStr, instance) => {
+                    const id = instance.input.id;
+                    if (id === 'start_date_picker') this.project.start_date = dateStr;
+                    if (id === 'end_date_picker') this.project.end_date = dateStr;
+                }
+            };
+            ['start_date_picker', 'end_date_picker'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    if (el._flatpickr) el._flatpickr.destroy();
+                    flatpickr(el, options);
+                }
+            });
+        },
+        initQuillEditor() {
+            if (this.quillInstance) return;
+            const toolbarOptions = [
+                [
+                    { font: [] },
+                    { size: [] }
+                ],
+                ['bold', 'italic', 'underline', 'strike'],
+                [
+                    { color: [] },
+                    { background: [] }
+                ],
+                [
+                    { script: 'super' },
+                    { script: 'sub' }
+                ],
+                [
+                    { header: '1' },
+                    { header: '2' }, 'blockquote' ],
+                [
+                    { list: 'ordered' },
+                    { indent: '-1' },
+                    { indent: '+1' }
+                ],
+                [{ direction: 'rtl' }, { align: [] }],
+                ['link', 'image', 'video', 'formula'],
+                ['clean']
+            ];
+            const el = document.getElementById('quill_description');
+            if (!el) return;
+            this.quillInstance = new Quill(el, {
+                bounds: el,
+                placeholder: 'Type Something...',
+                modules: {
+                    syntax: true,
+                    toolbar: toolbarOptions
+                },
+                theme: 'snow'
+            });
+            
+            // Add debounce to prevent too frequent updates
+            let debounceTimer;
+            this.quillInstance.on('text-change', () => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    const html = this.quillInstance.getSemanticHTML();
+                    this.project.description = html;
+                    const textarea = document.getElementById('quill_description_textarea');
+                    if (textarea) {
+                        textarea.value = html;
+                        const event = new Event('input', { bubbles: true });
+                        textarea.dispatchEvent(event);
+                    }
+                }, 300); // 300ms debounce
+            });
+        },
+        initSelect2() {
+            // 会社名 (category_id)
+            const $category = $('#category_id');
+            if ($category.length) {
+                $category.select2({
+                    placeholder: '選択してください',
+                    dropdownParent: $category.parent(),
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    ajax: {
+                        url: '/api/index.php?model=customer&method=list_categories',
+                        dataType: 'json',
+                        delay: 250,
+                        data: function(params) {
+                            return {
+                                search: params.term,
+                                page: params.page || 1
+                            };
+                        },
+                        processResults: function(data) {
+                            return {
+                                results: data.data.map(function(item) {
+                                    return {
+                                        id: item.id,
+                                        text: item.name
+                                    };
+                                })
+                            };
+                        }
+                    }
+                }).on('select2:select', (e) => {
+                    this.newProject.category_id = e.params.data.id;
+                    this.onCategoryChange();
+                });
+            }
+            // 支店名 (company_name)
+            const $company = $('#company_name');
+            if ($company.length) {
+                $company.select2({
+                    placeholder: '選択してください',
+                    dropdownParent: $company.parent(),
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    ajax: {
+                        url: '/api/index.php?model=customer&method=list_companies_by_category',
+                        dataType: 'json',
+                        delay: 250,
+                        data: (params) => {
+                            const data = {
+                                search: params.term,
+                                page: params.page || 1,
+                                category_id: this.newProject.category_id
+                            };
+                            if (this.project.department_id) {
+                                data.department_id = this.project.department_id;
+                            }
+                            return data;
+                        },
+                        processResults: function(data) {
+                            return {
+                                results: data.data.map(function(item) {
+                                    return {
+                                        id: item.company_name,
+                                        text: item.company_name
+                                    };
+                                })
+                            };
+                        }
+                    }
+                }).on('select2:select', (e) => {
+                    this.newProject.company_name = e.params.data.id;
+                    this.onCompanyChange();
+                });
+            }
+            // 担当者名 (customer_id)
+            const $customer = $('#customer_id');
+            if ($customer.length) {
+                $customer.select2({
+                    placeholder: '選択してください',
+                    dropdownParent: $customer.parent(),
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    ajax: {
+                        url: '/api/index.php?model=customer&method=list_contacts_by_company',
+                        dataType: 'json',
+                        delay: 250,
+                        data: (params) => {
+                            const data = {
+                                search: params.term,
+                                page: params.page || 1,
+                                company_name: this.newProject.company_name
+                            };
+                            if (this.project.department_id) {
+                                data.department_id = this.project.department_id;
+                            }
+                            return data;
+                        },
+                        processResults: function(data) {
+                            return {
+                                results: data.data.map(function(item) {
+                                    return {
+                                        id: item.id,
+                                        text: item.name
+                                    };
+                                })
+                            };
+                        }
+                    }
+                }).on('select2:select', (e) => {
+                    this.newProject.customer_id = e.params.data.id;
+                });
+            }
+        },
+        initProjectOrderTypeTagify() {
+            const input = document.querySelector('#project_order_type');
+            if (input && window.Tagify) {
+                if (this.projectOrderTypeTagify) {
+                    this.projectOrderTypeTagify.destroy();
+                }
+                this.projectOrderTypeTagify = new Tagify(input, {
+                    whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                    maxTags: 5,
+                    dropdown: {
+                        maxItems: 20,
+                        classname: "tags-look",
+                        enabled: 0,
+                        closeOnSelect: true
+                    },
+                });
+                const updateOrderType = () => {
+                    this.project.project_order_type = this.projectOrderTypeTagify.value.map(tag => tag.value).join(',');
+                };
+                this.projectOrderTypeTagify.on('add', updateOrderType);
+                this.projectOrderTypeTagify.on('remove', updateOrderType);
+            }
+        },
+        initTagify() {
+            const input = document.getElementById('team_tags');
+            if (!input) return;
+            // Destroy previous Tagify instance if exists
+            if (input._tagify) {
+                input._tagify.destroy();
+            }
+            // Initialize with empty tags
+            const tags = [];
+            // Danh sách tất cả team cho whitelist
+            const whitelist = this.filteredTeams.map(t => ({ value: t.name, id: t.id }));
+            this.tagify = new Tagify(input, {
+                whitelist: whitelist,
+                enforceWhitelist: true,
+                dropdown: { enabled: 0 }
+            });
+            this.tagify.addTags(tags);
+            // Xử lý khi xóa team thì xóa member của team đó
+            this.tagify.on('remove', async (e) => {
+                const removedTeamId = e.detail.data.id;
+                if (!removedTeamId || !this.membersTagify) return;
+                try {
+                    const res = await axios.get(`/api/index.php?model=team&method=get&id=${removedTeamId}`);
+                    if (res.data && Array.isArray(res.data.members)) {
+                        const teamMemberIds = res.data.members.map(m => String(m.user_id));
+                        const remain = this.membersTagify.value.filter(tag => !teamMemberIds.includes(String(tag.id)));
+                        this.membersTagify.removeAllTags();
+                        this.membersTagify.addTags(remain);
+                    }
+                } catch (err) {}
+            });
+            // Xử lý khi thêm team thì thêm member của team đó
+            this.tagify.on('add', async (e) => {
+                const addedTeamId = e.detail.data.id;
+                if (!addedTeamId || !this.membersTagify) return;
+                try {
+                    const res = await axios.get(`/api/index.php?model=team&method=get&id=${addedTeamId}`);
+                    if (res.data && Array.isArray(res.data.members)) {
+                        const teamMembers = res.data.members.map(m => ({ id: m.user_id, value: m.user_name }));
+                        const currentIds = this.membersTagify.value.map(tag => String(tag.id));
+                        const toAdd = teamMembers.filter(m => !currentIds.includes(String(m.id)));
+                        this.membersTagify.addTags(toAdd);
+                    }
+                } catch (err) {}
+            });
+            this.tagify.on('change', this.onTeamTagsChange.bind(this));
+        },
+        async onTeamTagsChange(e) {
+            const selected = this.tagify.value;
+            const ids = selected.map(t => t.id).join(',');
+            this.newProject.teams = ids;
+        },
+        async loadDepartmentUsers() {
+            if (!this.project.department_id) return [];
+            try {
+                const res = await axios.get(`/api/index.php?model=department&method=get_users&department_id=${this.project.department_id}`);
+                this.departmentUsers = res.data || [];
+                return this.departmentUsers;
+            } catch (e) {
+                this.departmentUsers = [];
+                return [];
+            }
+        },
+        async initManagerMembersTagify() {
+            // Lấy toàn bộ user trong department
+            await this.loadDepartmentUsers();
+            const allMembers = (this.departmentUsers || []).map(u => ({
+                user_id: u.id,
+                id: u.id,
+                value: u.user_name,
+                name: u.user_name
+            }));
+            // Khởi tạo Tagify cho manager
+            const managerInput = document.getElementById('manager_tags');
+            if (managerInput && window.Tagify) {
+                if (managerInput._tagify) managerInput._tagify.destroy();
+                const tagify = new Tagify(managerInput, {
+                    whitelist: allMembers,
+                    maxTags: 10,
+                    enforceWhitelist: true,
+                    dropdown: { maxItems: 20, enabled: 0, closeOnSelect: true }
+                });
+                tagify.on('change', e => {
+                    const selected = tagify.value.map(t => t.id);
+                    this.newProject.managers = selected;
+                });
+                this.managerTagify = tagify;
+            }
+            // Khởi tạo Tagify cho members
+            const membersInput = document.getElementById('members_tags');
+            if (membersInput && window.Tagify) {
+                if (membersInput._tagify) membersInput._tagify.destroy();
+                const tagify = new Tagify(membersInput, {
+                    whitelist: allMembers,
+                    maxTags: 20,
+                    enforceWhitelist: true,
+                    dropdown: { maxItems: 20, enabled: 0, closeOnSelect: true }
+                });
+                tagify.on('change', e => {
+                    const selected = tagify.value.map(t => t.id);
+                    this.newProject.members = selected;
+                });
+                this.membersTagify = tagify;
+            }
+        },
+        clearManagerMemberTagify() {
+            // Clear manager Tagify
+            const managerInput = document.getElementById('manager_tags');
+            if (managerInput && managerInput._tagify) {
+                managerInput._tagify.destroy();
+                this.managerTagify = null;
+            }
+            // Clear member Tagify
+            const membersInput = document.getElementById('members_tags');
+            if (membersInput && membersInput._tagify) {
+                membersInput._tagify.destroy();
+                this.membersTagify = null;
+            }
+        },
+    },
+    watch: {
+        'project.department_id': function(newVal) {
+            this.loadDepartmentCustomFieldSets();
+            // Load companies and contacts for the selected department
+            if (newVal) {
+                this.loadCompanies();
+                this.loadContacts();
+                // Reinitialize manager/member Tagify when department changes
+                this.$nextTick(() => {
+                    this.initManagerMembersTagify();
+                });
+            } else {
+                // Clear companies, contacts and manager/member Tagify when no department is selected
+                this.companies = [];
+                this.contacts = [];
+                this.clearManagerMemberTagify();
+            }
+        },
+        'project.department_custom_fields_set_id': function(newVal) {
+            if (newVal && this.selectedCustomFieldSet) {
+                this.customFields = this.selectedCustomFieldSet.fields.map(f => {
+                    if (f.type === 'checkbox') {
+                        return { label: f.label, type: f.type, options: f.options, value: '', valueArr: [] };
+                    } else {
+                        return { label: f.label, type: f.type, options: f.options, value: '' };
+                    }
+                });
+            }
+        },
+        'customFields': {
+            handler(newVal, oldVal) {
+                if (!this.selectedCustomFieldSet) return;
+                
+                // Only process if there are actual changes
+                if (JSON.stringify(newVal) === JSON.stringify(oldVal)) return;
+                
+                this.selectedCustomFieldSet.fields.forEach((f, idx) => {
+                    if (f.type === 'checkbox' && this.customFields[idx]) {
+                        if (Array.isArray(this.customFields[idx].valueArr)) {
+                            this.customFields[idx].value = this.customFields[idx].valueArr.join(',');
+                        } else if (typeof this.customFields[idx].value === 'string') {
+                            this.customFields[idx].valueArr = this.customFields[idx].value.split(',').map(s => s.trim()).filter(Boolean);
+                        }
+                    }
+                });
+            },
+            deep: true
+        },
+    },
+    async mounted() {
+        await this.loadAllTeams();
+        await this.loadCategories();
+        await this.loadDepartments();
+        await this.loadProject();
+        
+        // Only load companies and contacts if department is set
+        if (this.project.department_id) {
+            await this.loadCompanies();
+            await this.loadContacts();
+        }
+        
+        // If department is preset, load related data
+        if (this.presetDepartmentId) {
+            await this.loadDepartmentCustomFieldSets();
+            await this.initManagerMembersTagify();
+        }
+        
+        this.$nextTick(() => {
+            this.initDatePickers();
+            this.initQuillEditor();
+            this.initSelect2();
+            this.initProjectOrderTypeTagify();
+            this.initTagify();
+        });
+    }
+}).mount('#app');

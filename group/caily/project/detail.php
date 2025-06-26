@@ -50,6 +50,9 @@ if (!$project_id) {
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h5 class="card-title">基本情報</h5>
                         <div>
+                            <button v-if="!isEditMode" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
+                                <i class="fa fa-copy"></i>
+                            </button>
                             <button v-if="!isEditMode" class="btn btn-outline-primary btn-sm me-2" @click="toggleEditMode">
                                 <i class="fa fa-pencil-alt"></i>
                             </button>
@@ -356,56 +359,68 @@ if (!$project_id) {
                                     <option v-for="set in departmentCustomFieldSets" :value="set.id">{{ set.name }}</option>
                                 </select>
                                 <div v-if="selectedCustomFieldSet" class="mt-3">
-                                    <div v-for="(field, idx) in selectedCustomFieldSet.fields" :key="idx" class="mb-2">
-                                        <label class="form-label">{{ field.label }}</label>
-                                        <template v-if="field.type === 'radio'">
-                                            <div v-if="customFields[idx]">
-                                                <label v-for="opt in field.options.split(',')" :key="opt.trim()" class="me-3">
-                                                    <input type="radio" :name="'custom_radio_' + idx" :value="opt.trim()" v-model="customFields[idx].value"> {{ opt.trim() }}
-                                                </label>
+                                    <div class="row">
+                                        <template v-for="(field, idx) in selectedCustomFieldSet.fields" :key="idx">
+                                            <div v-if="field.type === 'textarea'" class="col-12 mb-3">
+                                                <label class="form-label">{{ field.label }}</label>
+                                                <textarea class="form-control" v-if="customFields[idx]" v-model="customFields[idx].value"></textarea>
                                             </div>
-                                        </template>
-                                        <template v-else-if="field.type === 'select'">
-                                            <select class="form-select" v-if="customFields[idx]" v-model="customFields[idx].value">
-                                                <option value="">選択してください</option>
-                                                <option v-for="opt in field.options.split(',')" :key="opt.trim()" :value="opt.trim()">{{ opt.trim() }}</option>
-                                            </select>
-                                        </template>
-                                        <template v-else-if="field.type === 'checkbox'">
-                                            <div v-if="customFields[idx]">
-                                                <label v-for="opt in field.options.split(',')" :key="opt.trim()" class="me-3">
-                                                    <input type="checkbox" :name="'custom_checkbox_' + idx" :value="opt.trim()" v-model="customFields[idx].valueArr"> {{ opt.trim() }}
-                                                </label>
+                                            <div v-else class="col-md-4 mb-3">
+                                                <label class="form-label">{{ field.label }}</label>
+                                                <template v-if="field.type === 'radio'">
+                                                    <div v-if="customFields[idx]">
+                                                        <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
+                                                            <input class="form-check-input" type="radio" :name="'custom_radio_' + idx" :value="opt.trim()" v-model="customFields[idx].value">
+                                                            <label class="form-check-label">{{ opt.trim() }}</label>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <template v-else-if="field.type === 'select'">
+                                                    <select class="form-select" v-if="customFields[idx]" v-model="customFields[idx].value">
+                                                        <option value="">選択してください</option>
+                                                        <option v-for="opt in field.options.split(',')" :key="opt.trim()" :value="opt.trim()">{{ opt.trim() }}</option>
+                                                    </select>
+                                                </template>
+                                                <template v-else-if="field.type === 'checkbox'">
+                                                    <div v-if="customFields[idx]">
+                                                        <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
+                                                            <input class="form-check-input" type="checkbox" :name="'custom_checkbox_' + idx" :value="opt.trim()" v-model="customFields[idx].valueArr">
+                                                            <label class="form-check-label">{{ opt.trim() }}</label>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <template v-else>
+                                                    <input class="form-control" v-if="customFields[idx]" v-model="customFields[idx].value" type="text">
+                                                </template>
                                             </div>
-                                        </template>
-                                        <template v-else-if="field.type === 'textarea'">
-                                            <textarea class="form-control" v-if="customFields[idx]" v-model="customFields[idx].value"></textarea>
-                                        </template>
-                                        <template v-else>
-                                            <input class="form-control" v-if="customFields[idx]" v-model="customFields[idx].value" type="text">
                                         </template>
                                     </div>
                                 </div>
                             </template>
                             <template v-else>
                                 <template v-if="getCustomFieldsForView().length">
-                                    <ul class="mb-0 ps-3">
-                                        <li v-for="(field, idx) in getCustomFieldsForView()" :key="idx">
-                                            <strong>{{ field.label }}:</strong>
-                                            <template v-if="field.type === 'checkbox'">
-                                                <span v-if="field.value">
-                                                    <span v-for="val in field.value.split(',')" :key="val.trim()" class="badge bg-primary me-1">{{ val.trim() }}</span>
-                                                </span>
-                                                <span v-else>-</span>
-                                            </template>
-                                            <template v-else-if="field.type === 'radio' || field.type === 'select' || field.type === 'text' || field.type === 'textarea'">
-                                                {{ field.value || '-' }}
-                                            </template>
-                                            <template v-else>
-                                                {{ field.value || '-' }}
-                                            </template>
-                                        </li>
-                                    </ul>
+                                    <div class="row">
+                                        <template v-for="(field, idx) in getCustomFieldsForView()" :key="idx">
+                                            <div v-if="field.type === 'textarea'" class="col-12 mb-3">
+                                                <label class="form-label">{{ field.label }}</label>
+                                                <div class="form-control" style="min-height:80px;white-space:pre-line;">{{ field.value || '-' }}</div>
+                                            </div>
+                                            <div v-else class="col-md-4 mb-3">
+                                                <label class="form-label">{{ field.label }}</label>
+                                                <template v-if="field.type === 'checkbox' || field.type === 'radio' || field.type === 'select'">
+                                                    <div>
+                                                        <span v-if="field.value">
+                                                            <span v-for="val in field.value.split(',')" :key="val.trim()" class="badge bg-primary me-1">{{ val.trim() }}</span>
+                                                        </span>
+                                                        <span v-else>-</span>
+                                                    </div>
+                                                </template>
+                                                <template v-else>
+                                                    <div class="form-control">{{ field.value || '-' }}</div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
                                 </template>
                                 <template v-else>
                                     <div class="text-muted">-</div>
