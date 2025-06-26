@@ -209,8 +209,8 @@ class Project extends ApplicationModel {
             foreach ($members as $user_id) {
                 if (!empty($user_id)) {
                     $this->addMember($project_id, intval($user_id), 'member');
-                }
             }
+        }
         }
 
         // Add managers if provided
@@ -219,8 +219,8 @@ class Project extends ApplicationModel {
             foreach ($managers as $user_id) {
                 if (!empty($user_id)) {
                     $this->addMember($project_id, intval($user_id), 'manager');
-                }
             }
+        }
         }
 
         return [
@@ -460,7 +460,7 @@ class Project extends ApplicationModel {
             FROM " . DB_PREFIX . "comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
             WHERE c.project_id = %d 
-            ORDER BY c.created_at ASC
+            ORDER BY c.created_at DESC
             LIMIT %d OFFSET %d",
             intval($project_id),
             intval($per_page),
@@ -481,7 +481,142 @@ class Project extends ApplicationModel {
         $this->table = DB_PREFIX . 'comments';
         $result = $this->query_insert($commentData);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
+        
+        // Send mention notifications if comment was added successfully
+        if ($result) {
+            $this->sendMentionNotifications($data['project_id'], $data['content'], $data['user_id'], $result);
+        }
+        
         return $result;
+    }
+
+    // Detect mentions and send notifications
+    private function sendMentionNotifications($projectId, $content, $commentUserId, $commentId) {
+        try {
+            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            $notiService = new NotificationService();
+            
+            // Extract mentioned users from content
+            $mentionedUsers = $this->extractMentions($content);
+            
+            if (empty($mentionedUsers)) {
+                return; // No mentions found
+            }
+            
+            // Get project info for notification
+            $project = $this->getById($projectId);
+            if (!$project) {
+                return;
+            }
+            
+            // Get commenter info
+            $commenter = $this->fetchOne("SELECT realname, user_image FROM " . DB_PREFIX . "user WHERE userid = ?", [$commentUserId]);
+            if (!$commenter) {
+                return;
+            }
+            
+            // Track sent notifications to avoid duplicates
+            $sentUserIds = [];
+            
+            // Send notification to each mentioned user
+            foreach ($mentionedUsers as $mentionedUser) {
+                // Don't send notification if user mentions themselves
+                if ($mentionedUser['userid'] == $commentUserId) {
+                    continue;
+                }
+                
+                // Don't send duplicate notifications to the same user
+                if (in_array($mentionedUser['userid'], $sentUserIds)) {
+                    continue;
+                }
+                
+                $sentUserIds[] = $mentionedUser['userid'];
+                
+                $payload = [
+                    'event' => 'project_mention',
+                    'title' => 'プロジェクトでメンションされました',
+                    'message' => sprintf('%sさんがプロジェクト「%s」であなたをメンションしました', 
+                        $commenter['realname'], 
+                        $project['name']
+                    ),
+                    'data' => [
+                        'project_id' => $projectId,
+                        'project_name' => $project['name'],
+                        'comment_id' => $commentId,
+                        'comment_content' => $content,
+                        'commenter_id' => $commentUserId,
+                        'commenter_name' => $commenter['realname'],
+                        'commenter_image' => $commenter['user_image'],
+                        'url' => "/project/detail.php?id=$projectId#comment-$commentId"
+                    ],
+                    'project_id' => $projectId,
+                    'user_ids' => [$mentionedUser['userid']]
+                ];
+                
+                $notiService->create($payload);
+            }
+            
+        } catch (Exception $e) {
+            error_log('Failed to send mention notification: ' . $e->getMessage());
+        }
+    }
+    
+    // Extract mentions from content (supports both plain text and HTML)
+    private function extractMentions($content) {
+        $mentionedUsers = [];
+        
+        // Debug logging
+        error_log("Extracting mentions from content: " . substr($content, 0, 200) . "...");
+        
+        // First, try to extract from HTML mentions with data attributes
+        if (strpos($content, 'data-user-id') !== false) {
+            error_log("Found HTML mentions, extracting...");
+            // Extract user IDs from HTML mentions - improved regex for multiple mentions
+            preg_match_all('/<span[^>]*data-user-id="([^"]+)"[^>]*data-user-name="([^"]+)"[^>]*>@([^<]+)<\/span>/', $content, $matches);
+            if (!empty($matches[1])) {
+                $userIds = $matches[1];
+                error_log("Found user IDs: " . implode(', ', $userIds));
+                
+                // Remove duplicates while preserving order
+                $uniqueUserIds = array_unique($userIds);
+                
+                // Get user info by user IDs
+                $placeholders = str_repeat('?,', count($uniqueUserIds) - 1) . '?';
+                $query = "SELECT userid, realname, user_image FROM " . DB_PREFIX . "user WHERE userid IN ($placeholders)";
+                $users = $this->fetchAll($query, $uniqueUserIds);
+                
+                foreach ($users as $user) {
+                    $mentionedUsers[] = $user;
+                }
+                error_log("Found " . count($mentionedUsers) . " mentioned users from HTML");
+            }
+        }
+       
+        // If no HTML mentions found, try plain text mentions
+        if (empty($mentionedUsers)) {
+            error_log("No HTML mentions found, trying plain text...");
+            $plainText = strip_tags($content);
+            preg_match_all('/@([^\s]+)/', $plainText, $matches);
+            
+            if (!empty($matches[1])) {
+                $mentionedUsernames = $matches[1];
+                error_log("Found usernames: " . implode(', ', $mentionedUsernames));
+                
+                // Remove duplicates while preserving order
+                $uniqueUsernames = array_unique($mentionedUsernames);
+                
+                if (!empty($uniqueUsernames)) {
+                    // Get mentioned users from database by username
+                    $placeholders = str_repeat('?,', count($uniqueUsernames) - 1) . '?';
+                    $query = "SELECT userid, realname, user_image FROM " . DB_PREFIX . "user WHERE realname IN ($placeholders)";
+                    $mentionedUsers = $this->fetchAll($query, $uniqueUsernames);
+                    error_log("Found " . count($mentionedUsers) . " mentioned users from plain text");
+                }
+            }
+        }
+        
+        error_log("Total mentioned users: " . count($mentionedUsers));
+        return $mentionedUsers;
     }
 
     function updateTeams($params = null) {

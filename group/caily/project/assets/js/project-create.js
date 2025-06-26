@@ -118,7 +118,7 @@ createApp({
                 custom_fields: '',
                 description: ''
             };
-            this.project.team_list = [];
+                    this.project.team_list = [];
             
             // Check for copied project data
             this.loadCopiedProjectData();
@@ -190,7 +190,7 @@ createApp({
                             });
                         }
                     });
-                } catch (error) {
+            } catch (error) {
                     console.error('Error loading copied project data:', error);
                     sessionStorage.removeItem('copyProjectData');
                 }
@@ -340,11 +340,11 @@ createApp({
                 const customField = this.customFields[idx];
                 
                 if (customField) {
-                    if (f.type === 'checkbox') {
+                if (f.type === 'checkbox') {
                         value = Array.isArray(customField.valueArr) ? customField.valueArr.join(',') : '';
-                    } else {
+                } else {
                         value = customField.value || '';
-                    }
+                }
                 }
                 
                 return {
@@ -416,7 +416,7 @@ createApp({
                         // Redirect after user closes the message
                         if (response.data.project_id) {
                             window.location.href = `detail.php?id=${response.data.project_id}`;
-                        } else {
+                } else {
                             window.location.href = 'index.php';
                         }
                     });
@@ -437,7 +437,7 @@ createApp({
                 const res = await axios.get('/api/index.php?model=department&method=getCustomFields');
                 if (Array.isArray(res.data)) {
                     this.departmentCustomFieldSets = res.data.filter(set => String(set.department_id) === String(this.project.department_id));
-                } else {
+            } else {
                     this.departmentCustomFieldSets = [];
                 }
             } catch (e) {
@@ -519,152 +519,152 @@ createApp({
             this.quillInstance.on('text-change', () => {
                 clearTimeout(debounceTimer);
                 debounceTimer = setTimeout(() => {
-                    const html = this.quillInstance.getSemanticHTML();
-                    this.project.description = html;
-                    const textarea = document.getElementById('quill_description_textarea');
-                    if (textarea) {
-                        textarea.value = html;
-                        const event = new Event('input', { bubbles: true });
-                        textarea.dispatchEvent(event);
-                    }
+                const html = this.quillInstance.getSemanticHTML();
+                this.project.description = html;
+                const textarea = document.getElementById('quill_description_textarea');
+                if (textarea) {
+                    textarea.value = html;
+                    const event = new Event('input', { bubbles: true });
+                    textarea.dispatchEvent(event);
+                }
                 }, 300); // 300ms debounce
             });
         },
         initSelect2() {
-            // 会社名 (category_id)
-            const $category = $('#category_id');
-            if ($category.length) {
-                $category.select2({
-                    placeholder: '選択してください',
-                    dropdownParent: $category.parent(),
-                    allowClear: true,
-                    minimumResultsForSearch: 0,
-                    ajax: {
-                        url: '/api/index.php?model=customer&method=list_categories',
-                        dataType: 'json',
-                        delay: 250,
-                        data: function(params) {
-                            return {
-                                search: params.term,
-                                page: params.page || 1
-                            };
-                        },
-                        processResults: function(data) {
-                            return {
-                                results: data.data.map(function(item) {
+                    // 会社名 (category_id)
+                    const $category = $('#category_id');
+                    if ($category.length) {
+                        $category.select2({
+                            placeholder: '選択してください',
+                            dropdownParent: $category.parent(),
+                            allowClear: true,
+                            minimumResultsForSearch: 0,
+                            ajax: {
+                                url: '/api/index.php?model=customer&method=list_categories',
+                                dataType: 'json',
+                                delay: 250,
+                                data: function(params) {
                                     return {
-                                        id: item.id,
-                                        text: item.name
+                                        search: params.term,
+                                        page: params.page || 1
                                     };
-                                })
-                            };
-                        }
+                                },
+                                processResults: function(data) {
+                                    return {
+                                        results: data.data.map(function(item) {
+                                            return {
+                                                id: item.id,
+                                                text: item.name
+                                            };
+                                        })
+                                    };
+                                }
+                            }
+                        }).on('select2:select', (e) => {
+                            this.newProject.category_id = e.params.data.id;
+                            this.onCategoryChange();
+                        });
                     }
-                }).on('select2:select', (e) => {
-                    this.newProject.category_id = e.params.data.id;
-                    this.onCategoryChange();
-                });
-            }
-            // 支店名 (company_name)
-            const $company = $('#company_name');
-            if ($company.length) {
-                $company.select2({
-                    placeholder: '選択してください',
-                    dropdownParent: $company.parent(),
-                    allowClear: true,
-                    minimumResultsForSearch: 0,
-                    ajax: {
-                        url: '/api/index.php?model=customer&method=list_companies_by_category',
-                        dataType: 'json',
-                        delay: 250,
-                        data: (params) => {
+                    // 支店名 (company_name)
+                    const $company = $('#company_name');
+                    if ($company.length) {
+                        $company.select2({
+                            placeholder: '選択してください',
+                            dropdownParent: $company.parent(),
+                            allowClear: true,
+                            minimumResultsForSearch: 0,
+                            ajax: {
+                                url: '/api/index.php?model=customer&method=list_companies_by_category',
+                                dataType: 'json',
+                                delay: 250,
+                                data: (params) => {
                             const data = {
-                                search: params.term,
-                                page: params.page || 1,
-                                category_id: this.newProject.category_id
-                            };
+                                        search: params.term,
+                                        page: params.page || 1,
+                                        category_id: this.newProject.category_id
+                                    };
                             if (this.project.department_id) {
                                 data.department_id = this.project.department_id;
                             }
                             return data;
-                        },
-                        processResults: function(data) {
-                            return {
-                                results: data.data.map(function(item) {
+                                },
+                                processResults: function(data) {
                                     return {
-                                        id: item.company_name,
-                                        text: item.company_name
+                                        results: data.data.map(function(item) {
+                                            return {
+                                                id: item.company_name,
+                                                text: item.company_name
+                                            };
+                                        })
                                     };
-                                })
-                            };
-                        }
+                                }
+                            }
+                        }).on('select2:select', (e) => {
+                            this.newProject.company_name = e.params.data.id;
+                            this.onCompanyChange();
+                        });
                     }
-                }).on('select2:select', (e) => {
-                    this.newProject.company_name = e.params.data.id;
-                    this.onCompanyChange();
-                });
-            }
-            // 担当者名 (customer_id)
-            const $customer = $('#customer_id');
-            if ($customer.length) {
-                $customer.select2({
-                    placeholder: '選択してください',
-                    dropdownParent: $customer.parent(),
-                    allowClear: true,
-                    minimumResultsForSearch: 0,
-                    ajax: {
-                        url: '/api/index.php?model=customer&method=list_contacts_by_company',
-                        dataType: 'json',
-                        delay: 250,
-                        data: (params) => {
+                    // 担当者名 (customer_id)
+                    const $customer = $('#customer_id');
+                    if ($customer.length) {
+                        $customer.select2({
+                            placeholder: '選択してください',
+                            dropdownParent: $customer.parent(),
+                            allowClear: true,
+                            minimumResultsForSearch: 0,
+                            ajax: {
+                                url: '/api/index.php?model=customer&method=list_contacts_by_company',
+                                dataType: 'json',
+                                delay: 250,
+                                data: (params) => {
                             const data = {
-                                search: params.term,
-                                page: params.page || 1,
-                                company_name: this.newProject.company_name
-                            };
+                                        search: params.term,
+                                        page: params.page || 1,
+                                        company_name: this.newProject.company_name
+                                    };
                             if (this.project.department_id) {
                                 data.department_id = this.project.department_id;
                             }
                             return data;
-                        },
-                        processResults: function(data) {
-                            return {
-                                results: data.data.map(function(item) {
+                                },
+                                processResults: function(data) {
                                     return {
-                                        id: item.id,
-                                        text: item.name
+                                        results: data.data.map(function(item) {
+                                            return {
+                                                id: item.id,
+                                                text: item.name
+                                            };
+                                        })
                                     };
-                                })
-                            };
-                        }
+                                }
+                            }
+                        }).on('select2:select', (e) => {
+                            this.newProject.customer_id = e.params.data.id;
+                        });
                     }
-                }).on('select2:select', (e) => {
-                    this.newProject.customer_id = e.params.data.id;
-                });
-            }
         },
         initProjectOrderTypeTagify() {
-            const input = document.querySelector('#project_order_type');
-            if (input && window.Tagify) {
-                if (this.projectOrderTypeTagify) {
-                    this.projectOrderTypeTagify.destroy();
-                }
-                this.projectOrderTypeTagify = new Tagify(input, {
-                    whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
-                    maxTags: 5,
-                    dropdown: {
-                        maxItems: 20,
-                        classname: "tags-look",
-                        enabled: 0,
-                        closeOnSelect: true
-                    },
-                });
-                const updateOrderType = () => {
-                    this.project.project_order_type = this.projectOrderTypeTagify.value.map(tag => tag.value).join(',');
-                };
-                this.projectOrderTypeTagify.on('add', updateOrderType);
-                this.projectOrderTypeTagify.on('remove', updateOrderType);
-            }
+                    const input = document.querySelector('#project_order_type');
+                    if (input && window.Tagify) {
+                        if (this.projectOrderTypeTagify) {
+                            this.projectOrderTypeTagify.destroy();
+                        }
+                        this.projectOrderTypeTagify = new Tagify(input, {
+                            whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                            maxTags: 5,
+                            dropdown: {
+                                maxItems: 20,
+                                classname: "tags-look",
+                                enabled: 0,
+                                closeOnSelect: true
+                            },
+                        });
+                        const updateOrderType = () => {
+                            this.project.project_order_type = this.projectOrderTypeTagify.value.map(tag => tag.value).join(',');
+                        };
+                        this.projectOrderTypeTagify.on('add', updateOrderType);
+                        this.projectOrderTypeTagify.on('remove', updateOrderType);
+                    }
         },
         initTagify() {
             const input = document.getElementById('team_tags');
@@ -892,10 +892,10 @@ createApp({
         },
         initializeCustomFields() {
             if (this.selectedCustomFieldSet) {
-                this.customFields = this.selectedCustomFieldSet.fields.map(f => {
-                    if (f.type === 'checkbox') {
+                    this.customFields = this.selectedCustomFieldSet.fields.map(f => {
+                        if (f.type === 'checkbox') {
                         return { label: f.label, type: f.type, options: f.options, value: '', valueArr: [] };
-                    } else {
+                        } else {
                         return { label: f.label, type: f.type, options: f.options, value: '' };
                     }
                 });
@@ -971,9 +971,9 @@ createApp({
         
         // Load related data based on the project data (including copied data)
         if (this.project.department_id) {
-            await this.loadCompanies();
-            await this.loadContacts();
-            await this.loadDepartmentCustomFieldSets();
+        await this.loadCompanies();
+        await this.loadContacts();
+        await this.loadDepartmentCustomFieldSets();
             await this.loadDepartmentUsers(); // Load department users first
             
             // Initialize custom fields if a set is selected
@@ -1015,10 +1015,10 @@ createApp({
             
             // Set Quill editor content if description exists (for copied projects)
             if (this.project.description) {
-                this.$nextTick(() => {
+        this.$nextTick(() => {
                     this.setQuillContent(this.decodeHtmlEntities(this.project.description));
                 });
             }
         });
     }
-}).mount('#app');
+}).mount('#app'); 

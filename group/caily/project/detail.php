@@ -529,11 +529,11 @@ if (!$project_id) {
                                         </div>
                                         <div class="chat-message-wrapper flex-grow-1">
                                             <div class="chat-message-text bg-light rounded-3 p-2">
-                                                <p class="mb-0">{{ comment.content }}</p>
-                                            </div>
+                                                <p class="mb-0" v-html="renderMentions(comment.content)"></p>
+                                    </div>
                                             <div class="text-body-secondary mt-1">
                                                 <small>{{ formatDateTime(comment.created_at) }}</small>
-                                            </div>
+                                        </div>
                                         </div>
                                     </div>
                                 </li>
@@ -543,15 +543,18 @@ if (!$project_id) {
                     
                     <!-- Comment Input -->
                     <div class="d-flex gap-3">
-                        <div class="flex-grow-1">
+                        <div class="flex-grow-1 position-relative">
                             <div class="input-group">
-                                <input type="text" class="form-control" 
-                                       v-model="newComment" 
-                                       @keyup.enter="addComment"
-                                       placeholder="コメントを入力...">
+                                <div class="form-control" 
+                                     contenteditable="true"
+                                     data-mention
+                                     data-html-mention
+                                     @input="onCommentInput"
+                                     placeholder="コメントを入力... @でメンション"
+                                     style="min-height: 38px; max-height: 120px; overflow-y: auto; white-space: pre-wrap;"></div>
                                 <button class="btn btn-primary" 
                                         @click="addComment"
-                                        :disabled="!newComment.trim()">
+                                        :disabled="!hasCommentContent()">
                                     <i class="fa fa-paper-plane"></i>
                                 </button>
                             </div>
@@ -658,6 +661,8 @@ $view->footing();
 .edit-mode .form-control:not([readonly]) {
     border-color: var(--bs-primary);
 }
+
+
 </style>
 
 <!-- Define PROJECT_ID before loading Vue and project-detail.js -->
@@ -669,7 +674,9 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/highlight/highlight.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/katex.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/css/mention.css" />
 <script src="<?=ROOT?>assets/vendor/libs/highlight/highlight.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
+<script src="<?=ROOT?>assets/js/mention.js"></script>
 <script src="assets/js/project-detail.js"></script>

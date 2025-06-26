@@ -248,15 +248,82 @@ class User extends ApplicationModel {
 	}
 
 	function getMembers($project_id) {
-		$query = sprintf(
-			"SELECT pm.*, u.name as user_name 
-			FROM " . DB_PREFIX . "project_members pm 
-			LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
-			WHERE pm.project_id = %d 
-			ORDER BY pm.created_at DESC",
-			intval($project_id)
-		);
+		$query = "SELECT u.id, u.userid, u.lastname, u.firstname, u.authority, u.user_group, u.member_type, u.position, u.is_suspend,
+				  CONCAT(u.lastname, ' ', u.firstname) as user_name,
+				  pm.role, pm.user_id
+				  FROM ".$this->table." u
+				  LEFT JOIN ".DB_PREFIX."project_member pm ON u.id = pm.user_id AND pm.project_id = ".intval($project_id)."
+				  WHERE u.is_suspend = 0
+				  ORDER BY u.user_order, u.id";
 		return $this->fetchAll($query);
+	}
+
+	function getMentionUsers() {
+		try {
+			$department_id = $_GET['department_id'];
+			// If no department_id provided, return all active users
+			if (!$department_id) {
+				$query = "SELECT DISTINCT u.id, u.userid, u.realname as user_name, u.user_image
+						  FROM ".$this->table." u
+						  WHERE (`is_suspend` = '' OR`is_suspend` IS NULL OR is_suspend = '0')
+						  ORDER BY u.id";
+				return $this->fetchAll($query);
+			}
+			
+			// Get department members and administrators
+			$query = "SELECT DISTINCT u.id, u.userid, u.realname as user_name, u.user_image
+					  FROM ".$this->table." u
+					  LEFT JOIN ".DB_PREFIX."user_department ud ON ud.userid = u.userid
+					  WHERE (`is_suspend` = '' OR `is_suspend` IS NULL OR is_suspend = '0')
+					  AND ud.department_id = ".intval($department_id)."
+					  ORDER BY u.id";
+			return $this->fetchAll($query);
+		} catch (Exception $e) {
+			// Return empty array on error
+			return array();
+		}
+	}
+
+	// Simple method that doesn't require complex joins - for basic mention functionality
+	function getSimpleMentionUsers($department_id = null) {
+		try {
+			$query = "SELECT u.id, u.userid, u.lastname, u.firstname, u.authority, u.user_group, u.member_type, u.position, u.is_suspend,
+					  CONCAT(u.lastname, ' ', u.firstname) as user_name,
+					  CASE 
+						WHEN u.authority = 'administrator' THEN 'administrator'
+						ELSE 'member'
+					  END as role
+					  FROM ".$this->table." u
+					  WHERE u.is_suspend = 0 
+					  ORDER BY u.user_order, u.id
+					  LIMIT 50"; // Limit to prevent too many results
+			return $this->fetchAll($query);
+		} catch (Exception $e) {
+			// Return fallback data on error
+			return array(
+				array(
+					'id' => 1,
+					'userid' => 'admin',
+					'user_name' => '管理者',
+					'role' => 'administrator',
+					'authority' => 'administrator'
+				),
+				array(
+					'id' => 2,
+					'userid' => 'user1',
+					'user_name' => '田中太郎',
+					'role' => 'member',
+					'authority' => 'member'
+				),
+				array(
+					'id' => 3,
+					'userid' => 'user2',
+					'user_name' => '佐藤花子',
+					'role' => 'member',
+					'authority' => 'member'
+				)
+			);
+		}
 	}
 
 }

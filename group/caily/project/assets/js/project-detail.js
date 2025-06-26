@@ -262,14 +262,23 @@ createApp({
         //     }
         // },
         async addComment() {
-            if (!this.newComment.trim()) return;
+            if (!this.hasCommentContent()) return;
+            
+            const commentHtml = this.getCommentText().trim();
+            if (!commentHtml) return;
+            
             try {
                 const formData = new FormData();
                 formData.append('project_id', this.projectId);
-                formData.append('content', this.newComment.trim());
+                formData.append('content', commentHtml);
                 formData.append('user_id', USER_ID);
                 await axios.post('/api/index.php?model=project&method=addComment', formData);
-                this.newComment = '';
+                
+                // Clear the contenteditable div
+                const contenteditableDiv = document.querySelector('[contenteditable="true"][data-mention]');
+                if (contenteditableDiv) {
+                    contenteditableDiv.innerHTML = '';
+                }
                 
                 // Reset pagination and reload comments to show the new comment
                 this.commentsPage = 1;
@@ -1100,6 +1109,143 @@ createApp({
             if (res.data && res.data.data) {
                 this.contacts = res.data.data;
             }
+            
+            // Mention functionality methods
+            await this.loadMentionUsers();
+        },
+        
+        // Mention functionality methods
+        async loadMentionUsers() {
+            try {
+                // Load department users and administrators
+                const response = await axios.get(`/api/index.php?model=user&method=getMentionUsers&department_id=${this.project.department_id}`);
+                this.mentionUsers = response.data || [];
+            } catch (error) {
+                console.error('Error loading mention users:', error);
+                this.mentionUsers = [];
+            }
+        },
+        
+        handleCommentInput(event) {
+            const input = event.target;
+            const value = input.value;
+            const cursorPosition = input.selectionStart;
+            
+            // Check if we're typing @
+            const beforeCursor = value.substring(0, cursorPosition);
+            const atIndex = beforeCursor.lastIndexOf('@');
+            
+            if (atIndex !== -1 && (atIndex === 0 || /\s/.test(value[atIndex - 1]))) {
+                // We found @ at the beginning or after a space
+                const searchTerm = beforeCursor.substring(atIndex + 1);
+                this.mentionStartPosition = atIndex;
+                this.mentionSearchTerm = searchTerm;
+                this.showMentionDropdown = true;
+                this.selectedMentionIndex = 0;
+            } else {
+                this.hideMentionDropdown();
+            }
+        },
+        
+        handleCommentKeydown(event) {
+            if (this.showMentionDropdown) {
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    this.selectedMentionIndex = Math.min(this.selectedMentionIndex + 1, this.filteredMentionUsers.length - 1);
+                } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    this.selectedMentionIndex = Math.max(this.selectedMentionIndex - 1, 0);
+                } else if (event.key === 'Enter') {
+                    // Chỉ chọn mention, KHÔNG gọi addComment
+                    event.preventDefault();
+                    if (this.filteredMentionUsers.length > 0) {
+                        this.selectMention(this.filteredMentionUsers[this.selectedMentionIndex]);
+                    }
+                    // KHÔNG gọi addComment ở đây!
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    this.hideMentionDropdown();
+                }
+            }
+        },
+        
+        selectMention(user) {
+            if (!user) return;
+            // Lấy contenteditable div thay vì input
+            const contenteditableDiv = document.querySelector('[contenteditable="true"][data-mention]');
+            if (!contenteditableDiv) return;
+            // Lấy text hiện tại
+            const text = contenteditableDiv.textContent || '';
+            const beforeMention = text.substring(0, this.mentionStartPosition);
+            const afterMention = text.substring(this.mentionStartPosition + this.mentionSearchTerm.length + 1); // +1 for @
+            // Thay thế @searchterm bằng @username (có thể dùng HTML cho highlight)
+            // Để đơn giản, chỉ chèn plain text, hoặc có thể dùng span nếu muốn highlight
+            // contenteditableDiv.textContent = beforeMention + '@' + user.user_name + ' ' + afterMention;
+            // Nếu muốn highlight:
+            const mentionHtml = beforeMention + '<span class="mention-highlight" data-user-id="' + (user.userid || user.id) + '">@' + user.user_name + '</span> ' + afterMention;
+            contenteditableDiv.innerHTML = mentionHtml;
+            // Đặt lại cursor sau mention
+            const range = document.createRange();
+            const sel = window.getSelection();
+            if (contenteditableDiv.childNodes.length > 0) {
+                range.setStart(contenteditableDiv, contenteditableDiv.childNodes.length);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+            contenteditableDiv.focus();
+            // Ẩn dropdown
+            this.hideMentionDropdown();
+        },
+        
+        hideMentionDropdown() {
+            this.showMentionDropdown = false;
+            this.selectedMentionIndex = 0;
+            this.mentionSearchTerm = '';
+            this.mentionStartPosition = -1;
+        },
+        
+        // Method to render mentions in comments
+        renderMentions(content) {
+            if (!content) return content;
+            
+            // If content already contains HTML mentions, convert to display format
+            if (content.includes('mention-highlight')) {
+                // Convert HTML mentions to display format while preserving the mention styling
+                let displayContent = content;
+                
+                // Replace HTML mentions with styled spans but keep the @username format
+                displayContent = this.decodeHtmlEntities(displayContent);
+                return displayContent;
+            }
+            
+            // Otherwise, use the static method for plain text mentions
+            return MentionManager.renderMentions(content);
+        },
+        
+        // Method to get HTML content from contenteditable div
+        getCommentText() {
+            const contenteditableDiv = document.querySelector('[contenteditable="true"][data-mention]');
+            if (contenteditableDiv) {
+                // Return the HTML content to preserve mentions formatting
+                return contenteditableDiv.innerHTML || '';
+            }
+            return '';
+        },
+        
+        // Method to check if comment has content (for button disabled state)
+        hasCommentContent() {
+            const contenteditableDiv = document.querySelector('[contenteditable="true"][data-mention]');
+            if (contenteditableDiv) {
+                // Check if there's any text content (ignoring HTML tags)
+                const textContent = contenteditableDiv.textContent || contenteditableDiv.innerText || '';
+                return textContent.trim().length > 0;
+            }
+            return false;
+        },
+        onCommentInput() {
+            // Gọi forceUpdate để cập nhật lại trạng thái button gửi comment hoạt động khi gõ nội dung.
+            this.$forceUpdate();
         },
     },
     watch: {
@@ -1370,30 +1516,32 @@ createApp({
         },
     },
     async mounted() {
-        await this.loadAllTeams();
-        await this.loadCategories();
         await this.loadProject();
-        if (this.project) {
-            this.newProject.category_id = this.project.category_id;
-            this.newProject.company_name = this.project.company_name;
-            this.newProject.customer_id = this.project.customer_id;
-        }
-        
-        // Only load companies and contacts if department is set
-        if (this.project && this.project.department_id) {
-            await this.loadCompanies();
-            await this.loadContacts();
-        }
-        
-        this.loadTasks();
-        this.loadComments();
-        this.loadAllUsers();
+        await this.loadCategories();
+        await this.loadAllTeams();
         await this.loadDepartmentCustomFieldSets();
+        await this.loadComments();
+        this.initTooltips();
+        
+        // Initialize mention manager
         this.$nextTick(() => {
-            this.initTooltips();
-            this.initTagify();
-            this.initDatePickers();
+            if (window.mentionManager) {
+                // If MentionManager already exists, set department ID and rebind
+                if (this.project && this.project.department_id) {
+                    window.mentionManager.setDepartmentId(this.project.department_id);
+                }
+                // Force rebind to ensure it picks up the contenteditable element
+                window.mentionManager.bindToInputs();
+            } else {
+                // Create new MentionManager instance
+                window.mentionManager = new MentionManager({
+                    departmentId: this.project ? this.project.department_id : null
+                });
+            }
         });
+        
+        // Add beforeunload event listener
+        window.addEventListener('beforeunload', this.handleBeforeUnload);
     },
     updated() {
         this.$nextTick(() => {
