@@ -446,26 +446,31 @@ class Project extends ApplicationModel {
         return $this->query_update($data, ['id' => $id]);
     }
 
-    function getComments($params = null) {
-        // Handle both direct project_id parameter and params array from API
-        if (is_array($params)) {
-            $project_id = isset($params['project_id']) ? $params['project_id'] : 0;
-        } else {
-            $project_id = $params;
-        }
+    function getComments() {
+        $project_id = isset($_GET['project_id']) ? $_GET['project_id'] : 0;
+        if(!$project_id) return [];
+        
+        // Get pagination parameters
+        $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
+        $per_page = isset($_GET['per_page']) ? intval($_GET['per_page']) : 20;
+        $offset = ($page - 1) * $per_page;
         
         $query = sprintf(
-            "SELECT c.*, u.realname as user_name 
+            "SELECT c.*, u.realname as user_name, u.user_image
             FROM " . DB_PREFIX . "comments c 
-            LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.id 
+            LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
             WHERE c.project_id = %d 
-            ORDER BY c.created_at DESC",
-            intval($project_id)
+            ORDER BY c.created_at ASC
+            LIMIT %d OFFSET %d",
+            intval($project_id),
+            intval($per_page),
+            intval($offset)
         );
         return $this->fetchAll($query);
     }
 
     function addComment($data) {
+        $data = $_POST;
         $commentData = array(
             'project_id' => $data['project_id'],
             'user_id' => $data['user_id'],

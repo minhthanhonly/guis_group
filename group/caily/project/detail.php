@@ -500,27 +500,44 @@ if (!$project_id) {
                             <p class="text-muted">コメントはまだありません</p>
                         </div>
                         <!-- Comments List -->
-                        <div v-else class="comment-list mb-4" style="max-height: 400px; overflow-y: auto;">
-                            <div v-for="comment in comments" :key="comment.id" class="comment-item mb-3">
-                                <div class="d-flex gap-3">
-                                    <div class="flex-shrink-0">
-                                        <div class="avatar avatar-sm">
-                                            <span class="avatar-initial rounded-circle bg-primary">
-                                                {{ comment.user_name ? comment.user_name.charAt(0) : '?' }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <div class="comment-header d-flex justify-content-between align-items-center">
-                                            <h6 class="mb-0">{{ comment.user_name }}</h6>
-                                            <small class="text-muted">{{ formatDateTime(comment.created_at) }}</small>
-                                        </div>
-                                        <div class="comment-content mt-1">
-                                            {{ comment.content }}
-                                        </div>
-                                    </div>
-                                </div>
+                        <div v-else class="position-relative">
+                            <!-- Show more comments button at the top -->
+                            <div v-if="showLoadMoreButton" class="text-center py-2">
+                                <button class="btn btn-outline-secondary btn-sm" @click="loadMoreComments">
+                                    <i class="fa fa-chevron-up"></i> 古いコメントを表示
+                                </button>
                             </div>
+                            
+                            <!-- Loading indicator for older comments -->
+                            <div v-if="loadingOlderComments" class="text-center py-2">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <small class="text-muted ms-2">古いコメントを読み込み中...</small>
+                            </div>
+                            
+                            <ul class="list-unstyled chat-history" id="chat-history-project" 
+                                style="max-height: 400px; overflow-y: auto;"
+                                @scroll="handleScroll">
+                                <li v-for="comment in displayedComments" :key="comment.id" class="chat-message">
+                                    <div class="d-flex overflow-hidden">
+                                        <div class="user-avatar flex-shrink-0 me-4">
+                                            <div class="avatar avatar-sm" data-bs-toggle="tooltip" :data-bs-original-title="comment.user_name" :data-userid="comment.user_id">
+                                                <img v-if="!comment.avatarError" class="rounded-circle" :src="getAvatarSrc(comment)" :alt="comment.user_name" @error="handleAvatarError(comment)">
+                                                <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment.user_name) }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="chat-message-wrapper flex-grow-1">
+                                            <div class="chat-message-text bg-light rounded-3 p-2">
+                                                <p class="mb-0">{{ comment.content }}</p>
+                                            </div>
+                                            <div class="text-body-secondary mt-1">
+                                                <small>{{ formatDateTime(comment.created_at) }}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+                            </ul>
                         </div>
                     </div>
                     
@@ -593,6 +610,46 @@ $view->footing();
 .comment-content {
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+/* Chat interface styles */
+.chat-history {
+    margin: 0;
+    padding: 0;
+}
+
+.chat-message {
+    margin-bottom: 1.5rem;
+    padding: 0;
+}
+
+.chat-message:last-child {
+    margin-bottom: 0;
+}
+
+.user-avatar {
+    margin-right: 1rem;
+}
+
+.chat-message-wrapper {
+    max-width: 80%;
+}
+
+.chat-message-text {
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.chat-message-text p {
+    margin: 0;
+    line-height: 1.4;
+    word-wrap: break-word;
+}
+
+.text-body-secondary small {
+    font-size: 0.75rem;
+    color: #6c757d;
 }
 
 /* Edit mode styles */

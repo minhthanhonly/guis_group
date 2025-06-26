@@ -59,6 +59,12 @@ createApp({
             projectOrderTypeTagify: null,
             customFields: [],
             departmentCustomFieldSets: [],
+            // Comment pagination
+            commentsPage: 1,
+            commentsPerPage: 20,
+            loadingOlderComments: false,
+            hasMoreComments: true,
+            showLoadMoreButton: false, // Track if we should show the load more button
         }
     },
     computed: {
@@ -74,6 +80,15 @@ createApp({
         selectedCustomFieldSet() {
             if (!this.project || !this.project.department_custom_fields_set_id) return null;
             return this.departmentCustomFieldSets.find(set => String(set.id) === String(this.project.department_custom_fields_set_id)) || null;
+        },
+        displayedComments() {
+            // Sort comments by date ascending (oldest first)
+            const sortedComments = [...this.comments].sort((a, b) => 
+                new Date(a.created_at) - new Date(b.created_at)
+            );
+            
+            // Return all loaded comments (pagination is handled by the API)
+            return sortedComments;
         },
     },
     methods: {
@@ -162,10 +177,77 @@ createApp({
         },
         async loadComments() {
             try {
-                const response = await axios.get(`/api/index.php?model=project&method=getComments&project_id=${this.projectId}`);
-                this.comments = response.data || [];
+                const response = await axios.get(`/api/index.php?model=project&method=getComments&project_id=${this.projectId}&page=${this.commentsPage}&per_page=${this.commentsPerPage}`);
+                const newComments = response.data || [];
+                
+                if (this.commentsPage === 1) {
+                    // First load - replace all comments
+                    this.comments = newComments;
+                    
+                    // Scroll to bottom after Vue rendering is complete (initial load)
+                    this.$nextTick(() => {
+                        setTimeout(() => {
+                            const element = document.querySelector('#chat-history-project');
+                            if (element && element.scrollHeight > 0) {
+                                element.scrollTop = element.scrollHeight;
+                            }
+                        }, 100);
+                        this.setConnectedUsers();
+                    });
+                } else {
+                    // Loading more - prepend older comments
+                    // Store current scroll position and height
+                    const element = document.querySelector('#chat-history-project');
+                    const scrollHeightBefore = element ? element.scrollHeight : 0;
+                    
+                    this.comments = [...newComments, ...this.comments];
+                    
+                    // Restore scroll position after loading older comments
+                    this.$nextTick(() => {
+                        if (element) {
+                            const scrollHeightAfter = element.scrollHeight;
+                            const scrollDifference = scrollHeightAfter - scrollHeightBefore;
+                            element.scrollTop = scrollDifference;
+                        }
+                    });
+                }
+                
+                // Check if there are more comments
+                this.hasMoreComments = newComments.length === this.commentsPerPage;
+                
+                this.loadingOlderComments = false;
+              
             } catch (error) {
                 console.error('Error loading comments:', error);
+                this.loadingOlderComments = false;
+            }
+        },
+        async loadMoreComments() {
+            if (this.loadingOlderComments || !this.hasMoreComments) return;
+            
+            this.loadingOlderComments = true;
+            this.showLoadMoreButton = false; // Hide button while loading
+            
+            try {
+                this.commentsPage++;
+                await this.loadComments();
+            } catch (error) {
+                console.error('Error loading more comments:', error);
+                this.commentsPage--; // Revert page number on error
+            } finally {
+                this.loadingOlderComments = false;
+            }
+        },
+        handleScroll(event) {
+            const element = event.target;
+            
+            // Check if user is at the top of the scroll area
+            const isAtTop = element.scrollTop === 0;
+            this.showLoadMoreButton = isAtTop && this.hasMoreComments && !this.loadingOlderComments;
+            
+            // Load more comments when scrolling to the top
+            if (isAtTop && this.hasMoreComments && !this.loadingOlderComments) {
+                this.loadMoreComments();
             }
         },
         // calculateStats() {
@@ -183,14 +265,28 @@ createApp({
             if (!this.newComment.trim()) return;
             try {
                 const formData = new FormData();
-                formData.append('model', 'project');
-                formData.append('method', 'addComment');
                 formData.append('project_id', this.projectId);
                 formData.append('content', this.newComment.trim());
                 formData.append('user_id', USER_ID);
-                await axios.post('/api/index.php', formData);
+                await axios.post('/api/index.php?model=project&method=addComment', formData);
                 this.newComment = '';
-                this.loadComments();
+                
+                // Reset pagination and reload comments to show the new comment
+                this.commentsPage = 1;
+                this.hasMoreComments = true;
+                this.showLoadMoreButton = false; // Reset button state
+                await this.loadComments();
+                
+                // Scroll to bottom after Vue rendering is complete
+                this.$nextTick(() => {
+                    setTimeout(() => {
+                        const element = document.querySelector('#chat-history-project');
+                        console.log('Add comment scroll height:', element ? element.scrollHeight : 0);
+                        if (element && element.scrollHeight > 0) {
+                            element.scrollTop = element.scrollHeight;
+                        }
+                    }, 100);
+                });
             } catch (error) {
                 console.error('Error adding comment:', error);
                 alert('コメントの追加に失敗しました。');
@@ -214,6 +310,18 @@ createApp({
             }
         },
         copyProject() {
+            // Get the current custom fields data
+            let customFieldsData = [];
+            let raw = this.project.custom_fields;
+            if (typeof raw === 'string' && raw.includes('&quot;')) {
+                raw = raw.replace(/&quot;/g, '"');
+            }
+            if (typeof raw === 'string') {
+                try { customFieldsData = JSON.parse(raw); } catch (e) { customFieldsData = []; }
+            } else if (Array.isArray(raw)) {
+                customFieldsData = raw;
+            }
+            
             // Prepare project data for copying
             const projectData = {
                 category_id: this.newProject.category_id,
@@ -237,7 +345,7 @@ createApp({
                 teams: this.project.teams,
                 managers: this.managers.map(m => m.user_id).join(','),
                 members: this.members.map(m => m.user_id).join(','),
-                custom_fields: this.customFields
+                custom_fields: customFieldsData
             };
             
             // Store the data in sessionStorage

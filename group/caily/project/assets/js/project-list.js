@@ -275,14 +275,14 @@ var projectTable;
                 },
                 { data: 'start_date', title: '開始日', render: function(data) {
                     if(data) {
-                        return moment(data).format('YYYY/MM/DD');
+                        return moment(data).format('YYYY/MM/DD HH:mm');
                     } else {
                         return '-';
                     }
                 }},
                 { data: 'end_date', title: '終了日', render: function(data) {
                     if(data) {
-                        return moment(data).format('YYYY/MM/DD');
+                        return moment(data).format('YYYY/MM/DD HH:mm');
                     } else {
                         return '-';
                     }
@@ -291,7 +291,7 @@ var projectTable;
                     data: null,
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-center gap-1">
-                                    <button class="btn btn-sm btn-danger item-delete" data-id="${row.id}">削除</button>
+                                    <a href="detail.php?id=${row.id}" class="btn btn-sm bg-label-primary"><i class="fa fa-eye"></i></a>
                                 </div>`;
                     },
                     title: '操作'

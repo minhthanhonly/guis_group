@@ -77,6 +77,7 @@ createApp({
             projectOrderTypeTagify: null,
             customFields: [],
             departmentCustomFieldSets: [],
+            copiedCustomFields: [],
         }
     },
     computed: {
@@ -122,11 +123,17 @@ createApp({
             // Check for copied project data
             this.loadCopiedProjectData();
         },
+        decodeHtmlEntities(str) {
+            const txt = document.createElement('textarea');
+            txt.innerHTML = str;
+            return txt.value;
+        },
         loadCopiedProjectData() {
             const copiedData = sessionStorage.getItem('copyProjectData');
             if (copiedData) {
                 try {
                     const data = JSON.parse(copiedData);
+                    console.log('Loaded copied project data:', data);
                     
                     // Populate project data
                     this.project.name = data.name || '';
@@ -153,15 +160,36 @@ createApp({
                     this.newProject.managers = data.managers || '';
                     this.newProject.members = data.members || '';
                     
-                    // Load custom fields if available
+                    console.log('Managers data:', this.newProject.managers);
+                    console.log('Members data:', this.newProject.members);
+                    
+                    // Store custom fields data for later processing
                     if (data.custom_fields && Array.isArray(data.custom_fields)) {
-                        this.customFields = data.custom_fields;
+                        this.copiedCustomFields = data.custom_fields;
+                        console.log('Copied custom fields:', this.copiedCustomFields);
                     }
                     
                     // Clear the copied data from sessionStorage
                     sessionStorage.removeItem('copyProjectData');
                     
                     console.log('Copied project data loaded successfully');
+                    
+                    // Trigger loading of related data based on copied data
+                    this.$nextTick(async () => {
+                        if (this.newProject.category_id) {
+                            await this.loadCompaniesByCategory();
+                        }
+                        if (this.newProject.company_name) {
+                            await this.loadContactsByCompany();
+                        }
+                        
+                        // Set Quill editor content if description exists
+                        if (this.project.description) {
+                            this.$nextTick(() => {
+                                this.setQuillContent(this.project.description);
+                            });
+                        }
+                    });
                 } catch (error) {
                     console.error('Error loading copied project data:', error);
                     sessionStorage.removeItem('copyProjectData');
@@ -309,11 +337,16 @@ createApp({
             if (!this.selectedCustomFieldSet) return [];
             return this.selectedCustomFieldSet.fields.map((f, idx) => {
                 let value = '';
-                if (f.type === 'checkbox') {
-                    value = Array.isArray(this.customFields[idx].valueArr) ? this.customFields[idx].valueArr.join(',') : '';
-                } else {
-                    value = this.customFields[idx]?.value || '';
+                const customField = this.customFields[idx];
+                
+                if (customField) {
+                    if (f.type === 'checkbox') {
+                        value = Array.isArray(customField.valueArr) ? customField.valueArr.join(',') : '';
+                    } else {
+                        value = customField.value || '';
+                    }
                 }
+                
                 return {
                     label: f.label,
                     type: f.type,
@@ -752,6 +785,137 @@ createApp({
                 this.membersTagify = null;
             }
         },
+        async populateTeamTags() {
+            if (!this.tagify || !this.newProject.teams) return;
+            
+            try {
+                const teamIds = this.newProject.teams.split(',').map(id => id.trim()).filter(Boolean);
+                if (teamIds.length === 0) return;
+                
+                const res = await axios.get(`/api/index.php?model=team&method=listbyids&ids=${teamIds.join(',')}`);
+                if (res.data && Array.isArray(res.data)) {
+                    const teamTags = res.data.map(team => ({ value: team.name, id: team.id }));
+                    this.tagify.addTags(teamTags);
+                }
+            } catch (error) {
+                console.error('Error populating team tags:', error);
+            }
+        },
+        async populateManagerTags() {
+            if (!this.managerTagify || !this.newProject.managers) return;
+            
+            try {
+                const managerIds = this.newProject.managers.split(',').map(id => id.trim()).filter(Boolean);
+                if (managerIds.length === 0) return;
+                
+                // Use department users that are already loaded
+                const managerTags = this.departmentUsers
+                    .filter(user => managerIds.includes(String(user.id)))
+                    .map(user => ({ 
+                        id: user.id, 
+                        value: user.user_name,
+                        user_id: user.id,
+                        name: user.user_name
+                    }));
+                
+                if (managerTags.length > 0) {
+                    this.managerTagify.addTags(managerTags);
+                    console.log('Manager tags populated:', managerTags);
+                }
+            } catch (error) {
+                console.error('Error populating manager tags:', error);
+            }
+        },
+        async populateMemberTags() {
+            if (!this.membersTagify || !this.newProject.members) return;
+            
+            try {
+                const memberIds = this.newProject.members.split(',').map(id => id.trim()).filter(Boolean);
+                if (memberIds.length === 0) return;
+                
+                // Use department users that are already loaded
+                const memberTags = this.departmentUsers
+                    .filter(user => memberIds.includes(String(user.id)))
+                    .map(user => ({ 
+                        id: user.id, 
+                        value: user.user_name,
+                        user_id: user.id,
+                        name: user.user_name
+                    }));
+                
+                if (memberTags.length > 0) {
+                    this.membersTagify.addTags(memberTags);
+                    console.log('Member tags populated:', memberTags);
+                }
+            } catch (error) {
+                console.error('Error populating member tags:', error);
+            }
+        },
+        loadCopiedCustomFields() {
+            if (!this.copiedCustomFields || !this.selectedCustomFieldSet) {
+                console.log('No copied custom fields or selected custom field set');
+                return;
+            }
+            
+            try {
+                console.log('Loading copied custom fields:', this.copiedCustomFields);
+                console.log('Selected custom field set:', this.selectedCustomFieldSet);
+                
+                // Map copied custom fields to the current custom field set
+                this.selectedCustomFieldSet.fields.forEach((field, idx) => {
+                    const copiedField = this.copiedCustomFields.find(cf => cf.label === field.label);
+                    console.log(`Field ${field.label}:`, copiedField);
+                    
+                    if (copiedField && this.customFields[idx]) {
+                        if (field.type === 'checkbox') {
+                            // Handle checkbox fields
+                            if (Array.isArray(copiedField.valueArr)) {
+                                this.customFields[idx].valueArr = copiedField.valueArr;
+                                this.customFields[idx].value = copiedField.valueArr.join(',');
+                            } else if (typeof copiedField.value === 'string') {
+                                this.customFields[idx].valueArr = copiedField.value.split(',').map(s => s.trim()).filter(Boolean);
+                                this.customFields[idx].value = copiedField.value;
+                            }
+                        } else {
+                            // Handle other field types
+                            this.customFields[idx].value = copiedField.value || '';
+                        }
+                        
+                        console.log(`Set field ${field.label} to:`, this.customFields[idx]);
+                    }
+                });
+                
+                console.log('Copied custom fields loaded successfully');
+            } catch (error) {
+                console.error('Error loading copied custom fields:', error);
+            }
+        },
+        initializeCustomFields() {
+            if (this.selectedCustomFieldSet) {
+                this.customFields = this.selectedCustomFieldSet.fields.map(f => {
+                    if (f.type === 'checkbox') {
+                        return { label: f.label, type: f.type, options: f.options, value: '', valueArr: [] };
+                    } else {
+                        return { label: f.label, type: f.type, options: f.options, value: '' };
+                    }
+                });
+                
+                console.log('Custom fields initialized:', this.customFields);
+                
+                // Load copied custom fields if available
+                if (this.copiedCustomFields && this.copiedCustomFields.length > 0) {
+                    this.$nextTick(() => {
+                        this.loadCopiedCustomFields();
+                    });
+                }
+            }
+        },
+        setQuillContent(content) {
+            if (this.quillInstance && content) {
+                this.quillInstance.root.innerHTML = content;
+                console.log('Quill content set:', content);
+            }
+        },
     },
     watch: {
         'project.department_id': function(newVal) {
@@ -773,13 +937,7 @@ createApp({
         },
         'project.department_custom_fields_set_id': function(newVal) {
             if (newVal && this.selectedCustomFieldSet) {
-                this.customFields = this.selectedCustomFieldSet.fields.map(f => {
-                    if (f.type === 'checkbox') {
-                        return { label: f.label, type: f.type, options: f.options, value: '', valueArr: [] };
-                    } else {
-                        return { label: f.label, type: f.type, options: f.options, value: '' };
-                    }
-                });
+                this.initializeCustomFields();
             }
         },
         'customFields': {
@@ -803,29 +961,64 @@ createApp({
         },
     },
     async mounted() {
+        // Load basic data first
         await this.loadAllTeams();
         await this.loadCategories();
         await this.loadDepartments();
+        
+        // Load project data (this will also load copied data if available)
         await this.loadProject();
         
-        // Only load companies and contacts if department is set
+        // Load related data based on the project data (including copied data)
         if (this.project.department_id) {
             await this.loadCompanies();
             await this.loadContacts();
-        }
-        
-        // If department is preset, load related data
-        if (this.presetDepartmentId) {
             await this.loadDepartmentCustomFieldSets();
-            await this.initManagerMembersTagify();
+            await this.loadDepartmentUsers(); // Load department users first
+            
+            // Initialize custom fields if a set is selected
+            if (this.project.department_custom_fields_set_id && this.selectedCustomFieldSet) {
+                this.initializeCustomFields();
+            }
         }
         
-        this.$nextTick(() => {
+        // Initialize all UI components
+        this.$nextTick(async () => {
             this.initDatePickers();
             this.initQuillEditor();
             this.initSelect2();
             this.initProjectOrderTypeTagify();
             this.initTagify();
+            
+            // Initialize manager/member Tagify after everything else is loaded
+            if (this.project.department_id) {
+                await this.initManagerMembersTagify();
+                
+                // If we have copied data, populate the Tagify components
+                if (this.newProject.teams) {
+                    await this.populateTeamTags();
+                }
+                if (this.newProject.managers) {
+                    await this.populateManagerTags();
+                }
+                if (this.newProject.members) {
+                    await this.populateMemberTags();
+                }
+            }
+            
+            // Handle copied custom fields after custom field sets are loaded
+            if (this.copiedCustomFields && this.copiedCustomFields.length > 0) {
+                this.$nextTick(() => {
+                    this.loadCopiedCustomFields();
+                });
+            }
+            
+            // Set Quill editor content if description exists (for copied projects)
+            if (this.project.description) {
+                this.$nextTick(() => {
+                    this.setQuillContent(this.decodeHtmlEntities(this.project.description));
+                });
+            }
         });
     }
 }).mount('#app');

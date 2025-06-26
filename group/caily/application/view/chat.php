@@ -181,7 +181,7 @@
                   <input type="file" id="attach-doc" hidden />
                 </label> -->
                 <button class="btn btn-primary d-flex send-msg-btn">
-                  <i class="icon-base ti tabler-send icon-16px flex-shrink-0"></i>
+                  <i class="fa fa-paper-plane icon-16px flex-shrink-0"></i>
                 </button>
               </div>
             </form>
