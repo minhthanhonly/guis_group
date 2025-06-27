@@ -73,7 +73,7 @@ if (!$project_id) {
                                 <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
                                     タスク総数
                                 </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total }}</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ taskStats.total }}</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-tasks fa-2x text-gray-300"></i>
@@ -90,7 +90,7 @@ if (!$project_id) {
                                 <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
                                     完了済み
                                 </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.completed }}</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ taskStats.completed }}</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-check-circle fa-2x text-gray-300"></i>
@@ -107,7 +107,7 @@ if (!$project_id) {
                                 <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
                                     期限切れ
                                 </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.overdue }}</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ taskStats.overdue }}</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
@@ -136,6 +136,7 @@ if (!$project_id) {
         <!-- Tiêu đề các cột và nút tạo task -->
          
         <div class="d-flex align-items-center justify-content-end mb-2">
+            <button class="btn btn-secondary me-2" @click="testUpdateStatus">Test Update Status</button>
             <button class="btn btn-primary ms-2" @click="openNewTaskModal">
                 <i class="bi bi-plus"></i> 新規タスク
             </button>
@@ -217,10 +218,8 @@ if (!$project_id) {
                                     {{ getStatusLabel(inlineTask.status) }}
                                 </button>
                                 <ul class="dropdown-menu">
-                                    <li v-for="status in taskStatuses" :key="status.value">
-                                        <a class="dropdown-item waves-effect" href="#" @click.prevent="inlineTask.status = status.value; closeDropdown($event)">
-                                            {{ status.label }}
-                                        </a>
+                                    <li v-for="status in taskStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="inlineTask.status = status.value; closeDropdown($event)">
+                                        {{ status.label }}
                                     </li>
                                 </ul>
                             </div>
@@ -287,7 +286,7 @@ if (!$project_id) {
                                     {{ getStatusLabel(task.status) }}
                                 </button>
                                 <ul class="dropdown-menu">
-                                    <li v-for="status in taskStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateTaskStatus(task, status.value)">
+                                    <li v-for="status in taskStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateTaskStatus(task, status.value); closeDropdown($event)">
                                         {{ status.label }}
                                     </li>
                                 </ul>
@@ -341,7 +340,7 @@ if (!$project_id) {
                             </div>
                             <div class="mb-3">
                                 <label for="taskStatus" class="form-label">ステータス</label>
-                                <select class="form-select form-select-sm" id="taskStatus" v-model="taskForm.status" @change="updateTaskStatus(taskForm)">
+                                <select class="form-select form-select-sm" id="taskStatus" v-model="taskForm.status" @change="updateTaskStatus(taskForm, taskForm.status)">
                                     <option value="todo">未開始</option>
                                     <option value="in-progress">進行中</option>
                                     <option value="completed">完了</option>
@@ -387,7 +386,7 @@ if (!$project_id) {
 
                 <div class="mb-3">
                     <label class="form-label">ステータス</label>
-                    <select class="form-select form-select-sm" v-model="selectedTask.status" @change="updateTaskStatus(selectedTask)">
+                    <select class="form-select form-select-sm" v-model="selectedTask.status" @change="updateTaskStatus(selectedTask, selectedTask.status)">
                         <option v-for="status in taskStatuses" :key="status.value" :value="status.value">
                             {{ status.label }}
                         </option>
@@ -483,6 +482,7 @@ if (!$project_id) {
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
 <script src="assets/js/task-manager.js"></script>
 
 

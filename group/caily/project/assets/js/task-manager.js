@@ -87,6 +87,25 @@ const TaskApp = createApp({
                 //if (this.filterDueDate && task.due_date !== this.filterDueDate) match = false;
                 return match;
             });
+        },
+        taskStats() {
+            const total = this.tasks.length;
+            const completed = this.tasks.filter(t => t.status === 'completed').length;
+            
+            // Calculate overdue tasks: tasks with due_date that are past due and not completed
+            const overdue = this.tasks.filter(t => {
+                if (!t.due_date || t.status === 'completed') return false;
+                try {
+                    const dueDate = moment(t.due_date);
+                    const now = moment();
+                    return dueDate.isBefore(now, 'day'); // Compare by day, not exact time
+                } catch (error) {
+                    console.error('Error parsing date:', t.due_date, error);
+                    return false;
+                }
+            }).length;
+            
+            return { total, completed, overdue };
         }
     },
     
@@ -123,6 +142,17 @@ const TaskApp = createApp({
         testClick() {
             console.log('Click event works!');
         },
+        
+        testUpdateStatus() {
+            if (this.tasks.length > 0) {
+                const firstTask = this.tasks[0];
+                console.log('Testing updateStatus with first task:', firstTask);
+                this.updateTaskStatus(firstTask, 'completed');
+            } else {
+                console.log('No tasks available for testing');
+            }
+        },
+        
         async loadProjectInfo() {
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
@@ -320,45 +350,35 @@ const TaskApp = createApp({
         },
         
         async saveTask() {
-            alert(true);
-            // Validate required fields
-            if (!this.taskForm.title || !this.taskForm.title.trim()) {
-                this.showMessage('タスク名は必須です。', true);
-                return;
-            }
-            if (!this.taskForm.assigned_to) {
-                this.showMessage('担当者は必須です。', true);
-                return;
-            }
-            if (!this.taskForm.due_date || !this.taskForm.due_date.trim()) {
-                this.showMessage('期限日は必須です。', true);
-                return;
-            }
             try {
                 const formData = new FormData();
-                formData.append('model', 'task');
-                formData.append('method', this.editingTask ? 'edit' : 'add');
-                if (this.editingTask) {
-                    formData.append('id', this.editingTask.id);
-                }
                 Object.keys(this.taskForm).forEach(key => {
                     if (this.taskForm[key] !== null && this.taskForm[key] !== '') {
                         formData.append(key, this.taskForm[key]);
                     }
                 });
                 formData.append('project_id', this.projectId);
-                const response = await axios.post('/api/index.php', formData);
-                if (response.data && response.data.success !== false) {
-                    this.showMessage(this.editingTask ? 'タスクを更新しました。' : 'タスクを作成しました。');
-                    bootstrap.Modal.getInstance(document.getElementById('addTaskModal')).hide();
+                
+                let response;
+                if (this.editingTask) {
+                    response = await axios.post(`/api/index.php?model=task&method=update&id=${this.editingTask.id}`, formData);
+                } else {
+                    response = await axios.post('/api/index.php?model=task&method=create', formData);
+                }
+                
+                if (response.data.success) {
+                    this.showMessage(this.editingTask ? 'タスクが更新されました。' : 'タスクが作成されました。');
                     this.loadTasks();
                     this.resetTaskForm();
+                    this.editingTask = null;
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addTaskModal'));
+                    if (modal) modal.hide();
                 } else {
-                    this.showMessage(response.data && response.data.error ? response.data.error : 'タスクの保存に失敗しました。', true);
+                    this.showMessage(response.data.message || 'エラーが発生しました。', true);
                 }
             } catch (error) {
                 console.error('Error saving task:', error);
-                this.showMessage(error.response?.data?.error || 'タスクの保存に失敗しました。', true);
+                this.showMessage('タスクの保存に失敗しました。', true);
             }
         },
         
@@ -395,25 +415,45 @@ const TaskApp = createApp({
         async updateTaskStatus(task, newStatus = null) {
             console.log('updateTaskStatus called with task:', task, 'and newStatus:', newStatus);
             const targetTask = task;
-            if (!targetTask) return;
+            if (!targetTask) {
+                console.error('No target task provided');
+                return;
+            }
+            
+            if (!targetTask.id) {
+                console.error('Task has no id:', targetTask);
+                return;
+            }
             
             const statusToSet = newStatus !== null ? newStatus : targetTask.status;
+            console.log('Status to set:', statusToSet);
             
             try {
                 const formData = new FormData();
                 formData.append('id', targetTask.id);
                 formData.append('status', statusToSet);
                 
+                console.log('Sending request to:', '/api/index.php?model=task&method=updateStatus');
+                console.log('FormData:', {
+                    id: targetTask.id,
+                    status: statusToSet
+                });
+                
                 const response = await axios.post(
                     '/api/index.php?model=task&method=updateStatus',
                     formData
                 );
                 
+                console.log('Response:', response);
+                
                 if (response.data) {
                     this.showMessage('ステータスを更新しました。');
+                    // Reload tasks to get updated data
+                    await this.loadTasks();
                 }
             } catch (error) {
                 console.error('Error updating status:', error);
+                console.error('Error response:', error.response);
                 this.showMessage('ステータスの更新に失敗しました', true);
             }
         },
@@ -571,18 +611,32 @@ const TaskApp = createApp({
             // Gọi API cập nhật nếu cần
         },
         
-        updateTaskStatus(task, value) {
+        updateTaskStatusLocal(task, value) {
             task.status = value;
             // Gọi API cập nhật nếu cần
         },
         
         closeDropdown(event) {
+            // Prevent default behavior
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Find the dropdown menu and close it using jQuery
             const dropdownMenu = event.target.closest('.dropdown-menu');
             if (dropdownMenu) {
-                const dropdown = window.bootstrap
-                    ? window.bootstrap.Dropdown.getOrCreateInstance(dropdownMenu.previousElementSibling)
-                    : bootstrap.Dropdown.getOrCreateInstance(dropdownMenu.previousElementSibling);
-                dropdown.hide();
+                const dropdownButton = dropdownMenu.previousElementSibling;
+                if (dropdownButton && dropdownButton.classList.contains('dropdown-toggle')) {
+                    // Use jQuery to close the dropdown
+                    $(dropdownButton).dropdown('hide');
+                    
+                    // Backup method: manually hide after a short delay
+                    setTimeout(() => {
+                        if (dropdownMenu.classList.contains('show')) {
+                            dropdownMenu.classList.remove('show');
+                            dropdownButton.setAttribute('aria-expanded', 'false');
+                        }
+                    }, 100);
+                }
             }
         },
         

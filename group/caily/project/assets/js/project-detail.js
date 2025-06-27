@@ -1919,7 +1919,7 @@ createApp({
         });
         
         // Add beforeunload event listener
-        window.addEventListener('beforeunload', this.handleBeforeUnload);
+        //window.addEventListener('beforeunload', this.handleBeforeUnload);
 
         // Initialize Tagify for team selection
         if (document.getElementById('team_tags')) {
