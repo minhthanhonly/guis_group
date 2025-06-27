@@ -769,24 +769,14 @@ createApp({
             this.tagify.on('change', this.onTeamTagsChange.bind(this));
         },
         initProjectTagsTagify() {
-            console.log('initProjectTagsTagify called');
             const input = document.getElementById('project_tags');
-            console.log('project_tags input found:', input);
             if (!input) return;
             
             // Destroy previous Tagify instance if exists
             if (input._tagify) {
-                console.log('Destroying existing Tagify instance');
                 input._tagify.destroy();
             }
             
-            // Check if Tagify is available
-            if (!window.Tagify) {
-                console.error('Tagify is not available');
-                return;
-            }
-            
-            console.log('Initializing new Tagify instance');
             // Initialize Tagify for project tags
             const tagify = new Tagify(input, {
                 enforceWhitelist: false,
@@ -801,15 +791,10 @@ createApp({
                 }
             });
             
-            console.log('Tagify instance created:', tagify);
-            
             // Add existing tags if any
             if (this.project.tags) {
                 const tags = this.project.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
-                console.log('Adding existing tags:', tags);
-                if (tags.length > 0) {
-                    tagify.addTags(tags);
-                }
+                tagify.addTags(tags);
             }
             
             // Store reference
@@ -817,21 +802,16 @@ createApp({
             
             // Add event listeners for auto-save
             tagify.on('add', () => {
-                console.log('Tag added');
                 this.updateTags();
             });
             
             tagify.on('remove', () => {
-                console.log('Tag removed');
                 this.updateTags();
             });
             
             tagify.on('change', () => {
-                console.log('Tags changed');
                 this.updateTags();
             });
-            
-            console.log('Project tags Tagify initialization completed');
         },
         async onTeamTagsChange(e) {
             const selected = this.tagify.value; // [{value, id}]
@@ -1730,51 +1710,6 @@ createApp({
                             this.buildingBranchTagify.on('remove', updateBuildingBranch);
                         } else {
                         }
-                        
-                        // --- Tagify for project tags ---
-                        const projectTagsInput = document.querySelector('#project_tags');
-                        if (projectTagsInput && window.Tagify && !projectTagsInput._tagify) {
-                            if (this.projectTagsTagify) {
-                                try {
-                                    this.projectTagsTagify.destroy();
-                                } catch (e) {
-                                    console.log('Error destroying existing projectTagsTagify:', e);
-                                }
-                            }
-                            this.projectTagsTagify = new Tagify(projectTagsInput, {
-                                enforceWhitelist: false,
-                                mode: 'mix',
-                                pattern: /^[a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\u20000-\u2A6DF\u2A700-\u2B73F\u2B740-\u2B81F\u2B820-\u2CEAF\uF900-\uFAFF\u3300-\u33FF\uFE30-\uFE4F\uFF00-\uFFEF\s]+$/,
-                                maxTags: 20,
-                                dropdown: {
-                                    maxItems: 20,
-                                    classname: "tags-look",
-                                    enabled: 0,
-                                    closeOnSelect: false
-                                }
-                            });
-                            
-                            // Add existing tags if any
-                            if (this.project.tags) {
-                                const tags = this.project.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
-                                if (tags.length > 0) {
-                                    this.projectTagsTagify.addTags(tags);
-                                }
-                            }
-                            
-                            // Add event listeners for auto-save
-                            this.projectTagsTagify.on('add', () => {
-                                this.updateTags();
-                            });
-                            
-                            this.projectTagsTagify.on('remove', () => {
-                                this.updateTags();
-                            });
-                            
-                            this.projectTagsTagify.on('change', () => {
-                                this.updateTags();
-                            });
-                        }
                     }, 100);
                 });
                 window.addEventListener('beforeunload', this.handleBeforeUnload);
@@ -1802,16 +1737,6 @@ createApp({
                         console.log('Error destroying buildingBranchTagify:', e);
                     }
                     this.buildingBranchTagify = null;
-                }
-                
-                // Destroy Tagify for project tags
-                if (this.projectTagsTagify) {
-                    try {
-                        this.projectTagsTagify.destroy();
-                    } catch (e) {
-                        console.log('Error destroying projectTagsTagify:', e);
-                    }
-                    this.projectTagsTagify = null;
                 }
                 
                 window.removeEventListener('beforeunload', this.handleBeforeUnload);
@@ -1888,17 +1813,6 @@ createApp({
             },
             deep: true
         },
-        'project': {
-            handler(newVal) {
-                if (newVal && newVal.id) {
-                    // Initialize project tags Tagify when project is loaded
-                    setTimeout(() => {
-                        this.initProjectTagsTagify();
-                    }, 100);
-                }
-            },
-            deep: true
-        }
     },
     async mounted() {
         await this.loadProject();
@@ -1974,8 +1888,7 @@ createApp({
 
         // Initialize Tagify for project tags
         if (document.getElementById('project_tags')) {
-            const projectTagsInput = document.getElementById('project_tags');
-            this.projectTagsTagify = new Tagify(projectTagsInput, {
+            new Tagify(document.getElementById('project_tags'), {
                 enforceWhitelist: false,
                 mode: 'mix',
                 pattern: /^[a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\u20000-\u2A6DF\u2A700-\u2B73F\u2B740-\u2B81F\u2B820-\u2CEAF\uF900-\uFAFF\u3300-\u33FF\uFE30-\uFE4F\uFF00-\uFFEF\s]+$/,
@@ -1987,33 +1900,7 @@ createApp({
                     closeOnSelect: false
                 }
             });
-            
-            // Add existing tags if any
-            if (this.project.tags) {
-                const tags = this.project.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
-                if (tags.length > 0) {
-                    this.projectTagsTagify.addTags(tags);
-                }
-            }
-            
-            // Add event listeners for auto-save
-            this.projectTagsTagify.on('add', () => {
-                this.updateTags();
-            });
-            
-            this.projectTagsTagify.on('remove', () => {
-                this.updateTags();
-            });
-            
-            this.projectTagsTagify.on('change', () => {
-                this.updateTags();
-            });
         }
-        
-        // Initialize project tags Tagify with delay to ensure everything is ready
-        setTimeout(() => {
-            this.initProjectTagsTagify();
-        }, 500);
     },
     updated() {
         this.$nextTick(() => {
