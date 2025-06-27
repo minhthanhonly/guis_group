@@ -151,7 +151,6 @@ createApp({
                 // Ensure Tagify is updated after loading project and team_list
                 this.$nextTick(() => { 
                     this.initTagify(); 
-                    this.initProjectTagsTagify();
                     this.setConnectedUsers();
                 });
             } catch (error) {
@@ -718,55 +717,132 @@ createApp({
             }
         },
         initTagify() {
-            if (!this.isEditMode) return;
-            const input = document.getElementById('team_tags');
-            if (!input) return;
-            // Destroy previous Tagify instance if exists
-            if (input._tagify) {
-                input._tagify.destroy();
-            }
-            // Gán giá trị team đã chọn
-            const tags = (this.project.team_list || []).map(t => ({ value: t.name, id: t.id }));
-            // Danh sách tất cả team cho whitelist
-            const whitelist = this.filteredTeams.map(t => ({ value: t.name, id: t.id }));
-            this.tagify = new Tagify(input, {
-                whitelist: whitelist,
-                enforceWhitelist: true,
-                dropdown: { enabled: 0 }
-            });
-            this.tagify.addTags(tags);
-            // Xử lý khi xóa team thì xóa member của team đó
-            this.tagify.on('remove', async (e) => {
-                const removedTeamId = e.detail.data.id;
-                if (!removedTeamId || !this.membersTagify) return;
-                // Lấy danh sách user của team vừa bị xóa
-                try {
-                    const res = await axios.get(`/api/index.php?model=team&method=get&id=${removedTeamId}`);
-                    if (res.data && Array.isArray(res.data.members)) {
-                        const teamMemberIds = res.data.members.map(m => String(m.user_id));
-                        // Xóa các member này khỏi membersTagify
-                        const remain = this.membersTagify.value.filter(tag => !teamMemberIds.includes(String(tag.id)));
-                        this.membersTagify.removeAllTags();
-                        this.membersTagify.addTags(remain);
+            this.$nextTick(() => {
+                setTimeout(() => {
+                    // --- Tagify for team selection ---
+                    const teamInput = document.getElementById('team_tags');
+                    if (teamInput && window.Tagify && !teamInput._tagify) {
+                        if (this.tagify) {
+                            try {
+                                this.tagify.destroy();
+                            } catch (e) {
+                                console.log('Error destroying existing tagify:', e);
+                            }
+                        }
+                        this.tagify = new Tagify(teamInput, {
+                            whitelist: (this.teamList || []).map(team => ({ value: team.id, text: team.name })),
+                            enforceWhitelist: true,
+                            mode: 'select',
+                            templates: {
+                                tag: function(tagData) {
+                                    return `
+                                        <tag title="${tagData.value}"
+                                            contenteditable='false'
+                                            spellcheck='false'
+                                            class='tagify__tag ${tagData.class ? tagData.class : ""}'
+                                            tabindex="0"
+                                            role="option"
+                                            aria-label="${tagData.value}"
+                                            aria-selected="false">
+                                            <x title='' class='tagify__tag__removeBtn' role='button' aria-label='remove tag'></x>
+                                            <div>
+                                                <div class='tagify__tag__avatar-wrap'>
+                                                    <img onerror="this.style.visibility='hidden'" src="">
+                                                </div>
+                                                <div class='tagify__tag__text'>
+                                                    <span>${tagData.text}</span>
+                                                </div>
+                                            </div>
+                                        </tag>
+                                    `
+                                },
+                                dropdownItem: function(tagData) {
+                                    return `
+                                        <div class='tagify__dropdown__item ${tagData.class ? tagData.class : ""}'
+                                             tabindex="0"
+                                             role="option"
+                                             aria-label="${tagData.value}">
+                                            <span>${tagData.text}</span>
+                                        </div>
+                                    `
+                                }
+                            }
+                        });
+                        this.tagify.on('change', this.onTeamTagsChange.bind(this));
                     }
-                } catch (err) {}
-            });
-            // Xử lý khi thêm team thì thêm member của team đó
-            this.tagify.on('add', async (e) => {
-                const addedTeamId = e.detail.data.id;
-                if (!addedTeamId || !this.membersTagify) return;
-                try {
-                    const res = await axios.get(`/api/index.php?model=team&method=get&id=${addedTeamId}`);
-                    if (res.data && Array.isArray(res.data.members)) {
-                        const teamMembers = res.data.members.map(m => ({ id: m.user_id, value: m.user_name }));
-                        // Lọc ra các member chưa có trong Tagify
-                        const currentIds = this.membersTagify.value.map(tag => String(tag.id));
-                        const toAdd = teamMembers.filter(m => !currentIds.includes(String(m.id)));
-                        this.membersTagify.addTags(toAdd);
+                    
+                    // --- Tagify for project_order_type ---
+                    const orderTypeInput = document.querySelector('#project_order_type');
+                    if (orderTypeInput && window.Tagify && !orderTypeInput._tagify) {
+                        if (this.projectOrderTypeTagify) {
+                            try {
+                                this.projectOrderTypeTagify.destroy();
+                            } catch (e) {
+                                console.log('Error destroying existing projectOrderTypeTagify:', e);
+                            }
+                        }
+                        this.projectOrderTypeTagify = new Tagify(orderTypeInput, {
+                            whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                            maxTags: 5,
+                            dropdown: {
+                                maxItems: 20,
+                                classname: "tags-look-project-order-type",
+                                enabled: 0,
+                                closeOnSelect: true
+                            },
+                        });
+                        // Set default value
+                        let tags = [];
+                        if (typeof this.project.project_order_type === 'string' && this.project.project_order_type) {
+                            tags = this.project.project_order_type.split(',').map(s => s.trim()).filter(Boolean);
+                        }
+                        // if (tags.length > 0) {
+                        //     this.projectOrderTypeTagify.addTags(tags);
+                        // }
+                        const updateOrderType = () => {
+                            this.project.project_order_type = this.projectOrderTypeTagify.value.map(tag => tag.value).join(',');
+                        };
+                        this.projectOrderTypeTagify.on('add', updateOrderType);
+                        this.projectOrderTypeTagify.on('remove', updateOrderType);
                     }
-                } catch (err) {}
+                    
+                    // --- Tagify for building_branch ---
+                    const buildingBranchInput = document.querySelector('#building_branch');
+                    if (buildingBranchInput && window.Tagify && !buildingBranchInput._tagify) {
+                        if (this.buildingBranchTagify) {
+                            try {
+                                this.buildingBranchTagify.destroy();
+                            } catch (e) {
+                                console.log('Error destroying existing buildingBranchTagify:', e);
+                            }
+                        }
+                        this.buildingBranchTagify = new Tagify(buildingBranchInput, {
+                            whitelist: this.japanPrefectures,
+                            maxTags: 10,
+                            dropdown: {
+                                maxItems: 20,
+                                classname: "tags-look-building-branch",
+                                enabled: 0,
+                                closeOnSelect: true
+                            },
+                        });
+                        // Set default value
+                        let buildingBranchTags = [];
+                        if (typeof this.project.building_branch === 'string' && this.project.building_branch) {
+                            buildingBranchTags = this.project.building_branch.split(',').map(s => s.trim()).filter(Boolean);
+                        }
+                        // if (buildingBranchTags.length > 0) {
+                        //     this.buildingBranchTagify.addTags(buildingBranchTags);
+                        // }
+                        const updateBuildingBranch = () => {
+                            this.project.building_branch = this.buildingBranchTagify.value.map(tag => tag.value).join(',');
+                        };
+                        this.buildingBranchTagify.on('add', updateBuildingBranch);
+                        this.buildingBranchTagify.on('remove', updateBuildingBranch);
+                    } else {
+                    }
+                }, 100);
             });
-            this.tagify.on('change', this.onTeamTagsChange.bind(this));
         },
         initProjectTagsTagify() {
             const input = document.getElementById('project_tags');
@@ -1018,6 +1094,7 @@ createApp({
                 formData.append('invoice_status', this.project.invoice_status);
                 formData.append('tags', this.project.tags);
                 formData.append('department_custom_fields_set_id', this.project.department_custom_fields_set_id);
+                formData.append('custom_fields', this.project.custom_fields);
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
                 if (response.data && response.data.status == 'success') {
                     this.isEditMode = false;
@@ -1128,7 +1205,11 @@ createApp({
         async loadNotes() {
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getNotes&project_id=${this.projectId}`);
-                this.notes = response.data || [];
+                if (response.data && response.data.status === 'success') {
+                    this.notes = response.data.data || [];
+                } else {
+                    this.notes = [];
+                }
             } catch (error) {
                 console.error('Error loading notes:', error);
                 this.notes = [];
@@ -1291,14 +1372,11 @@ createApp({
             }
         },
         showNotification(message, type = 'info') {
-            // Simple notification using alert for now
-            // You can replace this with a proper notification library
-            if (type === 'success') {
-                console.log('Success:', message);
-            } else if (type === 'error') {
-                console.error('Error:', message);
+            // Use showMessage function if available, otherwise use alert
+            if (typeof showMessage === 'function') {
+                showMessage(message, type === 'error');
             } else {
-                console.log('Info:', message);
+                alert(message);
             }
         },
         initQuillEditor() {
@@ -1655,7 +1733,7 @@ createApp({
                                 maxTags: 5,
                                 dropdown: {
                                     maxItems: 20,
-                                    classname: "tags-look-order-type",
+                                    classname: "tags-look-project-order-type",
                                     enabled: 0,
                                     closeOnSelect: true
                                 },
@@ -1846,7 +1924,7 @@ createApp({
         // Initialize Tagify for team selection
         if (document.getElementById('team_tags')) {
             new Tagify(document.getElementById('team_tags'), {
-                whitelist: this.teamList.map(team => ({ value: team.id, text: team.name })),
+                whitelist: (this.teamList || []).map(team => ({ value: team.id, text: team.name })),
                 enforceWhitelist: true,
                 mode: 'select',
                 templates: {
@@ -1888,7 +1966,7 @@ createApp({
 
         // Initialize Tagify for project tags
         if (document.getElementById('project_tags')) {
-            new Tagify(document.getElementById('project_tags'), {
+            this.projectTagsTagify = new Tagify(document.getElementById('project_tags'), {
                 enforceWhitelist: false,
                 mode: 'mix',
                 pattern: /^[a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\u20000-\u2A6DF\u2A700-\u2B73F\u2B740-\u2B81F\u2B820-\u2CEAF\uF900-\uFAFF\u3300-\u33FF\uFE30-\uFE4F\uFF00-\uFFEF\s]+$/,
@@ -1899,6 +1977,25 @@ createApp({
                     enabled: 0,
                     closeOnSelect: false
                 }
+            });
+            
+            // Add existing tags if any
+            if (this.project && this.project.tags) {
+                const tags = this.project.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+                this.projectTagsTagify.addTags(tags);
+            }
+            
+            // Add event listeners for auto-save
+            this.projectTagsTagify.on('add', () => {
+                this.updateTags();
+            });
+            
+            this.projectTagsTagify.on('remove', () => {
+                this.updateTags();
+            });
+            
+            this.projectTagsTagify.on('change', () => {
+                this.updateTags();
             });
         }
     },

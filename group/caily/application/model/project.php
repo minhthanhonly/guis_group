@@ -670,6 +670,31 @@ class Project extends ApplicationModel {
             return ['success' => false, 'error' => 'Update failed'];
         }
     }
+
+    // Note methods
+    function addNote($params = null) {
+        require_once(DIR_ROOT . '/application/model/projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->create($params);
+    }
+
+    function updateNote($params = null) {
+        require_once(DIR_ROOT . '/application/model/projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->update($params);
+    }
+
+    function deleteNote($params = null) {
+        require_once(DIR_ROOT . '/application/model/projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->delete($params);
+    }
+
+    function getNotes($params = null) {
+        require_once(DIR_ROOT . '/application/model/projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->list($params);
+    }
 }
 
 ?>

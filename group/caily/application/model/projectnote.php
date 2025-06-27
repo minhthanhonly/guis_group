@@ -52,7 +52,7 @@ class ProjectNote extends ApplicationModel {
         $currentUserId = $_SESSION['userid'];
         
         // Check if user is the note creator
-        $isCreator = (String($note['user_id']) === String($currentUserId));
+        $isCreator = (strval($note['user_id']) === strval($currentUserId));
         
         // Check if user is project manager
         $isManager = false;
@@ -104,7 +104,7 @@ class ProjectNote extends ApplicationModel {
         $currentUserId = $_SESSION['userid'];
         
         // Check if user is the note creator
-        $isCreator = (String($note['user_id']) === String($currentUserId));
+        $isCreator = (strval($note['user_id']) === strval($currentUserId));
         
         // Check if user is project manager
         $isManager = false;
