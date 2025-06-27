@@ -187,9 +187,6 @@ if (!$project_id) {
                         <div class="py-2 pe-2">
                             <input type="text" class="form-control datetimepicker" v-model="inlineTask.due_date" placeholder="選択してください">
                         </div>
-                        <i v-if="isInlineTaskOverdue(inlineTask)" class="fas fa-exclamation-triangle text-warning ms-1" 
-                           data-bs-toggle="tooltip" data-bs-placement="top" 
-                           :title="getInlineOverdueTooltip(inlineTask)"></i>
                     </div>
                     <div class="col-2">
                         <div class="d-flex align-items-center flex-wrap avatar-group" @click="openAssigneeModal(idx)">
@@ -244,7 +241,7 @@ if (!$project_id) {
                     <div class="col-3 d-flex align-items-center">
                         <span class="drag-handle" style="cursor: move;">≡</span>
                         <div class="p-2">
-                            <span class="fw-bold">{{ task.title }}</span>
+                            <span class="fw-bold" style="cursor: pointer;" @click="openTaskDetails(task)">{{ task.title }}</span>
                         </div>
                     </div>
                     <div class="col-1">
@@ -371,54 +368,6 @@ if (!$project_id) {
         </div>
     </div>
 
-    <!-- Task Details -->
-    <div class="col-md-4" v-if="selectedTask">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">タスク詳細</h5>
-                <button class="btn-close" @click="selectedTask = null"></button>
-            </div>
-            <div class="card-body">
-                <h6>{{ selectedTask.title }}</h6>
-                <p class="text-muted">{{ selectedTask.description }}</p>
-
-                <div class="mb-3" v-if="selectedTask.due_date">
-                    <label class="form-label">期限</label>
-                    <div class="text-muted">
-                        {{ formatDate(selectedTask.due_date) }}
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">ステータス</label>
-                    <select class="form-select form-select-sm" v-model="selectedTask.status" @change="updateTaskStatus(selectedTask, selectedTask.status)">
-                        <option v-for="status in taskStatuses" :key="status.value" :value="status.value">
-                            {{ status.label }}
-                        </option>
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">進捗 ({{ selectedTask.progress }}%)</label>
-                    <input type="range" class="form-range" v-model="selectedTask.progress" 
-                           min="0" max="100" step="5" @change="updateTaskProgress">
-                </div>
-
-                <div class="mb-3" v-if="selectedTask.assigned_to_name">
-                    <label class="form-label">担当者</label>
-                    <div>{{ selectedTask.assigned_to_name }}</div>
-                </div>
-
-                <div v-if="hasSubtasks(selectedTask)" class="mb-3">
-                    <label class="form-label">サブタスク</label>
-                    <div class="alert alert-info">
-                        このタスクにはサブタスクがあります
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Modal quản lý member -->
     <div class="modal fade" tabindex="-1" :class="{show: showMemberModal}" style="display: block;" v-if="showMemberModal">
         <div class="modal-dialog">
@@ -476,125 +425,163 @@ if (!$project_id) {
             </div>
         </div>
     </div>
-</div>
 
-<!-- Task Details Offcanvas -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="taskDetailsOffcanvas" aria-labelledby="taskDetailsOffcanvasLabel">
-    <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="taskDetailsOffcanvasLabel">
-            <span v-if="selectedTask">{{ selectedTask.title }}</span>
-        </h5>
-        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-    </div>
-    <div class="offcanvas-body">
-        <div v-if="selectedTask">
-            <!-- Task Status Badge -->
-            <div class="mb-3">
-                <span class="badge" :class="getStatusButtonClass(selectedTask.status)">
-                    {{ getStatusLabel(selectedTask.status) }}
-                </span>
-                <span class="badge ms-2" :class="getPriorityButtonClass(selectedTask.priority)">
-                    {{ getPriorityLabel(selectedTask.priority) }}
-                </span>
-            </div>
-
-            <!-- Tabs Navigation -->
-            <ul class="nav nav-tabs" id="taskDetailTabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="content-tab" data-bs-toggle="tab" data-bs-target="#content" type="button" role="tab" aria-controls="content" aria-selected="true">
-                        <i class="fas fa-file-alt me-2"></i>タスク内容
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">
-                        <i class="fas fa-history me-2"></i>活動履歴
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab" aria-controls="settings" aria-selected="false">
-                        <i class="fas fa-cog me-2"></i>設定
-                    </button>
-                </li>
-            </ul>
-
-            <!-- Tab Content -->
-            <div class="tab-content mt-3" id="taskDetailTabContent">
-                <!-- Tab 1: Task Content -->
-                <div class="tab-pane fade show active" id="content" role="tabpanel" aria-labelledby="content-tab">
-                    <div class="row">
-                        <div class="col-12">
-                            <!-- Task Description Editor -->
-                            <div class="card mb-3">
-                                <div class="card-header d-flex justify-content-between align-items-center">
-                                    <h6 class="mb-0">タスクの説明</h6>
-                                    <button class="btn btn-sm btn-primary" @click="saveTaskDescription">
-                                        <i class="fas fa-save me-1"></i>保存
+    <!-- Task Details Modal -->
+    <div class="modal fade" id="taskDetailsModal" tabindex="-1" aria-labelledby="taskDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen" style="max-width: 70%;max-height: 70%; margin: 10% auto; 0">
+            <div class="modal-content h-100">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="taskDetailsModalLabel">
+                        <span v-if="selectedTask">{{ selectedTask.title }}</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body d-flex flex-column h-100 p-0">
+                    <div v-if="selectedTask" class="d-flex flex-column h-100">
+                    <!-- Tabs Navigation at Bottom -->
+                        <div class="nav-align-top nav-tabs-shadow">
+                            <ul class="nav nav-tabs nav-fill" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button type="button" class="nav-link waves-effect active" role="tab" data-bs-toggle="tab" data-bs-target="#content" aria-controls="content" aria-selected="true">
+                                        <span class="d-none d-sm-inline-flex align-items-center">
+                                            <i class="fas fa-file-alt me-1_5"></i>タスク内容
+                                        </span>
+                                        <i class="fas fa-file-alt d-sm-none"></i>
                                     </button>
-                                </div>
-                                <div class="card-body">
-                                    <div id="taskDescriptionEditor" style="min-height: 200px;">
-                                        <!-- Quill editor will be initialized here -->
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button type="button" class="nav-link waves-effect" role="tab" data-bs-toggle="tab" data-bs-target="#comments" aria-controls="comments" aria-selected="false" tabindex="-1">
+                                        <span class="d-none d-sm-inline-flex align-items-center">
+                                            <i class="fas fa-comments me-1_5"></i>コメント
+                                            <span v-if="taskComments.length > 0" class="badge rounded-pill badge-center h-px-20 w-px-20 bg-danger ms-1_5">{{ taskComments.length }}</span>
+                                        </span>
+                                        <i class="fas fa-comments d-sm-none"></i>
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button type="button" class="nav-link waves-effect" role="tab" data-bs-toggle="tab" data-bs-target="#history" aria-controls="history" aria-selected="false" tabindex="-1">
+                                        <span class="d-none d-sm-inline-flex align-items-center">
+                                            <i class="fas fa-history me-1_5"></i>活動履歴
+                                            <span v-if="taskActivities.length > 0" class="badge rounded-pill badge-center h-px-20 w-px-20 bg-label-info ms-1_5">{{ taskActivities.length }}</span>
+                                        </span>
+                                        <i class="fas fa-history d-sm-none"></i>
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                        <!-- Tab Content -->
+                        <div class="tab-content flex-grow-1 p-3">
+                            <!-- Tab 1: Task Content -->
+                            <div class="tab-pane fade show active" id="content" role="tabpanel">
+                                <div class="row h-100">
+                                    <div class="col-12">
+                                        <!-- Task Description Editor -->
+                                        <div class="card h-100">
+                                            <div class="card-header d-flex justify-content-between align-items-center">
+                                                <h6 class="mb-0">タスクの説明</h6>
+                                                <button class="btn btn-sm btn-primary" @click="saveTaskDescription">
+                                                    <i class="fas fa-save me-1"></i>保存
+                                                </button>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="taskDescriptionEditor" style="min-height: 400px;">
+                                                    <!-- Quill editor will be initialized here -->
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Comments Section -->
-                            <div class="card">
-                                <div class="card-header d-flex justify-content-between align-items-center">
-                                    <h6 class="mb-0">コメント</h6>
-                                    <button class="btn btn-sm btn-outline-primary" @click="showAddComment = true">
-                                        <i class="fas fa-plus me-1"></i>コメント追加
-                                    </button>
-                                </div>
-                                <div class="card-body">
-                                    <!-- Add Comment Form -->
-                                    <div v-if="showAddComment" class="mb-3">
-                                        <div class="d-flex">
-                                            <div class="flex-grow-1 me-2">
-                                                <textarea class="form-control" v-model="newComment" rows="3" placeholder="コメントを入力してください..."></textarea>
-                                            </div>
-                                            <div class="d-flex flex-column">
-                                                <button class="btn btn-primary btn-sm mb-1" @click="addComment">
-                                                    <i class="fas fa-paper-plane"></i>
-                                                </button>
-                                                <button class="btn btn-secondary btn-sm" @click="showAddComment = false">
-                                                    <i class="fas fa-times"></i>
-                                                </button>
-                                            </div>
-                                        </div>
+                            <!-- Tab 2: Comments -->
+                            <div class="tab-pane fade" id="comments" role="tabpanel">
+                                <div class="card h-100">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0">コメント</h6>
+                                        <button class="btn btn-sm btn-outline-primary" @click="showAddComment = true">
+                                            <i class="fas fa-plus me-1"></i>コメント追加
+                                        </button>
                                     </div>
-
-                                    <!-- Comments List -->
-                                    <div class="comments-list">
-                                        <div v-if="taskComments.length === 0" class="text-center text-muted py-4">
-                                            <i class="fas fa-comments fa-2x mb-2"></i>
-                                            <p>コメントがありません</p>
-                                        </div>
-                                        <div v-for="comment in taskComments" :key="comment.id" class="comment-item border-bottom pb-3 mb-3">
+                                    <div class="card-body">
+                                        <!-- Add Comment Form -->
+                                        <div v-if="showAddComment" class="mb-3">
                                             <div class="d-flex">
-                                                <div class="flex-shrink-0">
-                                                    <img v-if="comment.user_avatar" :src="comment.user_avatar" class="rounded-circle" width="40" height="40" :alt="comment.user_name">
-                                                    <span v-else class="avatar-initial rounded-circle bg-label-primary d-inline-flex align-items-center justify-content-center" style="width:40px;height:40px;">
-                                                        {{ getInitials(comment.user_name) }}
-                                                    </span>
+                                                <div class="flex-grow-1 me-2">
+                                                    <textarea class="form-control" v-model="newComment" rows="3" placeholder="コメントを入力してください..."></textarea>
                                                 </div>
-                                                <div class="flex-grow-1 ms-3">
-                                                    <div class="d-flex justify-content-between align-items-start">
-                                                        <div>
-                                                            <h6 class="mb-1">{{ comment.user_name }}</h6>
-                                                            <small class="text-muted">{{ formatDate(comment.created_at) }}</small>
-                                                        </div>
-                                                        <div class="dropdown">
-                                                            <button class="btn btn-sm btn-link text-muted" data-bs-toggle="dropdown">
-                                                                <i class="fas fa-ellipsis-v"></i>
-                                                            </button>
-                                                            <ul class="dropdown-menu">
-                                                                <li><a class="dropdown-item" href="#" @click="editComment(comment)">編集</a></li>
-                                                                <li><a class="dropdown-item text-danger" href="#" @click="deleteComment(comment.id)">削除</a></li>
-                                                            </ul>
-                                                        </div>
+                                                <div class="d-flex flex-column">
+                                                    <button class="btn btn-primary btn-sm mb-1" @click="addComment">
+                                                        <i class="fas fa-paper-plane"></i>
+                                                    </button>
+                                                    <button class="btn btn-secondary btn-sm" @click="showAddComment = false">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Comments List -->
+                                        <div class="comments-list">
+                                            <div v-if="taskComments.length === 0" class="text-center text-muted py-4">
+                                                <i class="fas fa-comments fa-2x mb-2"></i>
+                                                <p>コメントがありません</p>
+                                            </div>
+                                            <div v-for="comment in taskComments" :key="comment.id" class="comment-item border-bottom pb-3 mb-3">
+                                                <div class="d-flex">
+                                                    <div class="flex-shrink-0">
+                                                        <img v-if="comment.user_avatar" :src="comment.user_avatar" class="rounded-circle" width="40" height="40" :alt="comment.user_name">
+                                                        <span v-else class="avatar-initial rounded-circle bg-label-primary d-inline-flex align-items-center justify-content-center" style="width:40px;height:40px;">
+                                                            {{ getInitials(comment.user_name) }}
+                                                        </span>
                                                     </div>
-                                                    <div class="mt-2" v-html="comment.content"></div>
+                                                    <div class="flex-grow-1 ms-3">
+                                                        <div class="d-flex justify-content-between align-items-start">
+                                                            <div>
+                                                                <h6 class="mb-1">{{ comment.user_name }}</h6>
+                                                                <small class="text-muted">{{ formatDate(comment.created_at) }}</small>
+                                                            </div>
+                                                            <div class="dropdown">
+                                                                <button class="btn btn-sm btn-link text-muted" data-bs-toggle="dropdown">
+                                                                    <i class="fas fa-ellipsis-v"></i>
+                                                                </button>
+                                                                <ul class="dropdown-menu">
+                                                                    <li><a class="dropdown-item" href="#" @click="editComment(comment)">編集</a></li>
+                                                                    <li><a class="dropdown-item text-danger" href="#" @click="deleteComment(comment.id)">削除</a></li>
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+                                                        <div class="mt-2" v-html="comment.content"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab 3: Activity History -->
+                            <div class="tab-pane fade" id="history" role="tabpanel">
+                                <div class="card h-100">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">活動履歴</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div v-if="taskActivities.length === 0" class="text-center text-muted py-4">
+                                            <i class="fas fa-history fa-2x mb-2"></i>
+                                            <p>活動履歴がありません</p>
+                                        </div>
+                                        <div class="timeline">
+                                            <div v-for="activity in taskActivities" :key="activity.id" class="timeline-item">
+                                                <div class="timeline-marker" :class="getActivityIconClass(activity.type)">
+                                                    <i :class="getActivityIcon(activity.type)"></i>
+                                                </div>
+                                                <div class="timeline-content">
+                                                    <div class="d-flex justify-content-between">
+                                                        <h6 class="mb-1">{{ activity.title }}</h6>
+                                                        <small class="text-muted">{{ formatDate(activity.created_at) }}</small>
+                                                    </div>
+                                                    <p class="mb-1 text-muted">{{ activity.description }}</p>
+                                                    <small class="text-muted">by {{ activity.user_name }}</small>
                                                 </div>
                                             </div>
                                         </div>
@@ -602,98 +589,8 @@ if (!$project_id) {
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                <!-- Tab 2: Activity History -->
-                <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
-                    <div class="card">
-                        <div class="card-header">
-                            <h6 class="mb-0">活動履歴</h6>
-                        </div>
-                        <div class="card-body">
-                            <div v-if="taskActivities.length === 0" class="text-center text-muted py-4">
-                                <i class="fas fa-history fa-2x mb-2"></i>
-                                <p>活動履歴がありません</p>
-                            </div>
-                            <div class="timeline">
-                                <div v-for="activity in taskActivities" :key="activity.id" class="timeline-item">
-                                    <div class="timeline-marker" :class="getActivityIconClass(activity.type)">
-                                        <i :class="getActivityIcon(activity.type)"></i>
-                                    </div>
-                                    <div class="timeline-content">
-                                        <div class="d-flex justify-content-between">
-                                            <h6 class="mb-1">{{ activity.title }}</h6>
-                                            <small class="text-muted">{{ formatDate(activity.created_at) }}</small>
-                                        </div>
-                                        <p class="mb-1 text-muted">{{ activity.description }}</p>
-                                        <small class="text-muted">by {{ activity.user_name }}</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab 3: Settings -->
-                <div class="tab-pane fade" id="settings" role="tabpanel" aria-labelledby="settings-tab">
-                    <div class="card">
-                        <div class="card-header">
-                            <h6 class="mb-0">タスク設定</h6>
-                        </div>
-                        <div class="card-body">
-                            <form>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">優先度</label>
-                                        <select class="form-select" v-model="selectedTask.priority">
-                                            <option v-for="priority in taskPriorities" :key="priority.value" :value="priority.value">
-                                                {{ priority.label }}
-                                            </option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">ステータス</label>
-                                        <select class="form-select" v-model="selectedTask.status">
-                                            <option v-for="status in taskStatuses" :key="status.value" :value="status.value">
-                                                {{ status.label }}
-                                            </option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">開始日</label>
-                                        <input type="text" class="form-control" v-model="selectedTask.start_date" placeholder="YYYY-MM-DD">
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">期限日</label>
-                                        <input type="text" class="form-control" v-model="selectedTask.due_date" placeholder="YYYY-MM-DD">
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">進捗</label>
-                                    <div class="d-flex align-items-center">
-                                        <input type="range" class="form-range flex-grow-1 me-3" v-model="selectedTask.progress" min="0" max="100" step="5">
-                                        <span class="badge bg-primary">{{ selectedTask.progress }}%</span>
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">担当者</label>
-                                    <select class="form-select" v-model="selectedTask.assigned_to">
-                                        <option value="">選択してください</option>
-                                        <option v-for="member in projectMembers" :key="member.user_id" :value="member.user_id">
-                                            {{ member.user_name }}
-                                        </option>
-                                    </select>
-                                </div>
-                                <div class="d-flex justify-content-end">
-                                    <button type="button" class="btn btn-primary" @click="saveTaskSettings">
-                                        <i class="fas fa-save me-1"></i>設定を保存
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                       
                     </div>
                 </div>
             </div>
@@ -709,97 +606,17 @@ if (!$project_id) {
     border-left: 1px solid #ccc;
 }
 
-/* Timeline Styles */
-.timeline {
-    position: relative;
-    padding-left: 30px;
-}
 
-.timeline::before {
-    content: '';
-    position: absolute;
-    left: 15px;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: #e9ecef;
-}
-
-.timeline-item {
-    position: relative;
-    margin-bottom: 30px;
-}
-
-.timeline-marker {
-    position: absolute;
-    left: -22px;
-    top: 0;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 12px;
-}
-
-.timeline-marker.created { background-color: #28a745; }
-.timeline-marker.updated { background-color: #007bff; }
-.timeline-marker.commented { background-color: #ffc107; }
-.timeline-marker.completed { background-color: #6f42c1; }
-
-.timeline-content {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 8px;
-    border-left: 4px solid #007bff;
-}
-
-/* Comment Styles */
-.comment-item:last-child {
-    border-bottom: none !important;
-}
-
-.avatar-initial {
-    font-weight: bold;
-    font-size: 14px;
-}
-
-/* Offcanvas Styles */
-.offcanvas {
-    width: 600px;
-}
-
-@media (max-width: 768px) {
-    .offcanvas {
-        width: 100%;
-    }
-}
-
-/* Quill Editor Styles */
-.ql-editor {
-    min-height: 150px;
-}
-
-/* Task Status Badge Styles */
-.badge {
-    font-size: 0.75rem;
-    padding: 0.375rem 0.75rem;
-}
 </style>
+<script>
+const PROJECT_ID = <?php echo $project_id; ?>;
+</script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
 <script src="assets/js/task-manager.js"></script>
-
-
 
 <?php
 $view->footing();
 ?>
 
 
-<script>
-const PROJECT_ID = <?php echo $project_id; ?>;
-</script>
 

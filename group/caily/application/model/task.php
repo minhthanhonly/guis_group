@@ -131,7 +131,10 @@ class Task extends ApplicationModel {
         
         if (isset($_POST['status']) || isset($_POST['progress'])) {
             if (!$this->checkPermission($id, $currentUserId)) {
-                throw new Exception('このタスクを更新する権限がありません');
+               return [
+                'status' => 'error',
+                'message' => 'このタスクを更新する権限がありません'
+               ];
             }
         }
         
@@ -144,7 +147,6 @@ class Task extends ApplicationModel {
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
             'assigned_to' => isset($_POST['assigned_to']) ? $_POST['assigned_to'] : null,
             'due_date' => isset($_POST['due_date']) ? $_POST['due_date'] : null,
-            'category_id' => isset($_POST['category_id']) ? $_POST['category_id'] : null,
             'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
             'actual_hours' => isset($_POST['actual_hours']) ? $_POST['actual_hours'] : 0,
             'updated_at' => date('Y-m-d H:i:s')
@@ -161,7 +163,14 @@ class Task extends ApplicationModel {
         // if ($result && $task['project_id']) {
         //     $this->updateProjectProgress($task['project_id']);
         // }
-        return $result;
+        if($result){
+            return [
+                'status' => 'success'
+            ];
+        }
+        return [
+            'status' => 'error'
+        ];
     }
 
     function delete($id) {
@@ -269,7 +278,7 @@ class Task extends ApplicationModel {
 
     function getTimeEntries($taskId) {
         $query = sprintf(
-            "SELECT te.*, u.name as user_name 
+            "SELECT te.*, u.realname as user_name 
             FROM " . DB_PREFIX . "time_entries te 
             LEFT JOIN " . DB_PREFIX . "user u ON te.user_id = u.id 
             WHERE te.task_id = %d 
@@ -281,7 +290,7 @@ class Task extends ApplicationModel {
 
     function getComments($taskId) {
         $query = sprintf(
-            "SELECT c.*, u.name as user_name 
+            "SELECT c.*, u.realname as user_name 
             FROM " . DB_PREFIX . "task_comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.id 
             WHERE c.task_id = %d 
@@ -322,7 +331,7 @@ class Task extends ApplicationModel {
         }
 
         $query = sprintf(
-            "SELECT t.*, p.name as project_name, u.name as assigned_to_name 
+            "SELECT t.*, p.name as project_name, u.realname as assigned_to_name 
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id 
             LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
@@ -337,14 +346,12 @@ class Task extends ApplicationModel {
         if (!$task) return false;
         
         $isAssigned = in_array($userId, explode(',', $task['assigned_to']));
-        
-        $project = $this->fetchOne("SELECT manager_id FROM " . DB_PREFIX . "projects WHERE id = " . intval($task['project_id']));
-        $isManager = ($project && $project['manager_id'] == $userId);
+        $isManager = $_SESSION['authority'] == 'administrator';
         
         // If not manager by projects.manager_id, check groupware_project_members
         if (!$isManager) {
             $memberCheck = $this->fetchOne(
-                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "groupware_project_members " .
+                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "project_members " .
                 "WHERE project_id = " . intval($task['project_id']) . " " .
                 "AND user_id = " . intval($userId) . " " .
                 "AND role = 'manager'"

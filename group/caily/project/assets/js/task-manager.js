@@ -64,6 +64,12 @@ const TaskApp = createApp({
                 selected: []
             },
             editingInlineId: null,
+            // Offcanvas data
+            taskComments: [],
+            taskActivities: [],
+            showAddComment: false,
+            newComment: '',
+            quillEditor: null,
         }
     },
     
@@ -874,6 +880,158 @@ const TaskApp = createApp({
             } else {
                 return `期限切れ: ${minutes}分`;
             }
+        },
+        
+        openTaskDetails(task) {
+            this.selectedTask = task;
+            this.loadTaskComments(task.id);
+            this.loadTaskActivities(task.id);
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('taskDetailsModal'));
+            modal.show();
+            
+            // Initialize components after modal is shown
+            this.$nextTick(() => {
+                this.initQuillEditor();
+                // Re-initialize tooltips in modal
+                const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+                tooltipTriggerList.forEach(el => {
+                    new bootstrap.Tooltip(el);
+                });
+            });
+        },
+        
+        async loadTaskComments(taskId) {
+            try {
+                const response = await axios.get(`/api/index.php?model=task&method=getComments&task_id=${taskId}`);
+                this.taskComments = response.data || [];
+            } catch (error) {
+                console.error('Error loading comments:', error);
+                this.taskComments = [];
+            }
+        },
+        
+        async loadTaskActivities(taskId) {
+            try {
+                const response = await axios.get(`/api/index.php?model=task&method=getActivities&task_id=${taskId}`);
+                this.taskActivities = response.data || [];
+            } catch (error) {
+                console.error('Error loading activities:', error);
+                this.taskActivities = [];
+            }
+        },
+        
+        initQuillEditor() {
+            if (this.quillEditor) {
+                this.quillEditor.destroy();
+            }
+            
+            const editorElement = document.getElementById('taskDescriptionEditor');
+            if (editorElement && window.Quill) {
+                this.quillEditor = new window.Quill(editorElement, {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: [
+                            ['bold', 'italic', 'underline'],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            ['link', 'image'],
+                            ['clean']
+                        ]
+                    },
+                    placeholder: 'タスクの説明を入力してください...'
+                });
+                
+                // Set content if task has description
+                if (this.selectedTask && this.selectedTask.description) {
+                    this.quillEditor.root.innerHTML = this.selectedTask.description;
+                }
+            }
+        },
+        
+        async saveTaskDescription() {
+            if (!this.quillEditor || !this.selectedTask) return;
+            
+            const content = this.quillEditor.root.innerHTML;
+            try {
+                const formData = new FormData();
+                formData.append('id', this.selectedTask.id);
+                formData.append('description', content);
+                
+                const response = await axios.post('/api/index.php?model=task&method=updateDescription', formData);
+                if (response.data.success) {
+                    this.showMessage('説明を保存しました。');
+                    this.selectedTask.description = content;
+                }
+            } catch (error) {
+                console.error('Error saving description:', error);
+                this.showMessage('説明の保存に失敗しました。', true);
+            }
+        },
+        
+        async addComment() {
+            if (!this.newComment.trim() || !this.selectedTask) return;
+            
+            try {
+                const formData = new FormData();
+                formData.append('task_id', this.selectedTask.id);
+                formData.append('content', this.newComment);
+                
+                const response = await axios.post('/api/index.php?model=task&method=addComment', formData);
+                if (response.data.success) {
+                    this.newComment = '';
+                    this.showAddComment = false;
+                    await this.loadTaskComments(this.selectedTask.id);
+                    this.showMessage('コメントを追加しました。');
+                }
+            } catch (error) {
+                console.error('Error adding comment:', error);
+                this.showMessage('コメントの追加に失敗しました。', true);
+            }
+        },
+        
+        async deleteComment(commentId) {
+            if (!confirm('このコメントを削除しますか？')) return;
+            
+            try {
+                const response = await axios.delete(`/api/index.php?model=task&method=deleteComment&id=${commentId}`);
+                if (response.data.success) {
+                    await this.loadTaskComments(this.selectedTask.id);
+                    this.showMessage('コメントを削除しました。');
+                }
+            } catch (error) {
+                console.error('Error deleting comment:', error);
+                this.showMessage('コメントの削除に失敗しました。', true);
+            }
+        },
+        
+        editComment(comment) {
+            // TODO: Implement comment editing
+            console.log('Edit comment:', comment);
+        },
+        
+        getActivityIcon(type) {
+            const icons = {
+                'created': 'fas fa-plus',
+                'updated': 'fas fa-edit',
+                'commented': 'fas fa-comment',
+                'completed': 'fas fa-check',
+                'status_changed': 'fas fa-exchange-alt',
+                'assigned': 'fas fa-user-plus'
+            };
+            return icons[type] || 'fas fa-circle';
+        },
+        
+        getActivityIconClass(type) {
+            const classes = {
+                'created': 'created',
+                'updated': 'updated',
+                'commented': 'commented',
+                'completed': 'completed',
+                'status_changed': 'updated',
+                'assigned': 'updated'
+            };
+            return classes[type] || 'updated';
         },
     }
 });
