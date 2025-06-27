@@ -31,6 +31,9 @@ class Project extends ApplicationModel {
             'project_estimate_id' => array(), 
             'teams' => array(), 
             'amount' => array(), //edit, new, custom
+            'estimate_status' => array(), //未発行, 発行済み, 承認済み, 却下, 調整
+            'invoice_status' => array(), //未発行, 発行済み, 承認済み, 却下, 調整
+            'tags' => array(), //project tags for search and organization
         );
         $this->connect();
     }
@@ -250,6 +253,10 @@ class Project extends ApplicationModel {
             'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
             'customer_id' => isset($_POST['customer_id']) ? $_POST['customer_id'] : '',
+            'amount' => isset($_POST['amount']) ? floatval($_POST['amount']) : 0,
+            'estimate_status' => isset($_POST['estimate_status']) ? $_POST['estimate_status'] : '未発行',
+            'invoice_status' => isset($_POST['invoice_status']) ? $_POST['invoice_status'] : '未発行',
+            'tags' => isset($_POST['tags']) ? $_POST['tags'] : '',
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => $_SESSION['user_id']
         );
@@ -617,6 +624,35 @@ class Project extends ApplicationModel {
         
         error_log("Total mentioned users: " . count($mentionedUsers));
         return $mentionedUsers;
+    }
+
+    function updateProjectStatus($params = null) {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) return ['status' => 'error', 'error' => 'No project id'];
+        
+        $data = array(
+            'updated_at' => date('Y-m-d H:i:s'),
+            'updated_by' => $_SESSION['user_id']
+        );
+        
+        // Add fields if they exist in POST
+        if (isset($_POST['amount'])) {
+            $data['amount'] = floatval($_POST['amount']);
+        }
+        if (isset($_POST['estimate_status'])) {
+            $data['estimate_status'] = $_POST['estimate_status'];
+        }
+        if (isset($_POST['invoice_status'])) {
+            $data['invoice_status'] = $_POST['invoice_status'];
+        }
+        
+        $result = $this->query_update($data, ['id' => $id]);
+        
+        if ($result) {
+            return ['status' => 'success'];
+        } else {
+            return ['status' => 'error', 'error' => 'Update failed'];
+        }
     }
 
     function updateTeams($params = null) {

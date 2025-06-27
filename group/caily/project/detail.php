@@ -141,7 +141,20 @@ if (!$project_id) {
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">工事支店</label>
-                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.building_branch">
+                            <template v-if="isEditMode">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control tagify" v-model="project.building_branch" id="building_branch" name="building_branch">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('building_branch')" title="すべて削除"><i class="fa fa-times"></i></button>
+                                </div>
+                            </template>
+                            <template v-else>
+                                <div style="min-height:38px;">
+                                    <span v-if="project.building_branch && project.building_branch.split(',').length > 0">
+                                        <span v-for="item in project.building_branch.split(',')" :key="item.trim()" class="badge bg-primary me-1">{{ item.trim() }}</span>
+                                    </span>
+                                    <span v-else>-</span>
+                                </div>
+                            </template>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">建物規模</label>
@@ -206,7 +219,10 @@ if (!$project_id) {
                         <div class="col-md-4">
                             <label class="form-label">受注形態</label>
                             <template v-if="isEditMode">
-                                <input type="text" class="form-control tagify" v-model="project.project_order_type" id="project_order_type" name="project_order_type" required>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control tagify" v-model="project.project_order_type" id="project_order_type" name="project_order_type" required>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('project_order_type')" title="すべて削除"><i class="fa fa-times"></i></button>
+                                </div>
                             </template>
                             <template v-else>
                                 <div style="min-height:38px;">
@@ -216,6 +232,13 @@ if (!$project_id) {
                                     <span v-else>-</span>
                                 </div>
                             </template>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">タグ</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" class="form-control tagify" v-model="project.tags" id="project_tags" name="project_tags" @input="updateTags">
+                                <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('project_tags')" title="すべて削除"><i class="fa fa-times"></i></button>
+                            </div>
                         </div>
                       
                         
@@ -441,6 +464,121 @@ if (!$project_id) {
 
         <!-- Right Column - Stats & Comments -->
         <div class="col-xl-4">
+            <!-- Project Status Block -->
+            <div class="card mb-4 project-status-block">
+                <div class="card-header d-flex justify-content-start align-items-center">
+                    <h5 class="card-title mb-0">業務書類</h5>
+                    <i class="fa fa-question-circle text-muted ms-2" 
+                       data-bs-toggle="tooltip" 
+                       data-bs-placement="top" 
+                       title="システム見積書作成機能は開発中です"></i>
+                </div>
+                <div class="card-body" v-if="project">
+                    <div class="row g-3">
+                        <div class="col-3">
+                            <label class="form-label">見積書</label>
+                            <div>
+                                <div class="btn-group" v-if="isManager">
+                                    <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
+                                            :class="getEstimateStatusButtonClass(project.estimate_status)"
+                                            id="estimateStatusDropdown"
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                        {{ getEstimateStatusLabel(project.estimate_status) }}
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li v-for="status in estimateStatuses" :key="status.value">
+                                            <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                               @click="selectEstimateStatus(status.value)">
+                                                {{ status.label }}
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div v-else>
+                                    <span class="badge" :class="getEstimateStatusBadgeClass(project.estimate_status)">{{ getEstimateStatusLabel(project.estimate_status) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label">請求書</label>
+                            <div>
+                                <div class="btn-group" v-if="isManager">
+                                    <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
+                                            :class="getInvoiceStatusButtonClass(project.invoice_status)"
+                                            id="invoiceStatusDropdown"
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                        {{ getInvoiceStatusLabel(project.invoice_status) }}
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li v-for="status in invoiceStatuses" :key="status.value">
+                                            <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                               @click="selectInvoiceStatus(status.value)">
+                                                {{ status.label }}
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div v-else>
+                                    <span class="badge" :class="getInvoiceStatusBadgeClass(project.invoice_status)">{{ getInvoiceStatusLabel(project.invoice_status) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">総額</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" v-model="project.amount" placeholder="0" step="100" @input="updateAmount" v-if="isManager">
+                                <input type="text" class="form-control bg-light" :value="formatCurrency(project.amount || 0)" readonly v-else>
+                                <span class="input-group-text">円</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body text-center py-4" v-else>
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Notes Section -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">クイックメモ</h5>
+                    <button class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
+                        <i class="fa fa-plus"></i>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div v-if="notes.length > 0" class="list-group">
+                        <div v-for="note in notes" :key="note.id" class="list-group-item d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1" style="cursor: pointer;" @click="openNoteModal(note)">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i v-if="note.is_important == 1" class="fa fa-star text-warning me-2"></i>
+                                    <span class="fw-medium text-primary">{{ note.title }}</span>
+                                </div>
+                                <div v-if="note.content" class="text-muted small note-content">
+                                    {{ getNotePreview(note.content) }}
+                                </div>
+                                <small class="text-secondary">{{ formatDateTime(note.created_at) }} - {{ note.realname || 'Unknown' }}</small>
+                            </div>
+                            <button class="btn btn-outline-danger btn-sm ms-2" 
+                                    @click="deleteNote(note.id)" 
+                                    title="削除"
+                                    v-if="canDeleteNote(note)">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div v-else class="text-center text-muted py-3">
+                        <i class="fa fa-sticky-note fa-2x mb-2"></i>
+                        <p>メモがありません</p>
+                        <button class="btn btn-outline-primary btn-sm" @click="openNoteModal()">
+                            最初のメモを追加
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Statistics Cards -->
             <!-- <div class="row g-3 mb-4">
                 <div class="col-6">
@@ -522,6 +660,80 @@ if (!$project_id) {
         </div>
     </div>
 
+    <!-- Modal Note -->
+    <div class="modal fade" tabindex="-1" :class="{show: showNoteModal}" style="display: block;" v-if="showNoteModal">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <template v-if="editingNote.id">
+                            メモ詳細
+                        </template>
+                        <template v-else>
+                            新しいメモ
+                        </template>
+                    </h5>
+                    <button type="button" class="btn-close" @click="closeNoteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- View mode -->
+                    <div v-if="editingNote.id && !isNoteEditMode">
+                        <div class="mb-3">
+                            <label class="form-label">タイトル</label>
+                            <div class="form-control bg-light">{{ editingNote.title }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">内容</label>
+                            <div class="form-control bg-light" style="min-height:100px;white-space:pre-line;">{{ editingNote.content || '-' }}</div>
+                        </div>
+                        <div class="mb-3" v-if="editingNote.is_important">
+                            <label class="form-label">重要メモ</label>
+                            <div>
+                                <i class="fa fa-star text-warning"></i>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">作成者・作成日時</label>
+                            <div class="form-control bg-light">{{ formatDateTime(editingNote.created_at) }} - {{ editingNote.realname || 'Unknown' }}</div>
+                        </div>
+                    </div>
+                    <!-- Edit mode -->
+                    <form v-else @submit.prevent="saveNote">
+                        <div class="mb-3">
+                            <label class="form-label">タイトル <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" v-model="editingNote.title" required maxlength="255">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">内容</label>
+                            <textarea class="form-control" v-model="editingNote.content" rows="6" placeholder="メモの詳細を入力してください..."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant">
+                                <label class="form-check-label" for="isImportant">
+                                    <i class="fa fa-star text-warning"></i> 重要メモ
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <template v-if="editingNote.id && !isNoteEditMode">
+                        <button class="btn btn-primary" @click="isNoteEditMode = true" v-if="canEditNote(editingNote)"><i class="fa fa-pencil-alt"></i> 編集</button>
+                        <button class="btn btn-secondary" @click="closeNoteModal">閉じる</button>
+                    </template>
+                    <template v-else>
+                        <button class="btn btn-secondary" @click="isNoteEditMode = false" v-if="editingNote.id"><i class="fa fa-times"></i> キャンセル</button>
+                        <button class="btn btn-secondary" @click="closeNoteModal" v-else>キャンセル</button>
+                        <button class="btn btn-primary" @click="saveNote" :disabled="!editingNote.title.trim()">
+                            <i class="fa fa-save"></i> 保存
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 
@@ -551,6 +763,61 @@ $view->footing();
     border-color: var(--bs-primary);
 }
 
+.content-wrapper{
+    overflow-x: hidden;
+}
+
+.tags-look-building-branch .tagify__dropdown__item:last-child {
+    border-bottom: none;
+}
+
+
+/* Note content styling */
+.note-content {
+    line-height: 1.4;
+    max-height: 2.8em; /* 2 lines */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+}
+
+/* Project tags styling */
+.project-tags .badge {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s ease;
+}
+
+.project-tags .badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Tagify styling for project tags */
+#project_tags .tagify__tag {
+    background: #17a2b8;
+    color: white;
+    border-radius: 0.375rem;
+    margin: 2px;
+}
+
+#project_tags .tagify__tag:hover {
+    background: #138496;
+}
+
+#project_tags .tagify__tag__removeBtn {
+    color: white;
+}
+
+#project_tags .tagify__tag__removeBtn:hover {
+    background: rgba(255,255,255,0.2);
+}
 
 </style>
 

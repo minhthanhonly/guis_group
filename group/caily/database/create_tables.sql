@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS `groupware_projects` (
   `project_order_type` varchar(50) DEFAULT NULL,
   `project_estimate_id` int(11) DEFAULT NULL,
   `amount` decimal(15,2) DEFAULT 0.00,
+  `estimate_status` enum('未発行','発行済み','承認済み','却下','調整') DEFAULT '未発行',
+  `invoice_status` enum('未発行','発行済み','承認済み','却下','調整') DEFAULT '未発行',
+  `tags` text DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_department_id` (`department_id`),
   KEY `idx_status` (`status`),
@@ -83,6 +86,23 @@ CREATE TABLE IF NOT EXISTS `groupware_project_comments` (
   PRIMARY KEY (`id`),
   KEY `idx_project_id` (`project_id`),
   KEY `idx_user_id` (`user_id`),
+  FOREIGN KEY (`project_id`) REFERENCES `groupware_projects` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Project Notes table
+CREATE TABLE IF NOT EXISTS `groupware_project_notes` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `project_id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `content` text NOT NULL,
+  `is_important` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_project_id` (`project_id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_is_important` (`is_important`),
   FOREIGN KEY (`project_id`) REFERENCES `groupware_projects` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

@@ -35,6 +35,20 @@ createApp({
                 { value: 'high', label: '高', color: 'warning' },
                 { value: 'urgent', label: '緊急', color: 'danger' }
             ],
+            estimateStatuses: [
+                { value: '未発行', label: '未発行', color: 'secondary' },
+                { value: '発行済み', label: '発行済み', color: 'info' },
+                { value: '承認済み', label: '承認済み', color: 'success' },
+                { value: '却下', label: '却下', color: 'danger' },
+                { value: '調整', label: '調整', color: 'warning' }
+            ],
+            invoiceStatuses: [
+                { value: '未発行', label: '未発行', color: 'secondary' },
+                { value: '発行済み', label: '発行済み', color: 'info' },
+                { value: '承認済み', label: '承認済み', color: 'success' },
+                { value: '却下', label: '却下', color: 'danger' },
+                { value: '調整', label: '調整', color: 'warning' }
+            ],
             categories: [],
             companies: [],
             contacts: [],
@@ -57,6 +71,7 @@ createApp({
             managerTagify: null,
             quillInstance: null,
             projectOrderTypeTagify: null,
+            buildingBranchTagify: null,
             customFields: [],
             departmentCustomFieldSets: [],
             // Comment pagination
@@ -65,6 +80,34 @@ createApp({
             loadingOlderComments: false,
             hasMoreComments: true,
             showLoadMoreButton: false, // Track if we should show the load more button
+            // Danh sách các tỉnh/thành phố của Nhật Bản
+            japanPrefectures: [
+                '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
+                '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
+                '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
+                '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
+                '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
+                '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
+                '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
+            ],
+            // Notes functionality
+            notes: [],
+            showNoteModal: false,
+            isNoteEditMode: false,
+            editingNote: {
+                id: null,
+                title: '',
+                content: '',
+                is_important: false,
+                user_id: null
+            },
+            // Project status update loading
+            isUpdatingStatus: false,
+            // Debounce timer for amount updates
+            amountUpdateTimer: null,
+            tagsUpdateTimer: null,
+            projectTagsTagify: null,
+            // mention-related variables removed
         }
     },
     computed: {
@@ -108,6 +151,7 @@ createApp({
                 // Ensure Tagify is updated after loading project and team_list
                 this.$nextTick(() => { 
                     this.initTagify(); 
+                    this.initProjectTagsTagify();
                     this.setConnectedUsers();
                 });
             } catch (error) {
@@ -198,28 +242,27 @@ createApp({
                     // Loading more - prepend older comments
                     // Store current scroll position and height
                     const element = document.querySelector('#chat-history-project');
-                    const scrollHeightBefore = element ? element.scrollHeight : 0;
+                    const scrollTop = element ? element.scrollTop : 0;
+                    const scrollHeight = element ? element.scrollHeight : 0;
                     
                     this.comments = [...newComments, ...this.comments];
                     
-                    // Restore scroll position after loading older comments
+                    // Restore scroll position after Vue rendering
                     this.$nextTick(() => {
                         if (element) {
-                            const scrollHeightAfter = element.scrollHeight;
-                            const scrollDifference = scrollHeightAfter - scrollHeightBefore;
-                            element.scrollTop = scrollDifference;
+                            const newScrollHeight = element.scrollHeight;
+                            element.scrollTop = scrollTop + (newScrollHeight - scrollHeight);
                         }
+                        this.setConnectedUsers();
                     });
                 }
                 
-                // Check if there are more comments
+                // Update pagination state
                 this.hasMoreComments = newComments.length === this.commentsPerPage;
+                this.showLoadMoreButton = this.hasMoreComments && this.commentsPage > 1;
                 
-                this.loadingOlderComments = false;
-              
             } catch (error) {
                 console.error('Error loading comments:', error);
-                this.loadingOlderComments = false;
             }
         },
         async loadMoreComments() {
@@ -444,6 +487,14 @@ createApp({
         selectStatus(status) {
             this.project.status = status;
             this.updateStatus();
+            // Close dropdown
+            const dropdownElement = document.querySelector('#statusDropdown');
+            if (dropdownElement) {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                if (dropdown) {
+                    dropdown.hide();
+                }
+            }
         },
         getStatusButtonClass(status) {
             const s = this.statuses.find(s => s.value === status);
@@ -456,8 +507,6 @@ createApp({
         selectPriority(priority) {
             this.project.priority = priority;
             this.updatePriority();
-        },
-        async updatePriority() {
             // Close dropdown
             const dropdownElement = document.querySelector('#priorityDropdown');
             if (dropdownElement) {
@@ -466,19 +515,15 @@ createApp({
                     dropdown.hide();
                 }
             }
-            if (this.isEditMode) {
-                return;
-            }
+        },
+        async updatePriority() {
             try {
                 const formData = new FormData();
                 formData.append('id', this.projectId);
                 formData.append('priority', this.project.priority);
                 const response = await axios.post('/api/index.php?model=project&method=updatePriority', formData);
-                if (response.data && response.data.success !== false) {
-                    // Show success message
-                    showMessage('優先度の更新に完了しました。');
-                } else {
-                    showMessage('優先度の更新に失敗しました。', true);
+                if (response.data) {
+                    showMessage('優先度を更新しました。');
                 }
             } catch (error) {
                 console.error('Error updating priority:', error);
@@ -552,20 +597,112 @@ createApp({
             this.loadContactsByCompany();
         },
         async updateProgress() {
-            if (this.isEditMode) {
-                return;
-            }
             try {
                 const formData = new FormData();
                 formData.append('id', this.projectId);
                 formData.append('progress', this.project.progress);
                 const response = await axios.post('/api/index.php?model=project&method=updateProgress', formData);
-                if (response.data && response.data.success === false) {
-                    alert('進捗率の更新に失敗しました。');
+                if (response.data) {
+                    showMessage('進捗率を更新しました。');
                 }
             } catch (error) {
                 console.error('Error updating progress:', error);
-                alert('進捗率の更新に失敗しました。');
+                showMessage('進捗率の更新に失敗しました。', true);
+            }
+        },
+        async updateProjectStatus() {
+            if (this.isUpdatingStatus) return; // Prevent multiple simultaneous updates
+            if (!this.isManager) return; // Only managers can update status
+            
+            this.isUpdatingStatus = true;
+            try {
+                const formData = new FormData();
+                formData.append('id', this.projectId);
+                formData.append('amount', this.project.amount || 0);
+                formData.append('estimate_status', this.project.estimate_status || '未発行');
+                formData.append('invoice_status', this.project.invoice_status || '未発行');
+                const response = await axios.post('/api/index.php?model=project&method=updateProjectStatus', formData);
+                if (response.data && response.data.status === 'success') {
+                    showMessage('プロジェクトステータスを更新しました。');
+                } else {
+                    showMessage('プロジェクトステータスの更新に失敗しました。', true);
+                }
+            } catch (error) {
+                console.error('Error updating project status:', error);
+                showMessage('プロジェクトステータスの更新に失敗しました。', true);
+            } finally {
+                this.isUpdatingStatus = false;
+            }
+        },
+        updateAmount() {
+            if (!this.isManager) return; // Only managers can update amount
+            // Debounce the amount update to avoid too many API calls
+            clearTimeout(this.amountUpdateTimer);
+            this.amountUpdateTimer = setTimeout(() => {
+                this.updateProjectStatus();
+            }, 1000); // Wait 1 second after user stops typing
+        },
+        updateTags() {
+            // Get tags from Tagify instance
+            if (this.projectTagsTagify) {
+                const tags = this.projectTagsTagify.value.map(tag => tag.value).join(',');
+                this.project.tags = tags;
+            }
+            
+            // Debounce the tags update to avoid too many API calls
+            clearTimeout(this.tagsUpdateTimer);
+            this.tagsUpdateTimer = setTimeout(() => {
+                this.saveProjectTags();
+            }, 1000); // Wait 1 second after user stops typing
+        },
+        async saveProjectTags() {
+            try {
+                const formData = new FormData();
+                formData.append('id', this.project.id);
+                formData.append('tags', this.project.tags || '');
+                
+                const response = await axios.post('/api/index.php?model=project&method=update', formData);
+                if (response.data && response.data.status === 'success') {
+                    // Show success message
+                    this.showNotification('タグが更新されました', 'success');
+                } else {
+                    this.showNotification('タグの更新に失敗しました', 'error');
+                }
+            } catch (error) {
+                console.error('Error updating tags:', error);
+                this.showNotification('タグの更新に失敗しました', 'error');
+            }
+        },
+        clearTagifyTags(field) {
+            if (field === 'project_tags') {
+                if (this.projectTagsTagify) {
+                    this.projectTagsTagify.removeAllTags();
+                }
+            } else if (field === 'team') {
+                const teamTags = document.querySelector('#team_tags');
+                if (teamTags && teamTags.tagify) {
+                    teamTags.tagify.removeAllTags();
+                }
+            } else if (field === 'manager') {
+                const managerTags = document.querySelector('#manager_tags');
+                if (managerTags && managerTags.tagify) {
+                    managerTags.tagify.removeAllTags();
+                }
+            } else if (field === 'members') {
+                const membersTags = document.querySelector('#members_tags');
+                if (membersTags && membersTags.tagify) {
+                    membersTags.tagify.removeAllTags();
+                }
+            } else if (field === 'building_branch') {
+                const buildingBranchTags = document.querySelector('#building_branch');
+                if (buildingBranchTags && buildingBranchTags.tagify) {
+                    buildingBranchTags.tagify.removeAllTags();
+                }
+            } else if (field === 'project_order_type') {
+                const projectOrderTypeTags = document.querySelector('#project_order_type');
+                if (projectOrderTypeTags && projectOrderTypeTags.tagify) {
+                    projectOrderTypeTags.tagify.removeAllTags();
+                }
             }
         },
         async loadAllTeams() {
@@ -630,6 +767,71 @@ createApp({
                 } catch (err) {}
             });
             this.tagify.on('change', this.onTeamTagsChange.bind(this));
+        },
+        initProjectTagsTagify() {
+            console.log('initProjectTagsTagify called');
+            const input = document.getElementById('project_tags');
+            console.log('project_tags input found:', input);
+            if (!input) return;
+            
+            // Destroy previous Tagify instance if exists
+            if (input._tagify) {
+                console.log('Destroying existing Tagify instance');
+                input._tagify.destroy();
+            }
+            
+            // Check if Tagify is available
+            if (!window.Tagify) {
+                console.error('Tagify is not available');
+                return;
+            }
+            
+            console.log('Initializing new Tagify instance');
+            // Initialize Tagify for project tags
+            const tagify = new Tagify(input, {
+                enforceWhitelist: false,
+                mode: 'mix',
+                pattern: /^[a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\u20000-\u2A6DF\u2A700-\u2B73F\u2B740-\u2B81F\u2B820-\u2CEAF\uF900-\uFAFF\u3300-\u33FF\uFE30-\uFE4F\uFF00-\uFFEF\s]+$/,
+                maxTags: 20,
+                dropdown: {
+                    maxItems: 20,
+                    classname: "tags-look",
+                    enabled: 0,
+                    closeOnSelect: false
+                }
+            });
+            
+            console.log('Tagify instance created:', tagify);
+            
+            // Add existing tags if any
+            if (this.project.tags) {
+                const tags = this.project.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+                console.log('Adding existing tags:', tags);
+                if (tags.length > 0) {
+                    tagify.addTags(tags);
+                }
+            }
+            
+            // Store reference
+            this.projectTagsTagify = tagify;
+            
+            // Add event listeners for auto-save
+            tagify.on('add', () => {
+                console.log('Tag added');
+                this.updateTags();
+            });
+            
+            tagify.on('remove', () => {
+                console.log('Tag removed');
+                this.updateTags();
+            });
+            
+            tagify.on('change', () => {
+                console.log('Tags changed');
+                this.updateTags();
+            });
+            
+            console.log('Project tags Tagify initialization completed');
         },
         async onTeamTagsChange(e) {
             const selected = this.tagify.value; // [{value, id}]
@@ -817,26 +1019,25 @@ createApp({
             this.project.custom_fields = JSON.stringify(this.prepareCustomFieldsForSave());
             try {
                 const formData = new FormData();
-                formData.append('id', this.projectId);
-                formData.append('name', this.project.name || '');
-                formData.append('building_branch', this.project.building_branch || '');
-                formData.append('building_size', this.project.building_size || '');
-                formData.append('building_type', this.project.building_type || '');
-                formData.append('building_number', this.project.building_number || '');
-                formData.append('project_number', this.project.project_number || '');
-                formData.append('progress', this.project.progress || '');
-                formData.append('priority', this.project.priority || '');
-                formData.append('status', this.project.status || '');
-                formData.append('customer_id', this.newProject.customer_id || '');
-                formData.append('members', this.newProject.members || '');
-                formData.append('managers', this.newProject.managers || '');
-                formData.append('teams', this.newProject.teams || '');
-                formData.append('start_date', this.toAPIDate(this.project.start_date));
-                formData.append('end_date', this.toAPIDate(this.project.end_date));
+                formData.append('id', this.project.id);
+                formData.append('name', this.project.name);
+                formData.append('description', this.project.description);
+                formData.append('building_branch', this.project.building_branch);
+                formData.append('building_size', this.project.building_size);
+                formData.append('building_type', this.project.building_type);
+                formData.append('building_number', this.project.building_number);
+                formData.append('project_number', this.project.project_number);
+                formData.append('progress', this.project.progress);
+                formData.append('status', this.project.status);
+                formData.append('teams', this.project.teams);
                 formData.append('project_order_type', this.project.project_order_type);
+                formData.append('priority', this.project.priority);
+                formData.append('customer_id', this.project.customer_id);
+                formData.append('amount', this.project.amount);
+                formData.append('estimate_status', this.project.estimate_status);
+                formData.append('invoice_status', this.project.invoice_status);
+                formData.append('tags', this.project.tags);
                 formData.append('department_custom_fields_set_id', this.project.department_custom_fields_set_id);
-                formData.append('custom_fields', this.project.custom_fields);
-                formData.append('description', this.project.description || '');
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
                 if (response.data && response.data.status == 'success') {
                     this.isEditMode = false;
@@ -943,13 +1144,181 @@ createApp({
                 return [];
             }
         },
-        clearTagifyTags(field) {
-            if (field === 'members' && this.membersTagify) {
-                this.membersTagify.removeAllTags();
-            } else if (field === 'manager' && this.managerTagify) {
-                this.managerTagify.removeAllTags();
-            } else if (field === 'team' && this.tagify) {
-                this.tagify.removeAllTags();
+        // Notes functionality
+        async loadNotes() {
+            try {
+                const response = await axios.get(`/api/index.php?model=project&method=getNotes&project_id=${this.projectId}`);
+                this.notes = response.data || [];
+            } catch (error) {
+                console.error('Error loading notes:', error);
+                this.notes = [];
+            }
+        },
+        openNoteModal(note = null) {
+            this.showNoteModal = true;
+            this.isNoteEditMode = false;
+            
+            if (note) {
+                // Edit existing note
+                this.editingNote = {
+                    id: note.id,
+                    title: note.title,
+                    content: note.content,
+                    is_important: note.is_important == 1,
+                    user_id: note.user_id
+                };
+            } else {
+                // Create new note
+                this.editingNote = {
+                    id: null,
+                    title: '',
+                    content: '',
+                    is_important: false,
+                    user_id: null
+                };
+            }
+        },
+        closeNoteModal() {
+            this.showNoteModal = false;
+            this.isNoteEditMode = false;
+            this.editingNote = {
+                id: null,
+                title: '',
+                content: '',
+                is_important: false,
+                user_id: null
+            };
+        },
+        async saveNote() {
+            if (!this.editingNote.title.trim()) {
+                this.showNotification('タイトルを入力してください', 'error');
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('project_id', this.projectId);
+                formData.append('title', this.editingNote.title.trim());
+                formData.append('content', this.editingNote.content || '');
+                formData.append('is_important', this.editingNote.is_important ? 1 : 0);
+                
+                let response;
+                if (this.editingNote.id) {
+                    // Update existing note
+                    formData.append('id', this.editingNote.id);
+                    response = await axios.post('/api/index.php?model=project&method=updateNote', formData);
+                } else {
+                    // Create new note
+                    response = await axios.post('/api/index.php?model=project&method=addNote', formData);
+                }
+                
+                if (response.data && response.data.status === 'success') {
+                    this.showNotification('メモが保存されました', 'success');
+                    this.closeNoteModal();
+                    await this.loadNotes();
+                } else {
+                    this.showNotification('メモの保存に失敗しました', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving note:', error);
+                this.showNotification('メモの保存に失敗しました', 'error');
+            }
+        },
+        async deleteNote(noteId) {
+            if (!confirm('このメモを削除しますか？')) {
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('id', noteId);
+                
+                const response = await axios.post('/api/index.php?model=project&method=deleteNote', formData);
+                
+                if (response.data && response.data.status === 'success') {
+                    this.showNotification('メモが削除されました', 'success');
+                    await this.loadNotes();
+                } else {
+                    this.showNotification('メモの削除に失敗しました', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting note:', error);
+                this.showNotification('メモの削除に失敗しました', 'error');
+            }
+        },
+        getNotePreview(content) {
+            if (!content) return '';
+            // Remove HTML tags and limit to 100 characters
+            const textContent = content.replace(/<[^>]*>/g, '');
+            return textContent.length > 100 ? textContent.substring(0, 100) + '...' : textContent;
+        },
+        canDeleteNote(note) {
+            // Only note creator or managers can delete notes
+            return this.isManager || (note.user_id && String(note.user_id) === String(USER_AUTH_ID));
+        },
+        canEditNote(note) {
+            // Only note creator or managers can edit notes
+            return this.isManager || (note.user_id && String(note.user_id) === String(USER_AUTH_ID));
+        },
+        // Estimate status methods
+        getEstimateStatusLabel(status) {
+            const statusObj = this.estimateStatuses.find(s => s.value === status);
+            return statusObj ? statusObj.label : '未発行';
+        },
+        getEstimateStatusBadgeClass(status) {
+            const statusObj = this.estimateStatuses.find(s => s.value === status);
+            return statusObj ? `bg-${statusObj.color}` : 'bg-secondary';
+        },
+        getEstimateStatusButtonClass(status) {
+            const statusObj = this.estimateStatuses.find(s => s.value === status);
+            return statusObj ? `btn-${statusObj.color}` : 'btn-secondary';
+        },
+        selectEstimateStatus(status) {
+            this.project.estimate_status = status;
+            this.updateProjectStatus();
+            // Close dropdown
+            const dropdownElement = document.querySelector('#estimateStatusDropdown');
+            if (dropdownElement) {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                if (dropdown) {
+                    dropdown.hide();
+                }
+            }
+        },
+        // Invoice status methods
+        getInvoiceStatusLabel(status) {
+            const statusObj = this.invoiceStatuses.find(s => s.value === status);
+            return statusObj ? statusObj.label : '未発行';
+        },
+        getInvoiceStatusBadgeClass(status) {
+            const statusObj = this.invoiceStatuses.find(s => s.value === status);
+            return statusObj ? `bg-${statusObj.color}` : 'bg-secondary';
+        },
+        getInvoiceStatusButtonClass(status) {
+            const statusObj = this.invoiceStatuses.find(s => s.value === status);
+            return statusObj ? `btn-${statusObj.color}` : 'btn-secondary';
+        },
+        selectInvoiceStatus(status) {
+            this.project.invoice_status = status;
+            this.updateProjectStatus();
+            // Close dropdown
+            const dropdownElement = document.querySelector('#invoiceStatusDropdown');
+            if (dropdownElement) {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                if (dropdown) {
+                    dropdown.hide();
+                }
+            }
+        },
+        showNotification(message, type = 'info') {
+            // Simple notification using alert for now
+            // You can replace this with a proper notification library
+            if (type === 'success') {
+                console.log('Success:', message);
+            } else if (type === 'error') {
+                console.error('Error:', message);
+            } else {
+                console.log('Info:', message);
             }
         },
         initQuillEditor() {
@@ -1028,7 +1397,6 @@ createApp({
             event.returnValue = '編集中の内容が保存されていません。本当にページを離れますか？';
             return event.returnValue;
         },
-        
         async loadDepartmentCustomFieldSets() {
             if (!this.project || !this.project.department_id) {
                 this.departmentCustomFieldSets = [];
@@ -1113,7 +1481,6 @@ createApp({
             // Mention functionality methods
             await this.loadMentionUsers();
         },
-        
         // Mention functionality methods
         async loadMentionUsers() {
             try {
@@ -1124,128 +1491,6 @@ createApp({
                 console.error('Error loading mention users:', error);
                 this.mentionUsers = [];
             }
-        },
-        
-        handleCommentInput(event) {
-            const input = event.target;
-            const value = input.value;
-            const cursorPosition = input.selectionStart;
-            
-            // Check if we're typing @
-            const beforeCursor = value.substring(0, cursorPosition);
-            const atIndex = beforeCursor.lastIndexOf('@');
-            
-            if (atIndex !== -1 && (atIndex === 0 || /\s/.test(value[atIndex - 1]))) {
-                // We found @ at the beginning or after a space
-                const searchTerm = beforeCursor.substring(atIndex + 1);
-                this.mentionStartPosition = atIndex;
-                this.mentionSearchTerm = searchTerm;
-                this.showMentionDropdown = true;
-                this.selectedMentionIndex = 0;
-            } else {
-                this.hideMentionDropdown();
-            }
-        },
-        
-        handleCommentKeydown(event) {
-            if (this.showMentionDropdown) {
-                if (event.key === 'ArrowDown') {
-                    event.preventDefault();
-                    this.selectedMentionIndex = Math.min(this.selectedMentionIndex + 1, this.filteredMentionUsers.length - 1);
-                } else if (event.key === 'ArrowUp') {
-                    event.preventDefault();
-                    this.selectedMentionIndex = Math.max(this.selectedMentionIndex - 1, 0);
-                } else if (event.key === 'Enter') {
-                    // Chỉ chọn mention, KHÔNG gọi addComment
-                    event.preventDefault();
-                    if (this.filteredMentionUsers.length > 0) {
-                        this.selectMention(this.filteredMentionUsers[this.selectedMentionIndex]);
-                    }
-                    // KHÔNG gọi addComment ở đây!
-                } else if (event.key === 'Escape') {
-                    event.preventDefault();
-                    this.hideMentionDropdown();
-                }
-            }
-        },
-        
-        selectMention(user) {
-            if (!user) return;
-            // Lấy contenteditable div thay vì input
-            const contenteditableDiv = document.querySelector('[contenteditable="true"][data-mention]');
-            if (!contenteditableDiv) return;
-            // Lấy text hiện tại
-            const text = contenteditableDiv.textContent || '';
-            const beforeMention = text.substring(0, this.mentionStartPosition);
-            const afterMention = text.substring(this.mentionStartPosition + this.mentionSearchTerm.length + 1); // +1 for @
-            // Thay thế @searchterm bằng @username (có thể dùng HTML cho highlight)
-            // Để đơn giản, chỉ chèn plain text, hoặc có thể dùng span nếu muốn highlight
-            // contenteditableDiv.textContent = beforeMention + '@' + user.user_name + ' ' + afterMention;
-            // Nếu muốn highlight:
-            const mentionHtml = beforeMention + '<span class="mention-highlight" data-user-id="' + (user.userid || user.id) + '">@' + user.user_name + '</span> ' + afterMention;
-            contenteditableDiv.innerHTML = mentionHtml;
-            // Đặt lại cursor sau mention
-            const range = document.createRange();
-            const sel = window.getSelection();
-            if (contenteditableDiv.childNodes.length > 0) {
-                range.setStart(contenteditableDiv, contenteditableDiv.childNodes.length);
-                range.collapse(true);
-                sel.removeAllRanges();
-                sel.addRange(range);
-            }
-            contenteditableDiv.focus();
-            // Ẩn dropdown
-            this.hideMentionDropdown();
-        },
-        
-        hideMentionDropdown() {
-            this.showMentionDropdown = false;
-            this.selectedMentionIndex = 0;
-            this.mentionSearchTerm = '';
-            this.mentionStartPosition = -1;
-        },
-        
-        // Method to render mentions in comments
-        renderMentions(content) {
-            if (!content) return content;
-            
-            // If content already contains HTML mentions, convert to display format
-            if (content.includes('mention-highlight')) {
-                // Convert HTML mentions to display format while preserving the mention styling
-                let displayContent = content;
-                
-                // Replace HTML mentions with styled spans but keep the @username format
-                displayContent = this.decodeHtmlEntities(displayContent);
-                return displayContent;
-            }
-            
-            // Otherwise, use the static method for plain text mentions
-            return MentionManager.renderMentions(content);
-        },
-        
-        // Method to get HTML content from contenteditable div
-        getCommentText() {
-            const contenteditableDiv = document.querySelector('[contenteditable="true"][data-mention]');
-            if (contenteditableDiv) {
-                // Return the HTML content to preserve mentions formatting
-                return contenteditableDiv.innerHTML || '';
-            }
-            return '';
-        },
-        
-        // Method to check if comment has content (for button disabled state)
-        hasCommentContent() {
-            const contenteditableDiv = document.querySelector('[contenteditable="true"][data-mention]');
-            if (contenteditableDiv) {
-                // Check if there's any text content (ignoring HTML tags)
-                const textContent = contenteditableDiv.textContent || contenteditableDiv.innerText || '';
-                return textContent.trim().length > 0;
-            }
-            return false;
-        },
-        onCommentInput() {
-            // Gọi forceUpdate để cập nhật lại trạng thái button gửi comment hoạt động khi gõ nội dung.
-            this.$forceUpdate();
         },
     },
     watch: {
@@ -1286,42 +1531,43 @@ createApp({
                             }
                         });
                     }
-                    // --- Add select2 initialization for detail page ---
-                    // 会社名 (category_id)
-                    const $category = $('#category_id');
-                    if ($category.length) {
-                        $category.select2({
-                            placeholder: '選択してください',
-                            dropdownParent: $category.parent(),
-                            allowClear: true,
-                            minimumResultsForSearch: 0,
-                            ajax: {
-                                url: '/api/index.php?model=customer&method=list_categories',
-                                dataType: 'json',
-                                delay: 250,
-                                data: function(params) {
-                                    return {
-                                        search: params.term,
-                                        page: params.page || 1
-                                    };
-                                },
-                                processResults: function(data) {
-                                    return {
-                                        results: data.data.map(function(item) {
-                                            return {
-                                                id: item.id,
-                                                text: item.name
-                                            };
-                                        })
-                                    };
+                    // Initialize Select2 dropdowns
+                    $('#category_id').select2({
+                        placeholder: '選択してください',
+                        dropdownParent: $('#category_id').parent(),
+                        allowClear: true,
+                        minimumResultsForSearch: 0,
+                        ajax: {
+                            url: '/api/index.php?model=customer&method=list_categories',
+                            dataType: 'json',
+                            delay: 250,
+                            data: (params) => {
+                                const data = {
+                                    search: params.term,
+                                    page: params.page || 1
+                                };
+                                if (this.project.department_id) {
+                                    data.department_id = this.project.department_id;
                                 }
+                                return data;
+                            },
+                            processResults: function(data) {
+                                return {
+                                    results: data.data.map(function(item) {
+                                        return {
+                                            id: item.id,
+                                            text: item.name
+                                        };
+                                    })
+                                };
                             }
-                        }).on('select2:select', (e) => {
-                            this.newProject.category_id = e.params.data.id;
-                            this.onCategoryChange();
-                        });
-                    }
-                    // 支店名 (company_name)
+                        }
+                    }).on('select2:select', (e) => {
+                        this.newProject.category_id = e.params.data.id;
+                        this.onCategoryChange();
+                    });
+                    
+                    // Company name (company_name)
                     const $company = $('#company_name');
                     if ($company.length) {
                         $company.select2({
@@ -1398,36 +1644,138 @@ createApp({
                             this.newProject.customer_id = e.params.data.id;
                         });
                     }
-                    // --- Tagify for project_order_type ---
-                    const input = document.querySelector('#project_order_type');
-                    if (input && window.Tagify) {
-                        if (this.projectOrderTypeTagify) {
-                            this.projectOrderTypeTagify.destroy();
-                        }
-                        this.projectOrderTypeTagify = new Tagify(input, {
-                            whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
-                            maxTags: 5,
-                            dropdown: {
-                                maxItems: 20,
-                                classname: "tags-look",
-                                enabled: 0,
-                                closeOnSelect: true
-                            },
+                    
+                    // Initialize Tagify with delay to ensure DOM is ready
+                    setTimeout(() => {
+                        console.log('Initializing Tagify...');
+                        
+                        // Clear any existing tagify instances first
+                        document.querySelectorAll('.tagify').forEach(el => {
+                            if (el._tagify) {
+                                try {
+                                    el._tagify.destroy();
+                                } catch (e) {
+                                    console.log('Error destroying existing tagify:', e);
+                                }
+                            }
                         });
-                        // Set default value
-                        let tags = [];
-                        if (typeof this.project.project_order_type === 'string' && this.project.project_order_type) {
-                            tags = this.project.project_order_type.split(',').map(s => s.trim()).filter(Boolean);
+                        
+                        // --- Tagify for project_order_type ---
+                        const input = document.querySelector('#project_order_type');
+                        if (input && window.Tagify && !input._tagify) {
+                            if (this.projectOrderTypeTagify) {
+                                try {
+                                    this.projectOrderTypeTagify.destroy();
+                                } catch (e) {
+                                    console.log('Error destroying existing projectOrderTypeTagify:', e);
+                                }
+                            }
+                            this.projectOrderTypeTagify = new Tagify(input, {
+                                whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                                maxTags: 5,
+                                dropdown: {
+                                    maxItems: 20,
+                                    classname: "tags-look-order-type",
+                                    enabled: 0,
+                                    closeOnSelect: true
+                                },
+                            });
+                            // Set default value
+                            let tags = [];
+                            if (typeof this.project.project_order_type === 'string' && this.project.project_order_type) {
+                                tags = this.project.project_order_type.split(',').map(s => s.trim()).filter(Boolean);
+                            }
+                            // if (tags.length > 0) {
+                            //     this.projectOrderTypeTagify.addTags(tags);
+                            // }
+                            const updateOrderType = () => {
+                                this.project.project_order_type = this.projectOrderTypeTagify.value.map(tag => tag.value).join(',');
+                            };
+                            this.projectOrderTypeTagify.on('add', updateOrderType);
+                            this.projectOrderTypeTagify.on('remove', updateOrderType);
                         }
-                        if (tags.length > 0) {
-                          //  this.projectOrderTypeTagify.addTags(tags);
+                        
+                        // --- Tagify for building_branch ---
+                        const buildingBranchInput = document.querySelector('#building_branch');
+                        if (buildingBranchInput && window.Tagify && !buildingBranchInput._tagify) {
+                            if (this.buildingBranchTagify) {
+                                try {
+                                    this.buildingBranchTagify.destroy();
+                                } catch (e) {
+                                    console.log('Error destroying existing buildingBranchTagify:', e);
+                                }
+                            }
+                            this.buildingBranchTagify = new Tagify(buildingBranchInput, {
+                                whitelist: this.japanPrefectures,
+                                maxTags: 10,
+                                dropdown: {
+                                    maxItems: 20,
+                                    classname: "tags-look-building-branch",
+                                    enabled: 0,
+                                    closeOnSelect: true
+                                },
+                            });
+                            // Set default value
+                            let buildingBranchTags = [];
+                            if (typeof this.project.building_branch === 'string' && this.project.building_branch) {
+                                buildingBranchTags = this.project.building_branch.split(',').map(s => s.trim()).filter(Boolean);
+                            }
+                            // if (buildingBranchTags.length > 0) {
+                            //     this.buildingBranchTagify.addTags(buildingBranchTags);
+                            // }
+                            const updateBuildingBranch = () => {
+                                this.project.building_branch = this.buildingBranchTagify.value.map(tag => tag.value).join(',');
+                            };
+                            this.buildingBranchTagify.on('add', updateBuildingBranch);
+                            this.buildingBranchTagify.on('remove', updateBuildingBranch);
+                        } else {
                         }
-                        const updateOrderType = () => {
-                            this.project.project_order_type = this.projectOrderTypeTagify.value.map(tag => tag.value).join(',');
-                        };
-                        this.projectOrderTypeTagify.on('add', updateOrderType);
-                        this.projectOrderTypeTagify.on('remove', updateOrderType);
-                    }
+                        
+                        // --- Tagify for project tags ---
+                        const projectTagsInput = document.querySelector('#project_tags');
+                        if (projectTagsInput && window.Tagify && !projectTagsInput._tagify) {
+                            if (this.projectTagsTagify) {
+                                try {
+                                    this.projectTagsTagify.destroy();
+                                } catch (e) {
+                                    console.log('Error destroying existing projectTagsTagify:', e);
+                                }
+                            }
+                            this.projectTagsTagify = new Tagify(projectTagsInput, {
+                                enforceWhitelist: false,
+                                mode: 'mix',
+                                pattern: /^[a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\u20000-\u2A6DF\u2A700-\u2B73F\u2B740-\u2B81F\u2B820-\u2CEAF\uF900-\uFAFF\u3300-\u33FF\uFE30-\uFE4F\uFF00-\uFFEF\s]+$/,
+                                maxTags: 20,
+                                dropdown: {
+                                    maxItems: 20,
+                                    classname: "tags-look",
+                                    enabled: 0,
+                                    closeOnSelect: false
+                                }
+                            });
+                            
+                            // Add existing tags if any
+                            if (this.project.tags) {
+                                const tags = this.project.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+                                if (tags.length > 0) {
+                                    this.projectTagsTagify.addTags(tags);
+                                }
+                            }
+                            
+                            // Add event listeners for auto-save
+                            this.projectTagsTagify.on('add', () => {
+                                this.updateTags();
+                            });
+                            
+                            this.projectTagsTagify.on('remove', () => {
+                                this.updateTags();
+                            });
+                            
+                            this.projectTagsTagify.on('change', () => {
+                                this.updateTags();
+                            });
+                        }
+                    }, 100);
                 });
                 window.addEventListener('beforeunload', this.handleBeforeUnload);
             } else {
@@ -1435,11 +1783,37 @@ createApp({
                 $('#category_id').select2('destroy');
                 $('#company_name').select2('destroy');
                 $('#customer_id').select2('destroy');
+                
                 // Destroy Tagify for project_order_type
                 if (this.projectOrderTypeTagify) {
-                    this.projectOrderTypeTagify.destroy();
+                    try {
+                        this.projectOrderTypeTagify.destroy();
+                    } catch (e) {
+                        console.log('Error destroying projectOrderTypeTagify:', e);
+                    }
                     this.projectOrderTypeTagify = null;
                 }
+                
+                // Destroy Tagify for building_branch
+                if (this.buildingBranchTagify) {
+                    try {
+                        this.buildingBranchTagify.destroy();
+                    } catch (e) {
+                        console.log('Error destroying buildingBranchTagify:', e);
+                    }
+                    this.buildingBranchTagify = null;
+                }
+                
+                // Destroy Tagify for project tags
+                if (this.projectTagsTagify) {
+                    try {
+                        this.projectTagsTagify.destroy();
+                    } catch (e) {
+                        console.log('Error destroying projectTagsTagify:', e);
+                    }
+                    this.projectTagsTagify = null;
+                }
+                
                 window.removeEventListener('beforeunload', this.handleBeforeUnload);
             }
         },
@@ -1514,6 +1888,17 @@ createApp({
             },
             deep: true
         },
+        'project': {
+            handler(newVal) {
+                if (newVal && newVal.id) {
+                    // Initialize project tags Tagify when project is loaded
+                    setTimeout(() => {
+                        this.initProjectTagsTagify();
+                    }, 100);
+                }
+            },
+            deep: true
+        }
     },
     async mounted() {
         await this.loadProject();
@@ -1521,6 +1906,7 @@ createApp({
         await this.loadAllTeams();
         await this.loadDepartmentCustomFieldSets();
         await this.loadComments();
+        await this.loadNotes();
         this.initTooltips();
         
         // Initialize mention manager
@@ -1542,6 +1928,92 @@ createApp({
         
         // Add beforeunload event listener
         window.addEventListener('beforeunload', this.handleBeforeUnload);
+
+        // Initialize Tagify for team selection
+        if (document.getElementById('team_tags')) {
+            new Tagify(document.getElementById('team_tags'), {
+                whitelist: this.teamList.map(team => ({ value: team.id, text: team.name })),
+                enforceWhitelist: true,
+                mode: 'select',
+                templates: {
+                    tag: function(tagData) {
+                        return `
+                            <tag title="${tagData.value}"
+                                contenteditable='false'
+                                spellcheck='false'
+                                class='tagify__tag ${tagData.class ? tagData.class : ""}'
+                                tabindex="0"
+                                role="option"
+                                aria-label="${tagData.value}"
+                                aria-selected="false">
+                                <x title='' class='tagify__tag__removeBtn' role='button' aria-label='remove tag'></x>
+                                <div>
+                                    <div class='tagify__tag__avatar-wrap'>
+                                        <img onerror="this.style.visibility='hidden'" src="">
+                                    </div>
+                                    <div class='tagify__tag__text'>
+                                        <span>${tagData.text}</span>
+                                    </div>
+                                </div>
+                            </tag>
+                        `
+                    },
+                    dropdownItem: function(tagData) {
+                        return `
+                            <div class='tagify__dropdown__item ${tagData.class ? tagData.class : ""}'
+                                 tabindex="0"
+                                 role="option"
+                                 aria-label="${tagData.value}">
+                                <span>${tagData.text}</span>
+                            </div>
+                        `
+                    }
+                }
+            });
+        }
+
+        // Initialize Tagify for project tags
+        if (document.getElementById('project_tags')) {
+            const projectTagsInput = document.getElementById('project_tags');
+            this.projectTagsTagify = new Tagify(projectTagsInput, {
+                enforceWhitelist: false,
+                mode: 'mix',
+                pattern: /^[a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\u20000-\u2A6DF\u2A700-\u2B73F\u2B740-\u2B81F\u2B820-\u2CEAF\uF900-\uFAFF\u3300-\u33FF\uFE30-\uFE4F\uFF00-\uFFEF\s]+$/,
+                maxTags: 20,
+                dropdown: {
+                    maxItems: 20,
+                    classname: "tags-look",
+                    enabled: 0,
+                    closeOnSelect: false
+                }
+            });
+            
+            // Add existing tags if any
+            if (this.project.tags) {
+                const tags = this.project.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+                if (tags.length > 0) {
+                    this.projectTagsTagify.addTags(tags);
+                }
+            }
+            
+            // Add event listeners for auto-save
+            this.projectTagsTagify.on('add', () => {
+                this.updateTags();
+            });
+            
+            this.projectTagsTagify.on('remove', () => {
+                this.updateTags();
+            });
+            
+            this.projectTagsTagify.on('change', () => {
+                this.updateTags();
+            });
+        }
+        
+        // Initialize project tags Tagify with delay to ensure everything is ready
+        setTimeout(() => {
+            this.initProjectTagsTagify();
+        }, 500);
     },
     updated() {
         this.$nextTick(() => {
