@@ -205,6 +205,7 @@ class Task extends ApplicationModel {
         
         if ($status == 'completed') {
             $data['progress'] = 100;
+            $data['actual_end_date'] = date('Y-m-d H:i:s');
         } else if ($status == 'new') {
             $data['progress'] = 0;        
         }                

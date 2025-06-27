@@ -89,22 +89,22 @@ const TaskApp = createApp({
             });
         },
         taskStats() {
+            const now = moment().tz('Asia/Tokyo');
             const total = this.tasks.length;
             const completed = this.tasks.filter(t => t.status === 'completed').length;
-            
-            // Calculate overdue tasks: tasks with due_date that are past due and not completed
+
+            // Overdue: completed => actual_end_date > due_date, not completed => now > due_date
             const overdue = this.tasks.filter(t => {
-                if (!t.due_date || t.status === 'completed') return false;
-                try {
-                    const dueDate = moment(t.due_date);
-                    const now = moment();
-                    return dueDate.isBefore(now, 'day'); // Compare by day, not exact time
-                } catch (error) {
-                    console.error('Error parsing date:', t.due_date, error);
-                    return false;
+                if (!t.due_date) return false;
+                const due = moment.tz(t.due_date, 'Asia/Tokyo');
+                if (t.status === 'completed') {
+                    if (!t.actual_end_date) return false;
+                    return moment.tz(t.actual_end_date, 'Asia/Tokyo').isAfter(due, 'minute');
+                } else {
+                    return now.isAfter(due, 'minute');
                 }
             }).length;
-            
+
             return { total, completed, overdue };
         }
     },
@@ -129,12 +129,14 @@ const TaskApp = createApp({
         this.$nextTick(() => {
             this.initFlatpickr();
             this.initSortable();
+            this.initTooltips();
         });
     },
     
     updated() {
         this.$nextTick(() => {
             this.initFlatpickr();
+            this.initTooltips();
         });
     },
     
@@ -798,7 +800,81 @@ const TaskApp = createApp({
                 console.error('Error updating task order:', error);
                 this.showMessage('タスク順序の更新に失敗しました', true);
             }
-        }
+        },
+        
+        isTaskOverdue(task) {
+            if (!task.due_date) return false;
+            const due = moment.tz(task.due_date, 'Asia/Tokyo');
+            if (task.status === 'completed') {
+                if (!task.actual_end_date) return false;
+                return moment.tz(task.actual_end_date, 'Asia/Tokyo').isAfter(due, 'minute');
+            } else {
+                return moment().tz('Asia/Tokyo').isAfter(due, 'minute');
+            }
+        },
+        
+        isInlineTaskOverdue(inlineTask) {
+            if (!inlineTask.due_date) return false;
+            const due = moment.tz(inlineTask.due_date, 'Asia/Tokyo');
+            if (inlineTask.status === 'completed') {
+                // For inline tasks, we don't have actual_end_date, so just check if due_date is in the past
+                return moment().tz('Asia/Tokyo').isAfter(due, 'minute');
+            } else {
+                return moment().tz('Asia/Tokyo').isAfter(due, 'minute');
+            }
+        },
+        
+        initTooltips() {
+            // Initialize Bootstrap tooltips
+            if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+            } else if (typeof $ !== 'undefined' && $.fn.tooltip) {
+                // Fallback to jQuery tooltip if Bootstrap is not available
+                $('[data-bs-toggle="tooltip"]').tooltip();
+            }
+        },
+        
+        getOverdueTooltip(task) {
+            if (!this.isTaskOverdue(task)) return '';
+            
+            const due = moment.tz(task.due_date, 'Asia/Tokyo');
+            let endTime;
+            
+            if (task.status === 'completed') {
+                endTime = moment.tz(task.actual_end_date, 'Asia/Tokyo');
+            } else {
+                endTime = moment().tz('Asia/Tokyo');
+            }
+            
+            const duration = moment.duration(endTime.diff(due));
+            const hours = Math.floor(duration.asHours());
+            const minutes = Math.floor(duration.asMinutes()) % 60;
+            
+            if (hours > 0) {
+                return `期限切れ: ${hours}時間${minutes}分`;
+            } else {
+                return `期限切れ: ${minutes}分`;
+            }
+        },
+        
+        getInlineOverdueTooltip(inlineTask) {
+            if (!this.isInlineTaskOverdue(inlineTask)) return '';
+            
+            const due = moment.tz(inlineTask.due_date, 'Asia/Tokyo');
+            const now = moment().tz('Asia/Tokyo');
+            const duration = moment.duration(now.diff(due));
+            const hours = Math.floor(duration.asHours());
+            const minutes = Math.floor(duration.asMinutes()) % 60;
+            
+            if (hours > 0) {
+                return `期限切れ: ${hours}時間${minutes}分`;
+            } else {
+                return `期限切れ: ${minutes}分`;
+            }
+        },
     }
 });
 

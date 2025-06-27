@@ -18,6 +18,7 @@
 <script src="<?=$root?>assets/vendor/libs/@form-validation/auto-focus.js"></script>
 <script src="<?=$root?>assets/vendor/libs/apex-charts/apexcharts.js"></script>
 <script src="<?=$root?>assets/vendor/libs/moment/moment.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.43/moment-timezone-with-data.min.js"></script>
 <script src="<?=$root?>assets/vendor/libs/select2/select2.js"></script>
 <script src="<?=$root?>assets/vendor/libs/cleave-zen/cleave-zen.js"></script>
 <script src="<?=$root?>assets/vendor/libs/tagify/tagify.js"></script>
