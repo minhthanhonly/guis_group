@@ -39,7 +39,7 @@ if (!$project_id) {
         <!-- Back button -->
         <div class="col-12 mb-3">
             <a href="index.php" class="btn btn-outline-primary">
-                <i class="fa fa-arrow-left"></i> 戻る
+                <i class="fa fa-arrow-left me-2"></i>戻る
             </a>
         </div>
 
@@ -53,10 +53,10 @@ if (!$project_id) {
                             <button class="btn btn-outline-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalComment" title="コメントを見る">
                                 <i class="fa fa-comment"></i>
                             </button>
-                            <button v-if="!isEditMode" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
+                            <button v-if="!isEditMode && isManager" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
                                 <i class="fa fa-copy"></i>
                             </button>
-                            <button v-if="!isEditMode" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode">
+                            <button v-if="!isEditMode && isManager" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode">
                                 <i class="fa fa-pencil-alt"></i>
                             </button>
                             <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject">
@@ -65,7 +65,7 @@ if (!$project_id) {
                             <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit">
                                 <i class="fa fa-times"></i>
                             </button>  
-                            <button v-if="!isEditMode" class="btn btn-outline-danger btn-sm" @click="deleteProject">
+                            <button v-if="!isEditMode && isManager" class="btn btn-outline-danger btn-sm" @click="deleteProject">
                                 <i class="fa fa-trash"></i>
                             </button>
                         </div>
@@ -139,6 +139,19 @@ if (!$project_id) {
                             <label class="form-label">部署</label>
                             <input type="text" class="form-control" :value="department?.name || '-'" readonly>
                         </div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label">工事番号</label>
+                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.building_number">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">建物規模</label>
+                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.building_size">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">建物種類</label>
+                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.building_type">
+                        </div>
                         <div class="col-md-4">
                             <label class="form-label">工事支店</label>
                             <template v-if="isEditMode">
@@ -156,17 +169,24 @@ if (!$project_id) {
                                 </div>
                             </template>
                         </div>
+                        
+                        
                         <div class="col-md-4">
-                            <label class="form-label">建物規模</label>
-                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.building_size">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">建物種類</label>
-                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.building_type">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">工事番号</label>
-                            <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.building_number">
+                            <label class="form-label">受注形態</label>
+                            <template v-if="isEditMode">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control tagify" v-model="project.project_order_type" id="project_order_type" name="project_order_type" required>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('project_order_type')" title="すべて削除"><i class="fa fa-times"></i></button>
+                                </div>
+                            </template>
+                            <template v-else>
+                                <div style="min-height:38px;">
+                                    <span v-if="project.project_order_type && project.project_order_type.split(',').length > 0">
+                                        <span v-for="item in project.project_order_type.split(',')" :key="item.trim()" class="badge bg-primary me-1">{{ item.trim() }}</span>
+                                    </span>
+                                    <span v-else>-</span>
+                                </div>
+                            </template>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">優先度</label>
@@ -190,54 +210,6 @@ if (!$project_id) {
                                 <div v-else>
                                     <span class="badge" :class="getPriorityBadgeClass(project.priority)">{{ getPriorityLabel(project.priority) }}</span>
                                 </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">ステータス</label>
-                            <div>
-                                <div class="btn-group" v-if="isManager">
-                                    <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
-                                            :class="getStatusButtonClass(project.status)"
-                                            id="statusDropdown"
-                                            data-bs-toggle="dropdown" aria-expanded="false">
-                                        {{ getStatusLabel(project.status) }}
-                                    </button>
-                                    <ul class="dropdown-menu">
-                                        <li v-for="status in statuses" :key="status.value">
-                                            <a class="dropdown-item waves-effect" href="javascript:void(0);" 
-                                            @click="selectStatus(status.value)">
-                                                {{ status.label }}
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
-                                <div v-else>
-                                    <span class="badge" :class="getStatusBadgeClass(project.status)">{{ getStatusLabel(project.status) }}</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">受注形態</label>
-                            <template v-if="isEditMode">
-                                <div class="d-flex align-items-center gap-2">
-                                    <input type="text" class="form-control tagify" v-model="project.project_order_type" id="project_order_type" name="project_order_type" required>
-                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('project_order_type')" title="すべて削除"><i class="fa fa-times"></i></button>
-                                </div>
-                            </template>
-                            <template v-else>
-                                <div style="min-height:38px;">
-                                    <span v-if="project.project_order_type && project.project_order_type.split(',').length > 0">
-                                        <span v-for="item in project.project_order_type.split(',')" :key="item.trim()" class="badge bg-primary me-1">{{ item.trim() }}</span>
-                                    </span>
-                                    <span v-else>-</span>
-                                </div>
-                            </template>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">タグ</label>
-                            <div class="d-flex align-items-center gap-2">
-                                <input type="text" class="form-control tagify" v-model="project.tags" id="project_tags" name="project_tags" @input="updateTags">
-                                <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('project_tags')" title="すべて削除"><i class="fa fa-times"></i></button>
                             </div>
                         </div>
                       
@@ -329,14 +301,31 @@ if (!$project_id) {
                             </div>
                             <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" readonly>
                         </div>
-                        <!-- <div class="col-md-4">
-                            <label class="form-label">実終了日</label>
-                            <div v-if="isEditMode" class="input-group">
-                                <input type="text" class="form-control" v-model="project.actual_end_date" id="actual_end_date_picker" placeholder="YYYY/MM/DD HH:mm">
-                                <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label">ステータス</label>
+                            <div>
+                                <div class="btn-group" v-if="isManager">
+                                    <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
+                                            :class="getStatusButtonClass(project.status)"
+                                            id="statusDropdown"
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                        {{ getStatusLabel(project.status) }}
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li v-for="status in statuses" :key="status.value">
+                                            <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                            @click="selectStatus(status.value)">
+                                                {{ status.label }}
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div v-else>
+                                    <span class="badge" :class="getStatusBadgeClass(project.status)">{{ getStatusLabel(project.status) }}</span>
+                                </div>
                             </div>
-                            <input v-else type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
-                        </div> -->
+                        </div>
                         <div class="col-4">
                             <label class="form-label">進捗率</label>
                             <div class="position-relative">
@@ -361,6 +350,17 @@ if (!$project_id) {
                                 <div class="progress-value-label text-center">
                                     {{ project.progress }}%
                                 </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4" v-if="project.actual_end_date">
+                            <label class="form-label">実終了日</label>
+                            <input type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">タグ</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" class="form-control tagify" v-model="project.tags" id="project_tags" name="project_tags" @input="updateTags">
+                                <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('project_tags')" title="すべて削除"><i class="fa fa-times"></i></button>
                             </div>
                         </div>
                         <div class="col-12">
@@ -543,7 +543,7 @@ if (!$project_id) {
             <!-- Quick Notes Section -->
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">クイックメモ</h5>
+                    <h5 class="card-title mb-0">メモ</h5>
                     <button class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
                         <i class="fa fa-plus"></i>
                     </button>

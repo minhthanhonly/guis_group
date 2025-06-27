@@ -239,7 +239,7 @@ if (!$project_id) {
             <div v-for="task in filteredTasks" :key="task.id" class="card mb-2" :data-id="task.id">
                 <div class="row g-0 align-items-center">
                     <div class="col-3 d-flex align-items-center">
-                        <span class="drag-handle" style="cursor: move;">≡</span>
+                        <span class="drag-handle ps-2 fs-16" style="cursor: move;">≡</span>
                         <div class="p-2">
                             <span class="fw-bold" style="cursor: pointer;" @click="openTaskDetails(task)">{{ task.title }}</span>
                         </div>
@@ -308,64 +308,7 @@ if (!$project_id) {
                 </div>
             </div>
         </div>
-        <!-- Modal thêm/sửa task -->
-        <div class="modal fade" id="addTaskModal" tabindex="-1" aria-labelledby="addTaskModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="addTaskModalLabel">{{ editingTask ? 'タスクを編集' : '新しいタスクを追加' }}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form @submit.prevent="saveTask">
-                            <div class="mb-3">
-                                <label for="taskTitle" class="form-label">タスク名</label>
-                                <input type="text" class="form-control" id="taskTitle" v-model="taskForm.title" placeholder="タスク名を入力" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="taskDescription" class="form-label">説明</label>
-                                <textarea class="form-control" id="taskDescription" v-model="taskForm.description" rows="3"></textarea>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label for="taskPriority" class="form-label">優先度</label>
-                                    <select class="form-select" id="taskPriority" v-model="taskForm.priority">
-                                        <option value="high">高</option>
-                                        <option value="medium">中</option>
-                                        <option value="low">低</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="taskDueDate" class="form-label">期限日</label>
-                                    <input type="text" class="form-control" id="taskDueDate" v-model="taskForm.due_date" placeholder="yyyy-mm-dd HH:ii">
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="taskStatus" class="form-label">ステータス</label>
-                                <select class="form-select form-select-sm" id="taskStatus" v-model="taskForm.status" @change="updateTaskStatus(taskForm, taskForm.status)">
-                                    <option value="todo">未開始</option>
-                                    <option value="in-progress">進行中</option>
-                                    <option value="completed">完了</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="taskAssignee" class="form-label">担当者</label>
-                                <select class="form-select" id="taskAssignee" v-model="taskForm.assigned_to">
-                                    <option value="">選択してください</option>
-                                    <option v-for="member in projectMembers" :key="member.user_id" :value="member.user_id">
-                                        {{ member.user_name }}
-                                    </option>
-                                </select>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                        <button type="button" class="btn btn-primary" @click="saveTask">{{ editingTask ? '保存' : 'タスク追加' }}</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        
     </div>
 
     <!-- Modal quản lý member -->
