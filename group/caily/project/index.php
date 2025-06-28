@@ -18,14 +18,13 @@ $view->heading('プロジェクト管理');
                         <a href="#" class="nav-link" @click="viewProjects(department)" >{{ department.name }}</a>
                     </li>
                 </ul>
-                <a :href="createUrl" class="btn btn-primary">
+                <a v-if="canAddProject()" :href="createUrl" class="btn btn-primary">
                     <i class="fa fa-plus"></i> 新規プロジェクト
                 </a>
             </div>
         </div>
     </nav>
     <div class="card">
-        
         <div class="card-body">
             <div class="d-flex flex-wrap gap-2 mb-3">
                 <button 

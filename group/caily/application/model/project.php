@@ -49,8 +49,18 @@ class Project extends ApplicationModel {
         $whereArr = [];
         
         // Add permission check
-        $user_id = isset($_GET['user_id']) ? $_GET['user_id'] : $_SESSION['user_id'];
-        if (strlen($user_id) > 0 && $_SESSION['authority'] != 'administrator') {
+        $user_id = $_SESSION['id'];
+        $is_department_manager = false;
+        if (isset($_GET['department_id'])) {
+            $department_id = $_GET['department_id'];
+            $query = sprintf(
+                "SELECT COUNT(id) as count FROM " . DB_PREFIX . "user_department WHERE userid = '%s' AND department_id = %d AND (project_manager = 1 OR project_director = 1)",
+                $_SESSION['userid'],
+                $department_id);
+            $is_department_manager = $this->fetchOne($query)['count'] > 0;
+        }
+
+        if ($_SESSION['authority'] != 'administrator' && !$is_department_manager) {
             $whereArr[] = sprintf(
                 "(p.created_by = %d OR EXISTS (
                     SELECT 1 FROM " . DB_PREFIX . "project_members pm 
@@ -61,13 +71,14 @@ class Project extends ApplicationModel {
             );
         }
 
+
         if (isset($_GET['department_id'])) {
             $whereArr[] = sprintf("p.department_id = %d", intval($_GET['department_id']));
         }
         if (isset($_GET['status']) && $_GET['status'] != 'all') {
             $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
         } else {
-            $whereArr[] = "p.status != 'deleted'";
+            $whereArr[] = "p.is_deleted != 1";
         }
 
         // Add search condition
@@ -120,7 +131,7 @@ class Project extends ApplicationModel {
             $length
         );
 
-        
+
         
         $data = $this->fetchAll($query);
 
@@ -166,7 +177,7 @@ class Project extends ApplicationModel {
             'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
             'amount' => isset($_POST['amount']) ? floatval($_POST['amount']) : 0,
             'teams' => isset($_POST['teams']) ? $_POST['teams'] : '',
-            'created_by' => $_SESSION['user_id'],
+            'created_by' => $_SESSION['userid'],
             'created_at' => date('Y-m-d H:i:s'),
         );
 
@@ -258,7 +269,7 @@ class Project extends ApplicationModel {
             'invoice_status' => isset($_POST['invoice_status']) ? $_POST['invoice_status'] : '未発行',
             'tags' => isset($_POST['tags']) ? $_POST['tags'] : '',
             'updated_at' => date('Y-m-d H:i:s'),
-            'updated_by' => $_SESSION['user_id']
+            'updated_by' => $_SESSION['userid']
         );
         
         // Save custom field set id and custom fields JSON if provided
@@ -664,7 +675,7 @@ class Project extends ApplicationModel {
         
         $data = array(
             'updated_at' => date('Y-m-d H:i:s'),
-            'updated_by' => $_SESSION['user_id']
+            'updated_by' => $_SESSION['userid']
         );
         
         // Add fields if they exist in POST

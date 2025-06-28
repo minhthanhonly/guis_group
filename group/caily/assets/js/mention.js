@@ -4,7 +4,6 @@
  */
 class MentionManager {
     constructor(options = {}) {
-        console.log('MentionManager constructor called with options:', options);
         
         this.options = {
             inputSelector: '[data-mention]',
@@ -25,22 +24,18 @@ class MentionManager {
         this.dropdownElement = null;
         this.savedRange = null;
         
-        console.log('MentionManager initialized, loading users...');
         
         // Load users
         this.loadMentionUsers();
         
-        console.log('MentionManager constructor completed');
     }
     
     init() {
-        console.log('init called');
         // Bind event listeners
         document.addEventListener('input', this.handleInput.bind(this));
         document.addEventListener('keydown', this.handleKeydownEvent.bind(this));
         document.addEventListener('click', this.handleGlobalClick.bind(this));
         document.addEventListener('keydown', this.preventMentionEdit.bind(this));
-        console.log('init completed - event listeners bound');
     }
     
     async loadMentionUsers() {
@@ -52,7 +47,6 @@ class MentionManager {
             
             const response = await fetch(`${this.options.apiEndpoint}&${params.toString()}`);
             
-            console.log('loadMentionUsers - response status:', response.status);
             
             // Check if response is ok
             if (!response.ok) {
@@ -69,8 +63,7 @@ class MentionManager {
             }
             
             const data = await response.json();
-            this.mentionUsers = data || [];
-            console.log('loadMentionUsers - mentionUsers set:', this.mentionUsers);
+            this.mentionUsers = data || []; 
             
             // Initialize after loading users
             this.init();
@@ -95,7 +88,6 @@ class MentionManager {
             }
            
         ];
-        console.log('Loaded fallback users:', this.mentionUsers);
     }
     
     bindEvents() {
@@ -166,18 +158,16 @@ class MentionManager {
         const input = event.target;
         if(!input.classList.contains('allow-mention')) return;
         
-        console.log('handleInput called');
-        
         // Check if this is a contenteditable element
         const isContentEditable = input.contentEditable === 'true' || 
                                  input.hasAttribute('data-html-mention');
         
-        console.log('isContentEditable:', isContentEditable);
+        
         
         if (isContentEditable) {
             // For contenteditable elements, work with HTML content
             const currentHtml = input.innerHTML;
-            console.log('Current HTML:', currentHtml);
+           
             
             // Get cursor position for contenteditable
             const selection = window.getSelection();
@@ -186,18 +176,18 @@ class MentionManager {
                 
                 // Get the text content of the entire input
                 const fullText = input.textContent || input.innerText;
-                console.log('Full text:', fullText);
+               
                 
                 // Calculate cursor position in text
                 const tempRange = range.cloneRange();
                 tempRange.selectNodeContents(input);
                 tempRange.setEnd(range.endContainer, range.endOffset);
                 const cursorPosition = tempRange.toString().length;
-                console.log('Cursor position:', cursorPosition);
+               
                 
                 // Get text before cursor
                 let beforeCursorText = fullText.substring(0, cursorPosition);
-                console.log('Before cursor text:', beforeCursorText);
+               
                 
                 // Special case: just typed @, cursor at position 1
                 let atIndex = beforeCursorText.lastIndexOf('@');
@@ -205,7 +195,7 @@ class MentionManager {
                     atIndex = 0;
                     beforeCursorText = '@';
                 }
-                console.log('@ index in text:', atIndex);
+               
                 
                 if (atIndex !== -1) {
                     // Always define beforeAt
@@ -237,23 +227,23 @@ class MentionManager {
                             }
                         }
                     }
-                    console.log('Before @:', beforeAt, 'isAtWordBoundary:', isAtWordBoundary);
+                   
                     
                     if (isAtWordBoundary) {
                         // We found @ at word boundary
                         const searchTerm = beforeCursorText.substring(atIndex + 1);
-                        console.log('Search term:', searchTerm);
+                       
                         this.mentionStartPosition = atIndex;
                         this.mentionSearchTerm = searchTerm;
                         this.currentInput = input;
-                        console.log('Showing dropdown');
+                       
                         this.showDropdown();
                     } else {
-                        console.log('@ not at word boundary, hiding dropdown');
+                       
                         this.hideDropdown();
                     }
                 } else {
-                    console.log('No @ found, hiding dropdown');
+                   
                     this.hideDropdown();
                 }
             }
@@ -262,25 +252,21 @@ class MentionManager {
             const value = input.value;
             const cursorPosition = input.selectionStart;
             
-            console.log('Regular input - value:', value, 'cursorPosition:', cursorPosition);
+
             
             // Check if we're typing @
             const beforeCursor = value.substring(0, cursorPosition);
             const atIndex = beforeCursor.lastIndexOf('@');
             
-            console.log('Before cursor:', beforeCursor, '@ index:', atIndex);
             
             if (atIndex !== -1 && (atIndex === 0 || /\s/.test(value[atIndex - 1]))) {
                 // We found @ at the beginning or after a space
                 const searchTerm = beforeCursor.substring(atIndex + 1);
-                console.log('Search term:', searchTerm);
                 this.mentionStartPosition = atIndex;
                 this.mentionSearchTerm = searchTerm;
                 this.currentInput = input;
-                console.log('Showing dropdown');
                 this.showDropdown();
             } else {
-                console.log('No valid @ found, hiding dropdown');
                 this.hideDropdown();
             }
         }
@@ -320,12 +306,7 @@ class MentionManager {
     }
     
     getFilteredUsers() {
-        console.log('getFilteredUsers called');
-        console.log('mentionUsers:', this.mentionUsers);
-        console.log('mentionSearchTerm:', this.mentionSearchTerm);
-        
         if (!this.mentionSearchTerm) {
-            console.log('getFilteredUsers - no search term, returning all users');
             return this.mentionUsers;
         }
         
@@ -333,14 +314,11 @@ class MentionManager {
             user.user_name.toLowerCase().includes(this.mentionSearchTerm.toLowerCase())
         );
         
-        console.log('getFilteredUsers - filtered result:', filtered);
         return filtered;
     }
     
     showDropdown() {
-        console.log('showDropdown called');
         if (!this.currentInput) {
-            console.log('showDropdown - no current input');
             return;
         }
         
@@ -351,10 +329,8 @@ class MentionManager {
         }
         
         const filteredUsers = this.getFilteredUsers();
-        console.log('showDropdown - filtered users:', filteredUsers);
         
         if (filteredUsers.length === 0) {
-            console.log('showDropdown - no filtered users, hiding dropdown');
             this.hideDropdown();
             return;
         }
@@ -369,7 +345,6 @@ class MentionManager {
         }
         
         this.showMentionDropdown = true;
-        console.log('showDropdown - dropdown shown successfully');
     }
     
     createDropdown() {
@@ -612,7 +587,6 @@ class MentionManager {
     
     // Static method to render mentions in content
     static renderMentions(content) {
-        console.log('renderMentions called with content:', content);
         if (!content) return this.decodeHTML(content);
         // Updated regex to handle Unicode characters including Japanese
         return content.replace(/@([^\s]+)/g, '<span class="mention-highlight">@$1</span>');

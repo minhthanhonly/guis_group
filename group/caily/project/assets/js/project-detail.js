@@ -109,6 +109,7 @@ createApp({
             projectTagsTagify: null,
             // Quill editor content storage (separate from Vue reactivity)
             quillContent: '',
+            userPermissions: null,
             // mention-related variables removed
         }
     },
@@ -135,12 +136,58 @@ createApp({
             // Return all loaded comments (pagination is handled by the API)
             return sortedComments;
         },
+        canViewProject() {
+            if(USER_ROLE == 'administrator') return true;
+            if (!this.project) return false;
+            if(this.project.created_by &&this.project.created_by == USER_ID) return true;
+            if(this.managers && this.managers.some(m => String(m.user_id) === String(USER_AUTH_ID))) return true;
+            if(this.members && this.members.some(m => String(m.user_id) === String(USER_AUTH_ID))) return true;
+            if(this.hasPermission('project_manager')) return true;
+            if(this.hasPermission('project_director')) return true;
+            return false;
+        },
     },
     methods: {
+        async getUserPermissions(departmentId) {
+            try {
+                const response = await axios.get(`/api/index.php?model=department&method=get_user_permission_by_department&department_id=${departmentId}`);
+                this.userPermissions = response.data;
+                return this.userPermissions;
+            } catch (error) {
+                console.error('Error loading user permissions:', error);
+                this.userPermissions = null;
+                return null;
+            }
+        },
+        // Check if user has specific permission
+        hasPermission(permission) {
+            if(USER_ROLE == 'administrator') return true;
+            if (!this.userPermissions) return false;
+            return this.userPermissions[permission] == 1;
+        },
+        // Check if user can perform project actions
+        canAddProject() {
+            return this.hasPermission('project_add');
+        },
+        canEditProject() {
+            return this.hasPermission('project_edit');
+        },
+        canDeleteProject() {
+            return this.hasPermission('project_delete');
+        },
+        canManageProject() {
+            return this.hasPermission('project_manager');
+        },
+        canCommentProject() {
+            return this.hasPermission('project_comment');
+        },
+        
         async loadProject() {
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
                 this.project = response.data;
+                await this.getUserPermissions(this.project.department_id);
+                
                 if (this.project.teams) {
                     await this.loadTeamListByIds(this.project.teams);
                 } else {
@@ -154,6 +201,7 @@ createApp({
                 this.$nextTick(() => { 
                     this.initTagify(); 
                     this.setConnectedUsers();
+                    
                 });
             } catch (error) {
                 console.error('Error loading project:', error);
@@ -873,7 +921,6 @@ createApp({
             if (input._tagify) {
                 input._tagify.destroy();
             }
-            console.log('initProjectTagsTagify');
             
             // Initialize Tagify for project tags
             const tagify = new Tagify(input );

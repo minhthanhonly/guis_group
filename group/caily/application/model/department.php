@@ -27,6 +27,18 @@ class Department extends ApplicationModel {
         return $this->fetchAll($query);
     }
 
+    function listByUser() {
+        $query = sprintf( 
+            "SELECT DISTINCT c.*
+            FROM {$this->table} c
+            JOIN " . DB_PREFIX . "user_department ud ON c.id = ud.department_id
+            WHERE ud.userid = '%s' AND c.can_project = 1
+            ORDER BY c.id ASC",
+            $_SESSION['userid']
+        );
+        return $this->fetchAll($query);
+    }
+
     function list_department() {
         $query = sprintf(
             "SELECT c.*
@@ -168,6 +180,31 @@ class Department extends ApplicationModel {
             intval($department_id)
         );
         return $this->fetchAll($query);
+    }
+
+    function get_user_permissions() {
+        $userid = $_GET['userid'];
+        $query = sprintf(
+            "SELECT ud.*, d.name as department_name, d.id as department_id
+            FROM " . DB_PREFIX . "user_department ud
+            JOIN " . DB_PREFIX . "departments d ON ud.department_id = d.id
+            WHERE ud.userid = %d",
+            intval($userid)
+        );
+        return $this->fetchAll($query);
+    }
+
+    function get_user_permission_by_department() {
+        $userid = $_SESSION['userid'];
+        $department_id = $_GET['department_id'];
+        $query = sprintf(
+            "SELECT ud.*
+            FROM " . DB_PREFIX . "user_department ud
+            WHERE ud.userid = '%s' AND ud.department_id = %d",
+            $userid,
+            intval($department_id)
+        );
+        return $this->fetchOne($query);
     }
 
     // --- Custom Fields Management ---

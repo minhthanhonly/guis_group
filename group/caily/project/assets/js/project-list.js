@@ -71,10 +71,7 @@ var projectTable;
     ];
     $(document).ready(function() {
 
-        
-
         projectData = [];
-
         projectTable = $('#projectTable').DataTable({
             serverSide: true,
             processing: true,
@@ -619,6 +616,7 @@ var projectTable;
                 branches: [],
                 selectedStatus: null,
                 statuses: statuses,
+                userPermissions: null,
                 newProject: {
                     name: '',
                     description: '',
@@ -989,20 +987,53 @@ var projectTable;
         methods: {
             async loadDepartments() {
                 try {
-                    const response = await axios.get('/api/index.php?model=department&method=list');
+                    const response = await axios.get('/api/index.php?model=department&method=listByUser');
                     this.departments = response.data;
                     if(!this.selectedDepartment && this.departments.length > 0) {
                         this.selectedStatus = this.statuses[0];
                         const firstDepartment = this.departments.find(d => d.can_project == 1);
                         if (firstDepartment) {
                             this.viewProjects(firstDepartment);
-                           
                         }
                     }
                 } catch (error) {
                     console.error('Error loading departments:', error);
                     showMessage('部署の読み込みに失敗しました。', true);
                 }
+            },
+            async getUserPermissions(departmentId) {
+                try {
+                    const response = await axios.get(`/api/index.php?model=department&method=get_user_permission_by_department&userid=${USER_ID}&department_id=${departmentId}`);
+                    this.userPermissions = response.data;
+                    console.log('User permissions loaded:', this.userPermissions);
+                    return this.userPermissions;
+                } catch (error) {
+                    console.error('Error loading user permissions:', error);
+                    this.userPermissions = null;
+                    return null;
+                }
+            },
+            // Check if user has specific permission
+            hasPermission(permission) {
+                if(USER_ROLE == 'administrator') return true;
+                if (!this.userPermissions) return false;
+                return this.userPermissions[permission] == 1;
+            },
+            // Check if user can perform project actions
+            canAddProject() {
+                return this.hasPermission('project_add');
+            },
+            canEditProject() {
+                return this.hasPermission('project_edit');
+            },
+            canDeleteProject() {
+                return this.hasPermission('project_delete');
+            },
+            canManageProject() {
+                return this.hasPermission('project_manager');
+            },
+            canCommentProject() {
+                return this.hasPermission('project_comment');
             },
             async loadUsers() {
                 try {
@@ -1025,6 +1056,9 @@ var projectTable;
             viewProjects(department) {
                 this.selectedDepartment = department;
                 this.loadProjects();
+                
+                // Load user permissions for the selected department
+                this.getUserPermissions(department.id);
                 
                 // Reset teams and members when department changes
                 if (this.teamTagifyInstance) {

@@ -12,7 +12,6 @@ class NotificationManager {
     
     async init() {
         try {
-            console.log('Initializing Firebase Notification Manager...');
             
             // Load Firebase SDK
             await this.loadFirebaseSDK();
@@ -40,7 +39,6 @@ class NotificationManager {
             this.listenLastNotificationId();
             this.setupMarkAll();
             
-            console.log('Firebase Notification Manager initialized');
             
         } catch (error) {
             console.error('Failed to initialize Firebase Notification Manager:', error);
@@ -49,11 +47,9 @@ class NotificationManager {
     
     async loadFirebaseSDK() {
         return new Promise((resolve, reject) => {
-            console.log('Loading Firebase SDK...');
             
             // Check if Firebase is already loaded
             if (window.firebase) {
-                console.log('Firebase SDK already loaded');
                 resolve();
                 return;
             }
@@ -62,11 +58,9 @@ class NotificationManager {
             const script = document.createElement('script');
             script.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js';
             script.onload = () => {
-                console.log('Firebase App SDK loaded');
                 const dbScript = document.createElement('script');
                 dbScript.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js';
                 dbScript.onload = () => {
-                    console.log('Firebase Database SDK loaded');
                     resolve();
                 };
                 dbScript.onerror = (e) => {
@@ -85,7 +79,6 @@ class NotificationManager {
     
     async getFirebaseConfig() {
         try {
-            console.log('Getting Firebase configuration from API...');
             const response = await fetch('/api/NotificationAPI.php?method=get_config');
             const config = await response.json();
             
@@ -94,7 +87,6 @@ class NotificationManager {
                 return null;
             }
             
-            console.log('Firebase configuration retrieved successfully');
             return config;
         } catch (error) {
             console.error('Failed to get Firebase config:', error);
