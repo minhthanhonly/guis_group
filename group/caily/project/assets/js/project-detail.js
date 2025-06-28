@@ -107,6 +107,8 @@ createApp({
             amountUpdateTimer: null,
             tagsUpdateTimer: null,
             projectTagsTagify: null,
+            // Quill editor content storage (separate from Vue reactivity)
+            quillContent: '',
             // mention-related variables removed
         }
     },
@@ -396,7 +398,8 @@ createApp({
                 teams: this.project.teams,
                 managers: this.managers.map(m => m.user_id).join(','),
                 members: this.members.map(m => m.user_id).join(','),
-                custom_fields: customFieldsData
+                custom_fields: customFieldsData,
+                tags: this.project.tags
             };
             
             // Store the data in sessionStorage
@@ -743,7 +746,6 @@ createApp({
                             }
                         }
                         // Gán giá trị team đã chọn
-                        console.log(this.project.team_list);
                         const tags = (this.project.team_list || []).map(t => ({ value: t.name, id: t.id }));
                         // Danh sách tất cả team cho whitelist
                         const whitelist = this.filteredTeams.map(t => ({ value: t.name, id: t.id }));
@@ -1079,6 +1081,11 @@ createApp({
             });
         },
         async saveProject() {
+            // Use the stored quill content instead of syncing from editor
+            if (this.quillContent !== undefined) {
+                this.project.description = this.quillContent;
+            }
+            
             // Save custom field set id and values
             this.project.department_custom_fields_set_id = this.project.department_custom_fields_set_id || '';
             this.project.custom_fields = JSON.stringify(this.prepareCustomFieldsForSave());
@@ -1123,6 +1130,11 @@ createApp({
             }
         },
         cancelEdit() {
+            // Sync quill content before canceling
+            if (this.quillInstance && this.quillContent !== undefined) {
+                this.project.description = this.quillContent;
+            }
+            
             this.isEditMode = false;
             this.project = { ...this.originalProject };
             this.loadMembers(); // Restore managers and members from backend for correct avatars
@@ -1445,37 +1457,18 @@ createApp({
                     theme: 'snow'
                 });
                 
+                // Set initial content
                 if (this.project.description) {
                     const html = this.decodeHtmlEntities(this.project.description);
                     this.quillInstance.root.innerHTML = html;
                 }
                 
-                // Add debounce to prevent too frequent updates
-                let debounceTimer;
-                let isUpdatingFromQuill = false;
+                // Store content in a separate variable, not in Vue data
+                this.quillContent = this.quillInstance.getSemanticHTML();
                 
+                // Simple text-change handler without debounce
                 this.quillInstance.on('text-change', () => {
-                    if (isUpdatingFromQuill) return; // Prevent recursive updates
-                    
-                    clearTimeout(debounceTimer);
-                    debounceTimer = setTimeout(() => {
-                        const html = this.quillInstance.getSemanticHTML();
-                        
-                        // Temporarily disable reactivity to prevent focus loss
-                        isUpdatingFromQuill = true;
-                        this.project.description = html;
-                        
-                        // Also update hidden textarea for v-model without triggering events
-                        const textarea = document.getElementById('quill_description_textarea');
-                        if (textarea) {
-                            textarea.value = html;
-                        }
-                        
-                        // Re-enable reactivity after a short delay
-                        setTimeout(() => {
-                            isUpdatingFromQuill = false;
-                        }, 50);
-                    }, 300); // 300ms debounce
+                    this.quillContent = this.quillInstance.getSemanticHTML();
                 });
                 
                 // Prevent focus loss by stopping event propagation on toolbar clicks
@@ -1489,15 +1482,6 @@ createApp({
                     });
                 }
                 
-                // Prevent focus loss from other elements
-                this.quillInstance.root.addEventListener('blur', (e) => {
-                    // Only prevent blur if it's not intentional (like clicking outside)
-                    if (e.relatedTarget && !this.quillInstance.root.contains(e.relatedTarget)) {
-                        // Allow blur if clicking outside the editor
-                        return;
-                    }
-                });
-                
                 // Focus the editor after initialization
                 setTimeout(() => {
                     if (this.quillInstance) {
@@ -1505,7 +1489,7 @@ createApp({
                     }
                 }, 100);
                 
-            }, 200); // Increased delay to ensure other components are initialized first
+            }, 400); // Increased delay to ensure other components are initialized first
         },
         destroyQuillEditor() {
             if (this.quillInstance) {
@@ -1521,17 +1505,11 @@ createApp({
                         });
                     }
                     
-                    // Remove blur event listener
-                    if (this.quillInstance.root) {
-                        this.quillInstance.root.removeEventListener('blur', (e) => {
-                            if (e.relatedTarget && !this.quillInstance.root.contains(e.relatedTarget)) {
-                                return;
-                            }
-                        });
-                    }
-                    
                     // Clear the editor content
                     this.quillInstance.setText('');
+                    
+                    // Clear the stored content
+                    this.quillContent = '';
                     
                     // Destroy the instance
                     this.quillInstance = null;

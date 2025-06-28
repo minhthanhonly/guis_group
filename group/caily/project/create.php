@@ -100,11 +100,11 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                                 </option>
                             </select>
                         </div>
+                        
                         <div class="col-md-4">
                             <label class="form-label">工事番号</label>
                             <input type="text" class="form-control" v-model="project.building_number">
                         </div>
-                       
                         <div class="col-md-4">
                             <label class="form-label">建物規模</label>
                             <input type="text" class="form-control" v-model="project.building_size">
@@ -115,9 +115,19 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">工事支店</label>
-                            <input type="text" class="form-control" v-model="project.building_branch">
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" class="form-control tagify" v-model="project.building_branch" id="building_branch" name="building_branch">
+                                <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('building_branch')" title="すべて削除"><i class="fa fa-times"></i></button>
+                            </div>
                         </div>
                         
+                        <div class="col-md-4">
+                            <label class="form-label">受注形態</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" class="form-control tagify" v-model="project.project_order_type" id="project_order_type" name="project_order_type" required>
+                                <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('project_order_type')" title="すべて削除"><i class="fa fa-times"></i></button>
+                            </div>
+                        </div>
                         <div class="col-md-4">
                             <label class="form-label">優先度</label>
                             <div>
@@ -138,32 +148,6 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                                     </ul>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="col-md-4">
-                            <label class="form-label">ステータス</label>
-                            <div>
-                                <div class="btn-group">
-                                    <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
-                                            :class="getStatusButtonClass(project.status)"
-                                            id="statusDropdown"
-                                            data-bs-toggle="dropdown" aria-expanded="false">
-                                        {{ getStatusLabel(project.status) }}
-                                    </button>
-                                    <ul class="dropdown-menu">
-                                        <li v-for="status in statuses" :key="status.value">
-                                            <a class="dropdown-item waves-effect" href="javascript:void(0);" 
-                                            @click="selectStatus(status.value)">
-                                                {{ status.label }}
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">受注形態</label>
-                            <input type="text" class="form-control tagify" v-model="project.project_order_type" id="project_order_type" name="project_order_type">
                         </div>
                       
                         <div class="col-4">
@@ -201,6 +185,28 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                                 <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                             </div>
                         </div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label">ステータス</label>
+                            <div>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
+                                            :class="getStatusButtonClass(project.status)"
+                                            id="statusDropdown"
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                        {{ getStatusLabel(project.status) }}
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li v-for="status in statuses" :key="status.value">
+                                            <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                            @click="selectStatus(status.value)">
+                                                {{ status.label }}
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
                         <div class="col-4">
                             <label class="form-label">進捗率</label>
                             <div class="position-relative">
@@ -214,6 +220,12 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                                 <div class="progress-value-label text-center">
                                     {{ project.progress }}%
                                 </div>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">タグ</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" class="form-control tagify" v-model="project.tags" id="project_tags" name="project_tags" @input="updateTags">
                             </div>
                         </div>
                         <div class="col-12">
@@ -306,6 +318,66 @@ $view->footing();
 ?>
 
 <style>
+.comment-item {
+    padding: 1rem;
+    border-radius: 0.375rem;
+    background-color: #f8f9fa;
+}
+.comment-header {
+    margin-bottom: 0.5rem;
+}
+.comment-content {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Edit mode styles */
+.edit-mode .select2-selection,
+.edit-mode .form-select:not([readonly]) ,
+.edit-mode .form-control:not([readonly]) {
+    border-color: var(--bs-primary);
+}
+
+.content-wrapper{
+    overflow-x: hidden;
+}
+
+.tags-look-building-branch .tagify__dropdown__item:last-child {
+    border-bottom: none;
+}
+
+/* Project tags styling */
+.project-tags .badge {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s ease;
+}
+
+.project-tags .badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Tagify styling for project tags */
+#project_tags .tagify__tag {
+    background: #17a2b8;
+    color: white;
+    border-radius: 0.375rem;
+    margin: 2px;
+}
+
+#project_tags .tagify__tag:hover {
+    background: #138496;
+}
+
+#project_tags .tagify__tag__removeBtn {
+    color: white;
+}
+
+#project_tags .tagify__tag__removeBtn:hover {
+    background: rgba(255,255,255,0.2);
+}
 
 </style>
 

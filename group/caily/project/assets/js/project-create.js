@@ -20,7 +20,8 @@ createApp({
                 project_order_type: '',
                 department_custom_fields_set_id: '',
                 custom_fields: '',
-                description: ''
+                description: '',
+                tags: ''
             },
             department: null,
             managers: [],
@@ -75,9 +76,25 @@ createApp({
             managerTagify: null,
             quillInstance: null,
             projectOrderTypeTagify: null,
+            buildingBranchTagify: null,
+            projectTagsTagify: null,
             customFields: [],
             departmentCustomFieldSets: [],
             copiedCustomFields: [],
+            // Quill editor content storage (separate from Vue reactivity)
+            quillContent: '',
+            // Danh sách các tỉnh/thành phố của Nhật Bản
+            japanPrefectures: [
+                '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
+                '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
+                '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
+                '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
+                '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
+                '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
+                '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
+            ],
+            // Debounce timer for tags updates
+            tagsUpdateTimer: null,
         }
     },
     computed: {
@@ -116,9 +133,10 @@ createApp({
                 project_order_type: '',
                 department_custom_fields_set_id: '',
                 custom_fields: '',
-                description: ''
+                description: '',
+                tags: ''
             };
-                    this.project.team_list = [];
+            this.project.team_list = [];
             
             // Check for copied project data
             this.loadCopiedProjectData();
@@ -151,6 +169,7 @@ createApp({
                     this.project.project_order_type = data.project_order_type || '';
                     this.project.department_custom_fields_set_id = data.department_custom_fields_set_id || '';
                     this.project.description = data.description || '';
+                    this.project.tags = data.tags || '';
                     
                     // Populate newProject data
                     this.newProject.category_id = data.category_id || '';
@@ -159,20 +178,16 @@ createApp({
                     this.newProject.teams = data.teams || '';
                     this.newProject.managers = data.managers || '';
                     this.newProject.members = data.members || '';
-                    
-                    console.log('Managers data:', this.newProject.managers);
-                    console.log('Members data:', this.newProject.members);
+               
                     
                     // Store custom fields data for later processing
                     if (data.custom_fields && Array.isArray(data.custom_fields)) {
                         this.copiedCustomFields = data.custom_fields;
-                        console.log('Copied custom fields:', this.copiedCustomFields);
                     }
                     
                     // Clear the copied data from sessionStorage
                     sessionStorage.removeItem('copyProjectData');
                     
-                    console.log('Copied project data loaded successfully');
                     
                     // Trigger loading of related data based on copied data
                     this.$nextTick(async () => {
@@ -190,7 +205,7 @@ createApp({
                             });
                         }
                     });
-            } catch (error) {
+                } catch (error) {
                     console.error('Error loading copied project data:', error);
                     sessionStorage.removeItem('copyProjectData');
                 }
@@ -340,11 +355,11 @@ createApp({
                 const customField = this.customFields[idx];
                 
                 if (customField) {
-                if (f.type === 'checkbox') {
+                    if (f.type === 'checkbox') {
                         value = Array.isArray(customField.valueArr) ? customField.valueArr.join(',') : '';
-                } else {
+                    } else {
                         value = customField.value || '';
-                }
+                    }
                 }
                 
                 return {
@@ -356,6 +371,11 @@ createApp({
             });
         },
         async saveProject() {
+            // Use the stored quill content instead of syncing from editor
+            if (this.quillContent !== undefined) {
+                this.project.description = this.quillContent;
+            }
+            
             // Validate required fields
             if (!this.newProject.category_id) {
                 showMessage('会社名を選択してください。', true);
@@ -402,6 +422,7 @@ createApp({
                 formData.append('custom_fields', this.project.custom_fields);
                 formData.append('description', this.project.description || '');
                 formData.append('project_number', this.project.project_number || '');
+                formData.append('tags', this.project.tags || '');
                 
                 const response = await axios.post('/api/index.php?model=project&method=create', formData);
                 if (response.data && response.data.status == 'success') {
@@ -416,7 +437,7 @@ createApp({
                         // Redirect after user closes the message
                         if (response.data.project_id) {
                             window.location.href = `detail.php?id=${response.data.project_id}`;
-                } else {
+                        } else {
                             window.location.href = 'index.php';
                         }
                     });
@@ -437,7 +458,7 @@ createApp({
                 const res = await axios.get('/api/index.php?model=department&method=getCustomFields');
                 if (Array.isArray(res.data)) {
                     this.departmentCustomFieldSets = res.data.filter(set => String(set.department_id) === String(this.project.department_id));
-            } else {
+                } else {
                     this.departmentCustomFieldSets = [];
                 }
             } catch (e) {
@@ -451,7 +472,26 @@ createApp({
                 this.managerTagify.removeAllTags();
             } else if (field === 'team' && this.tagify) {
                 this.tagify.removeAllTags();
+            } else if (field === 'building_branch' && this.buildingBranchTagify) {
+                this.buildingBranchTagify.removeAllTags();
+            } else if (field === 'project_order_type' && this.projectOrderTypeTagify) {
+                this.projectOrderTypeTagify.removeAllTags();
+            } else if (field === 'project_tags' && this.projectTagsTagify) {
+                this.projectTagsTagify.removeAllTags();
             }
+        },
+        updateTags() {
+            // Get tags from Tagify instance
+            if (this.projectTagsTagify) {
+                const tags = this.projectTagsTagify.value.map(tag => tag.value).join(',');
+                this.project.tags = tags;
+            }
+            
+            // Debounce the tags update to avoid too many API calls
+            clearTimeout(this.tagsUpdateTimer);
+            this.tagsUpdateTimer = setTimeout(() => {
+                // No need to save tags during creation, just store in project object
+            }, 1000); // Wait 1 second after user stops typing
         },
         initDatePickers() {
             const options = {
@@ -476,185 +516,306 @@ createApp({
         },
         initQuillEditor() {
             if (this.quillInstance) return;
-            const toolbarOptions = [
-                [
-                    { font: [] },
-                    { size: [] }
-                ],
-                ['bold', 'italic', 'underline', 'strike'],
-                [
-                    { color: [] },
-                    { background: [] }
-                ],
-                [
-                    { script: 'super' },
-                    { script: 'sub' }
-                ],
-                [
-                    { header: '1' },
-                    { header: '2' }, 'blockquote' ],
-                [
-                    { list: 'ordered' },
-                    { indent: '-1' },
-                    { indent: '+1' }
-                ],
-                [{ direction: 'rtl' }, { align: [] }],
-                ['link', 'image', 'video', 'formula'],
-                ['clean']
-            ];
-            const el = document.getElementById('quill_description');
-            if (!el) return;
-            this.quillInstance = new Quill(el, {
-                bounds: el,
-                placeholder: 'Type Something...',
-                modules: {
-                    syntax: true,
-                    toolbar: toolbarOptions
-                },
-                theme: 'snow'
-            });
             
-            // Add debounce to prevent too frequent updates
-            let debounceTimer;
-            this.quillInstance.on('text-change', () => {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => {
-                const html = this.quillInstance.getSemanticHTML();
-                this.project.description = html;
-                const textarea = document.getElementById('quill_description_textarea');
-                if (textarea) {
-                    textarea.value = html;
-                    const event = new Event('input', { bubbles: true });
-                    textarea.dispatchEvent(event);
+            // Use a longer delay to ensure all other components are initialized first
+            setTimeout(() => {
+                const toolbarOptions = [
+                    [
+                        { font: [] },
+                        { size: [] }
+                    ],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [
+                        { color: [] },
+                        { background: [] }
+                    ],
+                    [
+                        { script: 'super' },
+                        { script: 'sub' }
+                    ],
+                    [
+                        { header: '1' },
+                        { header: '2' }, 'blockquote' ],
+                    [
+                        { list: 'ordered' },
+                        { indent: '-1' },
+                        { indent: '+1' }
+                    ],
+                    [{ direction: 'rtl' }, { align: [] }],
+                    ['link', 'image', 'video', 'formula'],
+                    ['clean']
+                ];
+                const el = document.getElementById('quill_description');
+                if (!el) return;
+                
+                // Destroy existing instance if any
+                if (this.quillInstance) {
+                    try {
+                        this.quillInstance = null;
+                    } catch (e) {
+                        console.log('Error destroying existing quill instance:', e);
+                    }
                 }
-                }, 300); // 300ms debounce
-            });
+                
+                this.quillInstance = new Quill(el, {
+                    bounds: el,
+                    placeholder: 'Type Something...',
+                    modules: {
+                        syntax: true,
+                        toolbar: toolbarOptions
+                    },
+                    theme: 'snow'
+                });
+                
+                // Set initial content
+                if (this.project.description) {
+                    const html = this.decodeHtmlEntities(this.project.description);
+                    this.quillInstance.root.innerHTML = html;
+                }
+                
+                // Store content in a separate variable, not in Vue data
+                this.quillContent = this.quillInstance.getSemanticHTML();
+                
+                // Simple text-change handler without debounce
+                this.quillInstance.on('text-change', () => {
+                    this.quillContent = this.quillInstance.getSemanticHTML();
+                });
+                
+                // Prevent focus loss by stopping event propagation on toolbar clicks
+                const toolbar = this.quillInstance.getModule('toolbar');
+                if (toolbar && toolbar.container) {
+                    toolbar.container.addEventListener('mousedown', (e) => {
+                        e.stopPropagation();
+                    });
+                    toolbar.container.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                    });
+                }
+                
+                // Focus the editor after initialization
+                setTimeout(() => {
+                    if (this.quillInstance) {
+                        this.quillInstance.focus();
+                    }
+                }, 100);
+                
+            }, 400); // Increased delay to ensure other components are initialized first
+        },
+        destroyQuillEditor() {
+            if (this.quillInstance) {
+                try {
+                    // Remove event listeners from toolbar
+                    const toolbar = this.quillInstance.getModule('toolbar');
+                    if (toolbar && toolbar.container) {
+                        toolbar.container.removeEventListener('mousedown', (e) => {
+                            e.stopPropagation();
+                        });
+                        toolbar.container.removeEventListener('click', (e) => {
+                            e.stopPropagation();
+                        });
+                    }
+                    
+                    // Clear the editor content
+                    this.quillInstance.setText('');
+                    
+                    // Clear the stored content
+                    this.quillContent = '';
+                    
+                    // Destroy the instance
+                    this.quillInstance = null;
+                } catch (e) {
+                    console.log('Error destroying quill editor:', e);
+                    this.quillInstance = null;
+                }
+            }
         },
         initSelect2() {
-                    // 会社名 (category_id)
-                    const $category = $('#category_id');
-                    if ($category.length) {
-                        $category.select2({
-                            placeholder: '選択してください',
-                            dropdownParent: $category.parent(),
-                            allowClear: true,
-                            minimumResultsForSearch: 0,
-                            ajax: {
-                                url: '/api/index.php?model=customer&method=list_categories',
-                                dataType: 'json',
-                                delay: 250,
-                                data: function(params) {
+            // 会社名 (category_id)
+            const $category = $('#category_id');
+            if ($category.length) {
+                $category.select2({
+                    placeholder: '選択してください',
+                    dropdownParent: $category.parent(),
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    ajax: {
+                        url: '/api/index.php?model=customer&method=list_categories',
+                        dataType: 'json',
+                        delay: 250,
+                        data: function(params) {
+                            return {
+                                search: params.term,
+                                page: params.page || 1
+                            };
+                        },
+                        processResults: function(data) {
+                            return {
+                                results: data.data.map(function(item) {
                                     return {
-                                        search: params.term,
-                                        page: params.page || 1
+                                        id: item.id,
+                                        text: item.name
                                     };
-                                },
-                                processResults: function(data) {
-                                    return {
-                                        results: data.data.map(function(item) {
-                                            return {
-                                                id: item.id,
-                                                text: item.name
-                                            };
-                                        })
-                                    };
-                                }
-                            }
-                        }).on('select2:select', (e) => {
-                            this.newProject.category_id = e.params.data.id;
-                            this.onCategoryChange();
-                        });
-                    }
-                    // 支店名 (company_name)
-                    const $company = $('#company_name');
-                    if ($company.length) {
-                        $company.select2({
-                            placeholder: '選択してください',
-                            dropdownParent: $company.parent(),
-                            allowClear: true,
-                            minimumResultsForSearch: 0,
-                            ajax: {
-                                url: '/api/index.php?model=customer&method=list_companies_by_category',
-                                dataType: 'json',
-                                delay: 250,
-                                data: (params) => {
-                            const data = {
-                                        search: params.term,
-                                        page: params.page || 1,
-                                        category_id: this.newProject.category_id
-                                    };
-                            if (this.project.department_id) {
-                                data.department_id = this.project.department_id;
-                            }
-                            return data;
-                                },
-                                processResults: function(data) {
-                                    return {
-                                        results: data.data.map(function(item) {
-                                            return {
-                                                id: item.company_name,
-                                                text: item.company_name
-                                            };
-                                        })
-                                    };
-                                }
-                            }
-                        }).on('select2:select', (e) => {
-                            this.newProject.company_name = e.params.data.id;
-                            this.onCompanyChange();
-                        });
-                    }
-                    // 担当者名 (customer_id)
-                    const $customer = $('#customer_id');
-                    if ($customer.length) {
-                        $customer.select2({
-                            placeholder: '選択してください',
-                            dropdownParent: $customer.parent(),
-                            allowClear: true,
-                            minimumResultsForSearch: 0,
-                            ajax: {
-                                url: '/api/index.php?model=customer&method=list_contacts_by_company',
-                                dataType: 'json',
-                                delay: 250,
-                                data: (params) => {
-                            const data = {
-                                        search: params.term,
-                                        page: params.page || 1,
-                                        company_name: this.newProject.company_name
-                                    };
-                            if (this.project.department_id) {
-                                data.department_id = this.project.department_id;
-                            }
-                            return data;
-                                },
-                                processResults: function(data) {
-                                    return {
-                                        results: data.data.map(function(item) {
-                                            return {
-                                                id: item.id,
-                                                text: item.name
-                                            };
-                                        })
-                                    };
-                                }
-                            }
-                        }).on('select2:select', (e) => {
-                            this.newProject.customer_id = e.params.data.id;
-                        });
-                    }
-        },
-        initProjectOrderTypeTagify() {
-                    const input = document.querySelector('#project_order_type');
-                    if (input && window.Tagify) {
-                        if (this.projectOrderTypeTagify) {
-                            this.projectOrderTypeTagify.destroy();
+                                })
+                            };
                         }
-                        this.projectOrderTypeTagify = new Tagify(input, {
+                    }
+                }).on('select2:select', (e) => {
+                    this.newProject.category_id = e.params.data.id;
+                    this.onCategoryChange();
+                });
+            }
+            // 支店名 (company_name)
+            const $company = $('#company_name');
+            if ($company.length) {
+                $company.select2({
+                    placeholder: '選択してください',
+                    dropdownParent: $company.parent(),
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    ajax: {
+                        url: '/api/index.php?model=customer&method=list_companies_by_category',
+                        dataType: 'json',
+                        delay: 250,
+                        data: (params) => {
+                            const data = {
+                                search: params.term,
+                                page: params.page || 1,
+                                category_id: this.newProject.category_id
+                            };
+                            if (this.project.department_id) {
+                                data.department_id = this.project.department_id;
+                            }
+                            return data;
+                        },
+                        processResults: function(data) {
+                            return {
+                                results: data.data.map(function(item) {
+                                    return {
+                                        id: item.company_name,
+                                        text: item.company_name
+                                    };
+                                })
+                            };
+                        }
+                    }
+                }).on('select2:select', (e) => {
+                    this.newProject.company_name = e.params.data.id;
+                    this.onCompanyChange();
+                });
+            }
+            // 担当者名 (customer_id)
+            const $customer = $('#customer_id');
+            if ($customer.length) {
+                $customer.select2({
+                    placeholder: '選択してください',
+                    dropdownParent: $customer.parent(),
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    ajax: {
+                        url: '/api/index.php?model=customer&method=list_contacts_by_company',
+                        dataType: 'json',
+                        delay: 250,
+                        data: (params) => {
+                            const data = {
+                                search: params.term,
+                                page: params.page || 1,
+                                company_name: this.newProject.company_name
+                            };
+                            if (this.project.department_id) {
+                                data.department_id = this.project.department_id;
+                            }
+                            return data;
+                        },
+                        processResults: function(data) {
+                            return {
+                                results: data.data.map(function(item) {
+                                    return {
+                                        id: item.id,
+                                        text: item.name
+                                    };
+                                })
+                            };
+                        }
+                    }
+                }).on('select2:select', (e) => {
+                    this.newProject.customer_id = e.params.data.id;
+                });
+            }
+        },
+        initTagify() {
+            this.$nextTick(() => {
+                setTimeout(() => {
+                    // --- Tagify for team selection ---
+                    const teamInput = document.getElementById('team_tags');
+                    if (teamInput && window.Tagify && !teamInput._tagify) {
+                        if (this.tagify) {
+                            try {
+                                this.tagify.destroy();
+                            } catch (e) {
+                                console.log('Error destroying existing tagify:', e);
+                            }
+                        }
+                        // Initialize with empty tags
+                        const tags = (this.filteredTeams || []).filter(t => this.newProject.teams.includes(t.id)).map(t => ({ value: t.name, id: t.id }));
+                        // Danh sách tất cả team cho whitelist
+                        const whitelist = this.filteredTeams.map(t => ({ value: t.name, id: t.id }));
+                        this.tagify = new Tagify(teamInput, {
+                            whitelist: whitelist,
+                            enforceWhitelist: true,
+                            dropdown: {
+                                maxItems: 20,
+                                enabled: 0,
+                                closeOnSelect: true
+                            },
+                        });
+                        this.tagify.addTags(tags);
+                        // Xử lý khi xóa team thì xóa member của team đó
+                        this.tagify.on('remove', async (e) => {
+                            const removedTeamId = e.detail.data.id;
+                            if (!removedTeamId || !this.membersTagify) return;
+                            try {
+                                const res = await axios.get(`/api/index.php?model=team&method=get&id=${removedTeamId}`);
+                                if (res.data && Array.isArray(res.data.members)) {
+                                    const teamMemberIds = res.data.members.map(m => String(m.user_id));
+                                    const remain = this.membersTagify.value.filter(tag => !teamMemberIds.includes(String(tag.id)));
+                                    this.membersTagify.removeAllTags();
+                                    this.membersTagify.addTags(remain);
+                                }
+                            } catch (err) {}
+                        });
+                        // Xử lý khi thêm team thì thêm member của team đó
+                        this.tagify.on('add', async (e) => {
+                            const addedTeamId = e.detail.data.id;
+                            if (!addedTeamId || !this.membersTagify) return;
+                            try {
+                                const res = await axios.get(`/api/index.php?model=team&method=get&id=${addedTeamId}`);
+                                if (res.data && Array.isArray(res.data.members)) {
+                                    const teamMembers = res.data.members.map(m => ({ id: m.user_id, value: m.user_name }));
+                                    const currentIds = this.membersTagify.value.map(tag => String(tag.id));
+                                    const toAdd = teamMembers.filter(m => !currentIds.includes(String(m.id)));
+                                    this.membersTagify.addTags(toAdd);
+                                }
+                            } catch (err) {}
+                        });
+                        this.tagify.on('change', this.onTeamTagsChange.bind(this));
+                    }
+                    
+                    // --- Tagify for project_order_type ---
+                    const orderTypeInput = document.querySelector('#project_order_type');
+                    if (orderTypeInput && window.Tagify && !orderTypeInput._tagify) {
+                        if (this.projectOrderTypeTagify) {
+                            try {
+                                this.projectOrderTypeTagify.destroy();
+                            } catch (e) {
+                                console.log('Error destroying existing projectOrderTypeTagify:', e);
+                            }
+                        }
+                        this.projectOrderTypeTagify = new Tagify(orderTypeInput, {
                             whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
                             maxTags: 5,
                             dropdown: {
                                 maxItems: 20,
-                                classname: "tags-look",
+                                classname: "tags-look-project-order-type",
                                 enabled: 0,
                                 closeOnSelect: true
                             },
@@ -665,53 +826,62 @@ createApp({
                         this.projectOrderTypeTagify.on('add', updateOrderType);
                         this.projectOrderTypeTagify.on('remove', updateOrderType);
                     }
-        },
-        initTagify() {
-            const input = document.getElementById('team_tags');
-            if (!input) return;
-            // Destroy previous Tagify instance if exists
-            if (input._tagify) {
-                input._tagify.destroy();
-            }
-            // Initialize with empty tags
-            const tags = [];
-            // Danh sách tất cả team cho whitelist
-            const whitelist = this.filteredTeams.map(t => ({ value: t.name, id: t.id }));
-            this.tagify = new Tagify(input, {
-                whitelist: whitelist,
-                enforceWhitelist: true,
-                dropdown: { enabled: 0 }
-            });
-            this.tagify.addTags(tags);
-            // Xử lý khi xóa team thì xóa member của team đó
-            this.tagify.on('remove', async (e) => {
-                const removedTeamId = e.detail.data.id;
-                if (!removedTeamId || !this.membersTagify) return;
-                try {
-                    const res = await axios.get(`/api/index.php?model=team&method=get&id=${removedTeamId}`);
-                    if (res.data && Array.isArray(res.data.members)) {
-                        const teamMemberIds = res.data.members.map(m => String(m.user_id));
-                        const remain = this.membersTagify.value.filter(tag => !teamMemberIds.includes(String(tag.id)));
-                        this.membersTagify.removeAllTags();
-                        this.membersTagify.addTags(remain);
+                    
+                    // --- Tagify for building_branch ---
+                    const buildingBranchInput = document.querySelector('#building_branch');
+                    if (buildingBranchInput && window.Tagify && !buildingBranchInput._tagify) {
+                        if (this.buildingBranchTagify) {
+                            try {
+                                this.buildingBranchTagify.destroy();
+                            } catch (e) {
+                                console.log('Error destroying existing buildingBranchTagify:', e);
+                            }
+                        }
+                        this.buildingBranchTagify = new Tagify(buildingBranchInput, {
+                            whitelist: this.japanPrefectures,
+                            maxTags: 10,
+                            dropdown: {
+                                maxItems: 20,
+                                classname: "tags-look-building-branch",
+                                enabled: 0,
+                                closeOnSelect: true
+                            },
+                        });
+                        const updateBuildingBranch = () => {
+                            this.project.building_branch = this.buildingBranchTagify.value.map(tag => tag.value).join(',');
+                        };
+                        this.buildingBranchTagify.on('add', updateBuildingBranch);
+                        this.buildingBranchTagify.on('remove', updateBuildingBranch);
                     }
-                } catch (err) {}
-            });
-            // Xử lý khi thêm team thì thêm member của team đó
-            this.tagify.on('add', async (e) => {
-                const addedTeamId = e.detail.data.id;
-                if (!addedTeamId || !this.membersTagify) return;
-                try {
-                    const res = await axios.get(`/api/index.php?model=team&method=get&id=${addedTeamId}`);
-                    if (res.data && Array.isArray(res.data.members)) {
-                        const teamMembers = res.data.members.map(m => ({ id: m.user_id, value: m.user_name }));
-                        const currentIds = this.membersTagify.value.map(tag => String(tag.id));
-                        const toAdd = teamMembers.filter(m => !currentIds.includes(String(m.id)));
-                        this.membersTagify.addTags(toAdd);
+                    
+                    // --- Tagify for project tags ---
+                    const projectTagsInput = document.querySelector('#project_tags');
+                    if (projectTagsInput && window.Tagify && !projectTagsInput._tagify) {
+                        if (this.projectTagsTagify) {
+                            try {
+                                this.projectTagsTagify.destroy();
+                            } catch (e) {
+                                console.log('Error destroying existing projectTagsTagify:', e);
+                            }
+                        }
+                        this.projectTagsTagify = new Tagify(projectTagsInput);
+                        
+                        // Add event listeners for auto-save
+                        this.projectTagsTagify.on('add', () => {
+                            this.updateTags();
+                        });
+                        
+                        this.projectTagsTagify.on('remove', () => {
+                            this.updateTags();
+                        });
+                        
+                        this.projectTagsTagify.on('change', () => {
+                            this.updateTags();
+                        });
                     }
-                } catch (err) {}
+                    
+                }, 100);
             });
-            this.tagify.on('change', this.onTeamTagsChange.bind(this));
         },
         async onTeamTagsChange(e) {
             const selected = this.tagify.value;
@@ -892,10 +1062,10 @@ createApp({
         },
         initializeCustomFields() {
             if (this.selectedCustomFieldSet) {
-                    this.customFields = this.selectedCustomFieldSet.fields.map(f => {
-                        if (f.type === 'checkbox') {
+                this.customFields = this.selectedCustomFieldSet.fields.map(f => {
+                    if (f.type === 'checkbox') {
                         return { label: f.label, type: f.type, options: f.options, value: '', valueArr: [] };
-                        } else {
+                    } else {
                         return { label: f.label, type: f.type, options: f.options, value: '' };
                     }
                 });
@@ -913,6 +1083,7 @@ createApp({
         setQuillContent(content) {
             if (this.quillInstance && content) {
                 this.quillInstance.root.innerHTML = content;
+                this.quillContent = this.quillInstance.getSemanticHTML();
                 console.log('Quill content set:', content);
             }
         },
@@ -971,9 +1142,9 @@ createApp({
         
         // Load related data based on the project data (including copied data)
         if (this.project.department_id) {
-        await this.loadCompanies();
-        await this.loadContacts();
-        await this.loadDepartmentCustomFieldSets();
+            await this.loadCompanies();
+            await this.loadContacts();
+            await this.loadDepartmentCustomFieldSets();
             await this.loadDepartmentUsers(); // Load department users first
             
             // Initialize custom fields if a set is selected
@@ -987,7 +1158,6 @@ createApp({
             this.initDatePickers();
             this.initQuillEditor();
             this.initSelect2();
-            this.initProjectOrderTypeTagify();
             this.initTagify();
             
             // Initialize manager/member Tagify after everything else is loaded
@@ -1015,7 +1185,7 @@ createApp({
             
             // Set Quill editor content if description exists (for copied projects)
             if (this.project.description) {
-        this.$nextTick(() => {
+                this.$nextTick(() => {
                     this.setQuillContent(this.decodeHtmlEntities(this.project.description));
                 });
             }
