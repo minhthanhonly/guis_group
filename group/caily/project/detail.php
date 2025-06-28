@@ -78,7 +78,7 @@ if (!$project_id) {
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">会社名 <span class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
-                                    <select id="category_id" class="form-select select2" v-model="newProject.category_id" name="category_id" required @change="onCategoryChange">
+                                    <select id="category_id" class="form-select select2" v-model="project.category_id" name="category_id" required @change="onCategoryChange">
                                         <option value="">選択してください</option>
                                         <option v-for="category in categories" :key="category.id" :value="category.id">
                                             {{ category.name }}
@@ -86,7 +86,7 @@ if (!$project_id) {
                                     </select>
                                 </template>
                                 <template v-else>
-                                    <input type="text" class="form-control" :value="getCategoryName(newProject.category_id)" readonly>
+                                    <input type="text" class="form-control" :value="getCategoryName(project.category_id)" readonly>
                                 </template>
                             </div>
                         </div>
@@ -94,7 +94,7 @@ if (!$project_id) {
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">支店名 <span class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
-                                    <select id="company_name" class="form-select select2" v-model="newProject.company_name" name="company_name" required @change="onCompanyChange">
+                                    <select id="company_name" class="form-select select2" v-model="project.company_name" name="company_name" required @change="onCompanyChange">
                                         <option value="">選択してください</option>
                                         <option v-for="company in companies" :key="company.company_name" :value="company.company_name">
                                             {{ company.company_name }}
@@ -102,7 +102,7 @@ if (!$project_id) {
                                     </select>
                                 </template>
                                 <template v-else>
-                                    <input type="text" class="form-control" :value="newProject.company_name" readonly>
+                                    <input type="text" class="form-control" :value="project.company_name" readonly>
                                 </template>
                             </div>
                         </div>
@@ -111,7 +111,7 @@ if (!$project_id) {
                                 <label class="form-label">担当者名 <span class="text-danger">*</span></label>
                                 <div class="d-flex gap-2 justify-content-between">
                                     <template v-if="isEditMode">
-                                        <select id="customer_id" class="form-select select2 flex-shrink-1" v-model="newProject.customer_id" name="customer_id" required>
+                                        <select id="customer_id" class="form-select select2 flex-shrink-1" v-model="project.customer_id" name="customer_id" required>
                                             <option value="">選択してください</option>
                                             <option v-for="contact in contacts" :key="contact.id" :value="contact.id">
                                                 {{ contact.name }}
@@ -119,7 +119,7 @@ if (!$project_id) {
                                         </select>
                                     </template>
                                     <template v-else>
-                                        <input type="text" class="form-control" :value="getContactName(newProject.customer_id)" readonly>
+                                        <input type="text" class="form-control" :value="getContactName(project.customer_id)" readonly>
                                     </template>
                                 </div>
                             </div>

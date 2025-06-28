@@ -52,10 +52,10 @@ createApp({
             categories: [],
             companies: [],
             contacts: [],
+            category_id: '',
+            company_name: '',
+            customer_id: '',
             newProject: {
-                category_id: '',
-                company_name: '',
-                customer_id: '',
                 members: '',
                 managers: '',
                 teams: '',
@@ -375,9 +375,9 @@ createApp({
             
             // Prepare project data for copying
             const projectData = {
-                category_id: this.newProject.category_id,
-                company_name: this.newProject.company_name,
-                customer_id: this.newProject.customer_id,
+                category_id: this.project.category_id,
+                company_name: this.project.company_name,
+                customer_id: this.project.customer_id,
                 project_number: this.project.project_number,
                 name: this.project.name + ' (コピー)',
                 department_id: this.project.department_id,
@@ -586,13 +586,13 @@ createApp({
             }
         },
         onCategoryChange() {
-            this.newProject.company_name = '';
-            this.newProject.customer_id = '';
+            this.project.company_name = '';
+            this.project.customer_id = '';
             this.loadCompaniesByCategory();
             this.contacts = [];
         },
         onCompanyChange() {
-            this.newProject.customer_id = '';
+            this.project.customer_id = '';
             this.loadContactsByCompany();
         },
         async updateProgress() {
@@ -1088,7 +1088,7 @@ createApp({
                 formData.append('teams', this.project.teams);
                 formData.append('project_order_type', this.project.project_order_type);
                 formData.append('priority', this.project.priority);
-                formData.append('customer_id', this.newProject.customer_id);
+                formData.append('customer_id', this.project.customer_id);
                 formData.append('amount', this.project.amount);
                 formData.append('estimate_status', this.project.estimate_status);
                 formData.append('invoice_status', this.project.invoice_status);
@@ -1505,12 +1505,12 @@ createApp({
             return arr;
         },
         async loadCompaniesByCategory() {
-            if (!this.newProject.category_id) {
+            if (!this.project.category_id) {
                 this.companies = [];
                 return;
             }
             const params = new URLSearchParams({
-                category_id: this.newProject.category_id
+                category_id: this.project.category_id
             });
             if (this.project.department_id) {
                 params.append('department_id', this.project.department_id);
@@ -1521,12 +1521,12 @@ createApp({
             }
         },
         async loadContactsByCompany() {
-            if (!this.newProject.company_name) {
+            if (!this.project.company_name) {
                 this.contacts = [];
                 return;
             }
             const params = new URLSearchParams({
-                company_name: this.newProject.company_name
+                company_name: this.project.company_name
             });
             if (this.project.department_id) {
                 params.append('department_id', this.project.department_id);
@@ -1621,7 +1621,7 @@ createApp({
                             }
                         }
                     }).on('select2:select', (e) => {
-                        this.newProject.category_id = e.params.data.id;
+                        this.project.category_id = e.params.data.id;
                         this.onCategoryChange();
                     });
                     
@@ -1641,7 +1641,7 @@ createApp({
                                     const data = {
                                         search: params.term,
                                         page: params.page || 1,
-                                        category_id: this.newProject.category_id
+                                        category_id: this.project.category_id
                                     };
                                     if (this.project.department_id) {
                                         data.department_id = this.project.department_id;
@@ -1660,7 +1660,7 @@ createApp({
                                 }
                             }
                         }).on('select2:select', (e) => {
-                            this.newProject.company_name = e.params.data.id;
+                            this.project.company_name = e.params.data.id;
                             this.onCompanyChange();
                         });
                     }
@@ -1680,7 +1680,7 @@ createApp({
                                     const data = {
                                         search: params.term,
                                         page: params.page || 1,
-                                        company_name: this.newProject.company_name
+                                        company_name: this.project.company_name
                                     };
                                     if (this.project.department_id) {
                                         data.department_id = this.project.department_id;
@@ -1699,7 +1699,7 @@ createApp({
                                 }
                             }
                         }).on('select2:select', (e) => {
-                            this.newProject.customer_id = e.params.data.id;
+                            this.project.customer_id = e.params.data.id;
                         });
                     }
                     
