@@ -716,6 +716,29 @@ createApp({
                 this.allTeams = [];
             }
         },
+
+        // initTagify() {
+        //     if (!this.isEditMode) return;
+        //     const input = document.getElementById('team_tags');
+        //     if (!input) return;
+        //     // Destroy previous Tagify instance if exists
+        //     if (input._tagify) {
+        //         input._tagify.destroy();
+        //     }
+        //     // Gán giá trị team đã chọn
+        //     const tags = (this.project.team_list || []).map(t => ({ value: t.name, id: t.id }));
+        //     // Danh sách tất cả team cho whitelist
+        //     const whitelist = this.filteredTeams.map(t => ({ value: t.name, id: t.id }));
+        //     this.tagify = new Tagify(input, {
+        //         whitelist: whitelist,
+        //         enforceWhitelist: true,
+        //         dropdown: { enabled: 0 }
+        //     });
+        //     this.tagify.addTags(tags);
+        //     // Xử lý khi xóa team thì xóa member của team đó
+           
+        //     this.tagify.on('change', this.onTeamTagsChange.bind(this));
+        // },
         initTagify() {
             this.$nextTick(() => {
                 setTimeout(() => {
@@ -729,44 +752,50 @@ createApp({
                                 console.log('Error destroying existing tagify:', e);
                             }
                         }
+                        // Gán giá trị team đã chọn
+                        console.log(this.project.team_list);
+                        const tags = (this.project.team_list || []).map(t => ({ value: t.name, id: t.id }));
+                        // Danh sách tất cả team cho whitelist
+                        const whitelist = this.filteredTeams.map(t => ({ value: t.name, id: t.id }));
                         this.tagify = new Tagify(teamInput, {
-                            whitelist: (this.teamList || []).map(team => ({ value: team.id, text: team.name })),
+                            whitelist: whitelist,
                             enforceWhitelist: true,
-                            mode: 'select',
-                            templates: {
-                                tag: function(tagData) {
-                                    return `
-                                        <tag title="${tagData.value}"
-                                            contenteditable='false'
-                                            spellcheck='false'
-                                            class='tagify__tag ${tagData.class ? tagData.class : ""}'
-                                            tabindex="0"
-                                            role="option"
-                                            aria-label="${tagData.value}"
-                                            aria-selected="false">
-                                            <x title='' class='tagify__tag__removeBtn' role='button' aria-label='remove tag'></x>
-                                            <div>
-                                                <div class='tagify__tag__avatar-wrap'>
-                                                    <img onerror="this.style.visibility='hidden'" src="">
-                                                </div>
-                                                <div class='tagify__tag__text'>
-                                                    <span>${tagData.text}</span>
-                                                </div>
-                                            </div>
-                                        </tag>
-                                    `
-                                },
-                                dropdownItem: function(tagData) {
-                                    return `
-                                        <div class='tagify__dropdown__item ${tagData.class ? tagData.class : ""}'
-                                             tabindex="0"
-                                             role="option"
-                                             aria-label="${tagData.value}">
-                                            <span>${tagData.text}</span>
-                                        </div>
-                                    `
+                            dropdown: {
+                                maxItems: 20,
+                                enabled: 0,
+                                closeOnSelect: true
+                            },
+                        });
+                        this.tagify.addTags(tags);
+                        this.tagify.on('remove', async (e) => {
+                            const removedTeamId = e.detail.data.id;
+                            if (!removedTeamId || !this.membersTagify) return;
+                            // Lấy danh sách user của team vừa bị xóa
+                            try {
+                                const res = await axios.get(`/api/index.php?model=team&method=get&id=${removedTeamId}`);
+                                if (res.data && Array.isArray(res.data.members)) {
+                                    const teamMemberIds = res.data.members.map(m => String(m.user_id));
+                                    // Xóa các member này khỏi membersTagify
+                                    const remain = this.membersTagify.value.filter(tag => !teamMemberIds.includes(String(tag.id)));
+                                    this.membersTagify.removeAllTags();
+                                    this.membersTagify.addTags(remain);
                                 }
-                            }
+                            } catch (err) {}
+                        });
+                        // Xử lý khi thêm team thì thêm member của team đó
+                        this.tagify.on('add', async (e) => {
+                            const addedTeamId = e.detail.data.id;
+                            if (!addedTeamId || !this.membersTagify) return;
+                            try {
+                                const res = await axios.get(`/api/index.php?model=team&method=get&id=${addedTeamId}`);
+                                if (res.data && Array.isArray(res.data.members)) {
+                                    const teamMembers = res.data.members.map(m => ({ id: m.user_id, value: m.user_name }));
+                                    // Lọc ra các member chưa có trong Tagify
+                                    const currentIds = this.membersTagify.value.map(tag => String(tag.id));
+                                    const toAdd = teamMembers.filter(m => !currentIds.includes(String(m.id)));
+                                    this.membersTagify.addTags(toAdd);
+                                }
+                            } catch (err) {}
                         });
                         this.tagify.on('change', this.onTeamTagsChange.bind(this));
                     }
