@@ -505,7 +505,6 @@ createApp({
         },
         selectPriority(priority) {
             this.project.priority = priority;
-            this.updatePriority();
             // Close dropdown
             const dropdownElement = document.querySelector('#priorityDropdown');
             if (dropdownElement) {
@@ -514,6 +513,10 @@ createApp({
                     dropdown.hide();
                 }
             }
+            if (this.isEditMode) {
+                return;
+            }
+            this.updatePriority();
         },
         async updatePriority() {
             try {
@@ -678,29 +681,24 @@ createApp({
                     this.projectTagsTagify.removeAllTags();
                 }
             } else if (field === 'team') {
-                const teamTags = document.querySelector('#team_tags');
-                if (teamTags && teamTags.tagify) {
-                    teamTags.tagify.removeAllTags();
+                if (this.tagify) {
+                    this.tagify.removeAllTags();
                 }
             } else if (field === 'manager') {
-                const managerTags = document.querySelector('#manager_tags');
-                if (managerTags && managerTags.tagify) {
-                    managerTags.tagify.removeAllTags();
+                if (this.managerTagify) {
+                    this.managerTagify.removeAllTags();
                 }
             } else if (field === 'members') {
-                const membersTags = document.querySelector('#members_tags');
-                if (membersTags && membersTags.tagify) {
-                    membersTags.tagify.removeAllTags();
+                if (this.membersTagify) {
+                    this.membersTagify.removeAllTags();
                 }
             } else if (field === 'building_branch') {
-                const buildingBranchTags = document.querySelector('#building_branch');
-                if (buildingBranchTags && buildingBranchTags.tagify) {
-                    buildingBranchTags.tagify.removeAllTags();
+                if (this.buildingBranchTagify) {
+                    this.buildingBranchTagify.removeAllTags();
                 }
             } else if (field === 'project_order_type') {
-                const projectOrderTypeTags = document.querySelector('#project_order_type');
-                if (projectOrderTypeTags && projectOrderTypeTags.tagify) {
-                    projectOrderTypeTags.tagify.removeAllTags();
+                if (this.projectOrderTypeTagify) {
+                    this.projectOrderTypeTagify.removeAllTags();
                 }
             }
         },
