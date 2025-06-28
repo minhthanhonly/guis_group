@@ -101,9 +101,10 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">工事支店</label>
-                            <input type="text" class="form-control" v-model="project.building_branch">
+                            <label class="form-label">工事番号</label>
+                            <input type="text" class="form-control" v-model="project.building_number">
                         </div>
+                       
                         <div class="col-md-4">
                             <label class="form-label">建物規模</label>
                             <input type="text" class="form-control" v-model="project.building_size">
@@ -113,9 +114,10 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                             <input type="text" class="form-control" v-model="project.building_type">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">工事番号</label>
-                            <input type="text" class="form-control" v-model="project.building_number">
+                            <label class="form-label">工事支店</label>
+                            <input type="text" class="form-control" v-model="project.building_branch">
                         </div>
+                        
                         <div class="col-md-4">
                             <label class="form-label">優先度</label>
                             <div>
@@ -137,6 +139,7 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                                 </div>
                             </div>
                         </div>
+
                         <div class="col-md-4">
                             <label class="form-label">ステータス</label>
                             <div>

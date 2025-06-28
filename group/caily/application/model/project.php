@@ -411,6 +411,19 @@ class Project extends ApplicationModel {
         if (!$id) return false;
         $data = array(
             'progress' => $progress,
+            'updated_by' => $_SESSION['userid'],
+            'updated_at' => date('Y-m-d H:i:s')
+        );
+        return $this->query_update($data, ['id' => $id]);
+    }
+
+    function updatePojectTags($params = null) {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $tags = isset($_POST['tags']) ? $_POST['tags'] : '';
+        if (!$id) return false;
+
+        $data = array(
+            'tags' => $tags,
             'updated_at' => date('Y-m-d H:i:s')
         );
         return $this->query_update($data, ['id' => $id]);
