@@ -710,7 +710,7 @@ if (!$project_id) {
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant">
                                 <label class="form-check-label" for="isImportant">
-                                    <i class="fa fa-star text-warning"></i> 重要メモ
+                                    <i class="fa fa-star text-warning me-2"></i> 重要メモ
                                 </label>
                             </div>
                         </div>
@@ -718,14 +718,14 @@ if (!$project_id) {
                 </div>
                 <div class="modal-footer">
                     <template v-if="editingNote.id && !isNoteEditMode">
-                        <button class="btn btn-primary" @click="isNoteEditMode = true" v-if="canEditNote(editingNote)"><i class="fa fa-pencil-alt"></i> 編集</button>
+                        <button class="btn btn-primary" @click="isNoteEditMode = true" v-if="canEditNote(editingNote)"><i class="fa fa-pencil-alt me-2"></i> 編集</button>
                         <button class="btn btn-secondary" @click="closeNoteModal">閉じる</button>
                     </template>
                     <template v-else>
-                        <button class="btn btn-secondary" @click="isNoteEditMode = false" v-if="editingNote.id"><i class="fa fa-times"></i> キャンセル</button>
+                        <button class="btn btn-secondary" @click="isNoteEditMode = false" v-if="editingNote.id"><i class="fa fa-times me-2"></i> キャンセル</button>
                         <button class="btn btn-secondary" @click="closeNoteModal" v-else>キャンセル</button>
                         <button class="btn btn-primary" @click="saveNote" :disabled="!editingNote.title.trim()">
-                            <i class="fa fa-save"></i> 保存
+                            <i class="fa fa-save me-2"></i> 保存
                         </button>
                     </template>
                 </div>
