@@ -658,22 +658,7 @@ createApp({
             }, 1000); // Wait 1 second after user stops typing
         },
         async saveProjectTags() {
-            try {
-                const formData = new FormData();
-                formData.append('id', this.project.id);
-                formData.append('tags', this.project.tags || '');
-                
-                const response = await axios.post('/api/index.php?model=project&method=update', formData);
-                if (response.data && response.data.status === 'success') {
-                    // Show success message
-                    this.showNotification('タグが更新されました', 'success');
-                } else {
-                    this.showNotification('タグの更新に失敗しました', 'error');
-                }
-            } catch (error) {
-                console.error('Error updating tags:', error);
-                this.showNotification('タグの更新に失敗しました', 'error');
-            }
+           
         },
         clearTagifyTags(field) {
             if (field === 'project_tags') {
@@ -1104,19 +1089,20 @@ createApp({
                 const formData = new FormData();
                 formData.append('id', this.project.id);
                 formData.append('name', this.project.name);
-                formData.append('description', this.project.description);
                 formData.append('building_branch', this.project.building_branch);
                 formData.append('building_size', this.project.building_size);
                 formData.append('building_type', this.project.building_type);
                 formData.append('building_number', this.project.building_number);
                 formData.append('project_number', this.project.project_number);
                 formData.append('progress', this.project.progress);
+                formData.append('priority', this.project.priority || '');
                 formData.append('status', this.project.status);
                 formData.append('teams', this.newProject.teams);
                 formData.append('members', this.newProject.members || '');
                 formData.append('managers', this.newProject.managers || '');
+                formData.append('start_date', this.toAPIDate(this.project.start_date));
+                formData.append('end_date', this.toAPIDate(this.project.end_date));
                 formData.append('project_order_type', this.project.project_order_type);
-                formData.append('priority', this.project.priority);
                 formData.append('customer_id', this.project.customer_id);
                 formData.append('amount', this.project.amount);
                 formData.append('estimate_status', this.project.estimate_status);
@@ -1124,6 +1110,7 @@ createApp({
                 formData.append('tags', this.project.tags);
                 formData.append('department_custom_fields_set_id', this.project.department_custom_fields_set_id);
                 formData.append('custom_fields', this.project.custom_fields);
+                formData.append('description', this.project.description || '');
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
                 if (response.data && response.data.status == 'success') {
                     this.isEditMode = false;

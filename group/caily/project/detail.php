@@ -360,7 +360,6 @@ if (!$project_id) {
                             <label class="form-label">タグ</label>
                             <div class="d-flex align-items-center gap-2">
                                 <input type="text" class="form-control tagify" v-model="project.tags" id="project_tags" name="project_tags" @input="updateTags">
-                                <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('project_tags')" title="すべて削除"><i class="fa fa-times"></i></button>
                             </div>
                         </div>
                         <div class="col-12">
