@@ -260,6 +260,7 @@ class Project extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => $_SESSION['user_id']
         );
+        
         // Save custom field set id and custom fields JSON if provided
         if (isset($_POST['department_custom_fields_set_id']) && $_POST['department_custom_fields_set_id'] != '') {
             $data['department_custom_fields_set_id'] = $_POST['department_custom_fields_set_id'];
@@ -270,13 +271,23 @@ class Project extends ApplicationModel {
         if(isset($_POST['start_date']) && $_POST['start_date'] != ''){
             $data['start_date'] = date('Y-m-d H:i', strtotime($_POST['start_date']));
         }
-        if(isset($_POST['actual_end_date']) && $_POST['actual_end_date'] != ''){
-            $data['actual_end_date'] = date('Y-m-d H:i', strtotime($_POST['actual_end_date']));
-        }
         if(isset($_POST['end_date']) && $_POST['end_date'] != ''){
             $data['end_date'] = date('Y-m-d H:i', strtotime($_POST['end_date']));
         }
+        
+        // Auto-set actual_end_date if status is completed
+        if ($data['status'] == 'completed') {
+            $data['actual_end_date'] = date('Y-m-d H:i:s');
+            $data['progress'] = 100;
+        }
+        
         $result = $this->query_update($data, ['id' => $id]);
+        
+        // Handle actual_end_date NULL case separately (only if status is not completed)
+        if ($result && $data['status'] != 'completed') {
+            $query = sprintf("UPDATE %s SET actual_end_date = NULL WHERE id = %d", $this->table, $id);
+            $this->query($query);
+        }
 
         if ($result && isset($_POST['members'])) {
             $members = explode(',', $_POST['members']);
@@ -423,17 +434,25 @@ class Project extends ApplicationModel {
         if ($status == 'in_progress') {
             $project = $this->getById($id);
             if (!$project['actual_start_date']) {
-                $data['actual_start_date'] = date('Y-m-d');
+                $data['actual_start_date'] = date('Y-m-d H:i:s');
             }
         }
         
         // Cập nhật actual_end_date nếu chuyển sang completed
         if ($status == 'completed') {
-            $data['actual_end_date'] = date('Y-m-d');
+            $data['actual_end_date'] = date('Y-m-d H:i:s');
             $data['progress'] = 100;
         }
         
-        return $this->query_update($data, ['id' => $id]);
+        $result = $this->query_update($data, ['id' => $id]);
+        
+        // Clear actual_end_date if status is not completed
+        if ($result && $status != 'completed') {
+            $query = sprintf("UPDATE %s SET actual_end_date = NULL WHERE id = %d", $this->table, $id);
+            $this->query($query);
+        }
+        
+        return $result;
     }
 
     function updatePriority($params = null) {

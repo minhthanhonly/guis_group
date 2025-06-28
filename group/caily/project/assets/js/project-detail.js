@@ -1088,7 +1088,7 @@ createApp({
                 formData.append('teams', this.project.teams);
                 formData.append('project_order_type', this.project.project_order_type);
                 formData.append('priority', this.project.priority);
-                formData.append('customer_id', this.project.customer_id);
+                formData.append('customer_id', this.newProject.customer_id);
                 formData.append('amount', this.project.amount);
                 formData.append('estimate_status', this.project.estimate_status);
                 formData.append('invoice_status', this.project.invoice_status);
