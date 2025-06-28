@@ -1394,68 +1394,151 @@ createApp({
         },
         initQuillEditor() {
             if (this.quillInstance || !this.isEditMode) return;
-            const toolbarOptions = [
-                [
-                    { font: [] },
-                    { size: [] }
-                ],
-                ['bold', 'italic', 'underline', 'strike'],
-                [
-                    { color: [] },
-                    { background: [] }
-                ],
-                [
-                    { script: 'super' },
-                    { script: 'sub' }
-                ],
-                [
-                    { header: '1' },
-                    { header: '2' }, 'blockquote' ],
-                [
-                    { list: 'ordered' },
-                    { indent: '-1' },
-                    { indent: '+1' }
-                ],
-                [{ direction: 'rtl' }, { align: [] }],
-                ['link', 'image', 'video', 'formula'],
-                ['clean']
-            ];
-            const el = document.getElementById('quill_description');
-            if (!el) return;
-            this.quillInstance = new Quill(el, {
-                bounds: el,
-                placeholder: 'Type Something...',
-                modules: {
-                    syntax: true,
-                    toolbar: toolbarOptions
-                },
-                theme: 'snow'
-            });
-            if (this.project.description) {
-                const html = this.decodeHtmlEntities(this.project.description);
-                this.quillInstance.root.innerHTML = html;
-            }
             
-            // Add debounce to prevent too frequent updates
-            let debounceTimer;
-            this.quillInstance.on('text-change', () => {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => {
-                    const html = this.quillInstance.getSemanticHTML();
-                    this.project.description = html;
-                    // Also update hidden textarea for v-model
-                    const textarea = document.getElementById('quill_description_textarea');
-                    if (textarea) {
-                        textarea.value = html;
-                        const event = new Event('input', { bubbles: true });
-                        textarea.dispatchEvent(event);
+            // Use a longer delay to ensure all other components are initialized first
+            setTimeout(() => {
+                const toolbarOptions = [
+                    [
+                        { font: [] },
+                        { size: [] }
+                    ],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [
+                        { color: [] },
+                        { background: [] }
+                    ],
+                    [
+                        { script: 'super' },
+                        { script: 'sub' }
+                    ],
+                    [
+                        { header: '1' },
+                        { header: '2' }, 'blockquote' ],
+                    [
+                        { list: 'ordered' },
+                        { indent: '-1' },
+                        { indent: '+1' }
+                    ],
+                    [{ direction: 'rtl' }, { align: [] }],
+                    ['link', 'image', 'video', 'formula'],
+                    ['clean']
+                ];
+                const el = document.getElementById('quill_description');
+                if (!el) return;
+                
+                // Destroy existing instance if any
+                if (this.quillInstance) {
+                    try {
+                        this.quillInstance = null;
+                    } catch (e) {
+                        console.log('Error destroying existing quill instance:', e);
                     }
-                }, 300); // 300ms debounce
-            });
+                }
+                
+                this.quillInstance = new Quill(el, {
+                    bounds: el,
+                    placeholder: 'Type Something...',
+                    modules: {
+                        syntax: true,
+                        toolbar: toolbarOptions
+                    },
+                    theme: 'snow'
+                });
+                
+                if (this.project.description) {
+                    const html = this.decodeHtmlEntities(this.project.description);
+                    this.quillInstance.root.innerHTML = html;
+                }
+                
+                // Add debounce to prevent too frequent updates
+                let debounceTimer;
+                let isUpdatingFromQuill = false;
+                
+                this.quillInstance.on('text-change', () => {
+                    if (isUpdatingFromQuill) return; // Prevent recursive updates
+                    
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        const html = this.quillInstance.getSemanticHTML();
+                        
+                        // Temporarily disable reactivity to prevent focus loss
+                        isUpdatingFromQuill = true;
+                        this.project.description = html;
+                        
+                        // Also update hidden textarea for v-model without triggering events
+                        const textarea = document.getElementById('quill_description_textarea');
+                        if (textarea) {
+                            textarea.value = html;
+                        }
+                        
+                        // Re-enable reactivity after a short delay
+                        setTimeout(() => {
+                            isUpdatingFromQuill = false;
+                        }, 50);
+                    }, 300); // 300ms debounce
+                });
+                
+                // Prevent focus loss by stopping event propagation on toolbar clicks
+                const toolbar = this.quillInstance.getModule('toolbar');
+                if (toolbar && toolbar.container) {
+                    toolbar.container.addEventListener('mousedown', (e) => {
+                        e.stopPropagation();
+                    });
+                    toolbar.container.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                    });
+                }
+                
+                // Prevent focus loss from other elements
+                this.quillInstance.root.addEventListener('blur', (e) => {
+                    // Only prevent blur if it's not intentional (like clicking outside)
+                    if (e.relatedTarget && !this.quillInstance.root.contains(e.relatedTarget)) {
+                        // Allow blur if clicking outside the editor
+                        return;
+                    }
+                });
+                
+                // Focus the editor after initialization
+                setTimeout(() => {
+                    if (this.quillInstance) {
+                        this.quillInstance.focus();
+                    }
+                }, 100);
+                
+            }, 200); // Increased delay to ensure other components are initialized first
         },
         destroyQuillEditor() {
             if (this.quillInstance) {
-                this.quillInstance = null;
+                try {
+                    // Remove event listeners from toolbar
+                    const toolbar = this.quillInstance.getModule('toolbar');
+                    if (toolbar && toolbar.container) {
+                        toolbar.container.removeEventListener('mousedown', (e) => {
+                            e.stopPropagation();
+                        });
+                        toolbar.container.removeEventListener('click', (e) => {
+                            e.stopPropagation();
+                        });
+                    }
+                    
+                    // Remove blur event listener
+                    if (this.quillInstance.root) {
+                        this.quillInstance.root.removeEventListener('blur', (e) => {
+                            if (e.relatedTarget && !this.quillInstance.root.contains(e.relatedTarget)) {
+                                return;
+                            }
+                        });
+                    }
+                    
+                    // Clear the editor content
+                    this.quillInstance.setText('');
+                    
+                    // Destroy the instance
+                    this.quillInstance = null;
+                } catch (e) {
+                    console.log('Error destroying quill editor:', e);
+                    this.quillInstance = null;
+                }
             }
         },
         decodeHtmlEntities(str) {
@@ -1568,7 +1651,6 @@ createApp({
         isEditMode(newVal) {
             if (newVal) {
                 this.$nextTick(() => {
-                    this.initQuillEditor();
                     // Sync customFields from project.custom_fields or set
                     let saved = [];
                     let raw = this.project.custom_fields;
@@ -1801,6 +1883,12 @@ createApp({
                             this.buildingBranchTagify.on('remove', updateBuildingBranch);
                         } else {
                         }
+                        
+                        // Initialize Quill editor after all other components are ready
+                        setTimeout(() => {
+                            this.initQuillEditor();
+                        }, 100);
+                        
                     }, 100);
                 });
                 window.addEventListener('beforeunload', this.handleBeforeUnload);
