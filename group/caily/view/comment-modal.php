@@ -96,7 +96,7 @@
                   </div>
                   <div class="chat-history-footer shadow-xs">
                     <div class="form-send-message d-flex justify-content-between align-items-center ">
-                        <div class="form-control message-input border-0 me-4 shadow-none"
+                        <div class="form-control message-input border-0 me-4 shadow-none allow-mention"
                              contenteditable="true"
                              data-mention
                              data-html-mention

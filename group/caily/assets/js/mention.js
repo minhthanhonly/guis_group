@@ -44,7 +44,6 @@ class MentionManager {
     }
     
     async loadMentionUsers() {
-        console.log('loadMentionUsers called');
         try {
             const params = new URLSearchParams();
             if (this.options.departmentId) {
@@ -120,11 +119,13 @@ class MentionManager {
     }
     
     bindToInput(input) {
+        if(!input.classList.contains('allow-mention')) return;
         if (input.dataset.mentionBound) return; // Already bound
         
         input.dataset.mentionBound = 'true';
         
         input.addEventListener('keyup', (event) => {
+         
             this.handleInput(event);
         });
         
@@ -163,6 +164,7 @@ class MentionManager {
     
     handleInput(event) {
         const input = event.target;
+        if(!input.classList.contains('allow-mention')) return;
         
         console.log('handleInput called');
         

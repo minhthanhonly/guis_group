@@ -868,8 +868,6 @@ createApp({
             // Initialize Tagify for project tags
             const tagify = new Tagify(input, {
                 enforceWhitelist: false,
-                mode: 'mix',
-                pattern: /^[a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\u20000-\u2A6DF\u2A700-\u2B73F\u2B740-\u2B81F\u2B820-\u2CEAF\uF900-\uFAFF\u3300-\u33FF\uFE30-\uFE4F\uFF00-\uFFEF\s]+$/,
                 maxTags: 20,
                 dropdown: {
                     maxItems: 20,
@@ -880,10 +878,10 @@ createApp({
             });
             
             // Add existing tags if any
-            if (this.project.tags) {
-                const tags = this.project.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
-                tagify.addTags(tags);
-            }
+            // if (this.project.tags) {
+            //     const tags = this.project.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+            //     tagify.addTags(tags);
+            // }
             
             // Store reference
             this.projectTagsTagify = tagify;
@@ -1057,6 +1055,7 @@ createApp({
                 this.initDatePickers();
                 this.initTagify();
                 this.initManagerMembersTagify();
+                this.initProjectTagsTagify();
             });
         },
         toAPIDate(str) {
