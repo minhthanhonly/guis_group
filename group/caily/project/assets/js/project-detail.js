@@ -1085,7 +1085,9 @@ createApp({
                 formData.append('project_number', this.project.project_number);
                 formData.append('progress', this.project.progress);
                 formData.append('status', this.project.status);
-                formData.append('teams', this.project.teams);
+                formData.append('teams', this.newProject.teams);
+                formData.append('members', this.newProject.members || '');
+                formData.append('managers', this.newProject.managers || '');
                 formData.append('project_order_type', this.project.project_order_type);
                 formData.append('priority', this.project.priority);
                 formData.append('customer_id', this.project.customer_id);
@@ -1924,7 +1926,7 @@ createApp({
         // Initialize Tagify for team selection
         if (document.getElementById('team_tags')) {
             new Tagify(document.getElementById('team_tags'), {
-                whitelist: (this.teamList || []).map(team => ({ value: team.id, text: team.name })),
+                whitelist: (this.project.team_list || []).map(team => ({ value: team.id, text: team.name })),
                 enforceWhitelist: true,
                 mode: 'select',
                 templates: {
