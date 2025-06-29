@@ -19,18 +19,19 @@ $view->heading('プロジェクト管理');
                     </li>
                 </ul>
                 <a v-if="canAddProject()" :href="createUrl" class="btn btn-primary">
-                    <i class="fa fa-plus"></i> 新規プロジェクト
+                    <i class="fa fa-plus me-1"></i> <span data-i18n="新規プロジェクト">新規プロジェクト</span>
                 </a>
             </div>
         </div>
     </nav>
     <div class="card">
         <div class="card-body">
-            <div class="d-flex flex-wrap gap-2 mb-3">
+            <div class="btn-group">
                 <button 
                     v-for="status in statuses" 
                     :key="status.key"
                     class="btn btn-sm"
+                    :data-i18n="status.name"
                     :class="{
                         [`btn-label-${status.color}`]: !selectedStatus || selectedStatus?.key !== status.key,
                         [`btn-${status.color}`]: selectedStatus?.key === status.key,

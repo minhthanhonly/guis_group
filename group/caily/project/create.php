@@ -8,14 +8,14 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
 <div id="app" class="container-fluid mt-4" v-cloak>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="#">プロジェクト作成</a>
+            <a class="navbar-brand fw-bold" href="#"><span data-i18n="プロジェクト作成">プロジェクト作成</span></a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar" aria-controls="projectNavbar" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="projectNavbar">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 <li class="nav-item">
-                <a class="nav-link active" aria-current="page" href="create.php">新規作成</a>
+                <a class="nav-link active" aria-current="page" href="create.php"><span data-i18n="新規作成">新規作成</span></a>
                 </li>
             </ul>
             </div>
@@ -26,7 +26,7 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
         <!-- Back button -->
         <div class="col-12 mb-3">
             <a href="index.php" class="btn btn-outline-primary">
-                <i class="fa fa-arrow-left"></i> 戻る
+                <i class="fa fa-arrow-left me-1"></i> <span data-i18n="戻る">戻る</span>
             </a>
         </div>
 
@@ -35,7 +35,7 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
             <div class="card edit-mode">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h5 class="card-title">基本情報</h5>
+                        <h5 class="card-title"><span data-i18n="基本情報">基本情報</span></h5>
                         <div>
                             <button class="btn btn-success btn-sm me-2" @click="saveProject">
                                 <i class="fa fa-save"></i>
@@ -49,9 +49,9 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                     <div class="row g-3" v-if="project">
                         <div class="col-md-4">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label">顧客カテゴリー <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="顧客カテゴリー">顧客カテゴリー</span> <span class="text-danger">*</span></label>
                                 <select id="category_id" class="form-select select2" v-model="newProject.category_id" name="category_id" required @change="onCategoryChange">
-                                    <option value="">選択してください</option>
+                                    <option value="" data-i18n="選択してください">選択してください</option>
                                     <option v-for="category in categories" :key="category.id" :value="category.id">
                                         {{ category.name }}
                                     </option>
@@ -60,9 +60,9 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label">会社名 <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="会社名">会社名</span> <span class="text-danger">*</span></label>
                                 <select id="company_name" class="form-select select2" v-model="newProject.company_name" name="company_name" required @change="onCompanyChange">
-                                    <option value="">選択してください</option>
+                                    <option value="" data-i18n="選択してください">選択してください</option>
                                     <option v-for="company in companies" :key="company.company_name" :value="company.company_name">
                                         {{ company.company_name }}
                                     </option>
@@ -71,10 +71,10 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label">担当者名 <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="担当者名">担当者名</span> <span class="text-danger">*</span></label>
                                 <div class="d-flex gap-2 justify-content-between">
                                     <select id="customer_id" class="form-select select2 flex-shrink-1" v-model="newProject.customer_id" name="customer_id" required>
-                                        <option value="">選択してください</option>
+                                        <option value="" data-i18n="選択してください">選択してください</option>
                                         <option v-for="contact in contacts" :key="contact.id" :value="contact.id">
                                             {{ contact.name }}
                                         </option>
@@ -83,18 +83,18 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">プロジェクト番号</label>
+                            <label class="form-label"><span data-i18n="プロジェクト番号">プロジェクト番号</span></label>
                             <input type="text" class="form-control" v-model="project.project_number">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">プロジェクト名 <span class="text-danger">*</span></label>
+                            <label class="form-label"><span data-i18n="プロジェクト名">プロジェクト名</span> <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" v-model="project.name" required>
                         </div>
                         
                         <div class="col-md-4">
-                            <label class="form-label">部署</label>
+                            <label class="form-label"><span data-i18n="部署">部署</span></label>
                             <select class="form-select" v-model="project.department_id" @change="onDepartmentChange" :disabled="presetDepartmentId">
-                                <option value="">選択してください</option>
+                                <option value="" data-i18n="選択してください">選択してください</option>
                                 <option v-for="dept in departments" :key="dept.id" :value="dept.id">
                                     {{ dept.name }}
                                 </option>
@@ -102,19 +102,19 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                         </div>
                         
                         <div class="col-md-4">
-                            <label class="form-label">工事番号</label>
+                            <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
                             <input type="text" class="form-control" v-model="project.building_number">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">建物規模</label>
+                            <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
                             <input type="text" class="form-control" v-model="project.building_size">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">建物種類</label>
+                            <label class="form-label"><span data-i18n="建物種類">建物種類</span></label>
                             <input type="text" class="form-control" v-model="project.building_type">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">工事支店</label>
+                            <label class="form-label"><span data-i18n="工事支店">工事支店</span></label>
                             <div class="d-flex align-items-center gap-2">
                                 <input type="text" class="form-control tagify" v-model="project.building_branch" id="building_branch" name="building_branch">
                                 <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('building_branch')" title="すべて削除"><i class="fa fa-times"></i></button>
@@ -122,14 +122,14 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                         </div>
                         
                         <div class="col-md-4">
-                            <label class="form-label">受注形態</label>
+                            <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
                             <div class="d-flex align-items-center gap-2">
                                 <input type="text" class="form-control tagify" v-model="project.project_order_type" id="project_order_type" name="project_order_type" required>
                                 <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('project_order_type')" title="すべて削除"><i class="fa fa-times"></i></button>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">優先度</label>
+                            <label class="form-label"><span data-i18n="優先度">優先度</span></label>
                             <div>
                                 <div class="btn-group">
                                     <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
@@ -151,35 +151,35 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                         </div>
                       
                         <div class="col-4">
-                            <label class="form-label">チーム</label>
+                            <label class="form-label"><span data-i18n="チーム">チーム</span></label>
                             <div class="d-flex align-items-center gap-2">
                                 <input id="team_tags" class="form-control" />
                                 <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('team')" title="すべて削除"><i class="fa fa-times"></i></button>
                             </div>
                         </div>
                         <div class="col-4">
-                            <label class="form-label">管理</label>
+                            <label class="form-label"><span data-i18n="管理">管理</span></label>
                             <div class="d-flex align-items-center gap-2">
                                 <input class="form-control" type="text" id="manager_tags" name="manager_tags">
                                 <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('manager')" title="すべて削除"><i class="fa fa-times"></i></button>
                             </div>
                         </div>
                         <div class="col-4">
-                            <label class="form-label">メンバー</label>
+                            <label class="form-label"><span data-i18n="メンバー">メンバー</span></label>
                             <div class="d-flex align-items-center gap-2">
                                 <input class="form-control" type="text" id="members_tags" name="members_tags">
                                 <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('members')" title="すべて削除"><i class="fa fa-times"></i></button>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">開始日</label>
+                            <label class="form-label"><span data-i18n="開始日">開始日</span></label>
                             <div class="input-group">
                                 <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" placeholder="YYYY/MM/DD HH:mm">
                                 <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">終了日</label>
+                            <label class="form-label"><span data-i18n="終了日">終了日</span></label>
                             <div class="input-group">
                                 <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm">
                                 <span class="input-group-text"><i class="fa fa-calendar"></i></span>
@@ -187,7 +187,7 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                         </div>
                         
                         <div class="col-md-4">
-                            <label class="form-label">ステータス</label>
+                            <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                             <div>
                                 <div class="btn-group">
                                     <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
@@ -200,7 +200,7 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                                         <li v-for="status in statuses" :key="status.value">
                                             <a class="dropdown-item waves-effect" href="javascript:void(0);" 
                                             @click="selectStatus(status.value)">
-                                                {{ status.label }}
+                                                <span :data-i18n="status.label">{{ status.label }}</span>
                                             </a>
                                         </li>
                                     </ul>
@@ -208,7 +208,7 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                             </div>
                         </div>
                         <div class="col-4">
-                            <label class="form-label">進捗率</label>
+                            <label class="form-label"><span data-i18n="進捗率">進捗率</span></label>
                             <div class="position-relative">
                                 <input
                                     type="range"
@@ -223,22 +223,22 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                             </div>
                         </div>
                         <div class="col-md-12">
-                            <label class="form-label">タグ</label>
+                            <label class="form-label"><span data-i18n="タグ">タグ</span></label>
                             <div class="d-flex align-items-center gap-2">
                                 <input type="text" class="form-control tagify" v-model="project.tags" id="project_tags" name="project_tags" @input="updateTags">
                             </div>
                         </div>
                         <div class="col-12">
-                            <label class="form-label">説明</label>
+                            <label class="form-label"><span data-i18n="説明">説明</span></label>
                             <div class="custom_editor">
                                 <div class="custom_editor_content" id="quill_description"></div>
                                 <textarea class="custom_editor_textarea d-none" v-model="project.description" id="quill_description_textarea"></textarea>
                             </div>
                         </div>
                         <div class="col-12 mt-3">
-                            <label class="form-label">カスタム項目セット</label>
+                            <label class="form-label"><span data-i18n="カスタム項目セット">カスタム項目セット</span></label>
                             <select class="form-select" v-model="project.department_custom_fields_set_id">
-                                <option value="">選択してください</option>
+                                <option value="" data-i18n="選択してください">選択してください</option>
                                 <option v-for="set in departmentCustomFieldSets" :value="set.id">{{ set.name }}</option>
                             </select>
                             <div v-if="selectedCustomFieldSet" class="mt-3">
@@ -295,17 +295,13 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
             <!-- Info Card -->
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">作成情報</h5>
+                    <h5 class="card-title mb-0"><span data-i18n="作成情報">作成情報</span></h5>
                 </div>
                 <div class="card-body">
                     <div class="text-center py-3">
                         <i class="fa fa-plus-circle fs-1 text-primary"></i>
-                        <p class="text-muted mt-2">新しいプロジェクトを作成します</p>
-                        <p class="small text-muted">必須項目（*）を入力してから保存してください</p>
-                        <div v-if="presetDepartmentId" class="mt-3 p-2 bg-light rounded">
-                            <i class="fa fa-info-circle text-info"></i>
-                            <small class="text-muted">部署が事前に設定されています</small>
-                        </div>
+                        <p class="text-muted mt-2" data-i18n="新しいプロジェクトを作成します">新しいプロジェクトを作成します</p>
+                        <p class="small text-muted" data-i18n="必須項目（*）を入力してから保存してください">必須項目（*）を入力してから保存してください</p>
                     </div>
                 </div>
             </div>

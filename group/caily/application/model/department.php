@@ -28,14 +28,24 @@ class Department extends ApplicationModel {
     }
 
     function listByUser() {
-        $query = sprintf( 
-            "SELECT DISTINCT c.*
-            FROM {$this->table} c
-            JOIN " . DB_PREFIX . "user_department ud ON c.id = ud.department_id
-            WHERE ud.userid = '%s' AND c.can_project = 1
-            ORDER BY c.id ASC",
-            $_SESSION['userid']
-        );
+        if($_SESSION['authority'] != 'administrator'){
+            $query = sprintf( 
+                "SELECT DISTINCT c.*
+                FROM {$this->table} c
+                JOIN " . DB_PREFIX . "user_department ud ON c.id = ud.department_id
+                WHERE ud.userid = '%s' AND c.can_project = 1 AND c.is_active = 1
+                ORDER BY c.id ASC",
+                $_SESSION['userid']
+            );
+        } else {
+            $query = sprintf(
+                "SELECT c.*
+                FROM {$this->table} c
+                WHERE c.is_active = 1 AND c.can_project = 1
+                ORDER BY c.id ASC"
+            );
+        }
+        
         return $this->fetchAll($query);
     }
 

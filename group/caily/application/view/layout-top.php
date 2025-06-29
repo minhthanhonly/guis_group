@@ -2,7 +2,6 @@
     <div class="layout-wrapper layout-content-navbar">
       <div class="layout-container">
         <!-- Menu -->
-
         <aside id="layout-menu" class="layout-menu menu-vertical menu">
           <div class="app-brand demo">
             <a href="/" class="app-brand-link">
@@ -13,7 +12,7 @@
                   data-app-dark-img="<?=APP_LOGO_DARK?>" />
                 </span>
               </span>
-              <span class="app-brand-text demo menu-text fw-bold ms-3"><?=APP_NAME?></span>
+              <span class="app-brand-text demo menu-text fw-bold ms-3" data-i18n="<?=APP_NAME?>"><?=APP_NAME?> </span>
             </a>
 
             <a href="javascript:void(0);" class="layout-menu-toggle menu-link text-large ms-auto">
@@ -36,55 +35,58 @@
             <li class="menu-item <?php if($directory == 'project') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base ti tabler-briefcase"></i>
-                <div>プロジェクト</div>
+                <div><span data-i18n="プロジェクト">プロジェクト</span><span class="badge bg-label-primary ms-2"><?=$_SESSION['isProjectManager'] ? 'PM' : ''?></span></div>
               </a>
               <ul class="menu-sub">
                 <li class="menu-item <?php if($directory == 'project' && $page == 'index') echo 'active'; ?>">
                   <a href="<?=$root?>project/" class="menu-link">
-                    <div>一覧</div>
+                    <div data-i18n="一覧">一覧</div>
                   </a>
                 </li>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'mytask') echo 'active'; ?>">
                   <a href="<?=$root?>project/mytask.php" class="menu-link">
-                    <div>マイタスク</div>
+                    <div data-i18n="マイタスク">マイタスク</div>
                   </a>
                 </li>
+                <?php if($_SESSION['isProjectManager']){ ?>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
                   <a href="<?=$root?>project/custom_fields.php" class="menu-link">
-                    <div>カスタムフィールド</div>
+                    <div data-i18n="設定">設定</div>
                   </a>
                 </li>
-                
+                <?php } ?>
               </ul>
             </li>
 
-            <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
-              <a href="<?=$root?>schedule/" class="menu-link">
-                <i class="menu-icon icon-base ti tabler-calendar-event"></i>
-                <div>カレンダー</div>
-              </a>
-            </li>
+            <?php if($_SESSION['group'] != '6'){ ?>
+              <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
+                <a href="<?=$root?>schedule/" class="menu-link">
+                  <i class="menu-icon icon-base ti tabler-calendar-event"></i>
+                  <div data-i18n="カレンダー">カレンダー</div>
+                </a>
+              </li>
             
-           
-            <li class="menu-item <?php if($directory == 'timecard' && ($page == 'index' || $page == 'group')) echo 'active'; ?>">
-              <a href="<?=$root?>timecard/" class="menu-link">
-                <i class="menu-icon icon-base ti tabler-clock"></i>
-                <div data-i18n="タイムカード">タイムカード</div>
-              </a>
-            </li>
-            <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
+              <li class="menu-item <?php if($directory == 'timecard' && ($page == 'index' || $page == 'group')) echo 'active'; ?>">
+                <a href="<?=$root?>timecard/" class="menu-link">
+                  <i class="menu-icon icon-base ti tabler-clock"></i>
+                  <div data-i18n="タイムカード">タイムカード</div>
+                </a>
+              </li>
+            
+            <!-- <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
               <a href="<?=$root?>addressbook/" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-address-book"></i>
-                <div>アドレス帳</div>
+                <div data-i18n="アドレス帳">アドレス帳</div>
               </a>
-            </li>
+            </li> -->
 
             <li class="menu-item <?php if($directory == 'customer') echo 'active open'; ?>">
               <a href="<?=$root?>customer/" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-users"></i>
-                <div>顧客情報</div>
+                <div data-i18n="顧客情報">顧客情報</div>
               </a>
             </li>
+            <?php } ?>
 
             <li class="menu-item <?php if($directory == 'member') echo 'active'; ?>">
               <a href="<?=$root?>member/" class="menu-link">
@@ -92,38 +94,38 @@
                 <div data-i18n="ユーザー一覧">ユーザー一覧</div>
               </a>
             </li>
-
+            <?php if($_SESSION['group'] != '6'){ ?>
             <li class="menu-item <?php if($directory == 'storage') echo 'active open'; ?>">
               <a href="<?=$root?>storage/" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-server-2"></i>
-                <div>ファイル共有</div>
+                <div data-i18n="ファイル共有">ファイル共有</div>
               </a>
             </li>
             <li class="menu-item <?php if($directory == 'forum') echo 'active open'; ?>">
               <a href="<?=$root?>forum/?folder=0" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-news"></i>
-                <div>お知らせ</div>
+                <div data-i18n="お知らせ">お知らせ</div>
               </a>
             </li>
-
+            <?php } ?>
             
 
-            <li class="menu-item <?php if($directory == 'form') echo 'active open'; ?>">
+            <!-- <li class="menu-item <?php if($directory == 'form') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base ti tabler-settings"></i>
-                <div>申請・承認</div>
+                <div data-i18n="申請・承認">申請・承認</div>
               </a>
 
               <ul class="menu-sub">
                 <li class="menu-item <?php echo $active1; ?>">
-                  <a href="<?=$root?>form/leave.php" class="menu-link">
-                    <div>休職</div>
+                  <a href="<?=$root?>form/index.php" class="menu-link">
+                    <div data-i18n="休職">休職</div>
                   </a>
                 </li>
               </ul>
-            </li>
+            </li> -->
 
-            <?php if($_SESSION['authority'] == 'administrator'){
+            <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '6'){
               $active = '';
               if($directory == 'setting') {
                 $active = 'active open';
@@ -148,38 +150,38 @@
             <li class="menu-item <?php echo $active; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base ti tabler-settings"></i>
-                <div>共通設定</div>
+                <div data-i18n="共通設定">共通設定</div>
               </a>
 
               <ul class="menu-sub">
                 <li class="menu-item <?php echo $active1; ?>">
                   <a href="<?=$root?>setting/branch.php" class="menu-link">
-                    <div>支社設定</div>
+                    <div data-i18n="支社設定">支社設定</div>
                   </a>
                 </li>
                 <li class="menu-item <?php echo $active2; ?>">
                   <a href="<?=$root?>setting/department.php" class="menu-link">
-                    <div>部署設定</div>
+                    <div data-i18n="部署設定">部署設定</div>
                   </a>
                 </li>
                 <li class="menu-item <?php echo $active6; ?>">
                   <a href="<?=$root?>setting/team.php" class="menu-link">
-                    <div>チーム設定</div>
+                    <div data-i18n="チーム設定">チーム設定</div>
                   </a>
                 </li>
                 <li class="menu-item <?php echo $active3; ?>">
                   <a href="<?=$root?>group/" class="menu-link">
-                    <div>グループ設定</div>
+                    <div data-i18n="グループ設定">グループ設定</div>
                   </a>
                 </li>
                 <li class="menu-item <?php echo $active4; ?>">
                   <a href="<?=$root?>timecard/holiday.php" class="menu-link">
-                    <div>休日設定</div>
+                    <div data-i18n="休日設定">休日設定</div>
                   </a>
                 </li>
                 <li class="menu-item <?php echo $active5; ?>">
                   <a href="<?=$root?>timecard/config.php" class="menu-link">
-                    <div>タイムカード設定</div>
+                    <div data-i18n="タイムカード設定">タイムカード設定</div>
                   </a>
                 </li>
               </ul>
@@ -224,6 +226,24 @@
               <!-- /Search -->
 
               <ul class="navbar-nav flex-row align-items-center ms-md-auto">
+              <li class="nav-item dropdown-language dropdown me-2 me-xl-0">
+                  <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown">
+                    <i class="icon-base fa fa-language icon-22px text-heading"></i>
+                  </a>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <a class="dropdown-item js-change-language" href="javascript:void(0);" data-language="en" data-text-direction="ltr">
+                        <span>日本語</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item js-change-language" href="javascript:void(0);" data-language="fr" data-text-direction="ltr">
+                        <span>Tiếng Việt</span>
+                      </a>
+                    </li>
+                  </ul>
+                </li>
+                <!--/ Language -->
                 <!-- Style Switcher -->
                 <li class="nav-item dropdown me-3 me-xl-2">
                   <a
@@ -232,7 +252,7 @@
                     href="javascript:void(0);"
                     data-bs-toggle="dropdown">
                     <i class="icon-base ti tabler-sun icon-22px theme-icon-active text-heading"></i>
-                    <span class="d-none ms-2" id="nav-theme-text">テーマ</span>
+                    <span class="d-none ms-2" id="nav-theme-text" data-i18n="テーマ">テーマ</span>
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="nav-theme-text">
                     <li>
@@ -241,7 +261,7 @@
                         class="dropdown-item align-items-center active"
                         data-bs-theme-value="light"
                         aria-pressed="false">
-                        <span><i class="icon-base ti tabler-sun icon-22px me-3" data-icon="sun"></i>ライト</span>
+                        <span><i class="icon-base ti tabler-sun icon-22px me-3" data-icon="sun"></i><span data-i18n="ライト">ライト</span></span>
                       </button>
                     </li>
                     <li>
@@ -252,7 +272,7 @@
                         aria-pressed="true">
                         <span
                           ><i class="icon-base ti tabler-moon-stars icon-22px me-3" data-icon="moon-stars"></i
-                          >ダーク</span
+                          ><span data-i18n="ダーク">ダーク</span></span
                         >
                       </button>
                     </li>
@@ -266,7 +286,7 @@
                           ><i
                             class="icon-base ti tabler-device-desktop-analytics icon-22px me-3"
                             data-icon="device-desktop-analytics"></i
-                          >システム</span
+                          ><span data-i18n="システム">システム</span></span
                         >
                       </button>
                     </li>
@@ -287,7 +307,7 @@
                   <div class="dropdown-menu dropdown-menu-end p-0">
                     <div class="dropdown-menu-header border-bottom">
                       <div class="dropdown-header d-flex align-items-center py-3">
-                        <h6 class="mb-0 me-auto">ショートカット</h6>
+                        <h6 class="mb-0 me-auto" data-i18n="ショートカット">ショートカット</h6>
                         
                       </div>
                     </div>
@@ -297,13 +317,13 @@
                           <span class="dropdown-shortcuts-icon rounded-circle mb-3">
                             <i class="icon-base ti tabler-tool icon-26px text-heading"></i>
                           </span>
-                          <a href="http://tools.caily.com.vn/?lang=ja" target="_blank" class="stretched-link">CAILYツール</a>
+                          <a href="http://tools.caily.com.vn/?lang=ja" target="_blank" class="stretched-link" data-i18n="CAILYツール">CAILYツール</a>
                         </div>
                         <div class="dropdown-shortcuts-item col">
                           <span class="dropdown-shortcuts-icon rounded-circle mb-3">
                             <i class="icon-base ti tabler-server icon-26px text-heading"></i>
                           </span>
-                          <a href="http://caily.ddns.net:9000/" target="_blank" class="stretched-link">CAILY NAS</a>
+                          <a href="http://caily.ddns.net:9000/" target="_blank" class="stretched-link" data-i18n="CAILY NAS">CAILY NAS</a>
                         </div>
                       </div>
                     </div>
@@ -324,7 +344,7 @@
                   <ul class="dropdown-menu dropdown-menu-end p-0">
                     <li class="dropdown-menu-header border-bottom">
                       <div class="dropdown-header d-flex align-items-center py-3">
-                        <h6 class="mb-0 me-auto">変更履歴</h6>
+                        <h6 class="mb-0 me-auto" data-i18n="変更履歴">変更履歴</h6>
                       </div>
                     </li>
                     <li class="dropdown-notifications-list scrollable-container">
@@ -336,7 +356,7 @@
                               <small class="mb-1 d-block text-body">
                                 <ul>
                                   <li>
-                                    <p>UIを変更しました。</p>
+                                    <p data-i18n="UIを変更しました。">UIを変更しました。</p>
                                   </li>
                                 </ul>
                               </small>
@@ -358,13 +378,13 @@
                     aria-expanded="false">
                     <span class="position-relative">
                       <i class="icon-base ti tabler-bell icon-22px text-heading"></i>
-                      <span class="badge rounded-pill bg-danger badge-dot badge-notifications border" id="notification_dot"></span>
+                      <span class="badge rounded-pill bg-danger badge-dot badge-notifications border d-none" id="notification_dot"></span>
                     </span>
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end p-0" id="notification_list">
                     <li class="dropdown-menu-header border-bottom">
                       <div class="dropdown-header d-flex align-items-center py-3">
-                        <h6 class="mb-0 me-auto">通知</h6>
+                        <h6 class="mb-0 me-auto" data-i18n="通知">通知</h6>
                         <div class="d-flex align-items-center h6 mb-0">
                           <!-- <span class="badge bg-label-primary me-2">8 New</span> -->
                           <a
@@ -389,7 +409,7 @@
                               </div>
                             </div>
                             <div class="flex-grow-1">
-                              <h6 class="small mb-1">通知はありません 🎉</h6>
+                              <h6 class="small mb-1" data-i18n="通知はありません">通知はありません 🎉</h6>
                               <small class="mb-1 d-block text-body">作成中...</small>
                               <!-- <small class="text-body-secondary">1h ago</small> -->
                             </div>
@@ -409,7 +429,7 @@
                     <li class="border-top">
                       <div class="d-grid p-4">
                         <a class="btn btn-primary btn-sm d-flex" href="javascript:void(0);">
-                          <small class="align-middle">すべての通知を表示</small>
+                          <small class="align-middle" data-i18n="すべての通知を表示">すべての通知を表示</small>
                         </a>
                       </div>
                     </li>
@@ -446,7 +466,7 @@
                             </div>
                           </div>
                           <div class="flex-grow-1">
-                            <h6 class="mb-0"><?=$realname?></h6>
+                            <h6 class="mb-0"><?=$_SESSION['realname']?></h6>
                             <!-- <small class="text-body-secondary"><?=$_SESSION['user_groupname']?></small> -->
                           </div>
                         </div>
@@ -458,7 +478,7 @@
                     <li>
                       <a class="dropdown-item" href="<?=$root?>member/view.php?id=<?=$_SESSION['id']?>">
                         <i class="icon-base ti tabler-user me-3 icon-md"></i
-                        ><span class="align-middle">個人情報</span>
+                        ><span class="align-middle" data-i18n="個人情報">個人情報</span>
                       </a>
                     </li>
                     <!-- <li>
@@ -476,7 +496,7 @@
                     <li>
                       <div class="d-grid px-2 pt-2 pb-1">
                         <a class="btn btn-sm btn-danger d-flex" href="<?=$root?>logout.php"">
-                          <small class="align-middle">ログアウト</small>
+                          <small class="align-middle" data-i18n="ログアウト">ログアウト</small>
                           <i class="icon-base ti tabler-logout ms-2 icon-14px"></i>
                         </a>
                       </div>

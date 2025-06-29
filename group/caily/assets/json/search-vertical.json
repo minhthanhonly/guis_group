@@ -3,7 +3,7 @@
     "Dashboards": [
       {
         "name": "ダッシュボード",
-        "icon": "tabler-smart-home",
+        "icon": "tabler-home",
         "url": "/index.php"
       }
     ],
@@ -17,13 +17,6 @@
         "name": "タスク",
         "icon": "tabler-list-numbers",
         "url": "/project/task.php"
-      }
-    ],
-    "Timecard": [
-      {
-        "name": "タイムカード",
-        "icon": "tabler-clock",
-        "url": "/timecard/"
       }
     ]
   },
@@ -31,7 +24,7 @@
     "Dashboards": [
       {
         "name": "ダッシュボード",
-        "icon": "tabler-smart-home",
+        "icon": "tabler-home",
         "url": "/index.php"
       }
     ],
@@ -43,15 +36,8 @@
       },
       {
         "name": "タスク",
-        "icon": "tabler-list-numbers",
-        "url": "/project/task.php"
-      }
-    ],
-    "Timecard": [
-      {
-        "name": "タイムカード",
-        "icon": "tabler-clock",
-        "url": "/timecard/"
+        "icon": "tabler-briefcase",
+        "url": "/project/mytask.php"
       }
     ]
   }

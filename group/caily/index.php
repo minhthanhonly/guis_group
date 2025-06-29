@@ -10,7 +10,9 @@ $week = array('日', '月', '火', '水', '木', '金', '土');
 $today = $hash['year'].'年'.$hash['month'].'月'.$hash['day'].'日('.$week[$hash['weekday']].')';
 
 $current_hour = date('H');
-if(str_contains($_SESSION['firstname'], '社長') || str_contains($_SESSION['lastname'], '社長')) {
+if(strlen($_SESSION['firstname']) == 0) {
+  $welcome_message = $_SESSION['realname'].'さん、';
+} else if(str_contains($_SESSION['firstname'], '社長') || str_contains($_SESSION['lastname'], '社長')) {
   $welcome_message = $_SESSION['lastname'].'社長、';
 } else {
   $welcome_message = $_SESSION['lastname'].'さん、';
@@ -33,11 +35,12 @@ if ($current_hour >= 6 && $current_hour < 12) {
     <!-- View sales -->
     <div class="col-md-8 col-lg-6 col-xl-4" style="min-width: 440px;">
       <div class="card">
-        <div class="d-flex align-items-end row">
+        <div class="d-flex align-items-center row">
           <div class="col-7">
             <div class="card-body text-nowrap">
               <h5 class="card-title mb-0"><?=$welcome_message?></h5>
               <p class="mb-4"><?=$today_message?></p>
+              <?php if($_SESSION['group'] != '6'){ ?>
               <button <?php if(isset($hash['timecard']['timecard_open']) && $hash['timecard']['timecard_open']!= ''){ echo 'disabled'; }?> class="me-2 btn btn-primary waves-effect waves-light" id="checkin">出社</button>
               <button <?php if(isset($hash['timecard']['timecard_close']) && $hash['timecard']['timecard_close'] != '') { echo 'disabled'; }?> class="btn btn-warning waves-effect waves-light" id="checkout" data-id="<?=$hash['timecard']['id']?>" data-open="<?=$hash['timecard']['timecard_open']?>">退社</button>
               <div id="timecard-result" class="mt-3">
@@ -49,13 +52,14 @@ if ($current_hour >= 6 && $current_hour < 12) {
                 </p> 
                 <?php } ?>
               </div>
+              <?php } ?>
             </div>
           </div>
           <div class="col-5 text-center text-sm-left">
             <div class="card-body pb-0 px-0 text-end" id="ai-image" data-bs-toggle="modal" data-bs-target="#modalAI">
               <img src="<?=$root?>assets/img/illustrations/girl-with-laptop.png" height="140" alt="view sales" >
               <div class="speech-bubble">
-                <div class="typing-text">
+                <div class="typing-text" data-i18n="AIチャットで何でも聞いてください！">
                   AIチャットで何でも聞いてください！
                 </div>
                 <div class="bubble-arrow"></div>
@@ -67,6 +71,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
     </div>
     <!-- View sales -->
   </div>
+  <?php if($_SESSION['group'] != '6'){ ?>
   <div class="row g-6 mt-1">                
     <!-- Statistics -->
     <div class="col-xl-6 col-md-12">
@@ -105,8 +110,8 @@ if ($current_hour >= 6 && $current_hour < 12) {
         </div>
       </div>
     </div>
-
-	</div>
+  </div>
+  <?php } ?>
  <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') { ?>
   <div class="row g-6 mt-1">
     <div class="col-md-12 col-lg-12 col-xl-6">

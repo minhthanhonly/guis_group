@@ -601,7 +601,7 @@ const TaskApp = createApp({
         
         getPriorityButtonClass(priority) {
             const p = this.taskPriorities.find(p => p.value === priority);
-            return `bg-label-${p?.color || 'secondary'}`;
+            return `btn-${p?.color || 'secondary'}`;
         },
         
         getStatusLabel(status) {
@@ -676,17 +676,7 @@ const TaskApp = createApp({
         },
         
         getInitials(name) {
-            if (!name) return '?';
-            // Check if name contains Japanese characters
-            const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
-            if (hasJapanese) {
-                // For Japanese names, take first 2 characters
-                return name.substring(0, 2);
-            } else {
-                // For English names, take first letter of each word
-                const initials = name.split(' ').map(n => n.charAt(0)).join('');
-                return initials.toUpperCase();
-            }
+            return getAvatarName(name);
         },
         
         openMemberModal() {

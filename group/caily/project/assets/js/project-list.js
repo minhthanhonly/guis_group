@@ -108,7 +108,7 @@ var projectTable;
                                     <span class="project-id">${data || '-'}</span>
                                 </div>`;
                     },
-                    title: '案件番号'
+                    title: '<span data-i18n="案件番号">案件番号</span>',
                 },
                 
                 { 
@@ -118,7 +118,7 @@ var projectTable;
                                     <a href="detail.php?id=${row.id}" class="text-decoration-none">${data}</a>
                                 </div>`;
                     },
-                    title: 'お施主様名'
+                    title: '<span data-i18n="お施主様名">お施主様名</span>'
                 },
                 { 
                     data: 'name',
@@ -130,7 +130,7 @@ var projectTable;
                                     </div>
                                 </div>`;
                     },
-                    title: '顧客情報'
+                    title: '<span data-i18n="顧客情報">顧客情報</span>'
                 },
                 // { 
                 //     data: 'building_type',
@@ -160,7 +160,7 @@ var projectTable;
                         }
                         return `<span>-</span>`;
                     },
-                    title: '受注形態'
+                    title: '<span data-i18n="受注形態">受注形態</span>'
                 },
                 {
                     data: 'manager_id',
@@ -169,15 +169,15 @@ var projectTable;
                         const members = data.split('|').filter(member => member.trim() !== '');
                         if (members.length === 0) return '-';
 
-                        let html = '<div class="d-flex align-items-center avatar-group">';
+                        let html = '<div class="d-flex align-items-center">';
                         const maxAvatars = 3;
                         members.slice(0, maxAvatars).forEach(member => {
                             const [userId, realname, userImage] = member.split(':');
-                            html += `<div class="avatar avatar-sm me-1" data-bs-toggle="tooltip" title="${realname || userId}">
+                            html += `<div class="avatar me-1" data-bs-toggle="tooltip" title="${realname || userId}">
                                 <img src="/assets/upload/avatar/${userImage ?? 'no-image.png'}" alt="${realname || userId}" 
                                     class="rounded-circle  pull-up" width="32" height="32" 
                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
-                                <span class="avatar-initial rounded-circle bg-label-primary pull-up">
+                                <span class="avatar-initial rounded-circle bg-label-primary pull-up" style="display:none;">
                                     ${getInitials(realname || userId)}
                                 </span>
                             </div>`;
@@ -199,7 +199,7 @@ var projectTable;
                         html += '</div>';
                         return html;
                     },
-                    title: '管理'
+                    title: '<span data-i18n="管理">管理</span>'
                 },
                 {
                     data: 'assignment_id',
@@ -208,15 +208,15 @@ var projectTable;
                         const members = data.split('|').filter(member => member.trim() !== '');
                         if (members.length === 0) return '-';
 
-                        let html = '<div class="d-flex align-items-center avatar-group">';
+                        let html = '<div class="d-flex align-items-center">';
                         const maxAvatars = 3;
                         members.slice(0, maxAvatars).forEach(member => {
                             const [userId, realname, userImage] = member.split(':');
-                            html += `<div class="avatar avatar-sm me-1" data-bs-toggle="tooltip" title="${realname || userId}">
+                            html += `<div class="avatar me-1" data-bs-toggle="tooltip" title="${realname || userId}">
                                 <img src="/assets/upload/avatar/${userImage ?? 'no-image.png'}" alt="${realname || userId}" 
                                     class="rounded-circle pull-up" width="32" height="32" 
                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
-                                <span class="avatar-initial rounded-circle bg-label-primary pull-up">
+                                <span class="avatar-initial rounded-circle bg-label-primary pull-up" style="display:none;">
                                     ${getInitials(realname || userId)}
                                 </span>
                             </div>`;
@@ -238,7 +238,7 @@ var projectTable;
                         html += '</div>';
                         return html;
                     },
-                    title: 'メンバー'
+                    title: '<span data-i18n="メンバー">メンバー</span>'
                 },
                 {
                     data: 'priority',
@@ -246,7 +246,7 @@ var projectTable;
                         const priority = priorities.find(priority => priority.key === data);
                         return `<span class="badge bg-${priority?.color || 'secondary'}">${priority?.name || data}</span>`;
                     },
-                    title: '優先度'
+                    title: '<span data-i18n="優先度">優先度</span>'
                 },
                 {
                     data: 'status',
@@ -254,7 +254,7 @@ var projectTable;
                         const status = statuses.find(status => status.key === data);
                         return `<span class="badge bg-${status?.color || 'secondary'}">${status?.name || data}</span>`;
                     },
-                    title: '案件状況'
+                    title: '<span data-i18n="案件状況">案件状況</span>'
                 },
                 {
                     data: 'progress',
@@ -268,16 +268,16 @@ var projectTable;
                                 </div>
                                 <small class="text-muted">${data}%</small>`;
                     },
-                    title: '進捗率'
+                    title: '<span data-i18n="進捗率">進捗率</span>'
                 },
-                { data: 'start_date', title: '開始日', render: function(data) {
+                { data: 'start_date', title: '<span data-i18n="開始日">開始日</span>', render: function(data) {
                     if(data) {
                         return moment(data).format('YYYY/MM/DD HH:mm');
                     } else {
                         return '-';
                     }
                 }},
-                { data: 'end_date', title: '終了日', render: function(data) {
+                { data: 'end_date', title: '<span data-i18n="終了日">終了日</span>', render: function(data) {
                     if(data) {
                         return moment(data).format('YYYY/MM/DD HH:mm');
                     } else {
@@ -291,7 +291,7 @@ var projectTable;
                                     <a href="detail.php?id=${row.id}" class="btn btn-sm bg-label-primary"><i class="fa fa-eye"></i></a>
                                 </div>`;
                     },
-                    title: '操作'
+                    title: '<span data-i18n="操作">操作</span>'
                 }
             ],
            
@@ -299,14 +299,14 @@ var projectTable;
             ordering: true,
             responsive: true,
             language: {
-                search: "検索:",
-                lengthMenu: "_MENU_ 件表示",
-                info: " _TOTAL_ 件中 _START_ から _END_ まで表示",
+                search: '<span data-i18n="検索">検索</span>:',
+                lengthMenu: '<span data-i18n="表示">表示</span>: _MENU_',
+                info: '<span data-i18n="合計">合計</span>: _TOTAL_ <span data-i18n="件中">件中</span> _START_ <span data-i18n="から">から</span> _END_ <span data-i18n="まで">まで</span>',
                 paginate: {
-                    first: "先頭",
-                    previous: "前",
-                    next: "次",
-                    last: "最終"
+                    first: '<span data-i18n="先頭">先頭</span>',
+                    previous: '<span data-i18n="前">前</span>',
+                    next: '<span data-i18n="次">次</span>',
+                    last: '<span data-i18n="最終">最終</span>'
                 }
             },
             
@@ -587,17 +587,7 @@ var projectTable;
 
     // Helper function to get initials from name
     function getInitials(name) {
-        if (!name) return '?';
-        // Check if name contains Japanese characters
-        const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
-        if (hasJapanese) {
-            // For Japanese names, take first 2 characters
-            return name.substring(0, 2);
-        } else {
-            // For English names, take first letter of each word
-            const initials = name.split(' ').map(n => n.charAt(0)).join('');
-            return initials.toUpperCase();
-        }
+        return getAvatarName(name);
     }
 
     function decodeHtmlEntities(str) {

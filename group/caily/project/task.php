@@ -189,7 +189,7 @@ if (!$project_id) {
                         </div>
                     </div>
                     <div class="col-2">
-                        <div class="d-flex align-items-center flex-wrap avatar-group" @click="openAssigneeModal(idx)">
+                        <div class="d-flex align-items-center flex-wrap" @click="openAssigneeModal(idx)">
                             <template v-if="inlineTask.assignees && inlineTask.assignees.length">
                                 <template v-for="(userId, i) in inlineTask.assignees.slice(0, 5)">
                                     <div :key="userId" class="avatar me-1">
@@ -261,7 +261,7 @@ if (!$project_id) {
                            :title="getOverdueTooltip(task)"></i>
                     </div>
                     <div class="col-2">
-                        <div class="d-flex align-items-center flex-wrap avatar-group">
+                        <div class="d-flex align-items-center flex-wrap">
                             <template v-if="task.assigned_to">
                                 <template v-for="(userId, i) in task.assigned_to.split(',').slice(0, 5)">
                                     <div :key="userId" class="avatar me-1">

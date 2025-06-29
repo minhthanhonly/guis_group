@@ -9,6 +9,7 @@
 <script src="<?=$root?>assets/vendor/libs/hammer/hammer.js"></script>
 <script src="<?=$root?>assets/vendor/js/menu.js"></script>
 <script src="<?=$root?>assets/js/axios.min.js"></script>
+<script src="<?=$root?>assets/vendor/libs/i18n/i18n.js"></script>
 
 <!-- endbuild -->
 

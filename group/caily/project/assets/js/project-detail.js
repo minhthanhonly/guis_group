@@ -182,6 +182,14 @@ createApp({
             return this.hasPermission('project_comment');
         },
         
+        // Phương thức để dịch label động
+        translateLabel(label) {
+            if (typeof i18next !== 'undefined' && i18next.isInitialized) {
+                return i18next.t(label) || label;
+            }
+            return label;
+        },
+        
         async loadProject() {
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
@@ -591,17 +599,7 @@ createApp({
             member.avatarError = true;
         },
         getInitials(name) {
-            if (!name) return '?';
-            // Check if name contains Japanese characters
-            const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
-            if (hasJapanese) {
-                // For Japanese names, take first 2 characters
-                return name.substring(0, 2);
-            } else {
-                // For English names, take first letter of each word
-                const initials = name.split(' ').map(n => n.charAt(0)).join('');
-                return initials.toUpperCase();
-            }
+            return getAvatarName(name);
         },
         initTooltips() {
             // Dispose previous tooltips to avoid duplicates
@@ -799,7 +797,7 @@ createApp({
                         const whitelist = this.filteredTeams.map(t => ({ value: t.name, id: t.id }));
                         this.tagify = new Tagify(teamInput, {
                             whitelist: whitelist,
-                            enforceWhitelist: true,
+                            enforceWhitelist: false,
                             dropdown: {
                                 maxItems: 20,
                                 enabled: 0,
@@ -1043,7 +1041,7 @@ createApp({
                 const tagify = new Tagify(managerInput, {
                     whitelist: allMembers,
                     maxTags: 10,
-                    enforceWhitelist: true,
+                    enforceWhitelist: false,
                     dropdown: { maxItems: 20, enabled: 0, closeOnSelect: true }
                 });
                 tagify.addTags((this.managers || []).map(m => ({ id: m.user_id, value: m.user_name })));
@@ -1061,7 +1059,7 @@ createApp({
                 const tagify = new Tagify(membersInput, {
                     whitelist: allMembers,
                     maxTags: 20,
-                    enforceWhitelist: true,
+                    enforceWhitelist: false,
                     dropdown: { maxItems: 20, enabled: 0, closeOnSelect: true }
                 });
                 tagify.addTags((this.members || []).map(m => ({ id: m.user_id, value: m.user_name })));

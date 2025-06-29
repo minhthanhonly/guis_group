@@ -881,6 +881,21 @@ function appParse($level, $type, $data, $element) {
   $selected.innerHTML = $string;
 }
 
+function getAvatarName(name) {
+  if (!name) return '?';
+  // Check if name contains Japanese characters
+  const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
+  if (hasJapanese) {
+      // For Japanese names, take first 2 characters
+      return name.substring(0, 2);
+  } else {
+      // For English names, take the last word
+      const words = name.trim().split(' ');
+      const lastWord = words[words.length - 1];
+      return lastWord;
+  }
+}
+
 
 $(function() {
   var select2 = $('.select2');
@@ -894,4 +909,67 @@ $(function() {
       });
     });
   }
+
+  $('.js-change-language').on('click', function() {
+    var language = $(this).data('language');
+    
+    // Sử dụng i18next cho tất cả ngôn ngữ
+    useI18nTranslation(language);
+  });
+
+  // Hàm sử dụng i18next
+  function useI18nTranslation(language) {
+    if (typeof i18next !== 'undefined') {
+      i18next.changeLanguage(language, (err, t) => {
+        if (window.templateCustomizer) {
+          window.templateCustomizer.setLang(language);
+        }
+        if (err) return console.log('something went wrong loading', err);
+        
+        // Cập nhật giao diện
+        let i18nList = document.querySelectorAll('[data-i18n]');
+        i18nList.forEach(function (item) {
+          item.innerHTML = i18next.t(item.dataset.i18n);
+        });
+        
+        // Lưu trạng thái
+        localStorage.setItem('templateCustomizer-' + templateName + '--Lang', language);
+        
+        // Cập nhật trạng thái active trong dropdown
+        updateLanguageDropdownState(language);
+      });
+    }
+  }
+
+  // Hàm cập nhật trạng thái active trong dropdown
+  function updateLanguageDropdownState(language) {
+    // Xóa active class từ tất cả các item
+    document.querySelectorAll('.js-change-language').forEach(function(item) {
+      item.classList.remove('active');
+    });
+    
+    // Thêm active class cho item được chọn
+    const selectedItem = document.querySelector(`.js-change-language[data-language="${language}"]`);
+    if (selectedItem) {
+      selectedItem.classList.add('active');
+    }
+  }
+
+  // Khôi phục trạng thái ngôn ngữ khi tải trang
+  function restoreLanguageState() {
+    const savedLang = localStorage.getItem('templateCustomizer-' + templateName + '--Lang');
+    
+    if (savedLang) {
+      // Khôi phục trạng thái i18next
+     setTimeout(() => {
+      useI18nTranslation(savedLang);
+     }, 100);
+    }
+  }
+
+  // Gọi hàm khôi phục khi trang đã tải xong
+  $(document).ready(function() {
+    restoreLanguageState();
+  });
+
 });

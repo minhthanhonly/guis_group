@@ -1,12 +1,10 @@
 <?php
 
-
+require_once DIR_MODEL.'applicationmodel.php';
 class ApplicationView extends View {
-	
 	var $group = array();
 	var $user = array();
 	var $folder = array();
-	
 	function __construct($hash = null) {
 	
 		if (isset($hash['group']) && is_array($hash['group'])) {
@@ -15,8 +13,10 @@ class ApplicationView extends View {
 		if (isset($hash['group']) && is_array($hash['user'])) {
 			$this->user = $hash['user'];
 		}
-	
+		$appmodel = new ApplicationModel;
+		$_SESSION['isProjectManager'] = $appmodel->findProjectManager();
 	}
+	
 	
 	function permitted($data, $level = 'public') {
 		if($_SESSION['userid'] == 'admin'){

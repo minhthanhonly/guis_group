@@ -1,7 +1,6 @@
 <?php
 
 class ApplicationModel extends Model {
-
 	public $user_list = [];
 	function __construct() {
 		parent::__construct();
@@ -9,8 +8,13 @@ class ApplicationModel extends Model {
 			$this->user_list = $this->findAllActiveUser();
 		}
 	}
+	function findProjectManager(){
+		$this->connect();
+		$query = "SELECT count(id) as count FROM ".DB_PREFIX."user_department WHERE userid = '".$_SESSION['userid']."'";
+		$data = $this->fetchOne($query);
+		return $_SESSION['group'] == ADMIN_GROUP || $data['count'] > 0;
+	}
 	function authorize() {
-		
 		$this->connect();
 		$authorized = false;
 		$argument = func_get_args();
