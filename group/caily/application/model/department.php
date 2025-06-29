@@ -96,11 +96,8 @@ class Department extends ApplicationModel {
         $this->query_update($data, ['id' => $id]);
         
         // Update department members
+        $this->query("DELETE FROM " . DB_PREFIX . "user_department WHERE department_id = " . intval($id));
         if (isset($_POST['members']) && is_array($_POST['members'])) {
-            // First delete existing members
-            $this->query("DELETE FROM " . DB_PREFIX . "user_department WHERE department_id = " . intval($id));
-            
-            // Then add new members
             foreach ($_POST['members'] as $user_id) {
                 $member_data = array(
                     'department_id' => $id,
