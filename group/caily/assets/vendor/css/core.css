@@ -188,13 +188,13 @@
   --bs-form-invalid-border-color: #ff4c51;
 }
 
-:root, [data-bs-theme=light], [data-bs-theme=dark] {
+/* :root, [data-bs-theme=light], [data-bs-theme=dark] {
   --bs-primary: #EB3D63;
   --bs-primary-rgb: 235, 61, 99;
   --bs-primary-bg-subtle: color-mix(in sRGB, var(--bs-paper-bg) 84%, #EB3D63);
   --bs-primary-border-subtle: rgba(235, 61, 99, 0.39);
   --bs-primary-contrast: #fff
-}
+} */
 
 *,
 *::before,

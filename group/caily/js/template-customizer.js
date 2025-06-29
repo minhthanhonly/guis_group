@@ -1210,6 +1210,36 @@ TemplateCustomizer.LANGUAGES = {
     layout_navbar_label: 'Navbar Type',
     direction_label: 'Direction'
   },
+  vi: {
+    panel_header: 'Template Customizer',
+    panel_sub_header: 'Customize and preview in real time',
+    theming_header: 'Theming',
+    color_label: 'Primary Color',
+    theme_label: 'Theme',
+    skin_label: 'Skins',
+    semiDark_label: 'Semi Dark',
+    layout_header: 'Layout',
+    layout_label: 'Menu (Navigation)',
+    layout_header_label: 'Header Types',
+    content_label: 'Content',
+    layout_navbar_label: 'Navbar Type',
+    direction_label: 'Direction'
+  },
+  ja: {
+    panel_header: 'テンプレートカスタマイザー',
+    panel_sub_header: 'リアルタイムでカスタマイズしてプレビュー',
+    theming_header: 'テーマ',
+    color_label: 'プライマリカラー',
+    theme_label: 'テーマ',
+    skin_label: 'スキン',
+    semiDark_label: 'セミダーク',
+    layout_header: 'レイアウト',
+    layout_label: 'メニュー (ナビゲーション)',
+    layout_header_label: 'ヘッダータイプ',
+    content_label: 'コンテンツ',
+    layout_navbar_label: 'ナビゲーションバーの種類',
+    direction_label: '方向'
+  },
   fr: {
     panel_header: 'Modèle De Personnalisation',
     panel_sub_header: 'Personnalisez et prévisualisez en temps réel',

@@ -237,7 +237,7 @@
                       </a>
                     </li>
                     <li>
-                      <a class="dropdown-item js-change-language" href="javascript:void(0);" data-language="fr" data-text-direction="ltr">
+                      <a class="dropdown-item js-change-language" href="javascript:void(0);" data-language="vi" data-text-direction="ltr">
                         <span>Tiếng Việt</span>
                       </a>
                     </li>

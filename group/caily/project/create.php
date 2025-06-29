@@ -6,21 +6,6 @@ $view->heading('プロジェクト作成');
 $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-        <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="#"><span data-i18n="プロジェクト作成">プロジェクト作成</span></a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar" aria-controls="projectNavbar" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="projectNavbar">
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item">
-                <a class="nav-link active" aria-current="page" href="create.php"><span data-i18n="新規作成">新規作成</span></a>
-                </li>
-            </ul>
-            </div>
-        </div>
-    </nav>
 
     <div class="row">
         <!-- Back button -->
@@ -35,7 +20,7 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
             <div class="card edit-mode">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h5 class="card-title"><span data-i18n="基本情報">基本情報</span></h5>
+                        <h5 class="card-title"><span data-i18n="プロジェクト作成">プロジェクト作成</span></h5>
                         <div>
                             <button class="btn btn-success btn-sm me-2" @click="saveProject">
                                 <i class="fa fa-save"></i>
