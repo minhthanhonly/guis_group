@@ -1633,9 +1633,9 @@ createApp({
             const params = new URLSearchParams({
                 category_id: this.project.category_id
             });
-            if (this.project.department_id) {
-                params.append('department_id', this.project.department_id);
-            }
+            // if (this.project.department_id) {
+            //     params.append('department_id', this.project.department_id);
+            // }
             const res = await axios.get(`/api/index.php?model=customer&method=list_companies_by_category&${params.toString()}`);
             if (res.data && res.data.data) {
                 this.companies = res.data.data;
@@ -1649,9 +1649,9 @@ createApp({
             const params = new URLSearchParams({
                 company_name: this.project.company_name
             });
-            if (this.project.department_id) {
-                params.append('department_id', this.project.department_id);
-            }
+            // if (this.project.department_id) {
+            //     params.append('department_id', this.project.department_id);
+            // }
             const res = await axios.get(`/api/index.php?model=customer&method=list_contacts_by_company&${params.toString()}`);
             if (res.data && res.data.data) {
                 this.contacts = res.data.data;
@@ -1950,8 +1950,8 @@ createApp({
             this.loadDepartmentCustomFieldSets();
             // Load companies and contacts for the selected department
             if (this.project && this.project.department_id) {
-                this.loadCompanies();
-                this.loadContacts();
+                this.loadCompaniesByCategory();
+                this.loadContactsByCompany();
             } else {
                 // Clear companies and contacts when no department is selected
                 this.companies = [];

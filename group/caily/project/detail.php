@@ -77,7 +77,7 @@ if (!$project_id) {
                         <div class="row g-3" v-if="project">
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">会社名 <span class="text-danger">*</span></label>
+                                    <label class="form-label">顧客カテゴリー <span class="text-danger">*</span></label>
                                     <template v-if="isEditMode">
                                         <select id="category_id" class="form-select select2" v-model="project.category_id" name="category_id" required @change="onCategoryChange">
                                             <option value="">選択してください</option>
@@ -93,7 +93,7 @@ if (!$project_id) {
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">支店名 <span class="text-danger">*</span></label>
+                                    <label class="form-label">会社名 <span class="text-danger">*</span></label>
                                     <template v-if="isEditMode">
                                         <select id="company_name" class="form-select select2" v-model="project.company_name" name="company_name" required @change="onCompanyChange">
                                             <option value="">選択してください</option>

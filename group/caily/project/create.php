@@ -49,7 +49,7 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                     <div class="row g-3" v-if="project">
                         <div class="col-md-4">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label">会社名 <span class="text-danger">*</span></label>
+                                <label class="form-label">顧客カテゴリー <span class="text-danger">*</span></label>
                                 <select id="category_id" class="form-select select2" v-model="newProject.category_id" name="category_id" required @change="onCategoryChange">
                                     <option value="">選択してください</option>
                                     <option v-for="category in categories" :key="category.id" :value="category.id">
@@ -60,7 +60,7 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label">支店名 <span class="text-danger">*</span></label>
+                                <label class="form-label">会社名 <span class="text-danger">*</span></label>
                                 <select id="company_name" class="form-select select2" v-model="newProject.company_name" name="company_name" required @change="onCompanyChange">
                                     <option value="">選択してください</option>
                                     <option v-for="company in companies" :key="company.company_name" :value="company.company_name">

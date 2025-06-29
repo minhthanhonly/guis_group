@@ -11,6 +11,7 @@ class Customer extends ApplicationModel {
             'company_name_kana' => array(),
             'name' => array(),
             'name_kana' => array(),
+            'branch' => array(),
             'department' => array(),
             'position' => array(),
             'tel' => array(),
@@ -144,6 +145,7 @@ class Customer extends ApplicationModel {
                 'name' => $_POST['name'],
                 'name_kana' => $_POST['name_kana'],
                 'department' => $_POST['department'],
+                'branch' => $_POST['branch'],
                 'position' => $_POST['position'],
                 'tel' => $_POST['tel'],
                 'fax' => $_POST['fax'],
@@ -158,7 +160,7 @@ class Customer extends ApplicationModel {
                 'guis_department' => $guis_department,
                 'status' => $_POST['status'],
                 'created_at' => date('Y-m-d H:i:s'),
-                'created_by' => $_SESSION['user_id'],
+                'created_by' => $_SESSION['userid'],
                 'memo' => $_POST['memo']
             );
             $result = $this->query_insert($data);
@@ -184,6 +186,7 @@ class Customer extends ApplicationModel {
                 'name' => $_POST['name'],
                 'name_kana' => $_POST['name_kana'],
                 'department' => $_POST['department'],
+                'branch' => $_POST['branch'],
                 'position' => $_POST['position'],
                 'tel' => $_POST['tel'],
                 'fax' => $_POST['fax'],
@@ -198,7 +201,7 @@ class Customer extends ApplicationModel {
                 'guis_department' => $guis_department,
                 'status' => $_POST['status'],
                 'updated_at' => date('Y-m-d H:i:s'),
-                'updated_by' => $_SESSION['user_id'],
+                'updated_by' => $_SESSION['userid'],
                 'memo' => $_POST['memo']
             );
             $result = $this->query_update($data, ['id' => $id]);
@@ -383,21 +386,22 @@ class Customer extends ApplicationModel {
             if ($category_id) {
                 $where .= " AND category_id = '$category_id'";
             }
-            if ($department_id) {
-                $where .= " AND FIND_IN_SET('$department_id', guis_department) > 0";
-            }
+            // if ($department_id) {
+            //     $where .= " AND FIND_IN_SET('$department_id', guis_department) > 0";
+            // }
             if ($search) {
                 $where .= " AND (company_name LIKE '%$search%' OR company_name_kana LIKE '%$search%')";
             }
             $where = ltrim($where, ' AND');
 
             $query = sprintf(
-                "SELECT DISTINCT company_name, id
+                "SELECT DISTINCT company_name, MIN(id) as id
                 FROM %scustomer 
                 WHERE %s
                 AND company_name IS NOT NULL 
                 AND company_name != '' 
-                ORDER BY id ASC",
+                GROUP BY company_name
+                ORDER BY company_name ASC",
                 DB_PREFIX,
                 $where
             );
@@ -430,9 +434,9 @@ class Customer extends ApplicationModel {
             if ($company_name) {
                 $where .= " AND company_name = '$company_name'";
             }
-            if ($department_id) {
-                $where .= " AND FIND_IN_SET('$department_id', guis_department) > 0";
-            }
+            // if ($department_id) {
+            //     $where .= " AND FIND_IN_SET('$department_id', guis_department) > 0";
+            // }
             if ($search) {
                 $where .= " AND (name LIKE '%$search%' OR name_kana LIKE '%$search%')";
             }
