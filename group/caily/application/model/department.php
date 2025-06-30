@@ -196,7 +196,7 @@ class Department extends ApplicationModel {
             FROM " . DB_PREFIX . "user_department ud
             JOIN " . DB_PREFIX . "departments d ON ud.department_id = d.id
             WHERE ud.userid = '%s'",
-            intval($userid)
+            $userid
         );
         return $this->fetchAll($query);
     }

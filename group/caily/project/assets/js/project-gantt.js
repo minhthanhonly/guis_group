@@ -85,7 +85,6 @@ $(document).ready(function() {
         },
         async mounted() {
             await this.loadDepartments();
-            await this.loadUserPermissions();
             // Initialize Gantt after Vue has rendered
             this.$nextTick(() => {
                 this.initGantt();
@@ -117,6 +116,24 @@ $(document).ready(function() {
             document.removeEventListener('MSFullscreenChange', this.handleFullscreenChange);
         },
         methods: {
+            async updateProjectDate(task) {
+                try {
+                    const formData = new FormData();
+                    formData.append('id', task.id);
+                    formData.append('start_date', this.formatDateTimeForAPI(task.start_date));
+                    formData.append('end_date', this.formatDateTimeForAPI(task.end_date));
+                    const response = await axios.post('/api/index.php?model=project&method=updateProjectDate', formData);
+                    if (response.data && response.data.success !== false) {
+                        showMessage('プロジェクトの日付更新に完了しました。');
+                    } else {
+                        showMessage('プロジェクトの日付更新に失敗しました。', true);
+                    }
+                } catch (error) {
+                    console.error('Error updating project date:', error);
+                    showMessage('プロジェクトの日付更新に失敗しました。', true);
+                }
+            },
+
             async loadDepartments() {
                 try {
                     const response = await $.ajax({
@@ -150,11 +167,11 @@ $(document).ready(function() {
                         type: 'GET',
                         data: {
                             model: 'department',
-                            method: 'get_user_permissions'
+                            method: 'get_user_permission_by_department',
+                            department_id: this.selectedDepartment.id
                         }
                     });
-                    
-                    if (Array.isArray(response) && response.length > 0) {
+                    if (Object.keys(response).length > 0) {
                         this.userPermissions = response || {};
                     }
                 } catch (error) {
@@ -163,7 +180,7 @@ $(document).ready(function() {
             },
             
             hasPermission(permission) {
-                return this.userPermissions[permission] || false;
+                return this.userPermissions[permission] == 1 || false;
             },
             
             canAddProject() {
@@ -171,15 +188,18 @@ $(document).ready(function() {
             },
             
             canEditProject() {
+                if(USER_ROLE == 'administrator') return true;
                 return this.hasPermission('project_edit');
             },
             
             canDeleteProject() {
+                if(USER_ROLE == 'administrator') return true;
                 return this.hasPermission('project_delete');
             },
             
             canManageProject() {
-                return this.hasPermission('project_manage');
+                if(USER_ROLE == 'administrator') return true;
+                return this.hasPermission('project_manager');
             },
             
             canCommentProject() {
@@ -199,7 +219,7 @@ $(document).ready(function() {
             
             async loadProjects() {
                 if (!this.selectedDepartment) return;
-                
+                await this.loadUserPermissions();
                 this.loading = true;
                 try {
                     const response = await $.ajax({
@@ -336,13 +356,6 @@ $(document).ready(function() {
                         endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
                     }
                     
-                    // Debug logging
-                    console.log('Project dates:', project.id, {
-                        original_start: project.start_date,
-                        parsed_start: startDate,
-                        original_end: project.end_date,
-                        parsed_end: endDate
-                    });
                     
                     // Get status color
                     const status = statuses.find(s => s.key === project.status);
@@ -351,7 +364,14 @@ $(document).ready(function() {
                     // Get priority color
                     const priority = priorities.find(p => p.key === project.priority);
                     const priorityColor = priority ? priority.color : 'secondary';
-                    
+                    const manager_ids = [];
+                    const manager_names = [];
+                    project.manager_id.split('|').forEach(item => {
+                        const id = item.split(':')[0];
+                        manager_ids.push(id || 'N/A');
+                        const name = item.split(':')[1];
+                        manager_names.push(name || 'N/A');
+                    });
                     
                     const task = {
                         id: project.id,
@@ -362,15 +382,17 @@ $(document).ready(function() {
                         parent: 0,
                         priority: project.priority || 'medium',
                         status: project.status || 'draft',
-                        manager: project.manager_name || 'N/A',
+                        manager: manager_names.join(', ') || 'N/A',
                         customer: project.customer_name || 'N/A',
-                        company: project.company_name.replace('株式会社', '') || 'N/A',
+                        company: project.company_name.replace(/株式会社/gi, '').replace(/有限会社/gi, '') || 'N/A',
                         building_type: project.building_type || 'N/A',
                         building_size: project.building_size || 'N/A',
                         project_order_type: project.project_order_type || 'N/A',
                         description: project.description || '',
                         statusColor: statusColor,
-                        priorityColor: priorityColor
+                        priorityColor: priorityColor,
+                        isManager: manager_ids.includes(USER_AUTH_ID) || this.canManageProject(),
+                        manager_ids: manager_ids
                     };
                     
                     tasks.push(task);
@@ -545,7 +567,7 @@ $(document).ready(function() {
 
                 // Ensure end date is after start date
                 if (endDate <= startDate) {
-                    alert('終了日は開始日より後である必要があります。');
+                    showMessage('終了日は開始日より後である必要があります。', true);
                     return;
                 }
 
@@ -574,6 +596,12 @@ $(document).ready(function() {
                 const day = String(date.getDate()).padStart(2, '0');
                 return `${year}-${month}-${day}`;
             },
+
+           
+            formatDateTimeForAPI(datetime) {
+                return moment(datetime).format('YYYY-MM-DD HH:mm');
+            },
+            
             
             // Fullscreen Toggle
             toggleFullscreen() {
@@ -655,6 +683,9 @@ $(document).ready(function() {
                     return;
                 }
                 
+                // Store reference to Vue component for use in Gantt events
+                const vueComponent = this;
+                
                 // // Configure Gantt
                 gantt.config.date_format = "%m月%d日";
                 gantt.config.scale_unit = "week";
@@ -705,6 +736,16 @@ $(document).ready(function() {
                         return false;
                     }
                 });
+
+                gantt.attachEvent("onLightboxSave", function(id, task, is_new){
+                    if(!task.isManager){
+                        showMessage('プロジェクトの編集権限がありません。', true);
+                        return false;
+                    }
+                    // Get reference to Vue component
+                    vueComponent.updateProjectDate(task);
+                    return true;
+                })
                 
                 // // Set reasonable date range
                 
@@ -826,6 +867,7 @@ $(document).ready(function() {
                             <p class="m-0"><strong>建物種類:</strong> ${task.building_type}</p>
                             <p class="m-0"><strong>建物規模:</strong> ${task.building_size}</p>
                             <p class="m-0"><strong>受注形態:</strong> ${task.project_order_type}</p>
+                            <p class="m-0"><strong>管理:</strong> ${task.manager}</p>
                             <p class="m-0"><strong>進捗:</strong> ${Math.round(task.progress * 100)}%</p>
                             <p class="m-0"><strong>状況:</strong> ${statuses.find(s => s.key === task.status).name}</p>
                             <p class="m-0"><strong>優先度:</strong> ${priorities.find(p => p.key === task.priority).name}</p>
@@ -864,16 +906,9 @@ $(document).ready(function() {
                 try {
                     // // Add custom CSS first
                    this.addGanttStyles();
-                    
                     // // Initialize Gantt
                     gantt.init("gantt_container");
                     this.ganttInitialized = true;
-                    
-                    // Load initial data if department is selected
-                    if (this.selectedDepartment) {
-                        this.loadProjects();
-                    }
-
                    
                 } catch (error) {
                     console.error('Error initializing Gantt:', error);
@@ -908,6 +943,17 @@ $(document).ready(function() {
                         opacity: 0.8;
                         z-index: 10;
                     }
+                    /* Overdue projects */
+                    .gantt-overdue .gantt_task_line { 
+                        border-color: var(--bs-danger); 
+                        border-width: 3px; 
+                        border-style: dashed; 
+                    }
+                    .gantt-overdue .gantt_task_content {
+                        background-color: var(--bs-danger);
+                        color: white;
+                    }
+
                     /* Status colors for task bars */
                     .gantt-status-info .gantt_task_content { 
                         background-color: var(--bs-info); 
@@ -952,16 +998,7 @@ $(document).ready(function() {
                         border-width: 2px; 
                     }
                     
-                    /* Overdue projects */
-                    .gantt-overdue .gantt_task_line { 
-                        border-color: var(--bs-danger); 
-                        border-width: 3px; 
-                        border-style: dashed; 
-                    }
-                    .gantt-overdue .gantt_task_content {
-                        background-color: var(--bs-danger) !important;
-                        color: white;
-                    }
+                    
                     
                    
                     

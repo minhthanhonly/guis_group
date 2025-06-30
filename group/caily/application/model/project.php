@@ -78,7 +78,7 @@ class Project extends ApplicationModel {
         if (isset($_GET['status']) && $_GET['status'] != 'all') {
             $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
         } else {
-            $whereArr[] = "p.is_deleted != 1";
+            $whereArr[] = "p.status != 'deleted'";
         }
 
         // Add search condition
@@ -175,17 +175,17 @@ class Project extends ApplicationModel {
         if (isset($_GET['status'])) {
             if ($_GET['status'] == 'all') {
                 // For 'all' status, only exclude deleted projects
-                $whereArr[] = "p.is_deleted != 1";
+                $whereArr[] = "p.status NOT IN ('deleted', 'draft')";
             } else if ($_GET['status'] == 'active') {
                 // For 'active' status, exclude deleted and draft projects
-                $whereArr[] = "p.is_deleted != 1 AND p.status NOT IN ('deleted', 'draft')";
+                $whereArr[] = "p.status NOT IN ('deleted', 'draft', 'completed', 'cancelled')";
             } else {
                 // For specific status
                 $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
             }
         } else {
             // Default: exclude deleted and draft projects (active projects)
-            $whereArr[] = "p.is_deleted != 1 AND p.status NOT IN ('deleted', 'draft')";
+            $whereArr[] = "AND p.status NOT IN ('deleted', 'draft')";
         }
 
         $where = implode(" AND ", $whereArr);
@@ -205,9 +205,7 @@ class Project extends ApplicationModel {
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
-             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
-            (SELECT GROUP_CONCAT(pm.user_id) FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id,
-            (SELECT u.realname FROM " . DB_PREFIX . "user u WHERE u.id = p.created_by) as manager_name
+             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
@@ -556,6 +554,27 @@ class Project extends ApplicationModel {
         }
         
         return $result;
+    }
+
+    function updateProjectDate() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $start_date = isset($_POST['start_date']) ? $_POST['start_date'] : '';
+        $end_date = isset($_POST['end_date']) ? $_POST['end_date'] : '';
+        if (!$id || !$start_date || !$end_date) return [
+            'status' => 'error',
+            'error' => 'No project id or start date or end date'
+        ];
+        $data = array(
+            'start_date' => $start_date,
+            'end_date' => $end_date,
+            'updated_at' => date('Y-m-d H:i:s')
+        );
+        $result = $this->query_update($data, ['id' => $id]);
+        if ($result) {
+            return ['status' => 'success'];
+        } else {
+            return ['status' => 'error', 'error' => 'Update failed'];
+        }
     }
 
     function updatePriority($params = null) {
