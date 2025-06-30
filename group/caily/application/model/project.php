@@ -143,6 +143,85 @@ class Project extends ApplicationModel {
         );
     }
 
+    function listForGantt() {
+        $whereArr = [];
+        
+        // Add permission check
+        $user_id = $_SESSION['id'];
+        $is_department_manager = false;
+        if (isset($_GET['department_id'])) {
+            $department_id = $_GET['department_id'];
+            $query = sprintf(
+                "SELECT COUNT(id) as count FROM " . DB_PREFIX . "user_department WHERE userid = '%s' AND department_id = %d AND (project_manager = 1 OR project_director = 1)",
+                $_SESSION['userid'],
+                $department_id);
+            $is_department_manager = $this->fetchOne($query)['count'] > 0;
+        }
+
+        if ($_SESSION['authority'] != 'administrator' && !$is_department_manager) {
+            $whereArr[] = sprintf(
+                "(p.created_by = %d OR EXISTS (
+                    SELECT 1 FROM " . DB_PREFIX . "project_members pm 
+                    WHERE pm.project_id = p.id AND pm.user_id = %d
+                ))",
+                $user_id,
+                $user_id
+            );
+        }
+
+        if (isset($_GET['department_id'])) {
+            $whereArr[] = sprintf("p.department_id = %d", intval($_GET['department_id']));
+        }
+        if (isset($_GET['status'])) {
+            if ($_GET['status'] == 'all') {
+                // For 'all' status, only exclude deleted projects
+                $whereArr[] = "p.is_deleted != 1";
+            } else if ($_GET['status'] == 'active') {
+                // For 'active' status, exclude deleted and draft projects
+                $whereArr[] = "p.is_deleted != 1 AND p.status NOT IN ('deleted', 'draft')";
+            } else {
+                // For specific status
+                $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
+            }
+        } else {
+            // Default: exclude deleted and draft projects (active projects)
+            $whereArr[] = "p.is_deleted != 1 AND p.status NOT IN ('deleted', 'draft')";
+        }
+
+        $where = implode(" AND ", $whereArr);
+        if (!empty($where)) {
+            $where = " WHERE " . $where;
+        }
+
+        // Get data for Gantt chart (all projects, no pagination)
+        $query = sprintf(
+            "SELECT p.*, d.name as department_name,
+            c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
+            CONCAT(gc.name, ' ', gc.title) as customer_name,
+            (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
+             FROM " . DB_PREFIX . "project_members pm 
+             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
+             WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
+            (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
+             FROM " . DB_PREFIX . "project_members pm 
+             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
+             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
+            (SELECT GROUP_CONCAT(pm.user_id) FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id,
+            (SELECT u.realname FROM " . DB_PREFIX . "user u WHERE u.id = p.created_by) as manager_name
+            FROM {$this->table} p 
+            LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+            LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+            LEFT JOIN " . DB_PREFIX . "customer gc ON gc.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+            %s
+            ORDER BY p.start_date ASC, p.created_at DESC",
+            $where
+        );
+
+        $data = $this->fetchAll($query);
+
+        return $data;
+    }
+
     private function escape($str) {
         return $this->quote($str);
     }

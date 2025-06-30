@@ -18,9 +18,14 @@ $view->heading('プロジェクト管理');
                         <a href="#" class="nav-link" @click="viewProjects(department)" >{{ department.name }}</a>
                     </li>
                 </ul>
-                <a v-if="canAddProject()" :href="createUrl" class="btn btn-primary">
-                    <i class="fa fa-plus me-1"></i> <span data-i18n="新規プロジェクト">新規プロジェクト</span>
-                </a>
+                <div class="d-flex gap-2">
+                    <a v-if="canAddProject()" :href="createUrl" class="btn btn-primary">
+                        <i class="fa fa-plus me-1"></i> <span data-i18n="新規プロジェクト">新規プロジェクト</span>
+                    </a>
+                    <a href="project_gantt.php" class="btn btn-info">
+                        <i class="fa fa-chart-bar me-1"></i> <span data-i18n="ガントチャート">ガントチャート</span>
+                    </a>
+                </div>
             </div>
         </div>
     </nav>

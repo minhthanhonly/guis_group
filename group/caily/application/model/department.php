@@ -190,12 +190,12 @@ class Department extends ApplicationModel {
     }
 
     function get_user_permissions() {
-        $userid = $_GET['userid'];
+        $userid = $_SESSION['userid'];
         $query = sprintf(
             "SELECT ud.*, d.name as department_name, d.id as department_id
             FROM " . DB_PREFIX . "user_department ud
             JOIN " . DB_PREFIX . "departments d ON ud.department_id = d.id
-            WHERE ud.userid = %d",
+            WHERE ud.userid = '%s'",
             intval($userid)
         );
         return $this->fetchAll($query);

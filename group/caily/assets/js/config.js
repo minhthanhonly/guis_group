@@ -81,7 +81,7 @@ if (typeof TemplateCustomizer !== 'undefined') {
     // defaultSemiDark: true,
     // defaultContentLayout: 'wide',
     // defaultHeaderType: 'static',
-    // defaultMenuCollapsed: true,
+    defaultMenuCollapsed: true,
     // defaultNavbarType: 'static',
     // defaultTextDir: 'rtl',
     // defaultFooterFixed: false,
