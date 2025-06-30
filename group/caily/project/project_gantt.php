@@ -81,14 +81,14 @@ $view->heading('プロジェクトガントチャート');
                 </div>
                 
                 <!-- Zoom Controls -->
-                <div class="btn-group me-2">
+                <!-- <div class="btn-group me-2">
                     <button class="btn btn-outline-secondary btn-sm" @click="zoomOut" title="ズームアウト">
                         <i class="fa fa-search-minus"></i>
                     </button>
                     <button class="btn btn-outline-secondary btn-sm" @click="zoomIn" title="ズームイン">
                         <i class="fa fa-search-plus"></i>
                     </button>
-                </div>
+                </div> -->
                 
                 <!-- Fullscreen Button -->
                 <button class="btn btn-outline-secondary btn-sm me-2" @click="toggleFullscreen" title="フルスクリーン">

@@ -245,17 +245,21 @@ $(document).ready(function() {
                     
                     const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
                     const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
-                    console.log('minDate:', minDate);
-                    console.log('maxDate:', maxDate);
+                    
+                    // Calculate 1 week ago from today
+                    const today = new Date();
+                    const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    
+                    // Use the earlier of: 1 week ago or the earliest project date
+                    const viewStart = oneWeekAgo;
                     
                     // Add some padding to the view
                     const padding = 7 * 24 * 60 * 60 * 1000; // 7 days
-                    const viewStart = new Date(minDate.getTime() - padding);
                     const viewEnd = new Date(maxDate.getTime() + padding);
                     
                     // Set the view range using proper DHTMLX methods
-                    gantt.config.min_date = viewStart;
-                    gantt.config.max_date = viewEnd;
+                    gantt.config.start_date = viewStart;
+                    gantt.config.end_date = viewEnd;
                     gantt.render();
                     
                     // Initialize date inputs
@@ -264,13 +268,15 @@ $(document).ready(function() {
                     console.log('Gantt view range:', {
                         minDate: minDate,
                         maxDate: maxDate,
+                        oneWeekAgo: oneWeekAgo,
                         viewStart: viewStart,
                         viewEnd: viewEnd
                     });
                 } else {
                     // Set default range if no data
                     const today = new Date();
-                    const startDate = new Date(today.getFullYear(), today.getMonth(), 1); // Start of current month
+                    const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 week ago
+                    const startDate = oneWeekAgo; // Start from 1 week ago
                     const endDate = new Date(today.getFullYear(), today.getMonth() + 2, 0); // End of next month
                     
                     gantt.config.min_date = startDate;
@@ -280,6 +286,19 @@ $(document).ready(function() {
                     // Initialize date inputs
                     this.updateDateInputs(startDate, endDate);
                 }
+
+                // Add current time marker
+                gantt.addMarker({
+                    start_date: new Date(),
+                    css: "current_time_marker",
+                    title: "現在時刻",
+                    text: "現在"
+                });
+                
+                // Update marker position every minute
+                setInterval(function() {
+                    gantt.updateMarker("current_time_marker");
+                }, 6000);
             },
             
             convertProjectsToGanttData(projects) {
@@ -483,8 +502,8 @@ $(document).ready(function() {
                 const newMaxDate = new Date(newMinDate.getTime() + newRange);
                 
                 // Set new date range
-                gantt.config.min_date = newMinDate;
-                gantt.config.max_date = newMaxDate;
+                gantt.config.start_date = newMinDate;
+                gantt.config.end_date = newMaxDate;
                 gantt.render();
                 
                 // Update date inputs
@@ -500,8 +519,8 @@ $(document).ready(function() {
                 const newMaxDate = new Date(newMinDate.getTime() + newRange);
                 
                 // Set new date range
-                gantt.config.min_date = newMinDate;
-                gantt.config.max_date = newMaxDate;
+                gantt.config.start_date = newMinDate;
+                gantt.config.end_date = newMaxDate;
                 gantt.render();
                 
                 // Update date inputs
@@ -530,9 +549,13 @@ $(document).ready(function() {
                     return;
                 }
 
-                gantt.config.min_date = startDate;
-                gantt.config.max_date = endDate;
+                // Set the date range using DHTMLX Gantt methods
+                gantt.config.start_date = startDate;
+                gantt.config.end_date = endDate;
+                
+                // Force the Gantt to recalculate and render
                 gantt.render();
+                
             },
             
             updateDateInputs(startDate, endDate) {
@@ -641,6 +664,7 @@ $(document).ready(function() {
                 ];
                 gantt.plugins({
                     tooltip: true,
+                    marker: true ,
                     //quick_info: true
                 });
                 gantt.config.quickinfo_buttons=["icon_edit"];
@@ -692,6 +716,8 @@ $(document).ready(function() {
                 
                 gantt.config.row_height = 30;
 	            gantt.config.grid_resize = true;
+
+              
                 
                 // // Set work time
                 // gantt.config.work_time = true;
@@ -841,6 +867,8 @@ $(document).ready(function() {
                     if (this.selectedDepartment) {
                         this.loadProjects();
                     }
+
+                   
                 } catch (error) {
                     console.error('Error initializing Gantt:', error);
                     this.ganttInitialized = false;
@@ -866,6 +894,15 @@ $(document).ready(function() {
                         text-align: left !important;
                         padding-left: 10px !important;
                     }
+                    
+                    /* Current time marker */
+                    .current_time_marker {
+                        background-color: #ff0000;
+                        width: 2px;
+                        opacity: 0.8;
+                        z-index: 10;
+                    }
+                    
                     /* Status colors for task bars */
                     .gantt-status-info .gantt_task_content { 
                         background-color: #17a2b8; 
