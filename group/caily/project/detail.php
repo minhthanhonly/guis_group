@@ -54,10 +54,10 @@ if (!$project_id) {
                                 <button v-if="canCommentProject()" class="btn btn-outline-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalComment" title="コメントを見る">
                                     <i class="fa fa-comment"></i>
                                 </button>
-                                <button v-if="!isEditMode && (isManager || canAddProject())" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
+                                <button v-if="!isEditMode && canAddProject()" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
                                     <i class="fa fa-copy"></i>
                                 </button>
-                                <button v-if="!isEditMode && (isManager || canEditProject())" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode">
+                                <button v-if="!isEditMode && canEditProject()" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode">
                                     <i class="fa fa-pencil-alt"></i>
                                 </button>
                                 <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject">
@@ -66,7 +66,7 @@ if (!$project_id) {
                                 <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit">
                                     <i class="fa fa-times"></i>
                                 </button>  
-                                <button v-if="!isEditMode && (isManager || canDeleteProject())" class="btn btn-outline-danger btn-sm" @click="deleteProject">
+                                <button v-if="!isEditMode && canDeleteProject()" class="btn btn-outline-danger btn-sm" @click="deleteProject">
                                     <i class="fa fa-trash"></i>
                                 </button>
                             </div>
@@ -192,7 +192,7 @@ if (!$project_id) {
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="優先度">優先度</span></label>
                                 <div>
-                                    <div class="btn-group" v-if="isManager">
+                                    <div class="btn-group" v-if="canEditProject()">
                                         <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
                                                 :class="getPriorityButtonClass(project.priority)"
                                                 id="priorityDropdown"
@@ -306,7 +306,7 @@ if (!$project_id) {
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <div>
-                                    <div class="btn-group" v-if="isManager">
+                                    <div class="btn-group" v-if="canEditProject()">
                                         <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
                                                 :class="getStatusButtonClass(project.status)"
                                                 id="statusDropdown"
@@ -331,7 +331,7 @@ if (!$project_id) {
                                 <label class="form-label"><span data-i18n="進捗率">進捗率</span></label>
                                 <div class="position-relative">
                                     <input
-                                        v-if="isManager"
+                                        v-if="canEditProject()"
                                         type="range"
                                         min="0"
                                         max="100"

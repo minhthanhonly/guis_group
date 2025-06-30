@@ -170,15 +170,19 @@ createApp({
             return this.hasPermission('project_add');
         },
         canEditProject() {
+            if(this.isManager) return true;
             return this.hasPermission('project_edit');
         },
         canDeleteProject() {
+            if(this.isManager) return true;
             return this.hasPermission('project_delete');
         },
         canManageProject() {
+            if(this.isManager) return true;
             return this.hasPermission('project_manager');
         },
         canCommentProject() {
+            if(this.isManager) return true;
             return this.hasPermission('project_comment');
         },
         
@@ -1072,7 +1076,7 @@ createApp({
             }
         },
         toggleEditMode() {
-            if (!this.isManager) {
+            if (!this.canEditProject()) {
                 showMessage('管理者のみプロジェクトを編集できます。', true);
                 return;
             }

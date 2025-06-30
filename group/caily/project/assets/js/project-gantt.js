@@ -124,7 +124,7 @@ $(document).ready(function() {
                         type: 'GET',
                         data: {
                             model: 'department',
-                            method: 'list'
+                            method: 'listByUser'
                         }
                     });
                     
@@ -679,15 +679,13 @@ $(document).ready(function() {
                     {name: "time", type: "time", map_to: "auto", time_format: ["%Y", "%m", "%d", "%H:%i"]}
                 ];
                 gantt.config.buttons_right = ["gantt_save_btn", "gantt_cancel_btn"];
-                gantt.config.buttons_left = [];
+                gantt.config.buttons_left = ["open_project_btn"];
                 gantt.i18n.setLocale('jp');
-                // gantt.i18n.setLocale({
-                //     labels: {
-                //        gantt_save_btn: "保存",
-                //        gantt_cancel_btn: "キャンセル",
-                //        gantt_delete_btn: "削除"
-                //     }
-                // });
+                gantt.i18n.setLocale({
+                    labels: {
+                        open_project_btn: "プロジェクト詳細",
+                    }
+                });
 
                 gantt.templates.scale_cell_class = function (date) {
                     if (date.getDay() == 0 || date.getDay() == 6) {
@@ -699,6 +697,14 @@ $(document).ready(function() {
                         return "weekend"
                     }
                 };
+
+                gantt.attachEvent("onLightboxButton", function(button_id, node, e){
+                    if(button_id == "open_project_btn"){
+                        var id = gantt.getState().lightbox;
+                        window.open(`detail.php?id=${id}`, '_blank');
+                        return false;
+                    }
+                });
                 
                 // // Set reasonable date range
                 
@@ -708,7 +714,7 @@ $(document).ready(function() {
                 
                 // // Enable features
                 gantt.config.drag_progress = false;
-                // gantt.config.drag_resize = true;
+                gantt.config.drag_resize = false;
                 gantt.config.drag_move = false;
                 gantt.config.drag_links = false;
                 gantt.config.drag_plan = false;
@@ -821,8 +827,8 @@ $(document).ready(function() {
                             <p class="m-0"><strong>建物規模:</strong> ${task.building_size}</p>
                             <p class="m-0"><strong>受注形態:</strong> ${task.project_order_type}</p>
                             <p class="m-0"><strong>進捗:</strong> ${Math.round(task.progress * 100)}%</p>
-                            <p class="m-0"><strong>状況:</strong> ${task.status}</p>
-                            <p class="m-0"><strong>優先度:</strong> ${task.priority}</p>
+                            <p class="m-0"><strong>状況:</strong> ${statuses.find(s => s.key === task.status).name}</p>
+                            <p class="m-0"><strong>優先度:</strong> ${priorities.find(p => p.key === task.priority).name}</p>
                             <p class="m-0"><strong>開始日:</strong> ${gantt.templates.tooltip_date_format(start)}</p>
                             <p class="m-0"><strong>終了日:</strong> ${gantt.templates.tooltip_date_format(end)}</p>
                         </div>
