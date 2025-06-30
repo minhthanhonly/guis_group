@@ -127,10 +127,9 @@ class Task extends ApplicationModel {
 
     function edit() {
         $id = $_POST['id'];
-        $currentUserId = $_SESSION['user_id'];
         
         if (isset($_POST['status']) || isset($_POST['progress'])) {
-            if (!$this->checkPermission($id, $currentUserId)) {
+            if (!$this->checkPermission($_POST['project_id'], $id)) {
                return [
                 'status' => 'error',
                 'message' => 'このタスクを更新する権限がありません'
@@ -341,25 +340,41 @@ class Task extends ApplicationModel {
         return $this->fetchOne($query);
     }
 
-    private function checkPermission($taskId, $userId) {
-        $task = $this->getById($taskId);
-        if (!$task) return false;
+    private function checkPermission($projectId, $taskId = null) {
+        $project = null;
+        $project = $this->fetchOne(
+            "SELECT * FROM " . DB_PREFIX . "projects p" .  " WHERE p.id = " . intval($projectId)
+        );
         
-        $isAssigned = in_array($userId, explode(',', $task['assigned_to']));
-        $isManager = $_SESSION['authority'] == 'administrator';
+        $task = $this->getById($taskId);
+
+        if (!$project || !$task) return false;
+        
+        $currentUserIdNumber = $_SESSION['id'];
+        $currentUserId = $_SESSION['userid'];
+        $isAssigned = in_array($currentUserIdNumber, explode(',', $task['assigned_to']));
+        $isProjectManager = $_SESSION['authority'] == 'administrator';
         
         // If not manager by projects.manager_id, check groupware_project_members
-        if (!$isManager) {
+        if (!$isProjectManager) {
             $memberCheck = $this->fetchOne(
                 "SELECT COUNT(*) as count FROM " . DB_PREFIX . "project_members " .
                 "WHERE project_id = " . intval($task['project_id']) . " " .
-                "AND user_id = " . intval($userId) . " " .
+                "AND user_id = '" . $currentUserIdNumber . "' " .
                 "AND role = 'manager'"
             );
-            $isManager = ($memberCheck && $memberCheck['count'] > 0);
+            $isProjectManager = ($memberCheck && $memberCheck['count'] > 0);
+        }
+        if(!$isProjectManager){
+            $departmentCheck = $this->fetchOne(
+                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "user_department ud " .
+                "WHERE ud.department_id = " . intval($project['department_id']) . " " .
+                "AND ud.userid = '" . $currentUserId . "' AND ud.project_manager = 1"
+            );
+            $isProjectManager = ($departmentCheck && $departmentCheck['count'] > 0);
         }
         
-        return $isAssigned || $isManager;
+        return $isAssigned || $isProjectManager;
     }
 
     function updateOrder() {

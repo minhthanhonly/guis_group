@@ -910,12 +910,12 @@ $(function() {
     });
   }
 
-  $('.js-change-language').on('click', function() {
-    var language = $(this).data('language');
-    
-    // Sử dụng i18next cho tất cả ngôn ngữ
-    useI18nTranslation(language);
-  });
+  // $('.js-change-language').on('click', function() {
+  //   var language = $(this).data('language');
+  //   const savedLang = localStorage.getItem('templateCustomizer-' + templateName + '--Lang');
+  //   if(savedLang == language) return;
+  //   window.location.reload();
+  // });
 
   // Hàm sử dụng i18next
   function useI18nTranslation(language) {

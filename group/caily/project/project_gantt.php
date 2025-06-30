@@ -33,7 +33,7 @@ $view->heading('プロジェクトガントチャート');
     <div class="card">
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">ガントチャート - {{ selectedDepartment ? selectedDepartment.name : '部署を選択してください' }} (アクティブプロジェクト)</h5>
+                <h5 class="mb-0">ガントチャート - {{ selectedDepartment ? selectedDepartment.name : '部署を選択してください' }}</h5>
                
                 <div class="d-flex gap-2 align-items-center">
                     <!-- Status Filter -->
