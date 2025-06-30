@@ -639,10 +639,44 @@ $(document).ready(function() {
                 gantt.config.subscales = [
                     { unit: "day", step: 1, date: "%d日" }
                 ];
+                gantt.plugins({
+                    tooltip: true,
+                    //quick_info: true
+                });
+                gantt.config.quickinfo_buttons=["icon_edit"];
+                gantt.config.drag_lightbox = true;
+                gantt.config.drag_timeline = {
+                    ignore:".gantt_task_line, .gantt_task_link",
+                    useKey: false,
+                    render: false
+                };
+                gantt.config.lightbox.sections = [
+                   // {name:"description", height:38, map_to:"text", type:"textarea",focus:true},
+                    {name: "time", type: "time", map_to: "auto", time_format: ["%Y", "%m", "%d", "%H:%i"]}
+                ];
+                gantt.config.buttons_right = ["gantt_save_btn", "gantt_cancel_btn"];
+                gantt.config.buttons_left = [];
+                gantt.i18n.setLocale('jp');
+                // gantt.i18n.setLocale({
+                //     labels: {
+                //        gantt_save_btn: "保存",
+                //        gantt_cancel_btn: "キャンセル",
+                //        gantt_delete_btn: "削除"
+                //     }
+                // });
+
+                gantt.templates.scale_cell_class = function (date) {
+                    if (date.getDay() == 0 || date.getDay() == 6) {
+                        return "weekend";
+                    }
+                };
+                gantt.templates.timeline_cell_class = function (item, date) {
+                    if (date.getDay() == 0 || date.getDay() == 6) {
+                        return "weekend"
+                    }
+                };
                 
                 // // Set reasonable date range
-                const today = new Date();
-              
                 
                 // gantt.config.start_on_monday = false;
                 // gantt.config.work_time = true;
@@ -651,16 +685,17 @@ $(document).ready(function() {
                 // // Enable features
                 gantt.config.drag_progress = false;
                 // gantt.config.drag_resize = true;
-                // gantt.config.drag_move = true;
+                gantt.config.drag_move = false;
                 gantt.config.drag_links = false;
                 gantt.config.drag_plan = false;
+
+                
+                gantt.config.row_height = 30;
+	            gantt.config.grid_resize = true;
                 
                 // // Set work time
                 // gantt.config.work_time = true;
                 // gantt.config.skip_off_time = true;
-                
-                // // Set row height
-                // gantt.config.row_height = 40;
                 
                 // // Enable horizontal scroll
                 // gantt.config.scroll_size = 20;
@@ -699,24 +734,24 @@ $(document).ready(function() {
                 gantt.config.columns = [
                     { name: "text", label: "プロジェクト名", width: 200, tree: true, min_width: 150 },
                     { name: "company", label: "会社", width: 120, min_width: 100 },
-                    { name: "start_date", label: "開始日", width: 100, align: "center", min_width: 80, template: function(obj) {
+                    { name: "start_date", label: "開始日", width: 100, align: "left", min_width: 80, template: function(obj) {
                         if (!obj.start_date) return 'N/A';
                         const date = new Date(obj.start_date);
                         return date.getMonth() + 1 + '月' + date.getDate() + '日';
                     }},
-                    { name: "end_date", label: "終了日", width: 100, align: "center", min_width: 80, template: function(obj) {
+                    { name: "end_date", label: "終了日", width: 100, align: "left", min_width: 80, template: function(obj) {
                         if (!obj.end_date) return 'N/A';
                         const date = new Date(obj.end_date);
                         return date.getMonth() + 1 + '月' + date.getDate() + '日';
                     }},
-                    { name: "progress", label: "進捗", width: 80, align: "center", min_width: 60, template: function(obj) {
+                    { name: "progress", label: "進捗", width: 80, align: "left", min_width: 60, template: function(obj) {
                         return Math.round(obj.progress * 100) + "%";
                     }},
-                    { name: "status", label: "状況", width: 100, align: "center", min_width: 80, template: function(obj) {
+                    { name: "status", label: "状況", width: 100, align: "left", min_width: 80, template: function(obj) {
                         const status = statuses.find(s => s.key === obj.status);
                         return status ? status.name : obj.status;
                     }},
-                    { name: "priority", label: "優先度", width: 100, align: "center", min_width: 80, template: function(obj) {
+                    { name: "priority", label: "優先度", width: 100, align: "left", min_width: 80, template: function(obj) {
                         const priority = priorities.find(p => p.key === obj.priority);
                         return priority ? priority.name : obj.priority;
                     }}
@@ -823,7 +858,9 @@ $(document).ready(function() {
                         position: relative !important;
                         overflow: hidden !important;
                     }
-                    
+                    .weekend {
+                        background: var(--dhx-gantt-base-colors-background-alt);
+                    }
                   
                     .gantt_task_content{
                         text-align: left !important;
