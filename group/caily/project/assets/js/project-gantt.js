@@ -675,7 +675,7 @@ $(document).ready(function() {
                     render: false
                 };
                 gantt.config.lightbox.sections = [
-                   // {name:"description", height:38, map_to:"text", type:"textarea",focus:true},
+                    // {name:"description", height:38, map_to:"text", type:"textarea",focus:true},
                     {name: "time", type: "time", map_to: "auto", time_format: ["%Y", "%m", "%d", "%H:%i"]}
                 ];
                 gantt.config.buttons_right = ["gantt_save_btn", "gantt_cancel_btn"];
@@ -811,27 +811,27 @@ $(document).ready(function() {
                 // };
                 
                 // // Customize tooltip
-                // gantt.templates.tooltip_text = function(start, end, task) {
-                //     return `
-                //         <div class="gantt-tooltip">
-                //             <h6>${task.text}</h6>
-                //             <p><strong>担当者:</strong> ${task.manager}</p>
-                //             <p><strong>顧客:</strong> ${task.customer}</p>
-                //             <p><strong>会社:</strong> ${task.company}</p>
-                //             <p><strong>建物種類:</strong> ${task.building_type}</p>
-                //             <p><strong>建物規模:</strong> ${task.building_size}</p>
-                //             <p><strong>受注形態:</strong> ${task.project_order_type}</p>
-                //             <p><strong>進捗:</strong> ${Math.round(task.progress * 100)}%</p>
-                //             <p><strong>開始日:</strong> ${gantt.templates.tooltip_date_format(start)}</p>
-                //             <p><strong>終了日:</strong> ${gantt.templates.tooltip_date_format(end)}</p>
-                //             ${task.description ? `<p><strong>メモ:</strong> ${task.description}</p>` : ''}
-                //         </div>
-                //     `;
-                // };
+                gantt.templates.tooltip_text = function(start, end, task) {
+                    return `
+                        <div class="gantt-tooltip">
+                            <h6>${task.text}</h6>
+                            <p class="m-0"><strong>顧客:</strong> ${task.customer}</p>
+                            <p class="m-0"><strong>会社:</strong> ${task.company}</p>
+                            <p class="m-0"><strong>建物種類:</strong> ${task.building_type}</p>
+                            <p class="m-0"><strong>建物規模:</strong> ${task.building_size}</p>
+                            <p class="m-0"><strong>受注形態:</strong> ${task.project_order_type}</p>
+                            <p class="m-0"><strong>進捗:</strong> ${Math.round(task.progress * 100)}%</p>
+                            <p class="m-0"><strong>状況:</strong> ${task.status}</p>
+                            <p class="m-0"><strong>優先度:</strong> ${task.priority}</p>
+                            <p class="m-0"><strong>開始日:</strong> ${gantt.templates.tooltip_date_format(start)}</p>
+                            <p class="m-0"><strong>終了日:</strong> ${gantt.templates.tooltip_date_format(end)}</p>
+                        </div>
+                    `;
+                };
                 
-                // gantt.templates.tooltip_date_format = function(date) {
-                //     return gantt.date.date_to_str("%Y年%m月%d日")(date);
-                // };
+                gantt.templates.tooltip_date_format = function(date) {
+                    return gantt.date.date_to_str("%Y年%m月%d日 %H:%i")(date);
+                };
                 
                 // // Add click event to open project detail
                 // gantt.attachEvent("onTaskClick", function(id, e) {
@@ -897,64 +897,63 @@ $(document).ready(function() {
                     
                     /* Current time marker */
                     .current_time_marker {
-                        background-color: #ff0000;
+                        background-color: var(--bs-danger);
                         width: 2px;
                         opacity: 0.8;
                         z-index: 10;
                     }
-                    
                     /* Status colors for task bars */
                     .gantt-status-info .gantt_task_content { 
-                        background-color: #17a2b8; 
+                        background-color: var(--bs-info); 
                         color: white;
                     }
                     .gantt-status-warning .gantt_task_content { 
-                        background-color: #ffc107; 
+                        background-color: var(--bs-warning); 
                         color: #212529;
                     }
                     .gantt-status-primary .gantt_task_content { 
-                        background-color: #007bff; 
+                        background-color: var(--bs-primary); 
                         color: white;
                     }
                     .gantt-status-success .gantt_task_content { 
-                        background-color: #28a745; 
+                        background-color: var(--bs-success); 
                         color: white;
                     }
                     .gantt-status-danger .gantt_task_content { 
-                        background-color: #dc3545; 
+                        background-color: var(--bs-danger); 
                         color: white;
                     }
                     .gantt-status-secondary .gantt_task_content { 
-                        background-color: #6c757d; 
+                        background-color: var(--bs-secondary); 
                         color: white;
                     }
                     
                     /* Priority border colors */
                     .gantt-priority-danger .gantt_task_line { 
-                        border-color: #dc3545; 
+                        border-color: var(--bs-danger); 
                         border-width: 3px; 
                     }
                     .gantt-priority-warning .gantt_task_line { 
-                        border-color: #ffc107; 
+                        border-color: var(--bs-warning); 
                         border-width: 3px; 
                     }
                     .gantt-priority-primary .gantt_task_line { 
-                        border-color: #007bff; 
+                        border-color: var(--bs-primary); 
                         border-width: 2px; 
                     }
                     .gantt-priority-secondary .gantt_task_line { 
-                        border-color: #6c757d; 
+                        border-color: var(--bs-secondary); 
                         border-width: 2px; 
                     }
                     
                     /* Overdue projects */
                     .gantt-overdue .gantt_task_line { 
-                        border-color: #dc3545; 
+                        border-color: var(--bs-danger); 
                         border-width: 3px; 
                         border-style: dashed; 
                     }
                     .gantt-overdue .gantt_task_content {
-                        background-color: #dc3545 !important;
+                        background-color: var(--bs-danger) !important;
                         color: white;
                     }
                     
