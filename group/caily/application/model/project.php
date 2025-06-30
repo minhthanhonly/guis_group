@@ -401,23 +401,15 @@ class Project extends ApplicationModel {
     }
 
 
-    function delete($id) {
-        // Check if project has tasks or members
-        // $query = sprintf(
-        //     "SELECT COUNT(*) as count FROM " . DB_PREFIX . "tasks WHERE project_id = %d",
-        //     intval($id)
-        // );
-        // $tasks = $this->fetchOne($query)['count'];
-
-        // if ($tasks > 0) {
-        //     throw new Exception('このプロジェクトにはタスクが存在するため、削除できません。');
-        // }
-        
-        // Xóa project members
-        // $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id));
-        
-        // Xóa project
-        return $this->query_update(['status' => 'deleted'], ['id' => $id]);
+    function delete() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) return ['status' => 'error', 'error' => 'No project id'];
+        $result = $this->query_update(['status' => 'deleted'], ['id' => $id]);
+        if ($result) {
+            return ['status' => 'success'];
+        } else {
+            return ['status' => 'error', 'error' => 'Delete failed'];
+        }
     }
 
     function getMembers($params = null) {

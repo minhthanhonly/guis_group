@@ -402,24 +402,34 @@ createApp({
                 });
             } catch (error) {
                 console.error('Error adding comment:', error);
-                alert('コメントの追加に失敗しました。');
+                showMessage('コメントの追加に失敗しました。', true);
             }
         },
         async deleteProject() {
-            if (!confirm('本当にこのプロジェクトを削除しますか？')) {
-                return;
-            }
-            try {
-                const formData = new FormData();
-                formData.append('model', 'project');
-                formData.append('method', 'delete');
-                formData.append('id', this.projectId);
-                await axios.post('/api/index.php', formData);
-                alert('プロジェクトが削除されました。');
-                window.location.href = 'index.php';
-            } catch (error) {
-                console.error('Error deleting project:', error);
-                alert('プロジェクトの削除に失敗しました。');
+            const swal = await Swal.fire({
+                title: '本当にこのプロジェクトを削除しますか？',
+                icon: 'warning',
+                showCancelButton: true,
+            });
+            if (swal.isConfirmed) {
+                try {
+                    const formData = new FormData();
+                    formData.append('id', this.projectId);
+                    const response = await axios.post('/api/index.php?model=project&method=delete', formData);
+                    if(response.data.status == 'success'){
+                        await Swal.fire({
+                            title: 'プロジェクトが削除されました。',
+                            icon: 'success',
+                        }).then(() => {
+                            window.location.href = 'index.php';
+                        });
+                    } else {
+                        showMessage('プロジェクトの削除に失敗しました。', true);
+                    }
+                } catch (error) {
+                    console.error('Error deleting project:', error);
+                    showMessage('プロジェクトの削除に失敗しました。', true);
+                }
             }
         },
         copyProject() {

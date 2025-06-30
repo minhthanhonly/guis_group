@@ -48,6 +48,11 @@
                     <div data-i18n="マイタスク">マイタスク</div>
                   </a>
                 </li>
+                <li class="menu-item <?php if($directory == 'project' && $page == 'gantt') echo 'active'; ?>">
+                  <a href="<?=$root?>project/project_gantt.php" class="menu-link">
+                    <div data-i18n="ガントチャート">ガントチャート</div>
+                  </a>
+                </li>
                 <?php if($_SESSION['isProjectManager']){ ?>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
                   <a href="<?=$root?>project/custom_fields.php" class="menu-link">
@@ -55,6 +60,7 @@
                   </a>
                 </li>
                 <?php } ?>
+                
               </ul>
             </li>
 
