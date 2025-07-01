@@ -43,21 +43,27 @@ CREATE TABLE IF NOT EXISTS `groupware_tasks` (
   `parent_id` int(11) DEFAULT NULL,
   `title` varchar(255) NOT NULL,
   `description` text,
-  `status` enum('new','in_progress','review','completed') DEFAULT 'new',
+  `status` enum('todo','in-progress','confirming','paused','completed','cancelled') DEFAULT 'todo',
   `priority` enum('low','medium','high','urgent') DEFAULT 'medium',
   `assigned_to` varchar(50) DEFAULT NULL,
   `created_by` varchar(50) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `start_date` date DEFAULT NULL,
   `due_date` date DEFAULT NULL,
+  `actual_end_date` date DEFAULT NULL,
   `progress` int(11) DEFAULT 0,
+  `category_id` int(11) DEFAULT NULL,
   `estimated_hours` decimal(10,2) DEFAULT 0.00,
   `actual_hours` decimal(10,2) DEFAULT 0.00,
+  `position` int(11) DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `idx_project_id` (`project_id`),
   KEY `idx_parent_id` (`parent_id`),
   KEY `idx_assigned_to` (`assigned_to`),
   KEY `idx_status` (`status`),
+  KEY `idx_start_date` (`start_date`),
+  KEY `idx_due_date` (`due_date`),
   FOREIGN KEY (`project_id`) REFERENCES `groupware_projects` (`id`) ON DELETE CASCADE,
   FOREIGN KEY (`parent_id`) REFERENCES `groupware_tasks` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -216,4 +222,19 @@ CREATE TABLE IF NOT EXISTS `notification_user` (
     PRIMARY KEY (`notification_id`, `user_id`),
     FOREIGN KEY (`notification_id`) REFERENCES `notification`(`id`) ON DELETE CASCADE,
     INDEX (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Task Links table (for Gantt chart dependencies)
+CREATE TABLE IF NOT EXISTS `groupware_task_links` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `source_task_id` int(11) NOT NULL,
+  `target_task_id` int(11) NOT NULL,
+  `link_type` enum('0','1','2','3') DEFAULT '0' COMMENT '0=Finish to Start, 1=Start to Start, 2=Finish to Finish, 3=Start to Finish',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_task_link` (`source_task_id`, `target_task_id`),
+  KEY `idx_source_task_id` (`source_task_id`),
+  KEY `idx_target_task_id` (`target_task_id`),
+  FOREIGN KEY (`source_task_id`) REFERENCES `groupware_tasks` (`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`target_task_id`) REFERENCES `groupware_tasks` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4; 

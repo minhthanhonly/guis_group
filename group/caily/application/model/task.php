@@ -369,6 +369,30 @@ class Task extends ApplicationModel {
         return $this->fetchOne($query);
     }
 
+    function getByProject($params = null) {
+        // Handle both direct project_id parameter and params array from API
+        if (is_array($params)) {
+            $project_id = isset($params['project_id']) ? intval($params['project_id']) : 0;
+        } else {
+            $project_id = intval($params);
+        }
+        
+        if (!$project_id) {
+            return [];
+        }
+        
+        $query = sprintf(
+            "SELECT t.*, u.realname as assigned_to_name,
+            (SELECT COUNT(*) FROM {$this->table} WHERE parent_id = t.id) as subtask_count
+            FROM {$this->table} t 
+            LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
+            WHERE t.project_id = %d 
+            ORDER BY t.position, t.created_at ASC",
+            $project_id
+        );
+        return $this->fetchAll($query);
+    }
+
     private function checkPermission($projectId, $taskId = null) {
         $project = null;
         $project = $this->fetchOne(
@@ -557,5 +581,163 @@ class Task extends ApplicationModel {
         }
         
         return false;
+    }
+
+    function updateTaskDate() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $start_date = isset($_POST['start_date']) ? $_POST['start_date'] : null;
+        $due_date = isset($_POST['due_date']) ? $_POST['due_date'] : null;
+        $progress = isset($_POST['progress']) ? intval($_POST['progress']) : null;
+        
+        if (!$id) {
+            return [
+                'success' => false,
+                'message' => 'タスクIDが指定されていません'
+            ];
+        }
+        
+        $data = [
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+        
+        if ($start_date !== null) {
+            $data['start_date'] = $start_date;
+        }
+        if ($due_date !== null) {
+            $data['due_date'] = $due_date;
+        }
+        if ($progress !== null) {
+            $data['progress'] = $progress;
+        }
+        
+        $result = $this->query_update($data, ['id' => $id]);
+        
+        if ($result) {
+            return [
+                'success' => true,
+                'message' => 'タスクが更新されました'
+            ];
+        } else {
+            return [
+                'success' => false,
+                'message' => 'タスクの更新に失敗しました'
+            ];
+        }
+    }
+
+    function updateTaskParent() {
+        $task_id = isset($_POST['task_id']) ? intval($_POST['task_id']) : 0;
+        $parent_id = isset($_POST['parent_id']) ? (empty($_POST['parent_id']) ? null : intval($_POST['parent_id'])) : null;
+        
+        if (!$task_id) {
+            return [
+                'success' => false,
+                'message' => 'タスクIDが指定されていません'
+            ];
+        }
+        
+        // Get current task info
+        $task = $this->getById($task_id);
+        if (!$task) {
+            return [
+                'success' => false,
+                'message' => 'タスクが見つかりません'
+            ];
+        }
+        
+        // If setting a parent, check for circular reference
+        if ($parent_id) {
+            if ($task_id == $parent_id) {
+                return [
+                    'success' => false,
+                    'message' => '自分自身を親タスクに設定することはできません'
+                ];
+            }
+            
+            // Check if parent exists and is in the same project
+            $parentTask = $this->getById($parent_id);
+            if (!$parentTask) {
+                return [
+                    'success' => false,
+                    'message' => '親タスクが見つかりません'
+                ];
+            }
+            
+            if ($parentTask['project_id'] != $task['project_id']) {
+                return [
+                    'success' => false,
+                    'message' => '異なるプロジェクトのタスクを親に設定することはできません'
+                ];
+            }
+            
+            // Check for circular reference (parent would become child of current task)
+            if ($this->isDescendant($parent_id, $task_id)) {
+                return [
+                    'success' => false,
+                    'message' => '循環参照を防ぐため、この操作は許可されていません'
+                ];
+            }
+        }
+        
+        // Update the task's parent_id
+        $data = [
+            'parent_id' => $parent_id,
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+        
+        $result = $this->query_update($data, ['id' => $task_id]);
+        
+        if ($result) {
+            return [
+                'success' => true,
+                'message' => $parent_id ? 'サブタスクが作成されました' : 'サブタスクが解除されました'
+            ];
+        } else {
+            return [
+                'success' => false,
+                'message' => 'タスクの更新に失敗しました'
+            ];
+        }
+    }
+
+    // Lấy tất cả links của project
+    function getLinksByProject($params = null) {
+        $project_id = is_array($params) ? intval($params['project_id']) : intval($params);
+        if (!$project_id) return [];
+        $query = "SELECT l.* FROM " . DB_PREFIX . "task_links l
+                  INNER JOIN " . DB_PREFIX . "tasks t ON l.source_task_id = t.id
+                  WHERE t.project_id = $project_id";
+        return $this->fetchAll($query);
+    }
+
+    // Thêm link
+    function addTaskLink() {
+        $source = intval($_POST['source_task_id']);
+        $target = intval($_POST['target_task_id']);
+        $type = isset($_POST['link_type']) ? $_POST['link_type'] : '0';
+        if (!$source || !$target) return ['success' => false, 'message' => 'Thiếu thông tin'];
+        $data = [
+            'source_task_id' => $source,
+            'target_task_id' => $target,
+            'link_type' => $type,
+            'created_at' => date('Y-m-d H:i:s')
+        ];
+        $this->table = DB_PREFIX . 'task_links';
+        $result = $this->query_insert($data);
+        $this->table = DB_PREFIX . 'tasks';
+        return $result ? ['success' => true] : ['success' => false];
+    }
+
+    // Xóa link
+    function deleteTaskLink() {
+        $source = intval($_POST['source_task_id']);
+        $target = intval($_POST['target_task_id']);
+        $this->table = DB_PREFIX . 'task_links';
+        $result = $this->query_delete([
+            'source_task_id' => $source,
+            'target_task_id' => $target
+        ]);
+        $this->table = DB_PREFIX . 'tasks';
+        return $result ? ['success' => true] : ['success' => false];
     }
 } 
