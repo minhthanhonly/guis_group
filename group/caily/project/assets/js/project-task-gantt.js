@@ -185,6 +185,7 @@ $(document).ready(function() {
                 const formData = new FormData();
                 formData.append('source_task_id', link.source);
                 formData.append('target_task_id', link.target);
+                formData.append('project_id', this.projectId);
                 formData.append('link_type', link.type);
                 await axios.post('/api/index.php?model=task&method=addTaskLink', formData);
             },
@@ -192,6 +193,7 @@ $(document).ready(function() {
                 const formData = new FormData();
                 formData.append('source_task_id', link.source);
                 formData.append('target_task_id', link.target);
+                formData.append('project_id', this.projectId);
                 await axios.post('/api/index.php?model=task&method=deleteTaskLink', formData);
             },
 
@@ -210,7 +212,7 @@ $(document).ready(function() {
             },
 
             updateGanttData() {
-                if (gantt && this.ganttInitialized) {
+                if (gantt) {
                     const ganttData = this.convertTasksToGanttData(this.filteredTasks);
                     gantt.clearAll();
                     gantt.parse({
@@ -225,7 +227,18 @@ $(document).ready(function() {
                     if (!this.startDate || !this.endDate) {
                         this.setDefaultDateRange();
                     }
+                    
+                    gantt.addMarker({
+                        start_date: new Date(),
+                        css: "current_time_marker",
+                        title: "現在時刻",
+                        text: "現在"
+                    });
+                    setInterval(function() {
+                        gantt.updateMarker("current_time_marker");
+                    }, 6000);
                 }
+                
             },
 
             convertTasksToGanttData(tasks) {
@@ -251,13 +264,13 @@ $(document).ready(function() {
 
                 // Thêm task project ở trên cùng
                 ganttTasks.push({
-                    id: 'project',
+                    id: 1,
                     text: this.projectInfo.name || 'プロジェクト',
                     type: 'project',
                     start_date: projectStart,
                     end_date: projectEnd,
                     progress: 0,
-                    parent: 0,
+                    parent: null,
                     open: true,
                     status: '',
                     priority: '',
@@ -265,7 +278,7 @@ $(document).ready(function() {
                     priorityColor: 'primary'
                 });
 
-                // Thêm các task con, nếu parent_id null thì parent là 'project'
+                // Thêm các task con, nếu parent_id null thì parent là 1
                 tasks.forEach(task => {
                     const statusObj = statuses.find(s => s.key === task.status);
                     const priorityObj = priorities.find(p => p.key === task.priority);
@@ -275,7 +288,7 @@ $(document).ready(function() {
                         start_date: this.parseDate(task.start_date),
                         end_date: this.parseDate(task.due_date),
                         progress: task.progress || 0,
-                        parent: task.parent_id ? task.parent_id : 'project',
+                        parent: task.parent_id ? task.parent_id : 1,
                         priority: task.priority || 'medium',
                         status: task.status || 'todo',
                         type: this.getTaskType(task),
@@ -431,49 +444,66 @@ $(document).ready(function() {
             },
 
             setMonthScale() {
+                if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'month';
-                if (gantt && this.ganttInitialized) {
-                    gantt.config.scale_unit = 'month';
-                    gantt.config.date_scale = '%F %Y';
-                    gantt.render();
-                }
+                gantt.config.scale_unit = "month";
+                gantt.config.date_scale = "%m月";
+                gantt.config.subscales = [
+                    { unit: "week", step: 1, date: "%d日" }
+                ];
+                gantt.render();
             },
-
+            
             setWeekScale() {
+                if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'week';
-                if (gantt && this.ganttInitialized) {
-                    gantt.config.scale_unit = 'week';
-                    gantt.config.date_scale = '%M %d';
-                    gantt.render();
-                }
+                gantt.config.scale_unit = "week";
+                gantt.config.date_scale = "%m月";
+                gantt.config.subscales = [
+                    { unit: "day", step: 1, date: "%d日" }
+                ];
+                gantt.render();
             },
-
+            
             setDayScale() {
-                this.currentScale = 'day';
-                if (gantt && this.ganttInitialized) {
-                    gantt.config.scale_unit = 'day';
-                    gantt.config.date_scale = '%d %M';
-                    gantt.render();
-                }
+                if (!gantt || !this.ganttInitialized) return;
+                this.currentScale = 'hour';
+                gantt.config.scale_unit = "hour";
+                gantt.config.date_scale = "%m月%d日";
+                gantt.config.subscales = [
+                    { unit: "minute", step: 30, date: "%H:%i" }
+                ];
+                gantt.render();
             },
 
             changeDates() {
-                const startInput = document.querySelector('.start_date');
-                const endInput = document.querySelector('.end_date');
+                if (!gantt || !this.ganttInitialized) return;
                 
-                if (startInput && endInput) {
-                    const startDate = new Date(startInput.value);
-                    const endDate = new Date(endInput.value);
-                    
-                    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
-                        this.startDate = startDate;
-                        this.endDate = endDate;
-                        
-                        if (gantt && this.ganttInitialized) {
-                            gantt.setDateRange(startDate, endDate);
-                        }
-                    }
+                const startDateEl = document.querySelector(".start_date");
+                const endDateEl = document.querySelector(".end_date");
+                
+                if (!startDateEl || !endDateEl) return;
+                
+                const startDate = new Date(startDateEl.value);
+                const endDate = new Date(endDateEl.value);
+
+                if (!+startDate || !+endDate) {
+                    return;
                 }
+
+                // Ensure end date is after start date
+                if (endDate <= startDate) {
+                    showMessage('終了日は開始日より後である必要があります。', true);
+                    return;
+                }
+
+                // Set the date range using DHTMLX Gantt methods
+                gantt.config.start_date = startDate;
+                gantt.config.end_date = endDate;
+                
+                // Force the Gantt to recalculate and render
+                gantt.render();
+                
             },
 
             updateDateInputs(startDate, endDate) {
@@ -562,7 +592,8 @@ $(document).ready(function() {
                     {name: "time", type: "time", map_to: "auto", time_format: ["%Y", "%m", "%d", "%H:%i"]}
                 ];
                 
-                gantt.config.buttons_right = ["gantt_save_btn", "gantt_cancel_btn"];
+                gantt.config.buttons_left = ["gantt_save_btn", "gantt_cancel_btn"];
+                gantt.config.buttons_right = [];
                 gantt.i18n.setLocale('jp');
                 
                 // Weekend highlighting
@@ -618,19 +649,15 @@ $(document).ready(function() {
                         const status = statuses.find(s => s.key === obj.status);
                         return status ? status.name : obj.status;
                     }},
-                    { name: "start_date", label: "開始日", width: 100, align: "left", min_width: 80, template: function(obj) {
-                        if (!obj.start_date) return 'N/A';
-                        const date = new Date(obj.start_date);
-                        return date.getMonth() + 1 + '月' + date.getDate() + '日';
-                    }},
-                    { name: "end_date", label: "期限日", width: 100, align: "left", min_width: 80, template: function(obj) {
-                        if (!obj.end_date) return 'N/A';
-                        const date = new Date(obj.end_date);
-                        return date.getMonth() + 1 + '月' + date.getDate() + '日';
-                    }},
                     { name: "priority", label: "優先度", width: 100, align: "left", min_width: 80, template: function(obj) {
                         const priority = priorities.find(p => p.key === obj.priority);
                         return priority ? priority.name : obj.priority;
+                    }},
+                    { name: "start_date", label: "開始日", width: 140, align: "left", min_width: 120, template: (obj) => {
+                        return this.formatDateTimeFull(obj.start_date);
+                    }},
+                    { name: "end_date", label: "期限日", width: 140, align: "left", min_width: 120, template: (obj) =>  {
+                        return this.formatDateTimeFull(obj.end_date);
                     }},
                     { name: "progress", label: "進捗", width: 80, align: "left", min_width: 60, template: function(obj) {
                         return Math.round(obj.progress * 100) + "%";
@@ -660,13 +687,13 @@ $(document).ready(function() {
                 };
                 
                 // Customize tooltip
-                gantt.templates.tooltip_text = function(start, end, task) {
+                gantt.templates.tooltip_text = (start, end, task) => {
                     return `
                         <div class="gantt-tooltip">
                             <div class="gantt-tooltip-title">${task.text}</div>
                             <div class="gantt-tooltip-content">
-                                <div>開始: ${gantt.templates.tooltip_date_format(start)}</div>
-                                <div>終了: ${gantt.templates.tooltip_date_format(end)}</div>
+                                <div>開始: ${this.formatDateTimeFull(start)}</div>
+                                <div>終了: ${this.formatDateTimeFull(end)}</div>
                                 <div>進捗: ${Math.round(task.progress * 100)}%</div>
                                 <div>ステータス: ${statuses.find(s => s.key === task.status)?.name || task.status}</div>
                                 <div>優先度: ${priorities.find(p => p.key === task.priority)?.name || task.priority}</div>
@@ -675,8 +702,8 @@ $(document).ready(function() {
                     `;
                 };
                 
-                gantt.templates.tooltip_date_format = function(date) {
-                    return date.getMonth() + 1 + '月' + date.getDate() + '日';
+                gantt.templates.tooltip_date_format = (date) => {
+                    return this.formatDateTimeFull(date);
                 };
                 
                 // Event handlers
@@ -703,23 +730,11 @@ $(document).ready(function() {
                 // Initialize Gantt
                 gantt.init('gantt_container');
                 
-                // Load data
-                if (this.filteredTasks.length > 0) {
-                    const ganttData = this.convertTasksToGanttData(this.filteredTasks);
-                    gantt.parse({
-                        data: ganttData.data,
-                        links: (this.ganttLinks || []).map(link => ({
-                            id: link.id,
-                            source: link.source_task_id,
-                            target: link.target_task_id,
-                            type: link.link_type
-                        }))
-                    });
-                    this.setDefaultDateRange();
-                }
-                
+                this.updateGanttData();
                 this.ganttInitialized = true;
                 this.addGanttStyles();
+
+                
             },
 
             async updateTaskInDatabase(task) {
@@ -770,6 +785,13 @@ $(document).ready(function() {
                 // Add custom styles for better appearance - same as project-gantt
                 const style = document.createElement('style');
                 style.textContent = `
+                    /* Current time marker */
+                    .current_time_marker {
+                        background-color: var(--bs-danger);
+                        width: 2px;
+                        opacity: 0.8;
+                        z-index: 10;
+                    }
                     /* Weekend styling */
                     .gantt_scale_cell.weekend {
                         background-color: #f8f9fa;
@@ -863,6 +885,18 @@ $(document).ready(function() {
                     }
                 `;
                 document.head.appendChild(style);
+            },
+
+            formatDateTimeFull(datetime) {
+                if (!datetime) return '';
+                const d = new Date(datetime);
+                const y = d.getFullYear();
+                const m = (d.getMonth() + 1).toString().padStart(2, '0');
+                const day = d.getDate().toString().padStart(2, '0');
+                const h = d.getHours().toString().padStart(2, '0');
+                const min = d.getMinutes().toString().padStart(2, '0');
+                // Bạn có thể đổi sang dạng 'YYYY-MM-DD HH:mm' hoặc 'YYYY年MM月DD日 HH:mm'
+                return `${m}月${day}日 ${h}:${min}`;
             }
         }
     }).mount('#app');

@@ -705,19 +705,20 @@ class Task extends ApplicationModel {
         $project_id = is_array($params) ? intval($params['project_id']) : intval($params);
         if (!$project_id) return [];
         $query = "SELECT l.* FROM " . DB_PREFIX . "task_links l
-                  INNER JOIN " . DB_PREFIX . "tasks t ON l.source_task_id = t.id
-                  WHERE t.project_id = $project_id";
+                  WHERE l.project_id = $project_id";
         return $this->fetchAll($query);
     }
 
     // Thêm link
     function addTaskLink() {
+        $project_id = intval($_POST['project_id']);
         $source = intval($_POST['source_task_id']);
         $target = intval($_POST['target_task_id']);
         $type = isset($_POST['link_type']) ? $_POST['link_type'] : '0';
         if (!$source || !$target) return ['success' => false, 'message' => 'Thiếu thông tin'];
         $data = [
             'source_task_id' => $source,
+            'project_id' => $project_id,
             'target_task_id' => $target,
             'link_type' => $type,
             'created_at' => date('Y-m-d H:i:s')
@@ -732,10 +733,12 @@ class Task extends ApplicationModel {
     function deleteTaskLink() {
         $source = intval($_POST['source_task_id']);
         $target = intval($_POST['target_task_id']);
+        $project_id = intval($_POST['project_id']);
         $this->table = DB_PREFIX . 'task_links';
         $result = $this->query_delete([
             'source_task_id' => $source,
-            'target_task_id' => $target
+            'target_task_id' => $target,
+            'project_id' => $project_id
         ]);
         $this->table = DB_PREFIX . 'tasks';
         return $result ? ['success' => true] : ['success' => false];
