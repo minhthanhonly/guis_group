@@ -52,6 +52,7 @@ const TaskApp = createApp({
                 title: '',
                 priority: 'medium',
                 status: 'todo',
+                start_date: '',
                 due_date: '',
                 assigned_to: ''
             },
@@ -321,6 +322,7 @@ const TaskApp = createApp({
                 title: '',
                 priority: 'medium',
                 status: 'todo',
+                start_date: '',
                 due_date: '',
                 progress: 0,
                 assignees: []
@@ -390,18 +392,15 @@ const TaskApp = createApp({
             }
         },
         
-        async deleteTask(id) {
+        async deleteTask(task) {
             if (!confirm('本当にこのタスクを削除しますか？')) {
                 return;
             }
             
             try {
                 const formData = new FormData();
-                formData.append('model', 'task');
-                formData.append('method', 'delete');
-                formData.append('id', id);
-                
-                const response = await axios.post('/api/index.php', formData);
+                formData.append('id', task.id);
+                const response = await axios.post('/api/index.php?model=task&method=delete', formData);
                 
                 if (response.data) {
                     this.showMessage('タスクを削除しました。');
@@ -529,6 +528,7 @@ const TaskApp = createApp({
                 id: task.id,
                 title: task.title,
                 priority: task.priority,
+                start_date: task.start_date,
                 due_date: task.due_date,
                 assignees: task.assigned_to ? task.assigned_to.split(',') : [],
                 status: task.status,
@@ -564,6 +564,7 @@ const TaskApp = createApp({
                 formData.append('project_id', this.projectId);
                 formData.append('title', inlineTask.title);
                 formData.append('priority', inlineTask.priority);
+                formData.append('start_date', inlineTask.start_date);
                 formData.append('due_date', inlineTask.due_date);
                 formData.append('assigned_to', inlineTask.assignees.join(','));
                 formData.append('status', inlineTask.status);

@@ -417,4 +417,17 @@ li.storageprevious {
 
 .avatar-initial{
 	font-size: 75% !important;
+	color: var(--bs-border-primary) !important;
+}
+.task-title{
+	box-sizing: border-box;
+	padding-right: 10px;
+	width: 90%;
+}
+.task-title .fa-expand-alt{
+	opacity: 0;
+	transition: opacity 0.3s ease-in-out;
+}
+.task-title:hover .fa-expand-alt{
+	opacity: 1;
 }

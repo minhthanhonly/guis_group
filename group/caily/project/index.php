@@ -208,7 +208,7 @@ $view->heading('プロジェクト管理');
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3 form-control-validation">
-                                        <label class="form-label">終了日</label>
+                                        <label class="form-label">期限日</label>
                                         <input type="date" class="form-control" v-model="newProject.end_date" id="end_date" name="end_date" required>
                                         <div class="invalid-feedback"></div>
                                     </div>

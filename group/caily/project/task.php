@@ -12,7 +12,7 @@ if (!$project_id) {
 <div id="app" class="container-fluid mt-4" v-cloak>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="#">タスク管理</a>
+            <a class="navbar-brand fw-bold d-none" href="#">タスク管理</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -38,22 +38,7 @@ if (!$project_id) {
     <div class="mt-4">
         <!-- ボー lọc -->
         <div class="row mb-4">
-            <div class="col-md-3 mb-2">
-                <select class="form-select" v-model="filterStatus">
-                    <option value="">全てのステータス</option>
-                    <option value="todo">未開始</option>
-                    <option value="in-progress">進行中</option>
-                    <option value="completed">完了</option>
-                </select>
-            </div>
-            <div class="col-md-3 mb-2">
-                <select class="form-select" v-model="filterPriority">
-                    <option value="">全ての優先度</option>
-                    <option value="high">高</option>
-                    <option value="medium">中</option>
-                    <option value="low">低</option>
-                </select>
-            </div>
+           
             <!-- <div class="col-md-3 mb-2">
                 <input type="text" class="form-control" v-model="filterDueDate" placeholder="yyyy-mm-dd HH:ii">
             </div>
@@ -135,7 +120,24 @@ if (!$project_id) {
         </div> -->
         <!-- Tiêu đề các cột và nút tạo task -->
          
-        <div class="d-flex align-items-center justify-content-end mb-2">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex align-items-center gap-2">
+            <select class="form-select" v-model="filterStatus">
+                <option value="">全てのステータス</option>
+                <option value="todo">未開始</option>
+                <option value="in-progress">進行中</option>
+                <option value="confirming">確認中</option>
+                <option value="paused">一時停止</option>
+                <option value="completed">完了</option>
+                <option value="cancelled">キャンセル</option>
+            </select>
+            <select class="form-select" v-model="filterPriority">
+                <option value="">全ての優先度</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+            </select>
+            </div>
             <button class="btn btn-primary ms-2" @click="openNewTaskModal">
                 <i class="bi bi-plus"></i> 新規タスク
             </button>
@@ -143,12 +145,12 @@ if (!$project_id) {
         
         <div class="d-flex align-items-center justify-content-between mb-2">
             <div class="row w-100 g-0 align-items-center fw-bold text-primary bg-light">
-                <div class="col-3 py-2 px-2">タスク</div>
+                <div class="col-2 py-2 px-2">タスク</div>
                 <div class="col-1 py-2 pe-2">優先度</div>
-                <div class="col-2 py-2 pe-2">期限日</div>
+                <div class="col-2 py-2 pe-2">期間</div>
                 <div class="col-2 py-2 pe-2">担当者</div>
                 <div class="col-1 py-2 pe-2">ステータス</div>
-                <div class="col-2 py-2 pe-2">進捗</div>
+                <div class="col-1 py-2 pe-2">進捗</div>
                 <div class="col-1 py-2">操作</div>
             </div>
         </div>
@@ -160,7 +162,7 @@ if (!$project_id) {
             </div>
             <div v-for="(inlineTask, idx) in inlineTasks" :key="'inline-' + idx" class="card mb-2">
                 <div class="row g-0 align-items-center">
-                    <div class="col-3">
+                    <div class="col-2">
                         <div class="p-2">
                             <input type="text" class="form-control inline-task-input" v-model="inlineTask.title" placeholder="タスク名" required>
                         </div>
@@ -184,8 +186,9 @@ if (!$project_id) {
                         </div>
                     </div>
                     <div class="col-2">
-                        <div class="py-2 pe-2">
-                            <input type="text" class="form-control datetimepicker" v-model="inlineTask.due_date" placeholder="選択してください">
+                        <div class="pe-2 d-flex align-items-center gap-2">
+                            <input type="text" class="form-control px-1 py-0 datetimepicker" v-model="inlineTask.start_date" placeholder="開始日">
+                            <input type="text" class="form-control px-1 py-0 datetimepicker" v-model="inlineTask.due_date" placeholder="期限日">
                         </div>
                     </div>
                     <div class="col-2">
@@ -202,9 +205,17 @@ if (!$project_id) {
                                         +{{ inlineTask.assignees.length - 5 }}
                                     </span>
                                 </div>
+                                <div class="avatar">
+                                    <span class="avatar-initial rounded-circle pull-up bg-label-success" data-bs-toggle="tooltip" data-bs-placement="bottom">
+                                        <i class="fa fa-plus"></i>
+                                    </span>
+                                </div>
                             </template>
-                            <span v-else class="text-muted">選択してください</span>
-                            <i class="bi bi-chevron-down ms-1"></i>
+                            <div v-else class="avatar">
+                                <span class="avatar-initial rounded-circle pull-up bg-label-success">
+                                    <i class="fa fa-plus"></i>
+                                </span>
+                            </div>
                         </div>
                     </div>
                     
@@ -224,7 +235,7 @@ if (!$project_id) {
                             </div>
                         </div>
                     </div>
-                    <div class="col-2">
+                    <div class="col-1">
                         <div class="py-2 pe-2 d-flex align-items-center">
                             <input type="range" min="0" max="100" step="1" v-model.number="inlineTask.progress" class="w-100">
                             <span class="ms-2">{{ inlineTask.progress || 0 }}%</span>
@@ -238,24 +249,28 @@ if (!$project_id) {
             </div>
             <div v-for="task in filteredTasks" :key="task.id" class="card mb-2" :data-id="task.id">
                 <div class="row g-0 align-items-center">
-                    <div class="col-3 d-flex align-items-center">
+                    <div class="col-2 d-flex align-items-center">
                         <span class="drag-handle ps-2 fs-16" style="cursor: move;">≡</span>
-                        <div class="p-2">
-                            <span class="fw-bold" style="cursor: pointer;" @click="openTaskDetails(task)">{{ task.title }}</span>
+                        <div class="d-flex align-items-center justify-content-between gap-2 flex-grow-1 task-title">
+                            <span class="fw-bold" @click="openTaskDetails(task)" style="cursor: pointer; max-width: 100%;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;">{{ task.title }}</span>
+                            <i class="fa fa-expand-alt" style="cursor: pointer;" @click="openTaskDetails(task)"></i>
                         </div>
                     </div>
                     <div class="col-1">
                         <div class="py-2 pe-2">
                             <div class="btn-group w-100">
-                                <label class="badge waves-light w-100"
-                                        :class="getPriorityButtonClass(task.priority)" >
+                                <button type="button" class="btn btn-sm waves-effect waves-light w-100"
+                                        :class="getPriorityButtonClass(task.priority)">
                                     {{ getPriorityLabel(task.priority) }}
-                                </label>
+                                </button>
                             </div>
                         </div>
                     </div>
                     <div class="col-2">
-                        <span>{{ formatDate(task.due_date) }}</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <span>{{ formatDate(task.start_date) }}</span> ~
+                            <span>{{ formatDate(task.due_date) }}</span>
+                        </div>
                         <i v-if="isTaskOverdue(task)" class="fas fa-exclamation-triangle text-warning ms-1" 
                            data-bs-toggle="tooltip" data-bs-placement="top" 
                            :title="getOverdueTooltip(task)"></i>
@@ -274,8 +289,9 @@ if (!$project_id) {
                                         +{{ task.assigned_to.split(',').length - 5 }}
                                     </span>
                                 </div>
+                                
                             </template>
-                            <span v-else class="text-muted">選択してください</span>
+                            <span v-else class="text-muted">未選択</span>
                         </div>
                     </div>
                    
@@ -295,7 +311,7 @@ if (!$project_id) {
                             </div>
                         </div>
                     </div>
-                    <div class="col-2">
+                    <div class="col-1">
                         <div class="py-2 pe-2 d-flex align-items-center">
                             <input type="range" min="0" max="100" step="1" v-model.number="task.progress" class="w-100" @change="updateTaskProgress(task)">
                             <span class="ms-2">{{ task.progress || 0 }}%</span>
@@ -540,6 +556,7 @@ if (!$project_id) {
         </div>
     </div>
 </div>
+
 
 <style>
 .title_block{

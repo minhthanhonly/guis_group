@@ -172,7 +172,14 @@ class Task extends ApplicationModel {
         ];
     }
 
-    function delete($id) {
+    function delete() {
+        $id = isset($_POST['id']) ? $_POST['id'] : 0;
+        if(!$id){
+            return [
+                'status' => 'error',
+                'message' => 'タスクIDが指定されていません'
+            ];
+        }
         $query = sprintf(
             "SELECT COUNT(*) as count FROM {$this->table} WHERE parent_id = %d",
             intval($id)
@@ -180,27 +187,40 @@ class Task extends ApplicationModel {
         $subtasks = $this->fetchOne($query)['count'];
         
         if ($subtasks > 0) {
-            throw new Exception('このタスクにはサブタスクが存在するため、削除できません。');
+            return [
+                'status' => 'error',
+                'message' => 'このタスクにはサブタスクが存在するため、削除できません。'
+            ];
         }
         
-        $query = sprintf(
-            "SELECT COUNT(*) as count FROM " . DB_PREFIX . "time_entries WHERE task_id = %d",
-            intval($id)
-        );
-        $timeEntries = $this->fetchOne($query)['count'];
+        // $query = sprintf(
+        //     "SELECT COUNT(*) as count FROM " . DB_PREFIX . "time_entries WHERE task_id = %d",
+        //     intval($id)
+        // );
+        // $timeEntries = $this->fetchOne($query)['count'];
 
         $query = sprintf(
-            "SELECT COUNT(*) as count FROM " . DB_PREFIX . "comments WHERE task_id = %d",
+            "DELETE FROM " . DB_PREFIX . "comments WHERE task_id = %d",
             intval($id)
         );
-        $comments = $this->fetchOne($query)['count'];
+        $this->query($query);
         
-        if ($timeEntries > 0 || $comments > 0) {
-            throw new Exception('このタスクには時間記録やコメントが存在するため、削除できません。');
+        //$task = $this->getById($id);
+        $result = $this->query_delete(['id' => $id]);
+        // if ($result && $task['parent_id']) {
+        //     $this->updateParentTaskProgress($task['parent_id']);
+        // }
+        // if ($result && $task['project_id']) {
+        //     $this->updateProjectProgress($task['project_id']);
+        // }
+        if($result){
+            return [
+                'status' => 'success'
+            ];
         }
-        
-        $task = $this->getById($id);
-                        $result = $this->query_delete(['id' => $id]);                if ($result && $task['parent_id']) {            $this->updateParentTaskProgress($task['parent_id']);        }                if ($result && $task['project_id']) {            $this->updateProjectProgress($task['project_id']);        }                return $result;
+        return [
+            'status' => 'error'
+        ];
     }
 
     function updateStatus() {

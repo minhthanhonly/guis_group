@@ -13,7 +13,7 @@ if (!$project_id) {
     <div v-if="canViewProject">
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">
-                <a class="navbar-brand fw-bold" href="#">プロジェクト詳細</a>
+                <a class="navbar-brand fw-bold d-none" href="#">プロジェクト詳細</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar" aria-controls="projectNavbar" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
                 </button>
@@ -295,7 +295,7 @@ if (!$project_id) {
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.start_date)" readonly>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="終了日">終了日</span></label>
+                                <label class="form-label"><span data-i18n="期限日">期限日</span></label>
                                 <div v-if="isEditMode" class="input-group">
                                     <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>
