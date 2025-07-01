@@ -60,7 +60,7 @@ if (!$project_id) {
                                 </div>
                                 <div class="h5 mb-0 font-weight-bold text-gray-800">{{ taskStats.total }}</div>
                             </div>
-                            <div class="col-auto">
+                            <div class="col-md-auto">
                                 <i class="fas fa-tasks fa-2x text-gray-300"></i>
                             </div>
                         </div>
@@ -77,7 +77,7 @@ if (!$project_id) {
                                 </div>
                                 <div class="h5 mb-0 font-weight-bold text-gray-800">{{ taskStats.completed }}</div>
                             </div>
-                            <div class="col-auto">
+                            <div class="col-md-auto">
                                 <i class="fas fa-check-circle fa-2x text-gray-300"></i>
                             </div>
                         </div>
@@ -94,7 +94,7 @@ if (!$project_id) {
                                 </div>
                                 <div class="h5 mb-0 font-weight-bold text-gray-800">{{ taskStats.overdue }}</div>
                             </div>
-                            <div class="col-auto">
+                            <div class="col-md-auto">
                                 <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
                             </div>
                         </div>
@@ -145,13 +145,13 @@ if (!$project_id) {
         
         <div class="d-flex align-items-center justify-content-between mb-2">
             <div class="row w-100 g-0 align-items-center fw-bold text-primary bg-light">
-                <div class="col-2 py-2 px-2">タスク</div>
-                <div class="col-1 py-2 pe-2">優先度</div>
-                <div class="col-2 py-2 pe-2">期間</div>
-                <div class="col-2 py-2 pe-2">担当者</div>
-                <div class="col-1 py-2 pe-2">ステータス</div>
-                <div class="col-1 py-2 pe-2">進捗</div>
-                <div class="col-1 py-2">操作</div>
+                <div class="col-md-2 py-2 px-2">タスク</div>
+                <div class="col-md-1 py-2 pe-2">優先度</div>
+                <div class="col-md-2 py-2 pe-2">期間</div>
+                <div class="col-md-2 py-2 pe-2">担当者</div>
+                <div class="col-md-1 py-2 pe-2">ステータス</div>
+                <div class="col-md-1 py-2 pe-2">進捗</div>
+                <div class="col-md-1 py-2">操作</div>
             </div>
         </div>
         <!-- Danh sách task dạng div card/list -->
@@ -163,12 +163,12 @@ if (!$project_id) {
             <div v-for="task in displayTasks" :key="task.id || 'inline-' + task._inlineIndex" class="card mb-2" :data-id="task.id" :class="{'subtask': task.indent_level > 0}" :style="{marginLeft: (task.indent_level * 20) + 'px'}">
                 <!-- Inline Edit Mode -->
                 <div v-if="task._isInlineEdit" class="row g-0 align-items-center">
-                    <div class="col-2">
+                    <div class="col-md-2">
                         <div class="p-2">
-                            <input type="text" class="form-control inline-task-input" v-model="task.title" placeholder="タスク名" required @input="ensureTaskData(task._inlineIndex)" @blur="ensureTaskData(task._inlineIndex)">
+                            <input type="text" class="form-control inline-task-input" :value="task.title" placeholder="タスク名" required @input="updateTaskField(task._inlineIndex, 'title', $event.target.value)">
                         </div>
                     </div>
-                    <div class="col-1">
+                    <div class="col-md-1">
                         <div class="py-2 pe-2">
                             <div class="btn-group w-100">
                                 <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light w-100"
@@ -186,13 +186,13 @@ if (!$project_id) {
                             </div>
                         </div>
                     </div>
-                    <div class="col-2">
+                    <div class="col-md-2">
                         <div class="pe-2 d-flex align-items-center gap-2">
-                            <input type="text" class="form-control px-1 py-0 datetimepicker" v-model="task.start_date" placeholder="開始日" @input="ensureTaskData(task._inlineIndex)" @blur="ensureTaskData(task._inlineIndex)">
-                            <input type="text" class="form-control px-1 py-0 datetimepicker" v-model="task.due_date" placeholder="期限日" @input="ensureTaskData(task._inlineIndex)" @blur="ensureTaskData(task._inlineIndex)">
+                            <input type="text" class="form-control px-1 py-0 datetimepicker" :value="task.start_date" placeholder="開始日" @input="updateTaskField(task._inlineIndex, 'start_date', $event.target.value)">
+                            <input type="text" class="form-control px-1 py-0 datetimepicker" :value="task.due_date" placeholder="期限日" @input="updateTaskField(task._inlineIndex, 'due_date', $event.target.value)">
                         </div>
                     </div>
-                    <div class="col-2">
+                    <div class="col-md-2">
                         <div class="d-flex align-items-center flex-wrap" @click="openAssigneeModal(task._inlineIndex)">
                             <template v-if="task.assignees && task.assignees.length">
                                 <template v-for="(userId, i) in task.assignees.slice(0, 5)">
@@ -220,7 +220,7 @@ if (!$project_id) {
                         </div>
                     </div>
                     
-                    <div class="col-1">
+                    <div class="col-md-1">
                         <div class="py-2 pe-2">
                             <div class="btn-group w-100">
                                 <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light w-100"
@@ -236,13 +236,13 @@ if (!$project_id) {
                             </div>
                         </div>
                     </div>
-                    <div class="col-1">
+                    <div class="col-md-1">
                         <div class="py-2 pe-2 d-flex align-items-center">
-                            <input type="range" min="0" max="100" step="1" v-model.number="task.progress" class="w-100" @change="ensureTaskData(task._inlineIndex)">
+                            <input type="range" min="0" max="100" step="1" :value="task.progress" class="w-100" @input="updateTaskField(task._inlineIndex, 'progress', parseInt($event.target.value))">
                             <span class="ms-2">{{ task.progress || 0 }}%</span>
                         </div>
                     </div>
-                    <div class="col-1 d-flex align-items-center justify-content-center gap-2">
+                    <div class="col-md-1 d-flex align-items-center justify-content-center gap-2">
                         <button class="btn btn-sm btn-success me-1" @click="saveTaskInline(task._inlineIndex)"><i class="fas fa-check"></i></button>
                         <button class="btn btn-sm btn-secondary" @click="cancelTaskInline(task._inlineIndex)"><i class="fas fa-times"></i></button>
                     </div>
@@ -250,14 +250,14 @@ if (!$project_id) {
                 
                 <!-- Normal Display Mode -->
                 <div v-else class="row g-0 align-items-center">
-                    <div class="col-2 d-flex align-items-center">
+                    <div class="col-md-2 d-flex align-items-center">
                         <span class="drag-handle ps-2 pe-2 fs-16" style="cursor: move;">≡</span>
                         <div class="d-flex align-items-center justify-content-between gap-2 flex-grow-1 task-title">
                             <span class="fw-bold" @click="openTaskDetails(task)" style="cursor: pointer; max-width: 100%;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;">{{ task.title }}</span>
                             <i class="fa fa-expand-alt" style="cursor: pointer;" @click="openTaskDetails(task)"></i>
                         </div>
                     </div>
-                    <div class="col-1">
+                    <div class="col-md-1">
                         <div class="py-2 pe-2">
                             <div class="btn-group w-100">
                                 <button type="button" class="btn btn-sm waves-effect waves-light w-100"
@@ -267,7 +267,7 @@ if (!$project_id) {
                             </div>
                         </div>
                     </div>
-                    <div class="col-2">
+                    <div class="col-md-2">
                         <div class="d-flex align-items-center gap-2">
                             <span>{{ formatDate(task.start_date) }}</span> ~
                             <span>{{ formatDate(task.due_date) }}</span>
@@ -276,7 +276,7 @@ if (!$project_id) {
                            data-bs-toggle="tooltip" data-bs-placement="top" 
                            :title="getOverdueTooltip(task)"></i>
                     </div>
-                    <div class="col-2">
+                    <div class="col-md-2">
                         <div class="d-flex align-items-center flex-wrap">
                             <template v-if="task.assigned_to">
                                 <template v-for="(userId, i) in task.assigned_to.split(',').slice(0, 5)">
@@ -296,7 +296,7 @@ if (!$project_id) {
                         </div>
                     </div>
                    
-                    <div class="col-1">
+                    <div class="col-md-1">
                         <div class="py-2 pe-2">
                             <div class="btn-group w-100">
                                 <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light w-100"
@@ -312,13 +312,13 @@ if (!$project_id) {
                             </div>
                         </div>
                     </div>
-                    <div class="col-1">
+                    <div class="col-md-1">
                         <div class="py-2 pe-2 d-flex align-items-center">
                             <input type="range" min="0" max="100" step="1" v-model.number="task.progress" class="w-100" @change="updateTaskProgress(task)">
                             <span class="ms-2">{{ task.progress || 0 }}%</span>
                         </div>
                     </div>
-                    <div class="col-1 d-flex align-items-center justify-content-center gap-2">
+                    <div class="col-md-1 d-flex align-items-center justify-content-center gap-2">
                         <button class="btn btn-sm btn-outline-primary me-1" @click="editTaskInline(task)"><i class="fas fa-edit"></i></button>
                         <button v-if="!isFirstTask(task)" class="btn btn-sm btn-outline-secondary me-1" @click="increaseIndent(task)" title="サブタスクにする">
                             <i class="fas fa-arrow-right"></i>
@@ -440,7 +440,7 @@ if (!$project_id) {
                             <!-- Tab 1: Task Content -->
                             <div class="tab-pane fade show active" id="content" role="tabpanel">
                                 <div class="row h-100">
-                                    <div class="col-12">
+                                    <div class="col-md-12">
                                         <!-- Task Description Editor -->
                                         <div class="card h-100">
                                             <div class="card-header d-flex justify-content-between align-items-center">

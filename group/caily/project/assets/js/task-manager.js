@@ -62,7 +62,8 @@ const TaskApp = createApp({
             assigneeModal: {
                 show: false,
                 idx: null,
-                selected: []
+                selected: [],
+                backupData: null
             },
             editingInlineId: null,
             // Offcanvas data
@@ -111,8 +112,9 @@ const TaskApp = createApp({
                         _inlineIndex: this.inlineTasks.indexOf(inlineTask)
                     });
                 } else {
-                    // Add normal task
-                    result.push(task);
+                    // Add normal task with indent calculation
+                    const taskWithIndent = this.calculateIndent(task, i, filtered);
+                    result.push(taskWithIndent);
                 }
             }
             
@@ -150,6 +152,22 @@ const TaskApp = createApp({
         }
     },
     
+    // Temporarily disable watcher to prevent data loss
+    // watch: {
+    //     // Watch for changes in inlineTasks to ensure data integrity
+    //     inlineTasks: {
+    //         handler(newTasks) {
+    //             console.log('Watcher triggered for inlineTasks:', newTasks.length, 'tasks');
+    //             newTasks.forEach((task, index) => {
+    //                 if (task && typeof task === 'object') {
+    //                     this.ensureTaskData(index);
+    //                 }
+    //             });
+    //         },
+    //         deep: true
+    //     }
+    // },
+    
     mounted() {
         // Lấy project ID từ URL
         const urlParams = new URLSearchParams(window.location.search);
@@ -172,6 +190,18 @@ const TaskApp = createApp({
             this.initSortable();
             this.initTooltips();
         });
+        
+        // Add click outside listener to close dropdowns
+        document.addEventListener('click', (event) => {
+            // Don't close if clicking on dropdown toggle button
+            if (event.target.closest('.dropdown-toggle')) {
+                return;
+            }
+            // Close if clicking outside dropdown
+            if (!event.target.closest('.dropdown')) {
+                this.closeAllDropdowns();
+            }
+        });
     },
     
     updated() {
@@ -181,9 +211,22 @@ const TaskApp = createApp({
         });
     },
     
+
+    
     methods: {
         testClick() {
             console.log('Click event works!');
+        },
+        
+        updateTaskField(index, field, value) {
+            if (this.inlineTasks[index]) {
+                // Use Vue.set to ensure reactivity
+                if (typeof Vue !== 'undefined' && Vue.set) {
+                    Vue.set(this.inlineTasks[index], field, value);
+                } else {
+                    this.inlineTasks[index][field] = value;
+                }
+            }
         },
         
         testUpdateStatus() {
@@ -352,7 +395,7 @@ const TaskApp = createApp({
         },
         
         openNewTaskModal() {
-            this.inlineTasks.push({
+            const newTask = {
                 title: '',
                 priority: 'medium',
                 status: 'todo',
@@ -360,10 +403,14 @@ const TaskApp = createApp({
                 due_date: '',
                 progress: 0,
                 assignees: []
-            });
+            };
+            this.inlineTasks.push(newTask);
+            
             this.$nextTick(() => {
                 const firstInput = document.querySelector('.inline-task-input');
-                if (firstInput) firstInput.focus();
+                if (firstInput) {
+                    firstInput.focus();
+                }
                 document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(el => {
                     if (el._dropdownInstance) {
                         el._dropdownInstance.dispose();
@@ -373,25 +420,7 @@ const TaskApp = createApp({
             });
         },
         
-        editTask(task) {
-            this.editingTask = task;
-            this.taskForm = {
-                title: task.title || '',
-                description: task.description || '',
-                status: task.status || 'new',
-                priority: task.priority || 'medium',
-                start_date: task.start_date || '',
-                due_date: task.due_date || '',
-                assigned_to: task.assigned_to || null,
-                parent_id: task.parent_id || null,
-                category_id: task.category_id || null,
-                estimated_hours: task.estimated_hours || 0,
-                progress: task.progress || 0,
-                project_id: this.projectId
-            };
-            const modal = new bootstrap.Modal(document.getElementById('taskModal'));
-            modal.show();
-        },
+       
         
         async saveTask() {
             try {
@@ -560,14 +589,15 @@ const TaskApp = createApp({
             // Convert task to inline editable format
             const inlineTask = {
                 id: task.id,
-                title: task.title,
-                priority: task.priority,
-                start_date: task.start_date,
-                due_date: task.due_date,
-                assignees: task.assigned_to ? task.assigned_to.split(',') : [],
-                status: task.status,
+                title: task.title || '',
+                priority: task.priority || 'medium',
+                start_date: task.start_date || '',
+                due_date: task.due_date || '',
+                assignees: task.assigned_to ? task.assigned_to.split(',').filter(id => id.trim()) : [],
+                status: task.status || 'todo',
                 progress: task.progress || 0
             };
+            console.log('Creating inline task:', inlineTask);
             this.editingInlineId = task.id;
             this.inlineTasks.push(inlineTask);
         },
@@ -677,6 +707,17 @@ const TaskApp = createApp({
             }
         },
         
+        closeAllDropdowns() {
+            // Close all open dropdowns
+            document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
+                menu.classList.remove('show');
+                const button = menu.previousElementSibling;
+                if (button && button.classList.contains('dropdown-toggle')) {
+                    button.setAttribute('aria-expanded', 'false');
+                }
+            });
+        },
+        
         async loadProjectMembers() {
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getMembers&project_id=${this.projectId}`);
@@ -730,17 +771,39 @@ const TaskApp = createApp({
         
         openAssigneeModal(idx) {
             this.assigneeModal.idx = idx;
-            this.assigneeModal.selected = [...(this.inlineTasks[idx].assignees || [])];
+            // Ensure we have a safe copy of assignees array
+            const currentAssignees = this.inlineTasks[idx]?.assignees || [];
+            this.assigneeModal.selected = Array.isArray(currentAssignees) ? [...currentAssignees] : [];
+            
+            // Backup current task data to prevent loss
+            this.assigneeModal.backupData = { ...this.inlineTasks[idx] };
+            
             this.assigneeModal.show = true;
         },
         
         closeAssigneeModal() {
             this.assigneeModal.show = false;
+            this.assigneeModal.backupData = null;
         },
         
         confirmAssigneeModal() {
             if (this.assigneeModal.idx !== null) {
-                this.inlineTasks[this.assigneeModal.idx].assignees = [...this.assigneeModal.selected];
+                // Preserve all existing data and only update assignees
+                const currentTask = this.inlineTasks[this.assigneeModal.idx];
+                
+                // Restore backup data if available and merge with new assignees
+                if (this.assigneeModal.backupData) {
+                    this.inlineTasks[this.assigneeModal.idx] = {
+                        ...this.assigneeModal.backupData,
+                        assignees: [...this.assigneeModal.selected]
+                    };
+                } else {
+                    // Update only the assignees property to preserve all other data
+                    this.inlineTasks[this.assigneeModal.idx].assignees = [...this.assigneeModal.selected];
+                }
+                
+                // Ensure all required fields exist
+                this.ensureTaskData(this.assigneeModal.idx);
             }
             this.closeAssigneeModal();
         },
@@ -824,6 +887,167 @@ const TaskApp = createApp({
             } catch (error) {
                 console.error('Error updating task order:', error);
                 this.showMessage('タスク順序の更新に失敗しました', true);
+            }
+        },
+        
+        calculateIndent(task, index, allTasks) {
+            // Calculate indent level based on parent_id
+            let indentLevel = 0;
+            let currentTask = task;
+            
+            while (currentTask.parent_id) {
+                indentLevel++;
+                currentTask = allTasks.find(t => t.id === currentTask.parent_id);
+                if (!currentTask) break;
+            }
+            
+            return {
+                ...task,
+                indent_level: indentLevel
+            };
+        },
+        
+        async increaseIndent(task) {
+            // Find the previous task with less indent
+            const currentIndex = this.displayTasks.findIndex(t => t.id === task.id);
+            if (currentIndex <= 0) return;
+            
+            let parentTask = null;
+            for (let i = currentIndex - 1; i >= 0; i--) {
+                const prevTask = this.displayTasks[i];
+                if (prevTask.indent_level <= task.indent_level) {
+                    parentTask = prevTask;
+                    break;
+                }
+            }
+            
+            if (parentTask) {
+                await this.setParent(task.id, parentTask.id);
+            }
+        },
+        
+        async decreaseIndent(task) {
+            if (task.indent_level > 0) {
+                await this.setParent(task.id, null);
+            }
+        },
+        
+        async setParent(taskId, parentId) {
+            try {
+                const formData = new FormData();
+                formData.append('task_id', taskId);
+                formData.append('parent_id', parentId || '');
+                
+                const response = await axios.post(
+                    '/api/index.php?model=task&method=setParent',
+                    formData
+                );
+                
+                if (response.data.success) {
+                   // this.showMessage(parentId ? 'サブタスクが作成されました。' : 'サブタスクが解除されました。');
+                    await this.loadTasks();
+                } else {
+                    this.showMessage(response.data.message || '操作に失敗しました。', true);
+                }
+                
+            } catch (error) {
+                console.error('Error setting parent:', error);
+                this.showMessage('操作に失敗しました。', true);
+            }
+        },
+        
+        isFirstTask(task) {
+            // Check if this is the first task in the display list
+            const firstTask = this.displayTasks.find(t => !t._isInlineEdit);
+            return firstTask && firstTask.id === task.id;
+        },
+        
+        updateInlineTaskPriority(index, priority) {
+            if (this.inlineTasks[index]) {
+                // Backup current data before updating
+                const backupData = { ...this.inlineTasks[index] };
+                
+                // Use Vue.set to ensure reactivity
+                if (typeof Vue !== 'undefined' && Vue.set) {
+                    Vue.set(this.inlineTasks[index], 'priority', priority);
+                } else {
+                    // Fallback to direct assignment
+                    this.inlineTasks[index].priority = priority;
+                }
+                
+                // Verify data integrity
+                if (!this.inlineTasks[index].title && backupData.title) {
+                    if (typeof Vue !== 'undefined' && Vue.set) {
+                        Vue.set(this.inlineTasks[index], 'title', backupData.title);
+                    } else {
+                        this.inlineTasks[index].title = backupData.title;
+                    }
+                }
+                
+                // Use setTimeout instead of $nextTick to avoid conflicts
+                setTimeout(() => {
+                    this.closeAllDropdowns();
+                }, 100);
+            }
+        },
+        
+        updateInlineTaskStatus(index, status) {
+            if (this.inlineTasks[index]) {
+                // Backup current data before updating
+                const backupData = { ...this.inlineTasks[index] };
+                
+                // Use Vue.set to ensure reactivity
+                if (typeof Vue !== 'undefined' && Vue.set) {
+                    Vue.set(this.inlineTasks[index], 'status', status);
+                } else {
+                    // Fallback to direct assignment
+                    this.inlineTasks[index].status = status;
+                }
+                
+                // Verify data integrity
+                if (!this.inlineTasks[index].title && backupData.title) {
+                    if (typeof Vue !== 'undefined' && Vue.set) {
+                        Vue.set(this.inlineTasks[index], 'title', backupData.title);
+                    } else {
+                        this.inlineTasks[index].title = backupData.title;
+                    }
+                }
+                
+                // Use setTimeout instead of $nextTick to avoid conflicts
+                setTimeout(() => {
+                    this.closeAllDropdowns();
+                }, 100);
+            }
+        },
+        
+        ensureTaskData(index) {
+            // Ensure all required fields exist in the inline task
+            if (this.inlineTasks[index]) {
+                const task = this.inlineTasks[index];
+                
+                // Only set default values if the field is undefined or null, not if it's an empty string
+                // Don't overwrite existing data
+                if (task.title === undefined || task.title === null) {
+                    task.title = '';
+                }
+                if (task.priority === undefined || task.priority === null) {
+                    task.priority = 'medium';
+                }
+                if (task.status === undefined || task.status === null) {
+                    task.status = 'todo';
+                }
+                if (task.start_date === undefined || task.start_date === null) {
+                    task.start_date = '';
+                }
+                if (task.due_date === undefined || task.due_date === null) {
+                    task.due_date = '';
+                }
+                if (task.progress === undefined || task.progress === null) {
+                    task.progress = 0;
+                }
+                if (!Array.isArray(task.assignees)) {
+                    task.assignees = [];
+                }
             }
         },
         
