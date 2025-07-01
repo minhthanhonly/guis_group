@@ -229,6 +229,31 @@ const TaskApp = createApp({
             }
         },
         
+        calculateTaskPosition(inlineIndex) {
+            // Get all display tasks (including inline tasks) to determine position
+            const allDisplayTasks = this.displayTasks;
+            const inlineTask = this.inlineTasks[inlineIndex];
+            
+            // Find the position where this inline task appears in the display
+            const displayIndex = allDisplayTasks.findIndex(task => 
+                task._isInlineEdit && task._inlineIndex === inlineIndex
+            );
+            
+            if (displayIndex === -1) {
+                // If not found in display, add at the end
+                return this.tasks.length + 1;
+            }
+            
+            // Calculate position based on display index
+            // Consider existing tasks and their positions
+            const existingTasks = this.tasks;
+            const maxPosition = existingTasks.length > 0 ? 
+                Math.max(...existingTasks.map(t => t.position || 0)) : 0;
+            
+            // Insert at the display position
+            return displayIndex + 1;
+        },
+        
         testUpdateStatus() {
             if (this.tasks.length > 0) {
                 const firstTask = this.tasks[0];
@@ -251,7 +276,16 @@ const TaskApp = createApp({
         async loadTasks() {
             try {
                 const response = await axios.get(`/api/index.php?model=task&method=list&project_id=${this.projectId}&include_subtasks=1`);
-                this.tasks = response.data || [];
+                let tasks = response.data || [];
+                
+                // Sort tasks by position if available
+                tasks = tasks.sort((a, b) => {
+                    const posA = a.position || 0;
+                    const posB = b.position || 0;
+                    return posA - posB;
+                });
+                
+                this.tasks = tasks;
                 //this.updateDataTable();
             } catch (error) {
                 console.error('Error loading tasks:', error);
@@ -402,7 +436,8 @@ const TaskApp = createApp({
                 start_date: '',
                 due_date: '',
                 progress: 0,
-                assignees: []
+                assignees: [],
+                position: null // Will be calculated when saving
             };
             this.inlineTasks.push(newTask);
             
@@ -631,6 +666,12 @@ const TaskApp = createApp({
                 formData.append('assigned_to', inlineTask.assignees.join(','));
                 formData.append('status', inlineTask.status);
                 formData.append('progress', inlineTask.progress);
+
+                // Calculate position for new task
+                if (!inlineTask.id) {
+                    const position = this.calculateTaskPosition(idx);
+                    formData.append('position', position);
+                }
 
                 const response = await axios.post('/api/index.php?model=task&method=' + method, formData);
                 if (response.data.status == 'success') {

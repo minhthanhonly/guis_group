@@ -102,10 +102,12 @@ class Task extends ApplicationModel {
             'assigned_to' => isset($_POST['assigned_to']) ? $_POST['assigned_to'] : null,
             'created_by' => isset($_POST['created_by']) ? $_POST['created_by'] : $_SESSION['user_id'],
             'due_date' => isset($_POST['due_date']) ? $_POST['due_date'] : null,
+            'start_date' => isset($_POST['start_date']) ? $_POST['start_date'] : null,
             // 'category_id' => isset($_POST['category_id']) ? $_POST['category_id'] : null,
             // 'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
             // 'actual_hours' => isset($_POST['actual_hours']) ? $_POST['actual_hours'] : 0,
             'progress' => isset($_POST['progress']) ? $_POST['progress'] : null,
+            'position' => isset($_POST['position']) ? $_POST['position'] : 0,
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
@@ -139,20 +141,27 @@ class Task extends ApplicationModel {
         
         $data = array(
             'project_id' => $_POST['project_id'],
-            'parent_id' => isset($_POST['parent_id']) && $_POST['parent_id'] ? $_POST['parent_id'] : null,
             'title' => $_POST['title'],
             'description' => isset($_POST['description']) ? $_POST['description'] : '',
             'status' => isset($_POST['status']) ? $_POST['status'] : 'new',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
             'assigned_to' => isset($_POST['assigned_to']) ? $_POST['assigned_to'] : null,
             'due_date' => isset($_POST['due_date']) ? $_POST['due_date'] : null,
+            'start_date' => isset($_POST['start_date']) ? $_POST['start_date'] : null,
             'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
             'actual_hours' => isset($_POST['actual_hours']) ? $_POST['actual_hours'] : 0,
             'updated_at' => date('Y-m-d H:i:s')
         );
+
+        if(isset($_POST['position'])){
+            $data['position'] = $_POST['position'];
+        }
         
         if (isset($_POST['progress'])) {
             $data['progress'] = intval($_POST['progress']);
+        }
+        if (isset($_POST['parent_id'])) {
+            $data['parent_id'] = intval($_POST['parent_id']);
         }
         $result = $this->query_update($data, ['id' => $id]);
         
