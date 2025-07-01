@@ -93,11 +93,6 @@ $(document).ready(function() {
             // Handle window resize
             window.addEventListener('resize', this.handleResize);
             
-            // Handle fullscreen change events
-            document.addEventListener('fullscreenchange', this.handleFullscreenChange);
-            document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange);
-            document.addEventListener('mozfullscreenchange', this.handleFullscreenChange);
-            document.addEventListener('MSFullscreenChange', this.handleFullscreenChange);
         },
         beforeUnmount() {
             // Clean up Gantt when component is destroyed
@@ -109,11 +104,6 @@ $(document).ready(function() {
             // Remove resize listener
             window.removeEventListener('resize', this.handleResize);
             
-            // Remove fullscreen listeners
-            document.removeEventListener('fullscreenchange', this.handleFullscreenChange);
-            document.removeEventListener('webkitfullscreenchange', this.handleFullscreenChange);
-            document.removeEventListener('mozfullscreenchange', this.handleFullscreenChange);
-            document.removeEventListener('MSFullscreenChange', this.handleFullscreenChange);
         },
         methods: {
             async updateProjectDate(task) {
@@ -605,27 +595,8 @@ $(document).ready(function() {
             
             // Fullscreen Toggle
             toggleFullscreen() {
-                const container = document.getElementById('gantt_container');
-                if (!container) return;
-                
-                if (!this.isFullscreen) {
-                    // Enter fullscreen
-                    if (container.requestFullscreen) {
-                        container.requestFullscreen();
-                    } else if (container.webkitRequestFullscreen) {
-                        container.webkitRequestFullscreen();
-                    } else if (container.msRequestFullscreen) {
-                        container.msRequestFullscreen();
-                    }
-                } else {
-                    // Exit fullscreen
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen();
-                    } else if (document.webkitExitFullscreen) {
-                        document.webkitExitFullscreen();
-                    } else if (document.msExitFullscreen) {
-                        document.msExitFullscreen();
-                    }
+                if(gantt && this.ganttInitialized){
+                    gantt.ext.fullscreen.toggle();
                 }
             },
             
@@ -695,7 +666,8 @@ $(document).ready(function() {
                 ];
                 gantt.plugins({
                     tooltip: true,
-                    marker: true ,
+                    marker: true,
+                    fullscreen: true,
                     //quick_info: true
                 });
                 gantt.config.quickinfo_buttons=["icon_edit"];
@@ -759,11 +731,9 @@ $(document).ready(function() {
                 gantt.config.drag_move = false;
                 gantt.config.drag_links = false;
                 gantt.config.drag_plan = false;
-
                 
                 gantt.config.row_height = 30;
 	            gantt.config.grid_resize = true;
-
               
                 
                 // // Set work time
@@ -919,13 +889,12 @@ $(document).ready(function() {
             addGanttStyles() {
                 const style = document.createElement('style');
                 style.textContent = `
-                    /* Ensure Gantt container has proper dimensions */
                     #gantt_container {
-                        width: 100% !important;
-                        height: 600px !important;
-                        min-height: 600px !important;
-                        position: relative !important;
-                        overflow: hidden !important;
+                        z-index: 2000 !important;
+                    }
+                    .gantt_modal_box,
+                    .gantt_cal_cover{
+                        z-index: 2000 !important;
                     }
                     .weekend {
                         background: var(--dhx-gantt-base-colors-background-alt);
@@ -999,8 +968,6 @@ $(document).ready(function() {
                     }
                     
                     
-                    
-                   
                     
                     /* Loading indicator */
                     .gantt-loading {

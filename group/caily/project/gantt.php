@@ -127,83 +127,6 @@ if (!$project_id) {
     background: rgba(255, 255, 255, 0.9);
 }
 
-/* Custom Gantt styles */
-.gantt_task_line {
-    border-radius: 3px;
-}
-
-/* Weekend styling */
-.gantt_scale_cell.weekend {
-    background-color: #f8f9fa;
-}
-
-.gantt_task_cell.weekend {
-    background-color: #f8f9fa;
-}
-
-/* Status colors - same as project-gantt */
-.gantt_task_line.gantt-status-secondary {
-    background-color: #6c757d;
-    border-color: #5a6268;
-}
-
-.gantt_task_line.gantt-status-primary {
-    background-color: #007bff;
-    border-color: #0056b3;
-}
-
-.gantt_task_line.gantt-status-success {
-    background-color: #28a745;
-    border-color: #1e7e34;
-}
-
-.gantt_task_line.gantt-status-warning {
-    background-color: #ffc107;
-    border-color: #e0a800;
-}
-
-.gantt_task_line.gantt-status-danger {
-    background-color: #dc3545;
-    border-color: #bd2130;
-}
-
-.gantt_task_line.gantt-status-info {
-    background-color: #17a2b8;
-    border-color: #117a8b;
-}
-
-/* Priority colors */
-.gantt_task_line.gantt-priority-secondary {
-    border-width: 2px;
-    border-style: solid;
-}
-
-.gantt_task_line.gantt-priority-primary {
-    border-width: 2px;
-    border-style: solid;
-}
-
-.gantt_task_line.gantt-priority-warning {
-    border-width: 2px;
-    border-style: solid;
-}
-
-.gantt_task_line.gantt-priority-danger {
-    border-width: 2px;
-    border-style: solid;
-}
-
-/* Overdue styling */
-.gantt_task_line.gantt-overdue {
-    background-image: repeating-linear-gradient(
-        45deg,
-        transparent,
-        transparent 5px,
-        rgba(255, 255, 255, 0.1) 5px,
-        rgba(255, 255, 255, 0.1) 10px
-    );
-}
-
 .gantt_row {
     border-bottom: 1px solid #e0e0e0;
 }
@@ -221,18 +144,6 @@ if (!$project_id) {
     border-bottom: 2px solid #dee2e6;
     font-weight: 600;
 }
-
-.gantt_task_progress {
-    background-color: rgba(255, 255, 255, 0.3);
-    border-radius: 2px;
-}
-
-.gantt_task_progress_wrapper {
-    background-color: rgba(0, 0, 0, 0.1);
-    border-radius: 2px;
-}
-
-
 
 /* Responsive adjustments */
 @media (max-width: 768px) {

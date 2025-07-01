@@ -417,7 +417,6 @@ li.storageprevious {
 
 .avatar-initial{
 	font-size: 75% !important;
-	color: var(--bs-border-primary) !important;
 }
 .task-title{
 	box-sizing: border-box;

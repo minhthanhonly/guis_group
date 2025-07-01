@@ -93,11 +93,6 @@ $(document).ready(function() {
             // Handle window resize
             window.addEventListener('resize', this.handleResize);
             
-            // Handle fullscreen change events
-            document.addEventListener('fullscreenchange', this.handleFullscreenChange);
-            document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange);
-            document.addEventListener('mozfullscreenchange', this.handleFullscreenChange);
-            document.addEventListener('MSFullscreenChange', this.handleFullscreenChange);
         },
         beforeUnmount() {
             // Clean up Gantt when component is destroyed
@@ -108,12 +103,6 @@ $(document).ready(function() {
             }
             // Remove resize listener
             window.removeEventListener('resize', this.handleResize);
-            
-            // Remove fullscreen listeners
-            document.removeEventListener('fullscreenchange', this.handleFullscreenChange);
-            document.removeEventListener('webkitfullscreenchange', this.handleFullscreenChange);
-            document.removeEventListener('mozfullscreenchange', this.handleFullscreenChange);
-            document.removeEventListener('MSFullscreenChange', this.handleFullscreenChange);
         },
         methods: {
             async loadProjectInfo() {
@@ -212,7 +201,7 @@ $(document).ready(function() {
             },
 
             updateGanttData() {
-                if (gantt) {
+                if (gantt && this.ganttInitialized) {
                     const ganttData = this.convertTasksToGanttData(this.filteredTasks);
                     gantt.clearAll();
                     gantt.parse({
@@ -233,6 +222,19 @@ $(document).ready(function() {
                         css: "current_time_marker",
                         title: "現在時刻",
                         text: "現在"
+                    });
+
+                    gantt.addMarker({
+                        start_date: new Date(this.projectInfo.end_date),
+                        css: "end_status_line",
+                        text: "終了",
+                        title: "終了: " + this.formatDateTimeFull(new Date(this.projectInfo.end_date))
+                    });
+                    gantt.addMarker({
+                        start_date: new Date(this.projectInfo.start_date),
+                        css: "start_status_line",
+                        text: "開始",
+                        title: "開始: " + this.formatDateTimeFull(new Date(this.projectInfo.start_date))
                     });
                     setInterval(function() {
                         gantt.updateMarker("current_time_marker");
@@ -287,7 +289,7 @@ $(document).ready(function() {
                         text: task.title,
                         start_date: this.parseDate(task.start_date),
                         end_date: this.parseDate(task.due_date),
-                        progress: task.progress || 0,
+                        progress: task.progress / 100 || 0,
                         parent: task.parent_id ? task.parent_id : 1,
                         priority: task.priority || 'medium',
                         status: task.status || 'todo',
@@ -301,6 +303,7 @@ $(document).ready(function() {
                         priorityColor: priorityObj ? priorityObj.color : 'secondary'
                     });
                 });
+                console.log(ganttTasks);
 
                 return {
                     data: ganttTasks,
@@ -426,7 +429,11 @@ $(document).ready(function() {
                 
                 this.updateDateInputs(this.startDate, this.endDate);
                 if (gantt && this.ganttInitialized) {
-                    gantt.setDateRange(this.startDate, this.endDate);
+                    gantt.config.start_date = this.startDate;
+                    gantt.config.end_date = this.endDate;
+                    // Force the Gantt to recalculate and render
+                    gantt.render();
+                    
                 }
             },
 
@@ -471,7 +478,7 @@ $(document).ready(function() {
                 gantt.config.scale_unit = "hour";
                 gantt.config.date_scale = "%m月%d日";
                 gantt.config.subscales = [
-                    { unit: "minute", step: 30, date: "%H:%i" }
+                    { unit: "hour", step: 1, date: "%H:%i" }
                 ];
                 gantt.render();
             },
@@ -526,40 +533,14 @@ $(document).ready(function() {
             },
 
             toggleFullscreen() {
-                const container = document.getElementById('gantt_container');
-                
-                if (!this.isFullscreen) {
-                    if (container.requestFullscreen) {
-                        container.requestFullscreen();
-                    } else if (container.webkitRequestFullscreen) {
-                        container.webkitRequestFullscreen();
-                    } else if (container.msRequestFullscreen) {
-                        container.msRequestFullscreen();
-                    }
-                } else {
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen();
-                    } else if (document.webkitExitFullscreen) {
-                        document.webkitExitFullscreen();
-                    } else if (document.msExitFullscreen) {
-                        document.msExitFullscreen();
-                    }
+                if (gantt && this.ganttInitialized) {
+                    gantt.ext.fullscreen.toggle();
                 }
             },
 
             handleResize() {
                 if (gantt && this.ganttInitialized) {
                     gantt.setSizes();
-                }
-            },
-
-            handleFullscreenChange() {
-                this.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
-                
-                if (gantt && this.ganttInitialized) {
-                    setTimeout(() => {
-                        gantt.setSizes();
-                    }, 100);
                 }
             },
 
@@ -578,15 +559,15 @@ $(document).ready(function() {
                 
                 gantt.plugins({
                     tooltip: true,
-                    marker: true
+                    marker: true,
+                    fullscreen: true
                 });
+
+                gantt.config.project_start = new Date(this.projectInfo.start_date);
+                gantt.config.project_end = new Date(this.projectInfo.end_date);
                 
                 gantt.config.drag_lightbox = true;
-                gantt.config.drag_timeline = {
-                    ignore:".gantt_task_line, .gantt_task_link",
-                    useKey: false,
-                    render: false
-                };
+                
                 
                 gantt.config.lightbox.sections = [
                     {name: "time", type: "time", map_to: "auto", time_format: ["%Y", "%m", "%d", "%H:%i"]}
@@ -614,7 +595,7 @@ $(document).ready(function() {
                 gantt.config.drag_resize = true;
                 gantt.config.drag_move = true;
                 gantt.config.drag_links = true;
-                gantt.config.drag_plan = false;
+                gantt.config.drag_plan = true;
                 
                 gantt.config.row_height = 30;
                 gantt.config.grid_resize = true;
@@ -707,9 +688,6 @@ $(document).ready(function() {
                 };
                 
                 // Event handlers
-                gantt.attachEvent('onTaskDrag', (id, mode, task, original) => {
-                    return true; // Allow dragging
-                });
                 
                 gantt.attachEvent('onAfterTaskUpdate', (id, task) => {
                     this.updateTaskInDatabase(task);
@@ -726,12 +704,41 @@ $(document).ready(function() {
                 gantt.attachEvent('onAfterLinkDelete', (id, link) => {
                     this.deleteTaskLink(link);
                 });
+
+                gantt.attachEvent("onTaskDrag", function (id, mode, task, original) {
+                    if(task.type == 'project'){
+                        return false;
+                    }
+                    // var modes = gantt.config.drag_mode;
+                    // if (mode == modes.move) {
+                    //     var diff = task.start_date - original.start_date;
+                    //     gantt.eachTask(function (child) {
+                    //         if (child.$source.length != 0 || child.$target.length != 0) {
+                    //             child.start_date = new Date(+child.start_date + diff);
+                    //             child.end_date = new Date(+child.end_date + diff);
+                    //             gantt.refreshTask(child.id, true);
+                    //         }
+                    //     }, id);
+                    // }
+                    // return true;
+                });
+            
+                //rounds the positions of child items to the scale
+                // gantt.attachEvent("onAfterTaskDrag", function(id, mode, e){
+                //     var modes = gantt.config.drag_mode;
+                //     if(mode == modes.move ){
+                //         gantt.eachTask(function(child){
+                //             child.start_date = gantt.roundDate(child.start_date);
+                //             child.end_date = gantt.calculateEndDate(child.start_date, child.duration);
+                //             gantt.updateTask(child.id);
+                //         },id );
+                //     }
+                // });
                 
                 // Initialize Gantt
                 gantt.init('gantt_container');
-                
-                this.updateGanttData();
                 this.ganttInitialized = true;
+                this.updateGanttData();
                 this.addGanttStyles();
 
                 
@@ -743,7 +750,8 @@ $(document).ready(function() {
                     formData.append('id', task.id);
                     formData.append('start_date', this.formatDateTimeForAPI(task.start_date));
                     formData.append('due_date', this.formatDateTimeForAPI(task.end_date));
-                    formData.append('progress', task.progress);
+                    console.log(task.start_date, this.formatDateTimeForAPI(task.start_date));
+                    // formData.append('progress', task.progress);
                     
                     const response = await axios.post('/api/index.php?model=task&method=updateTaskDate', formData);
                     if (response.data && response.data.success !== false) {
@@ -776,15 +784,21 @@ $(document).ready(function() {
             },
 
             formatDateTimeForAPI(datetime) {
-                if (!datetime) return '';
-                const date = new Date(datetime);
-                return date.toISOString().slice(0, 19).replace('T', ' ');
+                return moment(datetime).format('YYYY-MM-DD HH:mm');
             },
 
             addGanttStyles() {
                 // Add custom styles for better appearance - same as project-gantt
                 const style = document.createElement('style');
                 style.textContent = `
+                /* Ensure Gantt container has proper dimensions */
+                    #gantt_container {
+                        z-index: 2000 !important;
+                    }
+                    .gantt_modal_box,
+                    .gantt_cal_cover{
+                        z-index: 2000 !important;
+                    }
                     /* Current time marker */
                     .current_time_marker {
                         background-color: var(--bs-danger);
@@ -792,9 +806,22 @@ $(document).ready(function() {
                         opacity: 0.8;
                         z-index: 10;
                     }
+                    .end_status_line{
+                        background-color: var(--bs-secondary) !important;
+                        width: 2px;
+                        opacity: 0.5;
+                    }
+                    .start_status_line{
+                        background-color: var(--bs-secondary) !important;
+                        width: 2px;
+                        opacity: 0.5;
+                    }
+                    .start_status_line .gantt_marker_content{
+                        display: none;
+                    }
                     /* Weekend styling */
-                    .gantt_scale_cell.weekend {
-                        background-color: #f8f9fa;
+                    .weekend {
+                        background: var(--dhx-gantt-base-colors-background-alt);
                     }
                     
                     .gantt_task_cell.weekend {
