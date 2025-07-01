@@ -409,6 +409,10 @@ class Task extends ApplicationModel {
     function updateOrder() {
         $taskIds = json_decode($_POST['task_ids'], true);
         $projectId = $_POST['project_id'];
+        $draggedTaskId = isset($_POST['dragged_task_id']) ? intval($_POST['dragged_task_id']) : null;
+        $newParentId = isset($_POST['new_parent_id']) ? (empty($_POST['new_parent_id']) ? null : intval($_POST['new_parent_id'])) : null;
+        
+        // Update positions
         $position = 0;
         foreach ($taskIds as $taskId) {
             $this->query_update(
@@ -417,7 +421,30 @@ class Task extends ApplicationModel {
             );
             $position++;
         }
-        //return true;
+        
+        // Update parent_id for the dragged task if provided
+        if ($draggedTaskId && $newParentId !== null) {
+            // Check for circular reference
+            if ($newParentId && $this->isDescendant($newParentId, $draggedTaskId)) {
+                return [
+                    'success' => false,
+                    'message' => '循環参照を防ぐため、この操作は許可されていません'
+                ];
+            }
+            
+            // Update the parent_id
+            $data = [
+                'parent_id' => $newParentId,
+                'updated_at' => date('Y-m-d H:i:s')
+            ];
+            
+            $this->query_update($data, ['id' => $draggedTaskId]);
+        }
+        
+        return [
+            'success' => true,
+            'message' => 'タスク順序が更新されました'
+        ];
     }
 
     function setParent() {

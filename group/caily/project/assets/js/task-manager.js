@@ -897,6 +897,15 @@ const TaskApp = createApp({
                         console.log('Drag ended');
                         const taskElements = Array.from(taskList.children);
                         console.log('Task elements:', taskElements);
+                        
+                        // Get the dragged task ID
+                        const draggedTaskId = evt.item.getAttribute('data-id');
+                        console.log('Dragged task ID:', draggedTaskId);
+                        
+                        // Calculate new parent_id based on position
+                        const newParentId = this.calculateNewParentId(evt.newIndex, taskElements);
+                        console.log('New parent ID:', newParentId);
+                        
                         const newOrder = taskElements
                             .map(el => {
                                 const id = el.getAttribute('data-id');
@@ -908,22 +917,63 @@ const TaskApp = createApp({
                         
                         if (newOrder.length > 0) {
                             console.log('Calling updateTaskOrder');
-                            this.updateTaskOrder(newOrder);
+                            this.updateTaskOrder(newOrder, draggedTaskId, newParentId);
                         }
                     }
                 });
             }
         },
         
-        async updateTaskOrder(taskIds) {
+        calculateNewParentId(newIndex, taskElements) {
+            if (newIndex === 0) {
+                // If dropped at the top, no parent
+                return null;
+            }
+            // Get the indent level of the dropped position (after move, so use previous task)
+            let parentId = null;
+            for (let i = newIndex - 1; i >= 0; i--) {
+                const element = taskElements[i];
+                const taskId = element.getAttribute('data-id');
+                if (!taskId) continue;
+                // Find the task in our data
+                const task = this.tasks.find(t => t.id == taskId);
+                if (!task) continue;
+                // Calculate indent level for this task
+                const indentLevel = this.calculateIndent(task, i, this.tasks).indent_level;
+                // The first previous task with indent_level less than the dropped task will be the parent
+                if (indentLevel >= 0) {
+                    parentId = taskId;
+                    break;
+                }
+            }
+            return parentId;
+        },
+        
+        async updateTaskOrder(taskIds, draggedTaskId = null, newParentId = null) {
             try {
                 const formData = new FormData();
                 formData.append('task_ids', JSON.stringify(taskIds));
                 formData.append('project_id', this.projectId);
+                
+                // Add dragged task ID and new parent ID if provided
+                if (draggedTaskId) {
+                    formData.append('dragged_task_id', draggedTaskId);
+                }
+                if (newParentId !== null) {
+                    formData.append('new_parent_id', newParentId);
+                }
+                
                 const response = await axios.post(
                     '/api/index.php?model=task&method=updateOrder',
                     formData
                 );
+                
+                if (response.data.success) {
+                    // Reload tasks to reflect the new structure
+                    await this.loadTasks();
+                } else {
+                    this.showMessage(response.data.message || 'タスク順序の更新に失敗しました', true);
+                }
                 
             } catch (error) {
                 console.error('Error updating task order:', error);
@@ -969,7 +1019,17 @@ const TaskApp = createApp({
         
         async decreaseIndent(task) {
             if (task.indent_level > 0) {
-                await this.setParent(task.id, null);
+                // Find the current task's parent
+                const currentTask = this.tasks.find(t => t.id === task.id);
+                if (!currentTask || !currentTask.parent_id) return;
+                
+                // Find the parent task
+                const parentTask = this.tasks.find(t => t.id === currentTask.parent_id);
+                if (!parentTask) return;
+                
+                // Set the new parent to the parent's parent (one level up)
+                const newParentId = parentTask.parent_id;
+                await this.setParent(task.id, newParentId);
             }
         },
         

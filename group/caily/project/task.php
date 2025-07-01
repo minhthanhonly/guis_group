@@ -576,6 +576,7 @@ if (!$project_id) {
 /* Indent styling */
 .subtask {
     border-left: 3px solid var(--bs-primary);
+    background-color: var(--bs-primary-bg-subtle);
 }
 
 .task-list .card {
