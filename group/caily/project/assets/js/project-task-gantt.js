@@ -303,7 +303,6 @@ $(document).ready(function() {
                         priorityColor: priorityObj ? priorityObj.color : 'secondary'
                     });
                 });
-                console.log(ganttTasks);
 
                 return {
                     data: ganttTasks,
@@ -731,6 +730,14 @@ $(document).ready(function() {
                 });
                 gantt.attachEvent('onAfterLinkDelete', (id, link) => {
                     this.deleteTaskLink(link);
+                });
+
+                gantt.attachEvent('onBeforeLightbox', function(id) {
+                    const task = gantt.getTask(id);
+                    if (task.type === 'project') {
+                        return false; // Không hiển thị lightbox cho project
+                    }
+                    return true;
                 });
 
                 // Initialize Gantt
