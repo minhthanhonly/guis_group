@@ -271,7 +271,7 @@ $(document).ready(function() {
                     type: 'project',
                     start_date: projectStart,
                     end_date: projectEnd,
-                    progress: 0,
+                    progress: this.projectInfo.progress / 100 || 0,
                     parent: null,
                     open: true,
                     status: '',
@@ -625,6 +625,12 @@ $(document).ready(function() {
                 // Columns configuration - adapted for tasks
                 gantt.config.columns = [
                     { name: "text", label: "タスク名", width: 200, tree: true, min_width: 150 },
+                    { name: "start_date", label: "開始日", width: 140, align: "left", min_width: 120, template: (obj) => {
+                        return this.formatDateTimeFull(obj.start_date);
+                    }},
+                    { name: "end_date", label: "期限日", width: 140, align: "left", min_width: 120, template: (obj) =>  {
+                        return this.formatDateTimeFull(obj.end_date);
+                    }},
                     { name: "status", label: "ステータス", width: 100, align: "left", min_width: 80, template: function(obj) {
                         const status = statuses.find(s => s.key === obj.status);
                         return status ? status.name : obj.status;
@@ -633,12 +639,7 @@ $(document).ready(function() {
                         const priority = priorities.find(p => p.key === obj.priority);
                         return priority ? priority.name : obj.priority;
                     }},
-                    { name: "start_date", label: "開始日", width: 140, align: "left", min_width: 120, template: (obj) => {
-                        return this.formatDateTimeFull(obj.start_date);
-                    }},
-                    { name: "end_date", label: "期限日", width: 140, align: "left", min_width: 120, template: (obj) =>  {
-                        return this.formatDateTimeFull(obj.end_date);
-                    }},
+                    
                     { name: "progress", label: "進捗", width: 80, align: "left", min_width: 60, template: function(obj) {
                         return Math.round(obj.progress * 100) + "%";
                     }}
@@ -800,9 +801,10 @@ $(document).ready(function() {
                     #gantt_container {
                         z-index: 2000 !important;
                     }
+                    .gantt_tooltip,
                     .gantt_modal_box,
                     .gantt_cal_cover{
-                        z-index: 2000 !important;
+                        z-index: 2001 !important;
                     }
                     /* Current time marker */
                     .current_time_marker {
@@ -921,14 +923,7 @@ $(document).ready(function() {
 
             formatDateTimeFull(datetime) {
                 if (!datetime) return '';
-                const d = new Date(datetime);
-                const y = d.getFullYear();
-                const m = (d.getMonth() + 1).toString().padStart(2, '0');
-                const day = d.getDate().toString().padStart(2, '0');
-                const h = d.getHours().toString().padStart(2, '0');
-                const min = d.getMinutes().toString().padStart(2, '0');
-                // Bạn có thể đổi sang dạng 'YYYY-MM-DD HH:mm' hoặc 'YYYY年MM月DD日 HH:mm'
-                return `${m}月${day}日 ${h}:${min}`;
+                return moment(datetime).format('M月D日 H:mm');
             }
         }
     }).mount('#app');

@@ -892,9 +892,10 @@ $(document).ready(function() {
                     #gantt_container {
                         z-index: 2000 !important;
                     }
+                    .gantt_tooltip,
                     .gantt_modal_box,
                     .gantt_cal_cover{
-                        z-index: 2000 !important;
+                        z-index: 2001 !important;
                     }
                     .weekend {
                         background: var(--dhx-gantt-base-colors-background-alt);
