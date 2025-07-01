@@ -410,4 +410,116 @@ class Task extends ApplicationModel {
         }
         //return true;
     }
+
+    function setParent() {
+        $taskId = isset($_POST['task_id']) ? intval($_POST['task_id']) : 0;
+        $parentId = isset($_POST['parent_id']) ? (empty($_POST['parent_id']) ? null : intval($_POST['parent_id'])) : null;
+        
+        if (!$taskId) {
+            return [
+                'success' => false,
+                'message' => 'タスクIDが指定されていません'
+            ];
+        }
+        
+        // Get current task info
+        $task = $this->getById($taskId);
+        if (!$task) {
+            return [
+                'success' => false,
+                'message' => 'タスクが見つかりません'
+            ];
+        }
+        
+        // If setting a parent, check for circular reference
+        if ($parentId) {
+            if ($taskId == $parentId) {
+                return [
+                    'success' => false,
+                    'message' => '自分自身を親タスクに設定することはできません'
+                ];
+            }
+            
+            // Check if parent exists and is in the same project
+            $parentTask = $this->getById($parentId);
+            if (!$parentTask) {
+                return [
+                    'success' => false,
+                    'message' => '親タスクが見つかりません'
+                ];
+            }
+            
+            if ($parentTask['project_id'] != $task['project_id']) {
+                return [
+                    'success' => false,
+                    'message' => '異なるプロジェクトのタスクを親に設定することはできません'
+                ];
+            }
+            
+            // Check for circular reference (parent would become child of current task)
+            if ($this->isDescendant($parentId, $taskId)) {
+                return [
+                    'success' => false,
+                    'message' => '循環参照を防ぐため、この操作は許可されていません'
+                ];
+            }
+        }
+        
+        // Update the task's parent_id
+        $data = [
+            'parent_id' => $parentId,
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+        
+        $result = $this->query_update($data, ['id' => $taskId]);
+        
+        if ($result) {
+            // Update parent task progress if setting a parent
+            // if ($parentId) {
+            //     $this->updateParentTaskProgress($parentId);
+            // }
+            
+            // // Update project progress
+            // $this->updateProjectProgress($task['project_id']);
+            
+            return [
+                'success' => true,
+                'message' => $parentId ? 'サブタスクが作成されました' : 'サブタスクが解除されました'
+            ];
+        } else {
+            return [
+                'success' => false,
+                'message' => 'タスクの更新に失敗しました'
+            ];
+        }
+    }
+    
+    private function isDescendant($taskId, $potentialAncestorId) {
+        // Check if taskId is a descendant of potentialAncestorId using iterative approach
+        $currentId = $taskId;
+        $maxDepth = 10; // Prevent infinite loops
+        $depth = 0;
+        
+        while ($currentId && $depth < $maxDepth) {
+            $query = sprintf(
+                "SELECT parent_id FROM {$this->table} WHERE id = %d",
+                intval($currentId)
+            );
+            
+            $result = $this->fetchOne($query);
+            if (!$result || !$result['parent_id']) {
+                break; // No parent found
+            }
+            
+            $currentId = $result['parent_id'];
+            $depth++;
+            
+            // Check if we found the potential ancestor
+            if ($currentId == $potentialAncestorId) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
 } 

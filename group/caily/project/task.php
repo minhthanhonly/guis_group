@@ -160,12 +160,12 @@ if (!$project_id) {
                 <i class="bi bi-inbox fs-1 mb-2"></i>
                 <div class="card mb-2 p-2">タスクがありません</div>
             </div>
-            <div v-for="task in displayTasks" :key="task.id || 'inline-' + task._inlineIndex" class="card mb-2" :data-id="task.id">
+            <div v-for="task in displayTasks" :key="task.id || 'inline-' + task._inlineIndex" class="card mb-2" :data-id="task.id" :class="{'subtask': task.indent_level > 0}" :style="{marginLeft: (task.indent_level * 20) + 'px'}">
                 <!-- Inline Edit Mode -->
                 <div v-if="task._isInlineEdit" class="row g-0 align-items-center">
                     <div class="col-2">
                         <div class="p-2">
-                            <input type="text" class="form-control inline-task-input" v-model="task.title" placeholder="タスク名" required>
+                            <input type="text" class="form-control inline-task-input" v-model="task.title" placeholder="タスク名" required @input="ensureTaskData(task._inlineIndex)" @blur="ensureTaskData(task._inlineIndex)">
                         </div>
                     </div>
                     <div class="col-1">
@@ -178,7 +178,7 @@ if (!$project_id) {
                                 </button>
                                 <ul class="dropdown-menu">
                                     <li v-for="priority in taskPriorities" :key="priority.value">
-                                        <a class="dropdown-item waves-effect" href="#" @click.prevent="task.priority = priority.value; closeDropdown($event)">
+                                        <a class="dropdown-item waves-effect" href="#" @click="updateInlineTaskPriority(task._inlineIndex, priority.value)">
                                             {{ priority.label }}
                                         </a>
                                     </li>
@@ -188,8 +188,8 @@ if (!$project_id) {
                     </div>
                     <div class="col-2">
                         <div class="pe-2 d-flex align-items-center gap-2">
-                            <input type="text" class="form-control px-1 py-0 datetimepicker" v-model="task.start_date" placeholder="開始日">
-                            <input type="text" class="form-control px-1 py-0 datetimepicker" v-model="task.due_date" placeholder="期限日">
+                            <input type="text" class="form-control px-1 py-0 datetimepicker" v-model="task.start_date" placeholder="開始日" @input="ensureTaskData(task._inlineIndex)" @blur="ensureTaskData(task._inlineIndex)">
+                            <input type="text" class="form-control px-1 py-0 datetimepicker" v-model="task.due_date" placeholder="期限日" @input="ensureTaskData(task._inlineIndex)" @blur="ensureTaskData(task._inlineIndex)">
                         </div>
                     </div>
                     <div class="col-2">
@@ -229,7 +229,7 @@ if (!$project_id) {
                                     {{ getStatusLabel(task.status) }}
                                 </button>
                                 <ul class="dropdown-menu">
-                                    <li v-for="status in taskStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="task.status = status.value; closeDropdown($event)">
+                                    <li v-for="status in taskStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateInlineTaskStatus(task._inlineIndex, status.value)">
                                         {{ status.label }}
                                     </li>
                                 </ul>
@@ -238,7 +238,7 @@ if (!$project_id) {
                     </div>
                     <div class="col-1">
                         <div class="py-2 pe-2 d-flex align-items-center">
-                            <input type="range" min="0" max="100" step="1" v-model.number="task.progress" class="w-100">
+                            <input type="range" min="0" max="100" step="1" v-model.number="task.progress" class="w-100" @change="ensureTaskData(task._inlineIndex)">
                             <span class="ms-2">{{ task.progress || 0 }}%</span>
                         </div>
                     </div>
@@ -251,7 +251,7 @@ if (!$project_id) {
                 <!-- Normal Display Mode -->
                 <div v-else class="row g-0 align-items-center">
                     <div class="col-2 d-flex align-items-center">
-                        <span class="drag-handle ps-2 fs-16" style="cursor: move;">≡</span>
+                        <span class="drag-handle ps-2 pe-2 fs-16" style="cursor: move;">≡</span>
                         <div class="d-flex align-items-center justify-content-between gap-2 flex-grow-1 task-title">
                             <span class="fw-bold" @click="openTaskDetails(task)" style="cursor: pointer; max-width: 100%;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;">{{ task.title }}</span>
                             <i class="fa fa-expand-alt" style="cursor: pointer;" @click="openTaskDetails(task)"></i>
@@ -305,7 +305,7 @@ if (!$project_id) {
                                     {{ getStatusLabel(task.status) }}
                                 </button>
                                 <ul class="dropdown-menu">
-                                    <li v-for="status in taskStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateTaskStatus(task, status.value); closeDropdown($event)">
+                                    <li v-for="status in taskStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateTaskStatus(task, status.value); $nextTick(() => closeAllDropdowns())">
                                         {{ status.label }}
                                     </li>
                                 </ul>
@@ -320,6 +320,12 @@ if (!$project_id) {
                     </div>
                     <div class="col-1 d-flex align-items-center justify-content-center gap-2">
                         <button class="btn btn-sm btn-outline-primary me-1" @click="editTaskInline(task)"><i class="fas fa-edit"></i></button>
+                        <button v-if="!isFirstTask(task)" class="btn btn-sm btn-outline-secondary me-1" @click="increaseIndent(task)" title="サブタスクにする">
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                        <button v-if="task.indent_level > 0" class="btn btn-sm btn-outline-secondary me-1" @click="decreaseIndent(task)" title="サブタスクを解除">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
                         <button class="btn btn-sm btn-outline-danger" @click="deleteTask(task)"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
@@ -567,6 +573,18 @@ if (!$project_id) {
     border-left: 1px solid #ccc;
 }
 
+/* Indent styling */
+.subtask {
+    border-left: 3px solid var(--bs-primary);
+}
+
+.task-list .card {
+    transition: all 0.2s ease;
+}
+
+.task-list .card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
 
 </style>
 <script>
