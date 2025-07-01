@@ -293,7 +293,7 @@ $(document).ready(function() {
                         parent: task.parent_id ? task.parent_id : 1,
                         priority: task.priority || 'medium',
                         status: task.status || 'todo',
-                        type: this.getTaskType(task),
+                        type: 'task',
                         assignee: task.assigned_to,
                         description: task.description || '',
                         estimated_hours: task.estimated_hours || 0,
@@ -694,8 +694,36 @@ $(document).ready(function() {
                 });
                 
                 gantt.attachEvent('onAfterTaskDrop', (id, parent, tindex) => {
-                    // Handle parent-child relationship changes
-                    this.updateTaskParent(id, parent);
+                    // Lấy lại task cha đã snap với grid
+                    const snappedTask = gantt.getTask(id);
+                    // Lưu lại start_date cũ trước khi drag (nếu cần, có thể lưu vào biến tạm khi bắt đầu drag)
+                    // Ở đây giả sử bạn có thể lấy originalStartDate từ task (nếu không, cần lưu lại khi bắt đầu drag)
+                    if (!snappedTask._originalStartDate) return;
+                    const diff = snappedTask.start_date - snappedTask._originalStartDate;
+                    function moveChildTasks(parentId, diff) {
+                        gantt.eachTask(function(child) {
+                            if (child.parent == parentId) {
+                                child.start_date = new Date(+child.start_date + diff);
+                                child.end_date = new Date(+child.end_date + diff);
+                                gantt.refreshTask(child.id, true);
+                                moveChildTasks(child.id, diff);
+                            }
+                        }, parentId);
+                    }
+                    moveChildTasks(id, diff);
+                    // Xóa biến tạm
+                    delete snappedTask._originalStartDate;
+                });
+                // Lưu lại start_date gốc khi bắt đầu drag
+                gantt.attachEvent('onBeforeTaskDrag', function(id, mode, e){
+                    const task = gantt.getTask(id);
+                    if (task.type === 'project') {
+                        return false; // Không cho phép drag project
+                    }
+                    if (mode === gantt.config.drag_mode.move) {
+                        task._originalStartDate = new Date(task.start_date);
+                    }
+                    return true;
                 });
                 
                 gantt.attachEvent('onAfterLinkAdd', (id, link) => {
@@ -705,36 +733,6 @@ $(document).ready(function() {
                     this.deleteTaskLink(link);
                 });
 
-                gantt.attachEvent("onTaskDrag", function (id, mode, task, original) {
-                    if(task.type == 'project'){
-                        return false;
-                    }
-                    // var modes = gantt.config.drag_mode;
-                    // if (mode == modes.move) {
-                    //     var diff = task.start_date - original.start_date;
-                    //     gantt.eachTask(function (child) {
-                    //         if (child.$source.length != 0 || child.$target.length != 0) {
-                    //             child.start_date = new Date(+child.start_date + diff);
-                    //             child.end_date = new Date(+child.end_date + diff);
-                    //             gantt.refreshTask(child.id, true);
-                    //         }
-                    //     }, id);
-                    // }
-                    // return true;
-                });
-            
-                //rounds the positions of child items to the scale
-                // gantt.attachEvent("onAfterTaskDrag", function(id, mode, e){
-                //     var modes = gantt.config.drag_mode;
-                //     if(mode == modes.move ){
-                //         gantt.eachTask(function(child){
-                //             child.start_date = gantt.roundDate(child.start_date);
-                //             child.end_date = gantt.calculateEndDate(child.start_date, child.duration);
-                //             gantt.updateTask(child.id);
-                //         },id );
-                //     }
-                // });
-                
                 // Initialize Gantt
                 gantt.init('gantt_container');
                 this.ganttInitialized = true;
