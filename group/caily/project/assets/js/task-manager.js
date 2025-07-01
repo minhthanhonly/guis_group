@@ -95,6 +95,40 @@ const TaskApp = createApp({
                 return match;
             });
         },
+        displayTasks() {
+            const filtered = this.filteredTasks;
+            const result = [];
+            
+            for (let i = 0; i < filtered.length; i++) {
+                const task = filtered[i];
+                const inlineTask = this.inlineTasks.find(inline => inline.id === task.id);
+                
+                if (inlineTask) {
+                    // Add inline task with edit mode flag
+                    result.push({
+                        ...inlineTask,
+                        _isInlineEdit: true,
+                        _inlineIndex: this.inlineTasks.indexOf(inlineTask)
+                    });
+                } else {
+                    // Add normal task
+                    result.push(task);
+                }
+            }
+            
+            // Add new inline tasks (those without id)
+            this.inlineTasks.forEach((inlineTask, index) => {
+                if (!inlineTask.id) {
+                    result.push({
+                        ...inlineTask,
+                        _isInlineEdit: true,
+                        _inlineIndex: index
+                    });
+                }
+            });
+            
+            return result;
+        },
         taskStats() {
             const now = moment().tz('Asia/Tokyo');
             const total = this.tasks.length;
@@ -536,8 +570,6 @@ const TaskApp = createApp({
             };
             this.editingInlineId = task.id;
             this.inlineTasks.push(inlineTask);
-            // Remove the task from filteredTasks temporarily
-            this.tasks = this.tasks.filter(t => t.id !== task.id);
         },
         
         async saveTaskInline(idx) {
@@ -587,10 +619,6 @@ const TaskApp = createApp({
         
         cancelTaskInline(idx) {
             const inlineTask = this.inlineTasks[idx];
-            if (inlineTask.id) {
-                // If canceling an edit, restore the original task
-                this.loadTasks();
-            }
             this.inlineTasks.splice(idx, 1);
             this.editingInlineId = null;
         },
