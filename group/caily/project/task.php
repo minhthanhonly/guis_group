@@ -12,25 +12,28 @@ if (!$project_id) {
 <div id="app" class="container-fluid mt-4" v-cloak>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-label-info">#P{{ projectInfo?.project_number }}</span></a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar">
-                <span class="navbar-toggler-icon"></span>
+            <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-label-info">#P{{ project?.project_number }}</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar" aria-controls="projectNavbar" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="projectNavbar">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item">
-                        <a class="nav-link" href="detail.php?id=<?php echo $project_id; ?>">概要</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="task.php?project_id=<?php echo $project_id; ?>">タスク</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>">ガントチャート</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>">添付ファイル</a>
-                    </li>
-                </ul>
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                <a class="nav-link" href="detail.php?id=<?php echo $project_id; ?>">概要</a>
+                </li>
+                <li class="nav-item">
+                <a class="nav-link active" aria-current="page" href="task.php?project_id=<?php echo $project_id; ?>">タスク<span class="badge badge-sm ms-1 rounded-pill">{{ projectInfo?.task_count }}</span></a>
+                </li>
+                <li class="nav-item">
+                <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>">ガントチャート</a>
+                </li>
+                <li class="nav-item">
+                <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>">図面<span class="badge badge-sm bg-info ms-1 rounded-pill">{{ projectInfo?.drawing_count }}</span></a>
+                </li>
+                <li class="nav-item">
+                <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>">添付ファイル</a>
+                </li>
+            </ul>
             </div>
         </div>
     </nav>

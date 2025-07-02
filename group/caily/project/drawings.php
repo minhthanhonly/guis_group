@@ -23,13 +23,13 @@ if (!$project_id) {
                     <a class="nav-link" href="detail.php?id=<?php echo $project_id; ?>">概要</a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>">タスク</a>
+                    <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>">タスク<span class="badge badge-sm ms-1 rounded-pill">{{ project?.task_count }}</span></a>
                     </li>
                     <li class="nav-item">
                     <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>">ガントチャート</a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link active" aria-current="page" href="drawings.php?project_id=<?php echo $project_id; ?>">図面</a>
+                    <a class="nav-link active" aria-current="page" href="drawings.php?project_id=<?php echo $project_id; ?>">図面<span class="badge badge-sm bg-info ms-1 rounded-pill">{{ project?.drawing_count }}</span></a>
                     </li>
                     <li class="nav-item">
                     <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>">添付ファイル</a>

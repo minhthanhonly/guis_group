@@ -475,6 +475,7 @@ class Project extends ApplicationModel {
             "SELECT p.*, d.name as department_name,
             c.name as contact_name, c.company_name, c.department as branch_name, c.category_id as category_id, 
             (SELECT COUNT(*) FROM " . DB_PREFIX . "tasks WHERE project_id = p.id) as task_count,
+            (SELECT COUNT(*) FROM " . DB_PREFIX . "project_drawings WHERE project_id = p.id) as drawing_count,
             (SELECT COUNT(*) FROM " . DB_PREFIX . "project_members WHERE project_id = p.id) as member_count
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
