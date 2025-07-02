@@ -71,9 +71,14 @@ if (!$project_id) {
                         <!-- Drawing Statistics -->
                         <div class="row mb-4">
                             <div class="col-auto" v-for="stat in stats" :key="stat.label">
-                                <div class="card shadow-sm text-center" style="min-width: 140px;">
+                                <div class="card shadow-sm text-center"
+                                     :class="{'border-primary': statusFilter === stat.status || (stat.status === '' && !statusFilter)}"
+                                     style="min-width: 140px; cursor: pointer;"
+                                     @click="filterByStatus(stat.status)">
                                     <div class="card-body py-3 px-2">
-                                        <div :class="'fs-5 mb-1 ' + stat.color" style="font-size: 1.25rem;"><i :class="stat.icon"></i> {{ stat.value }}</div>
+                                        <div :class="'fs-5 mb-1 ' + stat.color" style="font-size: 1.25rem;">
+                                            <i :class="stat.icon"></i> {{ stat.value }}
+                                        </div>
                                         <div class="fw-bold small">{{ stat.label }}</div>
                                     </div>
                                 </div>

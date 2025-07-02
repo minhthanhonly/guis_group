@@ -108,43 +108,50 @@ createApp({
                     label: '図面総数',
                     value: this.drawings.length,
                     icon: 'fa fa-file-alt text-primary',
-                    color: 'text-primary'
+                    color: 'text-primary',
+                    status: ''
                 },
                 {
                     label: '下書き',
                     value: this.drawings.filter(d => d.status === 'draft').length,
                     icon: 'fa fa-pencil-alt text-secondary',
-                    color: 'text-secondary'
+                    color: 'text-secondary',
+                    status: 'draft'
                 },
                 {
                     label: 'レビュー中',
                     value: this.drawings.filter(d => d.status === 'review').length,
                     icon: 'fa fa-search text-info',
-                    color: 'text-info'
+                    color: 'text-info',
+                    status: 'review'
                 },
                 {
                     label: '修正中',
                     value: this.drawings.filter(d => d.status === 'revision').length,
                     icon: 'fa fa-tools text-warning',
-                    color: 'text-warning'
+                    color: 'text-warning',
+                    status: 'revision'
                 },
                 {
                     label: '修正済',
                     value: this.drawings.filter(d => d.status === 'revised').length,
                     icon: 'fa fa-check text-success',
-                    color: 'text-success'
+                    color: 'text-success',
+                    status: 'revised'
                 },
                 {
                     label: '承認済み',
                     value: this.drawings.filter(d => d.status === 'approved').length,
                     icon: 'fa fa-check-circle text-success',
-                    color: 'text-success'
+                    color: 'text-success',
+                    status: 'approved'
                 },
                 {
                     label: '却下',
                     value: this.drawings.filter(d => d.status === 'rejected').length,
                     icon: 'fa fa-times-circle text-danger',
-                    color: 'text-danger'
+                    color: 'text-danger',
+                    status: 'rejected'
                 }
             ];
         }
@@ -885,6 +892,10 @@ createApp({
                 status: 'draft',
                 file_path: ''
             };
+        },
+        
+        filterByStatus(status) {
+            this.statusFilter = status;
         }
     }
 }).mount('#app'); 
