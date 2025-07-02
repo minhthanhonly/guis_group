@@ -55,12 +55,12 @@ if (!$project_id) {
                             <i class="fa fa-file-alt me-2"></i>図面ファイル管理
                         </h5>
                         <div class="d-flex gap-2">
-                            <div class="col-md-6">
+                            <div class="col-md-12">
                                 <div class="d-flex gap-2">
-                                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#importModal">
+                                    <button class="btn btn-primary text-nowrap" data-bs-toggle="modal" data-bs-target="#importModal">
                                         <i class="fa fa-upload me-1"></i>インポート
                                     </button>
-                                    <button class="btn btn-success" @click="showAddModal = true">
+                                    <button class="btn btn-success text-nowrap" @click="openAddModal()">
                                         <i class="fa fa-plus me-1"></i>追加
                                     </button>
                                 </div>
@@ -81,6 +81,8 @@ if (!$project_id) {
                                     <option value="">すべてのステータス</option>
                                     <option value="draft">下書き</option>
                                     <option value="review">レビュー中</option>
+                                    <option value="revision">修正中</option>
+                                    <option value="revised">修正済</option>
                                     <option value="approved">承認済み</option>
                                     <option value="rejected">却下</option>
                                 </select>
@@ -108,52 +110,119 @@ if (!$project_id) {
                                         <th width="50">
                                             <input type="checkbox" class="form-check-input" @change="toggleSelectAll" :checked="isAllSelected">
                                         </th>
-                                        <th>ファイル名</th>
-                                        <th>ステータス</th>
-                                        <th>作成日</th>
-                                        <th>作成者</th>
-                                        <th width="120">操作</th>
+                                        <th @click="sortBy('name')" style="cursor: pointer;">
+                                            <div class="d-flex align-items-center">
+                                                <span>ファイル名</span>
+                                                <i class="fa ms-1" :class="getSortIcon('name')"></i>
+                                            </div>
+                                        </th>
+                                        <th @click="sortBy('file_type')" style="cursor: pointer;">
+                                            <div class="d-flex align-items-center">
+                                                <span>ファイルタイプ</span>
+                                                <i class="fa ms-1" :class="getSortIcon('file_type')"></i>
+                                            </div>
+                                        </th>
+
+                                        <th @click="sortBy('status')" style="cursor: pointer;">
+                                            <div class="d-flex align-items-center">
+                                                <span>ステータス</span>
+                                                <i class="fa ms-1" :class="getSortIcon('status')"></i>
+                                            </div>
+                                        </th>
+                                        <th @click="sortBy('check_date')" style="cursor: pointer;">
+                                            <div class="d-flex align-items-center">
+                                                <span>チェック日</span>
+                                                <i class="fa ms-1" :class="getSortIcon('check_date')"></i>
+                                            </div>
+                                        </th>
+                                        <th @click="sortBy('checked_by_name')" style="cursor: pointer;">
+                                            <div class="d-flex align-items-center">
+                                                <span>チェッカー</span>
+                                                <i class="fa ms-1" :class="getSortIcon('checked_by_name')"></i>
+                                            </div>
+                                        </th>
+                                        <th @click="sortBy('created_by')" style="cursor: pointer;">
+                                            <div class="d-flex align-items-center">
+                                                <span>作成者</span>
+                                                <i class="fa ms-1" :class="getSortIcon('created_by')"></i>
+                                            </div>
+                                        </th>
+                                        <th width="150">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="drawing in filteredDrawings" :key="drawing.id" :class="{ 'table-primary': selectedDrawings.includes(drawing.id) }">
+                                    <tr v-for="(drawing, index) in filteredDrawings" :key="drawing.id" 
+                                        :class="{ 'table-primary': selectedDrawings.includes(drawing.id) }"
+                                        :data-index="index"
+                                        @mousedown="startDragSelection($event, index)"
+                                        @mouseover="hoveredRow = index"
+                                        @mouseleave="hoveredRow = null"
+                                        style="cursor: pointer;">
                                         <td>
-                                            <input type="checkbox" class="form-check-input" :value="drawing.id" v-model="selectedDrawings">
+                                            <input type="checkbox" class="form-check-input" :value="drawing.id" v-model="selectedDrawings" @click.stop>
+                                        </td>
+                                        <td style="position: relative;">
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-grow-1">
+                                                    <span>{{ drawing.name }}</span>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary position-absolute" 
+                                                    @click.stop="copyToClipboard(drawing.name)" 
+                                                    title="ファイル名をコピー"
+                                                    v-show="hoveredRow === index"
+                                                    style="right: 8px; top: 50%; transform: translateY(-50%);">
+                                                <i class="fa fa-copy"></i>
+                                            </button>
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">
-                                                <i class="fa fa-file-pdf text-danger me-2" v-if="drawing.name && drawing.name.toLowerCase().endsWith('.pdf')"></i>
-                                                <i class="fa fa-file-image text-success me-2" v-else-if="drawing.name && ['jpg','jpeg','png','gif','bmp','tiff'].some(ext => drawing.name.toLowerCase().endsWith('.' + ext))"></i>
-                                                <i class="fa fa-file me-2" v-else></i>
-                                                <div>
-                                                    <div class="fw-medium">{{ drawing.name }}</div>
-                                                    <small class="text-muted" v-if="drawing.name">{{ drawing.name.split('.').pop().toUpperCase() }}</small>
+                                                <span class="badge bg-label-primary" v-if="drawing.name && drawing.name.includes('.')">{{ drawing.name.split('.').pop().toUpperCase() }}</span>
+                                                <span v-else class="text-muted">-</span>
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <div class="btn-group" style="width: 120px;">
+                                                <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light w-100"
+                                                        :class="getStatusButtonClass(drawing.status)"
+                                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                                    {{ getStatusLabel(drawing.status) }}
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li v-for="status in drawingStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateStatus(drawing.id, status.value)">
+                                                        {{ status.label }}
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </td>
+                                        <td>{{ drawing.check_date ? formatDateTime(drawing.check_date) : '-' }}</td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar me-2" v-if="drawing.checked_by_name">
+                                                    <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(drawing.checked_by_name) }}</span>
                                                 </div>
                                             </div>
                                         </td>
                                         <td>
-                                            <select class="form-select form-select-sm" v-model="drawing.status" @change="updateStatus(drawing.id, drawing.status)" style="width: auto;">
-                                                <option value="draft">下書き</option>
-                                                <option value="review">レビュー中</option>
-                                                <option value="approved">承認済み</option>
-                                                <option value="rejected">却下</option>
-                                            </select>
-                                        </td>
-                                        <td>{{ formatDateTime(drawing.created_at) }}</td>
-                                        <td>
                                             <div class="d-flex align-items-center">
-                                                <div class="avatar me-2" v-if="drawing.created_by_name">
-                                                    <span class="avatar-initial rounded-circle bg-label-primary" style="width:24px;height:24px;font-size:10px;">{{ getInitials(drawing.created_by_name) }}</span>
+                                                <div class="avatar me-2" v-if="drawing.created_by_names">
+                                                    <span class="avatar-initial rounded-circle bg-label-success">{{ getInitials(drawing.created_by_names) }}</span>
                                                 </div>
-                                                <span class="small">{{ drawing.created_by_name || 'Unknown' }}</span>
                                             </div>
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
+                                                <button v-if="!isUserAssigned(drawing)" class="btn btn-outline-success" @click="assignDrawing(drawing.id)" title="割り当てる">
+                                                    <i class="fa fa-user-plus"></i>
+                                                </button>
+                                                <button v-else class="btn btn-outline-warning" @click="unassignDrawing(drawing.id)" title="割り当て解除">
+                                                    <i class="fa fa-user-minus"></i>
+                                                </button>
                                                 <button class="btn btn-outline-primary" @click="downloadDrawing(drawing)" title="ダウンロード" v-if="drawing.file_path">
                                                     <i class="fa fa-download"></i>
                                                 </button>
-                                                <button class="btn btn-outline-secondary" @click="openDrawingModal(drawing)" title="編集">
+                                                <button class="btn btn-outline-secondary" @click="openEditModal(drawing)" title="編集">
                                                     <i class="fa fa-edit"></i>
                                                 </button>
                                                 <button class="btn btn-outline-danger" @click="deleteDrawing(drawing.id)" title="削除">
@@ -172,29 +241,16 @@ if (!$project_id) {
                             <h5 class="text-muted">ファイルがありません</h5>
                             <p class="text-muted">最初のファイルを追加してください</p>
                             <div class="d-flex gap-2 justify-content-center">
-                                <button class="btn btn-outline-info" @click="openImportModal">
+                                <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#importModal">
                                     <i class="fa fa-upload me-1"></i>インポート
                                 </button>
-                                <button class="btn btn-primary" @click="openDrawingModal()">
+                                <button class="btn btn-primary" @click="openAddModal()">
                                     <i class="fa fa-plus me-1"></i>ファイル追加
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Bulk Actions -->
-                        <div v-if="selectedDrawings.length > 0" class="mt-4 p-3 bg-light rounded">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span class="fw-medium">{{ selectedDrawings.length }}個のファイルが選択されています</span>
-                                <div class="d-flex gap-2">
-                                    <button class="btn btn-outline-warning btn-sm" @click="bulkChangeStatus">
-                                        <i class="fa fa-edit me-1"></i>ステータス変更
-                                    </button>
-                                    <button class="btn btn-outline-danger btn-sm" @click="bulkDelete">
-                                        <i class="fa fa-trash me-1"></i>一括削除
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+
                     </div>
                 </div>
             </div>
@@ -219,6 +275,8 @@ if (!$project_id) {
                                 <select class="form-select" v-model="editingDrawing.status">
                                     <option value="draft">下書き</option>
                                     <option value="review">レビュー中</option>
+                                    <option value="revision">修正中</option>
+                                    <option value="revised">修正済</option>
                                     <option value="approved">承認済み</option>
                                     <option value="rejected">却下</option>
                                 </select>
@@ -303,7 +361,7 @@ if (!$project_id) {
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                        <button type="button" class="btn btn-primary" @click="importFiles" :disabled="importFiles.length === 0">
+                        <button type="button" class="btn btn-primary" @click="performImport" :disabled="importFiles.length === 0">
                             <i class="fa fa-upload"></i> インポート ({{ importFiles.length }})
                         </button>
                     </div>
@@ -321,11 +379,13 @@ if (!$project_id) {
                     </div>
                     <div class="modal-body">
                         <p>選択された {{ selectedDrawings.length }} 個のファイルのステータスを変更します。</p>
-                        <div class="mb-3">
+                                                <div class="mb-3">
                             <label class="form-label">新しいステータス</label>
                             <select class="form-select" v-model="bulkStatus">
                                 <option value="draft">下書き</option>
                                 <option value="review">レビュー中</option>
+                                <option value="revision">修正中</option>
+                                <option value="revised">修正済</option>
                                 <option value="approved">承認済み</option>
                                 <option value="rejected">却下</option>
                             </select>
@@ -337,6 +397,37 @@ if (!$project_id) {
                             <i class="fa fa-check"></i> 変更
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Fixed Bulk Actions Bar -->
+    <div v-if="selectedDrawings.length > 0" class="bulk-actions-bar">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="fw-medium text-white">{{ selectedDrawings.length }}個のファイルが選択されています</span>
+                    <button class="btn btn-light btn-sm" @click="clearSelection">
+                        <i class="fa fa-times me-1"></i>選択解除
+                    </button>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-info" @click="bulkCopyNames">
+                        <i class="fa fa-copy me-1"></i>名前をコピー
+                    </button>
+                    <button class="btn btn-success" @click="bulkAssign">
+                        <i class="fa fa-user-plus me-1"></i>一括割り当て
+                    </button>
+                    <button class="btn btn-warning" @click="bulkUnassign">
+                        <i class="fa fa-user-minus me-1"></i>一括解除
+                    </button>
+                    <button class="btn btn-warning" @click="bulkChangeStatus">
+                        <i class="fa fa-edit me-1"></i>ステータス変更
+                    </button>
+                    <button class="btn btn-danger" @click="bulkDelete">
+                        <i class="fa fa-trash me-1"></i>一括削除
+                    </button>
                 </div>
             </div>
         </div>
@@ -403,11 +494,113 @@ $view->footing();
     font-weight: 500;
     text-transform: uppercase;
 }
+
+/* Sortable table headers */
+.table th[style*="cursor: pointer"]:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+    transition: background-color 0.2s ease;
+}
+
+.table th[style*="cursor: pointer"] .fa {
+    color: #6c757d;
+    transition: color 0.2s ease;
+}
+
+.table th[style*="cursor: pointer"]:hover .fa {
+    color: var(--bs-primary);
+}
+
+.table th[style*="cursor: pointer"] .fa-sort-up,
+.table th[style*="cursor: pointer"] .fa-sort-down {
+    color: var(--bs-primary);
+}
+
+/* Fixed Bulk Actions Bar */
+.bulk-actions-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 9998;
+    animation: slideUp 0.3s ease-out;
+}
+
+.bulk-actions-bar .btn {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border: none;
+    font-weight: 500;
+}
+
+.bulk-actions-bar .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Add bottom padding to main content when bulk actions bar is visible */
+.bulk-actions-bar + .container-fluid {
+    padding-bottom: 80px;
+}
+
+/* Drag selection styles */
+.drag-selecting {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+.drag-selecting .table tbody tr {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.1) !important;
+}
+
+.table tbody tr.table-primary {
+    background-color: rgba(var(--bs-primary-rgb), 0.2) !important;
+}
+
+/* Prevent text selection during drag */
+.table tbody tr {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* Allow text selection in specific cells */
+.table tbody tr td:nth-child(2) {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+}
 </style>
 
 <!-- Define PROJECT_ID before loading Vue and drawings.js -->
 <script>
 const PROJECT_ID = <?php echo $project_id; ?>;
+const CURRENT_USER_ID = '<?php echo $_SESSION['userid']; ?>';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
