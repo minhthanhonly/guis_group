@@ -12,7 +12,7 @@ if (!$project_id) {
 <div id="app" class="container-fluid mt-4" v-cloak>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container-fluid">
-            <a class="navbar-brand fw-bold d-none" href="#">タスク管理</a>
+            <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-label-info">#P{{ projectInfo?.project_number }}</span></a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -145,7 +145,7 @@ if (!$project_id) {
         
         <div class="d-flex align-items-center justify-content-between mb-2">
             <div class="row w-100 g-0 align-items-center fw-bold text-primary bg-light">
-                <div class="col-md-2 py-2 px-2">タスク</div>
+                <div class="col-md-3 py-2 px-2">タスク</div>
                 <div class="col-md-1 py-2 pe-2">優先度</div>
                 <div class="col-md-2 py-2 pe-2">期間</div>
                 <div class="col-md-2 py-2 pe-2">担当者</div>
@@ -163,7 +163,7 @@ if (!$project_id) {
             <div v-for="task in displayTasks" :key="task.id || 'inline-' + task._inlineIndex" class="card mb-2" :data-id="task.id" :class="{'subtask': task.indent_level > 0}" :style="{marginLeft: (task.indent_level * 20) + 'px'}">
                 <!-- Inline Edit Mode -->
                 <div v-if="task._isInlineEdit" class="row g-0 align-items-center">
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <div class="p-2">
                             <input type="text" class="form-control inline-task-input" :value="task.title" placeholder="タスク名" required @input="updateTaskField(task._inlineIndex, 'title', $event.target.value)">
                         </div>
@@ -250,8 +250,9 @@ if (!$project_id) {
                 
                 <!-- Normal Display Mode -->
                 <div v-else class="row g-0 align-items-center">
-                    <div class="col-md-2 d-flex align-items-center">
+                    <div class="col-md-3 d-flex align-items-center">
                         <span class="drag-handle ps-2 pe-2 fs-16" style="cursor: move;">≡</span>
+                        <span class="badge badge-sm bg-label-primary me-2">#{{ task.id }}</span>
                         <div class="d-flex align-items-center justify-content-between gap-2 flex-grow-1 task-title">
                             <span class="fw-bold" @click="openTaskDetails(task)" style="cursor: pointer; max-width: 100%;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;">{{ task.title }}</span>
                             <i class="fa fa-expand-alt" style="cursor: pointer;" @click="openTaskDetails(task)"></i>
@@ -398,7 +399,7 @@ if (!$project_id) {
             <div class="modal-content h-100">
                 <div class="modal-header">
                     <h5 class="modal-title" id="taskDetailsModalLabel">
-                        <span v-if="selectedTask">{{ selectedTask.title }}</span>
+                        <span v-if="selectedTask"><span class="badge badge-sm bg-label-primary">#{{ selectedTask.id }}</span> {{ selectedTask.title }}</span>
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>

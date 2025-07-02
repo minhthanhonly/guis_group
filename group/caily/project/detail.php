@@ -13,7 +13,7 @@ if (!$project_id) {
     <div v-if="canViewProject">
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">
-                <a class="navbar-brand fw-bold d-none" href="#">プロジェクト詳細</a>
+                <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-label-info">#P{{ project?.project_number }}</span></a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar" aria-controls="projectNavbar" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
                 </button>
@@ -27,6 +27,9 @@ if (!$project_id) {
                     </li>
                     <li class="nav-item">
                     <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>">ガントチャート</a>
+                    </li>
+                    <li class="nav-item">
+                    <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>">図面</a>
                     </li>
                     <li class="nav-item">
                     <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>">添付ファイル</a>
