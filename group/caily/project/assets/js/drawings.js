@@ -100,6 +100,53 @@ createApp({
         
         isAllSelected() {
             return this.filteredDrawings.length > 0 && this.selectedDrawings.length === this.filteredDrawings.length;
+        },
+        
+        stats() {
+            return [
+                {
+                    label: '図面総数',
+                    value: this.drawings.length,
+                    icon: 'fa fa-file-alt text-primary',
+                    color: 'text-primary'
+                },
+                {
+                    label: '下書き',
+                    value: this.drawings.filter(d => d.status === 'draft').length,
+                    icon: 'fa fa-pencil-alt text-secondary',
+                    color: 'text-secondary'
+                },
+                {
+                    label: 'レビュー中',
+                    value: this.drawings.filter(d => d.status === 'review').length,
+                    icon: 'fa fa-search text-info',
+                    color: 'text-info'
+                },
+                {
+                    label: '修正中',
+                    value: this.drawings.filter(d => d.status === 'revision').length,
+                    icon: 'fa fa-tools text-warning',
+                    color: 'text-warning'
+                },
+                {
+                    label: '修正済',
+                    value: this.drawings.filter(d => d.status === 'revised').length,
+                    icon: 'fa fa-check text-success',
+                    color: 'text-success'
+                },
+                {
+                    label: '承認済み',
+                    value: this.drawings.filter(d => d.status === 'approved').length,
+                    icon: 'fa fa-check-circle text-success',
+                    color: 'text-success'
+                },
+                {
+                    label: '却下',
+                    value: this.drawings.filter(d => d.status === 'rejected').length,
+                    icon: 'fa fa-times-circle text-danger',
+                    color: 'text-danger'
+                }
+            ];
         }
     },
     
