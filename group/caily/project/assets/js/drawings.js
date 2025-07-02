@@ -749,7 +749,7 @@ createApp({
         
         formatDateTime(dateString) {
             if (!dateString) return '-';
-            return moment(dateString).format('YYYY年MM月DD日 HH:mm');
+            return moment(dateString).format('MM月DD日 HH:mm');
         },
         
         downloadDrawing(drawing) {
