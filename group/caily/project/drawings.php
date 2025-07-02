@@ -122,7 +122,12 @@ if (!$project_id) {
                                                 <i class="fa ms-1" :class="getSortIcon('file_type')"></i>
                                             </div>
                                         </th>
-
+                                        <th @click="sortBy('created_by')" style="cursor: pointer;">
+                                            <div class="d-flex align-items-center">
+                                                <span>作成者</span>
+                                                <i class="fa ms-1" :class="getSortIcon('created_by')"></i>
+                                            </div>
+                                        </th>
                                         <th @click="sortBy('status')" style="cursor: pointer;">
                                             <div class="d-flex align-items-center">
                                                 <span>ステータス</span>
@@ -141,10 +146,17 @@ if (!$project_id) {
                                                 <i class="fa ms-1" :class="getSortIcon('checked_by_name')"></i>
                                             </div>
                                         </th>
-                                        <th @click="sortBy('created_by')" style="cursor: pointer;">
+                                        
+                                        <th @click="sortBy('revise_date')" style="cursor: pointer;">
                                             <div class="d-flex align-items-center">
-                                                <span>作成者</span>
-                                                <i class="fa ms-1" :class="getSortIcon('created_by')"></i>
+                                                <span>修正日</span>
+                                                <i class="fa ms-1" :class="getSortIcon('revise_date')"></i>
+                                            </div>
+                                        </th>
+                                        <th @click="sortBy('revise_by_name')" style="cursor: pointer;">
+                                            <div class="d-flex align-items-center">
+                                                <span>修正者</span>
+                                                <i class="fa ms-1" :class="getSortIcon('revise_by_name')"></i>
                                             </div>
                                         </th>
                                         <th width="150">操作</th>
@@ -181,7 +193,13 @@ if (!$project_id) {
                                                 <span v-else class="text-muted">-</span>
                                             </div>
                                         </td>
-
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar me-2" v-for="name in (drawing.created_by_names || '').split(',')" :key="name && name.trim()">
+                                                    <span class="avatar-initial rounded-circle bg-label-success" v-if="name.trim()">{{ getInitials(name.trim()) }}</span>
+                                                </div>
+                                            </div>
+                                        </td>
                                         <td>
                                             <div class="btn-group" style="width: 120px;">
                                                 <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light w-100"
@@ -204,10 +222,12 @@ if (!$project_id) {
                                                 </div>
                                             </div>
                                         </td>
+                                        
+                                        <td>{{ drawing.revise_date ? formatDateTime(drawing.revise_date) : '-' }}</td>
                                         <td>
                                             <div class="d-flex align-items-center">
-                                                <div class="avatar me-2" v-if="drawing.created_by_names">
-                                                    <span class="avatar-initial rounded-circle bg-label-success">{{ getInitials(drawing.created_by_names) }}</span>
+                                                <div class="avatar me-2" v-if="drawing.revise_by_name">
+                                                    <span class="avatar-initial rounded-circle bg-label-warning">{{ getInitials(drawing.revise_by_name) }}</span>
                                                 </div>
                                             </div>
                                         </td>
@@ -603,5 +623,4 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 const CURRENT_USER_ID = '<?php echo $_SESSION['userid']; ?>';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 <script src="assets/js/drawings.js"></script> 

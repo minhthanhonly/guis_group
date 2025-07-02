@@ -366,7 +366,18 @@ createApp({
         },
         
         async deleteDrawing(id) {
-            if (!confirm('このファイルを削除しますか？')) {
+            const result = await Swal.fire({
+                title: 'ファイルを削除しますか？',
+                text: "この操作は元に戻せません！",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: '削除する',
+                cancelButtonText: 'キャンセル'
+            });
+
+            if (!result.isConfirmed) {
                 return;
             }
             
@@ -483,7 +494,18 @@ createApp({
                 return;
             }
             
-            if (!confirm(`${this.selectedDrawings.length}個のファイルを削除しますか？`)) {
+            const result = await Swal.fire({
+                title: `${this.selectedDrawings.length}個のファイルを削除しますか？`,
+                text: "この操作は元に戻せません！",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: '削除する',
+                cancelButtonText: 'キャンセル'
+            });
+
+            if (!result.isConfirmed) {
                 return;
             }
             
@@ -760,8 +782,7 @@ createApp({
         },
         
         getInitials(name) {
-            if (!name) return '';
-            return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+            return getAvatarName(name);
         },
 
         // Copy text to clipboard
@@ -803,12 +824,10 @@ createApp({
         },
         
         showSuccess(message) {
-            // Implement success notification
             showMessage(message);
         },
         
         showError(message) {
-            // Implement error notification
             showMessage(message, true);
         },
         

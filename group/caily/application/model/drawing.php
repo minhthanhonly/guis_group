@@ -13,7 +13,9 @@ class Drawing extends ApplicationModel {
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search')),
             'check_date' => array('except' => array('search')),
-            'checked_by' => array()
+            'checked_by' => array(),
+            'revise_by' => array(),
+            'revise_date' => array(),
         );
         $this->connect();
     }
@@ -35,10 +37,11 @@ class Drawing extends ApplicationModel {
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
         
         $query = sprintf(
-            "SELECT d.*, u.realname as created_by_name, c.realname as checked_by_name
+            "SELECT d.*, u.realname as created_by_name, c.realname as checked_by_name, r.realname as revise_by_name
             FROM {$this->table} d 
             LEFT JOIN " . DB_PREFIX . "user u ON d.created_by = u.userid 
             LEFT JOIN " . DB_PREFIX . "user c ON d.checked_by = c.userid
+            LEFT JOIN " . DB_PREFIX . "user r ON d.revise_by = r.userid
             %s
             ORDER BY d.name ASC",
             $where
@@ -178,6 +181,11 @@ class Drawing extends ApplicationModel {
             $data['check_date'] = date('Y-m-d H:i:s');
             $data['checked_by'] = $_SESSION['userid'];
         }
+        // Nếu là revision hoặc revised thì set revise_date/by
+        if ($status === 'revision' || $status === 'revised') {
+            $data['revise_date'] = date('Y-m-d H:i:s');
+            $data['revise_by'] = $_SESSION['userid'];
+        }
         
         $result = $this->query_update($data, ['id' => $id]);
         
@@ -208,6 +216,15 @@ class Drawing extends ApplicationModel {
         if ($status === 'approved' || $status === 'rejected') {
             $query = sprintf(
                 "UPDATE {$this->table} SET status = '%s', updated_at = '%s', check_date = '%s', checked_by = '%s' WHERE id IN (%s)",
+                $status,
+                date('Y-m-d H:i:s'),
+                date('Y-m-d H:i:s'),
+                $_SESSION['userid'],
+                $ids_str
+            );
+        } else if ($status === 'revision' || $status === 'revised') {
+            $query = sprintf(
+                "UPDATE {$this->table} SET status = '%s', updated_at = '%s', revise_date = '%s', revise_by = '%s' WHERE id IN (%s)",
                 $status,
                 date('Y-m-d H:i:s'),
                 date('Y-m-d H:i:s'),
