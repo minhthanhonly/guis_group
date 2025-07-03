@@ -295,24 +295,41 @@ class Project extends ApplicationModel {
         }
 
         // Add members if provided
+        $members = [];
+        $managers = [];
         if (isset($_POST['members']) && !empty($_POST['members'])) {
             $members = explode(',', $_POST['members']);
+        }
+        if (isset($_POST['managers']) && !empty($_POST['managers'])) {
+            $managers = explode(',', $_POST['managers']);
+        }
+        $listAllUserIds = array_merge($members, $managers);
+        $listAllUsers = $this->getListUserName($listAllUserIds);
+        $new_users = array_filter($listAllUsers, function($user) use ($members) {
+            return in_array($user['id'], $members);
+        });
+        $new_managers = array_filter($listAllUsers, function($user) use ($managers) {
+            return in_array($user['id'], $managers);
+        });
+
+        if (isset($_POST['members']) && !empty($_POST['members'])) {
             foreach ($members as $user_id) {
                 if (!empty($user_id)) {
-                    $this->addMember($project_id, intval($user_id), 'member');
+                    $this->addMember($project_id, intval($user_id), $new_users[$user_id]['userid'], 'member');
+                }
             }
-        }
         }
 
         // Add managers if provided
         if (isset($_POST['managers']) && !empty($_POST['managers'])) {
-            $managers = explode(',', $_POST['managers']);
             foreach ($managers as $user_id) {
                 if (!empty($user_id)) {
-                    $this->addMember($project_id, intval($user_id), 'manager');
+                    $this->addMember($project_id, intval($user_id), $new_managers[$user_id]['userid'],'manager');
+                }
             }
         }
-        }
+        
+        $this->notifyProjectCreated($project_id, $data['name'], array_column($listAllUsers, 'userid'));
 
         return [
             'status' => 'success',
@@ -321,6 +338,18 @@ class Project extends ApplicationModel {
         ];
     }
 
+    // Lấy danh sách username từ danh sách id người dùng
+    function getListUserName($listUserIds) {
+        $listAllUserIds = array_map('intval', $listUserIds);
+        $listAllUserIds = array_unique($listAllUserIds);
+        $listAllUsers = [];
+        if (!empty($listUserIds)) {
+            $placeholders = str_repeat('%d,', count($listAllUserIds) - 1) . '%d';
+            $query = sprintf("SELECT id, userid FROM " . DB_PREFIX . "user WHERE id IN ($placeholders)", ...$listAllUserIds); 
+            $listAllUsers = $this->fetchAll($query);
+        }
+        return $listAllUsers;
+    }
 
     
     function update() {
@@ -377,20 +406,86 @@ class Project extends ApplicationModel {
             $this->query($query);
         }
 
+      
+      
+        $exist_managers = $this->getMembers(['project_id' => $id, 'role' => 'manager']);
+        $exist_members = $this->getMembers(['project_id' => $id, 'role' => 'member']);
+        $managers = [];
+        $members = [];
+        if ($result && isset($_POST['managers'])) {
+            $managers = explode(',', $_POST['managers']);
+        }
         if ($result && isset($_POST['members'])) {
             $members = explode(',', $_POST['members']);
+            $members = array_diff($members, $managers);
+
+            $exist_members_ids = array_column($exist_members, 'user_id');
+            $new_members = array_diff($members, $exist_members_ids);
+            $removed_members = array_diff($exist_members_ids, $members);
+            
+            // Get all users in one query
+            $listAllUserIds = array_merge($new_members, $removed_members);
+            $listAllUserIds = array_unique($listAllUserIds);
+            $listAllUserIds = array_map('intval', $listAllUserIds);
+            $listAllUsers = [];
+            if (!empty($listAllUserIds)) {
+                $placeholders = str_repeat('%d,', count($listAllUserIds) - 1) . '%d';
+                $query = sprintf("SELECT id, userid FROM " . DB_PREFIX . "user WHERE id IN ($placeholders)", ...$listAllUserIds);
+                $listAllUsers = $this->fetchAll($query);
+            }
+
+            $new_users = array_filter($listAllUsers, function($user) use ($new_members) {
+                return in_array($user['id'], $new_members);
+            });
+            $removed_users = array_filter($listAllUsers, function($user) use ($removed_members) {
+                return in_array($user['id'], $removed_members);
+            });
+            
             // Xóa members cũ
             $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id));
             // Thêm members mới
             foreach ($members as $user_id) {
-                $this->addMember($id, $user_id);
+                $this->addMember($id, $user_id, $new_users[$user_id]['userid']);
+            }
+
+            if (!empty($members)) {
+                $this->notifyMemberAdded($id, $data['name'], array_column($new_users, 'userid'), 'member');
+            }
+            if (!empty($removed_users)) {
+                $this->notifyMemberRemoved($id, $data['name'], array_column($removed_users, 'userid'), 'member');
             }
         }
        
         if ($result && isset($_POST['managers'])) {
-            $managers = explode(',', $_POST['managers']);
+            $exist_managers_ids = array_column($exist_managers, 'user_id');
+            $new_managers = array_diff($managers, $exist_managers_ids);
+            $removed_managers = array_diff($exist_managers_ids, $managers);
+
+            $listAllUserIds = array_merge($new_managers, $removed_managers);
+            $listAllUserIds = array_unique($listAllUserIds);
+            $listAllUserIds = array_map('intval', $listAllUserIds);
+            $listAllUsers = [];
+            if (!empty($listAllUserIds)) {
+                $placeholders = str_repeat('%d,', count($listAllUserIds) - 1) . '%d';
+                $query = sprintf("SELECT id, userid FROM " . DB_PREFIX . "user WHERE id IN ($placeholders)", ...$listAllUserIds);
+                $listAllUsers = $this->fetchAll($query);
+            }
+
+            //always add managers
+            $new_users = array_filter($listAllUsers, function($user) use ($managers) {
+                return in_array($user['id'], $managers);
+            });
+            $removed_users = array_filter($listAllUsers, function($user) use ($removed_managers) {
+                return in_array($user['id'], $removed_managers);
+            });
             foreach ($managers as $user_id) {
-                $this->addMember($id, $user_id, 'manager');
+                $this->addMember($id, $user_id, $new_users[$user_id]['userid'], 'manager');
+            }
+            if (!empty($new_managers)) {
+                $this->notifyMemberAdded($id, $data['name'], array_column($new_users, 'userid'), 'manager');
+            }
+            if (!empty($removed_managers)) {
+                $this->notifyMemberRemoved($id, $data['name'], array_column($removed_users, 'userid'), 'manager');
             }
         }
         if ($result) {
@@ -416,6 +511,7 @@ class Project extends ApplicationModel {
         // Handle both direct project_id parameter and params array from API
         if (is_array($params)) {
             $project_id = isset($params['project_id']) ? $params['project_id'] : 0;
+            $role = isset($params['role']) ? $params['role'] : '';
         } else {
             $project_id = $params;
         }
@@ -424,9 +520,10 @@ class Project extends ApplicationModel {
             "SELECT pm.*, u.realname as user_name, user_image, u.userid
             FROM " . DB_PREFIX . "project_members pm 
             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
-            WHERE pm.project_id = %d 
+            WHERE pm.project_id = %d %s 
             ORDER BY pm.created_at DESC",
-            intval($project_id)
+            intval($project_id),
+            $role ? "AND pm.role = '$role'" : ''
         );
         return $this->fetchAll($query);
     }
@@ -443,10 +540,15 @@ class Project extends ApplicationModel {
         return $this->fetchAll($query);
     }
 
-    function addMember($project_id, $user_id, $role = 'member') {
+    function addMember($project_id, $user_id, $username, $role = 'member') {
+        
+        if(!$user_id) return false;
+        
+
         $data = array(
             'project_id' => $project_id,
             'user_id' => $user_id,
+            'userid' => $username,
             'role' => $role,
             'created_at' => date('Y-m-d H:i:s')
         );
@@ -651,7 +753,7 @@ class Project extends ApplicationModel {
             }
             
             // Get commenter info
-            $commenter = $this->fetchOne("SELECT realname, user_image FROM " . DB_PREFIX . "user WHERE userid = ?", [$commentUserId]);
+            $commenter = $this->fetchOne(sprintf("SELECT realname, user_image FROM " . DB_PREFIX . "user WHERE userid = %d", intval($commentUserId)));
             if (!$commenter) {
                 return;
             }
@@ -675,8 +777,8 @@ class Project extends ApplicationModel {
                 
                 $payload = [
                     'event' => 'project_mention',
-                    'title' => 'プロジェクトでメンションされました',
-                    'message' => sprintf('%sさんがプロジェクト「%s」であなたをメンションしました', 
+                    'title' => '案件でメンションされました',
+                    'message' => sprintf('%sさんが案件「%s」であなたをメンションしました', 
                         $commenter['realname'], 
                         $project['name']
                     ),
@@ -828,6 +930,332 @@ class Project extends ApplicationModel {
         require_once(DIR_ROOT . '/application/model/projectnote.php');
         $noteModel = new ProjectNote();
         return $noteModel->list($params);
+    }
+
+    /**
+     * Gửi thông báo cho các hành động của dự án hoặc tác vụ
+     * @param array $params Tham số thông báo
+     * @return bool Kết quả gửi thông báo
+     */
+    function sendProjectNotification($params = null) {
+        try {
+            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            $notiService = new NotificationService();
+            
+            // Validate required parameters
+            if (!isset($params['event']) || !isset($params['title']) || !isset($params['message'])) {
+                $this->log('Missing required notification parameters');
+                return false;
+            }
+            
+            // Default values
+            $defaultParams = [
+                'project_id' => 0,
+                'task_id' => 0,
+                'user_ids' => [],
+                'group_ids' => [],
+                'department_ids' => [],
+                'exclude_user_ids' => [],
+                'data' => [],
+                'url' => '',
+                'priority' => 'normal', // low, normal, high, urgent
+                'type' => 'project' // project, task, comment, mention, etc.
+            ];
+            
+            $params = array_merge($defaultParams, $params);
+            
+            // Get target users based on different criteria
+            $targetUserIds = [];
+            
+            // 1. Direct user IDs
+            if (!empty($params['user_ids'])) {
+                $targetUserIds = array_merge($targetUserIds, $params['user_ids']);
+            }
+            
+            // 2. Users from groups
+            if (!empty($params['group_ids'])) {
+                $groupUserIds = $this->getUsersByGroups($params['group_ids']);
+                $targetUserIds = array_merge($targetUserIds, $groupUserIds);
+            }
+            
+            // 3. Users from departments
+            if (!empty($params['department_ids'])) {
+                $deptUserIds = $this->getUsersByDepartments($params['department_ids']);
+                $targetUserIds = array_merge($targetUserIds, $deptUserIds);
+            }
+            
+            // 4. Project members (if project_id is provided)
+            if ($params['project_id'] > 0) {
+                $projectMembers = $this->getProjectMemberIds($params['project_id']);
+                $targetUserIds = array_merge($targetUserIds, $projectMembers);
+            }
+            
+            // Remove duplicates and excluded users
+            $targetUserIds = array_unique($targetUserIds);
+            $targetUserIds = array_diff($targetUserIds, $params['exclude_user_ids']);
+            
+            // Remove current user if not explicitly included
+            $targetUserIds = array_diff($targetUserIds, [$_SESSION['userid']]);
+            
+            if (empty($targetUserIds)) {
+                error_log('No target users found for notification');
+                return false;
+            }
+            
+            // Prepare notification payload
+            $payload = [
+                'event' => $params['event'],
+                'title' => $params['title'],
+                'message' => $params['message'],
+                'data' => array_merge($params['data'], [
+                    'project_id' => $params['project_id'],
+                    'task_id' => $params['task_id'],
+                    'type' => $params['type'],
+                    'priority' => $params['priority'],
+                    'sender_id' => $_SESSION['userid'],
+                    'sender_name' => $_SESSION['realname'] ?? 'Unknown',
+                    'timestamp' => date('Y-m-d H:i:s')
+                ]),
+                'url' => $params['url'],
+                'user_ids' => array_values($targetUserIds)
+            ];
+            
+            // Send notification
+            $result = $notiService->create($payload);
+            
+            if ($result) {
+                $this->log('Project notification sent successfully to ' . count($targetUserIds) . ' users');
+                return true;
+            } else {
+                $this->log('Failed to send project notification');
+                return false;
+            }
+            
+        } catch (Exception $e) {
+            $this->log('Error sending project notification: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Lấy danh sách user IDs theo nhóm
+     */
+    private function getUsersByGroups($groupIds) {
+        if (empty($groupIds)) return [];
+        
+        $groupIds = array_map('intval', $groupIds);
+        $placeholders = str_repeat('%d,', count($groupIds) - 1) . '%d';
+        
+        $query = sprintf("SELECT DISTINCT userid FROM " . DB_PREFIX . "user WHERE user_group IN ($placeholders)", ...$groupIds);
+        $users = $this->fetchAll($query);
+        
+        return array_column($users, 'userid');
+    }
+    
+    /**
+     * Lấy danh sách user IDs theo phòng ban
+     */
+    private function getUsersByDepartments($departmentIds) {
+        if (empty($departmentIds)) return [];
+        
+        $departmentIds = array_map('intval', $departmentIds);
+        $placeholders = str_repeat('%d,', count($departmentIds) - 1) . '%d';
+        
+        $query = sprintf("SELECT DISTINCT userid FROM " . DB_PREFIX . "user_department WHERE department_id IN ($placeholders)", ...$departmentIds);
+        $users = $this->fetchAll($query);
+        
+        return array_column($users, 'userid');
+    }
+    
+    /**
+     * Lấy danh sách user IDs của thành viên dự án
+     */
+    private function getProjectMemberIds($projectId) {
+        $query = sprintf("SELECT DISTINCT userid FROM " . DB_PREFIX . "project_members WHERE project_id = %d", intval($projectId));
+        $members = $this->fetchAll($query);
+        
+        return array_column($members, 'user_id');
+    }
+    
+    /**
+     * Hàm tiện ích để gửi thông báo khi tạo dự án mới
+     */
+    function notifyProjectCreated($projectId, $projectName, $userIds = null) {
+        $params = [
+            'event' => 'project_created',
+            'title' => '新しい案件が作成されました',
+            'message' => sprintf('%sが案件「%s」を作成しました', $this->getUserRealname(), $projectName),
+            'project_id' => $projectId,
+            'user_ids' => $userIds ? $userIds : [],
+            'data' => [
+                'project_name' => $projectName,
+                'action' => 'created',
+                'avatar' => $this->getUserImage(),
+                'url' => "/project/detail.php?id=$projectId",
+            ],
+            'type' => 'project'
+        ];
+        
+        return $this->sendProjectNotification($params);
+    }
+    
+    /**
+     * Hàm tiện ích để gửi thông báo khi cập nhật dự án
+     */
+    function notifyProjectUpdated($projectId, $projectName, $changes = []) {
+        $params = [
+            'event' => 'project_updated',
+            'title' => '案件が更新されました',
+            'message' => sprintf('案件「%s」が更新されました', $projectName),
+            'project_id' => $projectId,
+            'data' => [
+                'project_name' => $projectName,
+                'changes' => $changes,
+                'action' => 'updated'
+            ],
+            'url' => "/project/detail.php?id=$projectId",
+            'type' => 'project'
+        ];
+        
+        return $this->sendProjectNotification($params);
+    }
+    
+    /**
+     * Hàm tiện ích để gửi thông báo khi thay đổi trạng thái dự án
+     */
+    function notifyProjectStatusChanged($projectId, $projectName, $oldStatus, $newStatus) {
+        $statusLabels = [
+            'draft' => '下書き',
+            'open' => '開始',
+            'in_progress' => '進行中',
+            'completed' => '完了',
+            'paused' => '一時停止',
+            'cancelled' => 'キャンセル'
+        ];
+        
+        $oldStatusLabel = $statusLabels[$oldStatus] ?? $oldStatus;
+        $newStatusLabel = $statusLabels[$newStatus] ?? $newStatus;
+        
+        $params = [
+            'event' => 'project_status_changed',
+            'title' => '案件のステータスが変更されました',
+            'message' => sprintf('案件「%s」のステータスが「%s」から「%s」に変更されました', 
+                $projectName, $oldStatusLabel, $newStatusLabel),
+            'project_id' => $projectId,
+            'data' => [
+                'project_name' => $projectName,
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+                'old_status_label' => $oldStatusLabel,
+                'new_status_label' => $newStatusLabel,
+                'action' => 'status_changed'
+            ],
+            'url' => "/project/detail.php?id=$projectId",
+            'type' => 'project',
+            'priority' => $newStatus === 'completed' ? 'high' : 'normal'
+        ];
+        
+        return $this->sendProjectNotification($params);
+    }
+
+    // function removeCurrentUserFromNotification($usernames) {
+    //     if (isset($usernames)) {
+    //         $usernames = array_diff($usernames, [$_SESSION['userid']]);
+    //     }
+    //     return $usernames;
+    // }
+    
+    /**
+     * Hàm tiện ích để gửi thông báo khi thêm thành viên vào dự án
+     */
+    function notifyMemberAdded($projectId, $projectName, $memberIds, $role = 'member') {
+        if (empty($memberIds)) return false;
+        
+        $roleLabel = $role === 'manager' ? 'マネージャー' : 'メンバー';
+        
+        $params = [
+            'event' => 'project_member_added',
+            'title' => '案件にメンバーが追加されました',
+            'message' => sprintf('%sがあなたを案件「%s」に%sを追加しました', $this->getUserRealname(), $projectName, $roleLabel),
+            'project_id' => $projectId,
+            'user_ids' => $memberIds,
+            'data' => [
+                'project_name' => $projectName,
+                'avatar' => $this->getUserImage(),
+                'role' => $role,
+                'role_label' => $roleLabel,
+                'action' => 'member_added',
+                'url' => "/project/detail.php?id=$projectId",
+            ],
+            'type' => 'project'
+        ];
+        
+        return $this->sendProjectNotification($params);
+    }
+
+    function getUserImage() {
+        if (isset($_SESSION['user_image']) && $_SESSION['user_image'] != '') {
+            return  '/assets/upload/avatar/'. $_SESSION['user_image'];
+        }
+        return  '/assets/img/avatars/1.png';
+    }
+
+    function getUserRealname() {
+        if (isset($_SESSION['lastname']) && $_SESSION['lastname'] != '') {
+            return $_SESSION['lastname'] . 'さん';
+        }
+        return $_SESSION['realname']. 'さん';
+    }
+
+    /**
+     * Hàm tiện ích để gửi thông báo khi xóa thành viên khỏi dự án
+     */
+    function notifyMemberRemoved($projectId, $projectName, $memberIds, $role = 'member') {
+        if (empty($memberIds)) return false;
+        
+        $roleLabel = $role === 'manager' ? 'マネージャー' : 'メンバー';
+        
+        $params = [
+            'event' => 'project_member_removed',
+            'title' => '案件からメンバーが削除されました',
+            'message' => sprintf('%sがあなたを案件「%s」から%sを削除しました', $this->getUserRealname(), $projectName, $roleLabel),
+            'project_id' => $projectId,
+            'user_ids' => $memberIds,
+            'data' => [
+                'project_name' => $projectName,
+                'avatar' => $this->getUserImage(),
+                'role' => $role,
+                'role_label' => $roleLabel,
+                'action' => 'member_removed',
+                'url' => "",
+            ],
+            'type' => 'project'
+        ];
+        
+        return $this->sendProjectNotification($params);
+    }
+    
+    /**
+     * Hàm tiện ích để gửi thông báo khi có comment mới
+     */
+    function notifyNewComment($projectId, $projectName, $commentId, $commentContent, $excludeUserId = null) {
+        $params = [
+            'event' => 'project_comment_added',
+            'title' => '案件に新しいコメントがあります',
+            'message' => sprintf('案件「%s」に新しいコメントが追加されました', $projectName),
+            'project_id' => $projectId,
+            'exclude_user_ids' => $excludeUserId ? [$excludeUserId] : [],
+            'data' => [
+                'project_name' => $projectName,
+                'comment_id' => $commentId,
+                'comment_content' => substr($commentContent, 0, 100) . (strlen($commentContent) > 100 ? '...' : ''),
+                'action' => 'comment_added'
+            ],
+            'url' => "/project/detail.php?id=$projectId#comment-$commentId",
+            'type' => 'comment'
+        ];
+        
+        return $this->sendProjectNotification($params);
     }
 }
 

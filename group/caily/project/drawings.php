@@ -71,7 +71,7 @@ if (!$project_id) {
                         <!-- Drawing Statistics -->
                         <div class="row mb-4">
                             <div class="col-auto" v-for="stat in stats" :key="stat.label">
-                                <div class="card shadow-sm text-center"
+                                <div class="card border text-center"
                                      :class="{'border-primary': statusFilter === stat.status || (stat.status === '' && !statusFilter)}"
                                      style="min-width: 140px; cursor: pointer;"
                                      @click="filterByStatus(stat.status)">

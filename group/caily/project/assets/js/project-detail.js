@@ -1542,11 +1542,11 @@ createApp({
                 }
                 
                 // Focus the editor after initialization
-                setTimeout(() => {
-                    if (this.quillInstance) {
-                        this.quillInstance.focus();
-                    }
-                }, 100);
+                // setTimeout(() => {
+                //     if (this.quillInstance) {
+                //         this.quillInstance.focus();
+                //     }
+                // }, 100);
                 
             }, 400); // Increased delay to ensure other components are initialized first
         },

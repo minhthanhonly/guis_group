@@ -384,7 +384,7 @@
                     aria-expanded="false">
                     <span class="position-relative">
                       <i class="icon-base ti tabler-bell icon-22px text-heading"></i>
-                      <span class="badge rounded-pill bg-danger badge-dot badge-notifications border d-none" id="notification_dot"></span>
+                      <span class="badge rounded-pill bg-danger badge-dot badge-notifications border" id="notification_dot"></span>
                     </span>
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end p-0" id="notification_list">
@@ -392,7 +392,7 @@
                       <div class="dropdown-header d-flex align-items-center py-3">
                         <h6 class="mb-0 me-auto" data-i18n="通知">通知</h6>
                         <div class="d-flex align-items-center h6 mb-0">
-                          <!-- <span class="badge bg-label-primary me-2">8 New</span> -->
+                          <span class="badge bg-label-primary me-2" id="notification_count"></span>
                           <a
                             href="javascript:void(0)"
                             class="dropdown-notifications-all p-2 btn btn-icon"

@@ -7,11 +7,15 @@ class NotificationManager {
         this.database = null;
         this.userId = USER_ID || '';
         this.userRole = USER_ROLE || '';
+        this.notificationPermission = 'default';
         this.init();
     }
     
     async init() {
         try {
+            
+            // Request notification permission
+            await this.requestNotificationPermission();
             
             // Load Firebase SDK
             await this.loadFirebaseSDK();
@@ -94,36 +98,38 @@ class NotificationManager {
         }
     }
     
-    async handleNotification(notification) {
-        if (notification && notification.data.notification_id) {
-            // Kiểm tra nếu notification_id đã có trong danh sách thì không fetch lại
-            if (this.notifications.some(n => n.id == notification.data.notification_id)) {
-                return;
-            }
-            const notif = await this.fetchNotificationDetail(notification.data.notification_id);
-            if (notif) {
-                this.notifications.unshift(notif);
-                this.updateNotificationCount();
-                this.renderNotificationList();
-            }
-        }
-    }
+    // async handleNotification(notification) {
+    //     console.log(notification);
+    //     if (notification && notification.data.notification_id) {
+    //         // Kiểm tra nếu notification_id đã có trong danh sách thì không fetch lại
+    //         if (this.notifications.some(n => n.id == notification.data.notification_id)) {
+    //             return;
+    //         }
+    //         const notif = await this.fetchNotificationDetail(notification.data.notification_id);
+    //         if (notif) {
+    //             this.notifications.unshift(notif);
+    //             this.updateNotificationCount();
+    //             this.renderNotificationList();
+    //             this.showWindowsNotification(notif);
+    //         }
+    //     }
+    // }
     
-    // Lấy danh sách thông báo mới nhất từ API
-    async fetchNotificationsFromAPI() {
-        if (!this.userId) return;
-        try {
-            const response = await fetch(`/api/NotificationAPI.php?method=get_notifications&user_id=${encodeURIComponent(this.userId)}&limit=20`);
-            const result = await response.json();
-            if (result.notifications) {
-                this.notifications = result.notifications;
-                this.updateNotificationCount();
-                this.renderNotificationList();
-            }
-        } catch (e) {
-            console.error('Failed to fetch notifications from API', e);
-        }
-    }
+    // // Lấy danh sách thông báo mới nhất từ API
+    // async fetchNotificationsFromAPI() {
+    //     if (!this.userId) return;
+    //     try {
+    //         const response = await fetch(`/api/NotificationAPI.php?method=get_notifications&user_id=${encodeURIComponent(this.userId)}&limit=20`);
+    //         const result = await response.json();
+    //         if (result.notifications) {
+    //             this.notifications = result.notifications;
+    //             this.updateNotificationCount();
+    //             this.renderNotificationList();
+    //         }
+    //     } catch (e) {
+    //         console.error('Failed to fetch notifications from API', e);
+    //     }
+    // }
     
     // Lấy chi tiết 1 notification từ API (theo notification_id)
     async fetchNotificationDetail(notification_id) {
@@ -217,6 +223,7 @@ class NotificationManager {
             this.updateNotificationDot();
             return;
         }
+        const count = list.filter(n => n.is_read == 0).length;
         list.forEach((n, idx) => {
             const data = n.data ? (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) : {};
             const li = document.createElement('li');
@@ -262,13 +269,14 @@ class NotificationManager {
                     n.is_read = 1;
                     li.classList.add('marked-as-read');
                 }
-                // if (data.url) {
-                //     window.location.href = data.url;
-                // }
+                if (data.url) {
+                    window.location.href = data.url;
+                }
             });
             ul.appendChild(li);
         });
         this.updateNotificationDot();
+        this.updateNotificationCount(count);
     }
 
     async markAsRead(notification_id) {
@@ -327,6 +335,9 @@ class NotificationManager {
                     this.notifications.unshift(notif);
                     this.updateNotificationCount();
                     this.renderNotificationList();
+                    this.showWindowsNotification(notif);
+                    this.showToastNotification(notif);
+                    console.log(notif);
                 }
             }
         });
@@ -364,6 +375,195 @@ class NotificationManager {
         if (!dot) return;
         const hasUnread = this.notifications.some(n => n.is_read == 0);
         dot.style.display = hasUnread ? 'inline-block' : 'none';
+    }
+    
+    updateNotificationCount(count = 0) {
+        const countElement = document.getElementById('notification_count');
+        if (!countElement) return;
+        countElement.textContent = count;
+        countElement.style.display = count > 0 ? 'inline' : 'none';
+        countElement.textContent = count > 0 ? count + ' New' : '';
+    }
+
+    /**
+     * Request notification permission from user
+     */
+    async requestNotificationPermission() {
+        if (!('Notification' in window)) {
+            console.log('This browser does not support desktop notification');
+            return;
+        }
+
+        if (Notification.permission === 'default') {
+            try {
+                const permission = await Notification.requestPermission();
+                this.notificationPermission = permission;
+                console.log('Notification permission:', permission);
+            } catch (error) {
+                console.error('Error requesting notification permission:', error);
+            }
+        } else {
+            this.notificationPermission = Notification.permission;
+        }
+    }
+
+    /**
+     * Show Windows desktop notification
+     */
+    showWindowsNotification(notification) {
+        if (!('Notification' in window) || this.notificationPermission !== 'granted') {
+            return;
+        }
+
+        // Don't show notification if page is focused (user is actively using the app)
+        if (document.hasFocus()) {
+            return;
+        }
+
+        try {
+            const data = notification.data ? (typeof notification.data === 'string' ? JSON.parse(notification.data) : notification.data) : {};
+            
+            const notificationOptions = {
+                body: notification.message || '新しい通知があります',
+                icon: data.avatar || '/assets/img/avatars/1.png',
+                badge: '/assets/img/favicon/favicon.ico',
+                tag: `notification_${notification.id}`,
+                requireInteraction: false,
+                silent: false,
+                data: {
+                    notification_id: notification.id,
+                    url: data.url || '',
+                    project_id: data.project_id || '',
+                    task_id: data.task_id || ''
+                }
+            };
+
+            // Add actions if available
+            if (data.url) {
+                notificationOptions.actions = [
+                    {
+                        action: 'view',
+                        title: '表示',
+                        icon: '/assets/img/icons/misc/view.png'
+                    },
+                    {
+                        action: 'dismiss',
+                        title: '閉じる'
+                    }
+                ];
+            }
+
+            const desktopNotification = new Notification(notification.title || '通知', notificationOptions);
+
+            // Handle notification click
+            desktopNotification.onclick = (event) => {
+                event.preventDefault();
+                desktopNotification.close();
+                
+                // Focus the window
+                window.focus();
+                
+                // Navigate to the notification URL if available
+                if (data.url) {
+                    window.location.href = data.url;
+                }
+                
+                // Mark as read
+                this.markAsRead(notification.id);
+            };
+
+            // Handle notification action clicks
+            desktopNotification.onactionclick = (event) => {
+                event.preventDefault();
+                desktopNotification.close();
+                
+                if (event.action === 'view' && data.url) {
+                    window.focus();
+                    window.location.href = data.url;
+                    this.markAsRead(notification.id);
+                }
+            };
+
+            // Auto close after 5 seconds
+            setTimeout(() => {
+                desktopNotification.close();
+            }, 5000);
+
+        } catch (error) {
+            console.error('Error showing Windows notification:', error);
+        }
+    }
+
+    /**
+     * Show a custom toast notification in the browser
+     */
+    showToastNotification(notification) {
+        const data = notification.data ? (typeof notification.data === 'string' ? JSON.parse(notification.data) : notification.data) : {};
+        
+        // Create toast container if it doesn't exist
+        let toastContainer = document.getElementById('toast-notification-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-notification-container';
+            toastContainer.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 9999;
+                max-width: 400px;
+            `;
+            document.body.appendChild(toastContainer);
+        }
+
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = 'notification-toast';
+        toast.style.cssText = `
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            animation: slideInRight 0.3s ease;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        `;
+
+        toast.innerHTML = `
+            <img src="${data.avatar || '/assets/img/avatars/1.png'}" 
+                 style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" />
+            <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 4px;">${this.escapeHtml(notification.title || '通知')}</div>
+                <div style="font-size: 14px; color: #666;">${this.escapeHtml(notification.message || '')}</div>
+            </div>
+            <button onclick="this.parentElement.remove()" 
+                    style="background: none; border: none; font-size: 18px; cursor: pointer; color: #999;">×</button>
+        `;
+
+        // Add click handler
+        toast.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') return;
+            
+            if (data.url) {
+                window.location.href = data.url;
+            }
+            this.markAsRead(notification.id);
+            toast.remove();
+        });
+
+        // Add to container
+        toastContainer.appendChild(toast);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 5000);
     }
 
     registerConnectedUser() {
