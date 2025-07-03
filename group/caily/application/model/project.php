@@ -449,10 +449,10 @@ class Project extends ApplicationModel {
             }
 
             if (!empty($members)) {
-                $this->notifyMemberAdded($id, $data['name'], array_column($new_users, 'userid'), 'member');
+                $this->notifyMemberAdded($data['project_number'], $id, $data['name'], array_column($new_users, 'userid'), 'member');
             }
             if (!empty($removed_users)) {
-                $this->notifyMemberRemoved($id, $data['name'], array_column($removed_users, 'userid'), 'member');
+                $this->notifyMemberRemoved($data['project_number'], $id, $data['name'], array_column($removed_users, 'userid'), 'member');
             }
         }
        
@@ -482,10 +482,10 @@ class Project extends ApplicationModel {
                 $this->addMember($id, $user_id, $new_users[$user_id]['userid'], 'manager');
             }
             if (!empty($new_managers)) {
-                $this->notifyMemberAdded($id, $data['name'], array_column($new_users, 'userid'), 'manager');
+                $this->notifyMemberAdded($data['project_number'], $id, $data['name'], array_column($new_users, 'userid'), 'manager');
             }
             if (!empty($removed_managers)) {
-                $this->notifyMemberRemoved($id, $data['name'], array_column($removed_users, 'userid'), 'manager');
+                $this->notifyMemberRemoved($data['project_number'], $id, $data['name'], array_column($removed_users, 'userid'), 'manager');
             }
         }
         if ($result) {
@@ -616,6 +616,8 @@ class Project extends ApplicationModel {
         // Get data directly from $_POST
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         $status = isset($_POST['status']) ? $_POST['status'] : '';
+        $name = isset($_POST['name']) ? $_POST['name'] : '';
+        $project_number = isset($_POST['project_number']) ? $_POST['project_number'] : '';
         
         if (!$id || !$status) {
             return false;
@@ -641,6 +643,10 @@ class Project extends ApplicationModel {
         }
         
         $result = $this->query_update($data, ['id' => $id]);
+        if ($result) {
+            $projectMembers = $this->getMembers(['project_id' => $id]);
+            $this->notifyProjectStatusChanged($project_number,$id, $name, $data['status'], array_column($projectMembers, 'userid'));
+        }
         
         // Clear actual_end_date if status is not completed
         if ($result && $status != 'completed') {
@@ -870,6 +876,7 @@ class Project extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => $_SESSION['userid']
         );
+
         
         // Add fields if they exist in POST
         if (isset($_POST['amount'])) {
@@ -885,6 +892,7 @@ class Project extends ApplicationModel {
         $result = $this->query_update($data, ['id' => $id]);
         
         if ($result) {
+         
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
@@ -1123,34 +1131,33 @@ class Project extends ApplicationModel {
     /**
      * Hàm tiện ích để gửi thông báo khi thay đổi trạng thái dự án
      */
-    function notifyProjectStatusChanged($projectId, $projectName, $oldStatus, $newStatus) {
+    function notifyProjectStatusChanged($projectNumber, $projectId, $projectName, $newStatus, $memberIds) {
         $statusLabels = [
             'draft' => '下書き',
-            'open' => '開始',
+            'open' => 'オープン',
+            'confirming' => '確認中',
             'in_progress' => '進行中',
             'completed' => '完了',
             'paused' => '一時停止',
-            'cancelled' => 'キャンセル'
+            'cancelled' => 'キャンセル',
+            'deleted' => '削除'
         ];
         
-        $oldStatusLabel = $statusLabels[$oldStatus] ?? $oldStatus;
         $newStatusLabel = $statusLabels[$newStatus] ?? $newStatus;
         
         $params = [
             'event' => 'project_status_changed',
-            'title' => '案件のステータスが変更されました',
-            'message' => sprintf('案件「%s」のステータスが「%s」から「%s」に変更されました', 
-                $projectName, $oldStatusLabel, $newStatusLabel),
+            'title' => '#'.$projectNumber.': ステータスが変更されました',
+            'message' => sprintf('%sが案件「%s」のステータスを「%s」に変更しました', $this->getUserRealname(), $projectName, $newStatusLabel),
             'project_id' => $projectId,
+            'user_ids' => $memberIds,
             'data' => [
                 'project_name' => $projectName,
-                'old_status' => $oldStatus,
-                'new_status' => $newStatus,
-                'old_status_label' => $oldStatusLabel,
-                'new_status_label' => $newStatusLabel,
-                'action' => 'status_changed'
+                'project_number' => $projectNumber,
+                'action' => 'status_changed',
+                'avatar' => $this->getUserImage(),
+                'url' => "/project/detail.php?id=$projectId",
             ],
-            'url' => "/project/detail.php?id=$projectId",
             'type' => 'project',
             'priority' => $newStatus === 'completed' ? 'high' : 'normal'
         ];
@@ -1168,14 +1175,14 @@ class Project extends ApplicationModel {
     /**
      * Hàm tiện ích để gửi thông báo khi thêm thành viên vào dự án
      */
-    function notifyMemberAdded($projectId, $projectName, $memberIds, $role = 'member') {
+    function notifyMemberAdded($projectNumber, $projectId, $projectName, $memberIds, $role = 'member') {
         if (empty($memberIds)) return false;
         
         $roleLabel = $role === 'manager' ? 'マネージャー' : 'メンバー';
         
         $params = [
             'event' => 'project_member_added',
-            'title' => '案件にメンバーが追加されました',
+            'title' => '#'.$projectNumber.': メンバーが追加されました',
             'message' => sprintf('%sがあなたを案件「%s」に%sを追加しました', $this->getUserRealname(), $projectName, $roleLabel),
             'project_id' => $projectId,
             'user_ids' => $memberIds,
@@ -1210,14 +1217,14 @@ class Project extends ApplicationModel {
     /**
      * Hàm tiện ích để gửi thông báo khi xóa thành viên khỏi dự án
      */
-    function notifyMemberRemoved($projectId, $projectName, $memberIds, $role = 'member') {
+    function notifyMemberRemoved($projectNumber, $projectId, $projectName, $memberIds, $role = 'member') {
         if (empty($memberIds)) return false;
         
         $roleLabel = $role === 'manager' ? 'マネージャー' : 'メンバー';
         
         $params = [
             'event' => 'project_member_removed',
-            'title' => '案件からメンバーが削除されました',
+            'title' => '#'.$projectNumber.': メンバーが削除されました',
             'message' => sprintf('%sがあなたを案件「%s」から%sを削除しました', $this->getUserRealname(), $projectName, $roleLabel),
             'project_id' => $projectId,
             'user_ids' => $memberIds,

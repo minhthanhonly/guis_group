@@ -545,6 +545,8 @@ createApp({
                 const formData = new FormData();
                 formData.append('id', this.projectId);
                 formData.append('status', this.project.status);
+                formData.append('name', this.project.name);
+                formData.append('project_number', this.project.project_number);
                 const response = await axios.post('/api/index.php?model=project&method=updateStatus', formData);
                 if (response.data && response.data.success !== false) {
                     showMessage('ステータスの更新に完了しました。');

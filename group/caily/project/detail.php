@@ -248,7 +248,7 @@ if (!$project_id) {
                                     <input class="form-control" type="text" id="manager_tags" name="manager_tags">
                                     <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('manager')" title="すべて削除"><i class="fa fa-times"></i></button>
                                 </div>
-                                <div class="d-flex align-items-center" v-else-if="managers && managers.length > 0">
+                                <div class="d-flex align-items-center flex-wrap gap-2" v-else-if="managers && managers.length > 0">
                                     <div v-for="member in managers" :key="member.userid"
                                         class="avatar"
                                         :data-userid="member.userid"

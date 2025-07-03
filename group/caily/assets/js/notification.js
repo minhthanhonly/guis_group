@@ -440,17 +440,17 @@ class NotificationManager {
 
             // Add actions if available
             if (data.url) {
-                notificationOptions.actions = [
-                    {
-                        action: 'view',
-                        title: '表示',
-                        icon: '/assets/img/icons/misc/view.png'
-                    },
-                    {
-                        action: 'dismiss',
-                        title: '閉じる'
-                    }
-                ];
+                // notificationOptions.actions = [
+                //     {
+                //         action: 'view',
+                //         title: '表示',
+                //         icon: '/assets/img/icons/misc/view.png'
+                //     },
+                //     {
+                //         action: 'dismiss',
+                //         title: '閉じる'
+                //     }
+                // ];
             }
 
             const desktopNotification = new Notification(notification.title || '通知', notificationOptions);
