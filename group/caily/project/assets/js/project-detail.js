@@ -111,6 +111,7 @@ createApp({
             quillContent: '',
             userPermissions: null,
             // mention-related variables removed
+            logs: [], // Thêm biến lưu log lịch sử
         }
     },
     computed: {
@@ -145,6 +146,11 @@ createApp({
             if(this.hasPermission('project_manager')) return true;
             if(this.hasPermission('project_director')) return true;
             return false;
+        },
+        sortedLogs() {
+            if (!this.logs) return [];
+            // Sắp xếp giảm dần theo thời gian
+            return [...this.logs].sort((a, b) => (b.time > a.time ? 1 : -1));
         },
     },
     methods: {
@@ -1685,6 +1691,67 @@ createApp({
                 this.mentionUsers = [];
             }
         },
+        async loadLogs() {
+            try {
+                const res = await axios.get(`/api/index.php?model=project&method=getLogs&project_id=${this.projectId}`);
+                if (res.data && Array.isArray(res.data)) {
+                    this.logs = res.data;
+                } else {
+                    this.logs = [];
+                }
+            } catch (e) {
+                this.logs = [];
+            }
+        },
+        historyIcon(action) {
+            switch(action) {
+                case 'created': return 'fa fa-pencil-alt text-primary';
+                case 'approved': return 'fa fa-check-circle text-success';
+                case 'rejected': return 'fa fa-times-circle text-danger';
+                case 'draft': return 'fa fa-edit text-warning';
+                case 'updated': return 'fa fa-sync text-info';
+                case 'status_changed': return 'fa fa-random text-primary';
+                case 'comment': return 'fa fa-comment-dots text-secondary';
+                case 'member_added': return 'fa fa-user-plus text-success';
+                case 'member_removed': return 'fa fa-user-minus text-danger';
+                case 'deleted': return 'fa fa-trash text-danger';
+                case 'date_updated': return 'fa fa-calendar-alt text-info';
+                case 'priority_updated': return 'fa fa-exclamation text-warning';
+                default: return 'fa fa-history';
+            }
+        },
+        actionLabel(action) {
+            switch(action) {
+                case 'created': return '作成';
+                case 'approved': return '承認';
+                case 'rejected': return '却下';
+                case 'draft': return '下書き';
+                case 'updated': return '更新';
+                case 'status_changed': return 'ステータス変更';
+                case 'comment': return 'コメント';
+                case 'member_added': return 'メンバー追加';
+                case 'member_removed': return 'メンバー削除';
+                default: return action;
+            }
+        },
+        getLogBadgeClass(log, field) {
+            if (log.action === 'status_changed') {
+                return 'badge ' + this.getStatusBadgeClass(log[field]);
+            }
+            if (log.action === 'priority_updated') {
+                return 'badge ' + this.getPriorityBadgeClass(log[field]);
+            }
+            return field === 'value1' ? 'badge bg-secondary' : 'badge bg-primary';
+        },
+        getLogBadgeLabel(log, field) {
+            if (log.action === 'status_changed') {
+                return this.getStatusLabel(log[field]);
+            }
+            if (log.action === 'priority_updated') {
+                return this.getPriorityLabel(log[field]);
+            }
+            return log[field];
+        },
     },
     watch: {
         isEditMode(newVal) {
@@ -2039,6 +2106,7 @@ createApp({
         await this.loadDepartmentCustomFieldSets();
         await this.loadComments();
         await this.loadNotes();
+        await this.loadLogs();
         this.initTooltips();
         
         // Initialize mention manager

@@ -330,6 +330,7 @@ class Project extends ApplicationModel {
         }
         
         $this->notifyProjectCreated($project_id, $data['name'], array_column($listAllUsers, 'userid'));
+        $this->logProjectAction($project_id, 'created', '案件作成', '', '');
 
         return [
             'status' => 'success',
@@ -355,6 +356,7 @@ class Project extends ApplicationModel {
     function update() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
+        $old = $this->getById($id);
         
         $data = array(
             'name' => isset($_POST['name']) ? $_POST['name'] : '',
@@ -489,6 +491,7 @@ class Project extends ApplicationModel {
             }
         }
         if ($result) {
+            $this->logProjectAction($id, 'updated', '案件情報を変更');
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
@@ -499,8 +502,10 @@ class Project extends ApplicationModel {
     function delete() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
+        $old = $this->getById($id);
         $result = $this->query_update(['status' => 'deleted'], ['id' => $id]);
         if ($result) {
+            $this->logProjectAction($id, 'deleted', '案件を削除', $old['status'], 'deleted');
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Delete failed'];
@@ -555,6 +560,9 @@ class Project extends ApplicationModel {
         $this->table = DB_PREFIX . 'project_members';
         $result = $this->query_insert($data);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
+        // if ($result) {
+        //     $this->logProjectAction($project_id, 'member_added', 'メンバー追加', $role, $username);
+        // }
         return $result;
     }
 
@@ -562,6 +570,9 @@ class Project extends ApplicationModel {
         $this->table = DB_PREFIX . 'project_members';
         $result = $this->query_delete(['project_id' => $project_id, 'user_id' => $user_id]);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
+        // if ($result) {
+        //     $this->logProjectAction($project_id, 'member_removed', 'メンバー削除', '', $user_id);
+        // }
         return $result;
     }
 
@@ -623,6 +634,7 @@ class Project extends ApplicationModel {
             return false;
         }
         
+        $old = $this->getById($id);
         $data = array(
             'status' => $status,
             'updated_at' => date('Y-m-d H:i:s')
@@ -646,6 +658,7 @@ class Project extends ApplicationModel {
         if ($result) {
             $projectMembers = $this->getMembers(['project_id' => $id]);
             $this->notifyProjectStatusChanged($project_number,$id, $name, $data['status'], array_column($projectMembers, 'userid'));
+            $this->logProjectAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
         }
         
         // Clear actual_end_date if status is not completed
@@ -665,6 +678,7 @@ class Project extends ApplicationModel {
             'status' => 'error',
             'error' => 'No project id or start date or end date'
         ];
+        $old = $this->getById($id);
         $data = array(
             'start_date' => $start_date,
             'end_date' => $end_date,
@@ -672,6 +686,7 @@ class Project extends ApplicationModel {
         );
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {
+            $this->logProjectAction($id, 'date_updated', '日程変更', $old['start_date'].'~'.$old['end_date'], $start_date.'~'.$end_date);
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
@@ -687,12 +702,17 @@ class Project extends ApplicationModel {
             return false;
         }
         
+        $old = $this->getById($id);
         $data = array(
             'priority' => $priority,
             'updated_at' => date('Y-m-d H:i:s')
         );
-        
-        return $this->query_update($data, ['id' => $id]);
+
+        $result = $this->query_update($data, ['id' => $id]);
+        if ($result) {
+            $this->logProjectAction($id, 'priority_updated', '優先度変更', $old['priority'], $priority);
+        }
+        return $result;
     }
 
     function getComments() {
@@ -734,6 +754,7 @@ class Project extends ApplicationModel {
         // Send mention notifications if comment was added successfully
         if ($result) {
             $this->sendMentionNotifications($data['project_id'], $data['content'], $data['user_id'], $result);
+            $this->logProjectAction($data['project_id'], 'comment', 'コメント追加', '', mb_substr(strip_tags($data['content']),0,30));
         }
         
         return $result;
@@ -1260,6 +1281,48 @@ class Project extends ApplicationModel {
         ];
         
         return $this->sendProjectNotification($params);
+    }
+
+    // Lấy lịch sử hành động của dự án
+    function getLogs($params = null) {
+        $project_id = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
+        if (!$project_id) return [];
+
+        // Nếu có bảng project_logs thì lấy từ đó, nếu không thì trả về mảng mẫu
+        $query = sprintf(
+            "SELECT l.*, u.realname, u.user_image FROM " . DB_PREFIX . "project_logs l
+            LEFT JOIN " . DB_PREFIX . "user u ON l.user_id = u.userid
+            WHERE l.project_id = %d ORDER BY l.time DESC",
+            $project_id
+        );
+        $logs = $this->fetchAll($query);
+        // Nếu không có bảng logs, trả về mảng mẫu (có thể xóa đoạn này nếu đã có bảng)
+        // if (!$logs) {
+        //     $logs = [
+        //         ['action'=>'created','time'=>'2024-06-01 10:00:00','realname'=>'管理者','user_image'=>'','note'=>'案件作成'],
+        //         ['action'=>'updated','time'=>'2024-06-02 12:00:00','realname'=>'山田太郎','user_image'=>'','note'=>'説明を修正'],
+        //     ];
+        // }
+        return $logs;
+    }
+
+    // Ghi log hành động dự án
+    private function logProjectAction($project_id, $action, $note = '', $value1 = '', $value2 = '') {
+        $user_id = $_SESSION['userid'] ?? '';
+        $username = $_SESSION['realname'] ?? '';
+        $data = [
+            'project_id' => $project_id,
+            'user_id' => $user_id,
+            'username' => $username,
+            'action' => $action,
+            'note' => $note,
+            'value1' => $value1,
+            'value2' => $value2,
+            'time' => date('Y-m-d H:i:s')
+        ];
+        $this->table = DB_PREFIX . 'project_logs';
+        $this->query_insert($data);
+        $this->table = DB_PREFIX . 'projects'; // reset lại table
     }
 }
 

@@ -581,6 +581,47 @@ if (!$project_id) {
                     </div>
                 </div>
 
+                <!-- Lịch sử hành động (履歴) -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex align-items-center">
+                        <strong>履歴:</strong>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group">
+                            <li v-for="log in sortedLogs" :key="log.id" class="list-group-item">
+                                <div class="d-flex">
+                                    <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:160px;">
+                                        <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
+                                            <span v-if="log.user_image">
+                                                <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
+                                            </span>
+                                            <span v-else>
+                                                <span class="avatar-placeholder rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center" style="width:32px;height:32px;font-size:1rem;">
+                                                    {{ log.username ? log.username.charAt(0) : (log.realname ? log.realname.charAt(0) : '?') }}
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <div class="d-flex flex-column align-items-start justify-content-center ms-2">
+                                            <span class="fw-bold small">{{ log.username || log.realname || log.user }}</span>
+                                            <span class="text-muted small">{{ formatDateTime(log.time) }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 d-flex align-items-center">
+                                        <span>
+                                            <i :class="historyIcon(log.action) + ' me-2'"></i>
+                                            <span class="me-2">{{ log.note }}</span>
+                                            <br>
+                                            <span v-if="log.value1" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getLogBadgeLabel(log, 'value1') }}</span>
+                                            <span v-if="log.value2" :class="getLogBadgeClass(log, 'value2')" class="mx-1">{{ getLogBadgeLabel(log, 'value2') }}</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </li>
+                            <li v-if="!logs || logs.length === 0" class="list-group-item text-muted">履歴はありません。</li>
+                        </ul>
+                    </div>
+                </div>
+
                 <!-- Statistics Cards -->
                 <!-- <div class="row g-3 mb-4">
                     <div class="col-6">
@@ -837,3 +878,4 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="assets/js/project-detail.js"></script>
+
