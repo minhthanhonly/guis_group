@@ -952,7 +952,6 @@ class Project extends ApplicationModel {
             
             // Validate required parameters
             if (!isset($params['event']) || !isset($params['title']) || !isset($params['message'])) {
-                $this->log('Missing required notification parameters');
                 return false;
             }
             
@@ -1032,10 +1031,8 @@ class Project extends ApplicationModel {
             $result = $notiService->create($payload);
             
             if ($result) {
-                $this->log('Project notification sent successfully to ' . count($targetUserIds) . ' users');
                 return true;
             } else {
-                $this->log('Failed to send project notification');
                 return false;
             }
             
