@@ -322,6 +322,35 @@ class Task extends ApplicationModel {
         }
     }
 
+    function updateDescription() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $description = isset($_POST['description']) ? $_POST['description'] : '';
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        
+        if (!$id || !$description) {
+            return ['status' => 'error', 'message' => 'Missing required parameters'];
+        }
+        
+        if (!$this->checkPermission($project_id, $id)) {
+            return ['status' => 'error', 'message' => 'このタスクを更新する権限がありません'];
+        }
+        
+        $data = array(
+            'description' => $description,
+            'updated_at' => date('Y-m-d H:i:s')
+        );
+        
+        $result = $this->query_update($data, ['id' => $id]);
+        
+        if ($result) {
+            $this->logTaskAction($id, 'description_updated', '説明変更');
+            return ['status' => 'success'];
+        } else {
+            return ['status' => 'error', 'message' => 'Update failed'];
+        }
+    }
+    
+
     function updatePriority() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         $priority = isset($_POST['priority']) ? $_POST['priority'] : '';

@@ -9,9 +9,6 @@ if (!$project_id) {
     exit;
 }
 ?>
-<!-- Add Quill CSS and JS -->
-<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
 
 <div id="app" class="container-fluid mt-4" v-cloak>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
@@ -469,64 +466,51 @@ if (!$project_id) {
 
                             <!-- Tab 2: Comments -->
                             <div class="tab-pane fade" id="comments" role="tabpanel">
-                                <div class="card h-100">
-                                    <div class="card-header d-flex justify-content-between align-items-center">
-                                        <h6 class="mb-0">コメント</h6>
-                                        <button class="btn btn-sm btn-outline-primary" @click="showAddComment = true">
-                                            <i class="fas fa-plus me-1"></i>コメント追加
-                                        </button>
-                                    </div>
-                                    <div class="card-body">
-                                        <!-- Add Comment Form -->
-                                        <div v-if="showAddComment" class="mb-3">
-                                            <div class="d-flex">
-                                                <div class="flex-grow-1 me-2">
-                                                    <textarea class="form-control" v-model="newComment" rows="3" placeholder="コメントを入力してください..."></textarea>
-                                                </div>
-                                                <div class="d-flex flex-column">
-                                                    <button class="btn btn-primary btn-sm mb-1" @click="addComment">
-                                                        <i class="fas fa-paper-plane"></i>
-                                                    </button>
-                                                    <button class="btn btn-secondary btn-sm" @click="showAddComment = false">
-                                                        <i class="fas fa-times"></i>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Comments List -->
-                                        <div class="comments-list">
-                                            <div v-if="taskComments.length === 0" class="text-center text-muted py-4">
-                                                <i class="fas fa-comments fa-2x mb-2"></i>
-                                                <p>コメントがありません</p>
-                                            </div>
-                                            <div v-for="comment in taskComments" :key="comment.id" class="comment-item border-bottom pb-3 mb-3">
-                                                <div class="d-flex">
-                                                    <div class="flex-shrink-0">
-                                                        <img v-if="comment.user_avatar" :src="comment.user_avatar" class="rounded-circle" width="40" height="40" :alt="comment.user_name">
-                                                        <span v-else class="avatar-initial rounded-circle bg-label-primary d-inline-flex align-items-center justify-content-center" style="width:40px;height:40px;">
-                                                            {{ getInitials(comment.user_name) }}
-                                                        </span>
-                                                    </div>
-                                                    <div class="flex-grow-1 ms-3">
-                                                        <div class="d-flex justify-content-between align-items-start">
-                                                            <div>
-                                                                <h6 class="mb-1">{{ comment.user_name }}</h6>
-                                                                <small class="text-muted">{{ formatDate(comment.created_at) }}</small>
-                                                            </div>
-                                                            <div class="dropdown">
-                                                                <button class="btn btn-sm btn-link text-muted" data-bs-toggle="dropdown">
-                                                                    <i class="fas fa-ellipsis-v"></i>
-                                                                </button>
-                                                                <ul class="dropdown-menu">
-                                                                    <li><a class="dropdown-item" href="#" @click="editComment(comment)">編集</a></li>
-                                                                    <li><a class="dropdown-item text-danger" href="#" @click="deleteComment(comment.id)">削除</a></li>
-                                                                </ul>
+                                <div class="app-chat card overflow-hidden h-100">
+                                    <div class="chat-history-wrapper h-100 d-flex flex-column">
+                                        <div class="chat-history-body flex-grow-1" style="overflow-y: auto;">
+                                            <ul class="list-unstyled chat-history p-3">
+                                                <li v-for="comment in taskComments" :key="comment.id" 
+                                                    class="chat-message" 
+                                                    :class="{'chat-message-right': String(comment.user_id) === String(USER_ID)}">
+                                                    <div 
+                                                        class="d-flex overflow-hidden gap-4"
+                                                        :class="{'flex-row-reverse': String(comment.user_id) === String(USER_ID)}">
+                                                        <div class="user-avatar flex-shrink-0">
+                                                            <div class="avatar avatar-sm">
+                                                                <img v-if="!comment.avatarError" class="rounded-circle" :src="getAvatarSrc(comment)" :alt="comment.user_name" @error="handleAvatarError(comment)">
+                                                                <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment.user_name) }}</span>
                                                             </div>
                                                         </div>
-                                                        <div class="mt-2" v-html="comment.content"></div>
+                                                        <div class="chat-message-wrapper flex-grow-1">
+                                                            <div class="chat-message-text">
+                                                                <div class="mb-0" v-html="renderMentions(comment.content)"></div>
+                                                            </div>
+                                                            <div class="text-body-secondary mt-1">
+                                                                <small>{{ formatDateTime(comment.created_at) }}</small>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                </li>
+                                                <li v-if="taskComments.length === 0" class="chat-message text-center text-muted py-5">
+                                                    コメントはまだありません
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        <div class="chat-history-footer shadow-xs">
+                                            <div class="form-send-message d-flex justify-content-between align-items-center p-3">
+                                                <div class="form-control message-input border-0 me-4 shadow-none allow-mention"
+                                                     contenteditable="true"
+                                                     data-mention
+                                                     data-html-mention
+                                                     @input="onCommentInput"
+                                                     placeholder="コメントを入力... @でメンション"
+                                                     style="min-height: 38px; max-height: 120px; overflow-y: auto; white-space: pre-wrap;"></div>
+                                                <button class="btn btn-primary d-flex send-msg-btn"
+                                                        @click="addComment"
+                                                        :disabled="!hasCommentContent()">
+                                                    <i class="fa fa-paper-plane icon-16px flex-shrink-0"></i>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -613,12 +597,47 @@ if (!$project_id) {
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
+
+/* Modal content styles */
+#taskDetailsModal .modal-body {
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#taskDetailsModal .tab-content {
+    height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
 </style>
 <script>
 const PROJECT_ID = <?php echo $project_id; ?>;
+const USER_ID = <?php echo $_SESSION['userid'] ?? 0; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="assets/js/task-manager.js"></script>
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/highlight/highlight.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/katex.css" />
+<script src="<?=ROOT?>assets/vendor/libs/highlight/highlight.js"></script>
+<script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
+<script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
+<script src="<?=ROOT?>assets/js/forms-editors.js"></script>
+
+<script>
+// Reset Quill editor when modal is closed
+document.addEventListener('DOMContentLoaded', function() {
+    const taskDetailsModal = document.getElementById('taskDetailsModal');
+    if (taskDetailsModal) {
+        taskDetailsModal.addEventListener('hidden.bs.modal', function() {
+            if (window.TaskApp && window.TaskApp.resetQuillEditor) {
+                window.TaskApp.resetQuillEditor();
+            }
+        });
+    }
+});
+</script>
 
 <?php
 $view->footing();

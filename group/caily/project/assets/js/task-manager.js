@@ -828,6 +828,11 @@ const TaskApp = createApp({
             return getAvatarName(name);
         },
         
+        formatDateTime(date) {
+            if (!date) return '-';
+            return moment(date).format('YYYY/MM/DD HH:mm');
+        },
+        
         openMemberModal() {
             this.showMemberModal = true;
         },
@@ -1260,22 +1265,47 @@ const TaskApp = createApp({
             
             // Load task data
             this.loadTaskComments(task.id);
-            this.loadTaskLogs(task.id);
-            
-            // Initialize Quill editor
-            this.$nextTick(() => {
-                this.initQuillEditor();
-            });
             
             // Show modal
             const modal = new bootstrap.Modal(document.getElementById('taskDetailsModal'));
             modal.show();
+            
+            // Initialize Quill editor after modal is shown
+            setTimeout(() => {
+                this.initQuillEditor();
+            }, 300);
+            
+            // Add event listener for tab changes
+            this.$nextTick(() => {
+                const taskDetailsModal = document.getElementById('taskDetailsModal');
+                if (taskDetailsModal) {
+                    taskDetailsModal.addEventListener('shown.bs.tab', (event) => {
+                        if (event.target.getAttribute('data-bs-target') === '#history') {
+                            if (this.taskLogs.length === 0) {
+                                this.loadTaskLogs(task.id);
+                            }
+                        }
+                        if (event.target.getAttribute('data-bs-target') === '#comments') {
+                            if (this.taskComments.length === 0) {
+                                this.loadTaskComments(task.id);
+                            }
+                        }
+                    });
+                }
+            });
         },
         
         async loadTaskComments(taskId) {
             try {
                 const response = await axios.get(`/api/index.php?model=task&method=getComments&task_id=${taskId}`);
-                this.taskComments = response.data || [];
+                if (response.data && Array.isArray(response.data)) {
+                    this.taskComments = response.data.map(comment => ({
+                        ...comment,
+                        avatarError: false
+                    }));
+                } else {
+                    this.taskComments = [];
+                }
             } catch (error) {
                 console.error('Error loading comments:', error);
                 this.taskComments = [];
@@ -1294,25 +1324,91 @@ const TaskApp = createApp({
         },
         
         initQuillEditor() {
-            if (this.quillEditor) {
-                this.quillEditor.destroy();
-            }
-            
-            this.quillEditor = new Quill('#taskDescriptionEditor', {
-                theme: 'snow',
-                modules: {
-                    toolbar: [
-                        ['bold', 'italic', 'underline'],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        ['link', 'image'],
-                        ['clean']
-                    ]
+            // Wait for DOM to be ready
+            this.$nextTick(() => {
+                const editorElement = document.getElementById('taskDescriptionEditor');
+                if (!editorElement) {
+                    console.error('Editor element not found');
+                    return;
+                }
+                
+                // Destroy existing editor if any
+                try {
+                    if (this.quillEditor && typeof this.quillEditor.destroy === 'function') {
+                        this.quillEditor.destroy();
+                    }
+                } catch (error) {
+                    console.warn('Error destroying existing Quill editor:', error);
+                }
+                
+                // Clear the container
+                editorElement.innerHTML = '';
+                const toolbarOptions = [
+                    [
+                        { font: [] },
+                        { size: [] }
+                    ],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [
+                        { color: [] },
+                        { background: [] }
+                    ],
+                    [
+                        { script: 'super' },
+                        { script: 'sub' }
+                    ],
+                    [
+                        { header: '1' },
+                        { header: '2' }, 'blockquote' ],
+                    [
+                        { list: 'ordered' },
+                        { indent: '-1' },
+                        { indent: '+1' }
+                    ],
+                    [{ direction: 'rtl' }, { align: [] }],
+                    ['link', 'image', 'video', 'formula'],
+                    ['clean']
+                ];
+                
+                // Initialize Quill editor
+                this.quillEditor = new Quill('#taskDescriptionEditor', {
+                    theme: 'snow',
+                    placeholder: 'タスクの説明を入力してください...',
+                    modules: {
+                        toolbar: toolbarOptions
+                    }
+                });
+                
+                // Set content if task has description
+                if (this.selectedTask && this.selectedTask.description) {
+                    // Convert HTML to safe format before displaying
+                    const cleanHtml = this.decodeHtmlEntities(this.selectedTask.description);
+                    this.quillEditor.root.innerHTML = cleanHtml;
                 }
             });
-            
-            if (this.selectedTask && this.selectedTask.description) {
-                this.quillEditor.root.innerHTML = this.selectedTask.description;
+        },
+        
+        
+        decodeHtmlEntities(str) {
+            const txt = document.createElement('textarea');
+            txt.innerHTML = str;
+            return txt.value;
+        },
+        resetQuillEditor() {
+            try {
+                if (this.quillEditor && typeof this.quillEditor.destroy === 'function') {
+                    this.quillEditor.destroy();
+                }
+            } catch (error) {
+                console.warn('Error destroying Quill editor:', error);
+            } finally {
+                this.quillEditor = null;
             }
+            this.selectedTask = null;
+            this.taskComments = [];
+            this.taskLogs = [];
+            this.showAddComment = false;
+            this.newComment = '';
         },
         
         getTaskLogIcon(action) {
@@ -1378,37 +1474,51 @@ const TaskApp = createApp({
         },
         
         async saveTaskDescription() {
-            if (!this.quillEditor || !this.selectedTask) return;
+            if (!this.quillEditor || !this.selectedTask) {
+                console.error('Quill editor or selected task not available');
+                return;
+            }
             
             const content = this.quillEditor.root.innerHTML;
+            console.log('Saving description:', content);
+            
             try {
                 const formData = new FormData();
                 formData.append('id', this.selectedTask.id);
+                formData.append('project_id', this.projectId);
                 formData.append('description', content);
                 
                 const response = await axios.post('/api/index.php?model=task&method=updateDescription', formData);
-                if (response.data.success) {
+                if (response.data.status === 'success') {
                     this.showMessage('説明を保存しました。');
                     this.selectedTask.description = content;
+                    // Reload tasks to get updated data
+                    await this.loadTasks();
+                } else {
+                    throw new Error(response.data.message || '保存に失敗しました');
                 }
             } catch (error) {
                 console.error('Error saving description:', error);
-                this.showMessage('説明の保存に失敗しました。', true);
+                this.showMessage(error.message || '説明の保存に失敗しました。', true);
             }
         },
         
         async addComment() {
-            if (!this.newComment.trim() || !this.selectedTask) return;
+            const messageInput = document.querySelector('.message-input');
+            const content = messageInput ? messageInput.textContent.trim() : '';
+            
+            if (!content || !this.selectedTask) return;
             
             try {
                 const formData = new FormData();
                 formData.append('task_id', this.selectedTask.id);
-                formData.append('content', this.newComment);
+                formData.append('content', content);
                 
                 const response = await axios.post('/api/index.php?model=task&method=addComment', formData);
                 if (response.data.success) {
-                    this.newComment = '';
-                    this.showAddComment = false;
+                    if (messageInput) {
+                        messageInput.textContent = '';
+                    }
                     await this.loadTaskComments(this.selectedTask.id);
                     this.showMessage('コメントを追加しました。');
                 }
@@ -1416,6 +1526,23 @@ const TaskApp = createApp({
                 console.error('Error adding comment:', error);
                 this.showMessage('コメントの追加に失敗しました。', true);
             }
+        },
+        
+        onCommentInput(event) {
+            // Handle comment input for mention functionality
+            const content = event.target.textContent;
+            // You can add mention handling logic here if needed
+        },
+        
+        hasCommentContent() {
+            const messageInput = document.querySelector('.message-input');
+            return messageInput ? messageInput.textContent.trim().length > 0 : false;
+        },
+        
+        renderMentions(content) {
+            if (!content) return '';
+            // Simple mention rendering - you can enhance this
+            return content.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
         },
         
         async deleteComment(commentId) {
@@ -1466,5 +1593,7 @@ const TaskApp = createApp({
 
 // Mount the app when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    TaskApp.mount('#app');
+    const app = TaskApp.mount('#app');
+    // Expose app instance globally for external access
+    window.TaskApp = app;
 });
