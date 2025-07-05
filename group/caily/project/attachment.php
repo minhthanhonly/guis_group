@@ -132,22 +132,46 @@ if (!$project_id) {
                             <!-- Folders and Files -->
                             <div v-else class="table-responsive">
                                 <table class="table table-hover">
-                                    <thead>
+                                    <thead class="table-light">
                                         <tr>
                                             <th style="width: 40px;" v-if="canManageProject"></th>
                                             <th style="width: 40px;"></th>
-                                            <th>名前</th>
-                                            <th style="width: 120px;">サイズ</th>
-                                            <th style="width: 150px;">更新日時</th>
-                                            <th style="width: 120px;">作成者</th>
+                                            <th @click="sortBy('name')" style="cursor: pointer;">
+                                                <div class="d-flex align-items-center">
+                                                    <span>名前</span>
+                                                    <i class="fa ms-1" :class="getSortIcon('name')"></i>
+                                                </div>
+                                            </th>
+                                            <th @click="sortBy('file_type')" style="cursor: pointer; width: 150px;">
+                                                <div class="d-flex align-items-center">
+                                                    <span>ファイルタイプ</span>
+                                                    <i class="fa ms-1" :class="getSortIcon('file_type')"></i>
+                                                </div>
+                                            </th>
+                                            <th @click="sortBy('file_size')" style="cursor: pointer; width: 120px;">
+                                                <div class="d-flex align-items-center">
+                                                    <span>サイズ</span>
+                                                    <i class="fa ms-1" :class="getSortIcon('file_size')"></i>
+                                                </div>
+                                            </th>
+                                            <th @click="sortBy('uploaded_at')" style="cursor: pointer; width: 150px;">
+                                                <div class="d-flex align-items-center">
+                                                    <span>更新日時</span>
+                                                    <i class="fa ms-1" :class="getSortIcon('uploaded_at')"></i>
+                                                </div>
+                                            </th>
+                                            <th @click="sortBy('uploaded_by_name')" style="cursor: pointer; width: 120px;">
+                                                <div class="d-flex align-items-center">
+                                                    <span>作成者</span>
+                                                    <i class="fa ms-1" :class="getSortIcon('uploaded_by_name')"></i>
+                                                </div>
+                                            </th>
                                             <th style="width: 100px;" v-if="canManageProject">操作</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <!-- Folders -->
-                                        <tr v-for="folder in folders" :key="'folder-' + folder.id" 
-                                            @dblclick="navigateToFolder(folder.id)"
-                                            style="cursor: pointer;">
+                                        <tr v-for="folder in sortedFolders" :key="'folder-' + folder.id">
                                             <td v-if="canManageProject">
                                                 <!-- Empty cell for folders -->
                                             </td>
@@ -155,8 +179,15 @@ if (!$project_id) {
                                                 <i class="fa fa-folder text-warning fa-lg"></i>
                                             </td>
                                             <td>
-                                                <strong>{{ folder.name }}</strong>
+                                                <strong>
+                                                    <a href="#" @click.prevent="navigateToFolder(folder.id)" class="text-decoration-none text-dark" style="cursor: pointer;">
+                                                        {{ folder.name }}
+                                                    </a>
+                                                </strong>
                                                 <small class="text-muted d-block">{{ folder.file_count }} ファイル</small>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-label-secondary">フォルダ</span>
                                             </td>
                                             <td>-</td>
                                             <td>{{ formatDateTime(folder.updated_at) }}</td>
@@ -182,7 +213,7 @@ if (!$project_id) {
                                         </tr>
 
                                         <!-- Files -->
-                                        <tr v-for="file in files" :key="'file-' + file.id" 
+                                        <tr v-for="file in sortedFiles" :key="'file-' + file.id" 
                                             :class="{ 'table-primary': isFileSelected(file.id) }">
                                             <td v-if="canManageProject">
                                                 <div class="form-check">
@@ -199,6 +230,12 @@ if (!$project_id) {
                                                 <a :href="getSecureViewUrl(file)" target="_blank" class="text-decoration-none">
                                                     {{ file.original_name }}
                                                 </a>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <span class="badge bg-label-primary" v-if="file.original_name && file.original_name.includes('.')">{{ file.original_name.split('.').pop().toUpperCase() }}</span>
+                                                    <span v-else class="text-muted">-</span>
+                                                </div>
                                             </td>
                                             <td>{{ formatFileSize(file.file_size) }}</td>
                                             <td>{{ formatDateTime(file.uploaded_at) }}</td>
@@ -289,22 +326,22 @@ if (!$project_id) {
                         <!-- Hidden File Input -->
                         <input type="file" class="d-none" ref="fileInput" multiple @change="handleFileSelect">
                         
-                        <!-- Selected Files List -->
-                        <div v-if="selectedFiles.length > 0" class="mb-3">
-                            <h6>選択されたファイル:</h6>
-                            <div class="list-group">
-                                <div v-for="(file, index) in selectedFiles" :key="index" class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <i :class="getFileIcon(file.name)" class="me-2"></i>
-                                        {{ file.name }}
-                                        <small class="text-muted">({{ formatFileSize(file.size) }})</small>
-                                    </div>
-                                    <button class="btn btn-sm btn-outline-danger" @click="removeSelectedFile(index)">
-                                        <i class="fa fa-times"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                                <!-- Selected Files List -->
+        <div v-if="selectedFiles.length > 0" class="mb-3">
+            <h6>選択されたファイル:</h6>
+            <div class="list-group selected-files-list">
+                <div v-for="(file, index) in selectedFiles" :key="index" class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <i :class="getFileIcon(file.name)" class="me-2"></i>
+                        {{ file.name }}
+                        <small class="text-muted">({{ formatFileSize(file.size) }})</small>
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger" @click="removeSelectedFile(index)">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-secondary" @click="closeUploadModal">キャンセル</button>
@@ -471,15 +508,59 @@ $view->footing();
 .upload-drop-zone {
     border: 2px dashed #dee2e6;
     border-radius: 8px;
-    background-color: #f8f9fa;
     transition: all 0.3s ease;
     cursor: pointer;
     position: relative;
 }
 
+/* Selected Files List Height Limit */
+.selected-files-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+}
+
+.selected-files-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.selected-files-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.selected-files-list::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.selected-files-list::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Sortable table headers */
+.table th[style*="cursor: pointer"]:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+    transition: background-color 0.2s ease;
+}
+
+.table th[style*="cursor: pointer"] .fa {
+    color: #6c757d;
+    transition: color 0.2s ease;
+}
+
+.table th[style*="cursor: pointer"]:hover .fa {
+    color: var(--bs-primary);
+}
+
+.table th[style*="cursor: pointer"] .fa-sort-up,
+.table th[style*="cursor: pointer"] .fa-sort-down {
+    color: var(--bs-primary);
+}
+
 .upload-drop-zone:hover {
     border-color: #007bff;
-    background-color: #f0f8ff;
 }
 
 .upload-drop-zone.drag-over {

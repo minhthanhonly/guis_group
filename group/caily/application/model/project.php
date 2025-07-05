@@ -1554,8 +1554,8 @@ class Project extends ApplicationModel {
         
         // Delete files from filesystem and database
         foreach ($files as $file) {
-            if (file_exists($file['file_path'])) {
-                unlink($file['file_path']);
+            if (file_exists('..' . $file['file_path'])) {
+                unlink('..' . $file['file_path']);
             }
             $this->table = DB_PREFIX . 'project_attachments';
             $this->query_delete(['id' => $file['id']]);

@@ -33,7 +33,11 @@ createApp({
             // User permissions
             userPermissions: null,
             managers: [],
-            members: []
+            members: [],
+            
+            // Sorting
+            sortField: 'name',
+            sortDirection: 'asc'
         }
     },
     
@@ -53,6 +57,76 @@ createApp({
             if (USER_ROLE == 'administrator') return true;
             if (this.managers && this.managers.some(m => String(m.user_id) === String(USER_AUTH_ID))) return true;
             return this.hasPermission('project_manager');
+        },
+        
+        sortedFolders() {
+            if (!this.folders || this.folders.length === 0) return [];
+            
+            return [...this.folders].sort((a, b) => {
+                let aValue, bValue;
+                
+                // Handle special cases for folder fields
+                if (this.sortField === 'name') {
+                    aValue = (a.name || '').toLowerCase();
+                    bValue = (b.name || '').toLowerCase();
+                } else if (this.sortField === 'uploaded_at') {
+                    // For folders, use updated_at instead of uploaded_at
+                    aValue = new Date(a.updated_at || 0);
+                    bValue = new Date(b.updated_at || 0);
+                } else if (this.sortField === 'uploaded_by_name') {
+                    // For folders, use created_by_name instead of uploaded_by_name
+                    aValue = (a.created_by_name || '').toLowerCase();
+                    bValue = (b.created_by_name || '').toLowerCase();
+                } else if (this.sortField === 'file_size') {
+                    // Folders don't have size, so they should be sorted to top
+                    return this.sortDirection === 'asc' ? -1 : 1;
+                } else if (this.sortField === 'file_type') {
+                    // For folders, use "フォルダ" as the type
+                    aValue = 'フォルダ';
+                    bValue = 'フォルダ';
+                } else {
+                    aValue = a[this.sortField];
+                    bValue = b[this.sortField];
+                }
+                
+                if (aValue < bValue) return this.sortDirection === 'asc' ? -1 : 1;
+                if (aValue > bValue) return this.sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+        },
+        
+        sortedFiles() {
+            if (!this.files || this.files.length === 0) return [];
+            
+            return [...this.files].sort((a, b) => {
+                let aValue = a[this.sortField];
+                let bValue = b[this.sortField];
+                
+                // Handle special cases
+                if (this.sortField === 'name') {
+                    aValue = (a.original_name || '').toLowerCase();
+                    bValue = (b.original_name || '').toLowerCase();
+                } else if (this.sortField === 'file_size') {
+                    aValue = parseInt(aValue || 0);
+                    bValue = parseInt(bValue || 0);
+                } else if (this.sortField === 'uploaded_at') {
+                    aValue = new Date(aValue || 0);
+                    bValue = new Date(bValue || 0);
+                } else if (this.sortField === 'uploaded_by_name') {
+                    aValue = (aValue || '').toLowerCase();
+                    bValue = (bValue || '').toLowerCase();
+                } else if (this.sortField === 'file_type') {
+                    // Extract file extension for sorting
+                    aValue = (a.original_name && a.original_name.includes('.')) ? 
+                             a.original_name.split('.').pop().toLowerCase() : 'zzz';
+                    bValue = (b.original_name && b.original_name.includes('.')) ? 
+                             b.original_name.split('.').pop().toLowerCase() : 'zzz';
+                }
+                
+                if (aValue < bValue) return this.sortDirection === 'asc' ? -1 : 1;
+                if (aValue > bValue) return this.sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
         }
     },
     
@@ -605,6 +679,23 @@ createApp({
         clearSelection() {
             this.selectedFileIds = [];
             this.selectAllFiles = false;
+        },
+        
+        // Sorting methods
+        sortBy(field) {
+            if (this.sortField === field) {
+                this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortField = field;
+                this.sortDirection = 'asc';
+            }
+        },
+        
+        getSortIcon(field) {
+            if (this.sortField !== field) {
+                return 'fa-sort text-muted';
+            }
+            return this.sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
         },
         
         // Utility methods
