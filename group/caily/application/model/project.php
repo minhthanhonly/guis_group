@@ -1600,20 +1600,26 @@ class Project extends ApplicationModel {
         
         // Use original filename (replace if exists)
         $filename = $originalName;
-        $uploadDir = "/assets/upload/project-attachments/$project_id/";
         $filePath = $uploadDir . $filename;
         
         // Move uploaded file (this will overwrite existing file)
         if (!move_uploaded_file($tmpName, $filePath)) {
             return ['success' => false, 'error' => 'Failed to move uploaded file'];
         }
+
+
+        $uploadDir2 = "assets/upload/project-attachments/$project_id/";
+        if ($folder_id) {
+            $uploadDir2 .= "folder-$folder_id/";
+        }
+        $urlFile = ROOT . $uploadDir2 . $filename;
         
         // Save to database
         $data = [
             'project_id' => $project_id,
             'original_name' => $originalName,
             'file_name' => $filename,
-            'file_path' => $filePath,
+            'file_path' => $urlFile,
             'file_size' => $fileSize,
             'mime_type' => $file['type'],
             'uploaded_by' => $_SESSION['userid'] ?? 0,
