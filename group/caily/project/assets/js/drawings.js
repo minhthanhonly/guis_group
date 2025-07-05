@@ -53,6 +53,8 @@ createApp({
         canViewProject() {
             return true; // Implement permission check
         },
+
+        
         
         filteredDrawings() {
             let filtered = this.drawings;
@@ -223,6 +225,47 @@ createApp({
             } finally {
                 this.loading = false;
             }
+        },
+
+        getUserAvatar(userid) {
+            const appChatContacts = document.getElementById('app-chat-contacts');
+            const user = appChatContacts.querySelector(`[data-userid="${userid}"]`);
+            let avatar = '';
+            if (user) {
+                avatar = user.querySelector('img').src;
+                if(avatar.includes('/1.png')) {
+                    avatar = '';
+                }
+            }
+            return avatar;
+        },
+
+        getUserAvatarCreatedByText(drawing, index) {
+            const name = drawing.created_by_names.split(',')[index];
+            return this.getInitials(name);
+        },
+        getUserCreatedByFullNameText(drawing, index) {
+            const name = drawing.created_by_names.split(',')[index];
+            return name;
+        },
+
+
+        getUserCheckerAvatarText(drawing, index) {
+            const name = drawing.checked_by_name.split(',')[index];
+            return this.getInitials(name);
+        },
+        getUserCheckerFullNameText(drawing, index) {
+            const name = drawing.checked_by_name.split(',')[index];
+            return name;
+        },
+
+        getUserReviseByAvatarText(drawing, index) {
+            const name = drawing.revise_by_name.split(',')[index];
+            return this.getInitials(name);
+        },
+        getUserReviseByFullNameText(drawing, index) {
+            const name = drawing.revise_by_name.split(',')[index];
+            return name;
         },
         
         // Drag and Drop handlers for modal

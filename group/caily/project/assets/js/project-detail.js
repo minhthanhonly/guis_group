@@ -3,7 +3,7 @@ const { createApp } = Vue;
 createApp({
     data() {
         return {
-            projectId: PROJECT_ID,
+            projectId: typeof PROJECT_ID !== 'undefined' ? PROJECT_ID : this.getProjectIdFromUrl(),
             project: null,
             department: null,
             managers: [],
@@ -154,6 +154,24 @@ createApp({
         },
     },
     methods: {
+        getProjectIdFromUrl() {
+            // Lấy project ID từ URL nếu không có biến PROJECT_ID
+            const urlParams = new URLSearchParams(window.location.search);
+            const id = urlParams.get('id');
+            if (id) return parseInt(id);
+            
+            // Hoặc lấy từ pathname
+            const pathMatch = window.location.pathname.match(/\/project\/detail\.php\?id=(\d+)/);
+            if (pathMatch) return parseInt(pathMatch[1]);
+            
+            // Fallback: lấy từ URL hiện tại
+            const currentUrl = window.location.href;
+            const urlMatch = currentUrl.match(/[?&]id=(\d+)/);
+            if (urlMatch) return parseInt(urlMatch[1]);
+            
+            console.error('Could not determine project ID from URL');
+            return null;
+        },
         async getUserPermissions(departmentId) {
             try {
                 const response = await axios.get(`/api/index.php?model=department&method=get_user_permission_by_department&department_id=${departmentId}`);
@@ -1519,7 +1537,12 @@ createApp({
                     placeholder: 'Type Something...',
                     modules: {
                         syntax: true,
-                        toolbar: toolbarOptions
+                        toolbar: {
+                            container: toolbarOptions,
+                            handlers: {
+                                image: () => this.imageHandler()
+                            }
+                        }
                     },
                     theme: 'snow'
                 });
@@ -1590,6 +1613,109 @@ createApp({
             const txt = document.createElement('textarea');
             txt.innerHTML = str;
             return txt.value;
+        },
+        
+        // Image handler for Quill editor
+        imageHandler() {
+            const input = document.createElement('input');
+            input.setAttribute('type', 'file');
+            input.setAttribute('accept', 'image/*');
+            input.click();
+            
+            input.onchange = async () => {
+                const file = input.files[0];
+                if (file) {
+                    try {
+                        // Kiểm tra kích thước file (max 5MB)
+                        if (file.size > 5 * 1024 * 1024) {
+                            this.showNotification('ファイルサイズは5MB以下にしてください。', 'error');
+                            return;
+                        }
+                        
+                        // Upload ảnh
+                        const uploadUrl = '/api/quill-image-upload.php';
+                        let response;
+                        
+                        // Debug: log project ID
+                        console.log('Project ID for upload:', this.projectId);
+                        
+                        if (window.swManager && window.swManager.swRegistration) {
+                            // Sử dụng Service Worker với project_id
+                            response = await window.swManager.uploadFile(file, uploadUrl, { project_id: this.projectId });
+                        } else {
+                            // Fallback to regular upload
+                            const formData = new FormData();
+                            formData.append('image', file);
+                            formData.append('project_id', this.projectId);
+                            const uploadResponse = await axios.post(uploadUrl, formData, {
+                                headers: {
+                                    'Content-Type': 'multipart/form-data'
+                                }
+                            });
+                            response = uploadResponse.data;
+                        }
+                        
+                        if (response.success) {
+                            // Chèn ảnh vào cuối editor mà không dùng getSelection
+                            requestAnimationFrame(() => {
+                                try {
+                                    if (this.quillInstance && this.quillInstance.root) {
+                                        // Lấy độ dài hiện tại của nội dung
+                                        const length = this.quillInstance.getLength();
+                                        
+                                        // Chèn ảnh ở cuối
+                                        this.quillInstance.insertEmbed(length - 1, 'image', response.url);
+                                        this.quillInstance.insertText(length, '\n');
+                                        
+                                        // Focus vào editor
+                                        this.quillInstance.focus();
+                                        
+                                        // Scroll xuống cuối
+                                        if (this.quillInstance.scrollingContainer) {
+                                            this.quillInstance.scrollingContainer.scrollTop = this.quillInstance.scrollingContainer.scrollHeight;
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.error('Error inserting image:', error);
+                                    // Fallback: append trực tiếp vào HTML
+                                    if (this.quillInstance && this.quillInstance.root) {
+                                        const imageHtml = `<p><img src="${response.url}" alt="Uploaded image" style="max-width: 100%; height: auto;"></p>`;
+                                        this.quillInstance.root.innerHTML += imageHtml;
+                                    }
+                                }
+                            });
+                        } else {
+                            this.showNotification('画像のアップロードに失敗しました: ' + (response.error || 'Unknown error'), 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error uploading image:', error);
+                        this.showNotification('画像のアップロードに失敗しました。', 'error');
+                    }
+                }
+            };
+        },
+        removeImagePlaceholder() {
+            try {
+                if (this.quillInstance && this.quillInstance.root) {
+                    const content = this.quillInstance.getContents();
+                    let placeholderIndex = -1;
+                    
+                    // Tìm vị trí của placeholder
+                    for (let i = 0; i < content.ops.length; i++) {
+                        if (content.ops[i].insert === '📷') {
+                            placeholderIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    if (placeholderIndex !== -1) {
+                        // Xóa placeholder
+                        this.quillInstance.deleteText(placeholderIndex, 1);
+                    }
+                }
+            } catch (error) {
+                console.error('Error removing placeholder:', error);
+            }
         },
         handleBeforeUnload(event) {
             event.preventDefault();
@@ -1752,6 +1878,35 @@ createApp({
             }
             return log[field];
         },
+        
+        // Upload progress handling methods
+        updateUploadProgress(fileName, progress) {
+            // Update progress bar if exists
+            const progressBar = document.querySelector(`[data-file="${fileName}"] .progress-bar`);
+            if (progressBar) {
+                progressBar.style.width = progress + '%';
+                progressBar.textContent = progress + '%';
+            }
+        },
+        
+        handleUploadSuccess(fileName, data) {
+            console.log('Upload successful:', fileName, data);
+            // Remove progress indicator if exists
+            const progressContainer = document.querySelector(`[data-file="${fileName}"]`);
+            if (progressContainer) {
+                progressContainer.remove();
+            }
+        },
+        
+        handleUploadError(fileName, error) {
+            console.error('Upload failed:', fileName, error);
+            // Remove progress indicator and show error
+            const progressContainer = document.querySelector(`[data-file="${fileName}"]`);
+            if (progressContainer) {
+                progressContainer.remove();
+            }
+            this.showNotification(`アップロードに失敗しました: ${fileName}`, 'error');
+        }
     },
     watch: {
         isEditMode(newVal) {
@@ -2130,6 +2285,22 @@ createApp({
         
         // Add beforeunload event listener
         //window.addEventListener('beforeunload', this.handleBeforeUnload);
+        
+        // Add upload progress event listeners
+        window.addEventListener('uploadProgress', (event) => {
+            const { progress, fileName } = event.detail;
+            this.updateUploadProgress(fileName, progress);
+        });
+        
+        window.addEventListener('uploadSuccess', (event) => {
+            const { data, fileName } = event.detail;
+            this.handleUploadSuccess(fileName, data);
+        });
+        
+        window.addEventListener('uploadError', (event) => {
+            const { error, fileName } = event.detail;
+            this.handleUploadError(fileName, error);
+        });
 
         // Initialize Tagify for team selection
         // if (document.getElementById('team_tags')) {

@@ -612,7 +612,6 @@ if (!$project_id) {
 </style>
 <script>
 const PROJECT_ID = <?php echo $project_id; ?>;
-const USER_ID = <?php echo $_SESSION['userid'] ?? 0; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="assets/js/task-manager.js"></script>
@@ -623,8 +622,7 @@ const USER_ID = <?php echo $_SESSION['userid'] ?? 0; ?>;
 <script src="<?=ROOT?>assets/vendor/libs/highlight/highlight.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
-<script src="<?=ROOT?>assets/js/forms-editors.js"></script>
-
+<script src="<?=ROOT?>assets/js/sw-manager.js"></script>
 <script>
 // Reset Quill editor when modal is closed
 document.addEventListener('DOMContentLoaded', function() {

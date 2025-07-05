@@ -10,6 +10,12 @@ if (!$project_id) {
 }
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
+    <!-- Service Worker Status Indicator -->
+    <div id="sw-status" class="sw-status">
+        <i class="fas fa-circle"></i>
+        <span id="sw-status-text">Service Worker</span>
+    </div>
+    
     <div v-if="canViewProject">
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">
@@ -873,9 +879,11 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/highlight/highlight.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/katex.css" />
+<link rel="stylesheet" href="assets/css/task-manager.css" />
 
 <script src="<?=ROOT?>assets/vendor/libs/highlight/highlight.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
+<script src="<?=ROOT?>assets/js/sw-manager.js"></script>
 <script src="assets/js/project-detail.js"></script>
 

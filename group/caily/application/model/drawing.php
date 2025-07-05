@@ -37,9 +37,8 @@ class Drawing extends ApplicationModel {
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
         
         $query = sprintf(
-            "SELECT d.*, u.realname as created_by_name, c.realname as checked_by_name, r.realname as revise_by_name
+            "SELECT d.*, c.realname as checked_by_name, r.realname as revise_by_name
             FROM {$this->table} d 
-            LEFT JOIN " . DB_PREFIX . "user u ON d.created_by = u.userid 
             LEFT JOIN " . DB_PREFIX . "user c ON d.checked_by = c.userid
             LEFT JOIN " . DB_PREFIX . "user r ON d.revise_by = r.userid
             %s
@@ -55,22 +54,38 @@ class Drawing extends ApplicationModel {
             if (!empty($drawing['created_by'])) {
                 $user_ids = array_filter(array_map('trim', explode(',', $drawing['created_by'])));
                 if (!empty($user_ids)) {
+                    // Create a mapping of userid to realname to preserve order
                     $user_ids_escaped = array_map(function($id) {
                         return "'" . str_replace("'", "''", $id) . "'";
                     }, $user_ids);
                     $user_query = sprintf(
-                        "SELECT realname FROM %suser WHERE userid IN (%s)",
+                        "SELECT userid, realname FROM %suser WHERE userid IN (%s)",
                         DB_PREFIX,
                         implode(',', $user_ids_escaped)
                     );
                     $users = $this->fetchAll($user_query);
+                    
                     if ($users) {
-                        $names = array_column($users, 'realname');
+                        // Create a mapping of userid to realname
+                        $user_map = [];
+                        foreach ($users as $user) {
+                            $user_map[$user['userid']] = $user['realname'];
+                        }
+                        
+                        // Build names array in the same order as created_by
+                        $names = [];
+                        foreach ($user_ids as $user_id) {
+                            if (isset($user_map[$user_id])) {
+                                $names[] = $user_map[$user_id];
+                            }
+                        }
+                        
                         $drawing['created_by_names'] = implode(', ', $names);
                     }
                 }
             }
         }
+
         unset($drawing);
         
         return $drawings;

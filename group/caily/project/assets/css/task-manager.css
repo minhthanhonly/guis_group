@@ -1,0 +1,137 @@
+/* Upload Progress Styles */
+.upload-progress-container {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    position: relative;
+}
+
+.upload-progress-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #495057;
+}
+
+.upload-progress-header i {
+    color: #007bff;
+}
+
+.upload-progress-container .progress {
+    height: 6px;
+    background-color: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.upload-progress-container .progress-bar {
+    background-color: #007bff;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+/* Service Worker Status Indicator */
+.sw-status {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    display: none;
+}
+
+.sw-status.connected {
+    background: rgba(40, 167, 69, 0.9);
+    display: block;
+}
+
+.sw-status.disconnected {
+    background: rgba(220, 53, 69, 0.9);
+    display: block;
+}
+
+/* Upload Error Styles */
+.upload-error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 8px 0;
+    font-size: 14px;
+}
+
+/* Quill Editor Upload Styles */
+.ql-editor .upload-placeholder {
+    display: inline-block;
+    width: 200px;
+    height: 100px;
+    background: #f8f9fa;
+    border: 2px dashed #dee2e6;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    font-size: 12px;
+    margin: 8px 0;
+}
+
+.ql-editor .upload-placeholder.uploading {
+    border-color: #007bff;
+    background: #e3f2fd;
+}
+
+/* File Size Warning */
+.file-size-warning {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    color: #856404;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 8px 0;
+    font-size: 14px;
+}
+
+/* Upload Success Animation */
+@keyframes uploadSuccess {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.upload-success {
+    animation: uploadSuccess 0.3s ease-in-out;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .upload-progress-container {
+        padding: 8px;
+        margin: 4px 0;
+    }
+    
+    .upload-progress-header {
+        font-size: 12px;
+    }
+    
+    .sw-status {
+        top: 10px;
+        right: 10px;
+        font-size: 10px;
+        padding: 6px 8px;
+    }
+} 

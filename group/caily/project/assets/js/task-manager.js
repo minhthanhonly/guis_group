@@ -208,6 +208,22 @@ const TaskApp = createApp({
                 this.closeAllDropdowns();
             }
         });
+        
+        // Add upload progress event listeners
+        window.addEventListener('uploadProgress', (event) => {
+            const { progress, fileName } = event.detail;
+            this.updateUploadProgress(fileName, progress);
+        });
+        
+        window.addEventListener('uploadSuccess', (event) => {
+            const { data, fileName } = event.detail;
+            this.handleUploadSuccess(fileName, data);
+        });
+        
+        window.addEventListener('uploadError', (event) => {
+            const { error, fileName } = event.detail;
+            this.handleUploadError(fileName, error);
+        });
     },
     
     updated() {
@@ -1375,7 +1391,12 @@ const TaskApp = createApp({
                     theme: 'snow',
                     placeholder: 'タスクの説明を入力してください...',
                     modules: {
-                        toolbar: toolbarOptions
+                        toolbar: {
+                            container: toolbarOptions,
+                            handlers: {
+                                image: this.imageHandler.bind(this)
+                            }
+                        }
                     }
                 });
                 
@@ -1393,6 +1414,71 @@ const TaskApp = createApp({
             const txt = document.createElement('textarea');
             txt.innerHTML = str;
             return txt.value;
+        },
+        
+        imageHandler() {
+            const input = document.createElement('input');
+            input.setAttribute('type', 'file');
+            input.setAttribute('accept', 'image/*');
+            input.click();
+            
+            input.onchange = async () => {
+                const file = input.files[0];
+                if (file) {
+                    try {
+                        // Kiểm tra kích thước file (max 5MB)
+                        if (file.size > 5 * 1024 * 1024) {
+                            this.showMessage('ファイルサイズは5MB以下にしてください。', true);
+                            return;
+                        }
+                        
+                        // Upload trực tiếp không cần placeholder
+                        
+                        // Upload sử dụng service worker với project_id và task_id
+                        const uploadUrl = '/api/quill-image-upload.php';
+                        const response = await window.swManager.uploadFile(file, uploadUrl, { 
+                            project_id: this.projectId,
+                            task_id: this.selectedTask ? this.selectedTask.id : null
+                        });
+                        
+                        if (response.success) {
+                            // Thay thế placeholder bằng ảnh thật với requestAnimationFrame để đảm bảo DOM sẵn sàng
+                            requestAnimationFrame(() => {
+                                try {
+                                    if (this.quillEditor && this.quillEditor.root) {
+                                        // Lấy độ dài hiện tại của nội dung
+                                        const length = this.quillEditor.getLength();
+                                        
+                                        // Chèn ảnh ở cuối
+                                        this.quillEditor.insertEmbed(length - 1, 'image', response.url);
+                                        this.quillEditor.insertText(length, '\n');
+                                        
+                                        // Focus vào editor
+                                        this.quillEditor.focus();
+                                        
+                                        // Scroll xuống cuối
+                                        if (this.quillEditor.scrollingContainer) {
+                                            this.quillEditor.scrollingContainer.scrollTop = this.quillEditor.scrollingContainer.scrollHeight;
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.error('Error inserting image:', error);
+                                    // Fallback: append trực tiếp vào HTML
+                                    if (this.quillEditor && this.quillEditor.root) {
+                                        const imageHtml = `<p><img src="${response.url}" alt="Uploaded image" style="max-width: 100%; height: auto;"></p>`;
+                                        this.quillEditor.root.innerHTML += imageHtml;
+                                    }
+                                }
+                            });
+                        } else {
+                            this.showMessage('画像のアップロードに失敗しました: ' + (response.error || 'Unknown error'), true);
+                        }
+                    } catch (error) {
+                        console.error('Error uploading image:', error);
+                        this.showMessage('画像のアップロードに失敗しました。', true);
+                    }
+                }
+            };
         },
         resetQuillEditor() {
             try {
@@ -1588,6 +1674,35 @@ const TaskApp = createApp({
             };
             return classes[type] || 'updated';
         },
+        
+        // Upload progress handling methods
+        updateUploadProgress(fileName, progress) {
+            // Update progress bar if exists
+            const progressBar = document.querySelector(`[data-file="${fileName}"] .progress-bar`);
+            if (progressBar) {
+                progressBar.style.width = progress + '%';
+                progressBar.textContent = progress + '%';
+            }
+        },
+        
+        handleUploadSuccess(fileName, data) {
+            console.log('Upload successful:', fileName, data);
+            // Remove progress indicator if exists
+            const progressContainer = document.querySelector(`[data-file="${fileName}"]`);
+            if (progressContainer) {
+                progressContainer.remove();
+            }
+        },
+        
+        handleUploadError(fileName, error) {
+            console.error('Upload failed:', fileName, error);
+            // Remove progress indicator and show error
+            const progressContainer = document.querySelector(`[data-file="${fileName}"]`);
+            if (progressContainer) {
+                progressContainer.remove();
+            }
+            this.showMessage(`アップロードに失敗しました: ${fileName}`, true);
+        }
     }
 });
 

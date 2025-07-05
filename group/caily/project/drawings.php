@@ -212,8 +212,9 @@ if (!$project_id) {
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">
-                                                <div class="avatar me-2" v-for="name in (drawing.created_by_names || '').split(',')" :key="name && name.trim()">
-                                                    <span class="avatar-initial rounded-circle bg-label-success" v-if="name.trim()">{{ getInitials(name.trim()) }}</span>
+                                                <div class="avatar me-2" v-for="(userid, user_index) in (drawing.created_by || '').split(',')" :key="userid && userid.trim()" :title="getUserCreatedByFullNameText(drawing, user_index)">
+                                                    <img :src="getUserAvatar(userid.trim())" class="avatar-img rounded-circle" v-if="getUserAvatar(userid.trim()) && userid.trim()">
+                                                    <span class="avatar-initial rounded-circle bg-label-primary" v-else-if="userid.trim()!= ''">{{ getUserAvatarCreatedByText(drawing, user_index) }}</span>
                                                 </div>
                                             </div>
                                         </td>
@@ -234,8 +235,9 @@ if (!$project_id) {
                                         <td>{{ drawing.check_date ? formatDateTime(drawing.check_date) : '-' }}</td>
                                         <td>
                                             <div class="d-flex align-items-center">
-                                                <div class="avatar me-2" v-if="drawing.checked_by_name">
-                                                    <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(drawing.checked_by_name) }}</span>
+                                                <div class="avatar me-2" v-for="(userid, user_index) in (drawing.checked_by || '').split(',')" :key="userid && userid.trim()" :title="getUserCheckerFullNameText(drawing, user_index)">
+                                                    <img :src="getUserAvatar(userid.trim())" class="avatar-img rounded-circle" v-if="getUserAvatar(userid.trim()) && userid.trim()">
+                                                    <span class="avatar-initial rounded-circle bg-label-primary" v-else-if="userid.trim()!= ''">{{ getUserCheckerAvatarText(drawing, user_index) }}</span>
                                                 </div>
                                             </div>
                                         </td>
@@ -243,8 +245,9 @@ if (!$project_id) {
                                         <td>{{ drawing.revise_date ? formatDateTime(drawing.revise_date) : '-' }}</td>
                                         <td>
                                             <div class="d-flex align-items-center">
-                                                <div class="avatar me-2" v-if="drawing.revise_by_name">
-                                                    <span class="avatar-initial rounded-circle bg-label-warning">{{ getInitials(drawing.revise_by_name) }}</span>
+                                                <div class="avatar me-2" v-for="(userid, user_index) in (drawing.revise_by || '').split(',')" :key="userid && userid.trim()" :title="getUserReviseByFullNameText(drawing, user_index)">
+                                                    <img :src="getUserAvatar(userid.trim())" class="avatar-img rounded-circle" v-if="getUserAvatar(userid.trim()) && userid.trim()">
+                                                    <span class="avatar-initial rounded-circle bg-label-primary" v-else-if="userid.trim()!= ''">{{ getUserReviseByAvatarText(drawing, user_index) }}</span>
                                                 </div>
                                             </div>
                                         </td>
