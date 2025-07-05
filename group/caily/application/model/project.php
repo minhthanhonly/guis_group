@@ -3,6 +3,10 @@
 class Project extends ApplicationModel {
     function __construct() {
         $this->table = DB_PREFIX . 'projects';
+        // Add integer fields that should not be quoted
+        $this->donotquote = array_merge($this->donotquote, array(
+            'parent_folder_id', 'folder_id', 'project_id', 'user_id', 'file_size'
+        ));
         $this->schema = array(
             'id' => array('except' => array('search')),
             'project_number' => array(),
@@ -1323,6 +1327,375 @@ class Project extends ApplicationModel {
         $this->table = DB_PREFIX . 'project_logs';
         $this->query_insert($data);
         $this->table = DB_PREFIX . 'projects'; // reset lại table
+    }
+
+    // Attachment management methods
+    function getAttachments($params = null) {
+        $project_id = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
+        $folder_id = isset($_GET['folder_id']) ? intval($_GET['folder_id']) : null;
+        
+        if (!$project_id) {
+            return ['status' => 'error', 'message' => 'Project ID is required'];
+        }
+        
+        // Get folders
+        $folderQuery = sprintf(
+            "SELECT f.*, u.realname as created_by_name,
+                    (SELECT COUNT(*) FROM " . DB_PREFIX . "project_attachments a WHERE a.folder_id = f.id) as file_count
+             FROM " . DB_PREFIX . "project_folders f
+             LEFT JOIN " . DB_PREFIX . "user u ON f.created_by = u.userid
+             WHERE f.project_id = %d AND %s
+             ORDER BY f.name ASC",
+            $project_id,
+            $folder_id ? "f.parent_folder_id = $folder_id" : "f.parent_folder_id IS NULL"
+        );
+        $folders = $this->fetchAll($folderQuery);
+        
+        // Get files
+        $fileQuery = sprintf(
+            "SELECT a.*, u.realname as uploaded_by_name
+             FROM " . DB_PREFIX . "project_attachments a
+             LEFT JOIN " . DB_PREFIX . "user u ON a.uploaded_by = u.userid
+             WHERE a.project_id = %d AND %s
+             ORDER BY a.uploaded_at DESC",
+            $project_id,
+            $folder_id ? "a.folder_id = $folder_id" : "a.folder_id IS NULL"
+        );
+        $files = $this->fetchAll($fileQuery);
+        
+        // Get breadcrumbs
+        $breadcrumbs = [];
+        if ($folder_id) {
+            $breadcrumbs = $this->getBreadcrumbs($folder_id);
+        }
+        
+        return [
+            'status' => 'success',
+            'folders' => $folders ?: [],
+            'files' => $files ?: [],
+            'breadcrumbs' => $breadcrumbs
+        ];
+    }
+    
+    private function getBreadcrumbs($folder_id) {
+        $breadcrumbs = [];
+        $current_id = $folder_id;
+        
+        while ($current_id) {
+            $query = sprintf(
+                "SELECT id, name, parent_folder_id FROM " . DB_PREFIX . "project_folders WHERE id = %d",
+                $current_id
+            );
+            $folder = $this->fetchOne($query);
+            
+            if ($folder) {
+                array_unshift($breadcrumbs, [
+                    'id' => $folder['id'],
+                    'name' => $folder['name']
+                ]);
+                $current_id = $folder['parent_folder_id'];
+            } else {
+                break;
+            }
+        }
+        
+        return $breadcrumbs;
+    }
+    
+    function createFolder($params = null) {
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        $parent_folder_id = isset($_POST['parent_folder_id']) && $_POST['parent_folder_id'] !== '' ? intval($_POST['parent_folder_id']) : null;
+        $name = isset($_POST['name']) ? trim($_POST['name']) : '';
+        
+        if (!$project_id || !$name) {
+            return ['status' => 'error', 'message' => 'Project ID and folder name are required'];
+        }
+        
+        // Check if folder name already exists in the same location
+        $checkQuery = sprintf(
+            "SELECT id FROM " . DB_PREFIX . "project_folders 
+             WHERE project_id = %d AND name = '%s' AND %s",
+            $project_id,
+            $this->escape($name),
+            $parent_folder_id ? "parent_folder_id = $parent_folder_id" : "parent_folder_id IS NULL"
+        );
+        
+        if ($this->fetchOne($checkQuery)) {
+            return ['status' => 'error', 'message' => 'Folder with this name already exists'];
+        }
+        
+        $data = [
+            'project_id' => $project_id,
+            'name' => $name,
+            'created_by' => $_SESSION['userid'] ?? 0,
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+        
+        // Only add parent_folder_id if it's not null
+        if ($parent_folder_id !== null) {
+            $data['parent_folder_id'] = $parent_folder_id;
+        }
+        
+        $this->table = DB_PREFIX . 'project_folders';
+        $result = $this->query_insert($data);
+        $this->table = DB_PREFIX . 'projects'; // reset table
+        
+        if ($result) {
+            return ['status' => 'success', 'message' => 'Folder created successfully'];
+        } else {
+            return ['status' => 'error', 'message' => 'Failed to create folder'];
+        }
+    }
+    
+    function updateFolder($params = null) {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $name = isset($_POST['name']) ? trim($_POST['name']) : '';
+        
+        if (!$id || !$name) {
+            return ['status' => 'error', 'message' => 'Folder ID and name are required'];
+        }
+        
+        // Get folder info
+        $folderQuery = sprintf(
+            "SELECT project_id, parent_folder_id FROM " . DB_PREFIX . "project_folders WHERE id = %d",
+            $id
+        );
+        $folder = $this->fetchOne($folderQuery);
+        
+        if (!$folder) {
+            return ['status' => 'error', 'message' => 'Folder not found'];
+        }
+        
+        // Check if folder name already exists in the same location
+        $checkQuery = sprintf(
+            "SELECT id FROM " . DB_PREFIX . "project_folders 
+             WHERE project_id = %d AND name = '%s' AND id != %d AND %s",
+            $folder['project_id'],
+            $this->escape($name),
+            $id,
+            $folder['parent_folder_id'] ? "parent_folder_id = " . $folder['parent_folder_id'] : "parent_folder_id IS NULL"
+        );
+        
+        if ($this->fetchOne($checkQuery)) {
+            return ['status' => 'error', 'message' => 'Folder with this name already exists'];
+        }
+        
+        $data = [
+            'name' => $name,
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+        
+        $this->table = DB_PREFIX . 'project_folders';
+        $result = $this->query_update($data, ['id' => $id]);
+        $this->table = DB_PREFIX . 'projects'; // reset table
+        
+        if ($result) {
+            return ['status' => 'success', 'message' => 'Folder updated successfully'];
+        } else {
+            return ['status' => 'error', 'message' => 'Failed to update folder'];
+        }
+    }
+    
+    function deleteFolder($params = null) {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        
+        if (!$id) {
+            return ['status' => 'error', 'message' => 'Folder ID is required'];
+        }
+        
+        // Get folder info
+        $folderQuery = sprintf(
+            "SELECT project_id FROM " . DB_PREFIX . "project_folders WHERE id = %d",
+            $id
+        );
+        $folder = $this->fetchOne($folderQuery);
+        
+        if (!$folder) {
+            return ['status' => 'error', 'message' => 'Folder not found'];
+        }
+        
+        // Recursively delete subfolders and files
+        $this->deleteSubfoldersAndFiles($id);
+        
+        // Delete the folder itself
+        $this->table = DB_PREFIX . 'project_folders';
+        $result = $this->query_delete(['id' => $id]);
+        $this->table = DB_PREFIX . 'projects'; // reset table
+        
+        if ($result) {
+            return ['status' => 'success', 'message' => 'Folder deleted successfully'];
+        } else {
+            return ['status' => 'error', 'message' => 'Failed to delete folder'];
+        }
+    }
+    
+    private function deleteSubfoldersAndFiles($folder_id) {
+        // Get all subfolders
+        $subfoldersQuery = sprintf(
+            "SELECT id FROM " . DB_PREFIX . "project_folders WHERE parent_folder_id = %d",
+            $folder_id
+        );
+        $subfolders = $this->fetchAll($subfoldersQuery);
+        
+        // Recursively delete subfolders
+        foreach ($subfolders as $subfolder) {
+            $this->deleteSubfoldersAndFiles($subfolder['id']);
+            $this->table = DB_PREFIX . 'project_folders';
+            $this->query_delete(['id' => $subfolder['id']]);
+        }
+        
+        // Get all files in this folder
+        $filesQuery = sprintf(
+            "SELECT id, file_path FROM " . DB_PREFIX . "project_attachments WHERE folder_id = %d",
+            $folder_id
+        );
+        $files = $this->fetchAll($filesQuery);
+        
+        // Delete files from filesystem and database
+        foreach ($files as $file) {
+            if (file_exists($file['file_path'])) {
+                unlink($file['file_path']);
+            }
+            $this->table = DB_PREFIX . 'project_attachments';
+            $this->query_delete(['id' => $file['id']]);
+        }
+        
+        $this->table = DB_PREFIX . 'projects'; // reset table
+    }
+    
+    function uploadAttachment($params = null) {
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        $folder_id = isset($_POST['folder_id']) && $_POST['folder_id'] !== '' ? intval($_POST['folder_id']) : null;
+        
+        if (!$project_id) {
+            return ['success' => false, 'error' => 'Project ID is required'];
+        }
+        
+        if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
+            return ['success' => false, 'error' => 'No file uploaded or upload error'];
+        }
+        
+        $file = $_FILES['image'];
+        $originalName = $file['name'];
+        $fileSize = $file['size'];
+        $tmpName = $file['tmp_name'];
+        
+        // Validate file size (10MB max)
+        if ($fileSize > 100 * 1024 * 1024) {
+            return ['success' => false, 'error' => 'File size exceeds 100MB limit'];
+        }
+        
+        // Create upload directory (relative to project root)
+        $uploadDir = "../assets/upload/project-attachments/$project_id/";
+        if ($folder_id) {
+            $uploadDir .= "folder-$folder_id/";
+        }
+        
+        if (!is_dir($uploadDir)) {
+            if (!mkdir($uploadDir, 0755, true)) {
+                return ['success' => false, 'error' => 'Failed to create upload directory'];
+            }
+        }
+        
+        // Use original filename (replace if exists)
+        $filename = $originalName;
+        $uploadDir = "/assets/upload/project-attachments/$project_id/";
+        $filePath = $uploadDir . $filename;
+        
+        // Move uploaded file (this will overwrite existing file)
+        if (!move_uploaded_file($tmpName, $filePath)) {
+            return ['success' => false, 'error' => 'Failed to move uploaded file'];
+        }
+        
+        // Save to database
+        $data = [
+            'project_id' => $project_id,
+            'original_name' => $originalName,
+            'file_name' => $filename,
+            'file_path' => $filePath,
+            'file_size' => $fileSize,
+            'mime_type' => $file['type'],
+            'uploaded_by' => $_SESSION['userid'] ?? 0,
+            'uploaded_at' => date('Y-m-d H:i:s')
+        ];
+        
+        // Only add folder_id if it's not null
+        if ($folder_id !== null) {
+            $data['folder_id'] = $folder_id;
+        }
+        
+        $this->table = DB_PREFIX . 'project_attachments';
+        $result = $this->query_insert($data);
+        $this->table = DB_PREFIX . 'projects'; // reset table
+        
+        if ($result) {
+            return [
+                'success' => true,
+                'message' => 'File uploaded successfully',
+                'file' => [
+                    'id' => $result,
+                    'original_name' => $originalName,
+                    'file_name' => $filename,
+                    'file_size' => $fileSize,
+                    'file_path' => $filePath
+                ]
+            ];
+        } else {
+            // Clean up file if database insert failed
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
+            return ['success' => false, 'error' => 'Failed to save file information'];
+        }
+    }
+    
+    function deleteAttachment($params = null) {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        
+        if (!$id) {
+            return ['status' => 'error', 'message' => 'Attachment ID is required'];
+        }
+        
+        // Get file info
+        $fileQuery = sprintf(
+            "SELECT file_path FROM " . DB_PREFIX . "project_attachments WHERE id = %d",
+            $id
+        );
+        $file = $this->fetchOne($fileQuery);
+        
+        if (!$file) {
+            return ['status' => 'error', 'message' => 'Attachment not found'];
+        }
+        
+        // Delete file from filesystem
+        if (file_exists($file['file_path'])) {
+            unlink($file['file_path']);
+        }
+        
+        // Delete from database
+        $this->table = DB_PREFIX . 'project_attachments';
+        $result = $this->query_delete(['id' => $id]);
+        $this->table = DB_PREFIX . 'projects'; // reset table
+        
+        if ($result) {
+            return ['status' => 'success', 'message' => 'Attachment deleted successfully'];
+        } else {
+            return ['status' => 'error', 'message' => 'Failed to delete attachment'];
+        }
+    }
+    
+    // Main attachment page method - called by the controller
+    function attachment($directory = null, $prefix = null, $filename = null, $type = '') {
+        // If called with parameters, use parent method for file download
+        if ($directory && $prefix && $filename) {
+            return parent::attachment($directory, $prefix, $filename, $type);
+        }
+        
+        // This method is called when accessing attachment.php
+        // It just needs to exist to prevent the error
+        // The actual functionality is handled by the Vue.js frontend
+        return [];
     }
 }
 

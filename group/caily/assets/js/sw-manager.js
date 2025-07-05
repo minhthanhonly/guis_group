@@ -99,6 +99,7 @@ class ServiceWorkerManager {
                         break;
                 }
             };
+            
 
             // Send upload request to service worker
             this.swRegistration.active.postMessage({
@@ -110,10 +111,11 @@ class ServiceWorkerManager {
         });
     }
 
-    // Fallback upload method (using axios with progress)
+    // Fallback upload method (using XMLHttpRequest with real progress)
     async fallbackUpload(file, uploadUrl, additionalData = {}) {
-        console.log(additionalData);
-        try {
+        console.log('Starting fallback upload for:', file.name, additionalData);
+        
+        return new Promise((resolve, reject) => {
             const formData = new FormData();
             formData.append('image', file);
             
@@ -122,33 +124,57 @@ class ServiceWorkerManager {
                 formData.append(key, additionalData[key]);
             });
             
-            // Simulate progress updates since axios doesn't support upload progress
-            let progress = 0;
-            const progressInterval = setInterval(() => {
-                progress += Math.random() * 10;
-                if (progress > 90) progress = 90; // Don't reach 100% until complete
-                this.onProgress(Math.round(progress), file.name);
-            }, 200);
+            const xhr = new XMLHttpRequest();
             
-            const response = await axios.post(uploadUrl, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                },
-                withCredentials: true // Include cookies for session
+            // Real upload progress
+            xhr.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable) {
+                    const progress = Math.round((event.loaded / event.total) * 100);
+                    this.onProgress(progress, file.name);
+                }
             });
             
-            clearInterval(progressInterval);
+            xhr.addEventListener('load', () => {
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        console.log('Upload response for', file.name, ':', response);
+                        
+                        if (response.success) {
+                            this.onSuccess(response, file.name);
+                            resolve(response);
+                        } else {
+                            this.onError(response.error || 'Upload failed', file.name);
+                            reject(new Error(response.error || 'Upload failed'));
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse response:', xhr.responseText);
+                        this.onError('Invalid response format', file.name);
+                        reject(new Error('Invalid response format'));
+                    }
+                } else {
+                    console.error('HTTP Error:', xhr.status, xhr.statusText);
+                    this.onError(`HTTP ${xhr.status}: ${xhr.statusText}`, file.name);
+                    reject(new Error(`HTTP ${xhr.status}: ${xhr.statusText}`));
+                }
+            });
             
-            // Send 100% progress
-            this.onProgress(100, file.name);
+            xhr.addEventListener('error', () => {
+                console.error('Network error during upload');
+                this.onError('Network error', file.name);
+                reject(new Error('Network error'));
+            });
             
-            this.onSuccess(response.data, file.name);
-            return response.data;
+            xhr.addEventListener('timeout', () => {
+                console.error('Upload timeout');
+                this.onError('Upload timeout', file.name);
+                reject(new Error('Upload timeout'));
+            });
             
-        } catch (error) {
-            this.onError(error.response?.data?.error || error.message || 'Upload failed', file.name);
-            throw error;
-        }
+            xhr.open('POST', uploadUrl);
+            xhr.timeout = 300000; // 5 minutes timeout
+            xhr.send(formData);
+        });
     }
 
     // Event handlers - can be overridden

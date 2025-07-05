@@ -1,5 +1,5 @@
 // Service Worker for Background File Uploads
-const CACHE_NAME = 'upload-cache-v2';
+const CACHE_NAME = 'upload-cache-v2.1';
 
 // Install event - cache necessary files
 self.addEventListener('install', (event) => {
@@ -40,6 +40,9 @@ self.addEventListener('message', (event) => {
 
 // Handle file upload in background
 async function handleFileUpload(file, uploadUrl, port, additionalData = {}) {
+    console.log('Service Worker handling upload for:', file.name);
+    let progressInterval;
+    
     try {
         // Create FormData
         const formData = new FormData();
@@ -50,18 +53,18 @@ async function handleFileUpload(file, uploadUrl, port, additionalData = {}) {
             formData.append(key, additionalData[key]);
         });
         
-        // Simulate progress updates (axios doesn't support progress events)
+        // Simulate progress updates (fetch doesn't support progress events)
         let progress = 0;
-        const progressInterval = setInterval(() => {
-            progress += Math.random() * 10;
-            if (progress > 90) progress = 90; // Don't reach 100% until complete
+        progressInterval = setInterval(() => {
+            progress += Math.random() * 15;
+            if (progress > 85) progress = 85; // Don't reach 100% until complete
             
             port.postMessage({
                 type: 'UPLOAD_PROGRESS',
                 progress: Math.round(progress),
                 fileName: file.name
             });
-        }, 200);
+        }, 300);
         
         // Use fetch API (axios not available in service worker)
         const response = await fetch(uploadUrl, {
@@ -69,12 +72,18 @@ async function handleFileUpload(file, uploadUrl, port, additionalData = {}) {
             body: formData,
             credentials: 'include' // Include cookies for session
         });
+
+        console.log("Service Worker response:", response.status, response.statusText);
         
-        clearInterval(progressInterval);
+        // Clear progress interval
+        if (progressInterval) {
+            clearInterval(progressInterval);
+        }
         
         if (response.ok) {
             try {
                 const data = await response.json();
+                console.log('Service Worker upload response:', data);
                 
                 // Send 100% progress
                 port.postMessage({
@@ -89,6 +98,7 @@ async function handleFileUpload(file, uploadUrl, port, additionalData = {}) {
                     fileName: file.name
                 });
             } catch (error) {
+                console.error('Service Worker parse error:', error);
                 port.postMessage({
                     type: 'UPLOAD_ERROR',
                     error: 'Invalid response format',
@@ -97,6 +107,7 @@ async function handleFileUpload(file, uploadUrl, port, additionalData = {}) {
             }
         } else {
             const errorText = await response.text();
+            console.error('Service Worker HTTP error:', response.status, errorText);
             let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
             
             try {
@@ -114,9 +125,15 @@ async function handleFileUpload(file, uploadUrl, port, additionalData = {}) {
         }
         
     } catch (error) {
+        console.error('Service Worker upload error:', error);
+        // Clear progress interval on error
+        if (progressInterval) {
+            clearInterval(progressInterval);
+        }
+        
         port.postMessage({
             type: 'UPLOAD_ERROR',
-            error: error.response?.data?.error || error.message || 'Upload failed',
+            error: error.message || 'Upload failed',
             fileName: file.name
         });
     }
