@@ -237,4 +237,23 @@ CREATE TABLE IF NOT EXISTS `groupware_task_links` (
   KEY `idx_target_task_id` (`target_task_id`),
   FOREIGN KEY (`source_task_id`) REFERENCES `groupware_tasks` (`id`) ON DELETE CASCADE,
   FOREIGN KEY (`target_task_id`) REFERENCES `groupware_tasks` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Task Logs table
+CREATE TABLE IF NOT EXISTS `groupware_task_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `task_id` int(11) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
+  `username` varchar(255) DEFAULT NULL,
+  `action` varchar(50) NOT NULL,
+  `note` text DEFAULT NULL,
+  `value1` text DEFAULT NULL,
+  `value2` text DEFAULT NULL,
+  `time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_task_id` (`task_id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_action` (`action`),
+  KEY `idx_time` (`time`),
+  FOREIGN KEY (`task_id`) REFERENCES `groupware_tasks` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4; 

@@ -117,6 +117,7 @@ class Task extends ApplicationModel {
         //     $this->updateProjectProgress($data['project_id']);
         // }
         if($task_id){
+            $this->logTaskAction($task_id, 'created', 'タスク作成', '', '');
             return [
                 'status' => 'success'
             ];
@@ -139,6 +140,7 @@ class Task extends ApplicationModel {
             }
         }
         
+        $old = $this->getById($id);
         $data = array(
             'project_id' => $_POST['project_id'],
             'title' => $_POST['title'],
@@ -172,6 +174,36 @@ class Task extends ApplicationModel {
         //     $this->updateProjectProgress($task['project_id']);
         // }
         if($result){
+            // Log các trường thay đổi chính
+            $fields = ['title','description','status','priority','due_date','start_date','progress'];
+            $labels = [
+                'title' => 'タスク名',
+                'description' => '説明',
+                'status' => 'ステータス',
+                'priority' => '優先度',
+                'assigned_to' => '担当者',
+                'due_date' => '期限日',
+                'start_date' => '開始日',
+                'progress' => '進捗',
+            ];
+            foreach ($fields as $f) {
+                $oldVal = $old[$f] ?? '';
+                $newVal = $data[$f] ?? '';
+                if ($oldVal != $newVal) {
+                    if ($f === 'priority') {
+                        $this->logTaskAction($id, 'priority_updated', '優先度変更', $oldVal, $newVal);
+                    } else if ($f === 'status') {
+                        $this->logTaskAction($id, 'status_changed', 'ステータス変更', $oldVal, $newVal);
+                    } else if ($f === 'progress') {
+                        $this->logTaskAction($id, 'progress_updated', '進捗変更', $oldVal, $newVal);
+                    } else {
+                        $this->logTaskAction($id, 'updated', $labels[$f].'を変更', $oldVal, $newVal);
+                    }
+                }
+            }
+            //TODO: Log assigned_to
+
+
             return [
                 'status' => 'success'
             ];
@@ -189,6 +221,7 @@ class Task extends ApplicationModel {
                 'message' => 'タスクIDが指定されていません'
             ];
         }
+        $old = $this->getById($id);
         $query = sprintf(
             "SELECT COUNT(*) as count FROM {$this->table} WHERE parent_id = %d",
             intval($id)
@@ -223,6 +256,7 @@ class Task extends ApplicationModel {
         //     $this->updateProjectProgress($task['project_id']);
         // }
         if($result){
+            $this->logTaskAction($id, 'deleted', 'タスク削除', $old['status'], 'deleted');
             return [
                 'status' => 'success'
             ];
@@ -233,41 +267,87 @@ class Task extends ApplicationModel {
     }
 
     function updateStatus() {
-        $id = $_POST['id'];
-        $status = $_POST['status'];
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $status = isset($_POST['status']) ? $_POST['status'] : '';
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        
+        if (!$id || !$status) {
+            return ['status' => 'error', 'message' => 'Missing required parameters'];
+        }
+        
+        if (!$this->checkPermission($project_id, $id)) {
+            return ['status' => 'error', 'message' => 'このタスクを更新する権限がありません'];
+        }
+        
+        $old = $this->getById($id);
         $data = array(
             'status' => $status,
             'updated_at' => date('Y-m-d H:i:s')
         );
         
-        if ($status == 'completed') {
-            $data['progress'] = 100;
-            $data['actual_end_date'] = date('Y-m-d H:i:s');
-        } else if ($status == 'new') {
-            $data['progress'] = 0;        
-        }                
         $result = $this->query_update($data, ['id' => $id]);
-        $task = $this->getById($id);
-        // if ($result && $task['parent_id']) {
-        //     $this->updateParentTaskProgress($task['parent_id']);
-        // }
-        // if ($result && $task['project_id']) {
-        //     $this->updateProjectProgress($task['project_id']);
-        // }
         
-        return $result;
+        if ($result) {
+            $this->logTaskAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
+            return ['status' => 'success'];
+        } else {
+            return ['status' => 'error', 'message' => 'Update failed'];
+        }
     }
 
     function updateProgress() {
-        $id = $_POST['id'];
-        $progress = $_POST['progress'];
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $progress = isset($_POST['progress']) ? intval($_POST['progress']) : 0;
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
         
-        $result = $this->query_update(
-            ['progress' => $progress],
-            ['id' => $id]
+        if (!$id) return ['status' => 'error', 'message' => 'Missing task id'];
+        
+        if (!$this->checkPermission($project_id, $id)) {
+            return ['status' => 'error', 'message' => 'このタスクを更新する権限がありません'];
+        }
+        
+        $old = $this->getById($id);
+        $data = array(
+            'progress' => $progress,
+            'updated_at' => date('Y-m-d H:i:s')
         );
         
-        return $result;
+        $result = $this->query_update($data, ['id' => $id]);
+        
+        if ($result) {
+            $this->logTaskAction($id, 'progress_updated', '進捗変更', $old['progress'], $progress);
+            return ['status' => 'success'];
+        } else {
+            return ['status' => 'error', 'message' => 'Update failed'];
+        }
+    }
+
+    function updatePriority() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $priority = isset($_POST['priority']) ? $_POST['priority'] : '';
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        
+        if (!$id || !$priority) {
+            return ['status' => 'error', 'message' => 'Missing required parameters'];
+        }
+        
+        if (!$this->checkPermission($project_id, $id)) {
+            return ['status' => 'error', 'message' => 'このタスクを更新する権限がありません'];
+        }
+        
+        $old = $this->getById($id);
+        $data = array(
+            'priority' => $priority,
+            'updated_at' => date('Y-m-d H:i:s')
+        );
+
+        $result = $this->query_update($data, ['id' => $id]);
+        if ($result) {
+            $this->logTaskAction($id, 'priority_updated', '優先度変更', $old['priority'], $priority);
+            return ['status' => 'success'];
+        } else {
+            return ['status' => 'error', 'message' => 'Update failed'];
+        }
     }
 
     function updateParentTaskProgress($parent_id) {
@@ -301,6 +381,7 @@ class Task extends ApplicationModel {
             date('Y-m-d H:i:s'),
             intval($project_id)
         );
+       
         return $this->query($query);
     }
 
@@ -343,10 +424,24 @@ class Task extends ApplicationModel {
     }
 
     function addComment($data) {
-        $data['created_at'] = date('Y-m-d H:i:s');
-        $this->table = DB_PREFIX . 'task_comments';
-        $result = $this->query_insert($data);
-        $this->table = DB_PREFIX . 'tasks';
+        $data = $_POST;
+        $commentData = array(
+            'project_id' => $data['project_id'],
+            'user_id' => $data['user_id'],
+            'content' => $data['content'],
+            'created_at' => date('Y-m-d H:i:s')
+        );
+        
+        $this->table = DB_PREFIX . 'comments';
+        $result = $this->query_insert($commentData);
+        $this->table = DB_PREFIX . 'tasks'; // Reset table back to tasks
+        
+        // Send mention notifications if comment was added successfully
+        if ($result) {
+            $this->sendMentionNotifications($data['project_id'], $data['content'], $data['user_id'], $result);
+            
+        }
+        
         return $result;
     }
 
@@ -407,6 +502,7 @@ class Task extends ApplicationModel {
         $currentUserId = $_SESSION['userid'];
         $isAssigned = in_array($currentUserIdNumber, explode(',', $task['assigned_to']));
         $isProjectManager = $_SESSION['authority'] == 'administrator';
+       
         
         // If not manager by projects.manager_id, check groupware_project_members
         if (!$isProjectManager) {
@@ -426,6 +522,7 @@ class Task extends ApplicationModel {
             );
             $isProjectManager = ($departmentCheck && $departmentCheck['count'] > 0);
         }
+        
         
         return $isAssigned || $isProjectManager;
     }
@@ -731,16 +828,48 @@ class Task extends ApplicationModel {
 
     // Xóa link
     function deleteTaskLink() {
-        $source = intval($_POST['source_task_id']);
-        $target = intval($_POST['target_task_id']);
-        $project_id = intval($_POST['project_id']);
-        $this->table = DB_PREFIX . 'task_links';
-        $result = $this->query_delete([
-            'source_task_id' => $source,
-            'target_task_id' => $target,
-            'project_id' => $project_id
-        ]);
-        $this->table = DB_PREFIX . 'tasks';
-        return $result ? ['success' => true] : ['success' => false];
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) return ['status' => 'error', 'message' => 'No link id'];
+        
+        $result = $this->query_delete(['id' => $id]);
+        if ($result) {
+            return ['status' => 'success'];
+        } else {
+            return ['status' => 'error', 'message' => 'Delete failed'];
+        }
+    }
+
+    // Ghi log hành động task
+    private function logTaskAction($task_id, $action, $note = '', $value1 = '', $value2 = '') {
+        $user_id = $_SESSION['userid'] ?? '';
+        $username = $_SESSION['realname'] ?? '';
+        $data = [
+            'task_id' => $task_id,
+            'user_id' => $user_id,
+            'username' => $username,
+            'action' => $action,
+            'note' => $note,
+            'value1' => $value1,
+            'value2' => $value2,
+            'time' => date('Y-m-d H:i:s')
+        ];
+        $this->table = DB_PREFIX . 'task_logs';
+        $this->query_insert($data);
+        $this->table = DB_PREFIX . 'tasks'; // reset lại table
+    }
+
+    // Lấy lịch sử hành động của task
+    function getLogs($params = null) {
+        $task_id = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
+        if (!$task_id) return [];
+
+        $query = sprintf(
+            "SELECT l.*, u.realname, u.user_image FROM " . DB_PREFIX . "task_logs l
+            LEFT JOIN " . DB_PREFIX . "user u ON l.user_id = u.userid
+            WHERE l.task_id = %d ORDER BY l.time DESC",
+            $task_id
+        );
+        $logs = $this->fetchAll($query);
+        return $logs;
     }
 } 

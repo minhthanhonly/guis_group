@@ -69,6 +69,7 @@ const TaskApp = createApp({
             // Offcanvas data
             taskComments: [],
             taskActivities: [],
+            taskLogs: [],
             showAddComment: false,
             newComment: '',
             quillEditor: null,
@@ -76,6 +77,11 @@ const TaskApp = createApp({
     },
     
     computed: {
+        sortedTaskLogs() {
+            if (!this.taskLogs) return [];
+            // Sắp xếp giảm dần theo thời gian
+            return [...this.taskLogs].sort((a, b) => (b.time > a.time ? 1 : -1));
+        },
         availableParentTasks() {
             if (!this.editingTask) {
                 return this.tasks.filter(t => !t.parent_id);
@@ -521,65 +527,102 @@ const TaskApp = createApp({
             console.log('updateTaskStatus called with task:', task, 'and newStatus:', newStatus);
             const targetTask = task;
             if (!targetTask) {
-                console.error('No target task provided');
                 return;
             }
             
             if (!targetTask.id) {
-                console.error('Task has no id:', targetTask);
                 return;
             }
             
             const statusToSet = newStatus !== null ? newStatus : targetTask.status;
-            console.log('Status to set:', statusToSet);
             
             try {
                 const formData = new FormData();
                 formData.append('id', targetTask.id);
                 formData.append('status', statusToSet);
+                formData.append('project_id', this.projectId);
                 
-                console.log('Sending request to:', '/api/index.php?model=task&method=updateStatus');
-                console.log('FormData:', {
-                    id: targetTask.id,
-                    status: statusToSet
-                });
-                
+               
                 const response = await axios.post(
                     '/api/index.php?model=task&method=updateStatus',
                     formData
                 );
                 
-                console.log('Response:', response);
-                
-                if (response.data) {
+                if (response.data.status == 'success') {
                     this.showMessage('ステータスを更新しました。');
                     // Reload tasks to get updated data
                     await this.loadTasks();
+                } else {
+                    throw new Error(response.data.message);
                 }
             } catch (error) {
-                console.error('Error updating status:', error);
-                console.error('Error response:', error.response);
-                this.showMessage('ステータスの更新に失敗しました', true);
+                this.showMessage(error.message || 'ステータスの更新に失敗しました', true);
             }
         },
         
         async updateTaskProgress(task = null) {
             const targetTask = task || this.selectedTask;
-            if (!targetTask) return;
+            if (!targetTask) {
+                return;
+            }
+            
+            if (!targetTask.id) {
+                return;
+            }
             
             try {
                 const formData = new FormData();
                 formData.append('id', targetTask.id);
                 formData.append('progress', targetTask.progress);
+                formData.append('project_id', this.projectId);
                 
                 const response = await axios.post(
                     '/api/index.php?model=task&method=updateProgress',
                     formData
                 );
-                
+                if (response.data.status == 'success') {
+                    this.showMessage('進捗を更新しました。');
+                    // Reload tasks to get updated data
+                    await this.loadTasks();
+                } else {
+                    throw new Error(response.data.message);
+                }
             } catch (error) {
-                console.error('Error updating progress:', error);
-                this.showMessage('進捗の更新に失敗しました', true);
+                this.showMessage(error.message || '進捗の更新に失敗しました', true);
+            }
+        },
+        
+        async updateTaskPriority(task, newPriority = null) {
+            const targetTask = task;
+            if (!targetTask) {
+                return;
+            }
+            
+            if (!targetTask.id) {
+                return;
+            }
+            
+            const priorityToSet = newPriority !== null ? newPriority : targetTask.priority;
+            
+            try {
+                const formData = new FormData();
+                formData.append('id', targetTask.id);
+                formData.append('priority', priorityToSet);
+                formData.append('project_id', this.projectId);
+                
+                const response = await axios.post(
+                    '/api/index.php?model=task&method=updatePriority',
+                    formData
+                );
+                if (response.data.status == 'success') {
+                    this.showMessage('優先度を更新しました。');
+                    // Reload tasks to get updated data
+                    await this.loadTasks();
+                } else {
+                    throw new Error(response.data.message);
+                }
+            } catch (error) {
+                this.showMessage(error.message || '優先度の更新に失敗しました', true);
             }
         },
         
@@ -712,11 +755,6 @@ const TaskApp = createApp({
         getStatusButtonClass(status) {
             const s = this.taskStatuses.find(s => s.value === status);
             return `btn-${s?.color || 'secondary'}`;
-        },
-        
-        updateTaskPriority(task, value) {
-            task.priority = value;
-            // Gọi API cập nhật nếu cần
         },
         
         updateTaskStatusLocal(task, value) {
@@ -1064,31 +1102,20 @@ const TaskApp = createApp({
         },
         
         updateInlineTaskPriority(index, priority) {
-            if (this.inlineTasks[index]) {
-                // Backup current data before updating
-                const backupData = { ...this.inlineTasks[index] };
-                
-                // Use Vue.set to ensure reactivity
-                if (typeof Vue !== 'undefined' && Vue.set) {
-                    Vue.set(this.inlineTasks[index], 'priority', priority);
-                } else {
-                    // Fallback to direct assignment
-                    this.inlineTasks[index].priority = priority;
+            if (index >= 0 && index < this.inlineTasks.length) {
+                const task = this.inlineTasks[index];
+                if (task) {
+                    const oldPriority = task.priority;
+                    task.priority = priority;
+                    
+                    // Nếu task có id thì gọi API cập nhật
+                    // if (task.id) {
+                    //     this.updateTaskPriority(task, priority);
+                    // }
+                    
+                    // Đảm bảo dữ liệu task đầy đủ
+                    this.ensureTaskData(index);
                 }
-                
-                // Verify data integrity
-                if (!this.inlineTasks[index].title && backupData.title) {
-                    if (typeof Vue !== 'undefined' && Vue.set) {
-                        Vue.set(this.inlineTasks[index], 'title', backupData.title);
-                    } else {
-                        this.inlineTasks[index].title = backupData.title;
-                    }
-                }
-                
-                // Use setTimeout instead of $nextTick to avoid conflicts
-                setTimeout(() => {
-                    this.closeAllDropdowns();
-                }, 100);
             }
         },
         
@@ -1228,22 +1255,21 @@ const TaskApp = createApp({
         
         openTaskDetails(task) {
             this.selectedTask = task;
+            this.showAddComment = false;
+            this.newComment = '';
+            
+            // Load task data
             this.loadTaskComments(task.id);
-            this.loadTaskActivities(task.id);
+            this.loadTaskLogs(task.id);
+            
+            // Initialize Quill editor
+            this.$nextTick(() => {
+                this.initQuillEditor();
+            });
             
             // Show modal
             const modal = new bootstrap.Modal(document.getElementById('taskDetailsModal'));
             modal.show();
-            
-            // Initialize components after modal is shown
-            this.$nextTick(() => {
-                this.initQuillEditor();
-                // Re-initialize tooltips in modal
-                const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-                tooltipTriggerList.forEach(el => {
-                    new bootstrap.Tooltip(el);
-                });
-            });
         },
         
         async loadTaskComments(taskId) {
@@ -1256,13 +1282,14 @@ const TaskApp = createApp({
             }
         },
         
-        async loadTaskActivities(taskId) {
+        async loadTaskLogs(taskId) {
             try {
-                const response = await axios.get(`/api/index.php?model=task&method=getActivities&task_id=${taskId}`);
-                this.taskActivities = response.data || [];
+                const response = await axios.get(`/api/index.php?model=task&method=getLogs&task_id=${taskId}`);
+                this.taskLogs = response.data || [];
+                console.log('Task logs loaded:', this.taskLogs);
             } catch (error) {
-                console.error('Error loading activities:', error);
-                this.taskActivities = [];
+                console.error('Error loading task logs:', error);
+                this.taskLogs = [];
             }
         },
         
@@ -1271,26 +1298,83 @@ const TaskApp = createApp({
                 this.quillEditor.destroy();
             }
             
-            const editorElement = document.getElementById('taskDescriptionEditor');
-            if (editorElement && window.Quill) {
-                this.quillEditor = new window.Quill(editorElement, {
-                    theme: 'snow',
-                    modules: {
-                        toolbar: [
-                            ['bold', 'italic', 'underline'],
-                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                            ['link', 'image'],
-                            ['clean']
-                        ]
-                    },
-                    placeholder: 'タスクの説明を入力してください...'
-                });
-                
-                // Set content if task has description
-                if (this.selectedTask && this.selectedTask.description) {
-                    this.quillEditor.root.innerHTML = this.selectedTask.description;
+            this.quillEditor = new Quill('#taskDescriptionEditor', {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        ['bold', 'italic', 'underline'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        ['link', 'image'],
+                        ['clean']
+                    ]
                 }
+            });
+            
+            if (this.selectedTask && this.selectedTask.description) {
+                this.quillEditor.root.innerHTML = this.selectedTask.description;
             }
+        },
+        
+        getTaskLogIcon(action) {
+            switch(action) {
+                case 'created': return 'fa fa-plus-circle text-success';
+                case 'updated': return 'fa fa-edit text-info';
+                case 'deleted': return 'fa fa-trash text-danger';
+                case 'status_changed': return 'fa fa-exchange-alt text-primary';
+                case 'progress_updated': return 'fa fa-chart-line text-warning';
+                case 'priority_updated': return 'fa fa-flag text-warning';
+                case 'assigned': return 'fa fa-user-plus text-success';
+                case 'comment': return 'fa fa-comment-dots text-secondary';
+                default: return 'fa fa-history text-muted';
+            }
+        },
+        
+        getTaskLogLabel(action) {
+            switch(action) {
+                case 'created': return 'タスク作成';
+                case 'updated': return 'タスク更新';
+                case 'deleted': return 'タスク削除';
+                case 'status_changed': return 'ステータス変更';
+                case 'progress_updated': return '進捗変更';
+                case 'priority_updated': return '優先度変更';
+                case 'assigned': return '担当者変更';
+                case 'comment': return 'コメント追加';
+                default: return action;
+            }
+        },
+        
+        getTaskLogBadgeClass(log, field) {
+            if (log.action === 'status_changed') {
+                const statusColors = {
+                    'todo': 'bg-secondary',
+                    'in-progress': 'bg-primary', 
+                    'confirming': 'bg-warning',
+                    'paused': 'bg-warning',
+                    'completed': 'bg-success',
+                    'cancelled': 'bg-danger'
+                };
+                return 'badge ' + (statusColors[log[field]] || 'bg-secondary');
+            }
+            if (log.action === 'priority_updated') {
+                const priorityColors = {
+                    'low': 'bg-secondary',
+                    'medium': 'bg-primary',
+                    'high': 'bg-warning', 
+                    'urgent': 'bg-danger'
+                };
+                return 'badge ' + (priorityColors[log[field]] || 'bg-secondary');
+            }
+            return field === 'value1' ? 'badge bg-secondary' : 'badge bg-primary';
+        },
+        
+        getTaskLogBadgeLabel(log, field) {
+            if (log.action === 'status_changed') {
+                return this.getStatusLabel(log[field]);
+            }
+            if (log.action === 'priority_updated') {
+                return this.getPriorityLabel(log[field]);
+            }
+            return log[field];
         },
         
         async saveTaskDescription() {

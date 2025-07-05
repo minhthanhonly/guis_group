@@ -9,6 +9,10 @@ if (!$project_id) {
     exit;
 }
 ?>
+<!-- Add Quill CSS and JS -->
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+
 <div id="app" class="container-fluid mt-4" v-cloak>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container-fluid">
@@ -432,7 +436,7 @@ if (!$project_id) {
                                     <button type="button" class="nav-link waves-effect" role="tab" data-bs-toggle="tab" data-bs-target="#history" aria-controls="history" aria-selected="false" tabindex="-1">
                                         <span class="d-none d-sm-inline-flex align-items-center">
                                             <i class="fas fa-history me-1_5"></i>活動履歴
-                                            <span v-if="taskActivities.length > 0" class="badge rounded-pill badge-center h-px-20 w-px-20 bg-label-info ms-1_5">{{ taskActivities.length }}</span>
+                                            <span v-if="taskLogs.length > 0" class="badge rounded-pill badge-center h-px-20 w-px-20 bg-label-info ms-1_5">{{ taskLogs.length }}</span>
                                         </span>
                                         <i class="fas fa-history d-sm-none"></i>
                                     </button>
@@ -536,25 +540,43 @@ if (!$project_id) {
                                         <h6 class="mb-0">活動履歴</h6>
                                     </div>
                                     <div class="card-body">
-                                        <div v-if="taskActivities.length === 0" class="text-center text-muted py-4">
+                                        <div v-if="taskLogs.length === 0" class="text-center text-muted py-4">
                                             <i class="fas fa-history fa-2x mb-2"></i>
                                             <p>活動履歴がありません</p>
                                         </div>
-                                        <div class="timeline">
-                                            <div v-for="activity in taskActivities" :key="activity.id" class="timeline-item">
-                                                <div class="timeline-marker" :class="getActivityIconClass(activity.type)">
-                                                    <i :class="getActivityIcon(activity.type)"></i>
-                                                </div>
-                                                <div class="timeline-content">
-                                                    <div class="d-flex justify-content-between">
-                                                        <h6 class="mb-1">{{ activity.title }}</h6>
-                                                        <small class="text-muted">{{ formatDate(activity.created_at) }}</small>
+                                        <ul class="list-group">
+                                            <li v-for="log in sortedTaskLogs" :key="log.time" class="list-group-item">
+                                                <div class="d-flex">
+                                                    <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:160px;">
+                                                        <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
+                                                            <span v-if="log.user_image">
+                                                                <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
+                                                            </span>
+                                                            <span v-else>
+                                                                <span class="avatar-placeholder rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center" style="width:32px;height:32px;">
+                                                                    {{ getInitials(log.username || log.realname) }}
+                                                                </span>
+                                                            </span>
+                                                        </div>
+                                                        <div class="d-flex flex-column align-items-start justify-content-start ms-2">
+                                                            <span class="fw-bold small">{{ log.username || log.realname }}</span>
+                                                            <span class="text-muted small">{{ formatDate(log.time) }}</span>
+                                                        </div>
                                                     </div>
-                                                    <p class="mb-1 text-muted">{{ activity.description }}</p>
-                                                    <small class="text-muted">by {{ activity.user_name }}</small>
+                                                    <div class="d-flex flex-column align-items-start justify-content-start flex-grow-1">
+                                                        <div class="d-flex align-items-center">
+                                                            <i :class="getTaskLogIcon(log.action)" class="me-2"></i>
+                                                            <span class="fw-bold">{{ log.note }}</span>
+                                                        </div>
+                                                        <div class="d-flex align-items-center">
+                                                            <span v-if="log.value1" :class="getTaskLogBadgeClass(log, 'value1')" class="mx-1">{{ getTaskLogBadgeLabel(log, 'value1') }}</span>
+                                                            <span v-if="log.value2" class="mx-1">→</span>
+                                                            <span v-if="log.value2" :class="getTaskLogBadgeClass(log, 'value2')" class="mx-1">{{ getTaskLogBadgeLabel(log, 'value2') }}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </div>
+                                            </li>
+                                        </ul>
                                     </div>
                                 </div>
                             </div>
