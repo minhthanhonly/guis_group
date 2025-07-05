@@ -586,7 +586,7 @@ createApp({
                 
                 // Create URLs for selected files
                 const urls = selectedFiles.map(file => {
-                    return `${window.location.origin}${file.file_path}`;
+                    return this.getSecureDownloadUrl(file);
                 });
                 
                 // Join URLs with newlines
@@ -682,9 +682,17 @@ createApp({
         },
         
         copyFileUrl(file) {
-            const url = `${window.location.origin}${file.file_path}`;
+            const url = this.getSecureDownloadUrl(file);
             this.copyToClipboard(url);
             this.showNotification('ファイルURLをコピーしました', 'success');
+        },
+        
+        getSecureViewUrl(file) {
+            return `${window.location.origin}/api/index.php?model=project&method=viewAttachment&file_id=${file.id}`;
+        },
+        
+        getSecureDownloadUrl(file) {
+            return `${window.location.origin}/api/index.php?model=project&method=downloadAttachment&file_id=${file.id}`;
         },
         
         copyToClipboard(text) {

@@ -196,7 +196,7 @@ if (!$project_id) {
                                                 <i :class="getFileIcon(file.file_name)" class="fa-lg"></i>
                                             </td>
                                             <td>
-                                                <a :href="file.file_path" target="_blank" class="text-decoration-none">
+                                                <a :href="getSecureViewUrl(file)" target="_blank" class="text-decoration-none">
                                                     {{ file.original_name }}
                                                 </a>
                                             </td>
@@ -212,10 +212,10 @@ if (!$project_id) {
                                                         <li><a class="dropdown-item" href="#" @click="copyFileUrl(file)">
                                                             <i class="fa fa-link me-2"></i>URLをコピー
                                                         </a></li>
-                                                        <li><a class="dropdown-item" :href="file.file_path" target="_blank">
+                                                        <li><a class="dropdown-item" :href="getSecureViewUrl(file)" target="_blank">
                                                             <i class="fa fa-eye me-2"></i>表示
                                                         </a></li>
-                                                        <li><a class="dropdown-item" :href="file.file_path" download>
+                                                        <li><a class="dropdown-item" :href="getSecureDownloadUrl(file)" download>
                                                             <i class="fa fa-download me-2"></i>ダウンロード
                                                         </a></li>
                                                         <li><a class="dropdown-item text-danger" href="#" @click="deleteFile(file)">

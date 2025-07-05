@@ -1598,23 +1598,42 @@ class Project extends ApplicationModel {
             }
         }
         
+        // Check if file with same original name already exists in this folder
+        $existingFileQuery = sprintf(
+            "SELECT id, file_path FROM " . DB_PREFIX . "project_attachments 
+             WHERE project_id = %d AND original_name = '%s' AND %s",
+            $project_id,
+            $this->escape($originalName),
+            $folder_id ? "folder_id = $folder_id" : "folder_id IS NULL"
+        );
+        $existingFile = $this->fetchOne($existingFileQuery) ?: null;
+        
         // Use original filename (replace if exists)
         $filename = $originalName;
         $filePath = $uploadDir . $filename;
+        
+        // If file exists, delete the old physical file first
+        if ($existingFile) {
+            // Try to delete old file from filesystem (use the relative path from database)
+            $oldFilePath = str_replace(ROOT, '../', $existingFile['file_path']);
+            if (file_exists($oldFilePath)) {
+                unlink($oldFilePath);
+            }
+        }
         
         // Move uploaded file (this will overwrite existing file)
         if (!move_uploaded_file($tmpName, $filePath)) {
             return ['success' => false, 'error' => 'Failed to move uploaded file'];
         }
 
-
+        // Create URL path for database storage
         $uploadDir2 = "assets/upload/project-attachments/$project_id/";
         if ($folder_id) {
             $uploadDir2 .= "folder-$folder_id/";
         }
         $urlFile = ROOT . $uploadDir2 . $filename;
         
-        // Save to database
+        // Prepare data for database
         $data = [
             'project_id' => $project_id,
             'original_name' => $originalName,
@@ -1632,23 +1651,35 @@ class Project extends ApplicationModel {
         }
         
         $this->table = DB_PREFIX . 'project_attachments';
-        $result = $this->query_insert($data);
+        
+        if ($existingFile) {
+            // Update existing record
+            $result = $this->query_update($data, ['id' => $existingFile['id']]);
+            $fileId = $existingFile['id'];
+            $message = 'File replaced successfully';
+        } else {
+            // Insert new record
+            $result = $this->query_insert($data);
+            $fileId = $result;
+            $message = 'File uploaded successfully';
+        }
+        
         $this->table = DB_PREFIX . 'projects'; // reset table
         
         if ($result) {
             return [
                 'success' => true,
-                'message' => 'File uploaded successfully',
+                'message' => $message,
                 'file' => [
-                    'id' => $result,
+                    'id' => $fileId,
                     'original_name' => $originalName,
                     'file_name' => $filename,
                     'file_size' => $fileSize,
-                    'file_path' => $filePath
+                    'file_path' => $urlFile
                 ]
             ];
         } else {
-            // Clean up file if database insert failed
+            // Clean up file if database operation failed
             if (file_exists($filePath)) {
                 unlink($filePath);
             }
@@ -1691,6 +1722,98 @@ class Project extends ApplicationModel {
         }
     }
     
+    function downloadAttachment($params = null) {
+        $this->serveSecureFile(true); // true = force download
+    }
+    
+    function viewAttachment($params = null) {
+        $this->serveSecureFile(false); // false = inline view
+    }
+    
+    private function serveSecureFile($forceDownload = true) {
+        // Check if user is logged in
+        if (!isset($_SESSION['userid']) || !$_SESSION['userid']) {
+            http_response_code(401);
+            die('認証が必要です。ログインしてください。');
+        }
+        
+        $file_id = isset($_GET['file_id']) ? intval($_GET['file_id']) : 0;
+        
+        if (!$file_id) {
+            http_response_code(400);
+            die('ファイルIDが指定されていません。');
+        }
+        
+        // Get file info from database
+        $fileQuery = sprintf(
+            "SELECT a.*, p.name as project_name 
+             FROM " . DB_PREFIX . "project_attachments a
+             LEFT JOIN " . DB_PREFIX . "projects p ON a.project_id = p.id
+             WHERE a.id = %d",
+            $file_id
+        );
+        $file = $this->fetchOne($fileQuery);
+        
+        if (!$file) {
+            http_response_code(404);
+            die('ファイルが見つかりません。');
+        }
+        
+        // Check if user has permission to access this project
+        // if (!$this->checkPermission($file['project_id'], $_SESSION['userid'])) {
+        //     http_response_code(403);
+        //     die('このファイルにアクセスする権限がありません。');
+        // }
+        
+        // Convert URL path to filesystem path for checking
+        $realFilePath = '..' . $file['file_path'];
+        
+        // Check if file exists on filesystem
+        if (!file_exists($realFilePath)) {
+            http_response_code(404);
+            die('ファイルが見つかりません。');
+        }
+        
+        // Update file array with real path for serving
+        $file['real_file_path'] = $realFilePath;
+        
+        // Serve the file
+        $this->serveFile($file, $forceDownload);
+    }
+    
+    private function serveFile($file, $forceDownload = true) {
+        // Get file info - use real_file_path if available, otherwise convert from URL path
+        $filePath = isset($file['real_file_path']) ? $file['real_file_path'] : str_replace(ROOT, '../', $file['file_path']);
+        $fileName = $file['original_name'];
+        $fileSize = filesize($filePath);
+        $mimeType = $file['mime_type'] ?: 'application/octet-stream';
+        
+        // Set headers
+        header('Content-Type: ' . $mimeType);
+        header('Content-Length: ' . $fileSize);
+        
+        if ($forceDownload) {
+            // Force download
+            header('Content-Disposition: attachment; filename="' . $fileName . '"');
+        } else {
+            // Inline view (for images, PDFs, etc.)
+            header('Content-Disposition: inline; filename="' . $fileName . '"');
+        }
+        
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        // Clear output buffer
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Output file
+        readfile($filePath);
+        exit;
+    }
+
     // Main attachment page method - called by the controller
     function attachment($directory = null, $prefix = null, $filename = null, $type = '') {
         // If called with parameters, use parent method for file download
