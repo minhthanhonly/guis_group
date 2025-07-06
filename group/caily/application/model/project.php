@@ -5,7 +5,7 @@ class Project extends ApplicationModel {
         $this->table = DB_PREFIX . 'projects';
         // Add integer fields that should not be quoted
         $this->donotquote = array_merge($this->donotquote, array(
-            'parent_folder_id', 'folder_id', 'project_id', 'user_id', 'file_size'
+            'parent_folder_id', 'folder_id', 'project_id', 'file_size'
         ));
         $this->schema = array(
             'id' => array('except' => array('search')),
@@ -334,7 +334,6 @@ class Project extends ApplicationModel {
         }
         
         $this->notifyProjectCreated($project_id, $data['name'], array_column($listAllUsers, 'userid'));
-        $this->logProjectAction($project_id, 'created', '案件作成', '', '');
 
         return [
             'status' => 'success',
@@ -495,7 +494,6 @@ class Project extends ApplicationModel {
             }
         }
         if ($result) {
-            $this->logProjectAction($id, 'updated', '案件情報を変更');
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
@@ -509,7 +507,6 @@ class Project extends ApplicationModel {
         $old = $this->getById($id);
         $result = $this->query_update(['status' => 'deleted'], ['id' => $id]);
         if ($result) {
-            $this->logProjectAction($id, 'deleted', '案件を削除', $old['status'], 'deleted');
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Delete failed'];
@@ -565,7 +562,6 @@ class Project extends ApplicationModel {
         $result = $this->query_insert($data);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
         // if ($result) {
-        //     $this->logProjectAction($project_id, 'member_added', 'メンバー追加', $role, $username);
         // }
         return $result;
     }
@@ -575,7 +571,6 @@ class Project extends ApplicationModel {
         $result = $this->query_delete(['project_id' => $project_id, 'user_id' => $user_id]);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
         // if ($result) {
-        //     $this->logProjectAction($project_id, 'member_removed', 'メンバー削除', '', $user_id);
         // }
         return $result;
     }
@@ -662,7 +657,6 @@ class Project extends ApplicationModel {
         if ($result) {
             $projectMembers = $this->getMembers(['project_id' => $id]);
             $this->notifyProjectStatusChanged($project_number,$id, $name, $data['status'], array_column($projectMembers, 'userid'));
-            $this->logProjectAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
         }
         
         // Clear actual_end_date if status is not completed
@@ -690,7 +684,6 @@ class Project extends ApplicationModel {
         );
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {
-            $this->logProjectAction($id, 'date_updated', '日程変更', $old['start_date'].'~'.$old['end_date'], $start_date.'~'.$end_date);
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
@@ -714,7 +707,6 @@ class Project extends ApplicationModel {
 
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {
-            $this->logProjectAction($id, 'priority_updated', '優先度変更', $old['priority'], $priority);
         }
         return $result;
     }
@@ -758,7 +750,6 @@ class Project extends ApplicationModel {
         // Send mention notifications if comment was added successfully
         if ($result) {
             $this->sendMentionNotifications($data['project_id'], $data['content'], $data['user_id'], $result);
-            $this->logProjectAction($data['project_id'], 'comment', 'コメント追加', '', mb_substr(strip_tags($data['content']),0,30));
         }
         
         return $result;
@@ -769,6 +760,7 @@ class Project extends ApplicationModel {
         try {
             require_once(DIR_ROOT . '/application/model/NotificationService.php');
             $notiService = new NotificationService();
+
             
             // Extract mentioned users from content
             $mentionedUsers = $this->extractMentions($content);
@@ -776,6 +768,8 @@ class Project extends ApplicationModel {
             if (empty($mentionedUsers)) {
                 return; // No mentions found
             }
+
+            
             
             // Get project info for notification
             $project = $this->getById($projectId);
@@ -840,57 +834,95 @@ class Project extends ApplicationModel {
         $mentionedUsers = [];
         
         // Debug logging
-        error_log("Extracting mentions from content: " . substr($content, 0, 200) . "...");
         
         // First, try to extract from HTML mentions with data attributes
         if (strpos($content, 'data-user-id') !== false) {
-            error_log("Found HTML mentions, extracting...");
             // Extract user IDs from HTML mentions - improved regex for multiple mentions
             preg_match_all('/<span[^>]*data-user-id="([^"]+)"[^>]*data-user-name="([^"]+)"[^>]*>@([^<]+)<\/span>/', $content, $matches);
             if (!empty($matches[1])) {
                 $userIds = $matches[1];
-                error_log("Found user IDs: " . implode(', ', $userIds));
                 
                 // Remove duplicates while preserving order
                 $uniqueUserIds = array_unique($userIds);
                 
-                // Get user info by user IDs
-                $placeholders = str_repeat('?,', count($uniqueUserIds) - 1) . '?';
-                $query = "SELECT userid, realname, user_image FROM " . DB_PREFIX . "user WHERE userid IN ($placeholders)";
-                $users = $this->fetchAll($query, $uniqueUserIds);
-                
-                foreach ($users as $user) {
-                    $mentionedUsers[] = $user;
+                // Get user info by user IDs - using safe parameter binding
+                if (!empty($uniqueUserIds)) {
+                    $placeholders = str_repeat('?,', count($uniqueUserIds) - 1) . '?';
+                    $query = "SELECT userid, realname, user_image FROM " . DB_PREFIX . "user WHERE userid IN ($placeholders)";
+                    $users = $this->fetchAllWithParams($query, $uniqueUserIds);
+                    
+                    foreach ($users as $user) {
+                        $mentionedUsers[] = $user;
+                    }
                 }
-                error_log("Found " . count($mentionedUsers) . " mentioned users from HTML");
             }
         }
        
         // If no HTML mentions found, try plain text mentions
         if (empty($mentionedUsers)) {
-            error_log("No HTML mentions found, trying plain text...");
             $plainText = strip_tags($content);
             preg_match_all('/@([^\s]+)/', $plainText, $matches);
             
             if (!empty($matches[1])) {
                 $mentionedUsernames = $matches[1];
-                error_log("Found usernames: " . implode(', ', $mentionedUsernames));
                 
                 // Remove duplicates while preserving order
                 $uniqueUsernames = array_unique($mentionedUsernames);
                 
                 if (!empty($uniqueUsernames)) {
-                    // Get mentioned users from database by username
+                    // Get mentioned users from database by username - using safe parameter binding
                     $placeholders = str_repeat('?,', count($uniqueUsernames) - 1) . '?';
                     $query = "SELECT userid, realname, user_image FROM " . DB_PREFIX . "user WHERE realname IN ($placeholders)";
-                    $mentionedUsers = $this->fetchAll($query, $uniqueUsernames);
-                    error_log("Found " . count($mentionedUsers) . " mentioned users from plain text");
+                    $mentionedUsers = $this->fetchAllWithParams($query, $uniqueUsernames);
                 }
             }
         }
         
-        error_log("Total mentioned users: " . count($mentionedUsers));
         return $mentionedUsers;
+    }
+
+    /**
+     * Fetch all records with prepared statement parameters
+     * @param string $query SQL query with placeholders
+     * @param array $params Parameters to bind
+     * @return array Results
+     */
+    private function fetchAllWithParams($query, $params) {
+        $this->connect();
+        if (!$this->handler) {
+            return [];
+        }
+        
+        // Prepare statement
+        $stmt = mysqli_prepare($this->handler, $query);
+        if (!$stmt) {
+            error_log("Prepare failed: " . mysqli_error($this->handler));
+            return [];
+        }
+        
+        // Bind parameters
+        if (!empty($params)) {
+            // Create types string (assuming all are strings for user IDs/names)
+            $types = str_repeat('s', count($params));
+            mysqli_stmt_bind_param($stmt, $types, ...$params);
+        }
+        
+        // Execute query
+        if (!mysqli_stmt_execute($stmt)) {
+            error_log("Execute failed: " . mysqli_stmt_error($stmt));
+            mysqli_stmt_close($stmt);
+            return [];
+        }
+        
+        // Get results
+        $result = mysqli_stmt_get_result($stmt);
+        $data = [];
+        while ($row = mysqli_fetch_assoc($result)) {
+            $data[] = $row;
+        }
+        
+        mysqli_stmt_close($stmt);
+        return $data;
     }
 
     function updateProjectStatus($params = null) {
@@ -1062,7 +1094,6 @@ class Project extends ApplicationModel {
             }
             
         } catch (Exception $e) {
-            $this->log('Error sending project notification: ' . $e->getMessage());
             return false;
         }
     }

@@ -24,9 +24,6 @@ class ServiceWorkerManager {
                 this.swRegistration = await navigator.serviceWorker.register(swPath);
                 console.log('Service Worker registered successfully:', this.swRegistration);
                 
-                // Update status indicator
-                this.updateStatusIndicator('connected');
-                
                 // Listen for service worker updates
                 // this.swRegistration.addEventListener('updatefound', () => {
                 //     const newWorker = this.swRegistration.installing;
@@ -40,11 +37,9 @@ class ServiceWorkerManager {
                 
             } catch (error) {
                 console.error('Service Worker registration failed:', error);
-                this.updateStatusIndicator('disconnected');
             }
         } else {
             console.warn('Service Worker not supported');
-            this.updateStatusIndicator('disconnected');
         }
     }
 
@@ -52,16 +47,6 @@ class ServiceWorkerManager {
         // Show notification to user about new version
         if (confirm('A new version is available. Reload to update?')) {
             window.location.reload();
-        }
-    }
-    
-    updateStatusIndicator(status) {
-        const statusElement = document.getElementById('sw-status');
-        const statusText = document.getElementById('sw-status-text');
-        
-        if (statusElement && statusText) {
-            statusElement.className = `sw-status ${status}`;
-            statusText.textContent = status === 'connected' ? 'Background Upload Ready' : 'Upload Service Unavailable';
         }
     }
 
