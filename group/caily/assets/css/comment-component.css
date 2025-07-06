@@ -97,15 +97,25 @@
     padding: 0.125rem 0.25rem;
     border-radius: 0.25rem;
     font-weight: 500;
-    display: inline-block;
+    display: inline;
     margin: 0 1px;
     text-decoration: none;
-    cursor: pointer;
+    cursor: text; /* Allow text cursor for deletion */
+    user-select: text; /* Allow text selection */
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
 }
 
 .mention-highlight:hover {
     background-color: #bbdefb;
     text-decoration: none;
+}
+
+/* Allow mentions to be selected and deleted */
+.mention-highlight:focus {
+    outline: 2px solid #1976d2;
+    outline-offset: 1px;
 }
 
 /* Load more button */
@@ -166,9 +176,14 @@
     padding: 0.125rem 0.25rem;
     border-radius: 0.25rem;
     font-weight: 500;
-    display: inline-block;
+    display: inline;
     margin: 0 1px;
     text-decoration: none;
+    cursor: text; /* Allow text cursor for deletion */
+    user-select: text; /* Allow text selection */
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
 }
 
 .comment-editor .mention:hover,
@@ -177,16 +192,49 @@
     text-decoration: none;
 }
 
+/* Allow mentions in editor to be selected and deleted */
+.comment-editor .mention:focus,
+.comment-editor .mention-highlight:focus {
+    outline: 2px solid #1976d2;
+    outline-offset: 1px;
+}
+
+/* Mention dropdown from mention.js */
+.mention-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 0.375rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    z-index: 9999;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.mention-list {
+    padding: 0;
+    margin: 0;
+}
+
 .mention-item {
     display: flex;
     align-items: center;
     padding: 0.5rem;
     cursor: pointer;
     border-bottom: 1px solid #eee;
+    transition: background-color 0.2s;
 }
 
-.mention-item:hover {
+.mention-item:hover,
+.mention-item.active {
     background-color: #f8f9fa;
+}
+
+.mention-item:last-child {
+    border-bottom: none;
 }
 
 .mention-avatar {
@@ -198,6 +246,90 @@
 
 .mention-name {
     font-size: 0.875rem;
+}
+
+/* Selected mention tags */
+.mention-tag {
+    display: inline-flex;
+    align-items: center;
+    background-color: #e3f2fd;
+    color: #1976d2;
+    padding: 0.25rem 0.5rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    gap: 0.25rem;
+    margin: 0.125rem;
+    border: 1px solid #bbdefb;
+}
+
+.mention-tag .avatar {
+    width: 1rem;
+    height: 1rem;
+    min-width: 1rem;
+}
+
+.mention-tag .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.mention-tag .avatar-initial {
+    font-size: 0.5rem;
+    line-height: 1;
+}
+
+.mention-tag .btn-close {
+    --bs-btn-close-width: 0.75rem;
+    --bs-btn-close-height: 0.75rem;
+    --bs-btn-close-color: #1976d2;
+    --bs-btn-close-opacity: 0.6;
+    margin-left: 0.25rem;
+    padding: 0;
+}
+
+.mention-tag .btn-close:hover {
+    --bs-btn-close-opacity: 1;
+}
+
+.selected-mentions {
+    border: 1px solid #e9ecef;
+    border-radius: 0.375rem;
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+}
+
+.mention-input-section {
+    border-bottom: 1px solid #e9ecef;
+    padding-bottom: 1rem;
+}
+
+/* Mention input contenteditable */
+.mention-input-editable {
+    min-height: 2.5rem;
+    max-height: 6rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.mention-input-editable:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Placeholder for contenteditable */
+.mention-input-editable:empty:before {
+    content: attr(data-placeholder);
+    color: #6c757d;
+    font-style: italic;
+    pointer-events: none;
+}
+
+.mention-input-editable:focus:before {
+    display: none;
 }
 
 /* Quill mention dropdown */

@@ -87,6 +87,45 @@ window.CommentComponent = {
                         </div>
                     </div>
                     <div class="flex-grow-1">
+                        <!-- Mention Input Section -->
+                        <div class="mention-input-section mb-3">
+                            <label class="form-label small text-muted">メンション (オプション)</label>
+                            <div class="position-relative">
+                                <div
+                                    ref="mentionInput"
+                                    class="form-control form-control-sm allow-mention mention-input-editable"
+                                    data-mention="true"
+                                    data-html-mention="true"
+                                    contenteditable="true"
+                                    data-placeholder="@でメンションするユーザーを入力..."
+                                ></div>
+                            </div>
+                            
+                            <!-- Selected Mentions Tags -->
+                            <div v-if="selectedMentions.length > 0" class="selected-mentions mt-2">
+                                <small class="text-muted d-block mb-1">選択されたメンション:</small>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <span 
+                                        v-for="mention in selectedMentions" 
+                                        :key="mention.userid"
+                                        class="mention-tag"
+                                    >
+                                        <div class="avatar avatar-sm me-1">
+                                            <img v-if="mention.user_image" :src="'/assets/upload/avatar/' + mention.user_image" :alt="mention.realname" class="rounded-circle">
+                                            <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(mention.realname) }}</span>
+                                        </div>
+                                        {{ mention.realname }}
+                                        <button 
+                                            type="button" 
+                                            class="btn-close btn-close-sm ms-1"
+                                            @click="removeMention(mention)"
+                                            aria-label="Remove mention"
+                                        ></button>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Quill Editor -->
                         <div class="comment-editor-container">
                             <div ref="quillEditor" class="comment-editor" style="min-height: 100px;"></div>
@@ -118,9 +157,8 @@ window.CommentComponent = {
             quillInstance: null,
             maxDisplayComments: 20,
             editorHasContent: false,
-            currentCursorPosition: 0,
-            savedMentionSelection: null,
-            isProcessingMention: false,
+            selectedMentions: [],
+            mentionManager: null,
         };
     },
     computed: {
@@ -185,29 +223,35 @@ window.CommentComponent = {
         },
         
         async addComment() {
-            if (!this.editorHasContent || this.submittingComment) return;
-            
             const commentHtml = this.getCommentText().trim();
-            if (!commentHtml) return;
+            const mentionHtml = this.generateMentionHtml();
+            
+            // Need either comment content or mentions
+            if (!commentHtml && !mentionHtml) return;
+            if (this.submittingComment) return;
             
             this.submittingComment = true;
             
             try {
+                // Combine mentions HTML at the start of the message
+                const finalContent = mentionHtml + commentHtml;
+                
                 const formData = new FormData();
                 formData.append(`${this.entityType}_id`, this.entityId);
-                formData.append('content', commentHtml);
+                formData.append('content', finalContent);
                 formData.append('user_id', this.currentUser.userid);
                 
                 await axios.post(this.apiEndpoints.addComment, formData);
                 
-                // Clear Quill editor
+                // Clear Quill editor and mentions
                 if (this.quillInstance) {
                     this.quillInstance.setContents([]);
                     this.editorHasContent = false;
                 }
+                this.clearMentions();
                 
                 await this.loadComments(true);
-                this.$emit('comment-added', { content: commentHtml });
+                this.$emit('comment-added', { content: finalContent });
                 
             } catch (error) {
                 console.error('Error adding comment:', error);
@@ -242,12 +286,19 @@ window.CommentComponent = {
         },
         
         hasCommentContent() {
+            let hasContent = false;
+            
+            // Check Quill content
             if (this.quillInstance) {
                 const text = this.quillInstance.getText().trim();
-                this.editorHasContent = text.length > 0;
-                return this.editorHasContent;
+                hasContent = text.length > 0;
             }
-            return false;
+            
+            // Check mention input content
+            const hasMentions = this.generateMentionHtml().length > 0;
+            
+            this.editorHasContent = hasContent || hasMentions;
+            return this.editorHasContent;
         },
         
         updateEditorContent() {
@@ -259,10 +310,7 @@ window.CommentComponent = {
         
         initQuillEditor() {
             if (this.$refs.quillEditor && !this.quillInstance) {
-                // Register custom mention format
-                this.registerMentionFormat();
-                
-                // Quill modules configuration
+                // Simple Quill configuration without mentions
                 const modules = {
                     toolbar: [
                         ['bold', 'italic', 'underline'],
@@ -272,30 +320,11 @@ window.CommentComponent = {
                     ]
                 };
 
-                // Add mention module if available
-                if (window.QuillMention) {
-                    modules.mention = {
-                        allowedChars: /^[A-Za-z\sÀ-ÿ]*$/,
-                        mentionDenotationChars: ["@"],
-                        source: this.getMentionUsers,
-                        selectKeys: [13, 9], // Enter and Tab
-                        onSelect: (item, insertItem) => {
-                            insertItem(item);
-                        },
-                        renderItem: (item, searchTerm) => {
-                            return `<div class="mention-item">
-                                <img src="/assets/upload/avatar/${item.user_image || 'default.png'}" alt="${item.realname}" class="mention-avatar">
-                                <span class="mention-name">${item.realname}</span>
-                            </div>`;
-                        }
-                    };
-                }
-
                 this.quillInstance = new Quill(this.$refs.quillEditor, {
                     theme: 'snow',
-                    placeholder: 'コメントを入力... @でメンション',
+                    placeholder: 'コメントを入力してください...',
                     modules: modules,
-                    formats: ['bold', 'italic', 'underline', 'link', 'list', 'mention']
+                    formats: ['bold', 'italic', 'underline', 'link', 'list']
                 });
                 
                 // Add text change listener to update button state
@@ -310,569 +339,93 @@ window.CommentComponent = {
                         this.updateEditorContent();
                     }
                 });
+            }
+        },
+        
 
-                // Setup mention support using mention.js
-                this.$nextTick(() => {
-                    this.setupBasicMentions();
-                });
-            }
-        },
         
-        registerMentionFormat() {
-            // Create custom mention format for Quill
-            const Inline = Quill.import('blots/inline');
+        // Mention functionality using mention.js
+        initMentionManager() {
+            if (!this.$refs.mentionInput) return;
             
-            class MentionBlot extends Inline {
-                static create(value) {
-                    const node = super.create();
-                    node.setAttribute('class', 'mention-highlight');
-                    node.setAttribute('data-user-id', value.userId || value['data-user-id'] || '');
-                    node.setAttribute('data-user-name', value.userName || value['data-user-name'] || '');
-                    node.setAttribute('data-mention', 'true');
-                    node.setAttribute('contenteditable', 'false');
-                    return node;
-                }
-                
-                static formats(node) {
-                    return {
-                        userId: node.getAttribute('data-user-id'),
-                        userName: node.getAttribute('data-user-name'),
-                        mention: true
-                    };
-                }
-                
-                static value(node) {
-                    return {
-                        userId: node.getAttribute('data-user-id'),
-                        userName: node.getAttribute('data-user-name'),
-                        mention: true
-                    };
-                }
-            }
-            
-            MentionBlot.blotName = 'mention';
-            MentionBlot.tagName = 'span';
-            
-            // Register the custom format
-            Quill.register(MentionBlot);
-        },
-        
-        async getMentionUsers(searchTerm, renderList) {
-            // Function for QuillMention module
-            try {
-                const response = await axios.get(`/api/index.php?model=user&method=searchUsers&search=${searchTerm}`);
-                const users = response.data || [];
-                const formattedUsers = users.map(user => ({
-                    id: user.userid,
-                    value: user.realname,
-                    realname: user.realname,
-                    user_image: user.user_image
-                }));
-                renderList(formattedUsers, searchTerm);
-            } catch (error) {
-                console.error('Error loading mention users:', error);
-                renderList([], searchTerm);
-            }
-        },
-        
-        setupBasicMentions() {
-            // Setup mention functionality using mention.js
-            if (this.quillInstance) {
-                const editor = this.quillInstance.root;
-                
-                // Add required attributes for mention.js
-                editor.setAttribute('data-mention', 'true');
-                editor.setAttribute('data-html-mention', 'true');
-                editor.classList.add('allow-mention');
-                
-                // Initialize mention manager if not already initialized
-                if (typeof window.mentionManager === 'undefined' && typeof MentionManager !== 'undefined') {
-                    window.mentionManager = new MentionManager({
-                        inputSelector: '[data-mention]',
-                        apiEndpoint: '/api/index.php?model=user&method=getMentionUsers',
-                        onMentionSelect: (user, input) => {
-                            console.log('Mention selected:', user);
-                            // Prevent default mention insertion behavior
-                            // We handle this in overrideMentionSelection
-                        }
+            // Let mention.js handle everything
+            this.mentionManager = new MentionManager({
+                inputSelector: '[data-mention]',
+                apiEndpoint: '/api/index.php?model=user&method=getMentionUsers',
+                onMentionSelect: (user, input) => {
+                    // mention.js handles insertion, we just track selected mentions
+                    this.trackSelectedMention(user);
+                    // Update button state
+                    this.$nextTick(() => {
+                        this.hasCommentContent();
                     });
                 }
-                
-                // Store reference to saved selection
-                this.savedMentionSelection = null;
-                
-                // Store current cursor position
-                this.currentCursorPosition = 0;
-                
-                // Track cursor position changes
-                this.quillInstance.on('selection-change', (range, oldRange, source) => {
-                    if (range && range.index !== undefined) {
-                        this.currentCursorPosition = range.index;
-                    }
-                });
-                
-                // Add custom event listener for @ detection using delta
-                this.quillInstance.on('text-change', (delta, oldDelta, source) => {
-                    if (source === 'user') {
-                        // First check for @ character insertion
-                        this.handleAtCharacterDetectionWithDelta(delta);
-                        
-                        // Then update mention selection if user is typing after @
-                        setTimeout(() => {
-                            this.updateMentionSelectionOnType();
-                        }, 20);
-                    }
-                });
-                
-                // Override the selectMention method completely
-                if (window.mentionManager) {
-                    this.overrideMentionSelection(window.mentionManager, editor);
-                }
-                
-                // If mention manager already exists, make sure it binds to this editor
-                if (window.mentionManager) {
-                    try {
-                        // Force rebind to ensure proper integration
-                        window.mentionManager.bindToInput(editor);
-                    } catch (error) {
-                        console.log('Could not bind mention manager to Quill:', error);
-                        // Fallback: manually bind events
-                        this.bindMentionEvents(editor);
-                    }
-                }
-            }
-        },
-        
-        handleAtCharacterDetectionWithDelta(delta) {
-            // Handle @ character detection using delta and cursor position
-            try {
-                // Skip if already processing a mention
-                if (this.isProcessingMention) return;
-                
-                // Check if @ character was inserted
-                let insertedAt = false;
-                let insertPosition = -1;
-                const ops = delta.ops || [];
-                
-                // Calculate position where @ was inserted
-                let currentPos = 0;
-                for (const op of ops) {
-                    if (op.retain) {
-                        currentPos += op.retain;
-                    } else if (op.insert && typeof op.insert === 'string') {
-                        if (op.insert.includes('@')) {
-                            insertedAt = true;
-                            insertPosition = currentPos + op.insert.indexOf('@');
-                            break;
-                        }
-                        currentPos += op.insert.length;
-                    }
-                }
-                
-                if (!insertedAt) return;
-                
-                const text = this.quillInstance.getText();
-                
-                // Use insert position if available, otherwise use cursor position
-                let atIndex = insertPosition >= 0 ? insertPosition : this.currentCursorPosition - 1;
-                
-                // Validate @ character is actually at this position
-                if (atIndex >= 0 && atIndex < text.length && text[atIndex] === '@') {
-                    console.log('@ confirmed at position:', atIndex);
-                } else {
-                    // Fallback: search for @ near cursor position
-                    const searchStart = Math.max(0, this.currentCursorPosition - 5);
-                    const searchEnd = Math.min(text.length, this.currentCursorPosition + 1);
-                    const searchText = text.substring(searchStart, searchEnd);
-                    const relativeAtIndex = searchText.lastIndexOf('@');
-                    
-                    if (relativeAtIndex !== -1) {
-                        atIndex = searchStart + relativeAtIndex;
-                        console.log('@ found via fallback search at position:', atIndex);
-                    } else {
-                        console.warn('Could not locate @ character');
-                        return;
-                    }
-                }
-                
-                console.log('@ detected at position:', atIndex, 'cursor:', this.currentCursorPosition);
-                
-                if (atIndex >= 0 && (atIndex === 0 || /\s/.test(text[atIndex - 1]))) {
-                    // Found @ at word boundary
-                    let endIndex = atIndex + 1;
-                    
-                    // Find end of text after @ (until space or end)
-                    while (endIndex < text.length && !/\s/.test(text[endIndex])) {
-                        endIndex++;
-                    }
-                    
-                    const mentionLength = endIndex - atIndex;
-                    console.log('Setting selection for mention:', atIndex, 'length:', mentionLength);
-                    
-                    // Save the selection for later use (don't call setSelection as it causes errors)
-                    this.savedMentionSelection = {
-                        index: atIndex,
-                        length: mentionLength,
-                        text: text.substring(atIndex, endIndex)
-                    };
-                    
-                    console.log('Saved mention selection:', this.savedMentionSelection);
-                }
-            } catch (error) {
-                console.error('Error in handleAtCharacterDetectionWithDelta:', error);
-            }
-        },
-        
-        updateMentionSelectionOnType() {
-            // Update saved selection when user continues typing after @
-            try {
-                if (!this.savedMentionSelection) return;
-                
-                const text = this.quillInstance.getText();
-                const atIndex = this.savedMentionSelection.index;
-                
-                // Find new end position
-                let endIndex = atIndex + 1;
-                while (endIndex < text.length && !/\s/.test(text[endIndex])) {
-                    endIndex++;
-                }
-                
-                // Update saved selection
-                const newLength = endIndex - atIndex;
-                if (newLength !== this.savedMentionSelection.length) {
-                    this.savedMentionSelection.length = newLength;
-                    this.savedMentionSelection.text = text.substring(atIndex, endIndex);
-                    
-                    console.log('Updated mention selection:', this.savedMentionSelection);
-                    
-                    // Update selection in editor
-                    setTimeout(() => {
-                        try {
-                            this.quillInstance.setSelection(atIndex, newLength, 'silent');
-                        } catch (error) {
-                            console.error('Error updating selection:', error);
-                        }
-                    }, 10);
-                }
-            } catch (error) {
-                console.error('Error in updateMentionSelectionOnType:', error);
-            }
-        },
-        
-        ensureMentionFormat(user, input) {
-            // Ensure the mention has the correct format
-            // This is called after mention selection to validate format
-            setTimeout(() => {
-                const mentions = input.querySelectorAll('.mention-highlight');
-                mentions.forEach(mention => {
-                    if (!mention.dataset.userId || !mention.dataset.userName) {
-                        mention.setAttribute('data-user-id', user.userid || user.id);
-                        mention.setAttribute('data-user-name', user.user_name);
-                        mention.setAttribute('data-mention', 'true');
-                        mention.className = 'mention-highlight';
-                    }
-                });
-            }, 100);
-        },
-        
-        bindMentionEvents(editor) {
-            // Fallback manual binding if automatic binding fails
-            let mentionStartPos = -1;
-            let mentionSearchTerm = '';
+            });
             
-            editor.addEventListener('input', (event) => {
-                const text = editor.textContent;
-                const selection = window.getSelection();
-                
-                if (selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    const cursorPos = this.getCursorPosition(editor, range);
-                    const beforeCursor = text.substring(0, cursorPos);
-                    const atIndex = beforeCursor.lastIndexOf('@');
-                    
-                    if (atIndex !== -1 && (atIndex === 0 || /\s/.test(text[atIndex - 1]))) {
-                        mentionStartPos = atIndex;
-                        mentionSearchTerm = beforeCursor.substring(atIndex + 1);
-                        
-                        // Trigger mention dropdown manually
-                        if (window.mentionManager) {
-                            window.mentionManager.currentInput = editor;
-                            window.mentionManager.mentionStartPosition = mentionStartPos;
-                            window.mentionManager.mentionSearchTerm = mentionSearchTerm;
-                            window.mentionManager.showDropdown();
-                        }
-                    }
+            // Add input listener for button state updates
+            this.$nextTick(() => {
+                if (this.$refs.mentionInput) {
+                    this.$refs.mentionInput.addEventListener('input', () => {
+                        this.hasCommentContent();
+                    });
                 }
             });
         },
         
-        getCursorPosition(element, range) {
-            // Get cursor position in contenteditable element
-            const tempRange = range.cloneRange();
-            tempRange.selectNodeContents(element);
-            tempRange.setEnd(range.endContainer, range.endOffset);
-            return tempRange.toString().length;
-        },
-        
-        overrideMentionSelection(mentionManager, editor) {
-            // Store the original selectMention method
-            const originalSelectMention = mentionManager.selectMention.bind(mentionManager);
+        trackSelectedMention(user) {
+            // Just track for display in tags (mention.js handles the input)
+            const userId = user.userid || user.id;
+            const alreadySelected = this.selectedMentions.some(m => m.userid === userId);
             
-            // Override selectMention for this editor
-            mentionManager.selectMention = (user) => {
-                if (mentionManager.currentInput === editor) {
-                    // Set processing flag to prevent duplicate @ detection
-                    this.isProcessingMention = true;
-                    
-                    // Prevent the original selectMention from running
-                    // Only use our custom insertion
-                    this.insertMentionIntoQuill(user, editor);
-                    
-                    // Hide dropdown first
-                    mentionManager.hideDropdown();
-                    
-                    // Call original callback after our insertion
-                    if (mentionManager.options.onMentionSelect) {
-                        mentionManager.options.onMentionSelect(user, editor);
-                    }
-                    
-                    // Clear processing flag after a delay
-                    setTimeout(() => {
-                        this.isProcessingMention = false;
-                    }, 1000);
-                } else {
-                    // Use original method for other inputs
-                    originalSelectMention(user);
-                }
-            };
+            if (!alreadySelected) {
+                this.selectedMentions.push({
+                    userid: userId,
+                    realname: user.user_name || user.realname,
+                    user_image: user.user_image || user.avatar
+                });
+            }
         },
         
-        insertMentionIntoQuill(user, editor) {
-            if (!this.quillInstance) return;
+        removeMention(mention) {
+            this.selectedMentions = this.selectedMentions.filter(m => m.userid !== mention.userid);
             
-            try {
-                // Make sure editor is focused and ready
-                editor.focus();
-                
-                // Small delay to ensure focus is set
-                setTimeout(() => {
-                    try {
-                        // Use saved mention selection if available
-                        let atIndex, deleteLength;
-                        
-                        if (this.savedMentionSelection) {
-                            // Use saved selection data
-                            atIndex = this.savedMentionSelection.index;
-                            deleteLength = this.savedMentionSelection.length;
-                            console.log('Using saved selection - atIndex:', atIndex, 'deleteLength:', deleteLength, 'text:', this.savedMentionSelection.text);
-                        } else {
-                            // Fallback: find @ position in text
-                            const text = this.quillInstance.getText();
-                            atIndex = text.lastIndexOf('@');
-                            
-                            if (atIndex === -1) {
-                                console.warn('Could not find @ character, falling back');
-                                this.fallbackMentionInsertion(user, editor);
-                                return;
-                            }
-                            
-                            // Find the end of the search term
-                            let searchEndIndex = atIndex + 1;
-                            while (searchEndIndex < text.length && !/\s/.test(text[searchEndIndex])) {
-                                searchEndIndex++;
-                            }
-                            
-                            deleteLength = searchEndIndex - atIndex;
-                            console.log('Using fallback method - atIndex:', atIndex, 'deleteLength:', deleteLength);
-                        }
-                        
-                        // Validate positions
-                        if (atIndex < 0 || deleteLength <= 0) {
-                            console.warn('Invalid position data, using fallback');
-                            this.fallbackMentionInsertion(user, editor);
-                            return;
-                        }
-                        
-                        // Create mention content 
-                        const mentionText = `@${user.user_name}`;
-                        
-                        // Use safer approach: individual API calls instead of updateContents
-                        try {
-                            // Delete the @ and search term
-                            this.quillInstance.deleteText(atIndex, deleteLength, 'silent');
-                            
-                            // Insert mention using custom format
-                            this.quillInstance.insertText(atIndex, mentionText, {
-                                'mention': {
-                                    userId: user.userid || user.id,
-                                    userName: user.user_name,
-                                    'data-user-id': user.userid || user.id,
-                                    'data-user-name': user.user_name
-                                }
-                            }, 'silent');
-                            
-                            // Add space after mention
-                            this.quillInstance.insertText(atIndex + mentionText.length, ' ', 'silent');
-                            
-                        } catch (apiError) {
-                            console.error('Quill API error, using DOM fallback:', apiError);
-                            this.fallbackMentionInsertion(user, editor);
-                            return;
-                        }
-                        
-                        // Clear saved selection
-                        this.savedMentionSelection = null;
-                        
-                        // Clear MentionManager state
-                        if (window.mentionManager) {
-                            window.mentionManager.mentionStartPosition = -1;
-                            window.mentionManager.mentionSearchTerm = '';
-                        }
-                        
-                        // Clean up any duplicate @ characters after the operation
-                        setTimeout(() => {
-                            this.cleanupDuplicateAtCharacters();
-                            
-                            // Update cursor position without using setSelection
-                            const newCursorPos = atIndex + mentionText.length + 1;
-                            this.currentCursorPosition = newCursorPos;
-                            console.log('Cursor updated to position:', newCursorPos);
-                        }, 50);
-                        
-                        // Update editor content state
-                        this.updateEditorContent();
-                        
-                    } catch (innerError) {
-                        console.error('Error in mention insertion:', innerError);
-                        this.fallbackMentionInsertion(user, editor);
-                    }
-                }, 50);
-                
-            } catch (error) {
-                console.error('Error focusing editor:', error);
-                this.fallbackMentionInsertion(user, editor);
+            // Also remove from mention input if exists
+            if (this.$refs.mentionInput) {
+                const mentionSpans = this.$refs.mentionInput.querySelectorAll(`[data-user-id="${mention.userid}"]`);
+                mentionSpans.forEach(span => span.remove());
             }
         },
         
-        cleanupDuplicateAtCharacters() {
-            // Clean up duplicate @ characters that might appear after mention insertion
-            try {
-                const html = this.quillInstance.root.innerHTML;
-                
-                // Look for patterns like: </span>@ or mention followed by standalone @
-                const cleanedHtml = html.replace(/(<\/span>)\s*@(?!\w)/g, '$1 ');
-                
-                if (html !== cleanedHtml) {
-                    console.log('Cleaning up duplicate @ characters');
-                    this.quillInstance.root.innerHTML = cleanedHtml;
-                    
-                    // Trigger text change to update Quill's internal state
-                    this.quillInstance.update();
-                }
-            } catch (error) {
-                console.error('Error cleaning up duplicate @ characters:', error);
+        clearMentions() {
+            this.selectedMentions = [];
+            
+            // Clear the contenteditable input
+            if (this.$refs.mentionInput) {
+                this.$refs.mentionInput.innerHTML = '';
             }
         },
         
-        fallbackMentionInsertion(user, editor) {
-            // Fallback method using simple text insertion at cursor
-            try {
-                console.log('Using fallback mention insertion');
-                
-                // Get current cursor position
-                const cursorPos = this.currentCursorPosition;
-                const text = this.quillInstance.getText();
-                
-                // Simple approach: just insert mention at current position
-                const mentionText = `@${user.user_name}`;
-                
-                // If there's a saved mention selection, use it
-                if (this.savedMentionSelection && this.savedMentionSelection.index >= 0) {
-                    const atIndex = this.savedMentionSelection.index;
-                    const deleteLength = this.savedMentionSelection.length;
-                    
-                    console.log('Fallback using saved selection:', atIndex, deleteLength);
-                    
-                    // Try simple text operations
-                    try {
-                        this.quillInstance.deleteText(atIndex, deleteLength, 'silent');
-                        this.quillInstance.insertText(atIndex, mentionText + ' ', 'silent');
-                        this.currentCursorPosition = atIndex + mentionText.length + 1;
-                    } catch (textError) {
-                        // Last resort: DOM manipulation
-                        this.domMentionInsertion(user, editor, atIndex, deleteLength);
-                    }
-                } else {
-                    // Search for @ near cursor
-                    const searchStart = Math.max(0, cursorPos - 10);
-                    const searchText = text.substring(searchStart, cursorPos + 1);
-                    const atIndex = searchText.lastIndexOf('@');
-                    
-                    if (atIndex !== -1) {
-                        const absoluteAtIndex = searchStart + atIndex;
-                        console.log('Fallback found @ at:', absoluteAtIndex);
-                        
-                        try {
-                            this.quillInstance.deleteText(absoluteAtIndex, 1, 'silent');
-                            this.quillInstance.insertText(absoluteAtIndex, mentionText + ' ', 'silent');
-                            this.currentCursorPosition = absoluteAtIndex + mentionText.length + 1;
-                        } catch (textError) {
-                            this.domMentionInsertion(user, editor, absoluteAtIndex, 1);
-                        }
-                    } else {
-                        // Just insert at cursor position
-                        console.log('Fallback: inserting at cursor position');
-                        try {
-                            this.quillInstance.insertText(cursorPos, mentionText + ' ', 'silent');
-                            this.currentCursorPosition = cursorPos + mentionText.length + 1;
-                        } catch (textError) {
-                            console.error('All fallback methods failed:', textError);
-                        }
-                    }
-                }
-                
-                // Clear saved selection
-                this.savedMentionSelection = null;
-                
-                // Update editor content state
-                this.updateEditorContent();
-                
-                // Clear processing flag
-                this.isProcessingMention = false;
-                
-            } catch (error) {
-                console.error('Fallback mention insertion failed:', error);
+        generateMentionHtml() {
+            // Get mentions directly from mention input (handled by mention.js)
+            if (this.$refs.mentionInput) {
+                const mentionHtml = this.$refs.mentionInput.innerHTML.trim();
+                return mentionHtml ? mentionHtml + ' ' : '';
             }
+            return '';
         },
         
-        domMentionInsertion(user, editor, atIndex, deleteLength) {
-            // Last resort DOM manipulation
-            try {
-                const mentionHtml = `<span class="mention-highlight" data-user-id="${user.userid || user.id}" data-user-name="${user.user_name}" data-mention="true">@${user.user_name}</span> `;
-                
-                // Get current selection
-                const selection = window.getSelection();
-                if (selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    
-                    // Simple insertion at cursor
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = mentionHtml;
-                    const mentionElement = tempDiv.firstElementChild;
-                    
-                    range.insertNode(mentionElement);
-                    range.setStartAfter(mentionElement);
-                    range.collapse(true);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                }
-                
-                console.log('DOM mention insertion completed');
-                
-            } catch (error) {
-                console.error('DOM mention insertion failed:', error);
-            }
-        },
+
+        
+
+
+
+
+        
+
+        
+
+        
+
         
 
         
@@ -880,9 +433,12 @@ window.CommentComponent = {
             if (this.quillInstance) {
                 this.quillInstance = null;
             }
-            // Clear saved mention selection and cursor position
-            this.savedMentionSelection = null;
-            this.currentCursorPosition = 0;
+            
+            // Clean up mention manager if needed
+            if (this.mentionManager && this.mentionManager.destroy) {
+                this.mentionManager.destroy();
+                this.mentionManager = null;
+            }
         },
         
         renderMentions(content) {
@@ -938,6 +494,7 @@ window.CommentComponent = {
         
         this.$nextTick(() => {
             this.initQuillEditor();
+            this.initMentionManager();
             // Force initial check of content
             setTimeout(() => {
                 this.updateEditorContent();
