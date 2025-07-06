@@ -59,9 +59,6 @@ if (!$project_id) {
                         <div class="d-flex justify-content-between align-items-center mb-4">
                             <h5 class="card-title"><span data-i18n="基本情報">基本情報</span></h5>
                             <div>
-                                <button v-if="canCommentProject()" class="btn btn-outline-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalComment" title="コメントを見る">
-                                    <i class="fa fa-comment"></i>
-                                </button>
                                 <button v-if="!isEditMode && canAddProject()" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
                                     <i class="fa fa-copy"></i>
                                 </button>
@@ -468,6 +465,25 @@ if (!$project_id) {
                     </div>
                 </div>
 
+                <!-- Comments Section -->
+                <div class="card mt-4" v-if="canCommentProject()">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fa fa-comment me-2"></i>コメント
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Comment Component -->
+                        <comment-component
+                             :entity-type="'project'"
+                             :entity-id="projectId"
+                             :current-user="currentUser"
+                             @comment-added="onCommentAdded"
+                             @error="onCommentError">
+                        </comment-component>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Right Column - Stats & Comments -->
@@ -784,26 +800,12 @@ if (!$project_id) {
         </div>
     </div>
 </div>
-<?php include(dirname(__DIR__).'/view/comment-modal.php'); ?>
 
 <?php
 $view->footing();
 ?>
 
 <style>
-
-.comment-item {
-    padding: 1rem;
-    border-radius: 0.375rem;
-    background-color: #f8f9fa;
-}
-.comment-header {
-    margin-bottom: 0.5rem;
-}
-.comment-content {
-    white-space: pre-wrap;
-    word-break: break-word;
-}
 
 /* Edit mode styles */
 .edit-mode .select2-selection,
@@ -879,11 +881,17 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/highlight/highlight.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/katex.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/css/mention.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/css/comment-component.css" />
 <link rel="stylesheet" href="assets/css/task-manager.css" />
 
 <script src="<?=ROOT?>assets/vendor/libs/highlight/highlight.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="<?=ROOT?>assets/js/sw-manager.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+<script src="/assets/js/mention.js"></script>
+<script src="/assets/js/comment-component.js"></script>
 <script src="assets/js/project-detail.js"></script>
 

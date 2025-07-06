@@ -1,6 +1,6 @@
 const { createApp } = Vue;
 
-createApp({
+const vueApp = createApp({
     data() {
         return {
             projectId: typeof PROJECT_ID !== 'undefined' ? PROJECT_ID : this.getProjectIdFromUrl(),
@@ -9,9 +9,7 @@ createApp({
             managers: [],
             members: [],
             tasks: [],
-            comments: [],
             team_list: [],
-            newComment: '',
             isEditMode: false,
             originalProject: null,
             stats: {
@@ -74,12 +72,6 @@ createApp({
             buildingBranchTagify: null,
             customFields: [],
             departmentCustomFieldSets: [],
-            // Comment pagination
-            commentsPage: 1,
-            commentsPerPage: 20,
-            loadingOlderComments: false,
-            hasMoreComments: true,
-            showLoadMoreButton: false, // Track if we should show the load more button
             // Danh sách các tỉnh/thành phố của Nhật Bản
             japanPrefectures: [
                 '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
@@ -112,6 +104,12 @@ createApp({
             userPermissions: null,
             // mention-related variables removed
             logs: [], // Thêm biến lưu log lịch sử
+            // Current user data
+            currentUser: {
+                userid: typeof USER_ID !== 'undefined' ? USER_ID : null,
+                realname: '',
+                user_image: null,
+            },
         }
     },
     computed: {
@@ -127,15 +125,6 @@ createApp({
         selectedCustomFieldSet() {
             if (!this.project || !this.project.department_custom_fields_set_id) return null;
             return this.departmentCustomFieldSets.find(set => String(set.id) === String(this.project.department_custom_fields_set_id)) || null;
-        },
-        displayedComments() {
-            // Sort comments by date ascending (oldest first)
-            const sortedComments = [...this.comments].sort((a, b) => 
-                new Date(a.created_at) - new Date(b.created_at)
-            );
-            
-            // Return all loaded comments (pagination is handled by the API)
-            return sortedComments;
         },
         canViewProject() {
             if(USER_ROLE == 'administrator') return true;
@@ -291,6 +280,9 @@ createApp({
                 this.managers = this.members.filter(m => m && m.role === 'manager');
                 const managerIds = this.managers.map(m => m.user_id);
                 this.members = this.members.filter(m => m && m.role === 'member' && !managerIds.includes(m.user_id));
+                
+                // Update current user data after loading members
+                this.loadCurrentUser();
             } catch (error) {
                 console.error('Error loading members:', error);
             }
@@ -304,80 +296,7 @@ createApp({
             //     console.error('Error loading tasks:', error);
             // }
         },
-        async loadComments() {
-            try {
-                const response = await axios.get(`/api/index.php?model=project&method=getComments&project_id=${this.projectId}&page=${this.commentsPage}&per_page=${this.commentsPerPage}`);
-                const newComments = response.data || [];
-                
-                if (this.commentsPage === 1) {
-                    // First load - replace all comments
-                    this.comments = newComments;
-                    
-                    // Scroll to bottom after Vue rendering is complete (initial load)
-                    this.$nextTick(() => {
-                        setTimeout(() => {
-                            const element = document.querySelector('#chat-history-project');
-                            if (element && element.scrollHeight > 0) {
-                                element.scrollTop = element.scrollHeight;
-                            }
-                        }, 100);
-                        this.setConnectedUsers();
-                    });
-                } else {
-                    // Loading more - prepend older comments
-                    // Store current scroll position and height
-                    const element = document.querySelector('#chat-history-project');
-                    const scrollTop = element ? element.scrollTop : 0;
-                    const scrollHeight = element ? element.scrollHeight : 0;
-                    
-                    this.comments = [...newComments, ...this.comments];
-                    
-                    // Restore scroll position after Vue rendering
-                    this.$nextTick(() => {
-                        if (element) {
-                            const newScrollHeight = element.scrollHeight;
-                            element.scrollTop = scrollTop + (newScrollHeight - scrollHeight);
-                        }
-                        this.setConnectedUsers();
-                    });
-                }
-                
-                // Update pagination state
-                this.hasMoreComments = newComments.length === this.commentsPerPage;
-                this.showLoadMoreButton = this.hasMoreComments && this.commentsPage > 1;
-                
-            } catch (error) {
-                console.error('Error loading comments:', error);
-            }
-        },
-        async loadMoreComments() {
-            if (this.loadingOlderComments || !this.hasMoreComments) return;
-            
-            this.loadingOlderComments = true;
-            this.showLoadMoreButton = false; // Hide button while loading
-            
-            try {
-                this.commentsPage++;
-                await this.loadComments();
-            } catch (error) {
-                console.error('Error loading more comments:', error);
-                this.commentsPage--; // Revert page number on error
-            } finally {
-                this.loadingOlderComments = false;
-            }
-        },
-        handleScroll(event) {
-            const element = event.target;
-            
-            // Check if user is at the top of the scroll area
-            const isAtTop = element.scrollTop === 0;
-            this.showLoadMoreButton = isAtTop && this.hasMoreComments && !this.loadingOlderComments;
-            
-            // Load more comments when scrolling to the top
-            if (isAtTop && this.hasMoreComments && !this.loadingOlderComments) {
-                this.loadMoreComments();
-            }
-        },
+        // Comment functionality is now handled by CommentComponent
         // calculateStats() {
         //     this.stats.totalTasks = this.tasks.length;
         //     this.stats.completedTasks = this.tasks.filter(t => t.status === 'completed').length;
@@ -389,45 +308,15 @@ createApp({
         //         this.stats.totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         //     }
         // },
-        async addComment() {
-            if (!this.hasCommentContent()) return;
-            
-            const commentHtml = this.getCommentText().trim();
-            if (!commentHtml) return;
-            
-            try {
-                const formData = new FormData();
-                formData.append('project_id', this.projectId);
-                formData.append('content', commentHtml);
-                formData.append('user_id', USER_ID);
-                await axios.post('/api/index.php?model=project&method=addComment', formData);
-                
-                // Clear the contenteditable div
-                const contenteditableDiv = document.querySelector('[contenteditable="true"][data-mention]');
-                if (contenteditableDiv) {
-                    contenteditableDiv.innerHTML = '';
-                }
-                
-                // Reset pagination and reload comments to show the new comment
-                this.commentsPage = 1;
-                this.hasMoreComments = true;
-                this.showLoadMoreButton = false; // Reset button state
-                await this.loadComments();
-                
-                // Scroll to bottom after Vue rendering is complete
-                this.$nextTick(() => {
-                    setTimeout(() => {
-                        const element = document.querySelector('#chat-history-project');
-                        console.log('Add comment scroll height:', element ? element.scrollHeight : 0);
-                        if (element && element.scrollHeight > 0) {
-                            element.scrollTop = element.scrollHeight;
-                        }
-                    }, 100);
-                });
-            } catch (error) {
-                console.error('Error adding comment:', error);
-                showMessage('コメントの追加に失敗しました。', true);
-            }
+        // Comment component event handlers
+        onCommentAdded(event) {
+            console.log('Comment added:', event);
+            this.showNotification('コメントが追加されました', 'success');
+        },
+        
+        onCommentError(event) {
+            console.error('Comment error:', event);
+            this.showNotification(event.message || 'エラーが発生しました', 'error');
         },
         async deleteProject() {
             const swal = await Swal.fire({
@@ -1829,6 +1718,12 @@ createApp({
                 this.logs = [];
             }
         },
+        loadCurrentUser() {
+            // Set basic user data from global variables
+            this.currentUser.userid = typeof USER_ID !== 'undefined' ? USER_ID : null;
+            this.currentUser.realname =  typeof USER_NAME !== 'undefined' ? USER_NAME : 'User';
+            this.currentUser.user_image = typeof USER_IMAGE !== 'undefined' ? USER_IMAGE : null;
+        },
         historyIcon(action) {
             switch(action) {
                 case 'created': return 'fa fa-pencil-alt text-primary';
@@ -1906,7 +1801,9 @@ createApp({
                 progressContainer.remove();
             }
             this.showNotification(`アップロードに失敗しました: ${fileName}`, 'error');
-        }
+        },
+        
+        // Comment functionality moved to CommentComponent
     },
     watch: {
         isEditMode(newVal) {
@@ -2259,9 +2156,10 @@ createApp({
         await this.loadCategories();
         await this.loadAllTeams();
         await this.loadDepartmentCustomFieldSets();
-        await this.loadComments();
         await this.loadNotes();
         await this.loadLogs();
+        // Load current user data after members are loaded
+        this.loadCurrentUser();
         this.initTooltips();
         
         // Initialize mention manager
@@ -2351,4 +2249,10 @@ createApp({
             this.initTooltips();
         });
     }
-}).mount('#app'); 
+});
+
+// Register Comment Component
+vueApp.component('comment-component', window.CommentComponent);
+
+// Mount the Vue app
+vueApp.mount('#app'); 
