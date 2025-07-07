@@ -1444,6 +1444,7 @@ const vueApp = createApp({
                 // Simple text-change handler without debounce
                 this.quillInstance.on('text-change', () => {
                     this.quillContent = this.quillInstance.getSemanticHTML();
+                    this.addZoomToDescriptionImages();
                 });
                 
                 // Prevent focus loss by stopping event propagation on toolbar clicks
@@ -1465,6 +1466,7 @@ const vueApp = createApp({
                 // }, 100);
                 
             }, 400); // Increased delay to ensure other components are initialized first
+            this.addZoomToDescriptionImages();
         },
         destroyQuillEditor() {
             if (this.quillInstance) {
@@ -1800,6 +1802,17 @@ const vueApp = createApp({
         },
         
         // Comment functionality moved to CommentComponent
+        addZoomToDescriptionImages() {
+            this.$nextTick(() => {
+                // View mode
+                const descEls = document.querySelectorAll('.project-description, #project-description, .ql-editor');
+                descEls.forEach(el => {
+                    el.querySelectorAll('img:not([data-zoom])').forEach(img => {
+                        img.setAttribute('data-zoom', '');
+                    });
+                });
+            });
+        },
     },
     watch: {
         isEditMode(newVal) {
@@ -2238,11 +2251,13 @@ const vueApp = createApp({
         //         }
         //     });
         // }
+        this.addZoomToDescriptionImages();
 
     },
     updated() {
         this.$nextTick(() => {
             this.initTooltips();
+            this.addZoomToDescriptionImages();
         });
     }
 });
