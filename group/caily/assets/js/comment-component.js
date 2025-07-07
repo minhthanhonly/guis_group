@@ -114,7 +114,6 @@ window.CommentComponent = {
                     <div class="flex-grow-1">
                         <!-- Mention Input Section -->
                         <div class="mention-input-section mb-3">
-                            <label class="form-label small text-muted">メンション (オプション)</label>
                             <div class="position-relative">
                                 <div
                                     ref="mentionInput"
@@ -124,30 +123,6 @@ window.CommentComponent = {
                                     contenteditable="true"
                                     data-placeholder="@でメンションするユーザーを入力..."
                                 ></div>
-                            </div>
-                            
-                            <!-- Selected Mentions Tags -->
-                            <div v-if="selectedMentions.length > 0" class="selected-mentions mt-2">
-                                <small class="text-muted d-block mb-1">選択されたメンション:</small>
-                                <div class="d-flex flex-wrap gap-1">
-                                    <span 
-                                        v-for="mention in selectedMentions" 
-                                        :key="mention.userid"
-                                        class="mention-tag"
-                                    >
-                                        <div class="avatar">
-                                            <img v-if="mention.user_image" :src="'/assets/upload/avatar/' + mention.user_image" :alt="mention.realname" class="rounded-circle">
-                                            <span v-else class="avatar-initial rounded-circle">{{ getInitials(mention.realname) }}</span>
-                                        </div>
-                                        {{ mention.realname }}
-                                        <button 
-                                            type="button" 
-                                            class="btn-close btn-close-sm ms-1"
-                                            @click="removeMention(mention)"
-                                            aria-label="Remove mention"
-                                        ></button>
-                                    </span>
-                                </div>
                             </div>
                         </div>
                         
@@ -182,7 +157,6 @@ window.CommentComponent = {
             quillInstance: null,
             maxDisplayComments: 10,
             editorHasContent: false,
-            selectedMentions: [],
             mentionManager: null,
         };
     },
@@ -191,6 +165,24 @@ window.CommentComponent = {
             const sortedComments = [...this.comments].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
             // Hiển thị tối đa 20 comments mới nhất, nhưng load more sẽ thêm comments cũ hơn vào đầu
             return sortedComments;
+        },
+        
+        // Auto-generate API endpoints based on entity type
+        computedApiEndpoints() {
+            const baseEndpoints = {
+                project: {
+                    getComments: '/api/index.php?model=project&method=getComments',
+                    addComment: '/api/index.php?model=project&method=addComment',
+                    toggleLike: '/api/index.php?model=project&method=toggleLike'
+                },
+                task: {
+                    getComments: '/api/index.php?model=task&method=getComments',
+                    addComment: '/api/index.php?model=task&method=addComment',
+                    toggleLike: '/api/index.php?model=task&method=toggleLike'
+                }
+            };
+            
+            return baseEndpoints[this.entityType] || baseEndpoints.project;
         }
     },
     methods: {
@@ -209,7 +201,7 @@ window.CommentComponent = {
                     per_page: this.commentsPerPage
                 });
                 
-                const response = await axios.get(`${this.apiEndpoints.getComments}&${params}`);
+                const response = await axios.get(`${this.computedApiEndpoints.getComments}&${params}`);
                 const newComments = response.data || [];
                 
                 // Initialize like status for comments
@@ -273,7 +265,7 @@ window.CommentComponent = {
                 formData.append('content', finalContent);
                 formData.append('user_id', this.currentUser.userid);
                 
-                const response = await axios.post(this.apiEndpoints.addComment, formData);
+                const response = await axios.post(this.computedApiEndpoints.addComment, formData);
                 if(response.data.success){
                    // this.$emit('error', { type: 'info', message: 'コメントを追加しました' });
                     // this.clearMentions();
@@ -283,11 +275,12 @@ window.CommentComponent = {
                     this.$emit('error', { type: 'error', message: 'コメントの追加に失敗しました' });
                 }
                 
-                // Clear Quill editor and mentions
+                // Clear Quill editor
                 if (this.quillInstance) {
                     this.quillInstance.setContents([]);
                     this.editorHasContent = false;
                 }
+                // Clear mention input
                 this.clearMentions();
                 
                 await this.loadComments(true);
@@ -417,8 +410,7 @@ window.CommentComponent = {
                 inputSelector: '[data-mention]',
                 apiEndpoint: '/api/index.php?model=user&method=getMentionUsers',
                 onMentionSelect: (user, input) => {
-                    // mention.js handles insertion, we just track selected mentions
-                    this.trackSelectedMention(user);
+                    // mention.js handles insertion
                     // Update button state
                     this.$nextTick(() => {
                         this.hasCommentContent();
@@ -436,33 +428,7 @@ window.CommentComponent = {
             });
         },
         
-        trackSelectedMention(user) {
-            // Just track for display in tags (mention.js handles the input)
-            const userId = user.userid || user.id;
-            const alreadySelected = this.selectedMentions.some(m => m.userid === userId);
-            
-            if (!alreadySelected) {
-                this.selectedMentions.push({
-                    userid: userId,
-                    realname: user.user_name || user.realname,
-                    user_image: user.user_image || user.avatar
-                });
-            }
-        },
-        
-        removeMention(mention) {
-            this.selectedMentions = this.selectedMentions.filter(m => m.userid !== mention.userid);
-            
-            // Also remove from mention input if exists
-            if (this.$refs.mentionInput) {
-                const mentionSpans = this.$refs.mentionInput.querySelectorAll(`[data-user-id="${mention.userid}"]`);
-                mentionSpans.forEach(span => span.remove());
-            }
-        },
-        
         clearMentions() {
-            this.selectedMentions = [];
-            
             // Clear the contenteditable input
             if (this.$refs.mentionInput) {
                 this.$refs.mentionInput.innerHTML = '';
@@ -546,8 +512,8 @@ window.CommentComponent = {
                 formData.append('action', comment.isLiked ? 'like' : 'unlike');
                 formData.append('name', this.currentUser.realname);
                 
-                // Use the project model API endpoint
-                const response = await axios.post('/api/index.php?model=project&method=toggleLike', formData);
+                // Use the appropriate model API endpoint
+                const response = await axios.post(this.computedApiEndpoints.toggleLike, formData);
                 
                 if (response.data.success) {
                     // Update like count if returned from API
@@ -764,7 +730,7 @@ window.CommentComponent = {
                         per_page: this.commentsPerPage
                     });
                     
-                    const response = await axios.get(`${this.apiEndpoints.getComments}&${params}`);
+                    const response = await axios.get(`${this.computedApiEndpoints.getComments}&${params}`);
                     const newComments = response.data || [];
                     
                     if (newComments.length === 0) {

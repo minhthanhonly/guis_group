@@ -426,16 +426,44 @@ class Task extends ApplicationModel {
         return $this->fetchAll($query);
     }
 
-    function getComments($taskId) {
+    function getComments() {
+        // Handle both direct parameter and GET parameter
+        $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
+        
+        if (!$taskId) {
+            return [];
+        }
+        
+        // Get pagination parameters
+        $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
+        $per_page = isset($_GET['per_page']) ? intval($_GET['per_page']) : 20;
+        $offset = ($page - 1) * $per_page;
+        
         $query = sprintf(
-            "SELECT c.*, u.realname as user_name 
-            FROM " . DB_PREFIX . "task_comments c 
-            LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.id 
+            "SELECT c.*, u.realname as user_name, u.user_image,
+            (SELECT COUNT(*) FROM " . DB_PREFIX . "comment_likes WHERE comment_id = c.id) as like_count,
+            (SELECT GROUP_CONCAT(user_id) FROM " . DB_PREFIX . "comment_likes WHERE comment_id = c.id) as liked_by,
+            (SELECT GROUP_CONCAT(name) FROM " . DB_PREFIX . "comment_likes WHERE comment_id = c.id) as liked_by_names
+            FROM " . DB_PREFIX . "comments c 
+            LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
             WHERE c.task_id = %d 
-            ORDER BY c.created_at DESC",
-            intval($taskId)
+            ORDER BY c.created_at DESC
+            LIMIT %d OFFSET %d",
+            intval($taskId),
+            intval($per_page),
+            intval($offset)
         );
-        return $this->fetchAll($query);
+        
+        $comments = $this->fetchAll($query);
+        
+        // Convert liked_by to array
+        foreach ($comments as &$comment) {
+            $comment['liked_by'] = $comment['liked_by'] ? explode(',', $comment['liked_by']) : [];
+            $comment['liked_by_names'] = $comment['liked_by_names'] ? explode(',', $comment['liked_by_names']) : [];
+            $comment['like_count'] = intval($comment['like_count']);
+        }
+        
+        return $comments;
     }
 
     function addTimeEntry($data) {
@@ -452,10 +480,25 @@ class Task extends ApplicationModel {
         return $result;
     }
 
-    function addComment($data) {
+    function addComment() {
         $data = $_POST;
+        
+        // Get task_id from the request
+        $task_id = isset($data['task_id']) ? intval($data['task_id']) : 0;
+        if (!$task_id) {
+            return ['success' => false, 'message' => 'タスクIDが指定されていません'];
+        }
+        
+        // Get task to get project_id
+        $task = $this->getById($task_id);
+        if (!$task) {
+            return ['success' => false, 'message' => 'タスクが見つかりません'];
+        }
+        
+        $project_id = $task['project_id'];
+        
         $commentData = array(
-            'project_id' => $data['project_id'],
+            'task_id' => $task_id,
             'user_id' => $data['user_id'],
             'content' => $data['content'],
             'created_at' => date('Y-m-d H:i:s')
@@ -466,12 +509,11 @@ class Task extends ApplicationModel {
         $this->table = DB_PREFIX . 'tasks'; // Reset table back to tasks
         
         // Send mention notifications if comment was added successfully
-        if ($result) {
-            $this->sendMentionNotifications($data['project_id'], $data['content'], $data['user_id'], $result);
-            
+        if ($result && $project_id) {
+            $this->sendMentionNotifications($project_id, $data['content'], $data['user_id'], $result);
         }
         
-        return $result;
+        return ['success' => (bool)$result, 'id' => $result];
     }
 
     function getById($params = null) {
@@ -900,5 +942,227 @@ class Task extends ApplicationModel {
         );
         $logs = $this->fetchAll($query);
         return $logs;
+    }
+    
+    function toggleLike() {
+        $comment_id = isset($_POST['comment_id']) ? intval($_POST['comment_id']) : 0;
+        $user_id = isset($_POST['user_id']) ? $_POST['user_id'] : '';
+        $action = isset($_POST['action']) ? $_POST['action'] : '';
+        $name = isset($_POST['name']) ? $_POST['name'] : '';
+        
+        if (!$comment_id || !$user_id) {
+            return ['success' => false, 'message' => 'Invalid parameters'];
+        }
+        
+        $this->table = DB_PREFIX . 'comment_likes';
+        
+        if ($action === 'like') {
+            // Check if already liked
+            $existing = $this->fetchOne(sprintf(
+                "SELECT * FROM %s WHERE comment_id = %d AND user_id = '%s'",
+                $this->table,
+                $comment_id,
+                $this->quote($user_id)
+            ));
+            
+            if (!$existing) {
+                $data = [
+                    'comment_id' => $comment_id,
+                    'user_id' => $user_id,
+                    'name' => $name ?: $_SESSION['realname'] ?? 'Unknown',
+                    'created_at' => date('Y-m-d H:i:s')
+                ];
+                $this->query_insert($data);
+            }
+        } else {
+            // Unlike
+            $this->query_delete([
+                'comment_id' => $comment_id,
+                'user_id' => $user_id
+            ]);
+        }
+        
+        // Get updated like count and names
+        $query = sprintf(
+            "SELECT COUNT(*) as like_count,
+            GROUP_CONCAT(name) as liked_by_names
+            FROM " . DB_PREFIX . "comment_likes
+            WHERE comment_id = %d",
+            $comment_id
+        );
+        
+        $result = $this->fetchOne($query);
+        $this->table = DB_PREFIX . 'tasks'; // Reset table
+        
+        return [
+            'success' => true,
+            'like_count' => intval($result['like_count']),
+            'liked_by_names' => $result['liked_by_names'] ? explode(',', $result['liked_by_names']) : []
+        ];
+    }
+    
+    // Detect mentions and send notifications
+    private function sendMentionNotifications($projectId, $content, $commentUserId, $commentId) {
+        try {
+            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            $notiService = new NotificationService();
+
+            // Extract mentioned users from content
+            $mentionedUsers = $this->extractMentions($content);
+            
+            if (empty($mentionedUsers)) {
+                return; // No mentions found
+            }
+            
+            // Get project info for notification
+            $project = $this->fetchOne(sprintf(
+                "SELECT * FROM " . DB_PREFIX . "projects WHERE id = %d",
+                intval($projectId)
+            ));
+            if (!$project) {
+                return;
+            }
+            
+            // Track sent notifications to avoid duplicates
+            $sentUserIds = [];
+            
+            // Send notification to each mentioned user
+            foreach ($mentionedUsers as $mentionedUser) {
+                // Don't send notification if user mentions themselves
+                if ($mentionedUser['userid'] == $commentUserId) {
+                    continue;
+                }
+                
+                // Don't send duplicate notifications to the same user
+                if (in_array($mentionedUser['userid'], $sentUserIds)) {
+                    continue;
+                }
+                
+                $sentUserIds[] = $mentionedUser['userid'];
+                
+                $payload = [
+                    'event' => 'task_mention',
+                    'title' => 'タスクでメンションされました',
+                    'message' => sprintf('%sさんがタスクでメンションしました', 
+                        $_SESSION['realname']
+                    ),
+                    'data' => [
+                        'project_id' => $projectId,
+                        'project_name' => $project['name'],
+                        'comment_id' => $commentId,
+                        'comment_content' => $content,
+                        'commenter_id' => $commentUserId,
+                        'commenter_name' => $_SESSION['realname'],
+                        'avatar' => $this->getUserImage(),
+                        'url' => "/project/task.php?id=$projectId#comment-$commentId"
+                    ],
+                    'project_id' => $projectId,
+                    'user_ids' => [$mentionedUser['userid']]
+                ];
+                
+                $notiService->create($payload);
+            }
+            
+        } catch (Exception $e) {
+            error_log('Failed to send mention notification: ' . $e->getMessage());
+        }
+    }
+    
+    // Extract mentions from content (supports both plain text and HTML)
+    private function extractMentions($content) {
+        $mentionedUsers = [];
+        
+        // First, try to extract from HTML mentions with data attributes
+        if (strpos($content, 'data-user-id') !== false) {
+            // Extract user IDs from HTML mentions - improved regex for multiple mentions
+            preg_match_all('/<span[^>]*data-user-id="([^"]+)"[^>]*data-user-name="([^"]+)"[^>]*>@([^<]+)<\/span>/', $content, $matches);
+            if (!empty($matches[1])) {
+                $userIds = $matches[1];
+                
+                // Remove duplicates while preserving order
+                $uniqueUserIds = array_unique($userIds);
+                
+                // Get user info by user IDs - using safe parameter binding
+                if (!empty($uniqueUserIds)) {
+                    $placeholders = str_repeat('?,', count($uniqueUserIds) - 1) . '?';
+                    $query = "SELECT userid, realname, user_image FROM " . DB_PREFIX . "user WHERE userid IN ($placeholders)";
+                    $users = $this->fetchAllWithParams($query, $uniqueUserIds);
+                    
+                    foreach ($users as $user) {
+                        $mentionedUsers[] = $user;
+                    }
+                }
+            }
+        }
+       
+        // If no HTML mentions found, try plain text mentions
+        if (empty($mentionedUsers)) {
+            $plainText = strip_tags($content);
+            preg_match_all('/@([^\s]+)/', $plainText, $matches);
+            
+            if (!empty($matches[1])) {
+                $mentionedUsernames = $matches[1];
+                
+                // Remove duplicates while preserving order
+                $uniqueUsernames = array_unique($mentionedUsernames);
+                
+                if (!empty($uniqueUsernames)) {
+                    // Get mentioned users from database by username - using safe parameter binding
+                    $placeholders = str_repeat('?,', count($uniqueUsernames) - 1) . '?';
+                    $query = "SELECT userid, realname, user_image FROM " . DB_PREFIX . "user WHERE realname IN ($placeholders)";
+                    $mentionedUsers = $this->fetchAllWithParams($query, $uniqueUsernames);
+                }
+            }
+        }
+        
+        return $mentionedUsers;
+    }
+
+    /**
+     * Fetch all records with prepared statement parameters
+     * @param string $query SQL query with placeholders
+     * @param array $params Parameters to bind
+     * @return array Results
+     */
+    private function fetchAllWithParams($query, $params) {
+        $this->connect();
+        if (!$this->handler) {
+            return [];
+        }
+        
+        // Prepare statement
+        $stmt = mysqli_prepare($this->handler, $query);
+        if (!$stmt) {
+            error_log("Prepare failed: " . mysqli_error($this->handler));
+            return [];
+        }
+        
+        // Bind parameters
+        if (!empty($params)) {
+            // Create types string (assuming all are strings for user IDs/names)
+            $types = str_repeat('s', count($params));
+            mysqli_stmt_bind_param($stmt, $types, ...$params);
+        }
+        
+        // Execute query
+        if (!mysqli_stmt_execute($stmt)) {
+            error_log("Execute failed: " . mysqli_stmt_error($stmt));
+            mysqli_stmt_close($stmt);
+            return [];
+        }
+        
+        // Get results
+        $result = mysqli_stmt_get_result($stmt);
+        $data = [];
+        while ($row = mysqli_fetch_assoc($result)) {
+            $data[] = $row;
+        }
+        
+        mysqli_stmt_close($stmt);
+        return $data;
+    }
+    
+    private function getUserImage() {
+        return $_SESSION['user_image'] ?? '';
     }
 } 

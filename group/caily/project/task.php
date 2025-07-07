@@ -399,7 +399,7 @@ if (!$project_id) {
 
     <!-- Task Details Modal -->
     <div class="modal fade" id="taskDetailsModal" tabindex="-1" aria-labelledby="taskDetailsModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-fullscreen" style="max-width: 70%;max-height: 70%; margin: 10% auto; 0">
+        <div class="modal-dialog modal-fullscreen" style="max-width: 70%;max-height: 90%; margin: 10% auto; 0">
             <div class="modal-content h-100">
                 <div class="modal-header">
                     <h5 class="modal-title" id="taskDetailsModalLabel">
@@ -424,7 +424,6 @@ if (!$project_id) {
                                     <button type="button" class="nav-link waves-effect" role="tab" data-bs-toggle="tab" data-bs-target="#comments" aria-controls="comments" aria-selected="false" tabindex="-1">
                                         <span class="d-none d-sm-inline-flex align-items-center">
                                             <i class="fas fa-comments me-1_5"></i>コメント
-                                            <span v-if="taskComments.length > 0" class="badge rounded-pill badge-center h-px-20 w-px-20 bg-danger ms-1_5">{{ taskComments.length }}</span>
                                         </span>
                                         <i class="fas fa-comments d-sm-none"></i>
                                     </button>
@@ -466,54 +465,20 @@ if (!$project_id) {
 
                             <!-- Tab 2: Comments -->
                             <div class="tab-pane fade" id="comments" role="tabpanel">
-                                <div class="app-chat card overflow-hidden h-100">
-                                    <div class="chat-history-wrapper h-100 d-flex flex-column">
-                                        <div class="chat-history-body flex-grow-1" style="overflow-y: auto;">
-                                            <ul class="list-unstyled chat-history p-3">
-                                                <li v-for="comment in taskComments" :key="comment.id" 
-                                                    class="chat-message" 
-                                                    :class="{'chat-message-right': String(comment.user_id) === String(USER_ID)}">
-                                                    <div 
-                                                        class="d-flex overflow-hidden gap-4"
-                                                        :class="{'flex-row-reverse': String(comment.user_id) === String(USER_ID)}">
-                                                        <div class="user-avatar flex-shrink-0">
-                                                            <div class="avatar avatar-sm">
-                                                                <img v-if="!comment.avatarError" class="rounded-circle" :src="getAvatarSrc(comment)" :alt="comment.user_name" @error="handleAvatarError(comment)">
-                                                                <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment.user_name) }}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div class="chat-message-wrapper flex-grow-1">
-                                                            <div class="chat-message-text">
-                                                                <div class="mb-0" v-html="renderMentions(comment.content)"></div>
-                                                            </div>
-                                                            <div class="text-body-secondary mt-1">
-                                                                <small>{{ formatDateTime(comment.created_at) }}</small>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </li>
-                                                <li v-if="taskComments.length === 0" class="chat-message text-center text-muted py-5">
-                                                    コメントはまだありません
-                                                </li>
-                                            </ul>
-                                        </div>
-                                        <div class="chat-history-footer shadow-xs">
-                                            <div class="form-send-message d-flex justify-content-between align-items-center p-3">
-                                                <div class="form-control message-input border-0 me-4 shadow-none allow-mention"
-                                                     contenteditable="true"
-                                                     data-mention
-                                                     data-html-mention
-                                                     @input="onCommentInput"
-                                                     placeholder="コメントを入力... @でメンション"
-                                                     style="min-height: 38px; max-height: 120px; overflow-y: auto; white-space: pre-wrap;"></div>
-                                                <button class="btn btn-primary d-flex send-msg-btn"
-                                                        @click="addComment"
-                                                        :disabled="!hasCommentContent()">
-                                                    <i class="fa fa-paper-plane icon-16px flex-shrink-0"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
+                                <div class="h-100">
+                                    <!-- Comment Component -->
+                                    <comment-component
+                                        v-if="selectedTask"
+                                        entity-type="task"
+                                        :entity-id="selectedTask.id"
+                                        :current-user="currentUser"
+                                        :api-endpoints="taskCommentApiEndpoints"
+                                        :show-load-more="true"
+                                        @comment-added="onTaskCommentAdded"
+                                        @comment-liked="onTaskCommentLiked"
+                                        @error="handleCommentError"
+                                        ref="taskCommentComponent"
+                                    ></comment-component>
                                 </div>
                             </div>
 
@@ -609,12 +574,28 @@ if (!$project_id) {
     overflow-y: auto;
 }
 
+/* Comment component in modal */
+#taskDetailsModal .comment-component {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+#taskDetailsModal .comments-list {
+    flex: 1;
+    overflow-y: auto;
+    max-height: calc(100vh - 400px);
+}
+
+#taskDetailsModal .comment-input-section {
+    flex-shrink: 0;
+}
+
 </style>
 <script>
 const PROJECT_ID = <?php echo $project_id; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="assets/js/task-manager.js"></script>
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/highlight/highlight.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
@@ -623,6 +604,10 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="<?=ROOT?>assets/js/sw-manager.js"></script>
+<link rel="stylesheet" href="<?=ROOT?>assets/css/comment-component.css" />
+<script src="<?=ROOT?>assets/js/comment-component.js"></script>
+<script src="<?=ROOT?>assets/js/mention.js"></script>
+<script src="assets/js/task-manager.js"></script>
 <script>
 // Reset Quill editor when modal is closed
 document.addEventListener('DOMContentLoaded', function() {

@@ -1,6 +1,9 @@
 const { createApp } = Vue;
 
 const TaskApp = createApp({
+    components: {
+        'comment-component': window.CommentComponent
+    },
     data() {
         return {
             projectId: null,
@@ -67,12 +70,21 @@ const TaskApp = createApp({
             },
             editingInlineId: null,
             // Offcanvas data
-            taskComments: [],
+            taskComments: [], // Keep for compatibility, but not used
             taskActivities: [],
             taskLogs: [],
-            showAddComment: false,
-            newComment: '',
             quillEditor: null,
+            // Comment component data
+            currentUser: {
+                userid: typeof USER_ID !== 'undefined' ? USER_ID : null,
+                realname: typeof USER_NAME !== 'undefined' ? USER_NAME : 'User',
+                user_image: typeof USER_IMAGE !== 'undefined' ? USER_IMAGE : null
+            },
+            taskCommentApiEndpoints: {
+                getComments: '/api/index.php?model=task&method=getComments',
+                addComment: '/api/index.php?model=task&method=addComment',
+                toggleLike: '/api/index.php?model=task&method=toggleLike'
+            },
         }
     },
     
@@ -1276,11 +1288,6 @@ const TaskApp = createApp({
         
         openTaskDetails(task) {
             this.selectedTask = task;
-            this.showAddComment = false;
-            this.newComment = '';
-            
-            // Load task data
-            this.loadTaskComments(task.id);
             
             // Show modal
             const modal = new bootstrap.Modal(document.getElementById('taskDetailsModal'));
@@ -1301,32 +1308,12 @@ const TaskApp = createApp({
                                 this.loadTaskLogs(task.id);
                             }
                         }
-                        if (event.target.getAttribute('data-bs-target') === '#comments') {
-                            if (this.taskComments.length === 0) {
-                                this.loadTaskComments(task.id);
-                            }
-                        }
                     });
                 }
             });
         },
         
-        async loadTaskComments(taskId) {
-            try {
-                const response = await axios.get(`/api/index.php?model=task&method=getComments&task_id=${taskId}`);
-                if (response.data && Array.isArray(response.data)) {
-                    this.taskComments = response.data.map(comment => ({
-                        ...comment,
-                        avatarError: false
-                    }));
-                } else {
-                    this.taskComments = [];
-                }
-            } catch (error) {
-                console.error('Error loading comments:', error);
-                this.taskComments = [];
-            }
-        },
+
         
         async loadTaskLogs(taskId) {
             try {
@@ -1491,10 +1478,7 @@ const TaskApp = createApp({
                 this.quillEditor = null;
             }
             this.selectedTask = null;
-            this.taskComments = [];
             this.taskLogs = [];
-            this.showAddComment = false;
-            this.newComment = '';
         },
         
         getTaskLogIcon(action) {
@@ -1589,67 +1573,9 @@ const TaskApp = createApp({
             }
         },
         
-        async addComment() {
-            const messageInput = document.querySelector('.message-input');
-            const content = messageInput ? messageInput.textContent.trim() : '';
-            
-            if (!content || !this.selectedTask) return;
-            
-            try {
-                const formData = new FormData();
-                formData.append('task_id', this.selectedTask.id);
-                formData.append('content', content);
-                
-                const response = await axios.post('/api/index.php?model=task&method=addComment', formData);
-                if (response.data.success) {
-                    if (messageInput) {
-                        messageInput.textContent = '';
-                    }
-                    await this.loadTaskComments(this.selectedTask.id);
-                    this.showMessage('コメントを追加しました。');
-                }
-            } catch (error) {
-                console.error('Error adding comment:', error);
-                this.showMessage('コメントの追加に失敗しました。', true);
-            }
-        },
+
         
-        onCommentInput(event) {
-            // Handle comment input for mention functionality
-            const content = event.target.textContent;
-            // You can add mention handling logic here if needed
-        },
-        
-        hasCommentContent() {
-            const messageInput = document.querySelector('.message-input');
-            return messageInput ? messageInput.textContent.trim().length > 0 : false;
-        },
-        
-        renderMentions(content) {
-            if (!content) return '';
-            // Simple mention rendering - you can enhance this
-            return content.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-        },
-        
-        async deleteComment(commentId) {
-            if (!confirm('このコメントを削除しますか？')) return;
-            
-            try {
-                const response = await axios.delete(`/api/index.php?model=task&method=deleteComment&id=${commentId}`);
-                if (response.data.success) {
-                    await this.loadTaskComments(this.selectedTask.id);
-                    this.showMessage('コメントを削除しました。');
-                }
-            } catch (error) {
-                console.error('Error deleting comment:', error);
-                this.showMessage('コメントの削除に失敗しました。', true);
-            }
-        },
-        
-        editComment(comment) {
-            // TODO: Implement comment editing
-            console.log('Edit comment:', comment);
-        },
+
         
         getActivityIcon(type) {
             const icons = {
@@ -1702,6 +1628,22 @@ const TaskApp = createApp({
                 progressContainer.remove();
             }
             this.showMessage(`アップロードに失敗しました: ${fileName}`, true);
+        },
+        
+        // Comment component event handlers
+        onTaskCommentAdded(event) {
+            console.log('Task comment added:', event);
+            // Comment component handles its own state, no need to reload
+        },
+        
+        onTaskCommentLiked(event) {
+            console.log('Task comment liked:', event);
+            // No need to reload, the component handles it internally
+        },
+        
+        handleCommentError(error) {
+            console.error('Comment component error:', error);
+            this.showMessage(error.message || 'コメントの処理中にエラーが発生しました', true);
         }
     }
 });
