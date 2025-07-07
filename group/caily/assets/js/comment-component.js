@@ -825,6 +825,9 @@ window.CommentComponent = {
                     // Wait for comments to be loaded first
                     this.waitForCommentsAndScroll(commentId);
                 }
+            } else {
+                // No comment hash, scroll to bottom of comment component
+                this.scrollToCommentBottom();
             }
         },
         
@@ -858,6 +861,16 @@ window.CommentComponent = {
             
             // If we reach here, comments didn't load in time
             console.warn('Comments did not load in time for hash navigation');
+        },
+        
+        // Scroll to bottom of comment component
+        scrollToCommentBottom() {
+            this.$nextTick(() => {
+                const commentsList = this.$refs.commentsList;
+                if (commentsList) {
+                    commentsList.scrollTop = commentsList.scrollHeight;
+                }
+            });
         },
         
         // Handle browser back/forward buttons

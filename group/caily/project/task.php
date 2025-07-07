@@ -13,7 +13,7 @@ if (!$project_id) {
 <div id="app" class="container-fluid mt-4" v-cloak>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-label-info">#P{{ project?.project_number }}</span></a>
+            <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-label-info">#P{{ projectInfo?.project_number }}</span></a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar" aria-controls="projectNavbar" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
             </button>
