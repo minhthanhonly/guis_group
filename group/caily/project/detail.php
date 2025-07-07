@@ -363,7 +363,10 @@ if (!$project_id) {
                                 <input type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
                             </div>
                             <div class="col-md-12">
-                                <label class="form-label"><span data-i18n="タグ">タグ</span></label>
+                                <label class="form-label"><span data-i18n="タグ">タグ</span><i class="fa fa-question-circle text-muted ms-2" 
+                                data-bs-toggle="tooltip" 
+                                data-bs-placement="top" 
+                                title="タグは案件の探す時に使用します。"></i></label>
                                 <div class="d-flex align-items-center gap-2">
                                     <input type="text" class="form-control tagify" v-model="project.tags" id="project_tags" name="project_tags" @input="updateTags">
                                 </div>
@@ -634,6 +637,7 @@ if (!$project_id) {
                                             <span class="me-2">{{ log.note }}</span>
                                             <br>
                                             <span v-if="log.value1" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getLogBadgeLabel(log, 'value1') }}</span>
+                                            <span v-if="log.value1 && log.value2" class="mx-1">→</span>
                                             <span v-if="log.value2" :class="getLogBadgeClass(log, 'value2')" class="mx-1">{{ getLogBadgeLabel(log, 'value2') }}</span>
                                         </span>
                                     </div>
