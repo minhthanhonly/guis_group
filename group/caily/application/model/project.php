@@ -791,6 +791,7 @@ class Project extends ApplicationModel {
         
         // Send mention notifications if comment was added successfully
         if ($result) {
+            
             $this->sendMentionNotifications($data['project_id'], $data['content'], $data['user_id'], $result);
           
             return ['success' => true, 'message' => 'Comment added successfully'];
@@ -891,8 +892,6 @@ class Project extends ApplicationModel {
             if (empty($mentionedUsers)) {
                 return; // No mentions found
             }
-
-            
             
             // Get project info for notification
             $project = $this->getById($projectId);
