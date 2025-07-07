@@ -334,6 +334,7 @@ class Project extends ApplicationModel {
         }
         
         $this->notifyProjectCreated($project_id, $data['name'], array_column($listAllUsers, 'userid'));
+        $this->logProjectAction($project_id, 'created', '案件作成', '', '');
 
         return [
             'status' => 'success',
@@ -494,6 +495,7 @@ class Project extends ApplicationModel {
             }
         }
         if ($result) {
+            $this->logProjectAction($id, 'updated', '案件情報を変更');
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
@@ -507,6 +509,7 @@ class Project extends ApplicationModel {
         $old = $this->getById($id);
         $result = $this->query_update(['status' => 'deleted'], ['id' => $id]);
         if ($result) {
+            $this->logProjectAction($id, 'deleted', '案件を削除', $old['status'], 'deleted');
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Delete failed'];
@@ -657,6 +660,7 @@ class Project extends ApplicationModel {
         if ($result) {
             $projectMembers = $this->getMembers(['project_id' => $id]);
             $this->notifyProjectStatusChanged($project_number,$id, $name, $data['status'], array_column($projectMembers, 'userid'));
+            $this->logProjectAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
         }
         
         // Clear actual_end_date if status is not completed
@@ -684,6 +688,7 @@ class Project extends ApplicationModel {
         );
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {
+            $this->logProjectAction($id, 'date_updated', '日程変更', $old['start_date'].'~'.$old['end_date'], $start_date.'~'.$end_date);
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
@@ -707,6 +712,7 @@ class Project extends ApplicationModel {
 
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {
+            $this->logProjectAction($id, 'priority_updated', '優先度変更', $old['priority'], $priority);
         }
         return $result;
     }
