@@ -333,7 +333,7 @@ if (!$project_id) {
                         </button>
                         <button class="btn btn-sm btn-outline-info position-relative me-1" @click="openTaskComments(task)" title="コメント">
                             <i class="fas fa-comment"></i>
-                            <span v-if="getUnreadCommentCount(task.id) > 0" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:10px;">{{ getUnreadCommentCount(task.id) }}</span>
+                            <span v-if="getUnreadCommentCount(task.id) > 0" class="position-absolute top-0 start-100 translate-middle text-white badge rounded-pill bg-danger" style="font-size:10px;">{{ getUnreadCommentCount(task.id) }}</span>
                         </button>
                         <button class="btn btn-sm btn-outline-danger" @click="deleteTask(task)"><i class="fas fa-trash"></i></button>
                     </div>

@@ -860,10 +860,25 @@ window.CommentComponent = {
         // Scroll to bottom of comment component
         scrollToCommentBottom() {
             this.$nextTick(() => {
-                const commentsList = this.$refs.commentsList;
-                if (commentsList) {
-                    commentsList.scrollTop = commentsList.scrollHeight;
-                }
+                setTimeout(() => {
+                    // Thử nhiều selector để tìm đúng vùng scroll trong modal
+                    let container = this.$el.querySelector('.comments-list');
+                    if (!container) {
+                        container = this.$el.querySelector('.modal .comments-list');
+                    }
+                    if (!container) {
+                        container = this.$el.querySelector('.modal .comment-component');
+                    }
+                    if (!container) {
+                        container = this.$el.querySelector('.comment-component');
+                    }
+                    if (container) {
+                        container.scrollTop = container.scrollHeight;
+                    } else {
+                        // Debug: log nếu không tìm thấy vùng scroll
+                        console.warn('scrollToCommentBottom: Không tìm thấy vùng scroll comment');
+                    }
+                }, 200); // tăng delay lên 200ms
             });
         },
         
@@ -964,7 +979,7 @@ window.CommentComponent = {
                     this.$emit('error', { type: 'delete', message: 'コメントの削除に失敗しました。' + (response.data && response.data.message ? response.data.message : '') });
                 }
             } catch (error) {
-                this.$emit('error', { type: 'delete', message: 'コメントの削除に失敗しました。' });
+                this.$emit('error', { type: 'delete', message: 'コメントの削除に失敗しました。' + error });
             }
         },
         cancelEditComment() {

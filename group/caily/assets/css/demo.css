@@ -443,3 +443,13 @@ li.storageprevious {
     transform: translateY(-2px);
 }
 
+@media (max-width: 1600px) {
+  :root {
+	--bs-root-font-size: 15px;
+  }
+}
+@media (max-width: 1300px) {
+	:root {
+	  --bs-root-font-size: 13px;
+	}
+}

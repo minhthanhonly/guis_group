@@ -253,6 +253,11 @@ const TaskApp = createApp({
             this.showNotification('コメントが追加されました', 'success');
         },
         
+        showNotification(message, type = 'info') {
+            // Use showMessage function if available, otherwise use alert
+            showMessage(message, type === 'error');
+        },
+        
         onCommentError(event) {
             this.showNotification(event.message || 'エラーが発生しました', 'error');
         },
@@ -1685,6 +1690,7 @@ const TaskApp = createApp({
                 if (tabBtn) tabBtn.click();
 
                 this.markCommentsAsRead(task.id);
+
             });
         },
         

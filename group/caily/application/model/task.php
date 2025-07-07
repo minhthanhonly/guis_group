@@ -981,8 +981,7 @@ class Task extends ApplicationModel {
         } else {
             // Unlike
             $this->query_delete([
-                'comment_id' => $comment_id,
-                'user_id' => $user_id
+                'comment_id' => $comment_id
             ]);
         }
         
