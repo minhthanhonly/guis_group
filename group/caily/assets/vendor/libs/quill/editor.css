@@ -773,3 +773,6 @@
 [data-bs-theme=dark] .ql-bubble {
   --bs-bubble-tooltip-bg: var(--bs-body-bg);
 }
+.ql-editor p{
+  word-break: break-all;
+}

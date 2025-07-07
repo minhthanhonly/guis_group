@@ -49,7 +49,7 @@ window.CommentComponent = {
                 </div>
 
                 <!-- Comment Items -->
-                <div v-for="comment in displayedComments" :key="comment.id" class="comment-item" :id="'comment-' + comment.id">
+                <div v-for="comment in displayedComments" :key="comment.id" class="comment-item" :id="'comment-' + comment.id" @mouseenter="comment.hovered = true" @mouseleave="comment.hovered = false">
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="d-flex flex-grow-1 position-relative" style="position: relative; padding-right: 50px;">
                             <div class="flex-shrink-0 me-3">
@@ -65,7 +65,12 @@ window.CommentComponent = {
                                 </div>
                                 <div class="comment-content ql-editor" v-html="renderMentions(comment.content)"></div>
                             </div>
-
+                            <!-- Nút sửa chỉ hiện khi hover và là comment của mình -->
+                            <div class="ms-2 d-flex gap-1" style="position: absolute; right: 170px; top: -5px;">
+                                <button v-if="comment.user_id == currentUser.userid && comment.hovered" class="btn btn-sm btn-outline-secondary mx-1" @click="startEditComment(comment)"><i class="fa fa-edit"></i> 編集</button>
+                                <button v-if="comment.user_id == currentUser.userid && comment.hovered" class="btn btn-sm btn-outline-danger" @click="deleteComment(comment)"><i class="fa fa-trash"></i> 削除</button>
+                                <button v-if="comment.hovered" class="btn btn-sm btn-outline-primary" @click="copyCommentContent(comment)"><i class="fa fa-copy"></i> コピー</button>
+                            </div>
                             <div class="ms-2" style="position: absolute; right: 10px; top: -6px;">
                                 <button 
                                     class="like-button"
@@ -121,7 +126,7 @@ window.CommentComponent = {
                             <div class="position-relative">
                                 <div
                                     ref="mentionInput"
-                                    class="form-control form-control-sm allow-mention mention-input-editable"
+                                    class="form-control allow-mention mention-input-editable"
                                     data-mention="true"
                                     data-html-mention="true"
                                     contenteditable="true"
@@ -135,7 +140,24 @@ window.CommentComponent = {
                             <div ref="quillEditor" class="comment-editor"></div>
                         </div>
                         <div class="d-flex justify-content-end mt-3">
+                            <template v-if="editingCommentId">
+                                <button 
+                                    class="btn btn-success me-2"
+                                    @click="saveEditComment"
+                                    :disabled="!editorHasContent || submittingComment">
+                                    <i v-if="submittingComment" class="fa fa-spinner fa-spin me-2"></i>
+                                    <i v-else class="fa fa-save me-2"></i>
+                                    {{ submittingComment ? '保存中...' : '保存' }}
+                                </button>
+                                <button 
+                                    class="btn btn-secondary"
+                                    @click="cancelEditComment"
+                                    :disabled="submittingComment">
+                                    <i class="fa fa-times me-2"></i> キャンセル
+                                </button>
+                            </template>
                             <button 
+                                v-else
                                 class="btn btn-primary"
                                 @click="addComment"
                                 :disabled="!editorHasContent || submittingComment">
@@ -162,6 +184,9 @@ window.CommentComponent = {
             maxDisplayComments: 10,
             editorHasContent: false,
             mentionManager: null,
+            // Thêm trạng thái sửa comment
+            editingCommentId: null,
+            editContent: '',
         };
     },
     computed: {
@@ -858,6 +883,126 @@ window.CommentComponent = {
                     img.setAttribute('data-zoom', '');
                 });
             });
+        },
+        startEditComment(comment) {
+            this.editingCommentId = comment.id;
+            this.editContent = comment.content;
+            // Đưa nội dung vào editor
+            this.$nextTick(() => {
+                if (this.quillInstance) {
+                    try {
+                        this.quillInstance.root.innerHTML = decodeHtmlEntities(this.editContent);
+                        this.editorHasContent = this.quillInstance.getText().trim().length > 0;
+                    } catch (e) {}
+                }
+            });
+            // Focus editor
+            setTimeout(() => {
+                if (this.quillInstance) this.quillInstance.focus();
+            }, 100);
+        },
+        async saveEditComment() {
+            if (!this.editingCommentId) return;
+            const commentHtml = this.getCommentText().trim();
+            const mentionHtml = this.generateMentionHtml();
+            const finalContent = mentionHtml + commentHtml;
+            if (!finalContent) return;
+            this.submittingComment = true;
+            try {
+                const formData = new FormData();
+                formData.append('comment_id', this.editingCommentId);
+                formData.append('content', finalContent);
+                formData.append('user_id', this.currentUser.userid);
+                // Gọi API update comment (dùng endpoint updateComment)
+                const updateUrl = this.apiEndpoints.updateComment || `/api/index.php?model=${this.entityType}&method=updateComment`;
+                const response = await axios.post(updateUrl, formData);
+                if (response.data && response.data.success == '1') {
+                    this.$emit('message', { type: 'info', message: 'コメントの編集に成功しました。' });
+                    this.editingCommentId = null;
+                    this.editContent = '';
+                    // Xóa editor
+                    try{
+                        if (this.quillInstance) this.quillInstance.setContents([]);
+                    } catch (e) {}
+                    this.editorHasContent = false;
+                    await this.loadComments(true);
+                    this.scrollToCommentBottom();
+                } else {
+                    this.$emit('error', { type: 'edit', message: 'コメントの編集に失敗しました。' + response.data.message });
+                }
+            } catch (error) {
+                this.$emit('error', { type: 'edit', message: 'コメントの編集に失敗しました。' + error });
+            } finally {
+                this.submittingComment = false;
+            }
+        },
+        async deleteComment(comment) {
+            if (!comment || comment.user_id != this.currentUser.userid) return;
+            // Sử dụng Swal để xác nhận xóa
+            const swal = await Swal.fire({
+                title: '本当にこのコメントを削除しますか？',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '削除',
+                cancelButtonText: 'キャンセル',
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6'
+            });
+            if (!swal.isConfirmed) return;
+            try {
+                const formData = new FormData();
+                formData.append('comment_id', comment.id);
+                formData.append('user_id', this.currentUser.userid);
+                // Gọi API xóa comment
+                const deleteUrl = this.apiEndpoints.deleteComment || `/api/index.php?model=${this.entityType}&method=deleteComment`;
+                const response = await axios.post(deleteUrl, formData);
+                if (response.data && response.data.success) {
+                    this.$emit('message', { type: 'info', message: 'コメントの削除に成功しました。' });
+                    await this.loadComments(true);
+                    this.scrollToCommentBottom();
+                } else {
+                    this.$emit('error', { type: 'delete', message: 'コメントの削除に失敗しました。' + (response.data && response.data.message ? response.data.message : '') });
+                }
+            } catch (error) {
+                this.$emit('error', { type: 'delete', message: 'コメントの削除に失敗しました。' });
+            }
+        },
+        cancelEditComment() {
+            this.editingCommentId = null;
+            this.editContent = '';
+            if (this.quillInstance) this.quillInstance.setContents([]);
+            this.editorHasContent = false;
+        },
+        async copyCommentContent(comment) {
+            try {
+                // Lấy plain text của phần tử .comment-content
+                const commentEl = document.getElementById('comment-' + comment.id)?.querySelector('.comment-content');
+                let text = '';
+                if (commentEl) {
+                    text = commentEl.innerText || commentEl.textContent || '';
+                } else {
+                    // fallback: lấy text từ content nếu không tìm thấy element
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = comment.content;
+                    text = tempDiv.innerText || tempDiv.textContent || '';
+                }
+                await navigator.clipboard.writeText(text);
+                Swal.fire({
+                    icon: 'success',
+                    title: 'コピーしました',
+                    text: 'コメント内容がクリップボードにコピーされました',
+                    timer: 1200,
+                    showConfirmButton: false
+                });
+            } catch (e) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'コピー失敗',
+                    text: 'コピーできませんでした',
+                    timer: 1200,
+                    showConfirmButton: false
+                });
+            }
         },
     },
     

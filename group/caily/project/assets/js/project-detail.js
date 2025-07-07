@@ -317,13 +317,15 @@ const vueApp = createApp({
         // },
         // Comment component event handlers
         onCommentAdded(event) {
-            console.log('Comment added:', event);
             this.showNotification('コメントが追加されました', 'success');
         },
         
         onCommentError(event) {
-            console.error('Comment error:', event);
             this.showNotification(event.message || 'エラーが発生しました', 'error');
+        },
+
+        onCommentMessage(event) {
+            this.showNotification(event.message || 'エラーが発生しました', 'info');
         },
         async deleteProject() {
             const swal = await Swal.fire({

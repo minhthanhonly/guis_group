@@ -505,6 +505,7 @@ if (!$project_id) {
                              :entity-id="projectId"
                              :current-user="currentUser"
                              @comment-added="onCommentAdded"
+                             @message="onCommentMessage"
                              @error="onCommentError">
                         </comment-component>
                     </div>

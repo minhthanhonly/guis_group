@@ -1165,4 +1165,55 @@ class Task extends ApplicationModel {
     private function getUserImage() {
         return $_SESSION['user_image'] ?? '';
     }
+
+    // Sửa comment task
+    function updateComment() {
+        $comment_id = isset($_POST['comment_id']) ? intval($_POST['comment_id']) : 0;
+        $content = isset($_POST['content']) ? $_POST['content'] : '';
+        $user_id = isset($_POST['user_id']) ? $_POST['user_id'] : '';
+        if (!$comment_id || !$user_id) {
+            return ['success' => false, 'message' => 'Invalid parameters'];
+        }
+        $this->table = DB_PREFIX . 'comments';
+        $comment = $this->fetchOne("SELECT * FROM " . DB_PREFIX . "comments WHERE id = $comment_id");
+        if (!$comment) {
+            $this->table = DB_PREFIX . 'tasks';
+            return ['success' => false, 'message' => 'Comment not found'];
+        }
+        // Chỉ cho phép sửa nếu là chủ comment hoặc admin
+        if ($_SESSION['authority'] != 'administrator' && $comment['user_id'] != $user_id) {
+            $this->table = DB_PREFIX . 'tasks';
+            return ['success' => false, 'message' => 'Permission denied'];
+        }
+        $data = [
+            'content' => $content,
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+        $result = $this->query_update($data, ['id' => $comment_id]);
+        $this->table = DB_PREFIX . 'tasks';
+        return $result ? ['success' => true] : ['success' => false, 'message' => 'Update failed'];
+    }
+
+    // Xóa comment task
+    function deleteComment() {
+        $comment_id = isset($_POST['comment_id']) ? intval($_POST['comment_id']) : 0;
+        $user_id = isset($_POST['user_id']) ? $_POST['user_id'] : '';
+        if (!$comment_id || !$user_id) {
+            return ['success' => false, 'message' => 'Invalid parameters'];
+        }
+        $this->table = DB_PREFIX . 'comments';
+        $comment = $this->fetchOne("SELECT * FROM " . DB_PREFIX . "comments WHERE id = $comment_id");
+        if (!$comment) {
+            $this->table = DB_PREFIX . 'tasks';
+            return ['success' => false, 'message' => 'Comment not found'];
+        }
+        // Chỉ cho phép xóa nếu là chủ comment hoặc admin
+        if ($_SESSION['authority'] != 'administrator' && $comment['user_id'] != $user_id) {
+            $this->table = DB_PREFIX . 'tasks';
+            return ['success' => false, 'message' => 'Permission denied'];
+        }
+        $result = $this->query_delete(['id' => $comment_id]);
+        $this->table = DB_PREFIX . 'tasks';
+        return $result ? ['success' => true] : ['success' => false, 'message' => 'Delete failed'];
+    }
 } 

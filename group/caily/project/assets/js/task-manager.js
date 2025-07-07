@@ -248,10 +248,17 @@ const TaskApp = createApp({
 
     
     methods: {
-        testClick() {
-            console.log('Click event works!');
+        onCommentAdded(event) {
+            this.showNotification('コメントが追加されました', 'success');
         },
         
+        onCommentError(event) {
+            this.showNotification(event.message || 'エラーが発生しました', 'error');
+        },
+
+        onCommentMessage(event) {
+            this.showNotification(event.message || 'エラーが発生しました', 'info');
+        },
         updateTaskField(index, field, value) {
             if (this.inlineTasks[index]) {
                 // Use Vue.set to ensure reactivity

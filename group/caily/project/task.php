@@ -477,6 +477,7 @@ if (!$project_id) {
                                         :show-load-more="true"
                                         @comment-added="onTaskCommentAdded"
                                         @comment-liked="onTaskCommentLiked"
+                                        @message="onCommentMessage"
                                         @error="handleCommentError"
                                         ref="taskCommentComponent"
                                     ></comment-component>
