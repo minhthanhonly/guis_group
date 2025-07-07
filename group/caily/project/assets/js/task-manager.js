@@ -1317,7 +1317,8 @@ const TaskApp = createApp({
             this.selectedTask = task;
             
             // Show modal
-            const modal = new bootstrap.Modal(document.getElementById('taskDetailsModal'));
+            const modalEl = document.getElementById('taskDetailsModal');
+            const modal = new bootstrap.Modal(modalEl);
             modal.show();
             
             // Initialize Quill editor after modal is shown
@@ -1326,18 +1327,32 @@ const TaskApp = createApp({
             }, 300);
             // Add event listener for tab changes
             this.$nextTick(() => {
-                const taskDetailsModal = document.getElementById('taskDetailsModal');
+                const taskDetailsModal = modalEl;
                 if (taskDetailsModal) {
-                    taskDetailsModal.addEventListener('shown.bs.tab', (event) => {
+                    // Define the handler as a named function so we can remove it later
+                    const tabShownHandler = (event) => {
                         if (event.target.getAttribute('data-bs-target') === '#history') {
                             if (this.taskLogs.length === 0) {
                                 this.loadTaskLogs(task.id);
                             }
-                            if (event.target.getAttribute('data-bs-target') === '#comments') {
-                                this.markCommentsAsRead(task.id);
-                            }
                         }
-                    });
+                        if (event.target.getAttribute('data-bs-target') === '#comments') {
+                            this.markCommentsAsRead(task.id);
+                        }
+                    };
+                    // Store handler on the element for later removal
+                    taskDetailsModal._tabShownHandler = tabShownHandler;
+                    taskDetailsModal.addEventListener('shown.bs.tab', tabShownHandler);
+
+                    // Remove the listener when modal is hidden
+                    const removeTabHandler = () => {
+                        if (taskDetailsModal._tabShownHandler) {
+                            taskDetailsModal.removeEventListener('shown.bs.tab', taskDetailsModal._tabShownHandler);
+                            delete taskDetailsModal._tabShownHandler;
+                        }
+                        taskDetailsModal.removeEventListener('hidden.bs.modal', removeTabHandler);
+                    };
+                    taskDetailsModal.addEventListener('hidden.bs.modal', removeTabHandler);
                 }
             });
         },
@@ -1678,16 +1693,12 @@ const TaskApp = createApp({
         
         openTaskComments(task) {
             this.selectedTask = task;
-            // Show modal
-            const modal = new bootstrap.Modal(document.getElementById('taskDetailsModal'));
-            modal.show();
-            // Chuyển sang tab comment
+            this.openTaskDetails(task);
+           
             this.$nextTick(() => {
                 const tabBtn = document.querySelector('#taskDetailsModal [data-bs-target="#comments"]');
                 if (tabBtn) tabBtn.click();
-
                 this.markCommentsAsRead(task.id);
-
             });
         },
         

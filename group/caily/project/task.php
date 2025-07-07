@@ -403,7 +403,7 @@ if (!$project_id) {
 
     <!-- Task Details Modal -->
     <div class="modal fade" id="taskDetailsModal" tabindex="-1" aria-labelledby="taskDetailsModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-fullscreen" style="max-width: 70%;max-height: 90%; margin: 5% auto; 0">
+        <div class="modal-dialog modal-fullscreen" style="max-width: 70%;max-height: 98vh; margin: 1% auto; 0">
             <div class="modal-content h-100">
                 <div class="modal-header">
                     <h5 class="modal-title" id="taskDetailsModalLabel">
@@ -571,7 +571,7 @@ if (!$project_id) {
 
 /* Modal content styles */
 #taskDetailsModal .modal-body {
-    max-height: 80vh;
+    max-height: 100vh;
     overflow-y: auto;
 }
 
@@ -590,7 +590,7 @@ if (!$project_id) {
 #taskDetailsModal .comments-list {
     flex: 1;
     overflow-y: auto;
-    max-height: calc(100vh - 400px);
+    max-height: calc(91vh - 460px);
 }
 
 #taskDetailsModal .comment-input-section {
