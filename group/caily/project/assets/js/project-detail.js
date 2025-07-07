@@ -110,6 +110,13 @@ const vueApp = createApp({
                 realname: '',
                 user_image: null,
             },
+            validationErrors: {
+                category_id: '',
+                company_name: '',
+                customer_id: '',
+                project_number: '',
+                name: ''
+            },
         }
     },
     computed: {
@@ -1055,6 +1062,9 @@ const vueApp = createApp({
             });
         },
         async saveProject() {
+            if (!this.validateProjectForm()) {
+                return;
+            }
             // Use the stored quill content instead of syncing from editor
             if (this.quillContent !== undefined) {
                 this.project.description = this.quillContent;
@@ -1813,6 +1823,38 @@ const vueApp = createApp({
                 });
             });
         },
+        validateProjectForm() {
+            this.validationErrors = {
+                category_id: '',
+                company_name: '',
+                customer_id: '',
+                project_number: '',
+                name: ''
+            };
+            let valid = true;
+            console.log(this.project);
+            if (!this.project.category_id) {
+                this.validationErrors.category_id = '顧客カテゴリーは必須です';
+                valid = false;
+            }
+            if (!this.project.company_name) {
+                this.validationErrors.company_name = '会社名は必須です';
+                valid = false;
+            }
+            if (!this.project.customer_id) {
+                this.validationErrors.customer_id = '担当者名は必須です';
+                valid = false;
+            }
+            if (!this.project.project_number) {
+                this.validationErrors.project_number = 'プロジェクト番号は必須です';
+                valid = false;
+            }
+            if (!this.project.name) {
+                this.validationErrors.name = 'プロジェクト名は必須です';
+                valid = false;
+            }
+            return valid;
+        },
     },
     watch: {
         isEditMode(newVal) {
@@ -1885,6 +1927,9 @@ const vueApp = createApp({
                     }).on('select2:select', (e) => {
                         this.project.category_id = e.params.data.id;
                         this.onCategoryChange();
+                    }).on('select2:clear', () => {
+                        this.project.category_id = '';
+                        this.onCategoryChange();
                     });
                     
                     // Company name (company_name)
@@ -1924,6 +1969,9 @@ const vueApp = createApp({
                         }).on('select2:select', (e) => {
                             this.project.company_name = e.params.data.id;
                             this.onCompanyChange();
+                        }).on('select2:clear', () => {
+                            this.project.company_name = '';
+                            this.onCompanyChange();
                         });
                     }
                     // 担当者名 (customer_id)
@@ -1962,6 +2010,8 @@ const vueApp = createApp({
                             }
                         }).on('select2:select', (e) => {
                             this.project.customer_id = e.params.data.id;
+                        }).on('select2:clear', () => {
+                            this.project.customer_id = '';
                         });
                     }
                     

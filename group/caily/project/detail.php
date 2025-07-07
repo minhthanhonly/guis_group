@@ -90,6 +90,9 @@ if (!$project_id) {
                                                 {{ category.name }}
                                             </option>
                                         </select>
+                                        <div v-if="validationErrors.category_id" class="invalid-feedback d-block">
+                                            {{ validationErrors.category_id }}
+                                        </div>
                                     </template>
                                     <template v-else>
                                         <input type="text" class="form-control" :value="getCategoryName(project.category_id)" readonly>
@@ -106,6 +109,9 @@ if (!$project_id) {
                                                 {{ company.company_name }}
                                             </option>
                                         </select>
+                                        <div v-if="validationErrors.company_name" class="invalid-feedback d-block">
+                                            {{ validationErrors.company_name }}
+                                        </div>
                                     </template>
                                     <template v-else>
                                         <input type="text" class="form-control" :value="project.company_name" readonly>
@@ -115,7 +121,7 @@ if (!$project_id) {
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="担当者名">担当者名</span> <span class="text-danger">*</span></label>
-                                    <div class="d-flex gap-2 justify-content-between">
+                                    <div class="">
                                         <template v-if="isEditMode">
                                             <select id="customer_id" class="form-select select2 flex-shrink-1" v-model="project.customer_id" name="customer_id" required>
                                                 <option value="">選択してください</option>
@@ -123,6 +129,9 @@ if (!$project_id) {
                                                     {{ contact.name }}
                                                 </option>
                                             </select>
+                                            <div v-if="validationErrors.customer_id" class="invalid-feedback d-block">
+                                                {{ validationErrors.customer_id }}
+                                            </div>
                                         </template>
                                         <template v-else>
                                             <input type="text" class="form-control" :value="getContactName(project.customer_id)" readonly>
@@ -131,19 +140,33 @@ if (!$project_id) {
                                 </div>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="プロジェクト番号">プロジェクト番号</span></label>
-                                <input type="text" class="form-control" v-if="isEditMode" v-model="project.project_number">
-                                <input type="text" class="form-control" v-else :value="project.project_number || '-'" readonly>
+                                <label class="form-label"><span data-i18n="プロジェクト番号">プロジェクト番号</span>  <span class="text-danger">*</span></label>
+                                <template v-if="isEditMode">
+                                    <input type="text" class="form-control" v-model="project.project_number">
+                                    <div v-if="validationErrors.project_number" class="invalid-feedback d-block">
+                                        {{ validationErrors.project_number }}
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <input type="text" class="form-control" :value="project.project_number || '-'" readonly>
+                                </template>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="プロジェクト名">プロジェクト名</span></label>
-                                <input type="text" class="form-control" :readonly="!isEditMode" v-model="project.name">
+                                <label class="form-label"><span data-i18n="プロジェクト名">プロジェクト名</span>  <span class="text-danger">*</span></label>
+                                <template v-if="isEditMode">
+                                    <input type="text" class="form-control" v-model="project.name">
+                                    <div v-if="validationErrors.name" class="invalid-feedback d-block">
+                                        {{ validationErrors.name }}
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <input type="text" class="form-control" :value="project.name || '-'" readonly>
+                                </template>
                             </div>
                             
-                            
                             <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="部署">部署</span></label>
-                                <input type="text" class="form-control" :value="department?.name || '-'" readonly>
+                                <!-- <label class="form-label"><span data-i18n="部署">部署</span></label>
+                                <input type="text" class="form-control" :value="department?.name || '-'" readonly> -->
                             </div>
                             
                             <div class="col-md-4">
