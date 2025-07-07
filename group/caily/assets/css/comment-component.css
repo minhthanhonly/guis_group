@@ -1,381 +1,454 @@
 /* Comment Component Styles */
 .comment-component {
     width: 100%;
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* Comments List */
+.comments-list {
+    background: transparent;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* Individual Comment Item */
 .comment-item {
-    padding: 1rem;
-    border-radius: 0.5rem;
+    padding: 1rem 0;
+    background: transparent;
+    position: relative;
     transition: all 0.3s ease;
 }
 
-.comment-item:hover {
-    transform: translateX(2px);
+/* Separator line between comments */
+.comment-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: var(--bs-border-color);
 }
 
+/* Comment highlight effect for navigation */
+.comment-item.comment-highlight {
+    background-color: #fff3cd;
+    animation: commentHighlight 2s ease-out;
+}
+
+@keyframes commentHighlight {
+    0% {
+        background-color: #fff3cd;
+        transform: translateX(-5px);
+    }
+    50% {
+        background-color: #fff3cd;
+        transform: translateX(0);
+    }
+    100% {
+        background-color: transparent;
+        transform: translateX(0);
+    }
+}
+
+/* Comment Header */
 .comment-header {
     margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .comment-author {
     font-weight: 600;
-    color: #495057;
+    font-size: 0.9rem;
+    margin: 0;
 }
 
+.comment-timestamp {
+    color: #6c757d;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.comment-timestamp:hover {
+    color: #007bff;
+    text-decoration: underline;
+}
+
+/* Comment Content */
 .comment-content {
-    white-space: pre-wrap;
-    word-break: break-word;
     line-height: 1.5;
+    margin: 0;
+    word-wrap: break-word;
 }
 
+.comment-content p {
+    margin-bottom: 0.5rem;
+}
+
+.comment-content p:last-child {
+    margin-bottom: 0;
+}
+
+/* Comment Input Section */
 .comment-input-section {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid #dee2e6;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e9ecef;
+    background: transparent;
 }
 
-.message-input {
+/* Load More Button */
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #6c757d;
+}
+
+.empty-state i {
+    color: #dee2e6;
+    margin-bottom: 1rem;
+}
+
+.empty-state p {
+    font-size: 0.925rem;
+    margin: 0;
+}
+
+/* Mention Input Section */
+.mention-input-section {
+    background: transparent;
+    border: none;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+}
+
+.mention-input-section .form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+/* Mention Input Editable */
+.mention-input-editable {
+    min-height: 38px;
+    max-height: 120px;
+    overflow-y: auto;
     border: 1px solid #ced4da;
     border-radius: 0.375rem;
-    padding: 0.75rem;
+    padding: 0.375rem 0.75rem;
     font-size: 0.875rem;
+    line-height: 1.5;
     transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
-.message-input:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-    outline: none;
+.mention-input-editable:focus {
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
 
-.message-input[contenteditable="true"]:empty::before {
-    content: attr(placeholder);
+.mention-input-editable[data-placeholder]:empty:before {
+    content: attr(data-placeholder);
     color: #6c757d;
-    font-style: italic;
+    pointer-events: none;
 }
 
-.comments-list {
-    /* No max-height - display all comments */
+/* Selected Mentions */
+.selected-mentions {
+    border: none;
+    border-radius: 0;
+    padding: 0.5rem 0;
+    background: transparent;
+    margin-top: 0.5rem;
 }
 
-/* Avatar styles */
-.avatar {
-    position: relative;
-    display: inline-block;
-    width: 2rem;
-    height: 2rem;
-}
-
-.avatar-sm {
-    width: 1.5rem;
-    height: 1.5rem;
-}
-
-.avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.avatar-initial {
-    display: flex;
+/* Mention Tags */
+.mention-tag {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #fff;
-    background-color: #007bff;
-    border-radius: 50%;
-}
-
-/* Mention highlighting */
-.mention-highlight {
     background-color: #e3f2fd;
-    color: #1976d2;
-    padding: 0.125rem 0.25rem;
-    border-radius: 0.25rem;
-    font-weight: 500;
-    display: inline;
-    margin: 0 1px;
-    text-decoration: none;
-    cursor: text; /* Allow text cursor for deletion */
-    user-select: text; /* Allow text selection */
-    -webkit-user-select: text;
-    -moz-user-select: text;
-    -ms-user-select: text;
-}
-
-.mention-highlight:hover {
-    background-color: #bbdefb;
-    text-decoration: none;
-}
-
-/* Allow mentions to be selected and deleted */
-.mention-highlight:focus {
-    outline: 2px solid #1976d2;
-    outline-offset: 1px;
-}
-
-/* Load more button */
-.btn-outline-primary {
-    border-color: #007bff;
-    color: #007bff;
-}
-
-.btn-outline-primary:hover {
-    background-color: #007bff;
-    color: #fff;
-}
-
-/* Empty state */
-.text-muted {
-    color: #6c757d;
-}
-
-/* Quill Editor Styles */
-.comment-editor-container {
+    border: 1px solid #bbdefb;
     border-radius: 0.375rem;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    color: #1976d2;
+    gap: 0.25rem;
+}
+
+.mention-tag .avatar {
+    width: 20px;
+    height: 20px;
+    font-size: 0.7rem;
+}
+
+.mention-tag .btn-close {
+    font-size: 0.7rem;
+    padding: 0.125rem;
+}
+
+/* Quill Editor Container */
+.comment-editor-container {
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    transition: all 0.3s ease;
+    background: transparent;
+    overflow: hidden;
 }
 
 .comment-editor-container:focus-within {
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    border-color: #5b7dff;
+    box-shadow: 0 0 0 3px rgba(91, 125, 255, 0.1);
 }
 
+/* Quill Toolbar */
 .comment-editor .ql-toolbar {
-    border: none;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid #ced4da;
+    background-color: #f8f9fa;
     padding: 0.5rem;
 }
 
+.comment-editor .ql-toolbar button {
+    margin: 0.125rem;
+}
+
+.comment-editor .ql-toolbar .ql-formats {
+    margin-right: 0.75rem;
+}
+
+/* Quill Editor */
 .comment-editor .ql-container {
     border: none;
-    font-size: 0.875rem;
+    font-size: 0.925rem;
 }
 
 .comment-editor .ql-editor {
-    min-height: 60px;
-    max-height: 200px;
+    min-height: 120px;
+    max-height: 300px;
     overflow-y: auto;
     padding: 0.75rem;
+    line-height: 1.5;
 }
 
 .comment-editor .ql-editor.ql-blank::before {
-    font-style: italic;
-    color: #6c757d;
+    font-style: normal;
+    left: 1rem;
 }
 
-/* Mention styles in Quill editor */
-.comment-editor .mention,
-.comment-editor .mention-highlight {
-    background-color: #e3f2fd;
-    color: #1976d2;
-    padding: 0.125rem 0.25rem;
-    border-radius: 0.25rem;
-    font-weight: 500;
-    display: inline;
-    margin: 0 1px;
-    text-decoration: none;
-    cursor: text; /* Allow text cursor for deletion */
-    user-select: text; /* Allow text selection */
-    -webkit-user-select: text;
-    -moz-user-select: text;
-    -ms-user-select: text;
+/* Quill toolbar button styling */
+.comment-editor .ql-toolbar .ql-formats:last-child {
+    margin-right: 0;
 }
 
-.comment-editor .mention:hover,
-.comment-editor .mention-highlight:hover {
-    background-color: #bbdefb;
-    text-decoration: none;
+.comment-editor .ql-toolbar .ql-picker {
+    height: 24px;
+    width: auto;
+    margin: 0 2px;
 }
 
-/* Allow mentions in editor to be selected and deleted */
-.comment-editor .mention:focus,
-.comment-editor .mention-highlight:focus {
-    outline: 2px solid #1976d2;
-    outline-offset: 1px;
+.comment-editor .ql-toolbar .ql-picker-label {
+    border: 1px solid transparent;
+    padding: 3px 5px;
 }
 
-/* Mention dropdown from mention.js */
+.comment-editor .ql-toolbar .ql-picker-label:hover {
+    background: rgba(91, 125, 255, 0.1);
+    border-radius: 4px;
+}
+
+.comment-editor .ql-toolbar .ql-picker-options {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    padding: 0.5rem;
+}
+
+.comment-editor .ql-toolbar .ql-stroke {
+    stroke: #495057;
+}
+
+.comment-editor .ql-toolbar .ql-fill {
+    fill: #495057;
+}
+
+.comment-editor .ql-toolbar button:hover .ql-stroke,
+.comment-editor .ql-toolbar .ql-picker-label:hover .ql-stroke {
+    stroke: #5b7dff;
+}
+
+.comment-editor .ql-toolbar button:hover .ql-fill,
+.comment-editor .ql-toolbar .ql-picker-label:hover .ql-fill {
+    fill: #5b7dff;
+}
+
+.comment-editor .ql-toolbar button.ql-active .ql-stroke,
+.comment-editor .ql-toolbar .ql-picker-label.ql-active .ql-stroke {
+    stroke: #5b7dff;
+}
+
+.comment-editor .ql-toolbar button.ql-active .ql-fill,
+.comment-editor .ql-toolbar .ql-picker-label.ql-active .ql-fill {
+    fill: #5b7dff;
+}
+
+/* Loading Spinner */
+.spinner-border {
+    width: 2rem;
+    height: 2rem;
+    border-width: 0.2rem;
+    border-color: #5b7dff;
+    border-right-color: transparent;
+}
+
+/* Mention Dropdown */
 .mention-dropdown {
     position: absolute;
     top: 100%;
     left: 0;
     right: 0;
     background: white;
-    border: 1px solid #ddd;
-    border-radius: 0.375rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     z-index: 9999;
     max-height: 200px;
     overflow-y: auto;
-}
-
-.mention-list {
-    padding: 0;
-    margin: 0;
+    margin-top: 4px;
 }
 
 .mention-item {
     display: flex;
     align-items: center;
-    padding: 0.5rem;
+    padding: 0.75rem;
     cursor: pointer;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid #f0f0f0;
     transition: background-color 0.2s;
 }
 
 .mention-item:hover,
 .mention-item.active {
-    background-color: #f8f9fa;
+    background-color: rgba(91, 125, 255, 0.05);
 }
 
 .mention-item:last-child {
     border-bottom: none;
 }
 
-.mention-avatar {
-    width: 24px;
-    height: 24px;
+/* Like Button */
+.like-button {
+    background: transparent;
+    border: none;
+    padding: 0.5rem;
     border-radius: 50%;
-    margin-right: 0.5rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    position: relative;
 }
 
-.mention-name {
+.like-button:hover {
+    transform: scale(1.1);
+}
+
+.like-button.liked {
+    color: #ffc107;
+}
+
+.like-button:not(.liked) {
+    color: #6c757d;
+}
+
+.like-button:not(.liked):hover {
+    color: #ffc107;
+}
+
+.like-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #ffc107;
+    color: #333;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    cursor: help;
+}
+
+/* Custom tooltip styles */
+.tooltip {
     font-size: 0.875rem;
 }
 
-/* Selected mention tags */
-.mention-tag {
-    display: inline-flex;
-    align-items: center;
-    background-color: #e3f2fd;
-    color: #1976d2;
-    padding: 0.25rem 0.5rem;
-    border-radius: 1rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    gap: 0.25rem;
-    margin: 0.125rem;
-    border: 1px solid #bbdefb;
+.tooltip-inner {
+    background-color: #333;
+    color: #fff;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    max-width: 300px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
-.mention-tag .avatar {
-    width: 1rem;
-    height: 1rem;
-    min-width: 1rem;
-}
-
-.mention-tag .avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.mention-tag .avatar-initial {
-    font-size: 0.5rem;
-    line-height: 1;
-}
-
-.mention-tag .btn-close {
-    --bs-btn-close-width: 0.75rem;
-    --bs-btn-close-height: 0.75rem;
-    --bs-btn-close-color: #1976d2;
-    --bs-btn-close-opacity: 0.6;
-    margin-left: 0.25rem;
-    padding: 0;
-}
-
-.mention-tag .btn-close:hover {
-    --bs-btn-close-opacity: 1;
-}
-
-.selected-mentions {
-    border: 1px solid #e9ecef;
-    border-radius: 0.375rem;
-    padding: 0.5rem;
-    background-color: #f8f9fa;
-}
-
-.mention-input-section {
-    border-bottom: 1px solid #e9ecef;
-    padding-bottom: 1rem;
-}
-
-/* Mention input contenteditable */
-.mention-input-editable {
-    min-height: 2.5rem;
-    max-height: 6rem;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-}
-
-.mention-input-editable:focus {
-    outline: none;
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
-}
-
-/* Placeholder for contenteditable */
-.mention-input-editable:empty:before {
-    content: attr(data-placeholder);
-    color: #6c757d;
-    font-style: italic;
-    pointer-events: none;
-}
-
-.mention-input-editable:focus:before {
-    display: none;
-}
-
-/* Quill mention dropdown */
-.ql-mention-list-container {
-    width: 300px;
-    border: 1px solid #ddd;
-    border-radius: 0.375rem;
-    background: #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    z-index: 9999;
-}
-
-.ql-mention-list {
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.ql-mention-list-item {
-    padding: 0.5rem;
-    cursor: pointer;
-    border-bottom: 1px solid #eee;
-}
-
-.ql-mention-list-item:hover,
-.ql-mention-list-item.selected {
-    background-color: #007bff;
-    color: white;
-}
-
-/* Responsive design */
+/* Responsive Design */
 @media (max-width: 768px) {
     .comment-item {
-        padding: 0.75rem;
+        padding: 16px 0;
     }
     
-    .comment-editor .ql-editor {
-        font-size: 0.8rem;
+    .comment-content {
+        margin-left: 0;
+        margin-top: 0.75rem;
     }
     
     .avatar {
-        width: 1.5rem;
-        height: 1.5rem;
+        width: 32px;
+        height: 32px;
     }
     
-    .avatar-sm {
-        width: 1.25rem;
-        height: 1.25rem;
+    .comment-author {
+        font-size: 0.875rem;
+    }
+    
+    .comment-content {
+        font-size: 0.875rem;
+    }
+    
+    .comment-editor .ql-editor {
+        min-height: 80px;
+        font-size: 0.875rem;
+    }
+    
+    .comment-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+    
+    .comment-timestamp {
+        font-size: 0.75rem;
+    }
+    
+    .like-button {
+        padding: 0.375rem;
+    }
+    
+    .like-count {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.25rem;
     }
 } 

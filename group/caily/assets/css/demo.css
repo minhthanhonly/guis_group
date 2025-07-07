@@ -430,3 +430,16 @@ li.storageprevious {
 .task-title:hover .fa-expand-alt{
 	opacity: 1;
 }
+
+
+/* Submit Button */
+.btn-primary {
+    background: linear-gradient(135deg, var(--bs-primary) 0%, #764ba2 100%);
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+}
+

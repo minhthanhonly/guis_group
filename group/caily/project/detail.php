@@ -609,7 +609,7 @@ if (!$project_id) {
                         <strong>履歴:</strong>
                     </div>
                     <div class="card-body">
-                        <ul class="list-group">
+                        <ul class="list-group" style="max-height: 400px; overflow-y: auto;">
                             <li v-for="log in sortedLogs" :key="log.id" class="list-group-item">
                                 <div class="d-flex">
                                     <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:160px;">
@@ -889,8 +889,6 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="<?=ROOT?>assets/js/sw-manager.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
 <script src="/assets/js/mention.js"></script>
 <script src="/assets/js/comment-component.js"></script>
 <script src="assets/js/project-detail.js"></script>

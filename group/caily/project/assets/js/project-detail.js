@@ -1372,11 +1372,7 @@ const vueApp = createApp({
         },
         showNotification(message, type = 'info') {
             // Use showMessage function if available, otherwise use alert
-            if (typeof showMessage === 'function') {
-                showMessage(message, type === 'error');
-            } else {
-                alert(message);
-            }
+            showMessage(message, type === 'error');
         },
         initQuillEditor() {
             if (this.quillInstance || !this.isEditMode) return;

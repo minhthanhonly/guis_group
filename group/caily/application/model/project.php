@@ -721,7 +721,12 @@ class Project extends ApplicationModel {
         $offset = ($page - 1) * $per_page;
         
         $query = sprintf(
-            "SELECT c.*, u.realname as user_name, u.user_image
+            "SELECT c.*, u.realname as user_name, u.user_image,
+                    (SELECT COUNT(*) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as like_count,
+                    (SELECT GROUP_CONCAT(cl.user_id) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as liked_by,
+                    (SELECT GROUP_CONCAT(CONCAT(cl.user_id, ':', cl.name) SEPARATOR '|') 
+                     FROM " . DB_PREFIX . "comment_likes cl 
+                     WHERE cl.comment_id = c.id) as liked_by_names
             FROM " . DB_PREFIX . "comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
             WHERE c.project_id = %d 
@@ -731,7 +736,36 @@ class Project extends ApplicationModel {
             intval($per_page),
             intval($offset)
         );
-        return $this->fetchAll($query);
+        
+        $comments = $this->fetchAll($query);
+        
+        // Process liked_by string to array and liked_by_names
+        foreach ($comments as &$comment) {
+            if ($comment['liked_by']) {
+                $comment['liked_by'] = explode(',', $comment['liked_by']);
+            } else {
+                $comment['liked_by'] = [];
+            }
+            
+            // Process liked_by_names
+            if ($comment['liked_by_names']) {
+                $likedByNames = [];
+                $namePairs = explode('|', $comment['liked_by_names']);
+                foreach ($namePairs as $pair) {
+                    if (strpos($pair, ':') !== false) {
+                        list($userId, $name) = explode(':', $pair, 2);
+                        $likedByNames[] = $name;
+                    }
+                }
+                $comment['liked_by_names'] = $likedByNames;
+            } else {
+                $comment['liked_by_names'] = [];
+            }
+            
+            $comment['like_count'] = intval($comment['like_count']);
+        }
+        
+        return $comments;
     }
 
     function addComment($data) {
@@ -750,9 +784,90 @@ class Project extends ApplicationModel {
         // Send mention notifications if comment was added successfully
         if ($result) {
             $this->sendMentionNotifications($data['project_id'], $data['content'], $data['user_id'], $result);
+          
+            return ['success' => true, 'message' => 'Comment added successfully'];
+        }
+        return ['success' => false, 'message' => 'Comment addition failed'];
+    }
+
+    function toggleLike() {
+
+        $comment_id = isset($_POST['comment_id']) ? intval($_POST['comment_id']) : 0;
+        $user_id = isset($_POST['user_id']) ? $_POST['user_id'] : 0;
+        $action = isset($_POST['action']) ? $_POST['action'] : 'like';
+        $name = isset($_POST['name']) ? $_POST['name'] : '';
+        
+        if (!$comment_id || !$user_id) {
+            return ['success' => false, 'message' => 'Invalid parameters'];
         }
         
-        return $result;
+        // Check if like already exists
+        $existingLike = $this->fetchOne(sprintf(
+            "SELECT id FROM " . DB_PREFIX . "comment_likes 
+             WHERE comment_id = %d AND user_id = '%s'",
+            $comment_id, $user_id
+        ));
+        
+        if ($action === 'like') {
+            if ($existingLike) {
+                return ['success' => false, 'message' => 'Already liked'];
+            }
+            
+            // Add like
+            $likeData = array(
+                'comment_id' => $comment_id,
+                'user_id' => $user_id,
+                'name' => $name,
+                'created_at' => date('Y-m-d H:i:s')
+            );
+            
+            $this->table = DB_PREFIX . 'comment_likes';
+            $result = $this->query_insert($likeData);
+            $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
+            
+        } else {
+            if (!$existingLike) {
+                return ['success' => false, 'message' => 'Not liked yet'];
+            }
+            
+            // Remove like
+            $result = $this->query(sprintf(
+                "DELETE FROM " . DB_PREFIX . "comment_likes 
+                 WHERE comment_id = %d AND user_id = %d",
+                $comment_id, $user_id
+            ));
+        }
+        
+        if ($result) {
+            // Get updated like count
+            $likeCount = $this->fetchOne(sprintf(
+                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "comment_likes 
+                 WHERE comment_id = %d",
+                $comment_id
+            ));
+            
+            // Get updated liked_by_names
+            $likedByNames = $this->fetchOne(sprintf(
+                "SELECT GROUP_CONCAT(cl.name SEPARATOR '|') as names
+                 FROM " . DB_PREFIX . "comment_likes cl 
+                 WHERE cl.comment_id = %d",
+                $comment_id
+            ));
+            
+            $likedByNamesArray = [];
+            if ($likedByNames && $likedByNames['names']) {
+                $likedByNamesArray = explode('|', $likedByNames['names']);
+            }
+            
+            return [
+                'success' => true,
+                'like_count' => intval($likeCount['count']),
+                'is_liked' => $action === 'like',
+                'liked_by_names' => $likedByNamesArray
+            ];
+        }
+        
+        return ['success' => false, 'message' => 'Database error'];
     }
 
     // Detect mentions and send notifications
@@ -777,12 +892,6 @@ class Project extends ApplicationModel {
                 return;
             }
             
-            // Get commenter info
-            $commenter = $this->fetchOne(sprintf("SELECT realname, user_image FROM " . DB_PREFIX . "user WHERE userid = %d", intval($commentUserId)));
-            if (!$commenter) {
-                return;
-            }
-            
             // Track sent notifications to avoid duplicates
             $sentUserIds = [];
             
@@ -804,7 +913,7 @@ class Project extends ApplicationModel {
                     'event' => 'project_mention',
                     'title' => '案件でメンションされました',
                     'message' => sprintf('%sさんが案件「%s」であなたをメンションしました', 
-                        $commenter['realname'], 
+                        $_SESSION['realname'], 
                         $project['name']
                     ),
                     'data' => [
@@ -813,8 +922,8 @@ class Project extends ApplicationModel {
                         'comment_id' => $commentId,
                         'comment_content' => $content,
                         'commenter_id' => $commentUserId,
-                        'commenter_name' => $commenter['realname'],
-                        'commenter_image' => $commenter['user_image'],
+                        'commenter_name' => $_SESSION['realname'],
+                        'avatar' => $this->getUserImage(),
                         'url' => "/project/detail.php?id=$projectId#comment-$commentId"
                     ],
                     'project_id' => $projectId,
@@ -1309,7 +1418,8 @@ class Project extends ApplicationModel {
                 'project_name' => $projectName,
                 'comment_id' => $commentId,
                 'comment_content' => substr($commentContent, 0, 100) . (strlen($commentContent) > 100 ? '...' : ''),
-                'action' => 'comment_added'
+                'action' => 'comment_added',
+                'avatar' => $this->getUserImage(),
             ],
             'url' => "/project/detail.php?id=$projectId#comment-$commentId",
             'type' => 'comment'
