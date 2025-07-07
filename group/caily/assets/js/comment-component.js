@@ -7,6 +7,10 @@ window.CommentComponent = {
             required: true,
             default: 'project'
         },
+        projectId: {
+            type: [String, Number],
+            required: false
+        },
         entityId: {
             type: [String, Number],
             required: true
@@ -210,7 +214,7 @@ window.CommentComponent = {
                 if (this.commentsPage === 1) {
                     this.comments = commentsWithLikes;
                     this.$nextTick(() => {
-                        //this.scrollToBottom();
+                        // this.scrollToBottom();
                         this.updateTooltips();
                     });
                 } else {
@@ -268,23 +272,24 @@ window.CommentComponent = {
                 const response = await axios.post(this.computedApiEndpoints.addComment, formData);
                 if(response.data.success){
                    // this.$emit('error', { type: 'info', message: 'コメントを追加しました' });
-                    // this.clearMentions();
-                    // this.clearEditor();
-                    this.loadComments(true);
+                    this.clearMentions();
+                    await this.loadComments(true);
+                    this.scrollToCommentBottom();
+
+                    // Clear Quill editor
+                    try {
+                        if (this.quillInstance) {
+                            this.quillInstance.setContents([]);
+                            this.editorHasContent = false;
+                        }
+                    } catch (error) {
+                        //console.error('Error clearing Quill editor:', error);
+                    }
                 }else{
                     this.$emit('error', { type: 'error', message: 'コメントの追加に失敗しました' });
                 }
                 
-                // Clear Quill editor
-                if (this.quillInstance) {
-                    this.quillInstance.setContents([]);
-                    this.editorHasContent = false;
-                }
-                // Clear mention input
-                this.clearMentions();
                 
-                await this.loadComments(true);
-                this.$emit('comment-added', { content: finalContent });
                 
             } catch (error) {
                 console.error('Error adding comment:', error);
@@ -411,18 +416,21 @@ window.CommentComponent = {
                 apiEndpoint: '/api/index.php?model=user&method=getMentionUsers',
                 onMentionSelect: (user, input) => {
                     // mention.js handles insertion
-                    // Update button state
-                    this.$nextTick(() => {
+                    // Update button state after a short delay to avoid cursor conflicts
+                    setTimeout(() => {
                         this.hasCommentContent();
-                    });
+                    }, 10);
                 }
             });
             
             // Add input listener for button state updates
             this.$nextTick(() => {
                 if (this.$refs.mentionInput) {
-                    this.$refs.mentionInput.addEventListener('input', () => {
-                        this.hasCommentContent();
+                    this.$refs.mentionInput.addEventListener('input', (event) => {
+                        // Only update if not triggered by mention selection
+                        if (!event.target.classList.contains('mention-highlight')) {
+                            this.hasCommentContent();
+                        }
                     });
                 }
             });
@@ -616,6 +624,9 @@ window.CommentComponent = {
                         const uploadData = {
                             [`${this.entityType}_id`]: this.entityId
                         };
+                        if(this.entityType != 'project'){
+                            uploadData.project_id = this.projectId;
+                        }
                         
                         if (window.swManager && window.swManager.swRegistration) {
                             // Use Service Worker with entity context

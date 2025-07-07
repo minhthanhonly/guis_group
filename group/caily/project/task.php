@@ -471,6 +471,7 @@ if (!$project_id) {
                                         v-if="selectedTask"
                                         entity-type="task"
                                         :entity-id="selectedTask.id"
+                                        :project-id="projectId"
                                         :current-user="currentUser"
                                         :api-endpoints="taskCommentApiEndpoints"
                                         :show-load-more="true"

@@ -18,9 +18,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 try {
-    // Debug logging
-    error_log('Upload request received: ' . json_encode($_POST));
-    error_log('Files received: ' . json_encode($_FILES));
     
     // Kiểm tra file upload
     if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {

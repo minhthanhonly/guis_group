@@ -467,21 +467,38 @@ class MentionManager {
                     // Sau khi xóa, range sẽ tự động cập nhật
                 }
                 // Chèn mention tại vị trí con trỏ hiện tại
-                const mentionHtml = `<span class="mention-highlight" data-user-id="${user.userid || user.id}" data-user-name="${user.user_name}" data-mention="true">@${user.user_name}</span> `;
+                const mentionHtml = `<span class="mention-highlight" contenteditable="false" data-user-id="${user.userid || user.id}" data-user-name="${user.user_name}" data-mention="true">@${user.user_name}</span>`;
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = mentionHtml;
                 const mentionElement = tempDiv.firstElementChild;
-                range = currentSelection.getRangeAt(0); // cập nhật lại range sau khi xóa
-                range.insertNode(mentionElement);
-                // Add a space after the mention
-                const spaceNode = document.createTextNode(' ');
-                range.setStartAfter(mentionElement);
-                range.insertNode(spaceNode);
-                // Set cursor position after the space
-                range.setStartAfter(spaceNode);
-                range.collapse(true);
-                currentSelection.removeAllRanges();
-                currentSelection.addRange(range);
+                
+                // Lấy range hiện tại sau khi đã xóa
+                const currentRange = currentSelection.getRangeAt(0);
+                currentRange.insertNode(mentionElement);
+                
+                // Sau khi chèn mentionElement
+                currentRange.setStartAfter(mentionElement);
+                currentRange.collapse(true);
+                
+                // Kiểm tra node tiếp theo của mentionElement
+                let nextNode = mentionElement.nextSibling;
+                if (!nextNode || nextNode.nodeType !== Node.TEXT_NODE || !nextNode.textContent.startsWith(' ')) {
+                    // Nếu chưa có space, thì chèn vào
+                    const spaceNode = document.createTextNode('\u00A0');
+                    mentionElement.parentNode.insertBefore(spaceNode, nextNode);
+                    nextNode = spaceNode;
+                }
+                
+                // Đặt con trỏ vào sau space
+                requestAnimationFrame(() => {
+                    const range = document.createRange();
+                    range.setStart(nextNode, 1); // sau space
+                    range.collapse(true);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    this.currentInput.focus();
+                });
             }
         } else {
             // For regular inputs, use the original logic
@@ -494,8 +511,9 @@ class MentionManager {
             // Set cursor position after the mention
             const newPosition = beforeMention.length + mentionText.length + 1;
             this.currentInput.setSelectionRange(newPosition, newPosition);
+            this.currentInput.focus();
         }
-        this.currentInput.focus();
+        
         // Trigger input event for Vue reactivity
         this.currentInput.dispatchEvent(new Event('input', { bubbles: true }));
         // Call custom callback if provided
