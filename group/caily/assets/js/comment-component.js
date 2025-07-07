@@ -1043,11 +1043,37 @@ window.CommentComponent = {
             // Check URL hash after everything is initialized
             this.checkUrlHash();
             this.addZoomToImages();
+            let inited = false;
 
+            if (this.entityType === 'project' && this.entityId && window.notificationManager && !inited) {
+                inited = true;
+                window.notificationManager.listenProjectCommentRealtime(this.entityId, () => {
+                    this.loadComments();
+                    this.scrollToCommentBottom();
+                });
+            }
+
+            if (this.entityType === 'task' && this.entityId && window.notificationManager && !inited) {
+                inited = true;
+                console.log('listenTaskCommentRealtime');
+                window.notificationManager.listenTaskCommentRealtime(this.entityId, () => {
+                    this.loadComments();
+                    this.scrollToCommentBottom();
+                });
+            }
 
             document.addEventListener('notificationManagerReady', () => {
-                if (this.entityType === 'project' && PROJECT_ID && window.notificationManager) {
-                    window.notificationManager.listenProjectCommentRealtime(PROJECT_ID, () => {
+                if (this.entityType === 'project' && this.entityId && window.notificationManager && !inited) {
+                    inited = true;
+                    window.notificationManager.listenProjectCommentRealtime(this.entityId, () => {
+                        this.loadComments();
+                        this.scrollToCommentBottom();
+                    });
+                }
+                if (this.entityType === 'task' && this.entityId && window.notificationManager && !inited) {
+                    inited = true;
+                    window.notificationManager.listenTaskCommentRealtime(this.entityId, () => {
+                        console.log('listenTaskCommentRealtime');
                         this.loadComments();
                         this.scrollToCommentBottom();
                     });

@@ -252,7 +252,7 @@ const TaskApp = createApp({
         onCommentAdded(event) {
             this.showNotification('コメントが追加されました', 'success');
         },
-        
+
         showNotification(message, type = 'info') {
             // Use showMessage function if available, otherwise use alert
             showMessage(message, type === 'error');
@@ -1601,9 +1601,6 @@ const TaskApp = createApp({
                 this.showMessage(error.message || '説明の保存に失敗しました。', true);
             }
         },
-        
-
-        
 
         
         getActivityIcon(type) {

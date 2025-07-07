@@ -514,7 +514,7 @@ class Task extends ApplicationModel {
         
         // Send mention notifications if comment was added successfully
         if ($result && $project_id) {
-            $this->sendMentionNotifications($project_id, $data['content'], $data['user_id'], $result);
+            $this->sendMentionNotifications($project_id, $data['content'], $data['user_id'], $result, $task_id);
         }
         
         return ['success' => (bool)$result, 'id' => $result];
@@ -1007,10 +1007,12 @@ class Task extends ApplicationModel {
     }
     
     // Detect mentions and send notifications
-    private function sendMentionNotifications($projectId, $content, $commentUserId, $commentId) {
+    private function sendMentionNotifications($projectId, $content, $commentUserId, $commentId, $taskId) {
         try {
             require_once(DIR_ROOT . '/application/model/NotificationService.php');
             $notiService = new NotificationService();
+
+            $notiService->sendTaskCommentNotification($taskId, $commentId);
 
             // Extract mentioned users from content
             $mentionedUsers = $this->extractMentions($content);
@@ -1059,7 +1061,7 @@ class Task extends ApplicationModel {
                         'commenter_id' => $commentUserId,
                         'commenter_name' => $_SESSION['realname'],
                         'avatar' => $this->getUserImage(),
-                        'url' => "/project/task.php?id=$projectId#comment-$commentId"
+                        'url' => "/project/task.php?id=$projectId&task_id=$taskId#comment-$commentId"
                     ],
                     'project_id' => $projectId,
                     'user_ids' => [$mentionedUser['userid']]
@@ -1253,11 +1255,14 @@ class Task extends ApplicationModel {
         $now = date('Y-m-d H:i:s');
         // Nếu đã có bản ghi thì update, chưa có thì insert
         $sql = "SELECT id FROM groupware_comment_reads WHERE task_id = $task_id AND user_id = '" . $this->quote($user_id) . "'";
+        echo $sql;
         $row = $this->fetchOne($sql);
         if ($row && isset($row['id'])) {
+            echo "update";
             $update = "UPDATE groupware_comment_reads SET read_at = '$now' WHERE id = " . intval($row['id']);
             $this->query($update);
         } else {
+            echo "insert";
             $insert = "INSERT INTO groupware_comment_reads (task_id, user_id, read_at) VALUES ($task_id, '" . $this->quote($user_id) . "', '$now')";
             $this->query($insert);
         }

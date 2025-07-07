@@ -618,6 +618,23 @@ class NotificationManager {
             }
         });
     }
+    
+    listenTaskCommentRealtime(taskId, reloadCallback) {
+        if (!this.database || !taskId || typeof reloadCallback !== 'function') return;
+        const channel = 'task_' + taskId;
+        const ref = this.database.ref('notifications/' + channel);
+        
+        // Lắng nghe thay đổi của last_comment_id
+        ref.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data && data.last_comment_id) {
+                reloadCallback({
+                    last_comment_id: data.last_comment_id,
+                    timestamp: Date.now()
+                });
+            }
+        });
+    }
 }
 
 // Initialize notification manager when DOM is ready
