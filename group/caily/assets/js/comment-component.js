@@ -466,19 +466,11 @@ window.CommentComponent = {
         
         renderMentions(content) {
             if (!content) return content;
-            
-            // If content already contains mention-highlight spans, just decode and return
-            if (content.includes('mention-highlight')) {
-                return this.decodeHtmlEntities(content);
-            }
-            
-            // Convert plain @mentions to HTML
-            const mentionRegex = /@([^\s<>]+)/g;
-            const renderedContent = content.replace(mentionRegex, (match, username) => {
-                return `<span class="mention-highlight" data-user-name="${username}" data-mention="true">${match}</span>`;
-            });
-            
-            return this.decodeHtmlEntities(renderedContent);
+            // Nếu content đã có mention-highlight thì chỉ decode và thêm data-zoom cho img
+            let html = content.includes('mention-highlight') ? this.decodeHtmlEntities(content) : this.decodeHtmlEntities(content.replace(/@([^\s<>]+)/g, '<span class="mention-highlight" data-user-name="$1" data-mention="true">@$1</span>'));
+            // Thêm data-zoom cho mọi img
+            html = html.replace(/<img /g, '<img data-zoom ');
+            return html;
         },
         
         decodeHtmlEntities(str) {
@@ -858,7 +850,15 @@ window.CommentComponent = {
                 // Check hash from URL
                 this.checkUrlHash();
             }
-        }
+        },
+        addZoomToImages() {
+            this.$nextTick(() => {
+                const imgs = this.$el.querySelectorAll('.comment-content img:not([data-zoom])');
+                imgs.forEach(img => {
+                    img.setAttribute('data-zoom', '');
+                });
+            });
+        },
     },
     
     async mounted() {
@@ -877,6 +877,7 @@ window.CommentComponent = {
             
             // Check URL hash after everything is initialized
             this.checkUrlHash();
+            this.addZoomToImages();
         });
         
         // Handle browser back/forward buttons
@@ -888,5 +889,10 @@ window.CommentComponent = {
         
         // Remove event listener for browser back/forward buttons
         window.removeEventListener('popstate', this.handlePopState);
+    },
+    watch: {
+        comments() {
+            this.addZoomToImages();
+        }
     }
 }; 

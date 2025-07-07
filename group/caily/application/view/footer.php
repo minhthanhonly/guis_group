@@ -48,8 +48,8 @@
 
 <!-- Notification System -->
 <script src="<?=$root?>assets/js/notification.js?v=<?=CACHE_VERSION?>"></script>
-
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-
+<link rel="stylesheet" href="<?=ROOT?>assets/css/image-modal.css">
+<script src="<?=ROOT?>assets/js/image-modal.js"></script>
 </body>
 </html>

@@ -399,7 +399,7 @@ if (!$project_id) {
 
     <!-- Task Details Modal -->
     <div class="modal fade" id="taskDetailsModal" tabindex="-1" aria-labelledby="taskDetailsModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-fullscreen" style="max-width: 70%;max-height: 90%; margin: 10% auto; 0">
+        <div class="modal-dialog modal-fullscreen" style="max-width: 70%;max-height: 90%; margin: 5% auto; 0">
             <div class="modal-content h-100">
                 <div class="modal-header">
                     <h5 class="modal-title" id="taskDetailsModalLabel">
@@ -609,6 +609,7 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <script src="<?=ROOT?>assets/js/comment-component.js"></script>
 <script src="<?=ROOT?>assets/js/mention.js"></script>
 <script src="assets/js/task-manager.js"></script>
+
 <script>
 // Reset Quill editor when modal is closed
 document.addEventListener('DOMContentLoaded', function() {
