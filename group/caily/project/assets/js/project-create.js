@@ -95,6 +95,14 @@ createApp({
             ],
             // Debounce timer for tags updates
             tagsUpdateTimer: null,
+            // Thêm biến validationErrors để lưu lỗi nhập liệu
+            validationErrors: {
+                category_id: '',
+                company_name: '',
+                customer_id: '',
+                name: '',
+                project_number: ''
+            },
         }
     },
     computed: {
@@ -375,25 +383,12 @@ createApp({
             if (this.quillContent !== undefined) {
                 this.project.description = this.quillContent;
             }
+            // Sử dụng validateProjectForm thay cho showMessage
+            if (!this.validateProjectForm()) {
+                // Có lỗi nhập liệu, không gửi form
+                return;
+            }
             
-            // Validate required fields
-            if (!this.newProject.category_id) {
-                showMessage('会社名を選択してください。', true);
-                return;
-            }
-            if (!this.newProject.company_name) {
-                showMessage('支店名を選択してください。', true);
-                return;
-            }
-            if (!this.newProject.customer_id) {
-                showMessage('担当者名を選択してください。', true);
-                return;
-            }
-            if (!this.project.name) {
-                showMessage('プロジェクト名を入力してください。', true);
-                return;
-            }
-
             // Save custom field set id and values
             this.project.department_custom_fields_set_id = this.project.department_custom_fields_set_id || '';
             this.project.custom_fields = JSON.stringify(this.prepareCustomFieldsForSave());
@@ -562,7 +557,12 @@ createApp({
                     placeholder: 'Type Something...',
                     modules: {
                         syntax: true,
-                        toolbar: toolbarOptions
+                        toolbar: {
+                            container: toolbarOptions,
+                            handlers: {
+                                image: () => this.imageHandler()
+                            }
+                        }
                     },
                     theme: 'snow'
                 });
@@ -662,6 +662,9 @@ createApp({
                 }).on('select2:select', (e) => {
                     this.newProject.category_id = e.params.data.id;
                     this.onCategoryChange();
+                }).on('select2:clear', () => {
+                    this.newProject.category_id = '';
+                    this.onCategoryChange();
                 });
             }
             // 支店名 (company_name)
@@ -701,6 +704,9 @@ createApp({
                 }).on('select2:select', (e) => {
                     this.newProject.company_name = e.params.data.id;
                     this.onCompanyChange();
+                }).on('select2:clear', () => {
+                    this.newProject.company_name = '';
+                    this.onCompanyChange();
                 });
             }
             // 担当者名 (customer_id)
@@ -739,6 +745,8 @@ createApp({
                     }
                 }).on('select2:select', (e) => {
                     this.newProject.customer_id = e.params.data.id;
+                }).on('select2:clear', () => {
+                    this.newProject.customer_id = '';
                 });
             }
         },
@@ -1086,6 +1094,112 @@ createApp({
                 this.quillContent = this.quillInstance.getSemanticHTML();
                 console.log('Quill content set:', content);
             }
+        },
+        // Thêm hàm validateProjectForm giống detail
+        validateProjectForm() {
+            this.validationErrors = {
+                category_id: '',
+                company_name: '',
+                customer_id: '',
+                name: '',
+                project_number: ''
+            };
+            let valid = true;
+            if (!this.newProject.category_id) {
+                this.validationErrors.category_id = '顧客カテゴリーは必須です';
+                valid = false;
+            }
+            if (!this.newProject.company_name) {
+                this.validationErrors.company_name = '会社名は必須です';
+                valid = false;
+            }
+            if (!this.newProject.customer_id) {
+                this.validationErrors.customer_id = '担当者名は必須です';
+                valid = false;
+            }
+            if (!this.project.project_number) {
+                this.validationErrors.project_number = 'プロジェクト番号は必須です';
+                valid = false;
+            }
+            if (!this.project.name) {
+                this.validationErrors.name = 'プロジェクト名は必須です';
+                valid = false;
+            }
+            return valid;
+        },
+        // Image handler giống project-detail.js
+        imageHandler() {
+            if (!this.projectId) {
+                if (typeof showMessage === 'function') showMessage('まずプロジェクトを保存してください。その後で画像をアップロードできます。', true);
+                return;
+            }
+            const input = document.createElement('input');
+            input.setAttribute('type', 'file');
+            input.setAttribute('accept', 'image/*');
+            input.click();
+            
+            input.onchange = async () => {
+                const file = input.files[0];
+                if (file) {
+                    try {
+                        // Kiểm tra kích thước file (max 5MB)
+                        if (file.size > 5 * 1024 * 1024) {
+                            if (typeof showMessage === 'function') showMessage('ファイルサイズは5MB以下にしてください。', true);
+                            return;
+                        }
+                        // Upload ảnh
+                        const uploadUrl = '/api/quill-image-upload.php';
+                        let response;
+                        if (window.swManager && window.swManager.swRegistration) {
+                            // Sử dụng Service Worker với project_id nếu có
+                            response = await window.swManager.uploadFile(file, uploadUrl, { project_id: this.projectId });
+                        } else {
+                            // Fallback to regular upload
+                            const formData = new FormData();
+                            formData.append('image', file);
+                            if (this.projectId) formData.append('project_id', this.projectId);
+                            const uploadResponse = await axios.post(uploadUrl, formData, {
+                                headers: {
+                                    'Content-Type': 'multipart/form-data'
+                                }
+                            });
+                            response = uploadResponse.data;
+                        }
+                        if (response.success) {
+                            // Chèn ảnh vào cuối editor mà không dùng getSelection
+                            requestAnimationFrame(() => {
+                                try {
+                                    if (this.quillInstance && this.quillInstance.root) {
+                                        // Lấy độ dài hiện tại của nội dung
+                                        const length = this.quillInstance.getLength();
+                                        // Chèn ảnh ở cuối
+                                        this.quillInstance.insertEmbed(length - 1, 'image', response.url);
+                                        this.quillInstance.insertText(length, '\n');
+                                        // Focus vào editor
+                                        this.quillInstance.focus();
+                                        // Scroll xuống cuối
+                                        if (this.quillInstance.scrollingContainer) {
+                                            this.quillInstance.scrollingContainer.scrollTop = this.quillInstance.scrollingContainer.scrollHeight;
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.error('Error inserting image:', error);
+                                    // Fallback: append trực tiếp vào HTML
+                                    if (this.quillInstance && this.quillInstance.root) {
+                                        const imageHtml = `<p><img src="${response.url}" alt="Uploaded image" style="max-width: 100%; height: auto;"></p>`;
+                                        this.quillInstance.root.innerHTML += imageHtml;
+                                    }
+                                }
+                            });
+                        } else {
+                            if (typeof showMessage === 'function') showMessage('画像のアップロードに失敗しました: ' + (response.error || 'Unknown error'), true);
+                        }
+                    } catch (error) {
+                        console.error('Error uploading image:', error);
+                        if (typeof showMessage === 'function') showMessage('画像のアップロードに失敗しました。', true);
+                    }
+                }
+            };
         },
     },
     watch: {

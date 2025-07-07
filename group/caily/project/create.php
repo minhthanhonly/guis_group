@@ -41,6 +41,9 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                                         {{ category.name }}
                                     </option>
                                 </select>
+                                <div v-if="validationErrors.category_id" class="invalid-feedback d-block">
+                                    {{ validationErrors.category_id }}
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -52,28 +55,40 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                                         {{ company.company_name }}
                                     </option>
                                 </select>
+                                <div v-if="validationErrors.company_name" class="invalid-feedback d-block">
+                                    {{ validationErrors.company_name }}
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="担当者名">担当者名</span> <span class="text-danger">*</span></label>
-                                <div class="d-flex gap-2 justify-content-between">
+                                <div class="">
                                     <select id="customer_id" class="form-select select2 flex-shrink-1" v-model="newProject.customer_id" name="customer_id" required>
                                         <option value="" data-i18n="選択してください">選択してください</option>
                                         <option v-for="contact in contacts" :key="contact.id" :value="contact.id">
                                             {{ contact.name }}
                                         </option>
                                     </select>
+                                    <div v-if="validationErrors.customer_id" class="invalid-feedback d-block">
+                                        {{ validationErrors.customer_id }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label"><span data-i18n="プロジェクト番号">プロジェクト番号</span></label>
-                            <input type="text" class="form-control" v-model="project.project_number">
+                            <label class="form-label"><span data-i18n="プロジェクト番号">プロジェクト番号</span> <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" v-model="project.project_number" required>
+                            <div v-if="validationErrors.project_number" class="invalid-feedback d-block">
+                                {{ validationErrors.project_number }}
+                            </div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label"><span data-i18n="プロジェクト名">プロジェクト名</span> <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" v-model="project.name" required>
+                            <div v-if="validationErrors.name" class="invalid-feedback d-block">
+                                {{ validationErrors.name }}
+                            </div>
                         </div>
                         
                         <div class="col-md-4">

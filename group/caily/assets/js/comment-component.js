@@ -670,7 +670,7 @@ window.CommentComponent = {
                         }
                     } catch (error) {
                         console.error('Error uploading image:', error);
-                        this.$emit('error', { type: 'image', message: '画像のアップロードに失敗しました。' });
+                        this.$emit('error', { type: 'image', message: '画像のアップロードに失敗しました。' + error});
                     }
                 }
             };
