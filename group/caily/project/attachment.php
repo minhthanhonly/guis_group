@@ -62,10 +62,10 @@ if (!$project_id) {
                             添付ファイル管理
                         </h5>
                         <div>
-                            <button class="btn btn-outline-primary btn-sm me-2" @click="showCreateFolderModal" v-if="canManageProject">
+                            <button class="btn btn-outline-primary btn-sm me-2" @click="showCreateFolderModal" v-if="canViewProject">
                                 <i class="fa fa-folder-plus me-1"></i>フォルダ作成
                             </button>
-                            <button class="btn btn-primary btn-sm" @click="showUploadModal" v-if="canManageProject">
+                            <button class="btn btn-primary btn-sm" @click="showUploadModal" v-if="canViewProject">
                                 <i class="fa fa-upload me-1"></i>ファイルアップロード
                             </button>
                         </div>
@@ -102,7 +102,7 @@ if (!$project_id) {
                         </div>
                         
                         <!-- Select All Checkbox -->
-                        <div v-if="files.length > 0 && canManageProject" class="mb-3">
+                        <div v-if="files.length > 0 && canViewProject" class="mb-3">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" 
                                        v-model="selectAllFiles" 
@@ -134,7 +134,7 @@ if (!$project_id) {
                                 <table class="table table-hover">
                                     <thead class="table-light">
                                         <tr>
-                                            <th style="width: 40px;" v-if="canManageProject"></th>
+                                            <th style="width: 40px;" v-if="canViewProject"></th>
                                             <th style="width: 40px;"></th>
                                             <th @click="sortBy('name')" style="cursor: pointer;">
                                                 <div class="d-flex align-items-center">
@@ -166,13 +166,13 @@ if (!$project_id) {
                                                     <i class="fa ms-1" :class="getSortIcon('uploaded_by_name')"></i>
                                                 </div>
                                             </th>
-                                            <th style="width: 100px;" v-if="canManageProject">操作</th>
+                                            <th style="width: 100px;" v-if="canViewProject">操作</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <!-- Folders -->
                                         <tr v-for="folder in sortedFolders" :key="'folder-' + folder.id">
-                                            <td v-if="canManageProject">
+                                            <td v-if="canViewProject">
                                                 <!-- Empty cell for folders -->
                                             </td>
                                             <td>
@@ -192,7 +192,7 @@ if (!$project_id) {
                                             <td>-</td>
                                             <td>{{ formatDateTime(folder.updated_at) }}</td>
                                             <td>{{ folder.created_by_name }}</td>
-                                            <td v-if="canManageProject">
+                                            <td v-if="canViewProject">
                                                 <div class="dropdown">
                                                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                                                         <i class="fa fa-ellipsis-v"></i>
@@ -215,7 +215,7 @@ if (!$project_id) {
                                         <!-- Files -->
                                         <tr v-for="file in sortedFiles" :key="'file-' + file.id" 
                                             :class="{ 'table-primary': isFileSelected(file.id) }">
-                                            <td v-if="canManageProject">
+                                            <td v-if="canViewProject">
                                                 <div class="form-check">
                                                     <input class="form-check-input" type="checkbox" 
                                                            :checked="isFileSelected(file.id)"
@@ -240,7 +240,7 @@ if (!$project_id) {
                                             <td>{{ formatFileSize(file.file_size) }}</td>
                                             <td>{{ formatDateTime(file.uploaded_at) }}</td>
                                             <td>{{ file.uploaded_by_name }}</td>
-                                            <td v-if="canManageProject">
+                                            <td v-if="canViewProject">
                                                 <div class="dropdown">
                                                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                                                         <i class="fa fa-ellipsis-v"></i>
