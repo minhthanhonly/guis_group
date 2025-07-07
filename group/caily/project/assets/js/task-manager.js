@@ -85,6 +85,7 @@ const TaskApp = createApp({
                 addComment: '/api/index.php?model=task&method=addComment',
                 toggleLike: '/api/index.php?model=task&method=toggleLike'
             },
+            unreadComments: {}, // { taskId: count }
         }
     },
     
@@ -327,12 +328,26 @@ const TaskApp = createApp({
                 });
                 
                 this.tasks = tasks;
-                //this.updateDataTable();
+                this.unreadComments = {};
+                tasks.forEach(task => {
+                    this.unreadComments[task.id] = task.unread_count || 0;
+                });
+                // Sau khi load tasks, load số comment chưa đọc
+                // await this.loadUnreadComments( );
             } catch (error) {
                 console.error('Error loading tasks:', error);
                 this.showMessage('タスクの読み込みに失敗しました。', true);
             }
         },
+        
+        // async loadUnreadComments() {
+        //     try {
+        //         const response = await axios.get(`/api/index.php?model=task&method=getTaskUnreadCommentCount&task_id=${this.selectedTask.id}`);
+        //         this.unreadComments = response.data && response.data.unread_count > 0 ? response.data.unread_count : 0;
+        //     } catch (e) {
+        //         this.unreadComments = 0;
+        //     }
+        // },
         
         async loadUsers() {
             try {
@@ -1304,7 +1319,6 @@ const TaskApp = createApp({
             setTimeout(() => {
                 this.initQuillEditor();
             }, 300);
-            
             // Add event listener for tab changes
             this.$nextTick(() => {
                 const taskDetailsModal = document.getElementById('taskDetailsModal');
@@ -1313,6 +1327,9 @@ const TaskApp = createApp({
                         if (event.target.getAttribute('data-bs-target') === '#history') {
                             if (this.taskLogs.length === 0) {
                                 this.loadTaskLogs(task.id);
+                            }
+                            if (event.target.getAttribute('data-bs-target') === '#comments') {
+                                this.markCommentsAsRead(task.id);
                             }
                         }
                     });
@@ -1651,7 +1668,36 @@ const TaskApp = createApp({
         handleCommentError(error) {
             console.error('Comment component error:', error);
             this.showMessage(error.message || 'コメントの処理中にエラーが発生しました', true);
-        }
+        },
+        
+        getUnreadCommentCount(taskId) {
+            return this.unreadComments[taskId] || 0;
+        },
+        
+        openTaskComments(task) {
+            this.selectedTask = task;
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('taskDetailsModal'));
+            modal.show();
+            // Chuyển sang tab comment
+            this.$nextTick(() => {
+                const tabBtn = document.querySelector('#taskDetailsModal [data-bs-target="#comments"]');
+                if (tabBtn) tabBtn.click();
+
+                this.markCommentsAsRead(task.id);
+            });
+        },
+        
+        async markCommentsAsRead(taskId) {
+            try {
+                const formData = new FormData();
+                formData.append('task_id', taskId);
+                await axios.post('/api/index.php?model=task&method=markTaskCommentsAsRead', formData);
+                // Cập nhật lại số comment chưa đọc
+                this.unreadComments[taskId] = 0;
+                //await this.loadUnreadComment(taskId);
+            } catch (e) {}
+        },
     }
 });
 

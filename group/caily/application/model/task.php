@@ -67,9 +67,13 @@ class Task extends ApplicationModel {
         );
         
         $tasks = $this->fetchAll($query);
+
+        
         
         if ($include_subtasks) {
             foreach ($tasks as &$task) {
+                $unread_count = $this->getTaskUnreadCommentCount($task['id']);
+                $task['unread_count'] = $unread_count['unread_count'] ?? 0;
                 if ($task['subtask_count'] > 0) {
                     $task['subtasks'] = $this->getSubtasks($task['id']);
                 }
@@ -1215,5 +1219,47 @@ class Task extends ApplicationModel {
         $result = $this->query_delete(['id' => $comment_id]);
         $this->table = DB_PREFIX . 'tasks';
         return $result ? ['success' => true] : ['success' => false, 'message' => 'Delete failed'];
+    }
+
+   
+    // API: Lấy số comment chưa đọc của 1 task cho user hiện tại dựa vào thời gian truy cập
+    function getTaskUnreadCommentCount($task_id = null) {
+        if(!$task_id) {
+            $task_id = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
+        }
+        $user_id = $_SESSION['userid'] ?? '';
+        if (!$task_id || !$user_id) return ['unread_count' => 0];
+        // Lấy thời gian đã đọc gần nhất
+        $sqlRead = "SELECT read_at FROM groupware_comment_reads WHERE task_id = $task_id AND user_id = '" . $this->quote($user_id) . "' ORDER BY read_at DESC LIMIT 1";
+        $rowRead = $this->fetchOne($sqlRead);
+        $read_at = $rowRead && !empty($rowRead['read_at']) ? $rowRead['read_at'] : null;
+        if ($read_at) {
+            // Đếm số comment mới hơn thời gian đã đọc
+            $sql = "SELECT COUNT(*) as unread_count FROM " . DB_PREFIX . "comments WHERE user_id != '" . $this->quote($user_id) . "' AND task_id = $task_id AND created_at > '" . $this->quote($read_at) . "'";
+        } else {
+            // Nếu chưa từng đọc, trả về tổng số comment
+            $sql = "SELECT COUNT(*) as unread_count FROM " . DB_PREFIX . "comments WHERE user_id != '" . $this->quote($user_id) . "' AND task_id = $task_id";
+        }
+        $row = $this->fetchOne($sql);
+        return ['unread_count' => intval($row['unread_count'] ?? 0)];
+    }
+
+    // Khi truy cập task, update hoặc insert read_at = NOW()
+    function markTaskCommentsAsRead() {
+        $task_id = isset($_POST['task_id']) ? intval($_POST['task_id']) : 0;
+        $user_id = $_SESSION['userid'] ?? '';
+        if (!$task_id || !$user_id) return ['success' => false, 'message' => 'Invalid parameters'];
+        $now = date('Y-m-d H:i:s');
+        // Nếu đã có bản ghi thì update, chưa có thì insert
+        $sql = "SELECT id FROM groupware_comment_reads WHERE task_id = $task_id AND user_id = '" . $this->quote($user_id) . "'";
+        $row = $this->fetchOne($sql);
+        if ($row && isset($row['id'])) {
+            $update = "UPDATE groupware_comment_reads SET read_at = '$now' WHERE id = " . intval($row['id']);
+            $this->query($update);
+        } else {
+            $insert = "INSERT INTO groupware_comment_reads (task_id, user_id, read_at) VALUES ($task_id, '" . $this->quote($user_id) . "', '$now')";
+            $this->query($insert);
+        }
+        return ['success' => true];
     }
 } 

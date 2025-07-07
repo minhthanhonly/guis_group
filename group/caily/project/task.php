@@ -331,6 +331,10 @@ if (!$project_id) {
                         <button v-if="task.indent_level > 0" class="btn btn-sm btn-outline-secondary me-1" @click="decreaseIndent(task)" title="サブタスクを解除">
                             <i class="fas fa-arrow-left"></i>
                         </button>
+                        <button class="btn btn-sm btn-outline-info position-relative me-1" @click="openTaskComments(task)" title="コメント">
+                            <i class="fas fa-comment"></i>
+                            <span v-if="getUnreadCommentCount(task.id) > 0" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:10px;">{{ getUnreadCommentCount(task.id) }}</span>
+                        </button>
                         <button class="btn btn-sm btn-outline-danger" @click="deleteTask(task)"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
