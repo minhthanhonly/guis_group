@@ -43,6 +43,8 @@ class NotificationManager {
             this.listenLastNotificationId();
             this.setupMarkAll();
             
+            // Thông báo đã sẵn sàng
+            document.dispatchEvent(new Event('notificationManagerReady'));
             
         } catch (error) {
             console.error('Failed to initialize Firebase Notification Manager:', error);
@@ -596,6 +598,24 @@ class NotificationManager {
                     avatar.classList.add('avatar-offline');
                 }
             });
+        });
+    }
+
+    // Lắng nghe realtime comment cho project (Firebase)
+    listenProjectCommentRealtime(projectId, reloadCallback) {
+        if (!this.database || !projectId || typeof reloadCallback !== 'function') return;
+        const channel = 'project_' + projectId;
+        const ref = this.database.ref('notifications/' + channel);
+        
+        // Lắng nghe thay đổi của last_comment_id
+        ref.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data && data.last_comment_id) {
+                reloadCallback({
+                    last_comment_id: data.last_comment_id,
+                    timestamp: Date.now()
+                });
+            }
         });
     }
 }

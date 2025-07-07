@@ -65,4 +65,12 @@ class NotificationService {
         }
         return ['success' => true, 'notification_id' => $notification_id];
     }
+    
+    function sendProjectCommentNotification($project_id, $comment_id) {
+        $this->firebase->sendNotification('project_' . $project_id, 'new-comment', [
+            'comment_id' => $comment_id,
+            'project_id' => $project_id
+        ]);
+        return ['success' => true];
+    }
 } 

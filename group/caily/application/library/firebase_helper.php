@@ -21,10 +21,7 @@ class FirebaseHelper {
         }
         
         $notification = [
-            'event' => $event,
-            'data' => $data,
-            'timestamp' => time(),
-            'created_at' => date('Y-m-d H:i:s')
+            'last_comment_id' => $data['comment_id'],
         ];
         
         $url = $this->databaseUrl . '/notifications/' . $channel . '.json';
@@ -32,7 +29,7 @@ class FirebaseHelper {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($notification));
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',

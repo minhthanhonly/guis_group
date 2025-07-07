@@ -50,7 +50,8 @@
     <script src="<?=$root?>assets/vendor/js/template-customizer.js?v=<?=CACHE_VERSION?>"></script>
     <script src="<?=$root?>assets/vendor/js/helpers.js?v=<?=CACHE_VERSION?>"></script>
     <script src="<?=$root?>assets/js/config.js?v=<?=CACHE_VERSION?>"></script>
-    
+    <!-- Notification System -->
+<script src="<?=$root?>assets/js/notification.js?v=<?=CACHE_VERSION?>"></script>
   </head>
 
   <body<?=$onload?>>

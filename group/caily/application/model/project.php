@@ -791,9 +791,7 @@ class Project extends ApplicationModel {
         
         // Send mention notifications if comment was added successfully
         if ($result) {
-            
             $this->sendMentionNotifications($data['project_id'], $data['content'], $data['user_id'], $result);
-          
             return ['success' => true, 'message' => 'Comment added successfully'];
         }
         return ['success' => false, 'message' => 'Comment addition failed'];
@@ -842,7 +840,7 @@ class Project extends ApplicationModel {
             // Remove like
             $result = $this->query(sprintf(
                 "DELETE FROM " . DB_PREFIX . "comment_likes 
-                 WHERE comment_id = %d AND user_id = %d",
+                 WHERE comment_id = %d AND user_id = '%s'",
                 $comment_id, $user_id
             ));
         }
@@ -884,8 +882,7 @@ class Project extends ApplicationModel {
         try {
             require_once(DIR_ROOT . '/application/model/NotificationService.php');
             $notiService = new NotificationService();
-
-            
+            $notiService->sendProjectCommentNotification($projectId, $commentId);
             // Extract mentioned users from content
             $mentionedUsers = $this->extractMentions($content);
             

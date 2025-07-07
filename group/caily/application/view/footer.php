@@ -46,8 +46,6 @@
 <script type="text/javascript" src="<?=$root?>js/library/jquery-ui.min.js"></script>
 <script type="text/javascript" src="<?=$root?>js/application.js?v=<?=CACHE_VERSION?>"></script>
 
-<!-- Notification System -->
-<script src="<?=$root?>assets/js/notification.js?v=<?=CACHE_VERSION?>"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <link rel="stylesheet" href="<?=ROOT?>assets/css/image-modal.css">
 <script src="<?=ROOT?>assets/js/image-modal.js"></script>

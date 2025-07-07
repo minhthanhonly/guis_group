@@ -980,9 +980,11 @@ class Task extends ApplicationModel {
             }
         } else {
             // Unlike
-            $this->query_delete([
-                'comment_id' => $comment_id
-            ]);
+            $result = $this->query(sprintf(
+                "DELETE FROM " . DB_PREFIX . "comment_likes 
+                 WHERE comment_id = %d AND user_id = '%s'",
+                $comment_id, $user_id
+            ));
         }
         
         // Get updated like count and names

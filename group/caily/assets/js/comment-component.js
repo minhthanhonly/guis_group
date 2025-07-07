@@ -602,17 +602,22 @@ window.CommentComponent = {
         updateTooltips() {
             // Update tooltips after comments are loaded or updated
             this.$nextTick(() => {
-                // Destroy existing tooltips
+                // Update existing tooltips or create new ones
                 const tooltipElements = document.querySelectorAll('[data-bs-toggle="tooltip"]');
                 tooltipElements.forEach(el => {
                     const tooltip = bootstrap.Tooltip.getInstance(el);
                     if (tooltip) {
-                        tooltip.dispose();
+                        // Update the tooltip content
+                        const newTitle = el.getAttribute('title') || el.getAttribute('data-bs-original-title') || '';
+                        tooltip.setContent({ '.tooltip-inner': newTitle });
+                    } else {
+                        // Create new tooltip if it doesn't exist
+                        new bootstrap.Tooltip(el, {
+                            trigger: 'hover',
+                            html: true
+                        });
                     }
                 });
-                
-                // Reinitialize tooltips
-                this.initTooltips();
             });
         },
         
@@ -1038,8 +1043,21 @@ window.CommentComponent = {
             // Check URL hash after everything is initialized
             this.checkUrlHash();
             this.addZoomToImages();
+
+
+            document.addEventListener('notificationManagerReady', () => {
+                if (this.entityType === 'project' && PROJECT_ID && window.notificationManager) {
+                    window.notificationManager.listenProjectCommentRealtime(PROJECT_ID, () => {
+                        this.loadComments();
+                        this.scrollToCommentBottom();
+                    });
+                }
+            });
         });
         
+        // Lắng nghe realtime comment nếu là project
+        
+      
         // Handle browser back/forward buttons
         window.addEventListener('popstate', this.handlePopState);
     },
