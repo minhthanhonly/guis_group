@@ -468,11 +468,13 @@ var projectTable;
             clearTimeout(timer2);
             timer2 = setTimeout(function() {
                 saveFiltersToLocalStorage();
+                renderActiveFilters();
                 if (projectTable) projectTable.ajax.reload();
             }, 500);
         });
         $('#showInactiveSwitch').on('change', function() {
             saveFiltersToLocalStorage();
+            renderActiveFilters();
             if (projectTable) projectTable.ajax.reload();
         });
         $('#filterReset').on('click', function() {
@@ -526,7 +528,11 @@ var projectTable;
                     shorthand: true,
                     dateFormat: 'Y-m',
                     altFormat: 'Y年m月',
-                })]
+                })],
+                onChange: function(date) {
+                    saveFiltersToLocalStorage();
+                    renderActiveFilters();
+                }
             });
             $('#filterEndMonth').flatpickr({
                 locale: 'ja',
@@ -534,10 +540,12 @@ var projectTable;
                     shorthand: true,
                     dateFormat: 'Y-m',
                     altFormat: 'Y年m月',
-                })]
+                })],
+                onChange: function(date) {
+                    saveFiltersToLocalStorage();
+                    renderActiveFilters();
+                }
             });
-            // Gọi renderActiveFilters sau khi khởi tạo flatpickr
-            renderActiveFilters();
         }
 
         var category_id = $('#category_id');
