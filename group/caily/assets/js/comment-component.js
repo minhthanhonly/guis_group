@@ -419,6 +419,7 @@ window.CommentComponent = {
                 // Add text change listener to update button state
                 this.quillInstance.on('text-change', () => {
                     this.updateEditorContent();
+                    this.addZoomToDescriptionImages();
                 });
                 
                 // Add blur/focus listeners
@@ -896,14 +897,6 @@ window.CommentComponent = {
                 this.checkUrlHash();
             }
         },
-        addZoomToImages() {
-            this.$nextTick(() => {
-                const imgs = this.$el.querySelectorAll('.comment-content img:not([data-zoom])');
-                imgs.forEach(img => {
-                    img.setAttribute('data-zoom', '');
-                });
-            });
-        },
         startEditComment(comment) {
             this.editingCommentId = comment.id;
             this.editContent = comment.content;
@@ -1024,6 +1017,18 @@ window.CommentComponent = {
                 });
             }
         },
+
+        addZoomToDescriptionImages() {
+            this.$nextTick(() => {
+                // View mode
+                const descEls = document.querySelectorAll('.project-description, #project-description, .ql-editor');
+                descEls.forEach(el => {
+                    el.querySelectorAll('img:not([data-zoom])').forEach(img => {
+                        img.setAttribute('data-zoom', '');
+                    });
+                });
+            });
+        },
     },
     
     async mounted() {
@@ -1042,7 +1047,7 @@ window.CommentComponent = {
             
             // Check URL hash after everything is initialized
             this.checkUrlHash();
-            this.addZoomToImages();
+            this.addZoomToDescriptionImages();
             let inited = false;
 
             if (this.entityType === 'project' && this.entityId && window.notificationManager && !inited) {
@@ -1096,7 +1101,7 @@ window.CommentComponent = {
     },
     watch: {
         comments() {
-            this.addZoomToImages();
+            this.addZoomToDescriptionImages();
         }
     }
 }; 
