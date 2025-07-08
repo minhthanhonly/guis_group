@@ -69,8 +69,38 @@ var projectTable;
             color: 'danger'
         },
     ];
+    // --- LocalStorage filter state ---
+    const FILTER_STORAGE_KEY = 'projectListFilters';
+
+    function saveFiltersToLocalStorage() {
+        const filters = {
+            filterStartMonth: $('#filterStartMonth').val(),
+            filterEndMonth: $('#filterEndMonth').val(),
+            filterPriority: $('#filterPriority').val(),
+            filterProgress: $('#filterProgress').val(),
+            filterTimeLeft: $('#filterTimeLeft').val(),
+            filterKeyword: $('#filterKeyword').val(),
+            showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0
+        };
+        localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+    }
+
+    function loadFiltersFromLocalStorage() {
+        const filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        if (filters.filterStartMonth !== undefined) $('#filterStartMonth').val(filters.filterStartMonth);
+        if (filters.filterEndMonth !== undefined) $('#filterEndMonth').val(filters.filterEndMonth);
+        if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
+        if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
+        if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
+        if (filters.filterKeyword !== undefined) $('#filterKeyword').val(filters.filterKeyword);
+        if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
+    }
+
     $(document).ready(function() {
 
+        // Khôi phục filter từ localStorage trước khi load projectTable
+        loadFiltersFromLocalStorage();
+        // Khởi tạo DataTable sau khi filter đã được khôi phục
         projectData = [];
         projectTable = $('#projectTable').DataTable({
             serverSide: true,
@@ -79,6 +109,14 @@ var projectTable;
                 url: '/api/index.php',
                 type: 'GET',
                 data: function(d) {
+                    // Thu thập filter từ form
+                    const filterStartMonth = $('#filterStartMonth').val();
+                    const filterEndMonth = $('#filterEndMonth').val();
+                    const filterPriority = $('#filterPriority').val();
+                    const filterProgress = $('#filterProgress').val();
+                    const filterTimeLeft = $('#filterTimeLeft').val();
+                    const filterKeyword = $('#filterKeyword').val();
+                    const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
                     return {
                         model: 'project',
                         method: 'list',
@@ -89,7 +127,14 @@ var projectTable;
                         length: d.length,
                         search: d.search.value,
                         order_column: d.columns[d.order[0].column].data,
-                        order_dir: d.order[0].dir
+                        order_dir: d.order[0].dir,
+                        filterStartMonth,
+                        filterEndMonth,
+                        filterPriority,
+                        filterProgress,
+                        filterTimeLeft,
+                        filterKeyword,
+                        showInactive
                     };
                 },
                 dataSrc: function(response) {
@@ -98,7 +143,7 @@ var projectTable;
             },
             paging: true,
             info: true,
-            searching: true,
+            searching: false,
             scrollX: true,
             columns: [
                 { 
@@ -351,6 +396,24 @@ var projectTable;
             }
         }, 60000); // Cập nhật mỗi phút
 
+        // Khôi phục filter từ localStorage khi load trang
+        // loadFiltersFromLocalStorage(); // Moved up
+        // Khi thay đổi filter thì lưu lại
+        $('#projectFilterForm select, #projectFilterForm input').on('change keyup', function() {
+            saveFiltersToLocalStorage();
+            if (projectTable) projectTable.ajax.reload();
+        });
+        $('#showInactiveSwitch').on('change', function() {
+            saveFiltersToLocalStorage();
+            if (projectTable) projectTable.ajax.reload();
+        });
+        $('#filterReset').on('click', function() {
+            localStorage.removeItem(FILTER_STORAGE_KEY);
+            $('#projectFilterForm')[0].reset();
+            $('#showInactiveSwitch').prop('checked', false);
+            if (projectTable) projectTable.ajax.reload();
+        });
+
         // イベントハンドラー
         $(document).on('click', '.item-edit', function() {
             const id = $(this).data('id');
@@ -386,6 +449,26 @@ var projectTable;
                 console.log(date);
             }
         });
+
+        // Khởi tạo flatpickr dạng tháng (month picker) cho filterStartMonth và filterEndMonth
+        if (window.flatpickr) {
+            $('#filterStartMonth').flatpickr({
+                locale: 'ja',
+                plugins: [new monthSelectPlugin({
+                    shorthand: true,
+                    dateFormat: 'Y-m',
+                    altFormat: 'Y年m月',
+                })]
+            });
+            $('#filterEndMonth').flatpickr({
+                locale: 'ja',
+                plugins: [new monthSelectPlugin({
+                    shorthand: true,
+                    dateFormat: 'Y-m',
+                    altFormat: 'Y年m月',
+                })]
+            });
+        }
 
         var category_id = $('#category_id');
         var company_name = $('#company_name');
@@ -607,6 +690,14 @@ var projectTable;
                 app.newProject.customer_id = '';
             });
         }
+        
+        // Render option cho filterPriority dựa trên priorities
+        var $priority = $('#filterPriority');
+        $priority.empty();
+        $priority.append('<option value="">すべて</option>');
+        priorities.forEach(function(p) {
+            $priority.append('<option value="' + p.key + '">' + p.name + '</option>');
+        });
         
     });
 

@@ -85,14 +85,57 @@ class Project extends ApplicationModel {
             $whereArr[] = "p.status != 'deleted'";
         }
 
-        // Add search condition
-        if (!empty($search)) {
-            $whereArr[] = sprintf(
-                "(p.name LIKE '%%%s%%' OR p.project_number LIKE '%%%s%%' OR p.description LIKE '%%%s%%')",
-                $this->escape($search),
-                $this->escape($search),
-                $this->escape($search)
-            );
+
+        // Nếu có filterKeyword thì chỉ áp dụng điều kiện tìm kiếm keyword, bỏ qua các filter nâng cao khác
+        $hasKeyword = isset($_GET['filterKeyword']) && $_GET['filterKeyword'] !== '';
+        $hasStatus = isset($_GET['status']) && $_GET['status'] !== '' && $_GET['status'] !== 'all';
+        $showInactive = isset($_GET['showInactive']) && $_GET['showInactive'] == '1';
+        if ($hasKeyword) {
+            $kw = $this->escape($_GET['filterKeyword']);
+            $whereArr[] = "(p.name LIKE '%$kw%' 
+            OR p.project_number LIKE '%$kw%' 
+            OR p.description LIKE '%$kw%' 
+            OR p.tags LIKE '%$kw%'
+            OR c.company_name LIKE '%$kw%'
+            OR c.company_name_kana LIKE '%$kw%'
+            OR c.name_kana LIKE '%$kw%'
+            OR c.name LIKE '%$kw%')";
+        } else {
+            // --- Advanced Filters ---
+            if (isset($_GET['filterStartMonth']) && $_GET['filterStartMonth'] !== '') {
+                $month = $this->escape($_GET['filterStartMonth']);
+                $whereArr[] = "DATE_FORMAT(p.start_date, '%Y-%m') = '$month'";
+            }
+            if (isset($_GET['filterEndMonth']) && $_GET['filterEndMonth'] !== '') {
+                $month = $this->escape($_GET['filterEndMonth']);
+                $whereArr[] = "DATE_FORMAT(p.end_date, '%Y-%m') = '$month'";
+            }
+            if (isset($_GET['filterPriority']) && $_GET['filterPriority'] !== '') {
+                $priority = $this->escape($_GET['filterPriority']);
+                $whereArr[] = "p.priority = '$priority'";
+            }
+            if (isset($_GET['filterProgress']) && $_GET['filterProgress'] !== '') {
+                $progress = $_GET['filterProgress'];
+                if ($progress === '100') {
+                    $whereArr[] = "p.progress = 100";
+                } else if ($progress === '0-50') {
+                    $whereArr[] = "p.progress >= 0 AND p.progress <= 50";
+                } else if ($progress === '51-99') {
+                    $whereArr[] = "p.progress >= 51 AND p.progress <= 99";
+                }
+            }
+            if (isset($_GET['filterTimeLeft']) && $_GET['filterTimeLeft'] !== '') {
+                $val = $_GET['filterTimeLeft'];
+                if ($val === 'overdue') {
+                    $whereArr[] = "p.end_date < NOW() AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
+                } else if (is_numeric($val)) {
+                    $whereArr[] = "p.end_date >= NOW() AND p.end_date <= DATE_ADD(NOW(), INTERVAL ".$this->quote($val)." DAY) AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
+                }
+            }
+            // Điều kiện mặc định: nếu không có status và không bật showInactive thì chỉ hiển thị active
+            if (!$hasStatus && !$showInactive) {
+                $whereArr[] = "p.status NOT IN ('completed', 'cancelled', 'deleted')";
+            }
         }
 
         $where = implode(" AND ", $whereArr);
@@ -100,8 +143,19 @@ class Project extends ApplicationModel {
             $where = " WHERE " . $where;
         }
 
+        // Sắp xếp ưu tiên nếu showInactive=1
+        $orderBy = '';
+        $orderBy = sprintf('ORDER BY p.%s %s', $this->escape($order_column), $this->escape($order_dir));
+        if (isset($_GET['showInactive']) && $_GET['showInactive'] == '1') {
+            // Active lên trước, sau đó mới completed/cancelled/deleted, rồi mới sắp xếp end_date, status
+            $orderBy .= ", (CASE WHEN p.status IN ('completed','cancelled','deleted') THEN 1 ELSE 0 END) ASC, p.end_date ASC, p.status ASC";
+        }
+
         // Get total records count
-        $totalQuery = "SELECT COUNT(*) as count FROM {$this->table} p" . $where;
+        $totalQuery = "SELECT COUNT(*) as count FROM {$this->table} p
+        JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+        JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+        " . $where;
         $totalRecords = $this->fetchOne($totalQuery)['count'];
 
         // Get filtered records count
@@ -111,7 +165,7 @@ class Project extends ApplicationModel {
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
             c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
-            CONCAT(gc.name, ' ', gc.title) as customer_name,
+            CONCAT(c.name, ' ', c.title) as customer_name,
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
@@ -119,22 +173,18 @@ class Project extends ApplicationModel {
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
-             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
-            (SELECT GROUP_CONCAT(pm.user_id) FROM " . DB_PREFIX . "project_members pm WHERE p.id = pm.project_id AND pm.role = 'viewer') as viewer_id
+             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id
             FROM {$this->table} p 
-            LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
-            LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
-            LEFT JOIN " . DB_PREFIX . "customer gc ON gc.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+            JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+            JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
             %s
-            ORDER BY p.%s %s
+            %s
             LIMIT %d, %d",
             $where,
-            $this->escape($order_column),
-            $this->escape($order_dir),
+            $orderBy,
             $start,
             $length
         );
-
 
         
         $data = $this->fetchAll($query);
