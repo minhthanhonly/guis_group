@@ -2321,6 +2321,7 @@ const vueApp = createApp({
         // Start timer to update time remaining every minute
         this.timeRemainingTimer = setInterval(() => {
             // Force Vue to re-render the time remaining badge
+            // only update bagde
             this.$forceUpdate();
         }, 60000); // Update every minute
 

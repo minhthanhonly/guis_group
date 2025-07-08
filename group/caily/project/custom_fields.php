@@ -90,7 +90,7 @@ $view->heading('カスタムフィールド管理');
                                         </select>
                                     </td>
                                     <td>
-                                        <input class="form-control" v-model="field.options" :disabled="!['select','radio','checkbox'].includes(field.type)" placeholder="A,B,C">
+                                        <input class="form-control" v-model="field.options" :disabled="!['select','radio','checkbox'].includes(field.type)" :placeholder="field.type === 'select' || field.type === 'radio' || field.type === 'checkbox' ? 'A,B,C' : ''">
                                     </td>
                                     <td>
                                         <button class="btn btn-outline-danger btn-sm" @click="removeFieldFromModal(idx)"><i class="fa fa-times"></i></button>

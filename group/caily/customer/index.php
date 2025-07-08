@@ -126,7 +126,7 @@ $view->heading('顧客情報');
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
-                                        <th>会社名/支店名</th>
+                                        <th>会社名会社名/支店名</th>
                                         <th>担当者名</th>
                                         <!-- <th>敬称</th> -->
                                         <th>担当部署</th>
@@ -188,8 +188,9 @@ $view->heading('顧客情報');
                                     </select>
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">会社名/支店名</label>
+                                    <label class="form-label">会社名/支店名  <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newCustomer.company_name" required>
+                                    <div v-if="customerErrors.company_name" class="text-danger small mt-1">{{ customerErrors.company_name }}</div>
                                 </div>
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">会社名/支店名(ふりがな)</label>
@@ -197,8 +198,9 @@ $view->heading('顧客情報');
                                 </div>
                             
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">担当者名</label>
+                                    <label class="form-label">担当者名  <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newCustomer.name" required>
+                                    <div v-if="customerErrors.name" class="text-danger small mt-1">{{ customerErrors.name }}</div>
                                 </div> 
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">担当者名(ふりがな)</label>
@@ -272,10 +274,11 @@ $view->heading('顧客情報');
                                 </div>
 
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">自社担当部署名</label>
+                                    <label class="form-label">自社担当部署名  <span class="text-danger">*</span></label>
                                     <select ref="guisDepartmentSelect" class="form-select select2" v-model="newCustomer.guis_department" required multiple>
                                         <option v-for="department in departments" :key="department.id" :value="department.id">{{ department.name }}</option>
                                     </select>
+                                    <div v-if="customerErrors.guis_department" class="text-danger small mt-1">{{ customerErrors.guis_department }}</div>
                                 </div>
                             
                                 <div class="col-md-12 mb-3">
@@ -338,6 +341,11 @@ $view->footing();
                         status: 1,
                         category_id: 0,
                         guis_department: [],
+                    },
+                    customerErrors: {
+                        company_name: '',
+                        name: '',
+                        guis_department: ''
                     }
                 }
             },
@@ -448,7 +456,9 @@ $view->footing();
                 editCustomer(customer) {
                     this.editingCustomer = customer;
                     this.newCustomer = { ...customer };
-                    $(this.$refs.guisDepartmentSelect).val(this.newCustomer.guis_department).trigger('change');
+                    this.$nextTick(() => {
+                        $(this.$refs.guisDepartmentSelect).val(this.newCustomer.guis_department).trigger('change');
+                    });
                     $('#customerModal').modal('show');
                 },
                 openNewCustomerModal() {
@@ -468,6 +478,22 @@ $view->footing();
                     }
                 },
                 async saveCustomer() {
+                    // Reset errors
+                    this.customerErrors = { company_name: '', name: '', guis_department: '' };
+                    let hasError = false;
+                    if (!this.newCustomer.company_name) {
+                        this.customerErrors.company_name = '会社名は必須です。';
+                        hasError = true;
+                    }
+                    if (!this.newCustomer.name) {
+                        this.customerErrors.name = '担当者名は必須です。';
+                        hasError = true;
+                    }
+                    if (!this.newCustomer.guis_department || this.newCustomer.guis_department.length === 0) {
+                        this.customerErrors.guis_department = '自社担当部署名は必須です。';
+                        hasError = true;
+                    }
+                    if (hasError) return;
                     try {
                         $reponse = null;
                         if (this.editingCustomer) {
@@ -543,7 +569,8 @@ $view->footing();
                     const selectElement = $(this.$refs.guisDepartmentSelect);
                     selectElement.select2();
                     selectElement.on('change', (event) => {
-                        this.newCustomer.guis_department = $(event.target).val();
+                        const val = $(event.target).val();
+                        this.newCustomer.guis_department = val ? val : [];
                     });
                 });
                 // Add event listener for modal hide
