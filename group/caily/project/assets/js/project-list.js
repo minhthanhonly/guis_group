@@ -164,6 +164,7 @@ var projectTable;
                 },
                 {
                     data: 'manager_id',
+                    orderable: false,
                     render: function(data) {
                         if (!data) return '-';
                         const members = data.split('|').filter(member => member.trim() !== '');
@@ -203,6 +204,7 @@ var projectTable;
                 },
                 {
                     data: 'assignment_id',
+                    orderable: false,
                     render: function(data) {
                         if (!data) return '-';
                         const members = data.split('|').filter(member => member.trim() !== '');

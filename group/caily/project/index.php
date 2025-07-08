@@ -29,23 +29,81 @@ $view->heading('プロジェクト管理');
             </div>
         </div>
     </nav>
+    <div class="mb-2">
+  <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#projectFilterBox" aria-expanded="false">
+    <i class="fa fa-filter me-1"></i> <span data-i18n="高度なフィルター">高度なフィルター</span>
+  </button>
+</div>
+<div class="collapse" id="projectFilterBox">
+  <div class="card mb-3">
+    <div class="card-body pb-4 pt-3">
+      <form class="row g-3" id="projectFilterForm" autocomplete="off">
+        <div class="col-md-3 col-6">
+          <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="開始月">開始月</label>
+          <select class="form-select form-select-sm" id="filterStartMonth"></select>
+        </div>
+        <div class="col-md-3 col-6">
+          <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="期限月">期限月</label>
+          <select class="form-select form-select-sm" id="filterEndMonth"></select>
+        </div>
+        <div class="col-md-3 col-6">
+          <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="優先度">優先度</label>
+          <select class="form-select form-select-sm" id="filterPriority"></select>
+        </div>
+        <div class="col-md-3 col-6">
+          <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="進捗率">進捗率</label>
+          <select class="form-select form-select-sm" id="filterProgress">
+            <option value="">すべて</option>
+            <option value="0-50">0-50%</option>
+            <option value="51-99">51-99%</option>
+            <option value="100">100%</option>
+          </select>
+        </div>
+        <div class="col-md-3 col-6">
+          <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="残り時間">残り時間</label>
+          <select class="form-select form-select-sm" id="filterTimeLeft">
+            <option value="">すべて</option>
+            <option value="7">7日以内</option>
+            <option value="30">30日以内</option>
+            <option value="overdue">期限切れ</option>
+          </select>
+        </div>
+        <div class="col-md-4 col-12">
+          <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="キーワード">キーワード</label>
+          <input type="text" class="form-control form-control-sm" id="filterKeyword" placeholder="検索...">
+        </div>
+        <div class="col-md-2 col-12 d-flex align-items-end">
+          <button class="btn btn-sm btn-outline-secondary w-100" id="filterReset" type="button" data-i18n="リセット">
+            <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
     <div class="card">
         <div class="card-body">
-            <div class="btn-group">
-                <button 
-                    v-for="status in statuses" 
-                    :key="status.key"
-                    class="btn btn-sm"
-                    :data-i18n="status.name"
-                    :class="{
-                        [`btn-label-${status.color}`]: !selectedStatus || selectedStatus?.key !== status.key,
-                        [`btn-${status.color}`]: selectedStatus?.key === status.key,
-                        'active': selectedStatus?.key === status.key
-                    }"
-                    @click="filterProjectByStatus(status)"
-                >
-                    {{ status.name }}
-                </button>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="btn-group">
+                    <button 
+                        v-for="status in statuses" 
+                        :key="status.key"
+                        class="btn btn-sm"
+                        :data-i18n="status.name"
+                        :class="{
+                            [`btn-label-${status.color}`]: !selectedStatus || selectedStatus?.key !== status.key,
+                            [`btn-${status.color}`]: selectedStatus?.key === status.key,
+                            'active': selectedStatus?.key === status.key
+                        }"
+                        @click="filterProjectByStatus(status)"
+                    >
+                        {{ status.name }}
+                    </button>
+                </div>
+                <div class="form-check form-switch ms-2">
+                    <input class="form-check-input" type="checkbox" id="showInactiveSwitch">
+                    <label class="form-check-label small" for="showInactiveSwitch" data-i18n="完了案件等も表示">完了等も表示</label>
+                </div>
             </div>
             <table id="projectTable" class="table table-striped">
                 
@@ -53,207 +111,6 @@ $view->heading('プロジェクト管理');
         </div>
     </div>
 
-     <!-- New Project Modal -->
-    <div class="modal fade" id="newProjectModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-            <div class="modal-dialog modal-xl">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title"><span v-if="!isEdit">新規プロジェクト</span><span v-if="isEdit">プロジェクト編集</span></h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form @submit.prevent="saveProject">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">お施主様名 <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control" v-model="newProject.name" name="name" required>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">部署 <span class="text-danger">*</span></label>
-                                        <select class="form-select" v-model="newProject.department_id" name="department_id" required disabled>
-                                            <option value="">選択してください</option>
-                                            <option v-for="department in departments" :key="department.id" :value="department.id">
-                                                {{ department.name }}
-                                            </option>
-                                        </select>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">会社名 <span class="text-danger">*</span></label>
-                                        <select id="category_id" class="form-select select2" v-model="newProject.category_id" name="category_id" required @change="onCategoryChange">
-                                            <option value="">選択してください</option>
-                                            <option v-for="category in categories" :key="category.id" :value="category.id">
-                                                {{ category.name }}
-                                            </option>
-                                        </select>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">支店名 <span class="text-danger">*</span></label>
-                                        <select id="company_name" class="form-select select2" v-model="newProject.company_name" name="company_name" required @change="onCompanyChange">
-                                            <option value="">選択してください</option>
-                                            <option v-for="company in companies" :key="company.company_name" :value="company.company_name">
-                                                {{ company.company_name }}
-                                            </option>
-                                        </select>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">担当者名 <span class="text-danger">*</span></label>
-                                        <div class="d-flex gap-2 justify-content-between">
-                                            <select id="customer_id" class="form-select select2 flex-shrink-1" v-model="newProject.customer_id" name="customer_id" required>
-                                                <option value="">選択してください</option>
-                                                <option v-for="contact in contacts" :key="contact.id" :value="contact.id">
-                                                    {{ contact.name }}
-                                                </option>
-                                            </select>
-                                            <button class="badge bg-primary rounded-pill flex-shrink-0" @click="openNewCustomerModal">+</button>
-                                        </div>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">建物規模</label>
-                                        <input type="text" class="form-control" v-model="newProject.building_size" name="building_size" required>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">建物種類</label>
-                                        <input type="text" class="form-control" v-model="newProject.building_type" name="building_type" required>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">案件番号</label>
-                                        <input type="text" class="form-control" v-model="newProject.project_number" name="project_number" required>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">工事番号</label>
-                                        <input type="text" class="form-control" v-model="newProject.buiding_number" name="buiding_number" required>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">工事支店名</label>
-                                        <input type="text" class="form-control" v-model="newProject.building_branch" name="building_branch" required>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">受注形態</label>
-                                        <input type="text" class="form-control tagify" v-model="newProject.project_order_type" id="project_order_type" name="project_order_type" required>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">優先度</label>
-                                        <select class="form-select" v-model="newProject.priority" name="priority" required>
-                                            <option value="low">低</option>
-                                            <option value="medium">中</option>
-                                            <option value="high">高</option>
-                                            <option value="urgent">緊急</option>
-                                        </select>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">案件状況</label>
-                                        <select class="form-select" v-model="newProject.status" name="status" required>
-                                            <option value="draft">下書き</option>
-                                            <option value="open">オープン</option>
-                                            <option value="confirming">確認中</option>
-                                            <option value="in_progress">進行中</option>
-                                            <option value="paused">一時停止</option>
-                                            <option value="completed">完了</option>
-                                            <option value="cancelled">キャンセル</option>
-                                        </select>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">開始日</label>
-                                        <input type="date" class="form-control" v-model="newProject.start_date" id="start_date" name="start_date" required>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">期限日</label>
-                                        <input type="date" class="form-control" v-model="newProject.end_date" id="end_date" name="end_date" required>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">チーム</label>
-                                        <input class="form-control" type="text" name="team_tags" required>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">管理</label>
-                                        <input class="form-control" type="text" name="manager_tags" required>
-                                        <input class="form-control" type="hidden" name="members" v-model="newProject.manager">
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">メンバー</label>
-                                        <input class="form-control" type="text" name="members_tags" required>
-                                        <input class="form-control" type="hidden" name="members" v-model="newProject.members">
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">メモ</label>
-                                <textarea class="form-control" v-model="newProject.description" name="description" rows="3"></textarea>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                        <button type="button" class="btn btn-primary" @click="saveProject">保存</button>
-                    </div>
-                </div>
-            </div>
-    </div>
 
     <!-- Delete Confirmation Modal -->
     <div class="modal fade" id="deleteModal" tabindex="-1">
