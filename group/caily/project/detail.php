@@ -146,7 +146,7 @@ if (!$project_id) {
                                 </template>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="プロジェクト名">プロジェクト名</span> <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="プロジェクト名">プロジェクト名</span>  <span class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
                                     <input type="text" class="form-control" v-model="project.name">
                                     <div v-if="validationErrors.name" class="invalid-feedback d-block">
@@ -319,7 +319,7 @@ if (!$project_id) {
                             <div class="col-md-4">
                                 <label class="form-label">
                                     <span data-i18n="期限日">期限日</span>
-                                    <span v-if="getTimeRemaining() && !isEditMode" :class="'badge ms-2 ' + getTimeRemaining().class" 
+                                    <span v-if="getTimeRemaining()" :class="'badge ms-2 ' + getTimeRemaining().class" 
                                           :title="getTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
                                         {{ getTimeRemaining().text }}
                                     </span>

@@ -62,6 +62,68 @@ var priorities = [
 ];
 
 $(document).ready(function() {
+    // --- Filter UI logic giống project-list.js ---
+    // Render option cho filterPriority dựa trên priorities
+    var $priority = $('#filterPriority');
+    $priority.empty();
+    $priority.append('<option value="">すべて</option>');
+    priorities.forEach(function(p) {
+        $priority.append('<option value="' + p.key + '">' + p.name + '</option>');
+    });
+
+    // Khởi tạo flatpickr dạng tháng (month picker) cho filterStartMonth và filterEndMonth
+    if (window.flatpickr && window.monthSelectPlugin) {
+        $('#filterStartMonth').flatpickr({
+            locale: 'ja',
+            plugins: [new monthSelectPlugin({
+                shorthand: true,
+                dateFormat: 'Y-m',
+                altFormat: 'Y年m月',
+            })]
+        });
+        $('#filterEndMonth').flatpickr({
+            locale: 'ja',
+            plugins: [new monthSelectPlugin({
+                shorthand: true,
+                dateFormat: 'Y-m',
+                altFormat: 'Y年m月',
+            })]
+        });
+    }
+
+    // LocalStorage filter state
+    const FILTER_STORAGE_KEY = 'projectGanttFilters';
+    function saveFiltersToLocalStorage() {
+        const filters = {
+            filterStartMonth: $('#filterStartMonth').val(),
+            filterEndMonth: $('#filterEndMonth').val(),
+            filterPriority: $('#filterPriority').val(),
+            filterProgress: $('#filterProgress').val(),
+            filterTimeLeft: $('#filterTimeLeft').val(),
+            filterKeyword: $('#filterKeyword').val(),
+        };
+        localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+    }
+    function loadFiltersFromLocalStorage() {
+        const filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        if (filters.filterStartMonth !== undefined) $('#filterStartMonth').val(filters.filterStartMonth);
+        if (filters.filterEndMonth !== undefined) $('#filterEndMonth').val(filters.filterEndMonth);
+        if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
+        if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
+        if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
+        if (filters.filterKeyword !== undefined) $('#filterKeyword').val(filters.filterKeyword);
+    }
+    loadFiltersFromLocalStorage();
+    $('#projectFilterForm select, #projectFilterForm input').on('change keyup', function() {
+        saveFiltersToLocalStorage();
+        if (window.ganttApp && window.ganttApp.loadProjects) window.ganttApp.loadProjects();
+    });
+    $('#filterReset').on('click', function() {
+        localStorage.removeItem(FILTER_STORAGE_KEY);
+        $('#projectFilterForm')[0].reset();
+        if (window.ganttApp && window.ganttApp.loadProjects) window.ganttApp.loadProjects();
+    });
+
     // Initialize Vue app first
     const app = Vue.createApp({
         data() {
@@ -212,17 +274,30 @@ $(document).ready(function() {
                 await this.loadUserPermissions();
                 this.loading = true;
                 try {
+                    // Lấy filter từ form
+                    const filterStartMonth = $('#filterStartMonth').val();
+                    const filterEndMonth = $('#filterEndMonth').val();
+                    const filterPriority = $('#filterPriority').val();
+                    const filterProgress = $('#filterProgress').val();
+                    const filterTimeLeft = $('#filterTimeLeft').val();
+                    const filterKeyword = $('#filterKeyword').val();
+                    const params = {
+                        model: 'project',
+                        method: 'listForGantt',
+                        department_id: this.selectedDepartment.id,
+                        status: this.selectedStatus?.key || 'active',
+                        filterStartMonth,
+                        filterEndMonth,
+                        filterPriority,
+                        filterProgress,
+                        filterTimeLeft,
+                        filterKeyword
+                    };
                     const response = await $.ajax({
                         url: '/api/index.php',
                         type: 'GET',
-                        data: {
-                            model: 'project',
-                            method: 'listForGantt',
-                            department_id: this.selectedDepartment.id,
-                            status: this.selectedStatus?.key || 'active'
-                        }
+                        data: params
                     });
-                    
                     if (Array.isArray(response) && response.length > 0) {
                         projectData = response || [];
                         this.updateGanttData();
@@ -987,7 +1062,7 @@ $(document).ready(function() {
             }
         }
     });
-    
+    window.ganttApp = app;
     app.mount('#app');
 });
 

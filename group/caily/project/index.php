@@ -105,6 +105,8 @@ $view->heading('プロジェクト管理');
                     <label class="form-check-label small" for="showInactiveSwitch" data-i18n="完了案件等も表示">完了等も表示</label>
                 </div>
             </div>
+            <!-- Active Filters Display -->
+            <div id="activeFilters" class="mb-2"></div>
             <table id="projectTable" class="table table-striped">
                 
             </table>

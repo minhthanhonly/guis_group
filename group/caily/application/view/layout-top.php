@@ -43,11 +43,11 @@
                     <div data-i18n="一覧">一覧</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'project' && $page == 'mytask') echo 'active'; ?>">
+                <!-- <li class="menu-item <?php if($directory == 'project' && $page == 'mytask') echo 'active'; ?>">
                   <a href="<?=$root?>project/mytask.php" class="menu-link">
                     <div data-i18n="マイタスク">マイタスク</div>
                   </a>
-                </li>
+                </li> -->
                 <li class="menu-item <?php if($directory == 'project' && $page == 'gantt') echo 'active'; ?>">
                   <a href="<?=$root?>project/project_gantt.php" class="menu-link">
                     <div data-i18n="ガントチャート">ガントチャート</div>

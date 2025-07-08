@@ -96,6 +96,71 @@ var projectTable;
         if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
     }
 
+    function getFiltersFromLocalStorage() {
+        const filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        return {
+            startMonth: filters.filterStartMonth || '',
+            endMonth: filters.filterEndMonth || '',
+            priority: filters.filterPriority || '',
+            progress: filters.filterProgress || '',
+            timeLeft: filters.filterTimeLeft || '',
+            keyword: filters.filterKeyword || '',
+            showInactive: filters.showInactive == 1
+        };
+    }
+
+    function renderActiveFilters() {
+        const filters = getFiltersFromLocalStorage();
+        const badges = [];
+        // Nếu tất cả filter đều rỗng, không hiển thị gì
+        if (
+            (!filters.startMonth || filters.startMonth.trim() === '') &&
+            (!filters.endMonth || filters.endMonth.trim() === '') &&
+            (!filters.priority || filters.priority.trim() === '') &&
+            (!filters.progress || filters.progress.trim() === '') &&
+            (!filters.timeLeft || filters.timeLeft.trim() === '') &&
+            (!filters.keyword || filters.keyword.trim() === '')
+        ) {
+            $('#activeFilters').html('');
+            return;
+        }
+        if (filters.keyword && filters.keyword.trim() !== '') {
+            badges.push(`<span class="badge bg-label-info me-1" >キーワード: ${filters.keyword}</span>`);
+        } else {
+            if (filters.startMonth && filters.startMonth.trim() !== '') {
+                badges.push(`<span class="badge bg-label-info me-1" >開始月: ${filters.startMonth}</span>`);
+            }
+            if (filters.endMonth && filters.endMonth.trim() !== '') {
+                badges.push(`<span class="badge bg-label-info me-1" >期限月: ${filters.endMonth}</span>`);
+            }
+            if (filters.priority && filters.priority.trim() !== '') {
+                const label = (window.priorities||[]).find(p=>p.key===filters.priority)?.name || filters.priority;
+                badges.push(`<span class="badge bg-label-info me-1" >優先度: ${label}</span>`);
+            }
+            if (filters.progress && filters.progress.trim() !== '') {
+                let label = '';
+                if (filters.progress === '0-50') label = '0-50%';
+                else if (filters.progress === '51-99') label = '51-99%';
+                else if (filters.progress === '100') label = '100%';
+                else label = filters.progress;
+                badges.push(`<span class="badge bg-label-info me-1" >進捗率: ${label}</span>`);
+            }
+            if (filters.timeLeft && filters.timeLeft.trim() !== '') {
+                let label = '';
+                if (filters.timeLeft === '7') label = '7日以内';
+                else if (filters.timeLeft === '30') label = '30日以内';
+                else if (filters.timeLeft === 'overdue') label = '期限切れ';
+                else label = filters.timeLeft;
+                badges.push(`<span class="badge bg-label-info me-1" >残り時間: ${label}</span>`);
+            }
+        }
+        if (badges.length > 0) {
+            $('#activeFilters').html(`<span class="me-2 text-muted small" >適用中のフィルター:</span>` + badges.join(''));
+        } else {
+           // $('#activeFilters').html(`<span class="text-muted small" >すべて表示中</span>`);
+        }
+    }
+
     $(document).ready(function() {
 
         // Khôi phục filter từ localStorage trước khi load projectTable
@@ -397,11 +462,14 @@ var projectTable;
         }, 60000); // Cập nhật mỗi phút
 
         // Khôi phục filter từ localStorage khi load trang
-        // loadFiltersFromLocalStorage(); // Moved up
         // Khi thay đổi filter thì lưu lại
+        let timer2= null;
         $('#projectFilterForm select, #projectFilterForm input').on('change keyup', function() {
-            saveFiltersToLocalStorage();
-            if (projectTable) projectTable.ajax.reload();
+            clearTimeout(timer2);
+            timer2 = setTimeout(function() {
+                saveFiltersToLocalStorage();
+                if (projectTable) projectTable.ajax.reload();
+            }, 500);
         });
         $('#showInactiveSwitch').on('change', function() {
             saveFiltersToLocalStorage();
@@ -468,6 +536,8 @@ var projectTable;
                     altFormat: 'Y年m月',
                 })]
             });
+            // Gọi renderActiveFilters sau khi khởi tạo flatpickr
+            renderActiveFilters();
         }
 
         var category_id = $('#category_id');
@@ -697,6 +767,35 @@ var projectTable;
         $priority.append('<option value="">すべて</option>');
         priorities.forEach(function(p) {
             $priority.append('<option value="' + p.key + '">' + p.name + '</option>');
+        });
+        
+        // Gọi khi filter thay đổi hoặc khi load trang
+        renderActiveFilters();
+        // Gọi lại renderActiveFilters mỗi khi filter thay đổi
+        $('#filterStartMonth, #filterEndMonth, #filterPriority, #filterProgress, #filterTimeLeft, #filterKeyword, #showInactiveSwitch').on('change input', function() {
+           renderActiveFilters();
+        });
+        let timer = null;
+        $('#filterKeyword').on('input', function() {
+            clearTimeout(timer);
+            timer = setTimeout(function() {
+                renderActiveFilters();
+            }, 500);
+        });
+        // Đảm bảo badge update khi reset filter
+        $('#filterReset').on('click', function() {
+            // Reset các filter về mặc định
+            $('#projectFilterForm')[0].reset();
+            $('#filterStartMonth').val('');
+            $('#filterEndMonth').val('');
+            $('#filterPriority').val('');
+            $('#filterProgress').val('');
+            $('#filterTimeLeft').val('');
+            $('#filterKeyword').val('');
+            $('#showInactiveSwitch').prop('checked', true); // hoặc giá trị mặc định
+            localStorage.removeItem(FILTER_STORAGE_KEY);
+            renderActiveFilters();
+            projectTable.ajax.reload();
         });
         
     });

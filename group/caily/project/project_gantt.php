@@ -29,6 +29,58 @@ $view->heading('プロジェクトガントチャート');
             </div>
         </div>
     </nav>
+    <div class="mb-2">
+      <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#projectFilterBox" aria-expanded="false">
+        <i class="fa fa-filter me-1"></i> <span data-i18n="高度なフィルター">高度なフィルター</span>
+      </button>
+    </div>
+    <div class="collapse show" id="projectFilterBox">
+      <div class="card mb-3">
+        <div class="card-body pb-4 pt-3">
+          <form class="row g-3" id="projectFilterForm" autocomplete="off">
+            <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="開始月">開始月</label>
+              <input type="text" class="form-control form-control-sm" id="filterStartMonth" autocomplete="off">
+            </div>
+            <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="期限月">期限月</label>
+              <input type="text" class="form-control form-control-sm" id="filterEndMonth" autocomplete="off">
+            </div>
+            <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="優先度">優先度</label>
+              <select class="form-select form-select-sm" id="filterPriority"></select>
+            </div>
+            <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="進捗率">進捗率</label>
+              <select class="form-select form-select-sm" id="filterProgress">
+                <option value="">すべて</option>
+                <option value="0-50">0-50%</option>
+                <option value="51-99">51-99%</option>
+                <option value="100">100%</option>
+              </select>
+            </div>
+            <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="残り時間">残り時間</label>
+              <select class="form-select form-select-sm" id="filterTimeLeft">
+                <option value="">すべて</option>
+                <option value="7">7日以内</option>
+                <option value="30">30日以内</option>
+                <option value="overdue">期限切れ</option>
+              </select>
+            </div>
+            <div class="col-md-4 col-12">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="キーワード">キーワード</label>
+              <input type="text" class="form-control form-control-sm" id="filterKeyword" placeholder="検索...">
+            </div>
+            <div class="col-md-2 col-12 d-flex align-items-end">
+              <button class="btn btn-sm btn-outline-primary w-100" id="filterReset" type="button">
+                <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
     
     <div class="card">
         <div class="card-header">

@@ -199,7 +199,6 @@ class Project extends ApplicationModel {
 
     function listForGantt() {
         $whereArr = [];
-        
         // Add permission check
         $user_id = $_SESSION['id'];
         $is_department_manager = false;
@@ -211,7 +210,6 @@ class Project extends ApplicationModel {
                 $department_id);
             $is_department_manager = $this->fetchOne($query)['count'] > 0;
         }
-
         if ($_SESSION['authority'] != 'administrator' && !$is_department_manager) {
             $whereArr[] = sprintf(
                 "(p.created_by = %d OR EXISTS (
@@ -222,36 +220,70 @@ class Project extends ApplicationModel {
                 $user_id
             );
         }
-
         if (isset($_GET['department_id'])) {
             $whereArr[] = sprintf("p.department_id = %d", intval($_GET['department_id']));
         }
         if (isset($_GET['status'])) {
             if ($_GET['status'] == 'all') {
-                // For 'all' status, only exclude deleted projects
                 $whereArr[] = "p.status NOT IN ('deleted', 'draft')";
             } else if ($_GET['status'] == 'active') {
-                // For 'active' status, exclude deleted and draft projects
                 $whereArr[] = "p.status NOT IN ('deleted', 'draft', 'completed', 'cancelled')";
             } else {
-                // For specific status
                 $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
             }
         } else {
-            // Default: exclude deleted and draft projects (active projects)
-            $whereArr[] = "AND p.status NOT IN ('deleted', 'draft')";
+            $whereArr[] = "p.status NOT IN ('deleted', 'draft')";
         }
-
+        // --- Advanced Filters ---
+        $hasKeyword = isset($_GET['filterKeyword']) && $_GET['filterKeyword'] !== '';
+        if ($hasKeyword) {
+            $kw = $this->escape($_GET['filterKeyword']);
+            $whereArr[] = "(p.name LIKE '%$kw%' 
+                OR p.project_number LIKE '%$kw%' 
+                OR p.description LIKE '%$kw%' 
+                OR p.tags LIKE '%$kw%'
+                OR c.name LIKE '%$kw%')";
+        } else {
+            if (isset($_GET['filterStartMonth']) && $_GET['filterStartMonth'] !== '') {
+                $month = $this->escape($_GET['filterStartMonth']);
+                $whereArr[] = "DATE_FORMAT(p.start_date, '%Y-%m') = '$month'";
+            }
+            if (isset($_GET['filterEndMonth']) && $_GET['filterEndMonth'] !== '') {
+                $month = $this->escape($_GET['filterEndMonth']);
+                $whereArr[] = "DATE_FORMAT(p.end_date, '%Y-%m') = '$month'";
+            }
+            if (isset($_GET['filterPriority']) && $_GET['filterPriority'] !== '') {
+                $priority = $this->escape($_GET['filterPriority']);
+                $whereArr[] = "p.priority = '$priority'";
+            }
+            if (isset($_GET['filterProgress']) && $_GET['filterProgress'] !== '') {
+                $progress = $_GET['filterProgress'];
+                if ($progress === '100') {
+                    $whereArr[] = "p.progress = 100";
+                } else if ($progress === '0-50') {
+                    $whereArr[] = "p.progress >= 0 AND p.progress <= 50";
+                } else if ($progress === '51-99') {
+                    $whereArr[] = "p.progress >= 51 AND p.progress <= 99";
+                }
+            }
+            if (isset($_GET['filterTimeLeft']) && $_GET['filterTimeLeft'] !== '') {
+                $val = $_GET['filterTimeLeft'];
+                if ($val === 'overdue') {
+                    $whereArr[] = "p.end_date < NOW() AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
+                } else if (is_numeric($val)) {
+                    $whereArr[] = "p.end_date >= NOW() AND p.end_date <= DATE_ADD(NOW(), INTERVAL ".$this->quote($val)." DAY) AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
+                }
+            }
+        }
         $where = implode(" AND ", $whereArr);
         if (!empty($where)) {
             $where = " WHERE " . $where;
         }
-
         // Get data for Gantt chart (all projects, no pagination)
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
-            CONCAT(gc.name, ' ', gc.title) as customer_name,
+            c.name as contact_name, c.name as company_name, c.category_id as category_id, c.department as branch_name,
+            CONCAT(c.name, ' ', c.title) as customer_name,
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
@@ -262,15 +294,12 @@ class Project extends ApplicationModel {
              WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
-            LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
-            LEFT JOIN " . DB_PREFIX . "customer gc ON gc.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+            JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
             %s
             ORDER BY p.start_date ASC, p.created_at DESC",
             $where
         );
-
         $data = $this->fetchAll($query);
-
         return $data;
     }
 
