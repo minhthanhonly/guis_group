@@ -272,14 +272,29 @@ var projectTable;
                 },
                 { data: 'start_date', title: '<span data-i18n="開始日">開始日</span>', render: function(data) {
                     if(data) {
-                        return moment(data).format('YYYY/MM/DD HH:mm');
+                        return `<span class="text-muted small text-nowrap">${moment(data).format('YYYY年M月D日 H:mm')}</span>`;
                     } else {
                         return '-';
                     }
                 }},
-                { data: 'end_date', title: '<span data-i18n="終了日">終了日</span>', render: function(data) {
+                { data: 'end_date', title: '<span data-i18n="終了日">終了日</span>', render: function(data, type, row) {
                     if(data) {
-                        return moment(data).format('YYYY/MM/DD HH:mm');
+                        const timeRemaining = getTimeRemaining(data, row.status);
+                        const dateStr = moment(data).format('M月D日 H:mm');
+                        
+                        if (timeRemaining) {
+                            const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
+                            return `<div class="d-flex flex-column">
+                                        <span class="text-muted small text-nowrap">${dateStr}</span>
+                                        <span class="badge ${timeRemaining.class} ${pulseClass} mt-1" 
+                                             title="${timeRemaining.isOverdue ? '期限を超過しています' : '残り時間'}"
+                                             style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
+                                             ${timeRemaining.text}
+                                        </span>
+                                    </div>`;
+                        } else {
+                            return `<span class="text-nowrap text-muted small">${dateStr}</span>`;
+                        }
                     } else {
                         return '-';
                     }
@@ -294,6 +309,7 @@ var projectTable;
                     title: '<span data-i18n="操作">操作</span>'
                 }
             ],
+            order: [[10, 'asc']],
            
             pageLength: 50,
             ordering: true,
@@ -325,6 +341,13 @@ var projectTable;
                 $('[data-bs-toggle="tooltip"]').tooltip();
             }
         });
+
+        // Timer để cập nhật thời gian còn lại mỗi phút
+        setInterval(function() {
+            if (projectTable) {
+                projectTable.ajax.reload(null, false); // false để giữ nguyên trang hiện tại
+            }
+        }, 60000); // Cập nhật mỗi phút
 
         // イベントハンドラー
         $(document).on('click', '.item-edit', function() {
@@ -594,6 +617,69 @@ var projectTable;
         var txt = document.createElement('textarea');
         txt.innerHTML = str;
         return txt.value;
+    }
+
+    function getTimeRemaining(endDate, status) {
+        if (!endDate || status === 'completed' || status === 'deleted' || status === 'draft' || status === 'cancelled') {
+            return null;
+        }
+        
+        const now = moment.tz('Asia/Tokyo');
+        const end = moment.tz(endDate, 'Asia/Tokyo');
+        
+        if (end.isBefore(now)) {
+            // Đã quá hạn
+            const diff = now.diff(end);
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            
+            if (days > 0) {
+                return {
+                    text: `${days}日超過`,
+                    class: 'bg-danger',
+                    isOverdue: true
+                };
+            } else if (hours > 0) {
+                return {
+                    text: `${hours}時間超過`,
+                    class: 'bg-danger',
+                    isOverdue: true
+                };
+            } else {
+                return {
+                    text: `${minutes}分超過`,
+                    class: 'bg-danger',
+                    isOverdue: true
+                };
+            }
+        } else {
+            // Còn thời gian
+            const diff = end.diff(now);
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            
+            if (days > 0) {
+                return {
+                    text: `+${days}日`,
+                    class: 'bg-label-info',
+                    isOverdue: false
+                };
+            } else if (hours > 0) {
+                return {
+                    text: `+${hours}時間`,
+                    class: hours <= 24 ? 'bg-label-warning' : 'bg-label-info',
+                    isOverdue: false
+                };
+            } else {
+                return {
+                    text: `+${minutes}分`,
+                    class: 'bg-label-warning',
+                    isOverdue: false
+                };
+            }
+        }
     }
 
     const { createApp } = Vue;

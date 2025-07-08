@@ -47,8 +47,8 @@ class Project extends ApplicationModel {
         $start = isset($_GET['start']) ? intval($_GET['start']) : 0;
         $length = isset($_GET['length']) ? intval($_GET['length']) : 10;
         $search = isset($_GET['search']) ? $_GET['search'] : '';
-        $order_column = isset($_GET['order_column']) ? $_GET['order_column'] : 'created_at';
-        $order_dir = isset($_GET['order_dir']) ? $_GET['order_dir'] : 'DESC';
+        $order_column = isset($_GET['order_column']) ? $_GET['order_column'] : 'end_date';
+        $order_dir = isset($_GET['order_dir']) ? $_GET['order_dir'] : 'ASC';
         
         $whereArr = [];
         

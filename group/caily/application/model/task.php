@@ -326,6 +326,30 @@ class Task extends ApplicationModel {
         }
     }
 
+    function updateAssignee() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $assigned_to = isset($_POST['assigned_to']) ? $_POST['assigned_to'] : '';
+        // $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        
+        if (!$id) return ['status' => 'error', 'message' => 'Missing task id'];
+       
+        $data = array(
+            'assigned_to' => $assigned_to,
+            'updated_at' => date('Y-m-d H:i:s')
+        );
+        
+        $result = $this->query_update($data, ['id' => $id]);
+        
+        if ($result) {
+           // $this->logTaskAction($id, 'progress_updated', '進捗変更', $old['progress'], $progress);
+            return ['status' => 'success'];
+        } else {
+            return ['status' => 'error', 'message' => 'Update failed'];
+        }
+    }
+
+
+
     function updateDescription() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         $description = isset($_POST['description']) ? $_POST['description'] : '';
@@ -600,6 +624,60 @@ class Task extends ApplicationModel {
         
         
         return $isAssigned || $isProjectManager;
+    }
+
+
+    function getPermission() {
+        $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
+        $project = null;
+        $project = $this->fetchOne(
+            "SELECT * FROM " . DB_PREFIX . "projects p" .  " WHERE p.id = " . intval($projectId)
+        );
+
+        if (!$project) return false;
+        $departmentCheck = null;
+        $currentUserIdNumber = $_SESSION['id'];
+        $currentUserId = $_SESSION['userid'];
+        $isAdmin = $_SESSION['authority'] == 'administrator';
+        $isDepartmentManager = false;
+        $isProjectManager = false;
+        $isMember = false;
+        
+        // If not manager by projects.manager_id, check groupware_project_members
+        if (!$isAdmin) {
+            $memberCheck = $this->fetchOne(
+                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "project_members " .
+                "WHERE project_id = " . intval($projectId) . " " .
+                "AND user_id = '" . $currentUserIdNumber . "' " .
+                "AND role = 'manager'"
+            );
+            $isProjectManager = ($memberCheck && $memberCheck['count'] > 0);
+        }
+        if (!$isAdmin) {
+            $memberCheck = $this->fetchOne(
+                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "project_members " .
+                "WHERE project_id = " . intval($projectId) . " " .
+                "AND user_id = '" . $currentUserIdNumber . "' " .
+                "AND role = 'member'"
+            );
+            $isMember = ($memberCheck && $memberCheck['count'] > 0);
+        }
+        if (!$isAdmin) {
+            $departmentCheck = $this->fetchOne(
+                "SELECT * FROM " . DB_PREFIX . "user_department ud " .
+                "WHERE ud.department_id = " . intval($project['department_id']) . " " .
+                "AND ud.userid = '" . $currentUserId . "' LIMIT 1"
+            );
+
+            $isDepartmentManager = ($departmentCheck && $departmentCheck['project_manager'] == 1);
+        }
+        return [
+            'is_member' => $isAdmin || $isProjectManager || $isDepartmentManager || $departmentCheck['project_director'] == 1 || $isMember,
+            'is_director' => $isAdmin || $isProjectManager || $isDepartmentManager || $departmentCheck['project_director'] == 1,
+            'can_manage_project' => $isAdmin || $isProjectManager || $isDepartmentManager,
+            'can_manage_department' => $isAdmin || $isDepartmentManager,
+            'rule' => $departmentCheck
+        ];
     }
 
     function updateOrder() {

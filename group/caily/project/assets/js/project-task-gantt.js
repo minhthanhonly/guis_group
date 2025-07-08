@@ -65,6 +65,7 @@ $(document).ready(function() {
     const app = Vue.createApp({
         data() {
             return {
+                permission: {},
                 projectId: PROJECT_ID,
                 projectInfo: {},
                 tasks: [],
@@ -81,7 +82,20 @@ $(document).ready(function() {
                 ganttLinks: []
             }
         },
+        computed: {
+            canEditProject() {
+                return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_edit == 1);
+            },
+        },
         async mounted() {
+            await this.loadPermission();
+            if(!this.permission.is_member){
+                this.showMessage('権限がありません。', true);
+                setTimeout(() => {
+                    window.location.href = 'index.php';
+                }, 1000);
+                return;
+            }
             await this.loadProjectInfo();
             await this.loadTasks();
             await this.loadLinks();
@@ -89,6 +103,8 @@ $(document).ready(function() {
             this.$nextTick(() => {
                 this.initGantt();
             });
+
+
             
             // Handle window resize
             window.addEventListener('resize', this.handleResize);
@@ -105,6 +121,14 @@ $(document).ready(function() {
             window.removeEventListener('resize', this.handleResize);
         },
         methods: {
+            async loadPermission() {
+                try {
+                    const response = await axios.get('/api/index.php?model=task&method=getPermission&project_id=' + this.projectId);
+                    this.permission = response.data || [];
+                } catch (error) {
+                    console.error('Error loading permission:', error);
+                }
+            },
             async loadProjectInfo() {
                 try {
                     this.loading = true;
@@ -572,8 +596,13 @@ $(document).ready(function() {
                     {name: "time", type: "time", map_to: "auto", time_format: ["%Y", "%m", "%d", "%H:%i"]}
                 ];
                 
-                gantt.config.buttons_left = ["gantt_save_btn", "gantt_cancel_btn"];
-                gantt.config.buttons_right = [];
+                if(this.canEditProject){
+                    gantt.config.buttons_left = ["gantt_save_btn", "gantt_cancel_btn"];
+                    gantt.config.buttons_right = [];
+                } else{
+                    gantt.config.buttons_left = ["gantt_cancel_btn"];
+                    gantt.config.buttons_right = [];
+                }
                 gantt.i18n.setLocale('jp');
                 
                 // Weekend highlighting
@@ -590,12 +619,19 @@ $(document).ready(function() {
                 };
                 
                 // Enable features
-                gantt.config.drag_progress = false;
-                gantt.config.drag_resize = true;
-                gantt.config.drag_move = true;
-                gantt.config.drag_links = true;
-                gantt.config.drag_plan = true;
-                
+                if(this.canEditProject){
+                    gantt.config.drag_progress = false;
+                    gantt.config.drag_resize = true;
+                    gantt.config.drag_move = true;
+                    gantt.config.drag_links = true;
+                    gantt.config.drag_plan = true;
+                } else{
+                    gantt.config.drag_progress = false;
+                    gantt.config.drag_resize = false;
+                    gantt.config.drag_move = false;
+                    gantt.config.drag_links = false;
+                    gantt.config.drag_plan = false;
+                }
                 gantt.config.row_height = 30;
                 gantt.config.grid_resize = true;
                 gantt.config.grid_elastic_columns = true;

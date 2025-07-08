@@ -180,7 +180,7 @@ if (!$project_id) {
                                             </td>
                                             <td>
                                                 <strong>
-                                                    <a href="#" @click.prevent="navigateToFolder(folder.id)" class="text-decoration-none text-dark" style="cursor: pointer;">
+                                                    <a href="#" @click.prevent="navigateToFolder(folder.id)" class="text-decoration-none text-primary" style="cursor: pointer;">
                                                         {{ folder.name }}
                                                     </a>
                                                 </strong>

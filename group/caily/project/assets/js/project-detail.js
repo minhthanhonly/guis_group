@@ -3,6 +3,7 @@ const { createApp } = Vue;
 const vueApp = createApp({
     data() {
         return {
+            permission: {},
             projectId: typeof PROJECT_ID !== 'undefined' ? PROJECT_ID : this.getProjectIdFromUrl(),
             project: null,
             department: null,
@@ -117,6 +118,7 @@ const vueApp = createApp({
                 project_number: '',
                 name: ''
             },
+            timeRemainingTimer: null,
         }
     },
     computed: {
@@ -134,14 +136,22 @@ const vueApp = createApp({
             return this.departmentCustomFieldSets.find(set => String(set.id) === String(this.project.department_custom_fields_set_id)) || null;
         },
         canViewProject() {
-            if(USER_ROLE == 'administrator') return true;
-            if (!this.project) return false;
-            if(this.project.created_by &&this.project.created_by == USER_ID) return true;
-            if(this.managers && this.managers.some(m => String(m.user_id) === String(USER_AUTH_ID))) return true;
-            if(this.members && this.members.some(m => String(m.user_id) === String(USER_AUTH_ID))) return true;
-            if(this.hasPermission('project_manager')) return true;
-            if(this.hasPermission('project_director')) return true;
-            return false;
+            return this.permission.is_member;
+        },
+        canEditProject() {
+            return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_edit == 1);
+        },
+        canAddProject() {
+            return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_add == 1);
+        },
+        canDeleteProject() {
+            return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_delete == 1);
+        },
+        canCommentProject() {
+            return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_comment == 1);
+        },
+        canDocumentProject() {
+            return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_director == 1);
         },
         sortedLogs() {
             if (!this.logs) return [];
@@ -150,6 +160,14 @@ const vueApp = createApp({
         },
     },
     methods: {
+        async loadPermission() {
+            try {
+                const response = await axios.get('/api/index.php?model=task&method=getPermission&project_id=' + this.projectId);
+                this.permission = response.data || [];
+            } catch (error) {
+                console.error('Error loading permission:', error);
+            }
+        },
         getProjectIdFromUrl() {
             // Lấy project ID từ URL nếu không có biến PROJECT_ID
             const urlParams = new URLSearchParams(window.location.search);
@@ -168,43 +186,6 @@ const vueApp = createApp({
             console.error('Could not determine project ID from URL');
             return null;
         },
-        async getUserPermissions(departmentId) {
-            try {
-                const response = await axios.get(`/api/index.php?model=department&method=get_user_permission_by_department&department_id=${departmentId}`);
-                this.userPermissions = response.data;
-                return this.userPermissions;
-            } catch (error) {
-                console.error('Error loading user permissions:', error);
-                this.userPermissions = null;
-                return null;
-            }
-        },
-        // Check if user has specific permission
-        hasPermission(permission) {
-            if(USER_ROLE == 'administrator') return true;
-            if (!this.userPermissions) return false;
-            return this.userPermissions[permission] == 1;
-        },
-        // Check if user can perform project actions
-        canAddProject() {
-            return this.hasPermission('project_add');
-        },
-        canEditProject() {
-            if(this.isManager) return true;
-            return this.hasPermission('project_edit');
-        },
-        canDeleteProject() {
-            if(this.isManager) return true;
-            return this.hasPermission('project_delete');
-        },
-        canManageProject() {
-            if(this.isManager) return true;
-            return this.hasPermission('project_manager');
-        },
-        canCommentProject() {
-            if(this.isManager) return true;
-            return this.hasPermission('project_comment');
-        },
         
         // Phương thức để dịch label động
         translateLabel(label) {
@@ -218,7 +199,8 @@ const vueApp = createApp({
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
                 this.project = response.data;
-                await this.getUserPermissions(this.project.department_id);
+               // await this.getUserPermissions(this.project.department_id);
+                this.calculateStats();
                 
                 if (this.project.teams) {
                     await this.loadTeamListByIds(this.project.teams);
@@ -304,17 +286,20 @@ const vueApp = createApp({
             // }
         },
         // Comment functionality is now handled by CommentComponent
-        // calculateStats() {
-        //     this.stats.totalTasks = this.tasks.length;
-        //     this.stats.completedTasks = this.tasks.filter(t => t.status === 'completed').length;
-        //     this.stats.timeTracked = this.tasks.reduce((sum, task) => sum + parseFloat(task.actual_hours || 0), 0);
-        //     if (this.project && this.project.start_date) {
-        //         const start = new Date(this.project.start_date);
-        //         const end = this.project.actual_end_date ? new Date(this.project.actual_end_date) : new Date();
-        //         const diffTime = Math.abs(end - start);
-        //         this.stats.totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        //     }
-        // },
+        calculateStats() {
+            this.stats.totalTasks = this.project.task_count || 0;
+            // this.stats.completedTasks = this.tasks.filter(t => t.status === 'completed').length;
+            // this.stats.timeTracked = this.tasks.reduce((sum, task) => sum + parseFloat(task.actual_hours || 0), 0);
+            if (this.project && this.project.start_date) {
+                let start = new Date(this.project.start_date);
+                let end = this.project.end_date ? new Date(this.project.end_date) : new Date();
+                if(this.project.actual_end_date){
+                    end = new Date(this.project.actual_end_date);
+                }
+                const diffTime = Math.abs(end - start);
+                this.stats.totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            }
+        },
         // Comment component event handlers
         onCommentAdded(event) {
             this.showNotification('コメントが追加されました', 'success');
@@ -405,7 +390,71 @@ const vueApp = createApp({
         },
         formatDate(date) {
             if (!date) return '-';
-            return moment(date).format('YYYY/MM/DD');
+            return moment(date).format('YYYY/MM/DDYYYY/MM/DD');
+        },
+        getTimeRemaining() {
+            if (!this.project || !this.project.end_date || this.project.status === 'completed' ||
+                 this.project.status === 'deleted' ||
+                 this.project.status === 'draft' || this.project.status === 'cancelled') {
+                return null;
+            }
+            
+            const now = moment.tz('Asia/Tokyo');
+            const endDate = moment.tz(this.project.end_date, 'Asia/Tokyo');
+            
+            if (endDate.isBefore(now)) {
+                // Đã quá hạn
+                const diff = now.diff(endDate);
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                
+                if (days > 0) {
+                    return {
+                        text: `${days}日${hours}時間${minutes}分超過`,
+                        class: 'bg-danger',
+                        isOverdue: true
+                    };
+                } else if (hours > 0) {
+                    return {
+                        text: `${hours}時間${minutes}分超過`,
+                        class: 'bg-danger',
+                        isOverdue: true
+                    };
+                } else {
+                    return {
+                        text: `${minutes}分超過`,
+                        class: 'bg-danger',
+                        isOverdue: true
+                    };
+                }
+            } else {
+                // Còn thời gian
+                const diff = endDate.diff(now);
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                
+                if (days > 0) {
+                    return {
+                        text: `残り${days}日${hours}時間${minutes}分`,
+                        class: 'bg-label-info',
+                        isOverdue: false
+                    };
+                } else if (hours > 0) {
+                    return {
+                        text: `残り${hours}時間${minutes}分`,
+                        class: hours <= 24 ? 'bg-label-warning' : 'bg-label-info',
+                        isOverdue: false
+                    };
+                } else {
+                    return {
+                        text: `残り${minutes}分`,
+                        class: 'bg-label-warning',
+                        isOverdue: false
+                    };
+                }
+            }
         },
         formatDateForInput(date) {
             if (!date) return '';
@@ -601,7 +650,7 @@ const vueApp = createApp({
         },
         async updateProjectStatus() {
             if (this.isUpdatingStatus) return; // Prevent multiple simultaneous updates
-            if (!this.isManager) return; // Only managers can update status
+            if (!this.canDocumentProject) return; // Only managers can update status
             
             this.isUpdatingStatus = true;
             try {
@@ -1010,7 +1059,7 @@ const vueApp = createApp({
             }
         },
         toggleEditMode() {
-            if (!this.canEditProject()) {
+            if (!this.canEditProject) {
                 showMessage('管理者のみプロジェクトを編集できます。', true);
                 return;
             }
@@ -2213,12 +2262,20 @@ const vueApp = createApp({
         },
     },
     async mounted() {
+        await this.loadPermission();
+        if(!this.permission.is_member){
+            this.showMessage('権限がありません。', true);
+            setTimeout(() => {
+                window.location.href = 'index.php';
+            }, 1000);
+            return;
+        }
         await this.loadProject();
         await this.loadCategories();
         await this.loadAllTeams();
-        await this.loadDepartmentCustomFieldSets();
-        await this.loadNotes();
-        await this.loadLogs();
+        this.loadDepartmentCustomFieldSets();
+        this.loadNotes();
+        this.loadLogs();
         // Load current user data after members are loaded
         this.loadCurrentUser();
         this.initTooltips();
@@ -2260,6 +2317,12 @@ const vueApp = createApp({
             const { error, fileName } = event.detail;
             this.handleUploadError(fileName, error);
         });
+
+        // Start timer to update time remaining every minute
+        this.timeRemainingTimer = setInterval(() => {
+            // Force Vue to re-render the time remaining badge
+            this.$forceUpdate();
+        }, 60000); // Update every minute
 
         // Initialize Tagify for team selection
         // if (document.getElementById('team_tags')) {
@@ -2311,6 +2374,12 @@ const vueApp = createApp({
             this.initTooltips();
             this.addZoomToDescriptionImages();
         });
+    },
+    beforeUnmount() {
+        // Clean up timer
+        if (this.timeRemainingTimer) {
+            clearInterval(this.timeRemainingTimer);
+        }
     }
 });
 

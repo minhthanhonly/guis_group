@@ -130,7 +130,7 @@ $view->heading('部署設定');
                                                     </div>
                                                     <div class="form-check form-check-inline">
                                                         <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_director">
-                                                        ディレクター</label>
+                                                        業務担当</label>
                                                     </div>
                                                     <div class="form-check form-check-inline">
                                                         <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_add">
@@ -210,7 +210,7 @@ $view->heading('部署設定');
                                         <td>{{ member.user_name }}</td>
                                         <td>
                                             <span v-if="member.project_manager == 1" class="badge bg-label-primary me-1">マネージャー</span>
-                                            <span v-if="member.project_director == 1" class="badge bg-label-info me-1">ディレクター</span>
+                                            <span v-if="member.project_director == 1" class="badge bg-label-info me-1">業務担当</span>
                                             <span v-if="member.project_add == 1" class="badge bg-label-success me-1">追加</span>
                                             <span v-if="member.project_edit == 1" class="badge bg-label-warning me-1">編集</span>
                                             <span v-if="member.project_delete == 1" class="badge bg-label-danger me-1">削除</span>

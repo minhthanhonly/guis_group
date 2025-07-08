@@ -453,3 +453,11 @@ li.storageprevious {
 	  --bs-root-font-size: 13px;
 	}
 }
+
+.prevent-click{
+	pointer-events: none;
+	filter: grayscale(40%);
+}
+.max-w-100{
+	max-width: 100%;
+}

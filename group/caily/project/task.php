@@ -142,7 +142,7 @@ if (!$project_id) {
                 <option value="low">低</option>
             </select>
             </div>
-            <button class="btn btn-primary ms-2" @click="openNewTaskModal">
+            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.task_add == 1)" class="btn btn-primary ms-2" @click="openNewTaskModal">
                 <i class="bi bi-plus"></i> 新規タスク
             </button>
         </div>
@@ -155,7 +155,7 @@ if (!$project_id) {
                 <div class="col-md-2 py-2 pe-2">担当者</div>
                 <div class="col-md-1 py-2 pe-2">ステータス</div>
                 <div class="col-md-1 py-2 pe-2">進捗</div>
-                <div class="col-md-1 py-2">操作</div>
+                <div class="col-md-2 py-2 text-center">操作</div>
             </div>
         </div>
         <!-- Danh sách task dạng div card/list -->
@@ -200,7 +200,7 @@ if (!$project_id) {
                         <div class="d-flex align-items-center flex-wrap" @click="openAssigneeModal(task._inlineIndex)">
                             <template v-if="task.assignees && task.assignees.length">
                                 <template v-for="(userId, i) in task.assignees.slice(0, 5)">
-                                    <div :key="userId" class="avatar me-1">
+                                    <div :key="userId" class="avatar me-1" data-bs-toggle="tooltip" :title="projectMembers.find(m => m.user_id == userId)?.user_name">
                                         <img v-if="!projectMembers.find(m => m.user_id == userId)?.avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == userId))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == userId))" :alt="projectMembers.find(m => m.user_id == userId)?.user_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == userId))" width="28" height="28">
                                         <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(projectMembers.find(m => m.user_id == userId)?.user_name) }}</span>
                                     </div>
@@ -241,21 +241,23 @@ if (!$project_id) {
                         </div>
                     </div>
                     <div class="col-md-1">
-                        <div class="py-2 pe-2 d-flex align-items-center">
-                            <input type="range" min="0" max="100" step="1" :value="task.progress" class="w-100" @input="updateTaskField(task._inlineIndex, 'progress', parseInt($event.target.value))">
+                        <div class="py-2 pe-2 d-flex align-items-center justify-content-end">
+                            <input class="form-range" type="range" min="0" max="100" step="1" :value="task.progress" @input="updateTaskField(task._inlineIndex, 'progress', parseInt($event.target.value))">
                             <span class="ms-2">{{ task.progress || 0 }}%</span>
                         </div>
                     </div>
-                    <div class="col-md-1 d-flex align-items-center justify-content-center gap-2">
-                        <button class="btn btn-sm btn-success me-1" @click="saveTaskInline(task._inlineIndex)"><i class="fas fa-check"></i></button>
-                        <button class="btn btn-sm btn-secondary" @click="cancelTaskInline(task._inlineIndex)"><i class="fas fa-times"></i></button>
+                    <div class="col-md-2">
+                        <div class="d-flex align-items-center justify-content-end gap-1 pe-2">
+                            <button class="btn btn-sm btn-success me-1" @click="saveTaskInline(task._inlineIndex)"><i class="fas fa-check"></i></button>
+                            <button class="btn btn-sm btn-secondary" @click="cancelTaskInline(task._inlineIndex)"><i class="fas fa-times"></i></button>
+                        </div>
                     </div>
                 </div>
                 
                 <!-- Normal Display Mode -->
                 <div v-else class="row g-0 align-items-center">
                     <div class="col-md-3 d-flex align-items-center">
-                        <span class="drag-handle ps-2 pe-2 fs-16" style="cursor: move;">≡</span>
+                        <span class="drag-handle ps-2 pe-2 fs-16" style="cursor: move;" :class="{'prevent-click': !(permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))}">≡</span>
                         <span class="badge badge-sm bg-label-primary me-2">#{{ task.id }}</span>
                         <div class="d-flex align-items-center justify-content-between gap-2 flex-grow-1 task-title">
                             <span class="fw-bold" @click="openTaskDetails(task)" style="cursor: pointer; max-width: 100%;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;">{{ task.title }}</span>
@@ -285,9 +287,9 @@ if (!$project_id) {
                         <div class="d-flex align-items-center flex-wrap">
                             <template v-if="task.assigned_to">
                                 <template v-for="(userId, i) in task.assigned_to.split(',').slice(0, 5)">
-                                    <div :key="userId" class="avatar me-1">
+                                    <div :key="userId" class="avatar me-1" :data-userid="projectMembers.find(m => m.user_id == userId)?.userid" data-bs-toggle="tooltip" :title="projectMembers.find(m => m.user_id == userId)?.user_name">
                                         <img v-if="!projectMembers.find(m => m.user_id == userId)?.avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == userId))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == userId))" :alt="projectMembers.find(m => m.user_id == userId)?.user_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == userId))" width="28" height="28">
-                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(projectMembers.find(m => m.user_id == userId)?.user_name) }}</span>
+                                        <span v-else class="avatar-initial rounded-circle bg-label-primary" @click="removeAssignee(task, userId)">{{ getInitials(projectMembers.find(m => m.user_id == userId)?.user_name) }}</span>
                                     </div>
                                 </template>
                                 <div v-if="task.assigned_to.split(',').length > 5" class="avatar">
@@ -303,7 +305,7 @@ if (!$project_id) {
                    
                     <div class="col-md-1">
                         <div class="py-2 pe-2">
-                            <div class="btn-group w-100">
+                            <div class="btn-group w-100" :class="{'prevent-click': !(permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))}">
                                 <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light w-100"
                                         :class="getStatusButtonClass(task.status)"
                                         data-bs-toggle="dropdown" aria-expanded="false">
@@ -318,24 +320,28 @@ if (!$project_id) {
                         </div>
                     </div>
                     <div class="col-md-1">
-                        <div class="py-2 pe-2 d-flex align-items-center">
-                            <input type="range" min="0" max="100" step="1" v-model.number="task.progress" class="w-100" @change="updateTaskProgress(task)">
+                        <div class="py-2 pe-2 d-flex align-items-center" :class="{'prevent-click': !(permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))}">
+                            <input class="form-range" type="range" min="0" max="100" step="1" v-model.number="task.progress" @change="updateTaskProgress(task)">
                             <span class="ms-2">{{ task.progress || 0 }}%</span>
                         </div>
                     </div>
-                    <div class="col-md-1 d-flex align-items-center justify-content-center gap-2">
-                        <button class="btn btn-sm btn-outline-primary me-1" @click="editTaskInline(task)"><i class="fas fa-edit"></i></button>
-                        <button v-if="!isFirstTask(task)" class="btn btn-sm btn-outline-secondary me-1" @click="increaseIndent(task)" title="サブタスクにする">
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                        <button v-if="task.indent_level > 0" class="btn btn-sm btn-outline-secondary me-1" @click="decreaseIndent(task)" title="サブタスクを解除">
-                            <i class="fas fa-arrow-left"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-info position-relative me-1" @click="openTaskComments(task)" title="コメント">
-                            <i class="fas fa-comment"></i>
-                            <span v-if="getUnreadCommentCount(task.id) > 0" class="position-absolute top-0 start-100 translate-middle text-white badge rounded-pill bg-danger" style="font-size:10px;">{{ getUnreadCommentCount(task.id) }}</span>
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger" @click="deleteTask(task)"><i class="fas fa-trash"></i></button>
+                    <div class="col-md-2">
+                        <div class="d-flex align-items-center justify-content-end gap-1 pe-2">
+                            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.project_comment == 1)"class="btn btn-sm btn-outline-info position-relative" @click="openTaskComments(task)" title="コメント">
+                                    <i class="fas fa-comment"></i>
+                                    <span v-if="getUnreadCommentCount(task.id) > 0" class="position-absolute top-0 start-100 translate-middle text-white badge rounded-pill bg-danger" style="font-size:10px;">{{ getUnreadCommentCount(task.id) }}</span>
+                            </button>
+                            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task))" class="btn btn-sm btn-outline-primary" @click="editTaskInline(task)"><i class="fas fa-edit"></i></button>
+                            
+                            <button v-if="task.indent_level > 0 && (permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))" class="btn btn-sm btn-outline-secondary" @click="decreaseIndent(task)" title="サブタスクを解除">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button v-if="canIncreaseIndent(task) && (permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))" class="btn btn-sm btn-outline-secondary" @click="increaseIndent(task)" title="サブタスクにする">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                           
+                            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.task_delete == 1 && checkAssignee(task))" class="btn btn-sm btn-outline-danger" @click="deleteTask(task)"><i class="fas fa-trash"></i></button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -343,35 +349,6 @@ if (!$project_id) {
         
     </div>
 
-    <!-- Modal quản lý member -->
-    <div class="modal fade" tabindex="-1" :class="{show: showMemberModal}" style="display: block;" v-if="showMemberModal">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">メンバー管理</h5>
-                    <button type="button" class="btn-close" @click="closeMemberModal"></button>
-                </div>
-                <div class="modal-body">
-                    <div v-if="projectMembers.length === 0" class="text-muted">メンバーがいません</div>
-                    <ul class="list-group mb-3">
-                        <li v-for="member in projectMembers" :key="member.user_id" class="list-group-item d-flex align-items-center justify-content-between">
-                            <div class="d-flex align-items-center">
-                                <img v-if="!member.avatarError && getAvatarSrc(member)" class="rounded-circle me-2" :src="getAvatarSrc(member)" :alt="member.user_name" width="32" height="32" @error="handleAvatarError(member)">
-                                <span v-else class="avatar-initial rounded-circle bg-label-primary me-2" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;">{{ getInitials(member.user_name) }}</span>
-                                <span>{{ member.user_name }}</span>
-                            </div>
-                            <button class="btn btn-sm btn-outline-danger" @click="removeMember(member.user_id)"><i class="bi bi-x"></i></button>
-                        </li>
-                    </ul>
-                    <!-- Thêm member mới: demo, thực tế có thể là dropdown hoặc search -->
-                    <div class="input-group">
-                        <input type="text" class="form-control" v-model="newMemberName" placeholder="ユーザー名で追加 (デモ)">
-                        <button class="btn btn-primary" @click="addMember(newMemberName)">追加</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Modal chọn assignee cho dòng nhập nhanh -->
     <div class="modal fade" tabindex="-1" :class="{show: assigneeModal.show}" style="display: block;" v-if="assigneeModal.show">
@@ -428,6 +405,7 @@ if (!$project_id) {
                                     <button type="button" class="nav-link waves-effect" role="tab" data-bs-toggle="tab" data-bs-target="#comments" aria-controls="comments" aria-selected="false" tabindex="-1">
                                         <span class="d-none d-sm-inline-flex align-items-center">
                                             <i class="fas fa-comments me-1_5"></i>コメント
+                                            <span v-if="getUnreadCommentCount(selectedTask.id) > 0" class="badge rounded-pill badge-center h-px-20 w-px-20 bg-label-info ms-1_5">{{ getUnreadCommentCount(selectedTask.id) }}</span>
                                         </span>
                                         <i class="fas fa-comments d-sm-none"></i>
                                     </button>

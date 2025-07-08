@@ -281,5 +281,43 @@ $view->heading('プロジェクト管理');
 $view->footing();
 ?>
 
+<style>
+/* Time remaining badge styling */
+.badge.pulse-animation {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
+}
+
+/* Badge styling for time remaining in end date column */
+#projectTable .d-flex.flex-column .badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.375rem;
+    font-weight: normal;
+    transition: all 0.2s ease;
+    max-width: fit-content;
+}
+
+#projectTable .d-flex.flex-column .badge:hover {
+    transform: scale(1.05);
+}
+
+/* Ensure proper spacing in end date column */
+#projectTable td {
+    vertical-align: middle;
+}
+</style>
+
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="assets/js/project-list.js"></script>

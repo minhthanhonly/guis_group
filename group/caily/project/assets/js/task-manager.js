@@ -6,7 +6,9 @@ const TaskApp = createApp({
     },
     data() {
         return {
+            currentUserId: USER_AUTH_ID,
             projectId: null,
+            permission: {},
             projectInfo: {},
             tasks: [],
             taskTable: null,
@@ -197,13 +199,19 @@ const TaskApp = createApp({
             window.location.href = 'index.php';
             return;
         }
-        
-        this.loadProjectInfo();
-        this.loadTasks();
-        this.loadUsers();
-        this.loadCategories();
-        this.initializeDataTable();
-        this.loadProjectMembers();
+        (async()=>{
+            await this.loadPermission();
+            if(!this.permission.is_member || (this.permission.rule && this.permission.rule.task_view != 1)){
+                this.showMessage('権限がありません。', true);
+                setTimeout(() => {
+                    window.location.href = 'index.php';
+                }, 1000);
+                return;
+            }
+            await this.loadProjectInfo();
+            await this.loadTasks();
+            await this.loadProjectMembers();
+        })();
         this.$nextTick(() => {
             this.initFlatpickr();
             this.initSortable();
@@ -315,6 +323,13 @@ const TaskApp = createApp({
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
                 this.projectInfo = response.data;
+                if(!this.projectInfo.id){
+                    this.showMessage('プロジェクト情報の読み込みに失敗しました。', true);
+                    setTimeout(() => {
+                        window.location.href = 'index.php';
+                    }, 1000);
+                    return;
+                }
             } catch (error) {
                 console.error('Error loading project info:', error);
             }
@@ -345,14 +360,15 @@ const TaskApp = createApp({
             }
         },
         
-        // async loadUnreadComments() {
-        //     try {
-        //         const response = await axios.get(`/api/index.php?model=task&method=getTaskUnreadCommentCount&task_id=${this.selectedTask.id}`);
-        //         this.unreadComments = response.data && response.data.unread_count > 0 ? response.data.unread_count : 0;
-        //     } catch (e) {
-        //         this.unreadComments = 0;
-        //     }
-        // },
+     
+        async loadPermission() {
+            try {
+                const response = await axios.get('/api/index.php?model=task&method=getPermission&project_id=' + this.projectId);
+                this.permission = response.data || [];
+            } catch (error) {
+                console.error('Error loading permission:', error);
+            }
+        },
         
         async loadUsers() {
             try {
@@ -372,122 +388,122 @@ const TaskApp = createApp({
             }
         },
         
-        initializeDataTable() {
-            const self = this;
-            this.taskTable = $('#taskTable').DataTable({
-                data: [],
-                columns: [
-                    {
-                        data: 'title',
-                        render: function(data, type, row) {
-                            let indent = '';
-                            if (row.parent_id) {
-                                indent = '<span style="margin-left: 20px;">↳ </span>';
-                            }
-                            return `${indent}<a href="#" class="task-link" data-id="${row.id}">${data}</a>`;
-                        }
-                    },
-                    {
-                        data: 'assigned_to_name',
-                        render: function(data) {
-                            return data || '-';
-                        }
-                    },
-                    {
-                        data: 'priority',
-                        render: function(data) {
-                            const priority = self.taskPriorities.find(p => p.value === data);
-                            return `<span class="badge bg-${priority?.color || 'secondary'}">${priority?.label || data}</span>`;
-                        }
-                    },
-                    {
-                        data: 'status',
-                        render: function(data) {
-                            const status = self.taskStatuses.find(s => s.value === data);
-                            return `<span class="badge bg-${status?.color || 'secondary'}">${status?.label || data}</span>`;
-                        }
-                    },
-                    {
-                        data: 'progress',
-                        render: function(data) {
-                            const color = data === 100 ? 'success' : 'primary';
-                            return `<div class="progress" style="width: 80px;">
-                                        <div class="progress-bar bg-${color}" style="width: ${data}%"></div>
-                                    </div>
-                                    <small>${data}%</small>`;
-                        }
-                    },
-                    {
-                        data: null,
-                        render: function(data, type, row) {
-                            return `<div class="btn-group btn-group-sm">
-                                        <button class="btn btn-primary btn-edit-task" data-id="${row.id}">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-                                        <button class="btn btn-danger btn-delete-task" data-id="${row.id}">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>`;
-                        }
-                    }
-                ],
-                language: {
-                    search: "検索:",
-                    lengthMenu: "_MENU_ 件表示",
-                    info: " _TOTAL_ 件中 _START_ から _END_ まで表示",
-                    paginate: {
-                        first: "先頭",
-                        previous: "前",
-                        next: "次",
-                        last: "最終"
-                    },
-                    emptyTable: "タスクがありません"
-                },
-                order: [[0, 'asc']],
-                pageLength: 25
-            });
+        // initializeDataTable() {
+        //     const self = this;
+        //     this.taskTable = $('#taskTable').DataTable({
+        //         data: [],
+        //         columns: [
+        //             {
+        //                 data: 'title',
+        //                 render: function(data, type, row) {
+        //                     let indent = '';
+        //                     if (row.parent_id) {
+        //                         indent = '<span style="margin-left: 20px;">↳ </span>';
+        //                     }
+        //                     return `${indent}<a href="#" class="task-link" data-id="${row.id}">${data}</a>`;
+        //                 }
+        //             },
+        //             {
+        //                 data: 'assigned_to_name',
+        //                 render: function(data) {
+        //                     return data || '-';
+        //                 }
+        //             },
+        //             {
+        //                 data: 'priority',
+        //                 render: function(data) {
+        //                     const priority = self.taskPriorities.find(p => p.value === data);
+        //                     return `<span class="badge bg-${priority?.color || 'secondary'}">${priority?.label || data}</span>`;
+        //                 }
+        //             },
+        //             {
+        //                 data: 'status',
+        //                 render: function(data) {
+        //                     const status = self.taskStatuses.find(s => s.value === data);
+        //                     return `<span class="badge bg-${status?.color || 'secondary'}">${status?.label || data}</span>`;
+        //                 }
+        //             },
+        //             {
+        //                 data: 'progress',
+        //                 render: function(data) {
+        //                     const color = data === 100 ? 'success' : 'primary';
+        //                     return `<div class="progress" style="width: 80px;">
+        //                                 <div class="progress-bar bg-${color}" style="width: ${data}%"></div>
+        //                             </div>
+        //                             <small>${data}%</small>`;
+        //                 }
+        //             },
+        //             {
+        //                 data: null,
+        //                 render: function(data, type, row) {
+        //                     return `<div class="btn-group btn-group-sm">
+        //                                 <button class="btn btn-primary btn-edit-task" data-id="${row.id}">
+        //                                     <i class="bi bi-pencil"></i>
+        //                                 </button>
+        //                                 <button class="btn btn-danger btn-delete-task" data-id="${row.id}">
+        //                                     <i class="bi bi-trash"></i>
+        //                                 </button>
+        //                             </div>`;
+        //                 }
+        //             }
+        //         ],
+        //         language: {
+        //             search: "検索:",
+        //             lengthMenu: "_MENU_ 件表示",
+        //             info: " _TOTAL_ 件中 _START_ から _END_ まで表示",
+        //             paginate: {
+        //                 first: "先頭",
+        //                 previous: "前",
+        //                 next: "次",
+        //                 last: "最終"
+        //             },
+        //             emptyTable: "タスクがありません"
+        //         },
+        //         order: [[0, 'asc']],
+        //         pageLength: 25
+        //     });
             
-            // イベントハンドラー
-            $('#taskTable').on('click', '.task-link', (e) => {
-                e.preventDefault();
-                const id = $(e.target).data('id');
-                const task = this.tasks.find(t => t.id == id);
-                if (task) {
-                    this.selectedTask = task;
-                }
-            });
+        //     // イベントハンドラー
+        //     $('#taskTable').on('click', '.task-link', (e) => {
+        //         e.preventDefault();
+        //         const id = $(e.target).data('id');
+        //         const task = this.tasks.find(t => t.id == id);
+        //         if (task) {
+        //             this.selectedTask = task;
+        //         }
+        //     });
             
-            $('#taskTable').on('click', '.btn-edit-task', (e) => {
-                const id = $(e.target).closest('button').data('id');
-                const task = this.tasks.find(t => t.id == id);
-                if (task) {
-                    this.editTask(task);
-                }
-            });
+        //     $('#taskTable').on('click', '.btn-edit-task', (e) => {
+        //         const id = $(e.target).closest('button').data('id');
+        //         const task = this.tasks.find(t => t.id == id);
+        //         if (task) {
+        //             this.editTask(task);
+        //         }
+        //     });
             
-            $('#taskTable').on('click', '.btn-delete-task', (e) => {
-                const id = $(e.target).closest('button').data('id');
-                this.deleteTask(id);
-            });
-        },
+        //     $('#taskTable').on('click', '.btn-delete-task', (e) => {
+        //         const id = $(e.target).closest('button').data('id');
+        //         this.deleteTask(id);
+        //     });
+        // },
         
-        updateDataTable() {
-            if (this.taskTable) {
-                // Sắp xếp tasks: parent tasks trước, sau đó subtasks
-                const sortedTasks = [];
-                const parentTasks = this.tasks.filter(t => !t.parent_id);
+        // updateDataTable() {
+        //     if (this.taskTable) {
+        //         // Sắp xếp tasks: parent tasks trước, sau đó subtasks
+        //         const sortedTasks = [];
+        //         const parentTasks = this.tasks.filter(t => !t.parent_id);
                 
-                parentTasks.forEach(parent => {
-                    sortedTasks.push(parent);
-                    const subtasks = this.tasks.filter(t => t.parent_id == parent.id);
-                    sortedTasks.push(...subtasks);
-                });
+        //         parentTasks.forEach(parent => {
+        //             sortedTasks.push(parent);
+        //             const subtasks = this.tasks.filter(t => t.parent_id == parent.id);
+        //             sortedTasks.push(...subtasks);
+        //         });
                 
-                this.taskTable.clear();
-                this.taskTable.rows.add(sortedTasks);
-                this.taskTable.draw();
-            }
-        },
+        //         this.taskTable.clear();
+        //         this.taskTable.rows.add(sortedTasks);
+        //         this.taskTable.draw();
+        //     }
+        // },
         
         openNewTaskModal() {
             const newTask = {
@@ -680,6 +696,38 @@ const TaskApp = createApp({
                 this.showMessage(error.message || '優先度の更新に失敗しました', true);
             }
         },
+
+        async updateTaskAssignee(task = null) {
+            const targetTask = task || this.selectedTask;
+            if (!targetTask) {
+                return;
+            }
+            
+            if (!targetTask.id) {
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('id', targetTask.id);
+                formData.append('assigned_to', targetTask.assigned_to);
+                formData.append('project_id', this.projectId);
+                
+                const response = await axios.post(
+                    '/api/index.php?model=task&method=updateAssignee',
+                    formData
+                );
+                if (response.data.status == 'success') {
+                    this.showMessage('担当者を更新しました。');
+                    // Reload tasks to get updated data
+                    await this.loadTasks();
+                } else {
+                    throw new Error(response.data.message);
+                }
+            } catch (error) {
+                this.showMessage(error.message || '担当者の更新に失敗しました', true);
+            }
+        },
         
         resetTaskForm() {
             this.taskForm = {
@@ -730,7 +778,6 @@ const TaskApp = createApp({
                 status: task.status || 'todo',
                 progress: task.progress || 0
             };
-            console.log('Creating inline task:', inlineTask);
             this.editingInlineId = task.id;
             this.inlineTasks.push(inlineTask);
         },
@@ -870,7 +917,7 @@ const TaskApp = createApp({
         
         getAvatarSrc(member) {
             if(member){
-                return member.user_image || '';
+                return  '/assets/upload/avatar/' + member.user_image || '';
             }
             return '';
         },
@@ -1154,12 +1201,42 @@ const TaskApp = createApp({
                 this.showMessage('操作に失敗しました。', true);
             }
         },
+        canIncreaseIndent(task) {
+            // Task đầu tiên không thể tăng indent
+            if (this.isFirstTask(task)) {
+                return false;
+            }
+            return true;
+        },
+        
+        canDecreaseIndent(task) {
+            // Kiểm tra xem task có indent level > 0 không
+            if (task.indent_level <= 0) {
+                return false;
+            }
+            
+            // Tìm vị trí của task trong displayTasks
+            const currentIndex = this.displayTasks.findIndex(t => t.id === task.id);
+            if (currentIndex <= 0) {
+                return false; // Task đầu tiên hoặc không tìm thấy
+            }
+            
+            // Kiểm tra task trước đó có cùng indent level không
+            const previousTask = this.displayTasks[currentIndex - 1];
+            if (!previousTask || previousTask._isInlineEdit) {
+                return false; // Task trước đó không tồn tại hoặc là inline task
+            }
+            
+            // Có thể giảm indent nếu task trước đó có cùng indent level
+            return previousTask.indent_level === task.indent_level;
+        },
         
         isFirstTask(task) {
             // Check if this is the first task in the display list
             const firstTask = this.displayTasks.find(t => !t._isInlineEdit);
             return firstTask && firstTask.id === task.id;
         },
+
         
         updateInlineTaskPriority(index, priority) {
             if (index >= 0 && index < this.inlineTasks.length) {
@@ -1712,6 +1789,33 @@ const TaskApp = createApp({
                 //await this.loadUnreadComment(taskId);
             } catch (e) {}
         },
+
+        checkAssignee(task) {
+            return task.assigned_to.split(',').includes(this.currentUserId);
+        },
+        
+        async removeAssignee(task, userId) {
+            if(this.permission.can_manage_project || (this.permission.rule && this.permission.rule.task_edit == 1 && this.checkAssignee(task))){
+                if(!this.projectMembers.find(m => m.user_id == userId)){
+                    const swal = await Swal.fire({
+                        title: '確認',
+                        text: '担当者を削除しますか？',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#3085d6',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: '削除',
+                        cancelButtonText: 'キャンセル'
+                    });
+                    
+                    if (swal.isConfirmed) {
+                        const newAssignees = task.assigned_to.split(',').filter(id => id !== userId.toString());
+                        task.assigned_to = newAssignees.join(',');
+                        await this.updateTaskAssignee(task);
+                    }
+                }
+            }
+        }
     }
 });
 

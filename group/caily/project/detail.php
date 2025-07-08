@@ -10,12 +10,6 @@ if (!$project_id) {
 }
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
-    <!-- Service Worker Status Indicator -->
-    <div id="sw-status" class="sw-status">
-        <i class="fas fa-circle"></i>
-        <span id="sw-status-text">Service Worker</span>
-    </div>
-    
     <div v-if="canViewProject">
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">
@@ -59,10 +53,10 @@ if (!$project_id) {
                         <div class="d-flex justify-content-between align-items-center mb-4">
                             <h5 class="card-title"><span data-i18n="基本情報">基本情報</span></h5>
                             <div>
-                                <button v-if="!isEditMode && canAddProject()" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
+                                <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
                                     <i class="fa fa-copy"></i>
                                 </button>
-                                <button v-if="!isEditMode && canEditProject()" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode">
+                                <button v-if="!isEditMode && canEditProject" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode">
                                     <i class="fa fa-pencil-alt"></i>
                                 </button>
                                 <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject">
@@ -71,7 +65,7 @@ if (!$project_id) {
                                 <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit">
                                     <i class="fa fa-times"></i>
                                 </button>  
-                                <button v-if="!isEditMode && canDeleteProject()" class="btn btn-outline-danger btn-sm" @click="deleteProject">
+                                <button v-if="!isEditMode && canDeleteProject" class="btn btn-outline-danger btn-sm" @click="deleteProject">
                                     <i class="fa fa-trash"></i>
                                 </button>
                             </div>
@@ -220,7 +214,7 @@ if (!$project_id) {
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="優先度">優先度</span></label>
                                 <div>
-                                    <div class="btn-group" v-if="canEditProject()">
+                                    <div class="btn-group" v-if="canEditProject">
                                         <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
                                                 :class="getPriorityButtonClass(project.priority)"
                                                 id="priorityDropdown"
@@ -323,7 +317,13 @@ if (!$project_id) {
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.start_date)" readonly>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="期限日">期限日</span></label>
+                                <label class="form-label">
+                                    <span data-i18n="期限日">期限日</span>
+                                    <span v-if="getTimeRemaining()" :class="'badge ms-2 ' + getTimeRemaining().class" 
+                                          :title="getTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
+                                        {{ getTimeRemaining().text }}
+                                    </span>
+                                </label>
                                 <div v-if="isEditMode" class="input-group">
                                     <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>
@@ -334,7 +334,7 @@ if (!$project_id) {
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <div>
-                                    <div class="btn-group" v-if="canEditProject()">
+                                    <div class="btn-group" v-if="canEditProject">
                                         <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
                                                 :class="getStatusButtonClass(project.status)"
                                                 id="statusDropdown"
@@ -359,22 +359,13 @@ if (!$project_id) {
                                 <label class="form-label"><span data-i18n="進捗率">進捗率</span></label>
                                 <div class="position-relative">
                                     <input
-                                        v-if="canEditProject()"
                                         type="range"
                                         min="0"
                                         max="100"
                                         v-model="project.progress"
                                         @change="updateProgress"
-                                        class="form-range custom-progress-range"
-                                    >
-                                    <input
-                                        v-else
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        :value="project.progress"
-                                        class="form-range custom-progress-range"
-                                        disabled
+                                        class="form-range"
+                                        :class="{'prevent-click': !canEditProject}"
                                     >
                                     <div class="progress-value-label text-center">
                                         {{ project.progress }}%
@@ -492,7 +483,7 @@ if (!$project_id) {
                 </div>
 
                 <!-- Comments Section -->
-                <div class="card mt-4" v-if="canCommentProject()">
+                <div class="card mt-4" v-if="canCommentProject">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
                             <i class="fa fa-comment me-2"></i>コメント
@@ -529,8 +520,8 @@ if (!$project_id) {
                             <div class="col-3">
                                 <label class="form-label">見積書</label>
                                 <div>
-                                    <div class="btn-group" v-if="isManager">
-                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
+                                    <div class="btn-group w-100" v-if="canDocumentProject">
+                                        <button type="button" class="btn dropdown-toggle waves-effect waves-light" 
                                                 :class="getEstimateStatusButtonClass(project.estimate_status)"
                                                 id="estimateStatusDropdown"
                                                 data-bs-toggle="dropdown" aria-expanded="false">
@@ -553,8 +544,8 @@ if (!$project_id) {
                             <div class="col-3">
                                 <label class="form-label">請求書</label>
                                 <div>
-                                    <div class="btn-group" v-if="isManager">
-                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
+                                    <div class="btn-group w-100" v-if="canDocumentProject">
+                                        <button type="button" class="btn dropdown-toggle waves-effect waves-light" 
                                                 :class="getInvoiceStatusButtonClass(project.invoice_status)"
                                                 id="invoiceStatusDropdown"
                                                 data-bs-toggle="dropdown" aria-expanded="false">
@@ -577,7 +568,7 @@ if (!$project_id) {
                             <div class="col-6">
                                 <label class="form-label">総額</label>
                                 <div class="input-group">
-                                    <input type="number" class="form-control" v-model="project.amount" placeholder="0" step="100" @input="updateAmount" v-if="isManager">
+                                    <input type="number" class="form-control" v-model="project.amount" placeholder="0" step="100" @input="updateAmount" v-if="canDocumentProject">
                                     <input type="text" class="form-control bg-light" :value="formatCurrency(project.amount || 0)" readonly v-else>
                                     <span class="input-group-text">円</span>
                                 </div>
@@ -673,7 +664,7 @@ if (!$project_id) {
                 </div>
 
                 <!-- Statistics Cards -->
-                <!-- <div class="row g-3 mb-4">
+               <div class="row g-3 mb-4">
                     <div class="col-6">
                         <div class="card bg-primary text-white text-center">
                             <div class="card-body">
@@ -685,7 +676,7 @@ if (!$project_id) {
                             </div>
                         </div>
                     </div>
-                    <div class="col-6">
+                    <!-- <div class="col-6">
                         <div class="card bg-success text-white text-center">
                             <div class="card-body">
                                 <div class="mb-1">
@@ -706,9 +697,9 @@ if (!$project_id) {
                                 <small>記録時間</small>
                             </div>
                         </div>
-                    </div>
+                    </div>-->
                     <div class="col-6">
-                        <div class="card bg-warning text-white text-center">
+                        <div class="card bg-info text-white text-center">
                             <div class="card-body">
                                 <div class="mb-1">
                                     <i class="fa fa-calendar fs-3"></i>
@@ -718,7 +709,7 @@ if (!$project_id) {
                             </div>
                         </div>
                     </div>
-                </div> -->
+                </div>
 
                 <!-- Nút mở modal comment -->
                 
@@ -785,10 +776,7 @@ if (!$project_id) {
                                     <i class="fa fa-star text-warning"></i>
                                 </div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">作成者・作成日時</label>
-                                <div class="form-control bg-light">{{ formatDateTime(editingNote.created_at) }} - {{ editingNote.realname || 'Unknown' }}</div>
-                            </div>
+                           
                         </div>
                         <!-- Edit mode -->
                         <form v-else @submit.prevent="saveNote">
@@ -896,6 +884,35 @@ $view->footing();
 
 #project_tags .tagify__tag__removeBtn:hover {
     background: rgba(255,255,255,0.2);
+}
+
+/* Time remaining badge styling */
+.form-label .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-weight: normal;
+    transition: all 0.2s ease;
+}
+
+.form-label .badge:hover {
+    transform: scale(1.05);
+}
+
+.form-label .badge.bg-danger {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
 }
 
 </style>
