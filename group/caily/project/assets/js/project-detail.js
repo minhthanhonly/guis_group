@@ -203,19 +203,18 @@ const vueApp = createApp({
                 this.calculateStats();
                 
                 if (this.project.teams) {
-                    await this.loadTeamListByIds(this.project.teams);
+                    this.loadTeamListByIds(this.project.teams);
                 } else {
                     this.project.team_list = [];
                 }
-                if (this.project.department_id) {
-                    this.loadDepartment();
-                }
-                await this.loadMembers();
+                // if (this.project.department_id) {
+                //     this.loadDepartment();
+                // }
+                this.loadMembers();
                 // Ensure Tagify is updated after loading project and team_list
                 this.$nextTick(() => { 
-                    this.initTagify(); 
+                    //this.initTagify(); 
                     this.setConnectedUsers();
-                    
                 });
             } catch (error) {
                 console.error('Error loading project:', error);
@@ -269,9 +268,6 @@ const vueApp = createApp({
                 this.managers = this.members.filter(m => m && m.role === 'manager');
                 const managerIds = this.managers.map(m => m.user_id);
                 this.members = this.members.filter(m => m && m.role === 'member' && !managerIds.includes(m.user_id));
-                
-                // Update current user data after loading members
-                this.loadCurrentUser();
             } catch (error) {
                 console.error('Error loading members:', error);
             }
@@ -771,10 +767,11 @@ const vueApp = createApp({
         // },
         initTagify() {
             this.$nextTick(() => {
-                setTimeout(() => {
+                setTimeout(async () => {
                     // --- Tagify for team selection ---
                     const teamInput = document.getElementById('team_tags');
                     if (teamInput && window.Tagify && !teamInput._tagify) {
+                        await this.loadAllTeams();
                         if (this.tagify) {
                             try {
                                 this.tagify.destroy();
@@ -2213,7 +2210,7 @@ const vueApp = createApp({
             }
         },
         'project.department_id': function() {
-            this.loadDepartmentCustomFieldSets();
+            //this.loadDepartmentCustomFieldSets();
             // Load companies and contacts for the selected department
             if (this.project && this.project.department_id) {
                 this.loadCompaniesByCategory();
@@ -2295,11 +2292,9 @@ const vueApp = createApp({
         }
         await this.loadProject();
         this.loadCategories();
-        this.loadAllTeams();
         this.loadDepartmentCustomFieldSets();
         this.loadNotes();
         this.loadLogs();
-        // Load current user data after members are loaded
         this.loadCurrentUser();
         this.initTooltips();
         
@@ -2342,10 +2337,10 @@ const vueApp = createApp({
         });
 
         // Start timer to update time remaining every minute
-        this.timeRemainingTimer = setInterval(() => {
-            // Force Vue to re-render the time remaining badge
-            this.$forceUpdate();
-        }, 60000); // Update every minute
+        // this.timeRemainingTimer = setInterval(() => {
+        //     // Force Vue to re-render the time remaining badge
+        //     this.$forceUpdate();
+        // }, 60000); // Update every minute
 
         // Initialize Tagify for team selection
         // if (document.getElementById('team_tags')) {

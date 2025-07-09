@@ -758,7 +758,7 @@ const TaskApp = createApp({
         
         formatDate(date) {
             if (!date) return '-';
-            return moment(date).format('YYYY/MM/DD HH:mm');
+            return moment(date).format('M月D日 HH:mm');
         },
         
         showMessage(message, isError = false) {

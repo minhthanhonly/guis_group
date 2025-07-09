@@ -183,7 +183,7 @@ class Department extends ApplicationModel {
             JOIN " . DB_PREFIX . "user_department ud ON u.userid = ud.userid
             WHERE ud.department_id = %d
             AND (u.is_suspend = 0 OR u.is_suspend IS NULL)
-            ORDER BY u.userid ASC",
+            ORDER BY u.id ASC",
             intval($department_id)
         );
         return $this->fetchAll($query);
@@ -219,18 +219,22 @@ class Department extends ApplicationModel {
         $json = file_get_contents('php://input');
         $data = json_decode($json, true);
         // Lưu vào 1 bảng riêng: department_custom_fields (id, department_id, fields)
-        foreach ($data['sets'] as $set) {
-            $department_id = intval($set['department_id']);
-            $name = $set['name'];
-            $fields = json_encode($set['fields'], JSON_UNESCAPED_UNICODE);
-            // Kiểm tra tồn tại
-            $exists = $this->fetchOne("SELECT id FROM " . "department_custom_fields WHERE department_id = $department_id");
-            if ($exists) {
-                $this->query_update(['fields' => $fields, 'name' => $name], ['department_id' => $department_id], 'department_custom_fields');
-            } else {
-                $this->query_insert(['department_id' => $department_id, 'fields' => $fields, 'name' => $name], 'department_custom_fields');
-            }
-        }
+        $department_id = intval($data['department_id']);
+        $id = intval($data['id']);
+        $name = $data['name'];
+        $fields = json_encode($data['fields'], JSON_UNESCAPED_UNICODE);
+        $this->query_update(['fields' => $fields, 'name' => $name], ['id' => $id], 'department_custom_fields');
+        return ['success' => true];
+    }
+
+    function addCustomFields() {
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+        // Lưu vào 1 bảng riêng: department_custom_fields (id, department_id, fields)
+        $department_id = intval($data['department_id']);
+        $name = $data['name'];
+        $fields = json_encode($data['fields'], JSON_UNESCAPED_UNICODE);
+        $this->query_insert(['department_id' => $department_id, 'fields' => $fields, 'name' => $name], 'department_custom_fields');
         return ['success' => true];
     }
 

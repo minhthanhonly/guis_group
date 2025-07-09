@@ -140,6 +140,7 @@ const app = Vue.createApp({
             this.showModal = true;
         },
         openModalForEdit(set, idx) {
+            console.log(set);
             this.editingSetIdx = idx;
             // Deep copy
             this.modalSet = JSON.parse(JSON.stringify(set));
@@ -180,8 +181,9 @@ const app = Vue.createApp({
                     return;
                 }
             }
+            const method = this.editingSetIdx === null ? 'addCustomFields' : 'saveCustomFields';
             // Save only this set to the database
-            axios.post('/api/index.php?model=department&method=saveCustomFields', { sets: [this.modalSet] })
+            axios.post('/api/index.php?model=department&method=' + method, this.modalSet)
                 .then(() => {
                     this.showModal = false;
                     this.loadCustomFieldSets();
