@@ -185,4 +185,4 @@ $view->footing();
 <!-- DHTMLX Gantt Standard Version -->
 <link rel="stylesheet" href="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.css" type="text/css">
 <script src="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.js"></script> 
-<script src="assets/js/project-task-gantt.js"></script>
+<script src="assets/js/project-task-gantt.js?v=<?=CACHE_VERSION?>"></script>

@@ -440,7 +440,7 @@ if (!$project_id) {
                                         <div class="card h-100">
                                             <div class="card-header d-flex justify-content-between align-items-center">
                                                 <h6 class="mb-0">タスクの説明</h6>
-                                                <button class="btn btn-sm btn-primary" @click="saveTaskDescription">
+                                                <button v-if="permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(selectedTask))" class="btn btn-sm btn-primary" @click="saveTaskDescription">
                                                     <i class="fas fa-save me-1"></i>保存
                                                 </button>
                                             </div>
@@ -590,11 +590,7 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/highlight/highlight.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/katex.css" />
-<script src="<?=ROOT?>assets/vendor/libs/highlight/highlight.js"></script>
-<script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="<?=ROOT?>assets/js/sw-manager.js"></script>
 <link rel="stylesheet" href="<?=ROOT?>assets/css/comment-component.css" />

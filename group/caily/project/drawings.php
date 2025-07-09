@@ -643,4 +643,4 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 const CURRENT_USER_ID = '<?php echo $_SESSION['userid']; ?>';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="assets/js/drawings.js"></script> 
+<script src="assets/js/drawings.js?v=<?=CACHE_VERSION?>"></script> 

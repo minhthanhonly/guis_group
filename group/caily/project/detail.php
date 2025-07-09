@@ -923,15 +923,12 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/highlight/highlight.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/katex.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/css/mention.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/css/comment-component.css" />
 <link rel="stylesheet" href="assets/css/task-manager.css" />
 
-<script src="<?=ROOT?>assets/vendor/libs/highlight/highlight.js"></script>
-<script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
+
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="<?=ROOT?>assets/js/sw-manager.js"></script>
 <script src="/assets/js/mention.js"></script>

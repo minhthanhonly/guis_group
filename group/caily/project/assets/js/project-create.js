@@ -572,7 +572,6 @@ createApp({
                     bounds: el,
                     placeholder: 'Type Something...',
                     modules: {
-                        syntax: true,
                         toolbar: {
                             container: toolbarOptions,
                             handlers: {

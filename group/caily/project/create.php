@@ -383,10 +383,6 @@ const PRESET_DEPARTMENT_ID = <?php echo $department_id; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/highlight/highlight.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/katex.css" />
-<script src="<?=ROOT?>assets/vendor/libs/highlight/highlight.js"></script>
-<script src="<?=ROOT?>assets/vendor/libs/quill/katex.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
-<script src="assets/js/project-create.js"></script>
+<script src="assets/js/project-create.js?v=<?=CACHE_VERSION?>"></script>

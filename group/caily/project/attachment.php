@@ -669,5 +669,5 @@ $view->footing();
 const PROJECT_ID = <?php echo $project_id; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="<?=ROOT?>assets/js/sw-manager.js"></script>
-<script src="assets/js/attachment.js"></script> 
+<script src="<?=ROOT?>assets/js/sw-manager.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/attachment.js?v=<?=CACHE_VERSION?>"></script> 

@@ -183,4 +183,4 @@ $view->footing();
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="assets/js/project-list.js"></script>
+<script src="assets/js/project-list.js?v=<?=CACHE_VERSION?>"></script>

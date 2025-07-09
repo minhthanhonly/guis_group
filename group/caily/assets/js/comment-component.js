@@ -405,7 +405,7 @@ window.CommentComponent = {
                     theme: 'snow',
                     placeholder: 'コメントを入力してください...',
                     modules: {
-                        syntax: true,
+                        // syntax: true,
                         toolbar: {
                             container: toolbarOptions,
                             handlers: {
@@ -1060,7 +1060,6 @@ window.CommentComponent = {
 
             if (this.entityType === 'task' && this.entityId && window.notificationManager && !inited) {
                 inited = true;
-                console.log('listenTaskCommentRealtime');
                 window.notificationManager.listenTaskCommentRealtime(this.entityId, () => {
                     this.loadComments();
                     this.scrollToCommentBottom();
@@ -1078,7 +1077,6 @@ window.CommentComponent = {
                 if (this.entityType === 'task' && this.entityId && window.notificationManager && !inited) {
                     inited = true;
                     window.notificationManager.listenTaskCommentRealtime(this.entityId, () => {
-                        console.log('listenTaskCommentRealtime');
                         this.loadComments();
                         this.scrollToCommentBottom();
                     });

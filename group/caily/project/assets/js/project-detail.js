@@ -995,26 +995,41 @@ const vueApp = createApp({
         },
         initDatePickers() {
             if (!this.isEditMode) return;
-            const options = {
+            const optionsStart = {
                 enableTime: true,
                 dateFormat: "Y/m/d H:i",
                 time_24hr: true,
                 allowInput: true,
                 locale: "ja",
+                defaultHour: 9,
+                defaultMinute: 0,
                 onChange: (selectedDates, dateStr, instance) => {
-                    const id = instance.input.id;
-                    if (id === 'start_date_picker') this.project.start_date = dateStr;
-                    if (id === 'end_date_picker') this.project.end_date = dateStr;
-                    // if (id === 'actual_end_date_picker') this.project.actual_end_date = dateStr;
+                    if (instance.input.id === 'start_date_picker') this.project.start_date = dateStr;
                 }
             };
-            ['start_date_picker', 'end_date_picker', 'actual_end_date_picker'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) {
-                    if (el._flatpickr) el._flatpickr.destroy();
-                    flatpickr(el, options);
+            const optionsEnd = {
+                enableTime: true,
+                dateFormat: "Y/m/d H:i",
+                time_24hr: true,
+                allowInput: true,
+                locale: "ja",
+                defaultHour: 18,
+                defaultMinute: 0,
+                onChange: (selectedDates, dateStr, instance) => {
+                    if (instance.input.id === 'end_date_picker') this.project.end_date = dateStr;
                 }
-            });
+            };
+
+            const elStart = document.getElementById('start_date_picker');
+            if (elStart) {
+                if (elStart._flatpickr) elStart._flatpickr.destroy();
+                flatpickr(elStart, optionsStart);
+            }
+            const elEnd = document.getElementById('end_date_picker');
+            if (elEnd) {
+                if (elEnd._flatpickr) elEnd._flatpickr.destroy();
+                flatpickr(elEnd, optionsEnd);
+            }
         },
         async initManagerMembersTagify() {
             // Lấy toàn bộ user trong department
@@ -1486,7 +1501,7 @@ const vueApp = createApp({
                     bounds: el,
                     placeholder: 'Type Something...',
                     modules: {
-                        syntax: true,
+                        // syntax: true,
                         toolbar: {
                             container: toolbarOptions,
                             handlers: {

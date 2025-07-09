@@ -181,4 +181,4 @@ $view->footing();
 <script src="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.js"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="assets/js/project-gantt.js"></script>
+<script src="assets/js/project-gantt.js?v=<?=CACHE_VERSION?>"></script>
