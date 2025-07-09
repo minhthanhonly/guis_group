@@ -601,7 +601,7 @@ if (!$project_id) {
                                     <div v-if="note.content" class="text-muted small note-content">
                                         {{ getNotePreview(note.content) }}
                                     </div>
-                                    <small class="text-secondary">{{ formatDateTime(note.created_at) }} - {{ note.realname || 'Unknown' }}</small>
+                                    <small class="text-secondary">{{ formatShortDateTime(note.created_at) }} - {{ note.realname || 'Unknown' }}</small>
                                 </div>
                                 <button class="btn btn-outline-danger btn-sm ms-2" 
                                         @click="deleteNote(note.id)" 
@@ -630,7 +630,7 @@ if (!$project_id) {
                         <ul class="list-group" style="max-height: 400px; overflow-y: auto;">
                             <li v-for="log in sortedLogs" :key="log.id" class="list-group-item">
                                 <div class="d-flex">
-                                    <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:160px;">
+                                    <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
                                         <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
                                             <span v-if="log.user_image">
                                                 <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
@@ -643,7 +643,7 @@ if (!$project_id) {
                                         </div>
                                         <div class="d-flex flex-column align-items-start justify-content-center ms-2">
                                             <span class="fw-bold small">{{ log.username || log.realname || log.user }}</span>
-                                            <span class="text-muted small">{{ formatDateTime(log.time) }}</span>
+                                            <span class="text-muted small">{{ formatShortDateTime(log.time) }}</span>
                                         </div>
                                     </div>
                                     <div class="flex-grow-1 d-flex align-items-center">

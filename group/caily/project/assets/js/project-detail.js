@@ -464,6 +464,10 @@ const vueApp = createApp({
             if (!datetime) return '-';
             return moment(datetime).format('YYYY/MM/DD HH:mm');
         },
+        formatShortDateTime(datetime) {
+            if (!datetime) return '-';
+            return moment(datetime).format('M月D日 HH:mm');
+        },
         formatCurrency(amount) {
             if (!amount) return '¥0';
             return '¥' + parseInt(amount).toLocaleString();

@@ -738,8 +738,11 @@ class Project extends ApplicationModel {
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {
             $projectMembers = $this->getMembers(['project_id' => $id]);
-            $this->notifyProjectStatusChanged($project_number,$id, $name, $data['status'], array_column($projectMembers, 'userid'));
-            $this->logProjectAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
+            if($old['status'] != $status) {
+                $this->notifyProjectStatusChanged($project_number,$id, $name, $data['status'], array_column($projectMembers, 'userid'));
+                $this->logProjectAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
+            }
+           
         }
         
         // Clear actual_end_date if status is not completed
@@ -791,7 +794,9 @@ class Project extends ApplicationModel {
 
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {
-            $this->logProjectAction($id, 'priority_updated', '優先度変更', $old['priority'], $priority);
+            if($old['priority'] != $priority) {
+                $this->logProjectAction($id, 'priority_updated', '優先度変更', $old['priority'], $priority);
+            }
         }
         return $result;
     }
