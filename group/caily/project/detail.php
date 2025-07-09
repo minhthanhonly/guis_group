@@ -311,7 +311,7 @@ if (!$project_id) {
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="開始日">開始日</span></label>
                                 <div v-if="isEditMode" class="input-group">
-                                    <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" placeholder="YYYY/MM/DD HH:mm">
+                                    <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                 </div>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.start_date)" readonly>
@@ -325,7 +325,7 @@ if (!$project_id) {
                                     </span>
                                 </label>
                                 <div v-if="isEditMode" class="input-group">
-                                    <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm">
+                                    <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                 </div>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" readonly>

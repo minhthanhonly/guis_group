@@ -13,7 +13,7 @@ createApp({
                 building_number: '',
                 progress: 0,
                 priority: 'medium',
-                status: 'draft',
+                status: 'open',
                 department_id: '',
                 start_date: '',
                 end_date: '',
@@ -134,7 +134,7 @@ createApp({
                 building_number: '',
                 progress: 0,
                 priority: 'medium',
-                status: 'draft',
+                status: 'open',
                 department_id: PRESET_DEPARTMENT_ID || '',
                 start_date: '',
                 end_date: '',
@@ -489,25 +489,41 @@ createApp({
             }, 1000); // Wait 1 second after user stops typing
         },
         initDatePickers() {
-            const options = {
+            const optionsStart = {
                 enableTime: true,
                 dateFormat: "Y/m/d H:i",
                 time_24hr: true,
                 allowInput: true,
                 locale: "ja",
+                defaultHour: 9,
+                defaultMinute: 0,
                 onChange: (selectedDates, dateStr, instance) => {
-                    const id = instance.input.id;
-                    if (id === 'start_date_picker') this.project.start_date = dateStr;
-                    if (id === 'end_date_picker') this.project.end_date = dateStr;
+                    if (instance.input.id === 'start_date_picker') this.project.start_date = dateStr;
                 }
             };
-            ['start_date_picker', 'end_date_picker'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) {
-                    if (el._flatpickr) el._flatpickr.destroy();
-                    flatpickr(el, options);
+            const optionsEnd = {
+                enableTime: true,
+                dateFormat: "Y/m/d H:i",
+                time_24hr: true,
+                allowInput: true,
+                locale: "ja",
+                defaultHour: 18,
+                defaultMinute: 0,
+                onChange: (selectedDates, dateStr, instance) => {
+                    if (instance.input.id === 'end_date_picker') this.project.end_date = dateStr;
                 }
-            });
+            };
+
+            const elStart = document.getElementById('start_date_picker');
+            if (elStart) {
+                if (elStart._flatpickr) elStart._flatpickr.destroy();
+                flatpickr(elStart, optionsStart);
+            }
+            const elEnd = document.getElementById('end_date_picker');
+            if (elEnd) {
+                if (elEnd._flatpickr) elEnd._flatpickr.destroy();
+                flatpickr(elEnd, optionsEnd);
+            }
         },
         initQuillEditor() {
             if (this.quillInstance) return;
@@ -907,6 +923,14 @@ createApp({
                 return [];
             }
         },
+        async generateProjectNumber() {
+            try {
+                const res = await axios.get(`/api/index.php?model=project&method=generateProjectNumber&&department_id=${this.project.department_id}`);
+                this.project.project_number = res.data;
+            } catch (e) {
+                showMessage('プロジェクト番号の生成に失敗しました', true);
+            }
+        },
         async initManagerMembersTagify() {
             // Lấy toàn bộ user trong department
             await this.loadDepartmentUsers();
@@ -1123,6 +1147,10 @@ createApp({
             }
             if (!this.project.name) {
                 this.validationErrors.name = 'プロジェクト名は必須です';
+                valid = false;
+            }
+            if (this.project.start_date && this.project.end_date && new Date(this.project.start_date) > new Date(this.project.end_date)) {
+                showMessage('開始日は終了日より前にしてください', true);
                 valid = false;
             }
             return valid;

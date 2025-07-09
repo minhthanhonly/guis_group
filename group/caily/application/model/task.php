@@ -260,7 +260,8 @@ class Task extends ApplicationModel {
         //     $this->updateProjectProgress($task['project_id']);
         // }
         if($result){
-            $this->logTaskAction($id, 'deleted', 'タスク削除', $old['status'], 'deleted');
+           // $this->logTaskAction($id, 'deleted', 'タスク削除', $old['status'], 'deleted');
+
             return [
                 'status' => 'success'
             ];

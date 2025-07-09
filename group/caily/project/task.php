@@ -39,7 +39,16 @@ if (!$project_id) {
         </div>
     </nav>
 
-    <div class="mt-4">
+    <div class="row">
+        <!-- Back button -->
+        <div class="col-12">
+            <a href="detail.php?id=<?php echo $project_id; ?>" class="btn btn-outline-primary">
+                <i class="fa fa-arrow-left me-2"></i><span data-i18n="戻る">戻る</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="">
         <!-- ボー lọc -->
         <div class="row mb-4">
            

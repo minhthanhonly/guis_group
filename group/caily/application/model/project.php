@@ -2113,6 +2113,38 @@ class Project extends ApplicationModel {
             return ['success' => false, 'message' => 'Delete failed'];
         }
     }
+
+    function generateProjectNumber() {
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+        $this->table = DB_PREFIX . 'projects';
+
+        // Lấy 50 project_number mới nhất của phòng ban
+        $query = "SELECT project_number FROM " . DB_PREFIX . "projects WHERE department_id = $department_id ORDER BY id DESC LIMIT 50";
+        $result = $this->fetchAll($query);
+
+        $prefix = '';
+        if (!empty($result)) {
+            // Lấy prefix là phần ký tự đầu tiên (không phải số) của project_number đầu tiên
+            if (preg_match('/^([^0-9]*)/', $result[0]['project_number'], $matches)) {
+                $prefix = $matches[1];
+            }
+        }
+
+        $maxNumber = 0;
+        foreach ($result as $row) {
+            // Tìm số ở cuối project_number
+            if (preg_match('/(\d+)\s*$/', $row['project_number'], $matches)) {
+                $num = intval($matches[1]);
+                if ($num > $maxNumber) {
+                    $maxNumber = $num;
+                }
+            }
+        }
+        $nextNumber = $maxNumber + 1;
+        // Format lại số, ví dụ: PRJ-001 hoặc chỉ 001 nếu không có prefix
+        $project_number = $prefix . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+        return $project_number;
+    }
 }
 
 ?>

@@ -77,7 +77,7 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label"><span data-i18n="プロジェクト番号">プロジェクト番号</span> <span class="text-danger">*</span></label>
+                            <label class="form-label"><span data-i18n="プロジェクト番号">プロジェクト番号</span> <span class="text-danger">*</span> <button class="btn btn-sm btn-outline-primary py-0 small" @click="generateProjectNumber">生成</button></label>
                             <input type="text" class="form-control" v-model="project.project_number" required>
                             <div v-if="validationErrors.project_number" class="invalid-feedback d-block">
                                 {{ validationErrors.project_number }}
@@ -174,14 +174,14 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                         <div class="col-md-4">
                             <label class="form-label"><span data-i18n="開始日">開始日</span></label>
                             <div class="input-group">
-                                <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" placeholder="YYYY/MM/DD HH:mm">
+                                <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                 <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label"><span data-i18n="終了日">終了日</span></label>
                             <div class="input-group">
-                                <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm">
+                                <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                 <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                             </div>
                         </div>

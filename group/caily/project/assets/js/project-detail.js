@@ -1887,7 +1887,6 @@ const vueApp = createApp({
                 name: ''
             };
             let valid = true;
-            console.log(this.project);
             if (!this.project.category_id) {
                 this.validationErrors.category_id = '顧客カテゴリーは必須です';
                 valid = false;
@@ -1906,6 +1905,11 @@ const vueApp = createApp({
             }
             if (!this.project.name) {
                 this.validationErrors.name = 'プロジェクト名は必須です';
+                valid = false;
+            }
+            // Validate start_date > end_date
+            if (this.project.start_date && this.project.end_date && new Date(this.project.start_date) > new Date(this.project.end_date)) {
+                this.showNotification('開始日は終了日より前にしてください', 'error');
                 valid = false;
             }
             return valid;

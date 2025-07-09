@@ -37,6 +37,14 @@ if (!$project_id) {
                 </div>
             </div>
         </nav>
+        <div class="row">
+            <!-- Back button -->
+            <div class="col-12 mb-3">
+                <a href="detail.php?id=<?php echo $project_id; ?>" class="btn btn-outline-primary">
+                    <i class="fa fa-arrow-left me-2"></i><span data-i18n="戻る">戻る</span>
+                </a>
+            </div>
+        </div>
 
     <div class="card">
         <div class="card-header">
