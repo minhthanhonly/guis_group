@@ -324,7 +324,7 @@ class Request extends ApplicationModel {
     // Firebase notification methods (NEW: dùng NotificationService)
     private function sendRequestCreatedNotification($requestId, $requestType, $userId) {
         try {
-            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
             // Lấy danh sách admin
             $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
@@ -352,7 +352,7 @@ class Request extends ApplicationModel {
 
     private function sendRequestUpdatedNotification($requestId, $requestType, $status, $userId) {
         try {
-            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
             $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
             $admin_ids = array_map(function($a){return $a['userid'];}, $admins);
@@ -380,7 +380,7 @@ class Request extends ApplicationModel {
 
     private function sendRequestStatusNotification($requestId, $requestType, $status, $userId, $actionUser, $action) {
         try {
-            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
             // Gửi cho chủ đơn
             $payload_user = [
@@ -414,7 +414,7 @@ class Request extends ApplicationModel {
 
     private function sendRequestCommentNotification($requestId, $requestType, $userId, $commentUserId) {
         try {
-            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
             // Gửi cho chủ đơn nếu người comment khác chủ đơn
             if ($userId !== $commentUserId) {

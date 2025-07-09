@@ -1,6 +1,6 @@
 <?php
-require_once(DIR_ROOT . '/application/model/notification.php');
-require_once(DIR_ROOT . '/application/library/firebase_helper.php');
+require_once(DIR_MODEL . 'notification.php');
+require_once(DIR_LIBRARY . 'firebase_helper.php');
 
 class NotificationService {
     private $notificationModel;

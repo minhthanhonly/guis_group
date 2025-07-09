@@ -147,6 +147,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
 <?php
 $view->footing();
 ?>
+<script src="<?=$root?>assets/vendor/libs/apex-charts/apexcharts.js"></script>
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/css/pages/app-calendar.css" />
 <script src="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.js"></script>

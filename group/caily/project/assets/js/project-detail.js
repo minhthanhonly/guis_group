@@ -2271,8 +2271,8 @@ const vueApp = createApp({
             return;
         }
         await this.loadProject();
-        await this.loadCategories();
-        await this.loadAllTeams();
+        this.loadCategories();
+        this.loadAllTeams();
         this.loadDepartmentCustomFieldSets();
         this.loadNotes();
         this.loadLogs();

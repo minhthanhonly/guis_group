@@ -14,7 +14,6 @@ class NotificationAPI {
     
     public function handleRequest() {
         $method = $_GET['method'] ?? '';
-        
         switch ($method) {
             case 'test':
                 return $this->testConnection();

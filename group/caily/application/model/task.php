@@ -1087,7 +1087,7 @@ class Task extends ApplicationModel {
     // Detect mentions and send notifications
     private function sendMentionNotifications($projectId, $content, $commentUserId, $commentId, $taskId) {
         try {
-            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
 
             $notiService->sendTaskCommentNotification($taskId, $commentId);

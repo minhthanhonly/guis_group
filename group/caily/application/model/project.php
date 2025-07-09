@@ -959,7 +959,7 @@ class Project extends ApplicationModel {
     // Detect mentions and send notifications
     private function sendMentionNotifications($projectId, $content, $commentUserId, $commentId) {
         try {
-            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            require_once('NotificationService.php');
             $notiService = new NotificationService();
             $notiService->sendProjectCommentNotification($projectId, $commentId);
             // Extract mentioned users from content
@@ -1163,40 +1163,37 @@ class Project extends ApplicationModel {
             return ['success' => false, 'error' => 'Update failed'];
         }
     }
+  
 
     // Note methods
     function addNote($params = null) {
-        require_once(DIR_ROOT . '/application/model/projectnote.php');
+        require_once('projectnote.php');
         $noteModel = new ProjectNote();
         return $noteModel->create($params);
     }
 
     function updateNote($params = null) {
-        require_once(DIR_ROOT . '/application/model/projectnote.php');
+        require_once('projectnote.php');
         $noteModel = new ProjectNote();
         return $noteModel->update($params);
     }
 
     function deleteNote($params = null) {
-        require_once(DIR_ROOT . '/application/model/projectnote.php');
+        require_once('projectnote.php');
         $noteModel = new ProjectNote();
         return $noteModel->delete($params);
     }
 
     function getNotes($params = null) {
-        require_once(DIR_ROOT . '/application/model/projectnote.php');
+        require_once('projectnote.php');
         $noteModel = new ProjectNote();
         return $noteModel->list($params);
     }
 
-    /**
-     * Gửi thông báo cho các hành động của dự án hoặc tác vụ
-     * @param array $params Tham số thông báo
-     * @return bool Kết quả gửi thông báo
-     */
+  
     function sendProjectNotification($params = null) {
         try {
-            require_once(DIR_ROOT . '/application/model/NotificationService.php');
+            require_once('NotificationService.php');
             $notiService = new NotificationService();
             
             // Validate required parameters
