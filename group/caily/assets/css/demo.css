@@ -442,16 +442,8 @@ li.storageprevious {
 .btn-primary:hover:not(:disabled) {
     transform: translateY(-2px);
 }
-
-@media (max-width: 1600px) {
-  :root {
-	--bs-root-font-size: 15px;
-  }
-}
-@media (max-width: 1300px) {
-	:root {
-	  --bs-root-font-size: 13px;
-	}
+:root {
+	--bs-root-font-size: clamp(13px, 1.1vw, 16px) !important;
 }
 
 .prevent-click{

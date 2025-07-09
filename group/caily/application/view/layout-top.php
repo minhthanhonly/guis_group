@@ -64,20 +64,21 @@
               </ul>
             </li>
 
-            <?php if($_SESSION['group'] != '6'){ ?>
+            <?php if($_SESSION['group'] != '7'){ ?>
               <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
                 <a href="<?=$root?>schedule/" class="menu-link">
                   <i class="menu-icon icon-base ti tabler-calendar-event"></i>
                   <div data-i18n="カレンダー">カレンダー</div>
                 </a>
               </li>
-            
+              <?php if($_SESSION['group'] != '6'){ ?>
               <li class="menu-item <?php if($directory == 'timecard' && ($page == 'index' || $page == 'group')) echo 'active'; ?>">
                 <a href="<?=$root?>timecard/" class="menu-link">
                   <i class="menu-icon icon-base ti tabler-clock"></i>
                   <div data-i18n="タイムカード">タイムカード</div>
                 </a>
               </li>
+              <?php } ?>
             
             <!-- <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
               <a href="<?=$root?>addressbook/" class="menu-link">
@@ -88,7 +89,7 @@
 
             <li class="menu-item <?php if($directory == 'customer') echo 'active open'; ?>">
               <a href="<?=$root?>customer/" class="menu-link">
-                <i class="menu-icon icon-base ti tabler-users"></i>
+                <i class="menu-icon icon-base fa fa-users"></i>
                 <div data-i18n="顧客情報">顧客情報</div>
               </a>
             </li>
@@ -100,7 +101,7 @@
                 <div data-i18n="ユーザー一覧">ユーザー一覧</div>
               </a>
             </li>
-            <?php if($_SESSION['group'] != '6'){ ?>
+            <?php if($_SESSION['group'] != '7'){ ?>
             <li class="menu-item <?php if($directory == 'storage') echo 'active open'; ?>">
               <a href="<?=$root?>storage/" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-server-2"></i>
@@ -131,7 +132,7 @@
               </ul>
             </li> -->
 
-            <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '6'){
+            <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7'){
               $active = '';
               if($directory == 'setting') {
                 $active = 'active open';

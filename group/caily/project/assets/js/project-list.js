@@ -225,7 +225,7 @@ var projectTable;
                     data: 'name',
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-start justify-content-start flex-column">
-                                    <a href="detail.php?id=${row.id}" class="text-decoration-none">${data}</a>
+                                    <a href="detail.php?id=${row.id}" class="text-decoration-none small">${data}</a>
                                 </div>`;
                     },
                     title: '<span data-i18n="お施主様名">お施主様名</span>'
@@ -235,40 +235,40 @@ var projectTable;
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-start justify-content-start flex-column">
                                     <div class="mt-1">
-                                        <small class="text-muted d-block">${row.company_name || '-'}</small>
+                                        <small class="text-muted d-block">${row.company_name.replace('株式会社', '').replace('有限会社', '') || '-'}</small>
                                         <small class="text-muted d-block">${row.customer_name || '-'}</small>
                                     </div>
                                 </div>`;
                     },
                     title: '<span data-i18n="顧客情報">顧客情報</span>'
                 },
-                // { 
-                //     data: 'building_type',
-                //     render: function(data, type, row) {
-                //         return `<div class="d-flex align-items-start justify-content-start flex-column">
-                //                     <span class="project-type">${row.building_type || '-'}</span>
-                //                     <span class="project-type">${row.building_size|| '-'}</span>
-                //                 </div>`;
-                //     },
-                //     title: '建物情報'
-                // },
+                { 
+                    data: 'building_type',
+                    render: function(data, type, row) {
+                        return `<div class="d-flex align-items-start justify-content-start flex-column">
+                                    <span class="project-type small">${row.building_type || '-'}</span>
+                                    <span class="project-type small">${row.building_size|| '-'}</span>
+                                </div>`;
+                    },
+                    title: '建物情報'
+                },
                 { 
                     data: 'project_order_type',
                     render: function(data, type, row) {
                         if (Array.isArray(data)) {
-                            return `<ul class="mb-0 ps-3">${data.map(item => `<li>${item}</li>`).join('')}</ul>`;
+                            return `<ul class="mb-0 ps-3">${data.map(item => `<li class="small">${item}</li>`).join('')}</ul>`;
                         } else if (typeof data === 'string') {
                             try {
                                 const decoded = decodeHtmlEntities(data);
                                 const arr = JSON.parse(decoded);
                                 if (Array.isArray(arr)) {
-                                    return `<ul class="mb-0 list-unstyled">${arr.map(item => `<li>${item}</li>`).join('')}</ul>`;
+                                    return `<ul class="mb-0 list-unstyled">${arr.map(item => `<li class="small">${item}</li>`).join('')}</ul>`;
                                 }
                             } catch (e) {
-                                return `<span>${data || '-'}</span>`;
+                                return `<span class="small">${data || '-'}</span>`;
                             }
                         }
-                        return `<span>-</span>`;
+                        return `<span class="small">-</span>`;
                     },
                     title: '<span data-i18n="受注形態">受注形態</span>'
                 },
@@ -281,7 +281,7 @@ var projectTable;
                         if (members.length === 0) return '-';
 
                         let html = '<div class="d-flex align-items-center">';
-                        const maxAvatars = 3;
+                        const maxAvatars = 1;
                         members.slice(0, maxAvatars).forEach(member => {
                             const [userId, realname, userImage] = member.split(':');
                             html += `<div class="avatar me-1" data-bs-toggle="tooltip" title="${realname || userId}">
@@ -321,7 +321,7 @@ var projectTable;
                         if (members.length === 0) return '-';
 
                         let html = '<div class="d-flex align-items-center">';
-                        const maxAvatars = 3;
+                        const maxAvatars = 1;
                         members.slice(0, maxAvatars).forEach(member => {
                             const [userId, realname, userImage] = member.split(':');
                             html += `<div class="avatar me-1" data-bs-toggle="tooltip" title="${realname || userId}">
@@ -411,15 +411,15 @@ var projectTable;
                         return '-';
                     }
                 }},
-                {
-                    data: null,
-                    render: function(data, type, row) {
-                        return `<div class="d-flex align-items-center gap-1">
-                                    <a href="detail.php?id=${row.id}" class="btn btn-sm bg-label-primary"><i class="fa fa-eye"></i></a>
-                                </div>`;
-                    },
-                    title: '<span data-i18n="操作">操作</span>'
-                }
+                // {
+                //     data: null,
+                //     render: function(data, type, row) {
+                //         return `<div class="d-flex align-items-center gap-1">
+                //                     <a href="detail.php?id=${row.id}" class="btn btn-sm bg-label-primary"><i class="fa fa-eye"></i></a>
+                //                 </div>`;
+                //     },
+                //     title: '<span data-i18n="操作">操作</span>'
+                // }
             ],
             order: [[10, 'asc']],
            
@@ -477,12 +477,12 @@ var projectTable;
             renderActiveFilters();
             if (projectTable) projectTable.ajax.reload();
         });
-        $('#filterReset').on('click', function() {
-            localStorage.removeItem(FILTER_STORAGE_KEY);
-            $('#projectFilterForm')[0].reset();
-            $('#showInactiveSwitch').prop('checked', false);
-            if (projectTable) projectTable.ajax.reload();
-        });
+        // $('#filterReset').on('click', function() {
+        //     localStorage.removeItem(FILTER_STORAGE_KEY);
+        //     $('#projectFilterForm')[0].reset();
+        //     $('#showInactiveSwitch').prop('checked', false);
+        //     if (projectTable) projectTable.ajax.reload();
+        // });
 
         // イベントハンドラー
         $(document).on('click', '.item-edit', function() {
@@ -800,7 +800,7 @@ var projectTable;
             $('#filterProgress').val('');
             $('#filterTimeLeft').val('');
             $('#filterKeyword').val('');
-            $('#showInactiveSwitch').prop('checked', true); // hoặc giá trị mặc định
+            $('#showInactiveSwitch').prop('checked', false); // hoặc giá trị mặc định
             localStorage.removeItem(FILTER_STORAGE_KEY);
             renderActiveFilters();
             projectTable.ajax.reload();

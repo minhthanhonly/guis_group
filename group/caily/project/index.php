@@ -175,6 +175,10 @@ $view->footing();
 /* Ensure proper spacing in end date column */
 #projectTable td {
     vertical-align: middle;
+    padding: 0.5rem 0.4rem;
+}
+.table thead tr th {
+    padding: 0.5rem 0.4rem!important;
 }
 </style>
 

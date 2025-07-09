@@ -517,11 +517,11 @@ if (!$project_id) {
                     </div>
                     <div class="card-body" v-if="project">
                         <div class="row g-3">
-                            <div class="col-3">
+                            <div class="col-6 col-xl-3">
                                 <label class="form-label">見積書</label>
                                 <div>
                                     <div class="btn-group w-100" v-if="canDocumentProject">
-                                        <button type="button" class="btn dropdown-toggle waves-effect waves-light" 
+                                        <button type="button" class="btn dropdown-toggle waves-effect waves-light fs-small px-1" 
                                                 :class="getEstimateStatusButtonClass(project.estimate_status)"
                                                 id="estimateStatusDropdown"
                                                 data-bs-toggle="dropdown" aria-expanded="false">
@@ -541,11 +541,11 @@ if (!$project_id) {
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-3">
+                            <div class="col-6 col-xl-3">
                                 <label class="form-label">請求書</label>
                                 <div>
                                     <div class="btn-group w-100" v-if="canDocumentProject">
-                                        <button type="button" class="btn dropdown-toggle waves-effect waves-light" 
+                                        <button type="button" class="btn dropdown-toggle waves-effect waves-light fs-small px-1" 
                                                 :class="getInvoiceStatusButtonClass(project.invoice_status)"
                                                 id="invoiceStatusDropdown"
                                                 data-bs-toggle="dropdown" aria-expanded="false">
@@ -565,7 +565,7 @@ if (!$project_id) {
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-6">
+                            <div class="col-12 col-xl-6">
                                 <label class="form-label">総額</label>
                                 <div class="input-group">
                                     <input type="number" class="form-control" v-model="project.amount" placeholder="0" step="100" @input="updateAmount" v-if="canDocumentProject">
@@ -624,7 +624,7 @@ if (!$project_id) {
                 <!-- Lịch sử hành động (履歴) -->
                 <div class="card mb-4">
                     <div class="card-header d-flex align-items-center">
-                        <strong>履歴:</strong>
+                        <h5 class="card-title mb-0">履歴</h5>
                     </div>
                     <div class="card-body">
                         <ul class="list-group" style="max-height: 400px; overflow-y: auto;">
