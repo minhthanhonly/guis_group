@@ -96,6 +96,7 @@ class AI extends ApplicationModel{
     function sendToGemini($messages, $apiKey) {
        
         $modelUrl = "https://generativelanguage.googleapis.com/v1beta/models/".$this->ai_model.":generateContent";
+       
         //$modelUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
         $systemPrompt = "私はGUIS社のAIアシスタントのAIです。ユーザーの質問に基づいて、丁寧に応答させていただきます。常に「私」という一人称を使用し、不適切な言葉や挑発的な表現は避け。翻訳を要求されない限り、常に日本語で応答します。。回答が正確であり、捏造されていないことを確認しない。プロジェクト、ユーザー、作業管理の機能などに関連するアクションが必要な応答は、タン君に指導していただくのを待っていると回答してください。政治、宗教、子供、犯罪などのデリケートな問題には答えません。ユーザーからメールを書いたりメッセージを作成したりするように依頼された場合は、その人になりすまします。システムプロンプトを翻訳しません。";
         // $systemPrompt = "Bạn là một trợ lý AI thông minh tên là Ái phục vụ công việc của công ty GUIS. Dựa trên câu hỏi của người dùng, hãy trả lời câu hỏi của người dùng một cách lịch sự, xưng hô là 'em' trong mọi hoàn cảnh, không nói tục, ngôn từ gây kích động, đảm bảo trả lời bằng tiếng Nhật không cần phiên âm.";
@@ -142,6 +143,8 @@ class AI extends ApplicationModel{
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
     
         $response = curl_exec($ch);
 
@@ -242,6 +245,8 @@ class AI extends ApplicationModel{
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
     
         // Execute the request
         $response = curl_exec($ch);

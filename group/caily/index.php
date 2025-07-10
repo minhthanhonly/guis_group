@@ -71,7 +71,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
     </div>
     <!-- View sales -->
   </div>
-  <?php if($_SESSION['group'] != '6'){ ?>
+ 
   <div class="row g-6 mt-1">                
     <!-- Statistics -->
     <div class="col-xl-6 col-md-12">
@@ -81,6 +81,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
         </div>
       </div>
     </div>
+    <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
     <div class="col-xl-6 col-md-12">
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between">
@@ -110,8 +111,9 @@ if ($current_hour >= 6 && $current_hour < 12) {
         </div>
       </div>
     </div>
+    <?php } ?>
   </div>
-  <?php } ?>
+ 
  <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') { ?>
   <div class="row g-6 mt-1">
     <div class="col-md-12 col-lg-12 col-xl-6">

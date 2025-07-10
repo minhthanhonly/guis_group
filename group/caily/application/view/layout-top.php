@@ -53,7 +53,7 @@
                     <div data-i18n="ガントチャート">ガントチャート</div>
                   </a>
                 </li>
-                <?php if($_SESSION['isProjectManager']){ ?>
+                <?php if($_SESSION['isProjectManager'] && $_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
                   <a href="<?=$root?>project/custom_fields.php" class="menu-link">
                     <div data-i18n="設定">設定</div>
@@ -64,21 +64,20 @@
               </ul>
             </li>
 
-            <?php if($_SESSION['group'] != '7'){ ?>
+           
               <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
                 <a href="<?=$root?>schedule/" class="menu-link">
                   <i class="menu-icon icon-base ti tabler-calendar-event"></i>
                   <div data-i18n="カレンダー">カレンダー</div>
                 </a>
               </li>
-              <?php if($_SESSION['group'] != '6'){ ?>
+            <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
               <li class="menu-item <?php if($directory == 'timecard' && ($page == 'index' || $page == 'group')) echo 'active'; ?>">
                 <a href="<?=$root?>timecard/" class="menu-link">
                   <i class="menu-icon icon-base ti tabler-clock"></i>
                   <div data-i18n="タイムカード">タイムカード</div>
                 </a>
               </li>
-              <?php } ?>
             
             <!-- <li class="menu-item <?php if($directory == 'addressbook') echo 'active open'; ?>">
               <a href="<?=$root?>addressbook/" class="menu-link">
@@ -101,7 +100,7 @@
                 <div data-i18n="ユーザー一覧">ユーザー一覧</div>
               </a>
             </li>
-            <?php if($_SESSION['group'] != '7'){ ?>
+            <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
             <li class="menu-item <?php if($directory == 'storage') echo 'active open'; ?>">
               <a href="<?=$root?>storage/" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-server-2"></i>

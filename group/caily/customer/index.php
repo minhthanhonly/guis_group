@@ -540,7 +540,7 @@ $view->footing();
 
                 searchAddressCustomer() {
                     const postalCode = this.newCustomer.zip;
-                    if (postalCode.length <= 7) {
+                    if (postalCode.length >= 7) {
                         const apiUrl = `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${postalCode}`;
                         axios.get(apiUrl)
                             .then(response => {
@@ -557,7 +557,7 @@ $view->footing();
                                 showMessage('住所の検索に失敗しました。', true);
                             });
                     } else {
-                        showMessage('郵便番号が正しくありません。', true);  
+                        showMessage('郵便番号が正しくありません。1', true);  
                     }
                 },
             },

@@ -1507,6 +1507,11 @@ const TaskApp = createApp({
                         }
                     }
                 });
+
+                // Simple text-change handler without debounce
+                this.quillEditor.on('text-change', () => {
+                    this.addZoomToDescriptionImages();
+                });
                 
                 // Set content if task has description
                 if (this.selectedTask && this.selectedTask.description) {
@@ -1517,6 +1522,17 @@ const TaskApp = createApp({
             });
         },
         
+        addZoomToDescriptionImages() {
+            this.$nextTick(() => {
+                // View mode
+                const descEls = document.querySelectorAll('.project-description, #project-description, .ql-editor');
+                descEls.forEach(el => {
+                    el.querySelectorAll('img:not([data-zoom])').forEach(img => {
+                        img.setAttribute('data-zoom', '');
+                    });
+                });
+            });
+        },
         
         decodeHtmlEntities(str) {
             const txt = document.createElement('textarea');

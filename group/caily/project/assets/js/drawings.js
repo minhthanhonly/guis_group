@@ -162,6 +162,7 @@ createApp({
     mounted() {
         this.loadProject();
         this.loadDrawings();
+
         
         // Add click outside listener to close dropdowns
         document.addEventListener('click', (event) => {
@@ -208,6 +209,20 @@ createApp({
                 this.showError('プロジェクトの読み込みに失敗しました');
             }
         },
+
+
+        initTooltips() {
+            // Initialize Bootstrap tooltips
+            if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+            } else if (typeof $ !== 'undefined' && $.fn.tooltip) {
+                // Fallback to jQuery tooltip if Bootstrap is not available
+                $('[data-bs-toggle="tooltip"]').tooltip();
+            }
+        },
         
         // Drawings loading
         async loadDrawings() {
@@ -224,6 +239,10 @@ createApp({
                 this.showError('ファイルの読み込みに失敗しました');
             } finally {
                 this.loading = false;
+
+                this.$nextTick(() => {
+                    this.initTooltips();
+                });
             }
         },
 

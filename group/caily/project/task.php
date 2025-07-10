@@ -284,13 +284,16 @@ if (!$project_id) {
                         </div>
                     </div>
                     <div class="col-md-2">
-                        <div class="d-flex align-items-center gap-2">
-                            <span>{{ formatDate(task.start_date) }}</span> ~
-                            <span>{{ formatDate(task.due_date) }}</span>
-                        </div>
-                        <i v-if="isTaskOverdue(task)" class="fas fa-exclamation-triangle text-warning ms-1" 
+                        <div class="d-flex align-items-center gap-1 flex-wrap small">
+                            <span class="text-nowrap">{{ formatDate(task.start_date) }}</span> ~
+                            <span class="text-nowrap">{{ formatDate(task.due_date) }}
+                            <i v-if="isTaskOverdue(task)" class="fas fa-exclamation-triangle text-warning ms-1" 
                            data-bs-toggle="tooltip" data-bs-placement="top" 
                            :title="getOverdueTooltip(task)"></i>
+                            </span>
+                           
+                        </div>
+                        
                     </div>
                     <div class="col-md-2">
                         <div class="d-flex align-items-center flex-wrap">
