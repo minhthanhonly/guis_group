@@ -227,6 +227,15 @@ class Department extends ApplicationModel {
         return ['success' => true];
     }
 
+    function removeCustomFields() {
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+        $id = intval($data['id']);
+        $this->query_delete(['id' => $id], 'department_custom_fields');
+        return ['success' => true];
+    }
+
+
     function addCustomFields() {
         $json = file_get_contents('php://input');
         $data = json_decode($json, true);
@@ -237,6 +246,8 @@ class Department extends ApplicationModel {
         $this->query_insert(['department_id' => $department_id, 'fields' => $fields, 'name' => $name], 'department_custom_fields');
         return ['success' => true];
     }
+
+
 
     function getCustomFields() {
         $rows = $this->fetchAll("SELECT * FROM " . "department_custom_fields");

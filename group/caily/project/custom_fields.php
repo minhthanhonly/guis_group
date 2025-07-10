@@ -25,7 +25,7 @@ $view->heading('カスタムフィールド管理');
                         <td>{{ set.fields.length }}</td>
                         <td>
                             <button class="btn btn-outline-primary btn-sm me-1" @click="openModalForEdit(set, setIdx)"><i class="fa fa-edit"></i> 編集</button>
-                            <button class="btn btn-outline-danger btn-sm" @click="removeFieldSet(setIdx)"><i class="fa fa-trash"></i> 削除</button>
+                            <button class="btn btn-outline-danger btn-sm" @click="removeFieldSet(set)"><i class="fa fa-trash"></i> 削除</button>
                         </td>
                     </tr>
                     <tr v-if="!customFieldSets.length">
@@ -190,9 +190,13 @@ const app = Vue.createApp({
                     showMessage('保存しました');
                 });
         },
-        removeFieldSet(idx) {
+        removeFieldSet(set) {
             if (confirm('本当に削除しますか？')) {
-                this.customFieldSets.splice(idx, 1);
+                axios.post('/api/index.php?model=department&method=removeCustomFields', { id: set.id })
+                    .then(() => {
+                        this.loadCustomFieldSets();
+                        showMessage('削除しました');
+                    });
             }
         },
         async loadDepartments() {

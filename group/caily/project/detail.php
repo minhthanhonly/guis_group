@@ -404,39 +404,35 @@ if (!$project_id) {
                                         <option value="">選択してください</option>
                                         <option v-for="set in departmentCustomFieldSets" :value="set.id">{{ set.name }}</option>
                                     </select>
-                                    <div v-if="selectedCustomFieldSet" class="mt-3">
+                                    <div v-if="customFields && customFields.length > 0" class="mt-3">
                                         <div class="row">
-                                            <template v-for="(field, idx) in selectedCustomFieldSet.fields" :key="idx">
+                                            <template v-for="(field, idx) in customFields" :key="idx">
                                                 <div v-if="field.type === 'textarea'" class="col-12 mb-3">
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
-                                                    <textarea class="form-control" v-if="customFields[idx]" v-model="customFields[idx].value"></textarea>
+                                                    <textarea class="form-control" v-model="field.value"></textarea>
                                                 </div>
                                                 <div v-else class="col-md-4 mb-3">
-                                                    <label class="form-label">{{ translateLabel(field.label) }}</label>
+                                                    <div class="form-label">{{ translateLabel(field.label) }}</div>
                                                     <template v-if="field.type === 'radio'">
-                                                        <div v-if="customFields[idx]">
-                                                            <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
-                                                                <input class="form-check-input" type="radio" :name="'custom_radio_' + idx" :value="opt.trim()" v-model="customFields[idx].value">
-                                                                <label class="form-check-label">{{ opt.trim() }}</label>
-                                                            </div>
+                                                        <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
+                                                            <input class="form-check-input" type="radio" :name="'custom_radio_' + idx" :value="opt.trim()" v-model="field.value">
+                                                            <label class="form-check-label">{{ opt.trim() }}</label>
                                                         </div>
                                                     </template>
                                                     <template v-else-if="field.type === 'select'">
-                                                        <select class="form-select" v-if="customFields[idx]" v-model="customFields[idx].value">
+                                                        <select class="form-select" v-model="field.value">
                                                             <option value="">選択してください</option>
                                                             <option v-for="opt in field.options.split(',')" :key="opt.trim()" :value="opt.trim()">{{ opt.trim() }}</option>
                                                         </select>
                                                     </template>
                                                     <template v-else-if="field.type === 'checkbox'">
-                                                        <div v-if="customFields[idx]">
-                                                            <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
-                                                                <input class="form-check-input" type="checkbox" :name="'custom_checkbox_' + idx" :value="opt.trim()" v-model="customFields[idx].valueArr">
-                                                                <label class="form-check-label">{{ opt.trim() }}</label>
-                                                            </div>
+                                                        <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
+                                                            <input class="form-check-input" type="checkbox" :name="'custom_checkbox_' + idx" :value="opt.trim()" v-model="field.valueArr">
+                                                            <label class="form-check-label">{{ opt.trim() }}</label>
                                                         </div>
                                                     </template>
                                                     <template v-else>
-                                                        <input class="form-control" v-if="customFields[idx]" v-model="customFields[idx].value" type="text">
+                                                        <input class="form-control" v-model="field.value" type="text">
                                                     </template>
                                                 </div>
                                             </template>
