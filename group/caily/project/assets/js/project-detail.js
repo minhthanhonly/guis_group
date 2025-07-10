@@ -2210,7 +2210,6 @@ const vueApp = createApp({
             }
         },
         'project.department_id': function() {
-            //this.loadDepartmentCustomFieldSets();
             // Load companies and contacts for the selected department
             if (this.project && this.project.department_id) {
                 this.loadCompaniesByCategory();
@@ -2221,65 +2220,65 @@ const vueApp = createApp({
                 this.contacts = [];
             }
         },
-        'project.department_custom_fields_set_id': function(newVal) {
-            if (this.isEditMode && newVal && this.selectedCustomFieldSet) {
-                // Try to load from project.custom_fields (full structure)
-                let saved = [];
-                let raw = this.project.custom_fields;
-                if (typeof raw === 'string' && raw.includes('&quot;')) {
-                    raw = raw.replace(/&quot;/g, '"');
-                }
-                if (typeof raw === 'string') {
-                    try { saved = JSON.parse(raw); } catch (e) { saved = []; }
-                } else if (Array.isArray(raw)) {
-                    saved = raw;
-                }
-                // If saved has type/options, use it directly, else fallback to set
-                if (saved.length && saved[0] && saved[0].type) {
-                    this.customFields = saved.map(f => {
-                        if (f.type === 'checkbox') {
-                            let arr = [];
-                            if (f.value) arr = f.value.split(',').map(s => s.trim()).filter(Boolean);
-                            return { ...f, valueArr: arr };
-                        } else {
-                            return { ...f };
-                        }
-                    });
-                } else {
-                    this.customFields = this.selectedCustomFieldSet.fields.map(f => {
-                        const found = saved.find(v => v && v.label && v.label.trim() === f.label.trim());
-                        if (f.type === 'checkbox') {
-                            let arr = [];
-                            if (found && found.value) arr = found.value.split(',').map(s => s.trim()).filter(Boolean);
-                            return { label: f.label, type: f.type, options: f.options, value: arr.join(','), valueArr: arr };
-                        } else {
-                            return { label: f.label, type: f.type, options: f.options, value: found ? found.value : '' };
-                        }
-                    });
-                }
-            }
-        },
-        'customFields': {
-            handler(newVal, oldVal) {
-                // Keep value and valueArr in sync for checkboxes
-                if (!this.selectedCustomFieldSet) return;
+        // 'project.department_custom_fields_set_id': function(newVal) {
+        //     if (this.isEditMode && newVal && this.selectedCustomFieldSet) {
+        //         // Try to load from project.custom_fields (full structure)
+        //         let saved = [];
+        //         let raw = this.project.custom_fields;
+        //         if (typeof raw === 'string' && raw.includes('&quot;')) {
+        //             raw = raw.replace(/&quot;/g, '"');
+        //         }
+        //         if (typeof raw === 'string') {
+        //             try { saved = JSON.parse(raw); } catch (e) { saved = []; }
+        //         } else if (Array.isArray(raw)) {
+        //             saved = raw;
+        //         }
+        //         // If saved has type/options, use it directly, else fallback to set
+        //         if (saved.length && saved[0] && saved[0].type) {
+        //             this.customFields = saved.map(f => {
+        //                 if (f.type === 'checkbox') {
+        //                     let arr = [];
+        //                     if (f.value) arr = f.value.split(',').map(s => s.trim()).filter(Boolean);
+        //                     return { ...f, valueArr: arr };
+        //                 } else {
+        //                     return { ...f };
+        //                 }
+        //             });
+        //         } else {
+        //             this.customFields = this.selectedCustomFieldSet.fields.map(f => {
+        //                 const found = saved.find(v => v && v.label && v.label.trim() === f.label.trim());
+        //                 if (f.type === 'checkbox') {
+        //                     let arr = [];
+        //                     if (found && found.value) arr = found.value.split(',').map(s => s.trim()).filter(Boolean);
+        //                     return { label: f.label, type: f.type, options: f.options, value: arr.join(','), valueArr: arr };
+        //                 } else {
+        //                     return { label: f.label, type: f.type, options: f.options, value: found ? found.value : '' };
+        //                 }
+        //             });
+        //         }
+        //     }
+        // },
+        // 'customFields': {
+        //     handler(newVal, oldVal) {
+        //         // Keep value and valueArr in sync for checkboxes
+        //         if (!this.selectedCustomFieldSet) return;
                 
-                // Only process if there are actual changes
-                if (JSON.stringify(newVal) === JSON.stringify(oldVal)) return;
+        //         // Only process if there are actual changes
+        //         if (JSON.stringify(newVal) === JSON.stringify(oldVal)) return;
                 
-                this.selectedCustomFieldSet.fields.forEach((f, idx) => {
-                    if (f.type === 'checkbox' && this.customFields[idx]) {
-                        // If valueArr changes, update value
-                        if (Array.isArray(this.customFields[idx].valueArr)) {
-                            this.customFields[idx].value = this.customFields[idx].valueArr.join(',');
-                        } else if (typeof this.customFields[idx].value === 'string') {
-                            this.customFields[idx].valueArr = this.customFields[idx].value.split(',').map(s => s.trim()).filter(Boolean);
-                        }
-                    }
-                });
-            },
-            deep: true
-        },
+        //         this.selectedCustomFieldSet.fields.forEach((f, idx) => {
+        //             if (f.type === 'checkbox' && this.customFields[idx]) {
+        //                 // If valueArr changes, update value
+        //                 if (Array.isArray(this.customFields[idx].valueArr)) {
+        //                     this.customFields[idx].value = this.customFields[idx].valueArr.join(',');
+        //                 } else if (typeof this.customFields[idx].value === 'string') {
+        //                     this.customFields[idx].valueArr = this.customFields[idx].value.split(',').map(s => s.trim()).filter(Boolean);
+        //                 }
+        //             }
+        //         });
+        //     },
+        //     deep: true
+        // },
     },
     async mounted() {
         await this.loadPermission();

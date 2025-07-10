@@ -612,14 +612,6 @@ $view->footing();
     -ms-user-select: none;
 }
 
-.table tbody tr:hover {
-    background-color: rgba(var(--bs-primary-rgb), 0.1) !important;
-}
-
-.table tbody tr.table-primary {
-    background-color: rgba(var(--bs-primary-rgb), 0.2) !important;
-}
-
 /* Prevent text selection during drag */
 .table tbody tr {
     user-select: none;

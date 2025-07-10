@@ -984,8 +984,9 @@ class Task extends ApplicationModel {
     function deleteTaskLink() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'message' => 'No link id'];
-        
+        $this->table = DB_PREFIX . 'task_links';
         $result = $this->query_delete(['id' => $id]);
+        $this->table = DB_PREFIX . 'tasks';
         if ($result) {
             return ['status' => 'success'];
         } else {

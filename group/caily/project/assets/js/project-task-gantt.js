@@ -202,8 +202,9 @@ $(document).ready(function() {
                 formData.append('link_type', link.type);
                 await axios.post('/api/index.php?model=task&method=addTaskLink', formData);
             },
-            async deleteTaskLink(link) {
+            async deleteTaskLink(id, link) {
                 const formData = new FormData();
+                formData.append('id', id);
                 formData.append('source_task_id', link.source);
                 formData.append('target_task_id', link.target);
                 formData.append('project_id', this.projectId);
@@ -766,7 +767,7 @@ $(document).ready(function() {
                     this.addTaskLink(link);
                 });
                 gantt.attachEvent('onAfterLinkDelete', (id, link) => {
-                    this.deleteTaskLink(link);
+                    this.deleteTaskLink(id, link);
                 });
 
                 gantt.attachEvent('onBeforeLightbox', function(id) {

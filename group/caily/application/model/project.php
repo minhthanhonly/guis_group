@@ -102,11 +102,20 @@ class Project extends ApplicationModel {
             OR c.name LIKE '%$kw%')";
         } else {
             // --- Advanced Filters ---
-            if (isset($_GET['filterStartMonth']) && $_GET['filterStartMonth'] !== '') {
+            $hasStartMonth = isset($_GET['filterStartMonth']) && $_GET['filterStartMonth'] !== '';
+            $hasEndMonth = isset($_GET['filterEndMonth']) && $_GET['filterEndMonth'] !== '';
+            if ($hasStartMonth && $hasEndMonth) {
+                // Convert to first day of start month and last day of end month
+                $startMonth = $this->escape($_GET['filterStartMonth']);
+                $endMonth = $this->escape($_GET['filterEndMonth']);
+                $startDate = "$startMonth-01";
+                // Calculate last day of end month
+                $endDate = date('Y-m-t', strtotime($endMonth . '-01'));
+                $whereArr[] = "(p.start_date <= '$endDate' AND p.end_date >= '$startDate')";
+            } else if ($hasStartMonth) {
                 $month = $this->escape($_GET['filterStartMonth']);
                 $whereArr[] = "DATE_FORMAT(p.start_date, '%Y-%m') = '$month'";
-            }
-            if (isset($_GET['filterEndMonth']) && $_GET['filterEndMonth'] !== '') {
+            } else if ($hasEndMonth) {
                 $month = $this->escape($_GET['filterEndMonth']);
                 $whereArr[] = "DATE_FORMAT(p.end_date, '%Y-%m') = '$month'";
             }
