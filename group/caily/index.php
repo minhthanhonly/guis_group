@@ -145,7 +145,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
 <?php } ?>
 
 <!-- Project Statistics Section -->
-<?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') { ?>
+<?php if($_SESSION['authority'] == 'administrator') { ?>
 <div id="project-stats-section">
   <!-- Project Overview Cards -->
   <div class="row g-4 mt-1">
@@ -215,19 +215,35 @@ if ($current_hour >= 6 && $current_hour < 12) {
   <div class="row g-4 mt-1">
     <div class="col-12">
       <div class="card">
+        <div class="card-header d-flex justify-content-between">
+          <h5 class="card-title mb-0">案件統計</h5>
+          <select class="form-select" id="project-stats-department" style="width: 200px;">
+            <option value="">すべての部署</option>
+            <!-- Options will be loaded dynamically -->
+          </select>
+        </div>
         <div class="card-body">
-          <div class="row">
+          <!-- Monthly Stats Chart -->
+          <div class="row g-4">
             <div class="col-md-6">
-              <label for="project-stats-department" class="form-label">部署選択</label>
-              <select class="form-select" id="project-stats-department">
-                <option value="">すべての部署</option>
-                <!-- Options will be loaded dynamically -->
-              </select>
+              <div class="card border">
+                <div class="card-header">
+                  <h5 class="card-title mb-0">月別案件統計</h5>
+                </div>
+                <div class="card-body">
+                  <div id="monthly-stats-chart"></div>
+                </div>
+              </div>
             </div>
-            <div class="col-md-6 d-flex align-items-end">
-              <button type="button" class="btn btn-primary" onclick="loadProjectStats()">
-                <i class="fas fa-sync-alt"></i> 更新
-              </button>
+            <div class="col-md-6">
+              <div class="card border">
+                <div class="card-header">
+                  <h5 class="card-title mb-0">部署別売上推移</h5>
+                </div>
+                <div class="card-body">
+                  <div id="financial-chart"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -235,29 +251,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
     </div>
   </div>
 
-  <!-- Monthly Stats Chart -->
-  <div class="row g-4 mt-1">
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header">
-          <h5 class="card-title mb-0">月別案件統計</h5>
-        </div>
-        <div class="card-body">
-          <div id="monthly-stats-chart"></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header">
-          <h5 class="card-title mb-0">部署別売上推移</h5>
-        </div>
-        <div class="card-body">
-          <div id="financial-chart"></div>
-        </div>
-      </div>
-    </div>
-  </div>
+ 
 </div>
 <?php } ?>
 	

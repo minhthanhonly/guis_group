@@ -423,7 +423,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         // Define explicit colors instead of using config references
         const chartColors = ['#4e73df', '#f6c23e', '#e74a3b', '#36b9cc', '#1cc88a'];
         const borderColor = 'rgba(224,224,224,0.2)';
-        const labelColor = '#fff';
+        const labelColor = '#ccc';
 
         const barChartEl = statistic,
             barChartConfig = {
@@ -576,7 +576,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         const departmentId = document.getElementById('project-stats-department').value;
         
         try {
-            console.log('Loading project stats with department ID:', departmentId); // Debug log
             
             // Load data using main department filter
             const response = await fetch(`/api/index.php?model=project&method=getDashboardStats&department_id=${departmentId}`);
@@ -587,7 +586,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             
             const data = await response.json();
             
-            console.log('API Response:', data); // Debug log
             
             // Check for backend error
             if (data.error) {
@@ -640,6 +638,11 @@ document.addEventListener('DOMContentLoaded', async function () {
             return `${year}年${month}月`;
         });
 
+        // Use same colors as timecard chart
+        const chartColors = ['#4e73df', '#f6c23e', '#e74a3b', '#36b9cc', '#1cc88a'];
+        const borderColor = 'rgba(224,224,224,0.2)';
+        const labelColor = '#ccc';
+
         const options = {
             series: [
                 {
@@ -666,6 +669,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                     maxWidth: '30px'
                 }
             },
+            colors: chartColors,
             dataLabels: {
                 enabled: true,
                 formatter: function (val) {
@@ -674,13 +678,28 @@ document.addEventListener('DOMContentLoaded', async function () {
                 offsetY: -20,
                 style: {
                     fontSize: '12px',
-                    colors: ['#304758']
+                    colors: [labelColor]
+                }
+            },
+            grid: {
+                borderColor: borderColor,
+                xaxis: {
+                    lines: {
+                        show: true
+                    }
                 }
             },
             xaxis: {
                 categories: months,
+                axisBorder: {
+                    show: false
+                },
+                axisTicks: {
+                    show: false
+                },
                 labels: {
                     style: {
+                        colors: labelColor,
                         fontSize: '12px'
                     },
                     rotate: -45,
@@ -690,6 +709,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             yaxis: {
                 labels: {
                     style: {
+                        colors: labelColor,
                         fontSize: '12px'
                     }
                 }
@@ -707,7 +727,8 @@ document.addEventListener('DOMContentLoaded', async function () {
                 horizontalAlign: 'left',
                 fontSize: '12px',
                 labels: {
-                    colors: '#304758'
+                    colors: labelColor,
+                    useSeriesColors: false
                 }
             }
         };
@@ -765,6 +786,11 @@ document.addEventListener('DOMContentLoaded', async function () {
             }))
         ];
 
+        // Use same colors as timecard chart
+        const chartColors = ['#4e73df', '#f6c23e', '#e74a3b', '#36b9cc', '#1cc88a', '#7367f0', '#28c76f', '#ff9f43'];
+        const borderColor = 'rgba(224,224,224,0.2)';
+        const labelColor = '#ccc';
+
         const options = {
             series: series,
             chart: {
@@ -779,17 +805,32 @@ document.addEventListener('DOMContentLoaded', async function () {
                 curve: 'smooth',
                 width: 3
             },
-            colors: ['#ea5455', '#7367f0', '#28c76f', '#ff9f43', '#00cfe8', '#9c27b0', '#ff5722', '#795548'],
+            colors: chartColors,
             dataLabels: {
                 enabled: false
+            },
+            grid: {
+                borderColor: borderColor,
+                xaxis: {
+                    lines: {
+                        show: true
+                    }
+                }
             },
             xaxis: {
                 categories: months.map(month => {
                     const [year, monthNum] = month.split('-');
                     return `${year}年${monthNum}月`;
                 }),
+                axisBorder: {
+                    show: false
+                },
+                axisTicks: {
+                    show: false
+                },
                 labels: {
                     style: {
+                        colors: labelColor,
                         fontSize: '12px'
                     },
                     rotate: -45,
@@ -802,6 +843,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                         return formatCurrency(val);
                     },
                     style: {
+                        colors: labelColor,
                         fontSize: '12px'
                     }
                 }
@@ -820,7 +862,8 @@ document.addEventListener('DOMContentLoaded', async function () {
                 horizontalAlign: 'left',
                 fontSize: '12px',
                 labels: {
-                    colors: '#304758'
+                    colors: labelColor,
+                    useSeriesColors: false
                 }
             }
         };

@@ -2166,16 +2166,16 @@ class Project extends ApplicationModel {
             
             // Base where clause for permissions
             $permissionWhere = "";
-            if (!$is_admin) {
-                $permissionWhere = sprintf(
-                    " AND (p.created_by = %d OR EXISTS (
-                        SELECT 1 FROM " . DB_PREFIX . "project_members pm 
-                        WHERE pm.project_id = p.id AND pm.user_id = %d
-                    ))",
-                    $user_id,
-                    $user_id
-                );
-            }
+            // if (!$is_admin) {
+            //     $permissionWhere = sprintf(
+            //         " AND (p.created_by = %d OR EXISTS (
+            //             SELECT 1 FROM " . DB_PREFIX . "project_members pm 
+            //             WHERE pm.project_id = p.id AND pm.user_id = %d
+            //         ))",
+            //         $user_id,
+            //         $user_id
+            //     );
+            // }
 
             // Add department filter if specified
             $departmentWhere = "";
