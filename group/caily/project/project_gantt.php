@@ -29,7 +29,7 @@ $view->heading('プロジェクトガントチャート');
             </div>
         </div>
     </nav>
-    <div class="mb-2">
+    <!-- <div class="mb-2">
       <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#projectFilterBox" aria-expanded="false">
         <i class="fa fa-filter me-1"></i> <span data-i18n="高度なフィルター">高度なフィルター</span>
       </button>
@@ -81,7 +81,7 @@ $view->heading('プロジェクトガントチャート');
         </div>
       </div>
     </div>
-    
+     -->
     <div class="card">
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center">
