@@ -116,7 +116,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
  
  <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') { ?>
   <div class="row g-6 mt-1">
-    <div class="col-md-12 col-lg-12 col-xl-6">
+    <div class="col-md-12 col-lg-12 col-xl-12">
       <div class="card">
         <div class="card-header d-flex justify-content-between">
           <h5 class="card-title mb-0">勤怠統計</h5>
@@ -142,6 +142,123 @@ if ($current_hour >= 6 && $current_hour < 12) {
     </div>
     <!-- View sales -->
   </div>
+<?php } ?>
+
+<!-- Project Statistics Section -->
+<?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') { ?>
+<div id="project-stats-section">
+  <!-- Project Overview Cards -->
+  <div class="row g-4 mt-1">
+    <div class="col-md-6 col-xl-3">
+      <div class="card project-stats-card">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="avatar avatar-md bg-label-primary rounded d-flex align-items-center justify-content-center">
+              <i class="fas fa-project-diagram fs-4"></i>
+            </div>
+            <div class="ms-3">
+              <h5 class="mb-0" id="total-projects">0</h5>
+              <small class="text-muted">総案件数</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <div class="card project-stats-card">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="avatar avatar-md bg-label-success rounded d-flex align-items-center justify-content-center">
+              <i class="fas fa-play-circle fs-4"></i>
+            </div>
+            <div class="ms-3">
+              <h5 class="mb-0" id="active-projects">0</h5>
+              <small class="text-muted">進行中案件</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <div class="card project-stats-card">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="avatar avatar-md bg-label-info rounded d-flex align-items-center justify-content-center">
+              <i class="fas fa-check-circle fs-4"></i>
+            </div>
+            <div class="ms-3">
+              <h5 class="mb-0" id="completed-projects">0</h5>
+              <small class="text-muted">完了案件</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <div class="card project-stats-card">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="avatar avatar-md bg-label-warning rounded d-flex align-items-center justify-content-center">
+              <i class="fas fa-calendar-plus fs-4"></i>
+            </div>
+            <div class="ms-3">
+              <h5 class="mb-0" id="new-this-month">0</h5>
+              <small class="text-muted">新規案件</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="row g-4 mt-1">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <label for="project-stats-department" class="form-label">部署選択</label>
+              <select class="form-select" id="project-stats-department">
+                <option value="">すべての部署</option>
+                <!-- Options will be loaded dynamically -->
+              </select>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+              <button type="button" class="btn btn-primary" onclick="loadProjectStats()">
+                <i class="fas fa-sync-alt"></i> 更新
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Monthly Stats Chart -->
+  <div class="row g-4 mt-1">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">月別案件統計</h5>
+        </div>
+        <div class="card-body">
+          <div id="monthly-stats-chart"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">部署別売上推移</h5>
+        </div>
+        <div class="card-body">
+          <div id="financial-chart"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 <?php } ?>
 	
 </div>

@@ -1,4 +1,4 @@
 <?php
-define('APP_VERSION', '1.0.1');
-define('CACHE_VERSION', '1.0.6');
+define('APP_VERSION', '1.1.0');
+define('CACHE_VERSION', '1.1.0');
 ?>

@@ -2154,6 +2154,144 @@ class Project extends ApplicationModel {
         $project_number = $prefix . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
         return $project_number;
     }
+
+    /**
+     * Lấy thống kê dự án cho dashboard
+     */
+    function getDashboardStats() {
+        try {
+            $user_id = $_SESSION['id'];
+            $is_admin = $_SESSION['authority'] == 'administrator';
+            $selected_department = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+            
+            // Base where clause for permissions
+            $permissionWhere = "";
+            if (!$is_admin) {
+                $permissionWhere = sprintf(
+                    " AND (p.created_by = %d OR EXISTS (
+                        SELECT 1 FROM " . DB_PREFIX . "project_members pm 
+                        WHERE pm.project_id = p.id AND pm.user_id = %d
+                    ))",
+                    $user_id,
+                    $user_id
+                );
+            }
+
+            // Add department filter if specified
+            $departmentWhere = "";
+            if ($selected_department > 0) {
+                $departmentWhere = sprintf(" AND p.department_id = %d", $selected_department);
+            }
+
+            $stats = [];
+
+            // 1. Thống kê tổng quan (không filter theo tháng)
+            $totalQuery = "SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN p.status NOT IN ('completed', 'cancelled', 'deleted') THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN p.status IN ('paused', 'cancelled') THEN 1 ELSE 0 END) as inactive
+                FROM {$this->table} p 
+                WHERE p.status != 'deleted' $permissionWhere $departmentWhere";
+            $overview = $this->fetchOne($totalQuery);
+            $stats['overview'] = $overview;
+
+            // 2. Thống kê theo phòng ban (không filter theo tháng)
+            $departmentQuery = "SELECT 
+                d.name as department_name,
+                d.id as department_id,
+                COUNT(*) as count
+                FROM {$this->table} p 
+                LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+                WHERE p.status != 'deleted' $permissionWhere $departmentWhere
+                GROUP BY p.department_id, d.name, d.id
+                ORDER BY count DESC";
+            $departmentStats = $this->fetchAll($departmentQuery);
+            $stats['by_department'] = $departmentStats;
+
+            // 3. Dự án mới tạo trong tháng hiện tại
+            $currentMonth = date('Y-m');
+            $newThisMonthQuery = "SELECT COUNT(*) as count
+                FROM {$this->table} p 
+                WHERE DATE_FORMAT(p.created_at, '%Y-%m') = '$currentMonth'
+                AND p.status != 'deleted' $permissionWhere $departmentWhere";
+            $newThisMonth = $this->fetchOne($newThisMonthQuery);
+            $stats['new_this_month'] = $newThisMonth['count'];
+
+            // 4. Thống kê tài chính theo tháng cho từng phòng ban
+            $financialQuery = "SELECT 
+                d.name as department_name,
+                d.id as department_id,
+                DATE_FORMAT(p.created_at, '%Y-%m') as month,
+                SUM(p.amount) as total_amount,
+                SUM(CASE WHEN p.estimate_status = '未発行' THEN p.amount ELSE 0 END) as pending_estimates,
+                SUM(CASE WHEN p.invoice_status = '未発行' THEN p.amount ELSE 0 END) as pending_invoices,
+                COUNT(*) as project_count
+                FROM {$this->table} p 
+                LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+                WHERE p.status != 'deleted' $permissionWhere $departmentWhere
+                AND p.amount > 0
+                GROUP BY p.department_id, d.name, d.id, DATE_FORMAT(p.created_at, '%Y-%m')
+                ORDER BY d.name, month DESC";
+            $financial = $this->fetchAll($financialQuery);
+            
+            $stats['financial_by_department'] = $financial;
+
+            // 5. Tổng thống kê tài chính
+            $totalFinancialQuery = "SELECT 
+                SUM(p.amount) as total_amount,
+                SUM(CASE WHEN p.estimate_status = '未発行' THEN p.amount ELSE 0 END) as pending_estimates,
+                SUM(CASE WHEN p.invoice_status = '未発行' THEN p.amount ELSE 0 END) as pending_invoices
+                FROM {$this->table} p 
+                WHERE p.status != 'deleted' $permissionWhere $departmentWhere";
+            $totalFinancial = $this->fetchOne($totalFinancialQuery);
+            $stats['total_financial'] = $totalFinancial;
+
+            // 6. Thống kê theo tháng (lấy dữ liệu thực tế có sẵn)
+            $monthlyStatsQuery = "SELECT 
+                DATE_FORMAT(p.created_at, '%Y-%m') as month,
+                COUNT(*) as total_projects,
+                SUM(CASE WHEN p.status NOT IN ('completed', 'cancelled', 'deleted', 'paused') THEN 1 ELSE 0 END) as active_projects,
+                SUM(CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END) as completed_projects,
+                SUM(p.amount) as total_amount
+                FROM {$this->table} p 
+                WHERE p.status != 'deleted' $permissionWhere $departmentWhere
+                GROUP BY DATE_FORMAT(p.created_at, '%Y-%m')
+                ORDER BY month DESC
+                LIMIT 12";
+            $monthlyStats = $this->fetchAll($monthlyStatsQuery);
+            
+            // Đảo ngược thứ tự để hiển thị từ cũ đến mới
+            $monthlyStats = array_reverse($monthlyStats);
+            
+            $stats['monthly_stats'] = $monthlyStats;
+
+            // 7. Danh sách các tháng có dữ liệu
+            $monthsQuery = "SELECT DISTINCT 
+                DATE_FORMAT(p.created_at, '%Y-%m') as month,
+                DATE_FORMAT(p.created_at, '%Y年%m月') as month_label
+                FROM {$this->table} p 
+                WHERE p.status != 'deleted' $permissionWhere $departmentWhere
+                ORDER BY month DESC
+                LIMIT 24";
+            $availableMonths = $this->fetchAll($monthsQuery);
+            $stats['available_months'] = $availableMonths;
+
+            return $stats;
+        } catch (Exception $e) {
+            error_log('Error in getDashboardStats: ' . $e->getMessage());
+            return [
+                'error' => $e->getMessage(),
+                'overview' => ['total' => 0, 'active' => 0, 'completed' => 0, 'inactive' => 0],
+                'by_department' => [],
+                'new_this_month' => 0,
+                'financial_by_department' => [],
+                'total_financial' => ['total_amount' => 0, 'pending_estimates' => 0, 'pending_invoices' => 0],
+                'monthly_stats' => [],
+                'available_months' => []
+            ];
+        }
+    }
 }
 
 ?>

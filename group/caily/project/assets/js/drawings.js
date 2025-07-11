@@ -45,7 +45,12 @@ createApp({
             isDragging: false,
             dragStartIndex: -1,
             dragEndIndex: -1,
-            hoveredRow: null
+            hoveredRow: null,
+            
+            // Click selection
+            lastClickedIndex: -1,
+            isCtrlPressed: false,
+            isShiftPressed: false
         }
     },
     
@@ -102,6 +107,14 @@ createApp({
         
         isAllSelected() {
             return this.filteredDrawings.length > 0 && this.selectedDrawings.length === this.filteredDrawings.length;
+        },
+        
+        isCtrlMode() {
+            return this.isCtrlPressed;
+        },
+        
+        isShiftMode() {
+            return this.isShiftPressed;
         },
         
         stats() {
@@ -193,6 +206,31 @@ createApp({
         
         document.addEventListener('mouseup', () => {
             this.endDragSelection();
+        });
+        
+        // Add keyboard event listeners for Ctrl and Shift keys
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Control' || event.key === 'Meta') {
+                this.handleCtrlKeyChange(true);
+            }
+            if (event.key === 'Shift') {
+                this.handleShiftKeyChange(true);
+            }
+        });
+        
+        document.addEventListener('keyup', (event) => {
+            if (event.key === 'Control' || event.key === 'Meta') {
+                this.handleCtrlKeyChange(false);
+            }
+            if (event.key === 'Shift') {
+                this.handleShiftKeyChange(false);
+            }
+        });
+        
+        // Reset key states when window loses focus
+        window.addEventListener('blur', () => {
+            this.handleCtrlKeyChange(false);
+            this.handleShiftKeyChange(false);
         });
     },
     
@@ -569,6 +607,82 @@ createApp({
             }
         },
         
+        // Enhanced row click handler with Ctrl and Shift support
+        handleRowClick(event, drawingId, index) {
+            // Don't handle clicks on interactive elements
+            if (event.target.closest('button, input, .btn-group, .dropdown')) {
+                return;
+            }
+            
+            // Prevent default behavior for checkbox clicks
+            if (event.target.type === 'checkbox') {
+                return;
+            }
+            
+            // Don't handle row clicks if the click target is within a checkbox cell
+            if (event.target.closest('td:first-child')) {
+                return;
+            }
+            
+            // Stop event propagation to prevent conflicts
+            event.stopPropagation();
+            
+            if (this.isCtrlPressed) {
+                // Ctrl+Click: Toggle selection of clicked item
+                this.toggleSelectDrawing(drawingId);
+                this.lastClickedIndex = index;
+            } else if (this.isShiftPressed && this.lastClickedIndex !== -1) {
+                // Shift+Click: Select range from last clicked to current
+                this.selectRange(this.lastClickedIndex, index);
+            } else {
+                // Regular click: Select only the clicked item
+                this.selectedDrawings = [drawingId];
+                this.lastClickedIndex = index;
+            }
+        },
+        
+        // Handle Ctrl key state changes
+        handleCtrlKeyChange(isPressed) {
+            this.isCtrlPressed = isPressed;
+        },
+        
+        // Handle Shift key state changes
+        handleShiftKeyChange(isPressed) {
+            this.isShiftPressed = isPressed;
+        },
+        
+        // Select range of drawings
+        selectRange(startIndex, endIndex) {
+            const start = Math.min(startIndex, endIndex);
+            const end = Math.max(startIndex, endIndex);
+            
+            // Get the filtered drawings in the current view
+            const visibleDrawings = this.filteredDrawings;
+            
+            // Validate indices
+            if (start < 0 || end >= visibleDrawings.length) return;
+            
+            // Select the range
+            for (let i = start; i <= end; i++) {
+                if (visibleDrawings[i] && visibleDrawings[i].id) {
+                    if (!this.selectedDrawings.includes(visibleDrawings[i].id)) {
+                        this.selectedDrawings.push(visibleDrawings[i].id);
+                    }
+                }
+            }
+        },
+        
+        // Handle individual checkbox click
+        handleCheckboxClick(drawingId) {
+            // Update last clicked index for range selection
+            const index = this.filteredDrawings.findIndex(d => d.id === drawingId);
+            if (index !== -1) {
+                this.lastClickedIndex = index;
+            }
+        },
+        
+
+        
         bulkChangeStatus() {
             if (this.selectedDrawings.length === 0) {
                 this.showError('ファイルを選択してください');
@@ -813,6 +927,21 @@ createApp({
         
         // Drag selection methods
         startDragSelection(event, index) {
+            // Don't start drag on interactive elements
+            if (event.target.closest('button, input, .btn-group, .dropdown')) {
+                return;
+            }
+            
+            // Don't start drag if clicking on checkbox
+            if (event.target.type === 'checkbox') {
+                return;
+            }
+            
+            // Don't start drag if clicking in checkbox cell
+            if (event.target.closest('td:first-child')) {
+                return;
+            }
+            
             this.isDragging = true;
             this.dragStartIndex = index;
             this.dragEndIndex = index;

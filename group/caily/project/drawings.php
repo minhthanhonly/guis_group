@@ -51,9 +51,11 @@ if (!$project_id) {
             <div class="col-12">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">
-                            <i class="fa fa-file-alt me-2"></i>図面ファイル管理
-                        </h5>
+                        <div class="d-flex align-items-center">
+                            <h5 class="card-title mb-0 me-3">
+                                <i class="fa fa-file-alt me-2"></i>図面ファイル管理
+                            </h5>
+                        </div>
                         <div class="d-flex gap-2">
                             <div class="col-md-12">
                                 <div class="d-flex gap-2">
@@ -109,6 +111,20 @@ if (!$project_id) {
                                     <i class="fa fa-times me-1"></i>クリア
                                 </button>
                             </div>
+                        </div>
+                        
+                        <!-- Selection Mode Indicator -->
+                        <div class="selection-mode-hint" role="alert" :class="{'show': isCtrlMode || isShiftMode, 'ctrl-mode': isCtrlMode, 'shift-mode': isShiftMode}">
+                            <i class="fa fa-info-circle me-2"></i>
+                            <strong>選択モード:</strong> 
+                            <span class="ctrl-mode">Ctrlキーを押しながら行をクリックして複数のファイルを選択できます</span>
+                            <span class="shift-mode">Shiftキーを押しながら行をクリックして範囲選択できます</span>
+                        </div>
+                        
+                        <!-- Selection Count Indicator -->
+                        <div v-if="selectedDrawings.length > 0" class="selection-count">
+                            <i class="fa fa-check-circle me-1"></i>
+                            {{ selectedDrawings.length }}個選択中
                         </div>
 
                         <!-- Loading State -->
@@ -181,14 +197,19 @@ if (!$project_id) {
                                 </thead>
                                 <tbody>
                                     <tr v-for="(drawing, index) in filteredDrawings" :key="drawing.id" 
-                                        :class="{ 'table-primary': selectedDrawings.includes(drawing.id) }"
+                                        :class="{ 
+                                            'table-primary': selectedDrawings.includes(drawing.id),
+                                            'ctrl-mode': isCtrlMode,
+                                            'shift-mode': isShiftMode
+                                        }"
                                         :data-index="index"
+                                        @click="handleRowClick($event, drawing.id, index)"
                                         @mousedown="startDragSelection($event, index)"
                                         @mouseover="hoveredRow = index"
                                         @mouseleave="hoveredRow = null"
                                         style="cursor: pointer;">
-                                        <td>
-                                            <input type="checkbox" class="form-check-input" :value="drawing.id" v-model="selectedDrawings" @click.stop>
+                                        <td @click.stop @mousedown.stop>
+                                            <input type="checkbox" class="form-check-input" :value="drawing.id" v-model="selectedDrawings" @change="handleCheckboxClick(drawing.id)">
                                         </td>
                                         <td style="position: relative;">
                                             <div class="d-flex align-items-center">
@@ -626,6 +647,134 @@ $view->footing();
     -webkit-user-select: text;
     -moz-user-select: text;
     -ms-user-select: text;
+}
+
+/* Enhanced selection styles */
+.table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.08) !important;
+}
+
+.table tbody tr.table-primary {
+    background-color: rgba(var(--bs-primary-rgb), 0.15) !important;
+    border-left: 3px solid var(--bs-primary);
+}
+
+.table tbody tr.table-primary:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.2) !important;
+}
+
+/* Prevent selection on interactive elements */
+.table tbody tr button,
+.table tbody tr input,
+.table tbody tr .btn-group,
+.table tbody tr .dropdown {
+    pointer-events: auto;
+}
+
+/* Ensure checkbox works properly */
+.table tbody tr td:first-child {
+    pointer-events: auto;
+    position: relative;
+}
+
+.table tbody tr td:first-child .form-check-input {
+    pointer-events: auto;
+    z-index: 10;
+    position: relative;
+    cursor: pointer;
+}
+
+/* Visual feedback for Ctrl key state */
+.table tbody tr.ctrl-mode {
+    cursor: crosshair;
+}
+
+/* Visual feedback for Shift key state */
+.table tbody tr.shift-mode {
+    cursor: crosshair;
+}
+
+/* Enhanced table styles */
+.table-responsive {
+    position: relative;
+}
+
+.table tbody tr {
+    position: relative;
+}
+
+
+/* Selection count indicator */
+.selection-count {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--bs-primary);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    animation: fadeInUp 0.3s ease-out;
+}
+
+/* Selection mode hint */
+.selection-mode-hint {
+    position: fixed;
+    top: 160px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bs-info);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    z-index: 1001;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: 600px;
+    text-align: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: visibility 0s, opacity 0.3s ease-out;
+}
+
+.selection-mode-hint.show {
+    visibility: visible;
+    animation: fadeInUp 0.3s ease-out forwards;
+}
+
+.selection-mode-hint .ctrl-mode {
+    display: inline-block;
+}
+
+.selection-mode-hint .shift-mode {
+    display: none;
+}
+
+.selection-mode-hint.shift-mode .shift-mode{
+    display: inline-block;
+}
+
+.selection-mode-hint.shift-mode .ctrl-mode {
+    display: none;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
 }
 </style>
 

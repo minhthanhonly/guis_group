@@ -68,6 +68,8 @@ define('ROOT_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
 
 define('ROOT', '/');
 
+define('DIR_ROOT', $_SERVER['DOCUMENT_ROOT']);
+
 define('APP_NAME', 'GUISシステム');
 
 define('APP_COMPANY', 'GUIS Co.,Ltd');

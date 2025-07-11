@@ -369,7 +369,7 @@ class ApplicationModel extends Model {
 	function findAllActiveUser() {
 		$this->connect();
 		$retrict_group = array(RETIRE_GROUP);
-		$query = "SELECT userid, realname, user_groupname, user_image, authority FROM groupware_user WHERE (`is_suspend` = '' OR `is_suspend` IS NULL OR is_suspend = '0') and user_group NOT IN ('".implode("','", $retrict_group)."') ORDER BY user_order,id";
+		$query = "SELECT userid, realname, user_groupname, user_image, authority FROM groupware_user WHERE (`is_suspend` = '' OR `is_suspend` IS NULL OR is_suspend = '0') and user_group NOT IN ('".implode("','", $retrict_group)."') ORDER BY id";
 		$data = $this->fetchAll($query);
 		return $data;
 	}

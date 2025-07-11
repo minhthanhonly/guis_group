@@ -423,7 +423,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         // Define explicit colors instead of using config references
         const chartColors = ['#4e73df', '#f6c23e', '#e74a3b', '#36b9cc', '#1cc88a'];
         const borderColor = 'rgba(224,224,224,0.2)';
-        const labelColor = '#6c757d';
+        const labelColor = '#fff';
 
         const barChartEl = statistic,
             barChartConfig = {
@@ -568,6 +568,330 @@ document.addEventListener('DOMContentLoaded', async function () {
             barChart.render();
         } else {
             barChart.updateOptions(barChartConfig);
+        }
+    }
+
+    // Project Statistics
+    async function loadProjectStats() {
+        const departmentId = document.getElementById('project-stats-department').value;
+        
+        try {
+            console.log('Loading project stats with department ID:', departmentId); // Debug log
+            
+            // Load data using main department filter
+            const response = await fetch(`/api/index.php?model=project&method=getDashboardStats&department_id=${departmentId}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            console.log('API Response:', data); // Debug log
+            
+            // Check for backend error
+            if (data.error) {
+                console.error('Backend error:', data.error);
+                return;
+            }
+            
+            // Render all components with the same data
+            if (data && typeof data === 'object') {
+                renderProjectStats(data);
+            } else {
+                console.error('Failed to load project stats: Invalid data format', data);
+            }
+            
+        } catch (error) {
+            console.error('Error loading project stats:', error);
+        }
+    }
+
+    function renderProjectStats(stats) {
+        console.log('Rendering project stats:', stats); // Debug log
+        
+        // Overview cards
+        if (stats.overview) {
+            const totalElement = document.getElementById('total-projects');
+            const activeElement = document.getElementById('active-projects');
+            const completedElement = document.getElementById('completed-projects');
+            const newElement = document.getElementById('new-this-month');
+            
+            if (totalElement) totalElement.textContent = stats.overview.total || 0;
+            if (activeElement) activeElement.textContent = stats.overview.active || 0;
+            if (completedElement) completedElement.textContent = stats.overview.completed || 0;
+            if (newElement) newElement.textContent = stats.new_this_month || 0;
+        }
+
+        // Monthly stats chart
+        if (stats.monthly_stats && stats.monthly_stats.length > 0) {
+            renderMonthlyStats(stats.monthly_stats);
+        }
+
+        // Financial by department chart
+        if (stats.financial_by_department && stats.financial_by_department.length > 0) {
+            renderFinancialByDepartment(stats.financial_by_department);
+        }
+    }
+
+    function renderMonthlyStats(monthlyData) {
+        const months = monthlyData.map(item => {
+            const [year, month] = item.month.split('-');
+            return `${year}年${month}月`;
+        });
+
+        const options = {
+            series: [
+                {
+                    name: '総案件数',
+                    data: monthlyData.map(item => parseInt(item.total_projects))
+                }
+            ],
+            chart: {
+                type: 'bar',
+                height: 350,
+                stacked: false,
+                toolbar: {
+                    show: false
+                }
+            },
+            plotOptions: {
+                bar: {
+                    horizontal: false,
+                    borderRadius: 4,
+                    dataLabels: {
+                        position: 'top'
+                    },
+                    columnWidth: '30px',
+                    maxWidth: '30px'
+                }
+            },
+            dataLabels: {
+                enabled: true,
+                formatter: function (val) {
+                    return val;
+                },
+                offsetY: -20,
+                style: {
+                    fontSize: '12px',
+                    colors: ['#304758']
+                }
+            },
+            xaxis: {
+                categories: months,
+                labels: {
+                    style: {
+                        fontSize: '12px'
+                    },
+                    rotate: -45,
+                    rotateAlways: false
+                }
+            },
+            yaxis: {
+                labels: {
+                    style: {
+                        fontSize: '12px'
+                    }
+                }
+            },
+            tooltip: {
+                shared: false,
+                y: {
+                    formatter: function (val) {
+                        return val + ' 件';
+                    }
+                }
+            },
+            legend: {
+                position: 'top',
+                horizontalAlign: 'left',
+                fontSize: '12px',
+                labels: {
+                    colors: '#304758'
+                }
+            }
+        };
+
+        if (window.monthlyChart) {
+            window.monthlyChart.destroy();
+        }
+
+        const chartElement = document.getElementById('monthly-stats-chart');
+        if (chartElement) {
+            window.monthlyChart = new ApexCharts(chartElement, options);
+            window.monthlyChart.render();
+        }
+    }
+
+    function renderFinancialByDepartment(financialData) {
+        // Group data by department
+        const departmentGroups = {};
+        financialData.forEach(item => {
+            if (!departmentGroups[item.department_name]) {
+                departmentGroups[item.department_name] = [];
+            }
+            departmentGroups[item.department_name].push({
+                month: item.month,
+                total_amount: parseFloat(item.total_amount) || 0,
+                pending_estimates: parseFloat(item.pending_estimates) || 0,
+                pending_invoices: parseFloat(item.pending_invoices) || 0,
+                project_count: parseInt(item.project_count) || 0
+            });
+        });
+
+        // Create chart data
+        const months = [...new Set(financialData.map(item => item.month))].sort();
+        const departments = Object.keys(departmentGroups);
+
+        // Calculate total for all departments
+        const totalByMonth = {};
+        months.forEach(month => {
+            totalByMonth[month] = financialData
+                .filter(item => item.month === month)
+                .reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
+        });
+
+        const series = [
+            {
+                name: 'すべての部署',
+                data: months.map(month => totalByMonth[month])
+            },
+            ...departments.map(dept => ({
+                name: dept,
+                data: months.map(month => {
+                    const deptData = departmentGroups[dept].find(item => item.month === month);
+                    return deptData ? deptData.total_amount : 0;
+                })
+            }))
+        ];
+
+        const options = {
+            series: series,
+            chart: {
+                type: 'line',
+                height: 350,
+                stacked: false,
+                toolbar: {
+                    show: false
+                }
+            },
+            stroke: {
+                curve: 'smooth',
+                width: 3
+            },
+            colors: ['#ea5455', '#7367f0', '#28c76f', '#ff9f43', '#00cfe8', '#9c27b0', '#ff5722', '#795548'],
+            dataLabels: {
+                enabled: false
+            },
+            xaxis: {
+                categories: months.map(month => {
+                    const [year, monthNum] = month.split('-');
+                    return `${year}年${monthNum}月`;
+                }),
+                labels: {
+                    style: {
+                        fontSize: '12px'
+                    },
+                    rotate: -45,
+                    rotateAlways: false
+                }
+            },
+            yaxis: {
+                labels: {
+                    formatter: function (val) {
+                        return formatCurrency(val);
+                    },
+                    style: {
+                        fontSize: '12px'
+                    }
+                }
+            },
+            tooltip: {
+                shared: true,
+                intersect: false,
+                y: {
+                    formatter: function (val) {
+                        return formatCurrency(val);
+                    }
+                }
+            },
+            legend: {
+                position: 'top',
+                horizontalAlign: 'left',
+                fontSize: '12px',
+                labels: {
+                    colors: '#304758'
+                }
+            }
+        };
+
+        if (window.financialChart) {
+            window.financialChart.destroy();
+        }
+
+        const chartElement = document.getElementById('financial-chart');
+        if (chartElement) {
+            try {
+                window.financialChart = new ApexCharts(chartElement, options);
+                window.financialChart.render();
+            } catch (error) {
+                console.error('Error rendering financial chart:', error);
+            }
+        }
+
+    }
+
+    function formatCurrency(amount) {
+        if (!amount || amount === 0) return '¥0';
+        return '¥' + parseInt(amount).toLocaleString();
+    }
+
+    // Load project stats if user has permission
+    if (document.getElementById('project-stats-section')) {
+        // Load departments for dropdown
+        loadDepartmentsForStats().then(() => {
+            // Load initial stats after departments are loaded
+            loadProjectStats();
+        });
+    }
+
+    // Load departments for project stats dropdown
+    async function loadDepartmentsForStats() {
+        try {
+            const response = await fetch('/api/index.php?model=department&method=listByUser');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            
+            // Populate main department dropdown only
+            const select = document.getElementById('project-stats-department');
+            if (select && data) {
+                // Clear existing options except the first one
+                select.innerHTML = '<option value="">すべての部署</option>';
+                
+                // Add department options
+                data.forEach(dept => {
+                    const option = document.createElement('option');
+                    option.value = dept.id;
+                    option.textContent = dept.name;
+                    select.appendChild(option);
+                });
+                
+                // Remove existing event listeners to avoid duplicates
+                const newSelect = select.cloneNode(true);
+                select.parentNode.replaceChild(newSelect, select);
+                
+                // Add event listener for department change
+                newSelect.addEventListener('change', function() {
+                    loadProjectStats();
+                });
+            }
+            
+            return Promise.resolve();
+        } catch (error) {
+            console.error('Error loading departments for stats:', error);
+            return Promise.reject(error);
         }
     }
 
