@@ -50,7 +50,7 @@ class Customer extends ApplicationModel {
             "SELECT c.*, 
             (SELECT COUNT(*) FROM " . DB_PREFIX . "customer WHERE category_id = c.id) as num_customers
             FROM " . DB_PREFIX . "customer_category c
-            ORDER BY c.id ASC"
+            ORDER BY c.arrange ASC, c.id ASC"
         );
         return $this->fetchAll($query);
     }
@@ -310,7 +310,7 @@ class Customer extends ApplicationModel {
             'message_code' => 'error',
         );
         try {
-            $query = "SELECT * FROM " . DB_PREFIX . "customer_category ORDER BY id ASC";
+            $query = "SELECT * FROM " . DB_PREFIX . "customer_category ORDER BY arrange ASC, id ASC";
             $result = $this->fetchAll($query);
             if ($result) {
                 $hash['status'] = 'success';

@@ -14,7 +14,7 @@ class Connection {
 
         if ($this->handler) {
             if (defined('DB_CHARSET') && DB_CHARSET) {
-                if (!mysqli_set_charset($this->handler, 'utf8')) {
+                if (!mysqli_set_charset($this->handler, DB_CHARSET)) {
                     die('Failed to set character set: ' . mysqli_error($this->handler));
                 }
             }

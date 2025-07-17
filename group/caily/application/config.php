@@ -61,7 +61,7 @@ define('DB_PREFIX', 'groupware_');
 define('DB_PORT', '5432');
 // define('DB_PORT', '3306');
 //データベース文字コード設定
-define('DB_CHARSET', 'utf8');
+define('DB_CHARSET', 'utf8mb4');
 //データベースファイル
 define('DB_FILE', DIR_PATH.'database/group.sqlite2');
 //郵便番号データファイル
@@ -69,9 +69,9 @@ define('DB_POSTCODE', DIR_PATH.'database/KEN_ALL.CSV');
 
 define('ROOT_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
 
-define('DIR_ROOT', $_SERVER['DOCUMENT_ROOT']);
-
 define('ROOT', '/');
+
+define('DIR_ROOT', $_SERVER['DOCUMENT_ROOT']);
 
 define('APP_NAME', 'GUISシステム');
 

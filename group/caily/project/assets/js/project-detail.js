@@ -125,7 +125,7 @@ const vueApp = createApp({
         isManager() {
             if(USER_ROLE == `administrator`) return true;
             if (!this.managers) return false;
-            return this.managers.some(m => String(m.user_id) === String(USER_AUTH_ID));
+            return this.managers.some(m => String(m.user_id) === String(USER_AUTH_ID)) || this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_edit == 1);
         },
         filteredTeams() {
             if (!this.project || !this.project.department_id) return this.allTeams;
@@ -1391,11 +1391,11 @@ const vueApp = createApp({
         },
         canDeleteNote(note) {
             // Only note creator or managers can delete notes
-            return this.isManager || (note.user_id && String(note.user_id) === String(USER_AUTH_ID));
+            return this.isManager || (note.user_id && String(note.user_id) === String(USER_ID));
         },
         canEditNote(note) {
             // Only note creator or managers can edit notes
-            return this.isManager || (note.user_id && String(note.user_id) === String(USER_AUTH_ID));
+            return this.isManager || (note.user_id && String(note.user_id) === String(USER_ID));
         },
         // Estimate status methods
         getEstimateStatusLabel(status) {

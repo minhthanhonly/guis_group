@@ -999,7 +999,30 @@ window.CommentComponent = {
                     tempDiv.innerHTML = comment.content;
                     text = tempDiv.innerText || tempDiv.textContent || '';
                 }
-                await navigator.clipboard.writeText(text);
+                
+                // Check if Clipboard API is available
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    // Fallback for browsers without Clipboard API or insecure contexts
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    
+                    try {
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                    } catch (err) {
+                        document.body.removeChild(textArea);
+                        throw new Error('Copy fallback failed');
+                    }
+                }
+                
                 Swal.fire({
                     icon: 'success',
                     title: 'コピーしました',
@@ -1008,6 +1031,7 @@ window.CommentComponent = {
                     showConfirmButton: false
                 });
             } catch (e) {
+                console.error('Error copying comment content:', e);
                 Swal.fire({
                     icon: 'error',
                     title: 'コピー失敗',

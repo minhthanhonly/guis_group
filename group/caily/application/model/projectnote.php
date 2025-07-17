@@ -50,26 +50,29 @@ class ProjectNote extends ApplicationModel {
         }
         
         $currentUserId = $_SESSION['userid'];
-        
-        // Check if user is the note creator
-        $isCreator = (strval($note['user_id']) === strval($currentUserId));
-        
-        // Check if user is project manager
-        $isManager = false;
-        if (!$isCreator) {
-            $query = sprintf(
-                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "project_members 
-                WHERE project_id = %d AND user_id = %s AND role = 'manager'",
-                intval($note['project_id']),
-                $this->quote($currentUserId)
-            );
-            $result = $this->fetchOne($query);
-            $isManager = ($result && $result['count'] > 0);
-        }
-        
-        // Only allow editing if user is creator or manager
-        if (!$isCreator && !$isManager) {
-            return ['status' => 'error', 'error' => 'Permission denied'];
+        $currentUserAuthId = $_SESSION['id'];
+
+        if($_SESSION['authority'] != 'administrator'){
+            // Check if user is the note creator
+            $isCreator = (strval($note['user_id']) === strval($currentUserId));
+            
+            // Check if user is project manager
+            $isManager = false;
+            if (!$isCreator) {
+                $query = sprintf(
+                    "SELECT COUNT(*) as count FROM " . DB_PREFIX . "project_members 
+                    WHERE project_id = %d AND user_id = %s AND role = 'manager'",
+                    intval($note['project_id']),
+                    $this->quote($currentUserAuthId)
+                );
+                $result = $this->fetchOne($query);
+                $isManager = ($result && $result['count'] > 0);
+            }
+            
+            // Only allow editing if user is creator or manager
+            if ((!$isCreator && !$isManager)) {
+                return ['status' => 'error', 'error' => 'Permission denied'];
+            }
         }
         
         $data = array(

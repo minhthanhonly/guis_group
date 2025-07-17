@@ -773,7 +773,7 @@ createApp({
         },
         
         copyFileUrl(file) {
-            const url = this.getSecureDownloadUrl(file);
+            const url = this.getSecureViewUrl(file);
             this.copyToClipboard(url);
             this.showNotification('ファイルURLをコピーしました', 'success');
         },

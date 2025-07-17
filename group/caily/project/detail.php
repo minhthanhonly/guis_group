@@ -56,16 +56,16 @@ if (!$project_id) {
                                 <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
                                     <i class="fa fa-copy"></i>
                                 </button>
-                                <button v-if="!isEditMode && canEditProject" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode">
+                                <button v-if="!isEditMode && canEditProject" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode" title="編集">
                                     <i class="fa fa-pencil-alt"></i>
                                 </button>
-                                <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject">
+                                <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject" title="保存">
                                     <i class="fa fa-save"></i>
                                 </button>
-                                <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit">
+                                <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit" title="キャンセル">
                                     <i class="fa fa-times"></i>
                                 </button>  
-                                <button v-if="!isEditMode && canDeleteProject" class="btn btn-outline-danger btn-sm" @click="deleteProject">
+                                <button v-if="!isEditMode && canDeleteProject" class="btn btn-outline-danger btn-sm" @click="deleteProject" title="削除">
                                     <i class="fa fa-trash"></i>
                                 </button>
                             </div>
@@ -255,8 +255,8 @@ if (!$project_id) {
                                     <input v-if="isEditMode" id="team_tags" class="form-control" />
                                     <button v-if="isEditMode" class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('team')" title="すべて削除"><i class="fa fa-times"></i></button>
                                     <div v-else>
-                                        <span v-if="project.team_list && project.team_list.length > 0">
-                                            <span v-for="team in project.team_list" :key="team.id" class="badge bg-info me-1">{{ team.name }}</span>
+                                        <span v-if="project.team_list && project.team_list.length > 0" class="d-flex flex-wrap gap-1">
+                                            <span v-for="team in project.team_list" :key="team.id" class="badge bg-info">{{ team.name }}</span>
                                         </span>
                                         <span v-else class="text-muted">-</span>
                                     </div>
@@ -631,11 +631,11 @@ if (!$project_id) {
                                             <span v-if="log.user_image">
                                                 <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
                                             </span>
-                                            <span v-else>
-                                                <span class="avatar-placeholder rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center" style="width:32px;height:32px;font-size:1rem;">
-                                                    {{ log.username ? log.username.charAt(0) : (log.realname ? log.realname.charAt(0) : '?') }}
+                                            <div class="avatar avatar-sm" v-else>
+                                                <span class="avatar-initial rounded-circle bg-label-primary">
+                                                    {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
                                                 </span>
-                                            </span>
+                                            </div>
                                         </div>
                                         <div class="d-flex flex-column align-items-start justify-content-center ms-2">
                                             <span class="fw-bold small">{{ log.username || log.realname || log.user }}</span>

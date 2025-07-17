@@ -22,10 +22,10 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h5 class="card-title"><span data-i18n="プロジェクト作成">プロジェクト作成</span></h5>
                         <div>
-                            <button class="btn btn-success btn-sm me-2" @click="saveProject">
+                            <button class="btn btn-success btn-sm me-2" @click="saveProject" title="保存">
                                 <i class="fa fa-save"></i>
                             </button>
-                            <a href="index.php" class="btn btn-secondary btn-sm">
+                            <a href="index.php" class="btn btn-secondary btn-sm" title="キャンセル">
                                 <i class="fa fa-times"></i>
                             </a>
                         </div>

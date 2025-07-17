@@ -217,7 +217,6 @@ class NotificationManager {
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <h6 class="small mb-1">通知はありません 🎉</h6>
-                            <small class="mb-1 d-block text-body">作成中...</small>
                         </div>
                     </div>
                 </li>

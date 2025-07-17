@@ -358,6 +358,20 @@
                         <li class="list-group-item list-group-item-action dropdown-notifications-item">
                           <div class="d-flex">
                             <div class="flex-grow-1">
+                              <h6 class="small mb-1">2025年7月15日</h6>
+                              <small class="mb-1 d-block text-body">
+                                <ul>
+                                  <li>
+                                    <p data-i18n="プロジェクト管理機能を追加しました。">プロジェクト管理機能を追加しました。</p>
+                                  </li>
+                                </ul>
+                              </small>
+                            </div>
+                          </div>
+                        </li>
+                        <li class="list-group-item list-group-item-action dropdown-notifications-item">
+                          <div class="d-flex">
+                            <div class="flex-grow-1">
                               <h6 class="small mb-1">2025年5月21日</h6>
                               <small class="mb-1 d-block text-body">
                                 <ul>
@@ -416,7 +430,6 @@
                             </div>
                             <div class="flex-grow-1">
                               <h6 class="small mb-1" data-i18n="通知はありません">通知はありません 🎉</h6>
-                              <small class="mb-1 d-block text-body">作成中...</small>
                               <!-- <small class="text-body-secondary">1h ago</small> -->
                             </div>
                             <div class="flex-shrink-0 dropdown-notifications-actions">

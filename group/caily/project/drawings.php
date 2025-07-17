@@ -136,7 +136,7 @@ if (!$project_id) {
                         </div>
 
                         <!-- Drawings Table -->
-                        <div v-else-if="filteredDrawings.length > 0" class="table-responsive">
+                        <div v-else-if="filteredDrawings.length > 0" class="table-responsive" id="drawingsTable">
                             <table class="table table-hover">
                                 <thead class="table-light">
                                     <tr>
@@ -699,8 +699,11 @@ $view->footing();
 }
 
 /* Enhanced table styles */
-.table-responsive {
+#drawingsTable {
     position: relative;
+    overflow-x: auto;
+    overflow-y: visible;
+    min-height: 400px;
 }
 
 .table tbody tr {

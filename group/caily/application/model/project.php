@@ -316,6 +316,26 @@ class Project extends ApplicationModel {
         return $this->quote($str);
     }
 
+    /**
+     * Validate and ensure UTF-8 MB4 compatibility for strings containing emojis
+     */
+    private function validateUTF8MB4($str) {
+        if (empty($str)) {
+            return $str;
+        }
+        
+        // Ensure the string is valid UTF-8
+        if (!mb_check_encoding($str, 'UTF-8')) {
+            // Try to convert from other encodings
+            $str = mb_convert_encoding($str, 'UTF-8', 'auto');
+        }
+        
+        // Clean up any malformed UTF-8 sequences
+        $str = mb_convert_encoding($str, 'UTF-8', 'UTF-8');
+        
+        return $str;
+    }
+
     function checkPermission($project_id, $user_id) {
         $query = sprintf(
             "SELECT COUNT(*) as count FROM " . DB_PREFIX . "project_members WHERE project_id = %d AND user_id = %d",
@@ -327,11 +347,15 @@ class Project extends ApplicationModel {
 
     function create($params = null) {
     
-            // Get data from $_POST if no params provided
+        // Get data from $_POST if no params provided
+        // Validate and sanitize input to ensure UTF-8 MB4 compatibility
+        $name = isset($_POST['name']) ? $this->validateUTF8MB4($_POST['name']) : '';
+        $description = isset($_POST['description']) ? $this->validateUTF8MB4($_POST['description']) : '';
+        
         $data = array(
             'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
-            'name' => isset($_POST['name']) ? $_POST['name'] : '',
-            'description' => isset($_POST['description']) ? $_POST['description'] : '',
+            'name' => $name,
+            'description' => $description,
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
             'department_id' => isset($_POST['department_id']) ? intval($_POST['department_id']) : null,
@@ -450,9 +474,13 @@ class Project extends ApplicationModel {
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
         $old = $this->getById($id);
         
+        // Validate and sanitize input to ensure UTF-8 MB4 compatibility
+        $name = isset($_POST['name']) ? $this->validateUTF8MB4($_POST['name']) : '';
+        $description = isset($_POST['description']) ? $this->validateUTF8MB4($_POST['description']) : '';
+        
         $data = array(
-            'name' => isset($_POST['name']) ? $_POST['name'] : '',
-            'description' => isset($_POST['description']) ? $_POST['description'] : '',
+            'name' => $name,
+            'description' => $description,
             'building_branch' => isset($_POST['building_branch']) ? $_POST['building_branch'] : '',
             'building_size' => isset($_POST['building_size']) ? $_POST['building_size'] : '',
             'building_type' => isset($_POST['building_type']) ? $_POST['building_type'] : '',
@@ -492,12 +520,17 @@ class Project extends ApplicationModel {
             $data['progress'] = 100;
         }
         
-        $result = $this->query_update($data, ['id' => $id]);
-        
-        // Handle actual_end_date NULL case separately (only if status is not completed)
-        if ($result && $data['status'] != 'completed') {
-            $query = sprintf("UPDATE %s SET actual_end_date = NULL WHERE id = %d", $this->table, $id);
-            $this->query($query);
+        try {
+            $result = $this->query_update($data, ['id' => $id]);
+            
+            // Handle actual_end_date NULL case separately (only if status is not completed)
+            if ($result && $data['status'] != 'completed') {
+                $query = sprintf("UPDATE %s SET actual_end_date = NULL WHERE id = %d", $this->table, $id);
+                $this->query($query);
+            }
+        } catch (Exception $e) {
+            error_log('Project update error: ' . $e->getMessage());
+            return ['status' => 'error', 'error' => 'Database error: ' . $e->getMessage()];
         }
 
       

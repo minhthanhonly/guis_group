@@ -58,7 +58,7 @@ define('DB_PREFIX', 'groupware_');
 define('DB_PORT', '5432');
 // define('DB_PORT', '3306');
 //データベース文字コード設定
-define('DB_CHARSET', 'utf8');
+define('DB_CHARSET', 'utf8mb4');
 //データベースファイル
 define('DB_FILE', DIR_PATH.'database/group.sqlite2');
 //郵便番号データファイル
