@@ -83,6 +83,26 @@ $view->heading('親プロジェクト作成');
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
+                                <label class="form-label">
+                                    <span data-i18n="プロジェクト番号">プロジェクト番号</span>
+                                    <button class="btn btn-sm btn-outline-primary py-0 small ms-2" @click="generateProjectNumber" title="生成">
+                                        生成
+                                    </button>
+                                </label>
+                                <input type="text" class="form-control" v-model="parentProject.project_number">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="工事支店">工事支店</span></label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control tagify" v-model="parentProject.construction_branch" id="construction_branch_tags" name="construction_branch_tags">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('construction_branch')" title="すべて削除"><i class="fa fa-times"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="案件名">案件名</span> <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" v-model="parentProject.project_name" required>
                                 <div v-if="validationErrors.project_name" class="invalid-feedback d-block">
@@ -92,7 +112,7 @@ $view->heading('親プロジェクト作成');
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="規模">規模</span></label>
+                                <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
                                 <input type="text" class="form-control" v-model="parentProject.scale">
                             </div>
                         </div>
@@ -113,7 +133,7 @@ $view->heading('親プロジェクト作成');
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
                                     <span data-i18n="希望納期">希望納期</span>
-                                    <button type="button" class="btn btn-sm btn-outline-primary ms-2" @click="setDesiredDeliveryDate">
+                                                                            <button type="button" class="btn btn-sm btn-outline-primary ms-2" @click="setTodayDate">
                                         <i class="fa fa-calendar"></i> 今日
                                     </button>
                                 </label>

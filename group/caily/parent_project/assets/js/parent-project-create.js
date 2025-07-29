@@ -10,7 +10,9 @@ createApp({
                 guis_receiver: '',
                 request_date: '',
                 construction_number: '',
+                project_number: '',
                 project_name: '',
+                construction_branch: '',
                 scale: '',
                 type1: '',
                 type2: '',
@@ -37,7 +39,8 @@ createApp({
                 project_name: ''
             },
             type1Tagify: null,
-            type2Tagify: null
+            type2Tagify: null,
+            constructionBranchTagify: null
         }
     },
     methods: {
@@ -92,7 +95,9 @@ createApp({
                 formData.append('guis_receiver', this.parentProject.guis_receiver || '');
                 formData.append('request_date', this.parentProject.request_date || '');
                 formData.append('construction_number', this.parentProject.construction_number || '');
+                formData.append('project_number', this.parentProject.project_number || '');
                 formData.append('project_name', this.parentProject.project_name || '');
+                formData.append('construction_branch', this.parentProject.construction_branch || '');
                 formData.append('scale', this.parentProject.scale || '');
                 formData.append('type1', this.parentProject.type1 || '');
                 formData.append('type2', this.parentProject.type2 || '');
@@ -440,7 +445,7 @@ createApp({
                 el._flatpickr.setDate(formattedDate);
             }
         },
-        setDesiredDeliveryDate() {
+        setTodayDate() {
             const today = new Date();
             const formattedDate = today.getFullYear() + '/' + 
                 String(today.getMonth() + 1).padStart(2, '0') + '/' + 
@@ -452,6 +457,20 @@ createApp({
             const el = document.getElementById('desired_delivery_date_picker');
             if (el && el._flatpickr) {
                 el._flatpickr.setDate(formattedDate);
+            }
+        },
+        async generateProjectNumber() {
+            try {
+                const response = await axios.get('/api/index.php?model=parentproject&method=generateProjectNumber');
+                if (response.data && response.data.status === 'success') {
+                    this.parentProject.project_number = response.data.project_number;
+                    showMessage('プロジェクト番号を生成しました', false);
+                } else {
+                    showMessage('プロジェクト番号の生成に失敗しました', true);
+                }
+            } catch (error) {
+                console.error('Error generating project number:', error);
+                showMessage('プロジェクト番号の生成に失敗しました', true);
             }
         },
         initTagify() {
@@ -510,6 +529,39 @@ createApp({
                     this.type2Tagify.on('add', updateType2);
                     this.type2Tagify.on('remove', updateType2);
                 }
+                
+                // --- Tagify for Construction Branch (工事支店) ---
+                const constructionBranchInput = document.querySelector('#construction_branch_tags');
+                if (constructionBranchInput && window.Tagify && !constructionBranchInput._tagify) {
+                    if (this.constructionBranchTagify) {
+                        try {
+                            this.constructionBranchTagify.destroy();
+                        } catch (e) {
+                            console.log('Error destroying existing constructionBranchTagify:', e);
+                        }
+                    }
+                    this.constructionBranchTagify = new Tagify(constructionBranchInput, {
+                        whitelist: ['北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
+                '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
+                '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
+                '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
+                '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
+                '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
+                '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'],
+                        maxTags: 5,
+                        dropdown: {
+                            maxItems: 20,
+                            classname: "tags-look-construction-branch",
+                            enabled: 0,
+                            closeOnSelect: true
+                        },
+                    });
+                    const updateConstructionBranch = () => {
+                        this.parentProject.construction_branch = this.constructionBranchTagify.value.map(tag => tag.value).join(',');
+                    };
+                    this.constructionBranchTagify.on('add', updateConstructionBranch);
+                    this.constructionBranchTagify.on('remove', updateConstructionBranch);
+                }
             });
         }
     },
@@ -522,7 +574,9 @@ createApp({
             guis_receiver: '',
             request_date: '',
             construction_number: '',
+            project_number: '',
             project_name: '',
+            construction_branch: '',
             scale: '',
             type1: '',
             type2: '',

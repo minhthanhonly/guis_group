@@ -348,7 +348,7 @@ class Project extends ApplicationModel {
 
     function create($params = null) {
     
-        // Get data from $_POST if no params provided
+            // Get data from $_POST if no params provided
         // Validate and sanitize input to ensure UTF-8 MB4 compatibility
         $name = isset($_POST['name']) ? $this->validateUTF8MB4($_POST['name']) : '';
         $description = isset($_POST['description']) ? $this->validateUTF8MB4($_POST['description']) : '';
@@ -523,12 +523,12 @@ class Project extends ApplicationModel {
         }
         
         try {
-            $result = $this->query_update($data, ['id' => $id]);
-            
-            // Handle actual_end_date NULL case separately (only if status is not completed)
-            if ($result && $data['status'] != 'completed') {
-                $query = sprintf("UPDATE %s SET actual_end_date = NULL WHERE id = %d", $this->table, $id);
-                $this->query($query);
+        $result = $this->query_update($data, ['id' => $id]);
+        
+        // Handle actual_end_date NULL case separately (only if status is not completed)
+        if ($result && $data['status'] != 'completed') {
+            $query = sprintf("UPDATE %s SET actual_end_date = NULL WHERE id = %d", $this->table, $id);
+            $this->query($query);
             }
         } catch (Exception $e) {
             error_log('Project update error: ' . $e->getMessage());

@@ -11,7 +11,9 @@ class ParentProject extends ApplicationModel {
             'guis_receiver' => array(),
             'request_date' => array(),
             'construction_number' => array(),
+            'project_number' => array(),
             'project_name' => array('notnull'),
+            'construction_branch' => array(),
             'scale' => array(),
             'type1' => array(),
             'type2' => array(),
@@ -119,6 +121,8 @@ class ParentProject extends ApplicationModel {
             'structural_office' => isset($_POST['structural_office']) ? $_POST['structural_office'] : '',
             'notes' => $notes,
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
+            'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
+            'construction_branch' => isset($_POST['construction_branch']) ? $_POST['construction_branch'] : '',
             'created_by' => $_SESSION['userid'],
             'created_at' => date('Y-m-d H:i:s')
         );
@@ -181,6 +185,8 @@ class ParentProject extends ApplicationModel {
             'desired_delivery_date' => isset($_POST['desired_delivery_date']) ? $_POST['desired_delivery_date'] : null,
             'materials' => $materials,
             'structural_office' => isset($_POST['structural_office']) ? $_POST['structural_office'] : '',
+            'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
+            'construction_branch' => isset($_POST['construction_branch']) ? $_POST['construction_branch'] : '',
             'notes' => $notes,
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
             'updated_by' => $_SESSION['userid'],
@@ -256,6 +262,43 @@ class ParentProject extends ApplicationModel {
             intval($parent_project_id)
         );
         return $this->fetchAll($query);
+    }
+
+    /**
+     * Generate a unique project number for parent projects
+     */
+    function generateProjectNumber() {
+        // Get the latest 50 project numbers to analyze the pattern
+        $query = "SELECT project_number FROM " . $this->table . " ORDER BY id DESC LIMIT 50";
+        $result = $this->fetchAll($query);
+
+        $prefix = 'P'; // Default prefix for parent projects
+        // if (!empty($result)) {
+        //     // Extract prefix from the first project number (non-numeric characters at the beginning)
+        //     if (preg_match('/^([^0-9]*)/', $result[0]['project_number'], $matches)) {
+        //         $prefix = $matches[1];
+        //     }
+        // }
+
+        $maxNumber = 0;
+        foreach ($result as $row) {
+            // Find the number at the end of project_number
+            if (preg_match('/(\d+)\s*$/', $row['project_number'], $matches)) {
+                $num = intval($matches[1]);
+                if ($num > $maxNumber) {
+                    $maxNumber = $num;
+                }
+            }
+        }
+        
+        $nextNumber = $maxNumber + 1;
+        // Format the number, e.g., PP-001 or just 001 if no prefix
+        $project_number = $prefix . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+        
+        return [
+            'status' => 'success',
+            'project_number' => $project_number
+        ];
     }
 
     /**
