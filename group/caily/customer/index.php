@@ -126,7 +126,8 @@ $view->heading('顧客情報');
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
-                                        <th>会社名会社名/支店名</th>
+                                        <th>会社名</th>
+                                        <th>支店名</th>
                                         <th>担当者名</th>
                                         <!-- <th>敬称</th> -->
                                         <th>担当部署</th>
@@ -142,6 +143,7 @@ $view->heading('顧客情報');
                                 <tbody>
                                     <tr v-for="customer in customers" :key="customer.id" :class="{ 'bg-label-success': lastEditCustomer && lastEditCustomer.id === customer.id }">
                                         <td>{{ customer.company_name }}</td>
+                                        <td>{{ customer.branch }}</td>
                                         <td class="text-nowrap">{{ customer.name }}</td>
                                         <!-- <td>{{ customer.title }}</td> -->
                                         <td>{{ customer.department }}</td>

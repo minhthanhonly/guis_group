@@ -4,6 +4,8 @@ $view->heading('プロジェクト作成');
 
 // Get department ID from URL parameter
 $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+// Get parent project ID from URL parameter
+$parent_project_id = isset($_GET['parent_project_id']) ? intval($_GET['parent_project_id']) : 0;
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
 
@@ -380,6 +382,7 @@ $view->footing();
 <!-- Define PRESET_DEPARTMENT_ID before loading Vue and project-create.js -->
 <script>
 const PRESET_DEPARTMENT_ID = <?php echo $department_id; ?>;
+const PRESET_PARENT_PROJECT_ID = <?php echo $parent_project_id; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />

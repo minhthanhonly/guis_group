@@ -15,6 +15,7 @@ createApp({
                 priority: 'medium',
                 status: 'open',
                 department_id: '',
+                parent_project_id: '',
                 start_date: '',
                 end_date: '',
                 project_order_type: '',
@@ -136,6 +137,7 @@ createApp({
                 priority: 'medium',
                 status: 'open',
                 department_id: PRESET_DEPARTMENT_ID || '',
+                parent_project_id: PRESET_PARENT_PROJECT_ID || '',
                 start_date: '',
                 end_date: '',
                 project_order_type: '',
@@ -417,6 +419,7 @@ createApp({
                 formData.append('custom_fields', this.project.custom_fields);
                 formData.append('description', this.project.description || '');
                 formData.append('project_number', this.project.project_number || '');
+                formData.append('parent_project_id', this.project.parent_project_id || '');
                 formData.append('tags', this.project.tags || '');
                 
                 const response = await axios.post('/api/index.php?model=project&method=create', formData);

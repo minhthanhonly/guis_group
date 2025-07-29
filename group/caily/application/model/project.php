@@ -9,6 +9,7 @@ class Project extends ApplicationModel {
         ));
         $this->schema = array(
             'id' => array('except' => array('search')),
+            'parent_project_id' => array(),
             'project_number' => array(),
             'name' => array(),
             'description' => array(),
@@ -353,6 +354,7 @@ class Project extends ApplicationModel {
         $description = isset($_POST['description']) ? $this->validateUTF8MB4($_POST['description']) : '';
         
         $data = array(
+            'parent_project_id' => isset($_POST['parent_project_id']) ? intval($_POST['parent_project_id']) : null,
             'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
             'name' => $name,
             'description' => $description,

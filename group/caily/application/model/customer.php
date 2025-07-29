@@ -333,14 +333,22 @@ class Customer extends ApplicationModel {
             'message_code' => 'error',
         );
         try {
-            $query = "SELECT DISTINCT company_name FROM " . DB_PREFIX . "customer WHERE company_name IS NOT NULL AND company_name != '' ORDER BY company_name ASC";
+            $search = isset($_GET['search']) ? $_GET['search'] : '';
+            $where = '';
+            if ($search) {
+                $where = "WHERE company_name LIKE '%$search%' OR company_name_kana LIKE '%$search%'";
+            }
+            
+            $query = "SELECT DISTINCT company_name FROM " . DB_PREFIX . "customer WHERE company_name IS NOT NULL AND company_name != '' $where ORDER BY company_name ASC";
             $result = $this->fetchAll($query);
             if ($result) {
                 $hash['status'] = 'success';
                 $hash['message_code'] = 'success';
                 $hash['data'] = $result;
             } else {
-                throw new Exception('会社名の取得に失敗しました。');
+                $hash['data'] = [];
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
             }
         } catch (Exception $e) {
             $hash['data'] = [];
@@ -356,14 +364,22 @@ class Customer extends ApplicationModel {
             'message_code' => 'error',
         );
         try {
-            $query = "SELECT id, name FROM " . DB_PREFIX . "customer WHERE name IS NOT NULL AND name != '' ORDER BY name ASC";
+            $search = isset($_GET['search']) ? $_GET['search'] : '';
+            $where = '';
+            if ($search) {
+                $where = "WHERE name LIKE '%$search%' OR name_kana LIKE '%$search%'";
+            }
+            
+            $query = "SELECT id, name FROM " . DB_PREFIX . "customer WHERE name IS NOT NULL AND name != '' $where ORDER BY name ASC";
             $result = $this->fetchAll($query);
             if ($result) {
                 $hash['status'] = 'success';
                 $hash['message_code'] = 'success';
                 $hash['data'] = $result;
             } else {
-                throw new Exception('担当者名の取得に失敗しました。');
+                $hash['data'] = [];
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
             }
         } catch (Exception $e) {
             $hash['data'] = [];
@@ -531,6 +547,108 @@ class Customer extends ApplicationModel {
 
             $query = sprintf(
                 "SELECT id, name, company_name
+                FROM %scustomer 
+                WHERE %s
+                AND name IS NOT NULL 
+                AND name != '' 
+                ORDER BY name ASC",
+                DB_PREFIX,
+                $where
+            );
+            $result = $this->fetchAll($query);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                $hash['data'] = $result;
+            } else {
+                $hash['data'] = [];
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+            }
+        } catch (Exception $e) {
+            $hash['data'] = [];
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    // Get branches by company name
+    function list_branches_by_company() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $company_name = isset($_GET['company_name']) ? $_GET['company_name'] : '';
+            $search = isset($_GET['search']) ? $_GET['search'] : '';
+            
+            if (!$company_name) {
+                $hash['data'] = [];
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                return $hash;
+            }
+
+            $where = "company_name = '$company_name'";
+            if ($search) {
+                $where .= " AND (branch LIKE '%$search%' OR department LIKE '%$search%')";
+            }
+
+            $query = sprintf(
+                "SELECT DISTINCT branch 
+                FROM %scustomer 
+                WHERE %s
+                AND branch IS NOT NULL 
+                AND branch != '' 
+                ORDER BY branch ASC",
+                DB_PREFIX,
+                $where
+            );
+            $result = $this->fetchAll($query);
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                $hash['data'] = $result;
+            } else {
+                $hash['data'] = [];
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+            }
+        } catch (Exception $e) {
+            $hash['data'] = [];
+            $hash['message_code'] = $e->getMessage();
+        }
+        return $hash;
+    }
+
+    // Get contacts by company and branch
+    function list_contacts_by_company_branch() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+        );
+        try {
+            $company_name = isset($_GET['company_name']) ? $_GET['company_name'] : '';
+            $branch_name = isset($_GET['branch_name']) ? $_GET['branch_name'] : '';
+            $search = isset($_GET['search']) ? $_GET['search'] : '';
+            
+            if (!$company_name) {
+                $hash['data'] = [];
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'success';
+                return $hash;
+            }
+
+            $where = "company_name = '$company_name'";
+            if ($branch_name) {
+                $where .= " AND branch = '$branch_name'";
+            }
+            if ($search) {
+                $where .= " AND (name LIKE '%$search%' OR name_kana LIKE '%$search%')";
+            }
+
+            $query = sprintf(
+                "SELECT DISTINCT id, name 
                 FROM %scustomer 
                 WHERE %s
                 AND name IS NOT NULL 

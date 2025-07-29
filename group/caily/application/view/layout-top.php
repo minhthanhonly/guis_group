@@ -38,6 +38,11 @@
                 <div><span data-i18n="プロジェクト">プロジェクト</span><span class="badge bg-label-primary ms-2"><?=$_SESSION['isProjectManager'] ? 'PM' : ''?></span></div>
               </a>
               <ul class="menu-sub">
+                <li class="menu-item <?php if($directory == 'parent_project' && $page == 'index') echo 'active'; ?>">
+                  <a href="<?=$root?>parent_project/" class="menu-link">
+                    <div data-i18n="親プロジェクト">親プロジェクト</div>
+                  </a>
+                </li>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'index') echo 'active'; ?>">
                   <a href="<?=$root?>project/" class="menu-link">
                     <div data-i18n="一覧">一覧</div>

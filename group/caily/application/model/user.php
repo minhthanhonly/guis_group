@@ -258,6 +258,39 @@ class User extends ApplicationModel {
 		return $this->fetchAll($query);
 	}
 
+	function searchMembers() {
+		$hash = array(
+			'status' => 'error',
+			'message_code' => 'error',
+		);
+		try {
+			$search = isset($_GET['search']) ? $_GET['search'] : '';
+			$where = "u.is_suspend = 0 OR u.is_suspend IS NULL OR u.is_suspend = ''";
+			if ($search) {
+				$where .= " AND (u.lastname LIKE '%$search%' OR u.firstname LIKE '%$search%' OR CONCAT(u.lastname, ' ', u.firstname) LIKE '%$search%')";
+			}
+			
+			$query = "SELECT u.id, u.userid, u.lastname, u.firstname, u.realname, u.authority, u.user_group, u.member_type, u.position, u.is_suspend
+					  FROM ".$this->table." u
+					  WHERE $where
+					  ORDER BY u.id";
+			$result = $this->fetchAll($query);
+			if ($result) {
+				$hash['status'] = 'success';
+				$hash['message_code'] = 'success';
+				$hash['data'] = $result;
+			} else {
+				$hash['data'] = [];
+				$hash['status'] = 'success';
+				$hash['message_code'] = 'success';
+			}
+		} catch (Exception $e) {
+			$hash['data'] = [];
+			$hash['message_code'] = $e->getMessage();
+		}
+		return $hash;
+	}
+
 	function getMentionUsers() {
 		try {
 			$department_id = $_GET['department_id'];
