@@ -12,6 +12,7 @@ createApp({
             branches: [],
             contacts: [],
             users: [],
+            departments: [],
             guisReceiverDisplayName: '', // Add this to store the display name
             type1Tagify: null,
             type2Tagify: null,
@@ -40,7 +41,47 @@ createApp({
                 { value: 'paused', label: '一時停止', color: 'warning' },
                 { value: 'completed', label: '完了', color: 'success' },
                 { value: 'cancelled', label: 'キャンセル', color: 'danger' }
-            ]
+            ],
+            // Child project modal data
+            newChildProject: {
+                name: '',
+                department_id: '',
+                project_number: '',
+                description: '',
+                start_date: '',
+                end_date: '',
+                project_order_type: '',
+                parent_project_id: PARENT_PROJECT_ID,
+                is_kadai: true
+            },
+            editingChildProject: {
+                id: null,
+                name: '',
+                department_id: '',
+                project_number: '',
+                description: '',
+                start_date: '',
+                end_date: '',
+                project_order_type: '',
+                parent_project_id: PARENT_PROJECT_ID,
+                is_kadai: true
+            },
+            childProjectValidationErrors: {
+                name: '',
+                department_id: '',
+                project_number: '',
+                start_date: '',
+                end_date: ''
+            },
+            editChildProjectValidationErrors: {
+                name: '',
+                department_id: '',
+                project_number: '',
+                start_date: '',
+                end_date: ''
+            },
+            creatingChildProject: false,
+            updatingChildProject: false
         }
     },
     methods: {
@@ -66,9 +107,12 @@ createApp({
         },
         async loadChildProjects() {
             try {
+                console.log('Loading child projects for parent project ID:', PARENT_PROJECT_ID);
                 const response = await axios.get(`/api/index.php?model=parentproject&method=getChildProjects&parent_project_id=${PARENT_PROJECT_ID}`);
+                console.log('Child projects response:', response.data);
                 if (response.data) {
                     this.childProjects = response.data;
+                    console.log('Child projects loaded:', this.childProjects);
                 }
             } catch (error) {
                 console.error('Error loading child projects:', error);
@@ -817,6 +861,542 @@ createApp({
             } catch (error) {
                 console.error('Error deleting parent project:', error);
                 showMessage('削除に失敗しました。', true);
+            }
+        },
+
+        // Child project modal methods
+        showCreateChildProjectModal() {
+            this.resetChildProjectForm();
+            this.loadDepartments();
+            
+            // Set default start_date to request_date if available
+            if (this.parentProject && this.parentProject.request_date) {
+                this.newChildProject.start_date = this.formatDateTimeForInput(this.parentProject.request_date);
+            }
+            
+            const modal = new bootstrap.Modal(document.getElementById('createChildProjectModal'));
+            modal.show();
+            
+            // Initialize components after modal is shown
+            this.$nextTick(() => {
+                setTimeout(() => {
+                    this.initializeChildProjectDatePickers();
+                    this.initializeChildProjectTagify();
+                }, 100);
+            });
+            
+            // Add event listener for modal hidden
+            const modalElement = document.getElementById('createChildProjectModal');
+            if (modalElement) {
+                modalElement.addEventListener('hidden.bs.modal', () => {
+                    this.destroyChildProjectTagify();
+                });
+            }
+            
+            // Clear validation errors when modal opens
+            this.childProjectValidationErrors = {
+                name: '',
+                department_id: '',
+                project_number: '',
+                start_date: '',
+                end_date: ''
+            };
+        },
+
+        resetChildProjectForm() {
+            this.newChildProject = {
+                name: '',
+                department_id: '',
+                project_number: '',
+                description: '',
+                start_date: '',
+                end_date: '',
+                project_order_type: '',
+                parent_project_id: PARENT_PROJECT_ID,
+                is_kadai: true
+            };
+            this.childProjectValidationErrors = {
+                name: '',
+                department_id: '',
+                project_number: '',
+                start_date: '',
+                end_date: ''
+            };
+            
+            // Destroy existing flatpickr instances if they exist
+            const startPicker = document.getElementById('start_date_picker');
+            const endPicker = document.getElementById('end_date_picker');
+            
+            if (startPicker && startPicker._flatpickr) {
+                startPicker._flatpickr.destroy();
+            }
+            if (endPicker && endPicker._flatpickr) {
+                endPicker._flatpickr.destroy();
+            }
+            
+            // Destroy Tagify instance
+            this.destroyChildProjectTagify();
+        },
+
+        async loadDepartments() {
+            try {
+                const response = await axios.get('/api/index.php?model=department&method=listByUser');
+                if (response.data) {
+                    this.departments = response.data;
+                    // Generate project number after departments are loaded
+                    this.generateChildProjectNumber();
+                }
+            } catch (error) {
+                console.error('Error loading departments:', error);
+                this.departments = [];
+            }
+        },
+        
+        initializeChildProjectDatePickers() {
+            // Initialize start date picker
+            const startDatePicker = document.getElementById('start_date_picker');
+            if (startDatePicker) {
+                flatpickr(startDatePicker, {
+                    enableTime: true,
+                    dateFormat: "Y/m/d H:i",
+                    time_24hr: true,
+                    locale: "ja",
+                    allowInput: true,
+                    clickOpens: true,
+                    onChange: (selectedDates, dateStr) => {
+                        this.newChildProject.start_date = dateStr;
+                    }
+                });
+            }
+            
+            // Initialize end date picker
+            const endDatePicker = document.getElementById('end_date_picker');
+            if (endDatePicker) {
+                flatpickr(endDatePicker, {
+                    enableTime: true,
+                    dateFormat: "Y/m/d H:i",
+                    time_24hr: true,
+                    locale: "ja",
+                    allowInput: true,
+                    clickOpens: true,
+                    onChange: (selectedDates, dateStr) => {
+                        this.newChildProject.end_date = dateStr;
+                    }
+                });
+            }
+        },
+        
+        initializeChildProjectTagify() {
+            // Initialize Tagify for child project order type
+            const orderTypeInput = document.querySelector('#child_project_order_type');
+            if (orderTypeInput) {
+                // Destroy existing instance if it exists
+                if (orderTypeInput.tagify) {
+                    orderTypeInput.tagify.destroy();
+                }
+                
+                // Clear any existing content
+                orderTypeInput.value = '';
+                
+                this.childProjectOrderTypeTagify = new Tagify(orderTypeInput, {
+                    whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                    maxTags: 5,
+                    dropdown: {
+                        maxItems: 20,
+                        classname: "tags-look-project-order-type",
+                        enabled: 0,
+                        closeOnSelect: true
+                    }
+                });
+                
+                // Update the model when tags change
+                const updateOrderType = () => {
+                    this.newChildProject.project_order_type = this.childProjectOrderTypeTagify.value.map(tag => tag.value).join(',');
+                };
+                this.childProjectOrderTypeTagify.on('add', updateOrderType);
+                this.childProjectOrderTypeTagify.on('remove', updateOrderType);
+            }
+        },
+        
+        clearChildProjectTagifyTags(fieldName) {
+            if (fieldName === 'project_order_type' && this.childProjectOrderTypeTagify) {
+                this.childProjectOrderTypeTagify.removeAllTags();
+                this.newChildProject.project_order_type = '';
+            }
+        },
+        
+        destroyChildProjectTagify() {
+            if (this.childProjectOrderTypeTagify) {
+                this.childProjectOrderTypeTagify.destroy();
+                this.childProjectOrderTypeTagify = null;
+            }
+        },
+        
+        showEditChildProjectModal(project) {
+            // Copy project data to editing form
+            this.editingChildProject = {
+                id: project.id,
+                name: project.name,
+                department_id: project.department_id,
+                project_number: project.project_number,
+                description: project.description || '',
+                start_date: this.formatDateTimeForInput(project.start_date),
+                end_date: this.formatDateTimeForInput(project.end_date),
+                project_order_type: project.project_order_type || '',
+                parent_project_id: PARENT_PROJECT_ID,
+                is_kadai: true
+            };
+            
+            // Clear validation errors
+            this.editChildProjectValidationErrors = {
+                name: '',
+                department_id: '',
+                project_number: '',
+                start_date: '',
+                end_date: ''
+            };
+            
+            // Load departments if not already loaded
+            this.loadDepartments();
+            
+            const modal = new bootstrap.Modal(document.getElementById('editChildProjectModal'));
+            modal.show();
+            
+            // Initialize components after modal is shown
+            this.$nextTick(() => {
+                setTimeout(() => {
+                    this.initializeEditChildProjectDatePickers();
+                    this.initializeEditChildProjectTagify();
+                }, 100);
+            });
+            
+            // Add event listener for modal hidden
+            const modalElement = document.getElementById('editChildProjectModal');
+            if (modalElement) {
+                modalElement.addEventListener('hidden.bs.modal', () => {
+                    this.destroyEditChildProjectTagify();
+                });
+            }
+        },
+        
+        initializeEditChildProjectDatePickers() {
+            // Initialize flatpickr for edit modal date pickers
+            const startPicker = document.getElementById('edit_start_date_picker');
+            const endPicker = document.getElementById('edit_end_date_picker');
+            
+            if (startPicker) {
+                if (startPicker._flatpickr) {
+                    startPicker._flatpickr.destroy();
+                }
+                startPicker._flatpickr = flatpickr(startPicker, {
+                    enableTime: true,
+                    dateFormat: 'Y/m/d H:i',
+                    locale: 'ja',
+                    time_24hr: true
+                });
+            }
+            
+            if (endPicker) {
+                if (endPicker._flatpickr) {
+                    endPicker._flatpickr.destroy();
+                }
+                endPicker._flatpickr = flatpickr(endPicker, {
+                    enableTime: true,
+                    dateFormat: 'Y/m/d H:i',
+                    locale: 'ja',
+                    time_24hr: true
+                });
+            }
+        },
+        
+        initializeEditChildProjectTagify() {
+            const orderTypeInput = document.querySelector('#edit_child_project_order_type');
+            if (orderTypeInput) {
+                // Destroy existing instance if it exists
+                if (orderTypeInput.tagify) {
+                    orderTypeInput.tagify.destroy();
+                }
+                
+                this.editChildProjectOrderTypeTagify = new Tagify(orderTypeInput, {
+                    whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                    maxTags: 5,
+                    dropdown: {
+                        maxItems: 20,
+                        classname: "tags-look-project-order-type",
+                        enabled: 0,
+                        closeOnSelect: true
+                    }
+                });
+                
+                // Update the model when tags change
+                const updateOrderType = () => {
+                    const tags = this.editChildProjectOrderTypeTagify.value.map(tag => tag.value).join(',');
+                    this.editingChildProject.project_order_type = tags;
+                };
+                
+                this.editChildProjectOrderTypeTagify.on('add', updateOrderType);
+                this.editChildProjectOrderTypeTagify.on('remove', updateOrderType);
+            }
+        },
+        
+        clearEditChildProjectTagifyTags(fieldName) {
+            if (fieldName === 'project_order_type' && this.editChildProjectOrderTypeTagify) {
+                this.editChildProjectOrderTypeTagify.removeAllTags();
+                this.editingChildProject.project_order_type = '';
+            }
+        },
+        
+        destroyEditChildProjectTagify() {
+            if (this.editChildProjectOrderTypeTagify) {
+                this.editChildProjectOrderTypeTagify.destroy();
+                this.editChildProjectOrderTypeTagify = null;
+            }
+        },
+        
+        validateEditChildProjectForm() {
+            this.editChildProjectValidationErrors = {
+                name: '',
+                department_id: '',
+                project_number: '',
+                start_date: '',
+                end_date: ''
+            };
+            
+            let isValid = true;
+            
+            if (!this.editingChildProject.name.trim()) {
+                this.editChildProjectValidationErrors.name = '課題名は必須です。';
+                isValid = false;
+            }
+            
+            if (!this.editingChildProject.department_id) {
+                this.editChildProjectValidationErrors.department_id = '部署は必須です。';
+                isValid = false;
+            }
+            
+            if (!this.editingChildProject.project_number.trim()) {
+                this.editChildProjectValidationErrors.project_number = 'プロジェクト番号は必須です。';
+                isValid = false;
+            }
+            
+            if (!this.editingChildProject.start_date) {
+                this.editChildProjectValidationErrors.start_date = '開始日は必須です。';
+                isValid = false;
+            }
+            
+            if (!this.editingChildProject.end_date) {
+                this.editChildProjectValidationErrors.end_date = '期限日は必須です。';
+                isValid = false;
+            }
+            
+            return isValid;
+        },
+        
+        async updateChildProject() {
+            if (!this.validateEditChildProjectForm()) {
+                return;
+            }
+
+            this.updatingChildProject = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('id', this.editingChildProject.id);
+                formData.append('name', this.editingChildProject.name);
+                formData.append('department_id', this.editingChildProject.department_id);
+                formData.append('project_number', this.editingChildProject.project_number);
+                formData.append('description', this.editingChildProject.description || '');
+                formData.append('start_date', this.editingChildProject.start_date);
+                formData.append('end_date', this.editingChildProject.end_date);
+                formData.append('project_order_type', this.editingChildProject.project_order_type || '');
+                formData.append('parent_project_id', this.editingChildProject.parent_project_id);
+                formData.append('is_kadai', '1');
+
+                const response = await axios.post('/api/index.php?model=project&method=update', formData);
+
+                if (response.data.success) {
+                    showMessage('課題が正常に更新されました。');
+                    
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editChildProjectModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                    
+                    // Reload child projects
+                    await this.loadChildProjects();
+                    
+                    // Reset form
+                    this.editingChildProject = {
+                        id: null,
+                        name: '',
+                        department_id: '',
+                        project_number: '',
+                        description: '',
+                        start_date: '',
+                        end_date: '',
+                        project_order_type: '',
+                        parent_project_id: PARENT_PROJECT_ID,
+                        is_kadai: true
+                    };
+                } else if (response.data && response.data.message === 'Project number already exists') {
+                    this.editChildProjectValidationErrors.project_number = 'このプロジェクト番号は既に存在します。';
+                } else {
+                    showMessage(response.data.message || '課題の更新に失敗しました。', true);
+                }
+            } catch (error) {
+                console.error('Error updating child project:', error);
+                showMessage('課題の更新に失敗しました。', true);
+            } finally {
+                this.updatingChildProject = false;
+            }
+        },
+        
+        formatDateTimeForInput(dateTimeString) {
+            if (!dateTimeString) return '';
+            const date = new Date(dateTimeString);
+            if (isNaN(date.getTime())) return '';
+            
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            
+            return `${year}/${month}/${day} ${hours}:${minutes}`;
+        },
+
+
+
+        async generateChildProjectNumber() {
+            try {
+                // Get parent project number and existing child projects count
+                const parentProjectNumber = this.parentProject ? this.parentProject.project_number : '';
+                const childCount = this.childProjects.length;
+                let nextNumber = childCount + 1;
+                
+                // Check if the generated number already exists and find the next available number
+                let childProjectNumber = '';
+                if (parentProjectNumber) {
+                    let attempts = 0;
+                    const maxAttempts = 10; // Prevent infinite loop
+                    
+                    while (attempts < maxAttempts) {
+                        childProjectNumber = `${parentProjectNumber}-${nextNumber.toString().padStart(2, '0')}`;
+                        
+                        // Check if this number already exists in child projects
+                        const exists = this.childProjects.some(project => 
+                            project.project_number === childProjectNumber
+                        );
+                        
+                        if (!exists) {
+                            break; // Found available number
+                        }
+                        
+                        nextNumber++;
+                        attempts++;
+                    }
+                }
+                
+                this.newChildProject.project_number = childProjectNumber;
+            } catch (error) {
+                console.error('Error generating child project number:', error);
+                showMessage('プロジェクト番号の生成に失敗しました', true);
+            }
+        },
+
+        validateChildProjectForm() {
+            this.childProjectValidationErrors = {
+                name: '',
+                department_id: '',
+                project_number: '',
+                start_date: '',
+                end_date: ''
+            };
+
+            let isValid = true;
+
+            if (!this.newChildProject.name || this.newChildProject.name.trim() === '') {
+                this.childProjectValidationErrors.name = '案件名は必須です';
+                isValid = false;
+            }
+
+            // Check department_id - handle both string and number types
+            const departmentId = this.newChildProject.department_id;
+            if (!departmentId || departmentId === '' || departmentId === null || departmentId === undefined) {
+                this.childProjectValidationErrors.department_id = '部署は必須です';
+                isValid = false;
+            }
+
+            if (!this.newChildProject.project_number || this.newChildProject.project_number.trim() === '') {
+                this.childProjectValidationErrors.project_number = 'プロジェクト番号は必須です';
+                isValid = false;
+            }
+
+            if (!this.newChildProject.start_date || this.newChildProject.start_date.trim() === '') {
+                this.childProjectValidationErrors.start_date = '開始日は必須です';
+                isValid = false;
+            }
+
+            if (!this.newChildProject.end_date || this.newChildProject.end_date.trim() === '') {
+                this.childProjectValidationErrors.end_date = '期限日は必須です';
+                isValid = false;
+            }
+
+            return isValid;
+        },
+
+        async createChildProject() {
+            if (!this.validateChildProjectForm()) {
+                return;
+            }
+
+            this.creatingChildProject = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('name', this.newChildProject.name);
+                formData.append('department_id', this.newChildProject.department_id);
+                formData.append('project_number', this.newChildProject.project_number);
+                formData.append('description', this.newChildProject.description || '');
+                formData.append('start_date', this.newChildProject.start_date || '');
+                formData.append('end_date', this.newChildProject.end_date || '');
+                formData.append('project_order_type', this.newChildProject.project_order_type || '');
+                formData.append('parent_project_id', this.newChildProject.parent_project_id);
+                formData.append('is_kadai', '1');
+                formData.append('status', 'draft');
+
+                const response = await axios.post('/api/index.php?model=project&method=create', formData);
+
+                if (response.data && (response.data.success || response.data.status === 'success')) {
+                    Swal.fire({
+                        title: '成功',
+                        text: '課題を作成しました。',
+                        icon: 'success',
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        // Close modal
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('createChildProjectModal'));
+                        if (modal) {
+                            modal.hide();
+                        }
+                        
+                        // Reload child projects
+                        this.loadChildProjects();
+                        
+                        // Reset form
+                        this.resetChildProjectForm();
+                    });
+                } else if (response.data && response.data.message === 'Project number already exists') {
+                    this.childProjectValidationErrors.project_number = 'このプロジェクト番号は既に存在します。';
+                } else {
+                    showMessage(response.data?.error || response.data?.message || '課題の作成に失敗しました。', true);
+                }
+            } catch (error) {
+                console.error('Error creating child project:', error);
+                showMessage('課題の作成に失敗しました。', true);
+            } finally {
+                this.creatingChildProject = false;
             }
         }
     },

@@ -39,6 +39,7 @@ class Project extends ApplicationModel {
             'estimate_status' => array(), //未発行, 発行済み, 承認済み, 却下, 調整
             'invoice_status' => array(), //未発行, 発行済み, 承認済み, 却下, 調整
             'tags' => array(), //project tags for search and organization
+            'is_kadai' => array(), //boolean field to identify child projects
         );
         $this->connect();
     }
@@ -372,6 +373,7 @@ class Project extends ApplicationModel {
             'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
             'amount' => isset($_POST['amount']) ? floatval($_POST['amount']) : 0,
             'teams' => isset($_POST['teams']) ? $_POST['teams'] : '',
+            'is_kadai' => isset($_POST['is_kadai']) ? intval($_POST['is_kadai']) : 0,
             'created_by' => $_SESSION['userid'],
             'created_at' => date('Y-m-d H:i:s'),
         );
@@ -397,9 +399,20 @@ class Project extends ApplicationModel {
         // Validate required fields
         if (empty($data['name'])) {
             return [
-                'status' => 'error',
+                'success' => false,
                 'message' => 'Project name is required'
             ];
+        }
+        // Check duplicate project_number
+        if (!empty($data['project_number'])) {
+            $query = sprintf("SELECT id FROM %s WHERE project_number = '%s'", $this->table, $this->escape($data['project_number']));
+            $exists = $this->fetchOne($query);
+            if ($exists) {
+                return [
+                    'success' => false,
+                    'message' => 'Project number already exists'
+                ];
+            }
         }
 
         // Insert project data
@@ -501,6 +514,17 @@ class Project extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => $_SESSION['userid']
         );
+        
+        // Add department_id and parent_project_id support for child projects
+        if (isset($_POST['department_id'])) {
+            $data['department_id'] = intval($_POST['department_id']);
+        }
+        if (isset($_POST['parent_project_id'])) {
+            $data['parent_project_id'] = intval($_POST['parent_project_id']);
+        }
+        if (isset($_POST['is_kadai'])) {
+            $data['is_kadai'] = intval($_POST['is_kadai']);
+        }
         
         // Save custom field set id and custom fields JSON if provided
         if (isset($_POST['department_custom_fields_set_id']) && $_POST['department_custom_fields_set_id'] != '') {
@@ -619,9 +643,9 @@ class Project extends ApplicationModel {
         }
         if ($result) {
             $this->logProjectAction($id, 'updated', '案件情報を変更');
-            return ['status' => 'success'];
+            return ['success' => true, 'message' => 'Project updated successfully'];
         } else {
-            return ['status' => 'error', 'error' => 'Update failed'];
+            return ['success' => false, 'message' => 'Update failed'];
         }
     }
 

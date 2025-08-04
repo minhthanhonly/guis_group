@@ -1,6 +1,6 @@
 <?php
 require_once('../application/loader.php');
-$view->heading('親プロジェクト作成');
+$view->heading('プロジェクト作成');
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
 
@@ -17,7 +17,7 @@ $view->heading('親プロジェクト作成');
             <div class="card edit-mode">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h5 class="card-title"><span data-i18n="親プロジェクト作成">親プロジェクト作成</span></h5>
+                        <h5 class="card-title"><span data-i18n="プロジェクト作成">プロジェクト作成</span></h5>
                         <div>
                             <button class="btn btn-success btn-sm me-2" @click="saveParentProject" title="保存">
                                 <i class="fa fa-save"></i>
@@ -68,8 +68,8 @@ $view->heading('親プロジェクト作成');
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
                                     <span data-i18n="依頼日">依頼日</span>
-                                    <button type="button" class="btn btn-sm btn-outline-primary ms-2" @click="setCurrentDateTime">
-                                        <i class="fa fa-clock"></i> 現在時刻
+                                    <button type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2" @click="setCurrentDateTime">
+                                        <i class="fa fa-clock me-1"></i> 現在時刻
                                     </button>
                                 </label>
                                 <input type="text" class="form-control" v-model="parentProject.request_date" id="request_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
@@ -133,8 +133,8 @@ $view->heading('親プロジェクト作成');
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
                                     <span data-i18n="希望納期">希望納期</span>
-                                                                            <button type="button" class="btn btn-sm btn-outline-primary ms-2" @click="setTodayDate">
-                                        <i class="fa fa-calendar"></i> 今日
+                                        <button type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2" @click="setTodayDate">
+                                        <i class="fa fa-calendar me-1"></i> 今日
                                     </button>
                                 </label>
                                 <input type="text" class="form-control" v-model="parentProject.desired_delivery_date" id="desired_delivery_date_picker" placeholder="YYYY/MM/DD" autocomplete="off">

@@ -199,6 +199,12 @@ const vueApp = createApp({
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
                 this.project = response.data;
+                
+                // Load parent project information if this is a child project
+                if (this.project.parent_project_id) {
+                    await this.loadParentProjectInfo();
+                }
+                
                // await this.getUserPermissions(this.project.department_id);
                 this.calculateStats();
                 
@@ -219,6 +225,53 @@ const vueApp = createApp({
             } catch (error) {
                 console.error('Error loading project:', error);
                 alert('プロジェクトの読み込みに失敗しました。');
+            }
+        },
+        
+        async loadParentProjectInfo() {
+            try {
+                const response = await axios.get(`/api/index.php?model=parentproject&method=getById&id=${this.project.parent_project_id}`);
+                const parentProject = response.data;
+                
+                // Copy parent project information to child project
+                this.project.company_name = parentProject.company_name;
+                this.project.branch_name = parentProject.branch_name;
+                this.project.contact_name = parentProject.contact_name; // 担当様 from parent project
+                this.project.building_number = parentProject.construction_number;
+                this.project.building_size = parentProject.scale;
+                this.project.building_type = parentProject.type1;
+                this.project.building_branch = parentProject.construction_branch;
+                this.project.type1 = parentProject.type1;
+                this.project.type2 = parentProject.type2;
+                
+                // Additional fields from parent project
+                this.project.guis_receiver = parentProject.guis_receiver; // GUIS　受付者
+                this.project.structural_office = parentProject.structural_office; // 構造事務所
+                this.project.materials = parentProject.materials; // 資料
+                this.project.notes = parentProject.notes; // 備考
+                
+                // Load GUIS receiver display name if exists
+                if (this.project.guis_receiver) {
+                    await this.loadGuisReceiverDisplayName();
+                }
+                
+            } catch (error) {
+                console.error('Error loading parent project info:', error);
+            }
+        },
+        
+        async loadGuisReceiverDisplayName() {
+            try {
+                const response = await axios.get('/api/index.php?model=user&method=searchMembers');
+                if (response.data && response.data.data) {
+                    const user = response.data.data.find(u => u.userid === this.project.guis_receiver);
+                    if (user) {
+                        // Set display name for view mode
+                        this.project.guis_receiver_display_name = user.realname;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading GUIS receiver display name:', error);
             }
         },
         setConnectedUsers() {
@@ -768,6 +821,15 @@ const vueApp = createApp({
         initTagify() {
             this.$nextTick(() => {
                 setTimeout(async () => {
+                    // Kiểm tra Tagify library đã được load chưa
+                    if (!window.Tagify) {
+                        console.log('Tagify library not loaded yet, retrying...');
+                        setTimeout(() => {
+                            this.initTagify();
+                        }, 100);
+                        return;
+                    }
+                    
                     // --- Tagify for team selection ---
                     const teamInput = document.getElementById('team_tags');
                     if (teamInput && window.Tagify && !teamInput._tagify) {
@@ -824,6 +886,11 @@ const vueApp = createApp({
                             } catch (err) {}
                         });
                         this.tagify.on('change', this.onTeamTagsChange.bind(this));
+                    } else if (!teamInput) {
+                        // Nếu element chưa tồn tại, thử lại sau 100ms
+                        setTimeout(() => {
+                            this.initTagify();
+                        }, 100);
                     }
                     
                     // --- Tagify for project_order_type ---
@@ -859,43 +926,14 @@ const vueApp = createApp({
                         };
                         this.projectOrderTypeTagify.on('add', updateOrderType);
                         this.projectOrderTypeTagify.on('remove', updateOrderType);
+                    } else if (!orderTypeInput) {
+                        // Nếu element chưa tồn tại, thử lại sau 100ms
+                        setTimeout(() => {
+                            this.initTagify();
+                        }, 100);
                     }
                     
-                    // --- Tagify for building_branch ---
-                    const buildingBranchInput = document.querySelector('#building_branch');
-                    if (buildingBranchInput && window.Tagify && !buildingBranchInput._tagify) {
-                        if (this.buildingBranchTagify) {
-                            try {
-                                this.buildingBranchTagify.destroy();
-                            } catch (e) {
-                                console.log('Error destroying existing buildingBranchTagify:', e);
-                            }
-                        }
-                        this.buildingBranchTagify = new Tagify(buildingBranchInput, {
-                            whitelist: this.japanPrefectures,
-                            maxTags: 10,
-                            dropdown: {
-                                maxItems: 20,
-                                classname: "tags-look-building-branch",
-                                enabled: 0,
-                                closeOnSelect: true
-                            },
-                        });
-                        // Set default value
-                        let buildingBranchTags = [];
-                        if (typeof this.project.building_branch === 'string' && this.project.building_branch) {
-                            buildingBranchTags = this.project.building_branch.split(',').map(s => s.trim()).filter(Boolean);
-                        }
-                        // if (buildingBranchTags.length > 0) {
-                        //     this.buildingBranchTagify.addTags(buildingBranchTags);
-                        // }
-                        const updateBuildingBranch = () => {
-                            this.project.building_branch = this.buildingBranchTagify.value.map(tag => tag.value).join(',');
-                        };
-                        this.buildingBranchTagify.on('add', updateBuildingBranch);
-                        this.buildingBranchTagify.on('remove', updateBuildingBranch);
-                    } else {
-                    }
+
                 }, 100);
             });
         },
@@ -1102,8 +1140,11 @@ const vueApp = createApp({
             // Sync custom fields
             this.$nextTick(() => {
                 this.initDatePickers();
-                this.initTagify();
-                this.initManagerMembersTagify();
+                // Thêm delay để đảm bảo Vue đã render xong các element
+                setTimeout(() => {
+                    this.initTagify();
+                    this.initManagerMembersTagify();
+                }, 200);
             });
         },
         toAPIDate(str) {
@@ -1144,10 +1185,10 @@ const vueApp = createApp({
                 const formData = new FormData();
                 formData.append('id', this.project.id);
                 formData.append('name', this.project.name);
-                formData.append('building_branch', this.project.building_branch);
-                formData.append('building_size', this.project.building_size);
-                formData.append('building_type', this.project.building_type);
-                formData.append('building_number', this.project.building_number);
+                // formData.append('building_branch', this.project.building_branch);
+                // formData.append('building_size', this.project.building_size);
+                // formData.append('building_type', this.project.building_type);
+                // formData.append('building_number', this.project.building_number);
                 formData.append('project_number', this.project.project_number);
                 formData.append('progress', this.project.progress);
                 formData.append('priority', this.project.priority || '');
@@ -1159,9 +1200,9 @@ const vueApp = createApp({
                 formData.append('end_date', this.toAPIDate(this.project.end_date));
                 formData.append('project_order_type', this.project.project_order_type);
                 formData.append('customer_id', this.project.customer_id);
-                formData.append('amount', this.project.amount);
-                formData.append('estimate_status', this.project.estimate_status);
-                formData.append('invoice_status', this.project.invoice_status);
+                // formData.append('amount', this.project.amount);
+                // formData.append('estimate_status', this.project.estimate_status);
+                // formData.append('invoice_status', this.project.invoice_status);
                 formData.append('tags', this.project.tags);
                 formData.append('department_custom_fields_set_id', this.project.department_custom_fields_set_id);
                 formData.append('custom_fields', this.project.custom_fields);
@@ -1892,25 +1933,25 @@ const vueApp = createApp({
         },
         validateProjectForm() {
             this.validationErrors = {
-                category_id: '',
-                company_name: '',
-                customer_id: '',
+                // category_id: '',
+                // company_name: '',
+                // customer_id: '',
                 project_number: '',
                 name: ''
             };
             let valid = true;
-            if (!this.project.category_id) {
-                this.validationErrors.category_id = '顧客カテゴリーは必須です';
-                valid = false;
-            }
-            if (!this.project.company_name) {
-                this.validationErrors.company_name = '会社名は必須です';
-                valid = false;
-            }
-            if (!this.project.customer_id) {
-                this.validationErrors.customer_id = '担当者名は必須です';
-                valid = false;
-            }
+            // if (!this.project.category_id) {
+            //     this.validationErrors.category_id = '顧客カテゴリーは必須です';
+            //     valid = false;
+            // }
+            // if (!this.project.company_name) {
+            //     this.validationErrors.company_name = '会社名は必須です';
+            //     valid = false;
+            // }
+            // if (!this.project.customer_id) {
+            //     this.validationErrors.customer_id = '担当者名は必須です';
+            //     valid = false;
+            // }
             if (!this.project.project_number) {
                 this.validationErrors.project_number = 'プロジェクト番号は必須です';
                 valid = false;
@@ -2137,6 +2178,11 @@ const vueApp = createApp({
                             };
                             this.projectOrderTypeTagify.on('add', updateOrderType);
                             this.projectOrderTypeTagify.on('remove', updateOrderType);
+                        } else if (!input) {
+                            // Nếu element chưa tồn tại, thử lại sau 100ms
+                            setTimeout(() => {
+                                this.initTagify();
+                            }, 100);
                         }
                         
                         // --- Tagify for building_branch ---

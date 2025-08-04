@@ -42,7 +42,15 @@ $view->heading('親プロジェクト一覧');
 
                     <!-- Parent Projects Table -->
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <!-- Loading indicator -->
+                        <div v-if="loading" class="text-center py-4">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">読み込み中...</p>
+                        </div>
+                        
+                        <table v-else class="table table-hover">
                             <thead>
                                 <tr>
                                     <th>会社名</th>
@@ -51,6 +59,8 @@ $view->heading('親プロジェクト一覧');
                                     <th>依頼日</th>
                                     <th>希望納期</th>
                                     <th>ステータス</th>
+                                    <th>子プロジェクト数</th>
+                                    <th>作成者</th>
                                     <th>作成日</th>
                                     <th>操作</th>
                                 </tr>
@@ -71,13 +81,20 @@ $view->heading('親プロジェクト一覧');
                                             {{ getStatusLabel(project.status) }}
                                         </span>
                                     </td>
+                                    <td>
+                                        <span v-if="project.child_project_count > 0" class="badge bg-info">
+                                            {{ project.child_project_count }}
+                                        </span>
+                                        <span v-else class="text-muted">0</span>
+                                    </td>
+                                    <td>{{ project.created_by_name }}</td>
                                     <td>{{ formatDate(project.created_at) }}</td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <a :href="'detail.php?id=' + project.id" class="btn btn-outline-primary" title="詳細">
                                                 <i class="fa fa-eye"></i>
                                             </a>
-                                            <a :href="'edit.php?id=' + project.id" class="btn btn-outline-secondary" title="編集">
+                                            <a :href="'detail.php?id=' + project.id + '&edit=1'" class="btn btn-outline-secondary" title="編集">
                                                 <i class="fa fa-edit"></i>
                                             </a>
                                             <button class="btn btn-outline-danger" @click="deleteParentProject(project.id)" title="削除">
@@ -87,7 +104,7 @@ $view->heading('親プロジェクト一覧');
                                     </td>
                                 </tr>
                                 <tr v-if="filteredParentProjects.length === 0">
-                                    <td colspan="8" class="text-center py-4">
+                                    <td colspan="10" class="text-center py-4">
                                         <div class="text-muted">
                                             <i class="fa fa-inbox fa-2x mb-2"></i>
                                             <p>親プロジェクトが見つかりません</p>
@@ -143,4 +160,26 @@ $view->footing();
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+// Global function for showing messages
+function showMessage(message, isError = false) {
+    if (isError) {
+        Swal.fire({
+            title: 'エラー',
+            text: message,
+            icon: 'error',
+            confirmButtonText: 'OK'
+        });
+    } else {
+        Swal.fire({
+            title: '成功',
+            text: message,
+            icon: 'success',
+            confirmButtonText: 'OK'
+        });
+    }
+}
+</script>
 <script src="assets/js/parent-project-index.js?v=<?=CACHE_VERSION?>"></script> 

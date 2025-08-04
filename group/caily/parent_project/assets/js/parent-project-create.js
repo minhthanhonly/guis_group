@@ -464,7 +464,7 @@ createApp({
                 const response = await axios.get('/api/index.php?model=parentproject&method=generateProjectNumber');
                 if (response.data && response.data.status === 'success') {
                     this.parentProject.project_number = response.data.project_number;
-                    showMessage('プロジェクト番号を生成しました', false);
+                   // showMessage('プロジェクト番号を生成しました', false);
                 } else {
                     showMessage('プロジェクト番号の生成に失敗しました', true);
                 }

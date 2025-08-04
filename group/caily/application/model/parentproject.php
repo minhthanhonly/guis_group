@@ -78,7 +78,12 @@ class ParentProject extends ApplicationModel {
         
         // Get data for current page
         $query = sprintf(
-            "SELECT * FROM %s %s %s LIMIT %d, %d",
+            "SELECT p.*, 
+                    (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE parent_project_id = p.id) as child_project_count,
+                    u.realname as created_by_name
+             FROM %s p 
+             LEFT JOIN " . DB_PREFIX . "users u ON p.created_by = u.userid
+             %s %s LIMIT %d, %d",
             $this->table,
             $where,
             $orderBy,
@@ -250,7 +255,14 @@ class ParentProject extends ApplicationModel {
         return $this->fetchOne($query);
     }
 
-    function getChildProjects($parent_project_id) {
+    function getChildProjects($params = null) {
+        // Handle both direct parent_project_id parameter and params array from API
+        if (is_array($params)) {
+            $parent_project_id = isset($params['parent_project_id']) ? $params['parent_project_id'] : 0;
+        } else {
+            $parent_project_id = $params;
+        }
+        
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
             c.name as contact_name, c.company_name, c.department as branch_name

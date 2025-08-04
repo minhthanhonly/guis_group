@@ -5,7 +5,7 @@ if (!$parent_project_id) {
     header('Location: index.php');
     exit;
 }
-$view->heading('親プロジェクト詳細');
+$view->heading('プロジェクト詳細');
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
 
@@ -18,11 +18,11 @@ $view->heading('親プロジェクト詳細');
         </div>
 
         <!-- Left Column - Parent Project Details -->
-        <div class="col-xl-8">
+        <div class="col-xl-12">
             <div class="card" :class="{ 'edit-mode': isEditMode }">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h5 class="card-title"><span data-i18n="親プロジェクト詳細">親プロジェクト詳細</span></h5>
+                        <h5 class="card-title"><span data-i18n="プロジェクト詳細">プロジェクト詳細</span></h5>
                         <div>
                             <button v-if="!isEditMode" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode" title="編集">
                                 <i class="fa fa-pencil-alt"></i>
@@ -39,7 +39,7 @@ $view->heading('親プロジェクト詳細');
                         </div>
                     </div>
                     <div v-if="parentProject" class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="会社名">会社名</span> <span class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
@@ -58,7 +58,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="支店名">支店名</span></label>
                                 <template v-if="isEditMode">
@@ -74,7 +74,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="担当様">担当様</span></label>
                                 <template v-if="isEditMode">
@@ -90,7 +90,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="GUIS　受付者">GUIS　受付者</span></label>
                                 <template v-if="isEditMode">
@@ -106,7 +106,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="依頼日">依頼日</span></label>
                                 <template v-if="isEditMode">
@@ -123,7 +123,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
                                 <template v-if="isEditMode">
@@ -134,7 +134,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
                                     <span data-i18n="プロジェクト番号">プロジェクト番号</span>
@@ -150,7 +150,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="工事支店">工事支店</span></label>
                                 <template v-if="isEditMode">
@@ -169,7 +169,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="案件名">案件名</span> <span class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
@@ -183,7 +183,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
                                 <template v-if="isEditMode">
@@ -194,7 +194,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="種類1">種類1</span></label>
                                 <template v-if="isEditMode">
@@ -213,7 +213,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="種類2">種類2</span></label>
                                 <template v-if="isEditMode">
@@ -232,7 +232,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="希望納期">希望納期</span></label>
                                 <template v-if="isEditMode">
@@ -249,7 +249,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
                                 <template v-if="isEditMode">
@@ -260,7 +260,7 @@ $view->heading('親プロジェクト詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <div>
@@ -380,69 +380,80 @@ $view->heading('親プロジェクト詳細');
             <div class="card mt-4">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0"><span data-i18n="子プロジェクト">子プロジェクト</span></h5>
+                        <h5 class="card-title mb-0"><span data-i18n="課題">課題</span></h5>
                         <div>
-                            <a :href="'../project/create.php?parent_project_id=' + (parentProject ? parentProject.id : '')" class="btn btn-success btn-sm">
-                                <i class="fa fa-plus me-1"></i> <span data-i18n="子プロジェクト作成">子プロジェクト作成</span>
-                            </a>
+                            <button @click="showCreateChildProjectModal" class="btn btn-success btn-sm">
+                                <i class="fa fa-plus me-1"></i> <span data-i18n="課題作成">課題作成</span>
+                            </button>
                         </div>
                     </div>
                 </div>
                 <div class="card-body">
                     <div v-if="childProjects.length > 0" class="table-responsive">
                         <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>プロジェクト番号</th>
-                                    <th>プロジェクト名</th>
-                                    <th>部署</th>
-                                    <th>ステータス</th>
-                                    <th>進捗</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="project in childProjects" :key="project.id">
-                                    <td>{{ project.project_number || '-' }}</td>
-                                    <td>
-                                        <a :href="'../project/detail.php?id=' + project.id" class="text-decoration-none">
-                                            {{ project.name }}
-                                        </a>
-                                    </td>
-                                    <td>{{ project.department_name || '-' }}</td>
-                                    <td>
-                                        <span class="badge" :class="getProjectStatusBadgeClass(project.status)">
-                                            {{ getProjectStatusLabel(project.status) }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div class="progress" style="height: 20px;">
-                                            <div class="progress-bar" :style="{ width: project.progress + '%' }">
-                                                {{ project.progress }}%
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm">
-                                            <a :href="'../project/detail.php?id=' + project.id" class="btn btn-outline-primary" title="詳細">
-                                                <i class="fa fa-eye"></i>
-                                            </a>
-                                            <a :href="'../project/edit.php?id=' + project.id" class="btn btn-outline-secondary" title="編集">
-                                                <i class="fa fa-edit"></i>
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
+                                                         <thead>
+                                 <tr>
+                                     <th>課題番号</th>
+                                     <th>受注形態</th>
+                                     <th>課題名</th>
+                                     <th>部署</th>
+                                     <th>開始日</th>
+                                     <th>期限日</th>
+                                     <th>ステータス</th>
+                                     <th>進捗</th>
+                                     <th>操作</th>
+                                 </tr>
+                             </thead>
+                                                         <tbody>
+                                 <tr v-for="project in childProjects" :key="project.id">
+                                     <td>{{ project.project_number || '-' }}</td>
+                                     <td>
+                                         <span v-if="project.project_order_type && project.project_order_type.split(',').length > 0">
+                                             <span v-for="item in project.project_order_type.split(',')" :key="item.trim()" class="badge bg-info me-1">{{ item.trim() }}</span>
+                                         </span>
+                                         <span v-else>-</span>
+                                     </td>
+                                     <td>
+                                         <a :href="'../project/detail.php?id=' + project.id" class="text-decoration-none">
+                                             {{ project.name }}
+                                         </a>
+                                     </td>
+                                     <td>{{ project.department_name || '-' }}</td>
+                                     <td>{{ formatDateTime(project.start_date) || '-' }}</td>
+                                     <td>{{ formatDateTime(project.end_date) || '-' }}</td>
+                                     <td>
+                                         <span class="badge" :class="getProjectStatusBadgeClass(project.status)">
+                                             {{ getProjectStatusLabel(project.status) }}
+                                         </span>
+                                     </td>
+                                     <td>
+                                         <div class="progress" style="height: 20px;">
+                                             <div class="progress-bar" :style="{ width: project.progress + '%' }">
+                                                 {{ project.progress }}%
+                                             </div>
+                                         </div>
+                                     </td>
+                                     <td>
+                                         <div class="btn-group btn-group-sm">
+                                             <a :href="'../project/detail.php?id=' + project.id" class="btn btn-outline-primary" title="詳細">
+                                                 <i class="fa fa-eye"></i>
+                                             </a>
+                                             <button class="btn btn-outline-secondary" title="編集" @click="showEditChildProjectModal(project)">
+                                                 <i class="fa fa-edit"></i>
+                                             </button>
+                                         </div>
+                                     </td>
+                                 </tr>
+                             </tbody>
                         </table>
                     </div>
                     <div v-else class="text-center py-4">
                         <div class="text-muted">
                             <i class="fa fa-folder-open fa-2x mb-2"></i>
-                            <p>子プロジェクトがありません</p>
-                            <a :href="'../project/create.php?parent_project_id=' + (parentProject ? parentProject.id : '')" class="btn btn-primary btn-sm">
-                                <i class="fa fa-plus me-1"></i> 子プロジェクトを作成
-                            </a>
+                            <p>課題がありません</p>
+                            <button @click="showCreateChildProjectModal" class="btn btn-primary btn-sm">
+                                <i class="fa fa-plus me-1"></i> 課題を作成
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -450,47 +461,268 @@ $view->heading('親プロジェクト詳細');
         </div>
 
         <!-- Right Column - Info -->
-        <div class="col-xl-4">
-            <!-- Info Card -->
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0"><span data-i18n="プロジェクト情報">プロジェクト情報</span></h5>
+        
+    </div>
+
+    <!-- Create Child Project Modal -->
+    <div class="modal fade" id="createChildProjectModal" tabindex="-1" aria-labelledby="createChildProjectModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createChildProjectModalLabel">課題を作成</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="card-body">
-                    <div class="text-center py-3">
-                        <i class="fa fa-folder fs-1 text-primary"></i>
-                        <p class="text-muted mt-2" data-i18n="親プロジェクトの詳細情報">親プロジェクトの詳細情報</p>
-                    </div>
-                    <div v-if="parentProject" class="mt-3">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>子プロジェクト数:</span>
-                            <span class="fw-bold">{{ childProjects.length }}</span>
+                <div class="modal-body">
+                    <form @submit.prevent="createChildProject">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label">課題名 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" v-model="newChildProject.name" required>
+                                    <div v-if="childProjectValidationErrors.name" class="invalid-feedback d-block">
+                                        {{ childProjectValidationErrors.name }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label">部署 <span class="text-danger">*</span></label>
+                                    <select class="form-select" v-model="newChildProject.department_id" required>
+                                        <option value="">選択してください</option>
+                                        <option v-for="dept in departments" :key="dept.id" :value="dept.id">
+                                            {{ dept.name }}
+                                        </option>
+                                    </select>
+                                    <div v-if="childProjectValidationErrors.department_id" class="invalid-feedback d-block">
+                                        {{ childProjectValidationErrors.department_id }}
+                                    </div>
+                                </div>
+                            </div>
+                                                         <div class="col-12">
+                                 <div class="mb-3 form-control-validation">
+                                     <label class="form-label">プロジェクト番号 <span class="text-danger">*</span></label>
+                                     <div class="input-group">
+                                         <input type="text" class="form-control" v-model="newChildProject.project_number" readonly required>
+                                         <button type="button" class="btn btn-outline-primary" @click="generateChildProjectNumber">
+                                             <i class="fa fa-refresh"></i> 再生成
+                                         </button>
+                                     </div>
+                                     <div v-if="childProjectValidationErrors.project_number" class="invalid-feedback d-block">
+                                         {{ childProjectValidationErrors.project_number }}
+                                     </div>
+                                     <small class="form-text text-muted">
+                                         親プロジェクト番号 + "-" + 連番 (例: PRJ001-01, PRJ001-02)
+                                     </small>
+                                 </div>
+                             </div>
+                                                         <div class="col-md-4 col-xl-3">
+                                 <div class="mb-3 form-control-validation">
+                                     <label class="form-label">開始日 <span class="text-danger">*</span></label>
+                                     <input type="text" class="form-control" v-model="newChildProject.start_date" id="start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off" required>
+                                     <div v-if="childProjectValidationErrors.start_date" class="invalid-feedback d-block">
+                                         {{ childProjectValidationErrors.start_date }}
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="col-md-4 col-xl-3">
+                                 <div class="mb-3 form-control-validation">
+                                     <label class="form-label">期限日 <span class="text-danger">*</span></label>
+                                     <input type="text" class="form-control" v-model="newChildProject.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off" required>
+                                     <div v-if="childProjectValidationErrors.end_date" class="invalid-feedback d-block">
+                                         {{ childProjectValidationErrors.end_date }}
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="col-md-6">
+                                 <div class="mb-3 form-control-validation">
+                                     <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
+                                     <div class="d-flex align-items-center gap-2">
+                                         <input type="text" class="form-control tagify" v-model="newChildProject.project_order_type" id="child_project_order_type" name="child_project_order_type">
+                                         <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectTagifyTags('project_order_type')" title="すべて削除"><i class="fa fa-times"></i></button>
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="col-12">
+                                 <div class="mb-3">
+                                     <label class="form-label">説明</label>
+                                     <textarea class="form-control" v-model="newChildProject.description" rows="3"></textarea>
+                                 </div>
+                             </div>
                         </div>
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>作成日:</span>
-                            <span>{{ formatDate(parentProject.created_at) }}</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>更新日:</span>
-                            <span>{{ formatDate(parentProject.updated_at) }}</span>
-                        </div>
-                    </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" @click="createChildProject" :disabled="creatingChildProject">
+                        <span v-if="creatingChildProject" class="spinner-border spinner-border-sm me-1"></span>
+                        作成
+                    </button>
                 </div>
             </div>
         </div>
-    </div>
-</div>
-
-<?php
+         </div>
+ 
+     <!-- Edit Child Project Modal -->
+     <div class="modal fade" id="editChildProjectModal" tabindex="-1" aria-labelledby="editChildProjectModalLabel" aria-hidden="true">
+         <div class="modal-dialog modal-lg">
+             <div class="modal-content">
+                 <div class="modal-header">
+                     <h5 class="modal-title" id="editChildProjectModalLabel">課題を編集</h5>
+                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                 </div>
+                 <div class="modal-body">
+                     <form @submit.prevent="updateChildProject">
+                         <div class="row g-3">
+                             <div class="col-12">
+                                 <div class="mb-3 form-control-validation">
+                                     <label class="form-label">課題名 <span class="text-danger">*</span></label>
+                                     <input type="text" class="form-control" v-model="editingChildProject.name" required>
+                                     <div v-if="editChildProjectValidationErrors.name" class="invalid-feedback d-block">
+                                         {{ editChildProjectValidationErrors.name }}
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="col-12">
+                                 <div class="mb-3 form-control-validation">
+                                     <label class="form-label">部署 <span class="text-danger">*</span></label>
+                                     <select class="form-select" v-model="editingChildProject.department_id" required>
+                                         <option value="">選択してください</option>
+                                         <option v-for="dept in departments" :key="dept.id" :value="dept.id">
+                                             {{ dept.name }}
+                                         </option>
+                                     </select>
+                                     <div v-if="editChildProjectValidationErrors.department_id" class="invalid-feedback d-block">
+                                         {{ editChildProjectValidationErrors.department_id }}
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="col-12">
+                                 <div class="mb-3 form-control-validation">
+                                     <label class="form-label">プロジェクト番号 <span class="text-danger">*</span></label>
+                                     <input type="text" class="form-control" v-model="editingChildProject.project_number" required>
+                                     <div v-if="editChildProjectValidationErrors.project_number" class="invalid-feedback d-block">
+                                         {{ editChildProjectValidationErrors.project_number }}
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="col-md-4 col-xl-3">
+                                 <div class="mb-3 form-control-validation">
+                                     <label class="form-label">開始日 <span class="text-danger">*</span></label>
+                                     <input type="text" class="form-control" v-model="editingChildProject.start_date" id="edit_start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off" required>
+                                     <div v-if="editChildProjectValidationErrors.start_date" class="invalid-feedback d-block">
+                                         {{ editChildProjectValidationErrors.start_date }}
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="col-md-4 col-xl-3">
+                                 <div class="mb-3 form-control-validation">
+                                     <label class="form-label">期限日 <span class="text-danger">*</span></label>
+                                     <input type="text" class="form-control" v-model="editingChildProject.end_date" id="edit_end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off" required>
+                                     <div v-if="editChildProjectValidationErrors.end_date" class="invalid-feedback d-block">
+                                         {{ editChildProjectValidationErrors.end_date }}
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="col-md-6">
+                                 <div class="mb-3 form-control-validation">
+                                     <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
+                                     <div class="d-flex align-items-center gap-2">
+                                         <input type="text" class="form-control tagify" v-model="editingChildProject.project_order_type" id="edit_child_project_order_type" name="edit_child_project_order_type">
+                                         <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEditChildProjectTagifyTags('project_order_type')" title="すべて削除"><i class="fa fa-times"></i></button>
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="col-12">
+                                 <div class="mb-3">
+                                     <label class="form-label">説明</label>
+                                     <textarea class="form-control" v-model="editingChildProject.description" rows="3"></textarea>
+                                 </div>
+                             </div>
+                         </div>
+                     </form>
+                 </div>
+                 <div class="modal-footer">
+                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                     <button type="button" class="btn btn-primary" @click="updateChildProject" :disabled="updatingChildProject">
+                         <span v-if="updatingChildProject" class="spinner-border spinner-border-sm me-1"></span>
+                         更新
+                     </button>
+                 </div>
+             </div>
+         </div>
+     </div>
+ </div>
+ 
+ <?php
 $view->footing();
 ?>
 
 <style>
 
+.form-control-validation .invalid-feedback {
+    display: block;
+}
+
+.modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+/* Tagify styles for child project modal */
+.tags-look-project-order-type .tagify__dropdown__item {
+    display: inline-block;
+    border-radius: 3px;
+    padding: .3em .5em;
+    border: 1px solid #CCC;
+    background: #F3F3F3;
+    margin: .2em;
+    font-size: .85em;
+    color: #000;
+    transition: 0s;
+}
+
+.tags-look-project-order-type .tagify__dropdown__item--active {
+    color: #fff;
+}
+
+.tags-look-project-order-type .tagify__dropdown__item:hover {
+    background: #c1e4e6;
+    border-color: #92c0c3;
+    color: black;
+}
+
+.tags-look-project-order-type .tagify__dropdown__item--active {
+    background: linear-gradient(45deg, #c1e4e6, #92c0c3);
+    color: #fff;
+}
+
+.tags-look-project-order-type .tagify__dropdown__item--active:hover {
+    background: linear-gradient(45deg, #c1e4e6, #92c0c3);
+    color: #fff;
+}
+
+/* Ensure Tagify dropdown appears above modal */
+.modal .tagify__dropdown {
+    z-index: 1060 !important;
+}
+
+.modal .tagify__dropdown__wrapper {
+    z-index: 1060 !important;
+}
+
+/* Fix Tagify input styling in modal */
+.modal .tagify__input {
+    min-height: 38px;
+}
+
+.modal .tagify__tag {
+    margin: 2px;
+}
 </style>
 
 <script>
 const PARENT_PROJECT_ID = <?php echo $parent_project_id; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
+<script src="https://unpkg.com/@yaireo/tagify"></script>
 <script src="assets/js/parent-project-detail.js?v=<?=CACHE_VERSION?>"></script> 
