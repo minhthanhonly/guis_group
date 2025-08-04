@@ -69,7 +69,8 @@ $view->heading('親プロジェクト一覧');
                                 <tr v-for="project in filteredParentProjects" :key="project.id">
                                     <td>{{ project.company_name }}</td>
                                     <td>
-                                        <a href="detail.php?id={{ project.id }}" class="text-decoration-none">
+                                        <a href="detail.php?id={{ project.id }}" class="text-decoration-none" 
+                                           :title="'詳細を表示: ' + project.project_name">
                                             {{ project.project_name }}
                                         </a>
                                     </td>
@@ -77,27 +78,32 @@ $view->heading('親プロジェクト一覧');
                                     <td>{{ formatDate(project.request_date) }}</td>
                                     <td>{{ formatDate(project.desired_delivery_date) }}</td>
                                     <td>
-                                        <span class="badge" :class="getStatusBadgeClass(project.status)">
+                                        <span class="badge" :class="getStatusBadgeClass(project.status)" 
+                                              :title="getStatusLabel(project.status)">
                                             {{ getStatusLabel(project.status) }}
                                         </span>
                                     </td>
                                     <td>
-                                        <span v-if="project.child_project_count > 0" class="badge bg-info">
+                                        <span v-if="project.child_project_count > 0" class="badge bg-info" 
+                                              :title="project.child_project_count + ' 個の子プロジェクトがあります'">
                                             {{ project.child_project_count }}
                                         </span>
                                         <span v-else class="text-muted">0</span>
                                     </td>
-                                    <td>{{ project.created_by_name }}</td>
+                                    <td>{{ project.created_by_name || '-' }}</td>
                                     <td>{{ formatDate(project.created_at) }}</td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <a :href="'detail.php?id=' + project.id" class="btn btn-outline-primary" title="詳細">
+                                            <a :href="'detail.php?id=' + project.id" class="btn btn-outline-primary" 
+                                               title="詳細を表示">
                                                 <i class="fa fa-eye"></i>
                                             </a>
-                                            <a :href="'detail.php?id=' + project.id + '&edit=1'" class="btn btn-outline-secondary" title="編集">
+                                            <a :href="'detail.php?id=' + project.id + '&edit=1'" class="btn btn-outline-secondary" 
+                                               title="編集">
                                                 <i class="fa fa-edit"></i>
                                             </a>
-                                            <button class="btn btn-outline-danger" @click="deleteParentProject(project.id)" title="削除">
+                                            <button class="btn btn-outline-danger" @click="deleteParentProject(project.id)" 
+                                                    title="削除" :disabled="project.child_project_count > 0">
                                                 <i class="fa fa-trash"></i>
                                             </button>
                                         </div>
