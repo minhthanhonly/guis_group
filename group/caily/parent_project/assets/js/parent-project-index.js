@@ -116,13 +116,28 @@ createApp({
             const s = this.statuses.find(s => s.value === status);
             return `bg-${s?.color || 'secondary'}`;
         },
-        formatDate(dateString) {
-            if (!dateString) return '-';
-            const date = new Date(dateString);
-            return date.toLocaleDateString('ja-JP');
+        formatDate(date) {
+            if (!date) return '-';
+            return moment(date).format('Y年M月D日 HH:mm');
+        },
+        formatDate2(date) {
+            if (!date) return '-';
+            return moment(date).format('Y年M月D日');
         },
         async deleteParentProject(id) {
             try {
+                // Tìm dự án cha để kiểm tra số lượng dự án con
+                const project = this.parentProjects.find(p => p.id == id);
+                if (project && project.child_project_count > 0) {
+                    Swal.fire({
+                        title: '削除できません',
+                        text: 'この親プロジェクトには子プロジェクトが存在するため削除できません。先に子プロジェクトを削除してください。',
+                        icon: 'warning',
+                        confirmButtonText: 'OK'
+                    });
+                    return;
+                }
+
                 const result = await Swal.fire({
                     title: '確認',
                     text: 'この親プロジェクトを削除しますか？',

@@ -262,4 +262,12 @@ class Department extends ApplicationModel {
         }
         return $result;
     }
+
+    function getAll() {
+        $query = sprintf(
+            "SELECT id, name FROM %s WHERE is_active = 1 ORDER BY name",
+            $this->table
+        );
+        return $this->fetchAll($query);
+    }
 } 

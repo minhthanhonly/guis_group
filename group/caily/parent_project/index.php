@@ -1,6 +1,6 @@
 <?php
 require_once('../application/loader.php');
-$view->heading('親プロジェクト一覧');
+$view->heading('建物一覧');
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
 
@@ -9,8 +9,11 @@ $view->heading('親プロジェクト一覧');
             <div class="card">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0"><span data-i18n="親プロジェクト一覧">親プロジェクト一覧</span></h5>
+                        <h5 class="card-title mb-0"><span data-i18n="建物一覧">建物一覧</span></h5>
                         <div>
+                            <a href="../price_list/index.php" class="btn btn-outline-info btn-sm me-2">
+                                <i class="fa fa-list me-1"></i> <span data-i18n="価格表管理">価格表管理</span>
+                            </a>
                             <a href="create.php" class="btn btn-primary btn-sm">
                                 <i class="fa fa-plus me-1"></i> <span data-i18n="新規作成">新規作成</span>
                             </a>
@@ -54,12 +57,12 @@ $view->heading('親プロジェクト一覧');
                             <thead>
                                 <tr>
                                     <th>会社名</th>
-                                    <th>案件名</th>
+                                    <th>お施主様名</th>
                                     <th>工事番号</th>
                                     <th>依頼日</th>
                                     <th>希望納期</th>
                                     <th>ステータス</th>
-                                    <th>子プロジェクト数</th>
+                                    <th>課題数</th>
                                     <th>作成者</th>
                                     <th>作成日</th>
                                     <th>操作</th>
@@ -69,14 +72,14 @@ $view->heading('親プロジェクト一覧');
                                 <tr v-for="project in filteredParentProjects" :key="project.id">
                                     <td>{{ project.company_name }}</td>
                                     <td>
-                                        <a href="detail.php?id={{ project.id }}" class="text-decoration-none" 
+                                        <a :href="'detail.php?id=' + project.id" class="text-decoration-none" 
                                            :title="'詳細を表示: ' + project.project_name">
                                             {{ project.project_name }}
                                         </a>
                                     </td>
                                     <td>{{ project.construction_number || '-' }}</td>
                                     <td>{{ formatDate(project.request_date) }}</td>
-                                    <td>{{ formatDate(project.desired_delivery_date) }}</td>
+                                    <td>{{ formatDate2(project.desired_delivery_date) }}</td>
                                     <td>
                                         <span class="badge" :class="getStatusBadgeClass(project.status)" 
                                               :title="getStatusLabel(project.status)">
@@ -154,14 +157,58 @@ $view->footing();
 .table th {
     background-color: #f8f9fa;
     border-top: none;
+    font-weight: 600;
+    color: #495057;
+}
+
+.table td {
+    vertical-align: middle;
 }
 
 .badge {
     font-size: 0.75rem;
+    padding: 0.375rem 0.5rem;
 }
 
 .btn-group-sm .btn {
     padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.table-responsive {
+    border-radius: 0.375rem;
+    overflow: hidden;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .btn-group-sm .btn {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.8rem;
+    }
+    
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.4rem;
+    }
+}
+
+/* Loading animation */
+.spinner-border {
+    color: #007bff;
+}
+
+/* Empty state styling */
+.text-muted i {
+    opacity: 0.5;
 }
 </style>
 

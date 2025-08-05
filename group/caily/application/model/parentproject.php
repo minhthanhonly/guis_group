@@ -45,36 +45,36 @@ class ParentProject extends ApplicationModel {
         // Add permission check
         $user_id = $_SESSION['id'];
         if ($_SESSION['authority'] != 'administrator') {
-            $whereArr[] = sprintf("created_by = %d", $user_id);
+            $whereArr[] = sprintf("p.created_by = %d", $user_id);
         }
 
-        if (isset($_GET['status']) && $_GET['status'] != 'all') {
-            $whereArr[] = sprintf("status = '%s'", $_GET['status']);
+        if (isset($_GET['status']) && $_GET['status'] != '') {
+            $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
         } else {
-            $whereArr[] = "status != 'deleted'";
+            $whereArr[] = "p.status != 'deleted'";
         }
 
         // Search functionality
         if (!empty($search)) {
             $search = $this->escape($search);
-            $whereArr[] = "(company_name LIKE '%$search%' 
-                OR branch_name LIKE '%$search%' 
-                OR contact_name LIKE '%$search%' 
-                OR construction_number LIKE '%$search%' 
-                OR project_name LIKE '%$search%')";
+            $whereArr[] = "(p.company_name LIKE '%$search%' 
+                OR p.branch_name LIKE '%$search%' 
+                OR p.contact_name LIKE '%$search%' 
+                OR p.construction_number LIKE '%$search%' 
+                OR p.project_name LIKE '%$search%')";
         }
 
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
         
         // Get total count
-        $countQuery = sprintf("SELECT COUNT(*) as total FROM %s %s", $this->table, $where);
+        $countQuery = sprintf("SELECT COUNT(*) as total FROM %s p %s", $this->table, $where);
         $totalRecords = $this->fetchOne($countQuery)['total'];
         
         // Get filtered count
         $filteredRecords = $totalRecords;
         
         // Order by
-        $orderBy = "ORDER BY $order_column $order_dir";
+        $orderBy = "ORDER BY p.$order_column $order_dir";
         
         // Get data for current page
         $query = sprintf(
@@ -82,7 +82,7 @@ class ParentProject extends ApplicationModel {
                     (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE parent_project_id = p.id) as child_project_count,
                     u.realname as created_by_name
              FROM %s p 
-             LEFT JOIN " . DB_PREFIX . "users u ON p.created_by = u.userid
+             LEFT JOIN " . DB_PREFIX . "user u ON p.created_by = u.userid
              %s %s LIMIT %d, %d",
             $this->table,
             $where,

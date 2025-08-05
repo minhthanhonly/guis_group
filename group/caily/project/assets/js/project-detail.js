@@ -439,7 +439,7 @@ const vueApp = createApp({
         },
         formatDate(date) {
             if (!date) return '-';
-            return moment(date).format('YYYY/MM/DDYYYY/MM/DD');
+            return moment(date).format('YYYY/MM/DD');
         },
         getTimeRemaining() {
             if (!this.project || !this.project.end_date || this.project.status === 'completed' ||

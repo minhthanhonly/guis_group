@@ -242,7 +242,7 @@ $view->heading('プロジェクト作成');
                 <div class="card-body">
                     <div class="text-center py-3">
                         <i class="fa fa-plus-circle fs-1 text-primary"></i>
-                        <p class="text-muted mt-2" data-i18n="新しい親プロジェクトを作成します">新しい親プロジェクトを作成します</p>
+                        <p class="text-muted mt-2" data-i18n="新しい建物を作成します">新しい建物を作成します</p>
                         <p class="small text-muted" data-i18n="必須項目（*）を入力してから保存してください">必須項目（*）を入力してから保存してください</p>
                     </div>
                 </div>

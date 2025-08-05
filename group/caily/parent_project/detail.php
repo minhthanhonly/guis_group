@@ -18,7 +18,7 @@ $view->heading('プロジェクト詳細');
         </div>
 
         <!-- Left Column - Parent Project Details -->
-        <div class="col-xl-12">
+        <div class="col-xl-8">
             <div class="card" :class="{ 'edit-mode': isEditMode }">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -112,7 +112,6 @@ $view->heading('プロジェクト詳細');
                                 <template v-if="isEditMode">
                                     <div class="input-group">
                                         <input type="text" class="form-control" v-model="parentProject.request_date" id="request_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
-                                        <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                         <button class="btn btn-outline-secondary" type="button" @click="setCurrentDateTime" title="現在時刻">
                                             現在時刻
                                         </button>
@@ -238,7 +237,6 @@ $view->heading('プロジェクト詳細');
                                 <template v-if="isEditMode">
                                     <div class="input-group">
                                         <input type="text" class="form-control" v-model="parentProject.desired_delivery_date" id="desired_delivery_date_picker" placeholder="YYYY/MM/DD" autocomplete="off">
-                                        <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                         <button class="btn btn-outline-secondary" type="button" @click="setTodayDate" title="今日">
                                             今日
                                         </button>
@@ -461,6 +459,13 @@ $view->heading('プロジェクト詳細');
         </div>
 
         <!-- Right Column - Info -->
+        <div class="col-xl-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">建物情報</h5>
+                </div>
+            </div>
+        </div>
         
     </div>
 
@@ -511,7 +516,7 @@ $view->heading('プロジェクト詳細');
                                          {{ childProjectValidationErrors.project_number }}
                                      </div>
                                      <small class="form-text text-muted">
-                                         親プロジェクト番号 + "-" + 連番 (例: PRJ001-01, PRJ001-02)
+                                         建物番号 + "-" + 連番 (例: PRJ001-01, PRJ001-02)
                                      </small>
                                  </div>
                              </div>

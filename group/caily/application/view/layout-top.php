@@ -40,7 +40,7 @@
               <ul class="menu-sub">
                 <li class="menu-item <?php if($directory == 'parent_project' && $page == 'index') echo 'active'; ?>">
                   <a href="<?=$root?>parent_project/" class="menu-link">
-                    <div data-i18n="親プロジェクト">親プロジェクト</div>
+                    <div data-i18n="建物一覧">建物一覧</div>
                   </a>
                 </li>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'index') echo 'active'; ?>">

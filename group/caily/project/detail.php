@@ -57,9 +57,9 @@ if (!$project_id) {
                         <div class="d-flex justify-content-between align-items-center mb-4">
                             <h5 class="card-title"><span data-i18n="基本情報">基本情報</span></h5>
                             <div>
-                                <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
+                                <!-- <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
                                     <i class="fa fa-copy"></i>
-                                </button>
+                                </button> -->
                                 <button v-if="!isEditMode && canEditProject" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode" title="編集">
                                     <i class="fa fa-pencil-alt"></i>
                                 </button>
@@ -322,29 +322,6 @@ if (!$project_id) {
                                 </div>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="開始日">開始日</span></label>
-                                <div v-if="isEditMode" class="input-group">
-                                    <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
-                                    <span class="input-group-text"><i class="fa fa-calendar"></i></span>
-                                </div>
-                                <input v-else type="text" class="form-control" :value="formatDateTime(project.start_date)" readonly>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">
-                                    <span data-i18n="期限日">期限日</span>
-                                    <span v-if="getTimeRemaining()" :class="'badge ms-2 ' + getTimeRemaining().class" 
-                                          :title="getTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
-                                        {{ getTimeRemaining().text }}
-                                    </span>
-                                </label>
-                                <div v-if="isEditMode" class="input-group">
-                                    <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
-                                    <span class="input-group-text"><i class="fa fa-calendar"></i></span>
-                                </div>
-                                <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" readonly>
-                            </div>
-                            
-                            <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <div>
                                     <div class="btn-group" v-if="canEditProject">
@@ -368,6 +345,30 @@ if (!$project_id) {
                                     </div>
                                 </div>
                             </div>
+                            <div class="col-md-4">
+                                <label class="form-label"><span data-i18n="開始日">開始日</span></label>
+                                <div v-if="isEditMode" class="input-group">
+                                    <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                    <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                                </div>
+                                <input v-else type="text" class="form-control" :value="formatDateTime(project.start_date)" readonly>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">
+                                    <span data-i18n="期限日">期限日</span>
+                                    <span v-if="getTimeRemaining()" :class="'badge ms-2 ' + getTimeRemaining().class" 
+                                          :title="getTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
+                                        {{ getTimeRemaining().text }}
+                                    </span>
+                                </label>
+                                <div v-if="isEditMode" class="input-group">
+                                    <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                    <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                                </div>
+                                <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" readonly>
+                            </div>
+                            
+                            
                             <div class="col-4">
                                 <label class="form-label"><span data-i18n="進捗率">進捗率</span></label>
                                 <div class="position-relative">
