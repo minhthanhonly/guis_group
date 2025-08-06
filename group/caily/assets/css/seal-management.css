@@ -1,0 +1,106 @@
+/* Seal Management Styles */
+.seal-thumbnail {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 2px;
+    background-color: #f8f9fa;
+}
+
+.seal-thumbnail:hover {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+.seal-preview {
+    max-height: 300px;
+    max-width: 100%;
+    object-fit: contain;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    padding: 10px;
+    background-color: #f8f9fa;
+}
+
+.seal-type-badge {
+    font-size: 0.8em;
+    padding: 0.25em 0.6em;
+}
+
+.seal-status-badge {
+    font-size: 0.8em;
+    padding: 0.25em 0.6em;
+}
+
+.filter-card {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.seal-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.seal-table td {
+    vertical-align: middle;
+}
+
+.seal-image-cell {
+    width: 80px;
+    text-align: center;
+}
+
+.seal-actions-cell {
+    width: 120px;
+    text-align: center;
+}
+
+/* Modal styles */
+.seal-modal .modal-dialog {
+    max-width: 800px;
+}
+
+.seal-form-section {
+    border-right: 1px solid #dee2e6;
+    padding-right: 20px;
+}
+
+.seal-image-section {
+    padding-left: 20px;
+}
+
+/* File upload styles */
+.file-upload-area {
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+}
+
+.file-upload-area:hover {
+    border-color: #007bff;
+    background-color: #e3f2fd;
+}
+
+.file-upload-area.dragover {
+    border-color: #007bff;
+    background-color: #e3f2fd;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .seal-form-section {
+        border-right: none;
+        border-bottom: 1px solid #dee2e6;
+        padding-right: 0;
+        padding-bottom: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .seal-image-section {
+        padding-left: 0;
+    }
+}

@@ -7,6 +7,8 @@ class Branch extends ApplicationModel {
             'id' => array('except' => array('search')),
             'name' => array(),
             'name_kana' => array(),
+            'registration_number' => array(),
+            'company_name' => array(),
             'postal_code' => array(),
             'address1' => array(),
             'address2' => array(),
@@ -36,6 +38,8 @@ class Branch extends ApplicationModel {
         $data = array(
             'name' => $_POST['name'],
             'name_kana' => $_POST['name_kana'],
+            'registration_number' => $_POST['registration_number'],
+            'company_name' => $_POST['company_name'],
             'postal_code' => $_POST['postal_code'],
             'address1' => $_POST['address1'],
             'address2' => $_POST['address2'],
@@ -55,6 +59,8 @@ class Branch extends ApplicationModel {
         $data = array(
             'name' => $_POST['name'],
             'name_kana' => $_POST['name_kana'],
+            'registration_number' => $_POST['registration_number'],
+            'company_name' => $_POST['company_name'],
             'postal_code' => $_POST['postal_code'],
             'address1' => $_POST['address1'],
             'address2' => $_POST['address2'],

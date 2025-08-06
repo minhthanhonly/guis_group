@@ -52,7 +52,8 @@ createApp({
                 end_date: '',
                 project_order_type: '',
                 parent_project_id: PARENT_PROJECT_ID,
-                is_kadai: true
+                is_kadai: true,
+
             },
             editingChildProject: {
                 id: null,
@@ -64,7 +65,8 @@ createApp({
                 end_date: '',
                 project_order_type: '',
                 parent_project_id: PARENT_PROJECT_ID,
-                is_kadai: true
+                is_kadai: true,
+
             },
             childProjectValidationErrors: {
                 name: '',
@@ -81,7 +83,33 @@ createApp({
                 end_date: ''
             },
             creatingChildProject: false,
-            updatingChildProject: false
+            updatingChildProject: false,
+            // Quotation data
+            quotations: [],
+            selectedQuotation: null,
+            creatingQuotation: false,
+            newQuotation: {
+                issue_date: '',
+                quotation_number: '',
+                sender_company: '',
+                sender_address: '',
+                sender_contact: '',
+                receiver_company: '',
+                receiver_address: '',
+                receiver_contact: '',
+                items: [],
+                total_amount: 0,
+                tax_rate: 10,
+                total_with_tax: 0,
+                delivery_location: '',
+                payment_method: '',
+                valid_until: '',
+                notes: '',
+                parent_project_id: PARENT_PROJECT_ID
+            },
+            selectedQuotation: null,
+            creatingQuotation: false,
+            quotationFormBackup: null
         }
     },
     methods: {
@@ -560,6 +588,54 @@ createApp({
             
             this._safeUpdateFlatpickr('desired_delivery_date_picker', dateStr, 'desired_delivery_date');
         },
+        initializeQuotationDatePickers() {
+            // Initialize Flatpickr for quotation date fields
+            if (window.flatpickr) {
+                // Initialize issue date picker
+                const issueDateEl = document.getElementById('quotation_issue_date');
+                if (issueDateEl) {
+                    if (issueDateEl._flatpickr) {
+                        issueDateEl._flatpickr.destroy();
+                    }
+                    issueDateEl._flatpickr = flatpickr(issueDateEl, {
+                        dateFormat: 'Y-m-d',
+                        locale: 'ja',
+                        allowInput: true,
+                        clickOpens: true,
+                        onChange: (selectedDates, dateStr) => {
+                            this.newQuotation.issue_date = dateStr;
+                        }
+                    });
+                    
+                    // Set initial date if available
+                    if (this.newQuotation.issue_date) {
+                        issueDateEl._flatpickr.setDate(this.newQuotation.issue_date);
+                    }
+                }
+                
+                // Initialize valid until date picker
+                const validUntilEl = document.getElementById('quotation_valid_until');
+                if (validUntilEl) {
+                    if (validUntilEl._flatpickr) {
+                        validUntilEl._flatpickr.destroy();
+                    }
+                    validUntilEl._flatpickr = flatpickr(validUntilEl, {
+                        dateFormat: 'Y-m-d',
+                        locale: 'ja',
+                        allowInput: true,
+                        clickOpens: true,
+                        onChange: (selectedDates, dateStr) => {
+                            this.newQuotation.valid_until = dateStr;
+                        }
+                    });
+                    
+                    // Set initial date if available
+                    if (this.newQuotation.valid_until) {
+                        validUntilEl._flatpickr.setDate(this.newQuotation.valid_until);
+                    }
+                }
+            }
+        },
         initTagify() {
             // Initialize Tagify after Vue is mounted
             this.$nextTick(() => {
@@ -865,42 +941,22 @@ createApp({
         },
 
         // Child project modal methods
-        showCreateChildProjectModal() {
+
+
+        async showCreateChildProjectModal() {
             this.resetChildProjectForm();
             this.loadDepartments();
             
-            // Set default start_date to request_date if available
-            if (this.parentProject && this.parentProject.request_date) {
-                this.newChildProject.start_date = this.formatDateTimeForInput(this.parentProject.request_date);
-            }
+
             
+            this.generateChildProjectNumber();
             const modal = new bootstrap.Modal(document.getElementById('createChildProjectModal'));
             modal.show();
             
-            // Initialize components after modal is shown
             this.$nextTick(() => {
-                setTimeout(() => {
-                    this.initializeChildProjectDatePickers();
-                    this.initializeChildProjectTagify();
-                }, 100);
+                this.initializeChildProjectDatePickers();
+                this.initializeChildProjectTagify();
             });
-            
-            // Add event listener for modal hidden
-            const modalElement = document.getElementById('createChildProjectModal');
-            if (modalElement) {
-                modalElement.addEventListener('hidden.bs.modal', () => {
-                    this.destroyChildProjectTagify();
-                });
-            }
-            
-            // Clear validation errors when modal opens
-            this.childProjectValidationErrors = {
-                name: '',
-                department_id: '',
-                project_number: '',
-                start_date: '',
-                end_date: ''
-            };
         },
 
         resetChildProjectForm() {
@@ -913,7 +969,8 @@ createApp({
                 end_date: '',
                 project_order_type: '',
                 parent_project_id: PARENT_PROJECT_ID,
-                is_kadai: true
+                is_kadai: true,
+
             };
             this.childProjectValidationErrors = {
                 name: '',
@@ -1032,51 +1089,31 @@ createApp({
             }
         },
         
-        showEditChildProjectModal(project) {
-            // Copy project data to editing form
+        async showEditChildProjectModal(project) {
             this.editingChildProject = {
                 id: project.id,
-                name: project.name,
-                department_id: project.department_id,
-                project_number: project.project_number,
+                name: project.name || '',
+                department_id: project.department_id || '',
+                project_number: project.project_number || '',
                 description: project.description || '',
-                start_date: this.formatDateTimeForInput(project.start_date),
-                end_date: this.formatDateTimeForInput(project.end_date),
+                start_date: this.formatDateTimeForInput(project.start_date) || '',
+                end_date: this.formatDateTimeForInput(project.end_date) || '',
                 project_order_type: project.project_order_type || '',
                 parent_project_id: PARENT_PROJECT_ID,
-                is_kadai: true
+                is_kadai: true,
+
             };
             
-            // Clear validation errors
-            this.editChildProjectValidationErrors = {
-                name: '',
-                department_id: '',
-                project_number: '',
-                start_date: '',
-                end_date: ''
-            };
+
             
-            // Load departments if not already loaded
             this.loadDepartments();
-            
             const modal = new bootstrap.Modal(document.getElementById('editChildProjectModal'));
             modal.show();
             
-            // Initialize components after modal is shown
             this.$nextTick(() => {
-                setTimeout(() => {
-                    this.initializeEditChildProjectDatePickers();
-                    this.initializeEditChildProjectTagify();
-                }, 100);
+                this.initializeEditChildProjectDatePickers();
+                this.initializeEditChildProjectTagify();
             });
-            
-            // Add event listener for modal hidden
-            const modalElement = document.getElementById('editChildProjectModal');
-            if (modalElement) {
-                modalElement.addEventListener('hidden.bs.modal', () => {
-                    this.destroyEditChildProjectTagify();
-                });
-            }
         },
         
         initializeEditChildProjectDatePickers() {
@@ -1210,6 +1247,7 @@ createApp({
                 formData.append('end_date', this.editingChildProject.end_date);
                 formData.append('project_order_type', this.editingChildProject.project_order_type || '');
                 formData.append('parent_project_id', this.editingChildProject.parent_project_id);
+
                 formData.append('is_kadai', '1');
 
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
@@ -1237,7 +1275,8 @@ createApp({
                         end_date: '',
                         project_order_type: '',
                         parent_project_id: PARENT_PROJECT_ID,
-                        is_kadai: true
+                        is_kadai: true,
+        
                     };
                 } else if (response.data && response.data.message === 'Project number already exists') {
                     this.editChildProjectValidationErrors.project_number = 'このプロジェクト番号は既に存在します。';
@@ -1363,6 +1402,7 @@ createApp({
                 formData.append('end_date', this.newChildProject.end_date || '');
                 formData.append('project_order_type', this.newChildProject.project_order_type || '');
                 formData.append('parent_project_id', this.newChildProject.parent_project_id);
+
                 formData.append('is_kadai', '1');
                 formData.append('status', 'draft');
 
@@ -1398,11 +1438,275 @@ createApp({
             } finally {
                 this.creatingChildProject = false;
             }
+        },
+
+        // Quotation methods
+        async loadQuotations() {
+            try {
+                const response = await axios.get(`/api/index.php?model=quotation&method=getByParentProject&parent_project_id=${PARENT_PROJECT_ID}`);
+                if (response.data && Array.isArray(response.data)) {
+                    this.quotations = response.data;
+                } else {
+                    this.quotations = [];
+                }
+            } catch (error) {
+                console.error('Error loading quotations:', error);
+                this.quotations = [];
+            }
+        },
+
+        showCreateQuotationModal() {
+            // Restore previous form data if available, otherwise reset
+            if (this.quotationFormBackup) {
+                this.newQuotation = JSON.parse(JSON.stringify(this.quotationFormBackup));
+            } else {
+                this.resetQuotationForm();
+            }
+            const modal = new bootstrap.Modal(document.getElementById('createQuotationModal'));
+            modal.show();
+            
+            // Initialize Flatpickr for quotation date fields after modal is shown
+            this.$nextTick(() => {
+                this.initializeQuotationDatePickers();
+            });
+        },
+
+        resetQuotationForm() {
+            this.newQuotation = {
+                issue_date: new Date().toISOString().split('T')[0],
+                quotation_number: `GUIS-${Date.now()}`,
+                sender_company: this.parentProject?.company_name || '',
+                sender_address: '',
+                sender_contact: this.parentProject?.contact_name || '',
+                receiver_company: '',
+                receiver_address: '',
+                receiver_contact: '',
+                items: [],
+                total_amount: 0,
+                tax_rate: 10,
+                total_with_tax: 0,
+                delivery_location: '',
+                payment_method: '',
+                valid_until: '',
+                notes: '',
+                parent_project_id: PARENT_PROJECT_ID
+            };
+            this.addOrderItem(); // Add one empty item by default
+        },
+
+        addOrderItem() {
+            this.newQuotation.items.push({
+                title: '',
+                product_code: '',
+                product_name: '',
+                quantity: 1,
+                unit: '個',
+                unit_price: 0,
+                amount: 0,
+                notes: ''
+            });
+        },
+
+        removeOrderItem(index) {
+            this.newQuotation.items.splice(index, 1);
+            this.calculateTotalAmount();
+        },
+
+        calculateItemAmount(index) {
+            const item = this.newQuotation.items[index];
+            item.amount = (item.quantity || 0) * (item.unit_price || 0);
+            this.calculateTotalAmount();
+        },
+
+        calculateTotalAmount() {
+            this.newQuotation.total_amount = this.newQuotation.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+            this.newQuotation.total_with_tax = this.newQuotation.total_amount * (1 + (this.newQuotation.tax_rate || 0) / 100);
+        },
+
+        async createQuotation() {
+            if (!this.validateQuotationForm()) {
+                return;
+            }
+
+            this.creatingQuotation = true;
+
+            try {
+                const formData = new FormData();
+                
+                // Add quotation data
+                Object.keys(this.newQuotation).forEach(key => {
+                    if (key === 'items') {
+                        formData.append(key, JSON.stringify(this.newQuotation[key]));
+                    } else if (this.newQuotation[key] !== null && this.newQuotation[key] !== '') {
+                        formData.append(key, this.newQuotation[key]);
+                    }
+                });
+
+                const response = await axios.post('/api/index.php?model=quotation&method=create', formData);
+                
+                if (response.data && response.data.status === 'success') {
+                    // Clear backup and close modal
+                    this.quotationFormBackup = null;
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('createQuotationModal'));
+                    modal.hide();
+                    
+                    // Reload quotations
+                    await this.loadQuotations();
+                    
+                    showMessage('見積書を作成しました', false);
+                } else {
+                    showMessage(response.data?.message || 'エラーが発生しました', true);
+                }
+            } catch (error) {
+                console.error('Error creating quotation:', error);
+                showMessage('エラーが発生しました', true);
+            } finally {
+                this.creatingQuotation = false;
+            }
+        },
+
+        backupQuotationForm() {
+            // Backup current form data before closing
+            this.quotationFormBackup = JSON.parse(JSON.stringify(this.newQuotation));
+        },
+
+        clearQuotationFormBackup() {
+            // Clear backup and reset form
+            this.quotationFormBackup = null;
+            this.resetQuotationForm();
+        },
+        
+        destroyQuotationDatePickers() {
+            // Destroy Flatpickr instances for quotation date fields
+            const issueDateEl = document.getElementById('quotation_issue_date');
+            if (issueDateEl && issueDateEl._flatpickr) {
+                issueDateEl._flatpickr.destroy();
+            }
+            
+            const validUntilEl = document.getElementById('quotation_valid_until');
+            if (validUntilEl && validUntilEl._flatpickr) {
+                validUntilEl._flatpickr.destroy();
+            }
+        },
+
+        validateQuotationForm() {
+            let isValid = true;
+            
+            if (!this.newQuotation.issue_date) {
+                showMessage('発行日は必須です', true);
+                isValid = false;
+            }
+            
+            if (!this.newQuotation.quotation_number) {
+                showMessage('見積番号は必須です', true);
+                isValid = false;
+            }
+            
+            if (!this.newQuotation.sender_company) {
+                showMessage('発注者会社名は必須です', true);
+                isValid = false;
+            }
+            
+            if (!this.newQuotation.receiver_company) {
+                showMessage('受注者会社名は必須です', true);
+                isValid = false;
+            }
+            
+            if (this.newQuotation.items.length === 0) {
+                showMessage('商品明細は必須です', true);
+                isValid = false;
+            }
+            
+            return isValid;
+        },
+
+        showQuotationModal(quotation) {
+            this.selectedQuotation = quotation;
+            const modal = new bootstrap.Modal(document.getElementById('viewQuotationModal'));
+            modal.show();
+        },
+
+        editQuotation(quotation) {
+            // TODO: Implement edit functionality
+            showMessage('編集機能は準備中です', true);
+        },
+
+        async deleteQuotation(quotation) {
+            try {
+                const result = await Swal.fire({
+                    title: '確認',
+                    text: `「${quotation.quotation_number}」を削除しますか？`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: '削除',
+                    cancelButtonText: 'キャンセル'
+                });
+                
+                if (result.isConfirmed) {
+                    const formData = new FormData();
+                    formData.append('id', quotation.id);
+                    
+                    const response = await axios.post('/api/index.php?model=quotation&method=delete', formData);
+                    
+                    if (response.data && response.data.status === 'success') {
+                        await this.loadQuotations();
+                        showMessage('見積書を削除しました', false);
+                    } else {
+                        showMessage(response.data?.message || 'エラーが発生しました', true);
+                    }
+                }
+            } catch (error) {
+                console.error('Error deleting quotation:', error);
+                showMessage('エラーが発生しました', true);
+            }
+        },
+
+        printQuotation() {
+            window.print();
+        },
+
+        formatJapaneseDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            const year = date.getFullYear();
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            
+            // Convert to Japanese era (Reiwa)
+            const reiwaYear = year - 2018;
+            return `令和${reiwaYear}年${month}月${day}日`;
+        },
+
+        formatNumber(number) {
+            return new Intl.NumberFormat('ja-JP').format(number);
+        },
+
+        formatPrice(price) {
+            return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(price);
         }
     },
     async mounted() {
-        await this.loadParentProject();
-        await this.loadChildProjects();
-        this.loading = false;
+        try {
+            await this.loadParentProject();
+            await this.loadChildProjects();
+            await this.loadQuotations();
+            
+            // Add event listeners for modal close events
+            const createQuotationModal = document.getElementById('createQuotationModal');
+            if (createQuotationModal) {
+                createQuotationModal.addEventListener('hidden.bs.modal', () => {
+                    // Backup form data when modal is closed
+                    this.backupQuotationForm();
+                    // Destroy Flatpickr instances
+                    this.destroyQuotationDatePickers();
+                });
+            }
+        } catch (error) {
+            console.error('Error in mounted:', error);
+        } finally {
+            this.loading = false;
+        }
     }
 }).mount('#app'); 

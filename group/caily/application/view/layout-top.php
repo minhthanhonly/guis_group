@@ -143,6 +143,7 @@
                 if($page == 'branch') $active1 = 'active';
                 if($page == 'department') $active2 = 'active';
                 if($page == 'team') $active6 = 'active';
+                if($page == 'seal') $active7 = 'active';
               }
               if($directory == 'administration'){
                 $active = 'active open';
@@ -178,6 +179,11 @@
                 <li class="menu-item <?php echo $active6; ?>">
                   <a href="<?=$root?>setting/team.php" class="menu-link">
                     <div data-i18n="チーム設定">チーム設定</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php echo $active7; ?>">
+                  <a href="<?=$root?>setting/seal.php" class="menu-link">
+                    <div data-i18n="印鑑設定">印鑑設定</div>
                   </a>
                 </li>
                 <li class="menu-item <?php echo $active3; ?>">

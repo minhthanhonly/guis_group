@@ -458,11 +458,64 @@ $view->heading('プロジェクト詳細');
             </div>
         </div>
 
-        <!-- Right Column - Info -->
+        <!-- Right Column - Quotations -->
         <div class="col-xl-4">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title">建物情報</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">見積書</h5>
+                        <button @click="showCreateQuotationModal" class="btn btn-primary btn-sm">
+                            <i class="fa fa-plus me-1"></i> 新規見積書
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div v-if="loading" class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">読み込み中...</span>
+                        </div>
+                    </div>
+                    <div v-else-if="quotations && quotations.length > 0" class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>見積番号</th>
+                                    <th>作成日</th>
+                                    <th>金額</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="quotation in quotations" :key="quotation.id">
+                                    <td>{{ quotation.quotation_number || '-' }}</td>
+                                    <td>{{ formatDate(quotation.created_at) }}</td>
+                                    <td>{{ formatPrice(quotation.total_amount) }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" title="表示" @click="showQuotationModal(quotation)">
+                                                <i class="fa fa-eye"></i>
+                                            </button>
+                                            <button class="btn btn-outline-secondary" title="編集" @click="editQuotation(quotation)">
+                                                <i class="fa fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" title="削除" @click="deleteQuotation(quotation)">
+                                                <i class="fa fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-else-if="!loading" class="text-center py-4">
+                        <div class="text-muted">
+                            <i class="fa fa-file-text fa-2x mb-2"></i>
+                            <p>見積書がありません</p>
+                            <button @click="showCreateQuotationModal" class="btn btn-primary btn-sm">
+                                <i class="fa fa-plus me-1"></i> 見積書を作成
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -470,7 +523,7 @@ $view->heading('プロジェクト詳細');
     </div>
 
     <!-- Create Child Project Modal -->
-    <div class="modal fade" id="createChildProjectModal" tabindex="-1" aria-labelledby="createChildProjectModalLabel" aria-hidden="true">
+    <div class="modal fade" id="createChildProjectModal" tabindex="-1" aria-labelledby="createChildProjectModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
@@ -568,7 +621,7 @@ $view->heading('プロジェクト詳細');
          </div>
  
      <!-- Edit Child Project Modal -->
-     <div class="modal fade" id="editChildProjectModal" tabindex="-1" aria-labelledby="editChildProjectModalLabel" aria-hidden="true">
+     <div class="modal fade" id="editChildProjectModal" tabindex="-1" aria-labelledby="editChildProjectModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
          <div class="modal-dialog modal-lg">
              <div class="modal-content">
                  <div class="modal-header">
@@ -656,6 +709,314 @@ $view->heading('プロジェクト詳細');
              </div>
          </div>
      </div>
+ 
+     <!-- Create Quotation Modal -->
+     <div class="modal fade" id="createQuotationModal" tabindex="-1" aria-labelledby="createQuotationModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+         <div class="modal-dialog modal-xl">
+             <div class="modal-content">
+                 <div class="modal-header">
+                     <h5 class="modal-title" id="createQuotationModalLabel">注⽂請書作成</h5>
+                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                 </div>
+                 <div class="modal-body">
+                     <form @submit.prevent="createQuotation">
+                         <div class="row g-3">
+                             <!-- Header Information -->
+                             <div class="col-12">
+                                 <div class="card">
+                                     <div class="card-header">
+                                         <h6 class="mb-0">基本情報</h6>
+                                     </div>
+                                     <div class="card-body">
+                                         <div class="row g-3">
+                                             <div class="col-md-6">
+                                                 <label class="form-label">発行日 <span class="text-danger">*</span></label>
+                                                 <input type="text" class="form-control" id="quotation_issue_date" v-model="newQuotation.issue_date" required>
+                                             </div>
+                                             <div class="col-md-6">
+                                                 <label class="form-label">見積番号 <span class="text-danger">*</span></label>
+                                                 <input type="text" class="form-control" v-model="newQuotation.quotation_number" placeholder="GUIS-XXXX" required>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+ 
+                             <!-- Sender Information -->
+                             <div class="col-md-6">
+                                 <div class="card">
+                                     <div class="card-header">
+                                         <h6 class="mb-0">発注者情報</h6>
+                                     </div>
+                                     <div class="card-body">
+                                         <div class="mb-3">
+                                             <label class="form-label">会社名 <span class="text-danger">*</span></label>
+                                             <input type="text" class="form-control" v-model="newQuotation.sender_company" required>
+                                         </div>
+                                         <div class="mb-3">
+                                             <label class="form-label">住所</label>
+                                             <textarea class="form-control" v-model="newQuotation.sender_address" rows="2"></textarea>
+                                         </div>
+                                         <div class="mb-3">
+                                             <label class="form-label">担当者</label>
+                                             <input type="text" class="form-control" v-model="newQuotation.sender_contact">
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+ 
+                             <!-- Receiver Information -->
+                             <div class="col-md-6">
+                                 <div class="card">
+                                     <div class="card-header">
+                                         <h6 class="mb-0">受注者情報</h6>
+                                     </div>
+                                     <div class="card-body">
+                                         <div class="mb-3">
+                                             <label class="form-label">会社名 <span class="text-danger">*</span></label>
+                                             <input type="text" class="form-control" v-model="newQuotation.receiver_company" required>
+                                         </div>
+                                         <div class="mb-3">
+                                             <label class="form-label">住所</label>
+                                             <textarea class="form-control" v-model="newQuotation.receiver_address" rows="2"></textarea>
+                                         </div>
+                                         <div class="mb-3">
+                                             <label class="form-label">担当者</label>
+                                             <input type="text" class="form-control" v-model="newQuotation.receiver_contact">
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+ 
+                             <!-- Order Items -->
+                             <div class="col-12">
+                                 <div class="card">
+                                     <div class="card-header d-flex justify-content-between align-items-center">
+                                         <h6 class="mb-0">商品明細</h6>
+                                         <button type="button" class="btn btn-sm btn-outline-primary" @click="addOrderItem">
+                                             <i class="fa fa-plus me-1"></i> 商品追加
+                                         </button>
+                                     </div>
+                                     <div class="card-body">
+                                         <div class="table-responsive">
+                                             <table class="table table-bordered">
+                                                 <thead>
+                                                     <tr>
+                                                         <th>件名</th>
+                                                         <th>商品コード</th>
+                                                         <th>品名</th>
+                                                         <th>数量</th>
+                                                         <th>単位</th>
+                                                         <th>単価</th>
+                                                         <th>金額</th>
+                                                         <th>備考</th>
+                                                         <th>操作</th>
+                                                     </tr>
+                                                 </thead>
+                                                 <tbody>
+                                                     <tr v-for="(item, index) in newQuotation.items" :key="index">
+                                                         <td>
+                                                             <input type="text" class="form-control form-control-sm" v-model="item.title" placeholder="件名">
+                                                         </td>
+                                                         <td>
+                                                             <input type="text" class="form-control form-control-sm" v-model="item.product_code" placeholder="商品コード">
+                                                         </td>
+                                                         <td>
+                                                             <input type="text" class="form-control form-control-sm" v-model="item.product_name" placeholder="品名">
+                                                         </td>
+                                                         <td>
+                                                             <input type="number" class="form-control form-control-sm" v-model="item.quantity" @input="calculateItemAmount(index)" min="0" step="1">
+                                                         </td>
+                                                         <td>
+                                                             <input type="text" class="form-control form-control-sm" v-model="item.unit" placeholder="個">
+                                                         </td>
+                                                         <td>
+                                                             <input type="number" class="form-control form-control-sm" v-model="item.unit_price" @input="calculateItemAmount(index)" min="0" step="0.01">
+                                                         </td>
+                                                         <td>
+                                                             <input type="number" class="form-control form-control-sm" v-model="item.amount" readonly>
+                                                         </td>
+                                                         <td>
+                                                             <input type="text" class="form-control form-control-sm" v-model="item.notes" placeholder="備考">
+                                                         </td>
+                                                         <td>
+                                                             <button type="button" class="btn btn-sm btn-outline-danger" @click="removeOrderItem(index)">
+                                                                 <i class="fa fa-trash"></i>
+                                                             </button>
+                                                         </td>
+                                                     </tr>
+                                                 </tbody>
+                                             </table>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+ 
+                             <!-- Summary Information -->
+                             <div class="col-12">
+                                 <div class="card">
+                                     <div class="card-header">
+                                         <h6 class="mb-0">その他情報</h6>
+                                     </div>
+                                     <div class="card-body">
+                                         <div class="row g-3">
+                                             <div class="col-md-4">
+                                                 <label class="form-label">合計金額</label>
+                                                 <input type="number" class="form-control" v-model="newQuotation.total_amount" readonly>
+                                             </div>
+                                             <div class="col-md-4">
+                                                 <label class="form-label">消費税等 (%)</label>
+                                                 <input type="number" class="form-control" v-model="newQuotation.tax_rate" min="0" max="100" step="0.1">
+                                             </div>
+                                             <div class="col-md-4">
+                                                 <label class="form-label">税込合計</label>
+                                                 <input type="number" class="form-control" v-model="newQuotation.total_with_tax" readonly>
+                                             </div>
+                                             <div class="col-md-6">
+                                                 <label class="form-label">納入場所</label>
+                                                 <input type="text" class="form-control" v-model="newQuotation.delivery_location">
+                                             </div>
+                                             <div class="col-md-6">
+                                                 <label class="form-label">取引方法</label>
+                                                 <select class="form-select" v-model="newQuotation.payment_method">
+                                                     <option value="">選択してください</option>
+                                                     <option value="現金">現金</option>
+                                                     <option value="銀行振込">銀行振込</option>
+                                                     <option value="小切手">小切手</option>
+                                                     <option value="その他">その他</option>
+                                                 </select>
+                                             </div>
+                                             <div class="col-md-6">
+                                                 <label class="form-label">有効期限</label>
+                                                 <input type="text" class="form-control" id="quotation_valid_until" v-model="newQuotation.valid_until">
+                                             </div>
+                                             <div class="col-md-6">
+                                                 <label class="form-label">備考</label>
+                                                 <textarea class="form-control" v-model="newQuotation.notes" rows="2"></textarea>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+                         </div>
+                     </form>
+                 </div>
+                 <div class="modal-footer">
+                     <button type="button" class="btn btn-warning" @click="clearQuotationFormBackup">リセット</button>
+                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                     <button type="button" class="btn btn-primary" @click="createQuotation" :disabled="creatingQuotation">
+                         <span v-if="creatingQuotation" class="spinner-border spinner-border-sm me-1"></span>
+                         作成
+                     </button>
+                 </div>
+             </div>
+         </div>
+     </div>
+ 
+     <!-- View Quotation Modal -->
+     <div class="modal fade" id="viewQuotationModal" tabindex="-1" aria-labelledby="viewQuotationModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+         <div class="modal-dialog modal-xl">
+             <div class="modal-content">
+                 <div class="modal-header">
+                     <h5 class="modal-title" id="viewQuotationModalLabel">注⽂請書</h5>
+                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                 </div>
+                 <div class="modal-body" v-if="selectedQuotation">
+                     <div class="quotation-document">
+                         <div class="text-center mb-4">
+                             <h3 class="mb-2">注⽂請書</h3>
+                             <p class="text-muted">{{ formatJapaneseDate(selectedQuotation.issue_date) }}</p>
+                             <p class="text-muted">#No: {{ selectedQuotation.quotation_number }}</p>
+                         </div>
+ 
+                         <div class="row mb-4">
+                             <div class="col-md-6">
+                                 <h6>発注者</h6>
+                                 <p class="mb-1"><strong>{{ selectedQuotation.sender_company }}</strong></p>
+                                 <p class="mb-1">{{ selectedQuotation.sender_address }}</p>
+                                 <p class="mb-0">担当: {{ selectedQuotation.sender_contact }}</p>
+                             </div>
+                             <div class="col-md-6">
+                                 <h6>受注者</h6>
+                                 <p class="mb-1"><strong>{{ selectedQuotation.receiver_company }}</strong></p>
+                                 <p class="mb-1">{{ selectedQuotation.receiver_address }}</p>
+                                 <p class="mb-0">担当: {{ selectedQuotation.receiver_contact }}</p>
+                             </div>
+                         </div>
+ 
+                         <div class="table-responsive mb-4">
+                             <table class="table table-bordered">
+                                 <thead>
+                                     <tr>
+                                         <th>件名</th>
+                                         <th>商品コード</th>
+                                         <th>品名</th>
+                                         <th>数量</th>
+                                         <th>単位</th>
+                                         <th>単価</th>
+                                         <th>金額</th>
+                                         <th>備考</th>
+                                     </tr>
+                                 </thead>
+                                 <tbody>
+                                     <tr v-for="item in selectedQuotation.items" :key="item.id">
+                                         <td>{{ item.title }}</td>
+                                         <td>{{ item.product_code }}</td>
+                                         <td>{{ item.product_name }}</td>
+                                         <td class="text-end">{{ formatNumber(item.quantity) }}</td>
+                                         <td>{{ item.unit }}</td>
+                                         <td class="text-end">{{ formatPrice(item.unit_price) }}</td>
+                                         <td class="text-end">{{ formatPrice(item.amount) }}</td>
+                                         <td>{{ item.notes }}</td>
+                                     </tr>
+                                 </tbody>
+                             </table>
+                         </div>
+ 
+                         <div class="row">
+                             <div class="col-md-6">
+                                 <div class="card">
+                                     <div class="card-body">
+                                         <h6>その他情報</h6>
+                                         <p class="mb-1"><strong>納入場所:</strong> {{ selectedQuotation.delivery_location || '-' }}</p>
+                                         <p class="mb-1"><strong>取引方法:</strong> {{ selectedQuotation.payment_method || '-' }}</p>
+                                         <p class="mb-1"><strong>有効期限:</strong> {{ formatDate(selectedQuotation.valid_until) || '-' }}</p>
+                                         <p class="mb-0"><strong>備考:</strong> {{ selectedQuotation.notes || '-' }}</p>
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="col-md-6">
+                                 <div class="card">
+                                     <div class="card-body">
+                                         <h6>金額計算</h6>
+                                         <div class="d-flex justify-content-between">
+                                             <span>合計:</span>
+                                             <span>{{ formatPrice(selectedQuotation.total_amount) }}</span>
+                                         </div>
+                                         <div class="d-flex justify-content-between">
+                                             <span>消費税等 ({{ selectedQuotation.tax_rate }}%):</span>
+                                             <span>{{ formatPrice(selectedQuotation.total_amount * selectedQuotation.tax_rate / 100) }}</span>
+                                         </div>
+                                         <hr>
+                                         <div class="d-flex justify-content-between">
+                                             <strong>税込合計:</strong>
+                                             <strong>{{ formatPrice(selectedQuotation.total_with_tax) }}</strong>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+                 <div class="modal-footer">
+                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                     <button type="button" class="btn btn-primary" @click="printQuotation">
+                         <i class="fa fa-print me-1"></i> 印刷
+                     </button>
+                 </div>
+             </div>
+         </div>
+     </div>
  </div>
  
  <?php
@@ -722,6 +1083,75 @@ $view->footing();
 
 .modal .tagify__tag {
     margin: 2px;
+}
+
+/* Quotation document styles */
+.quotation-document {
+    font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+    line-height: 1.6;
+}
+
+.quotation-document h3 {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #333;
+}
+
+.quotation-document h6 {
+    font-size: 1rem;
+    font-weight: bold;
+    color: #555;
+    margin-bottom: 0.5rem;
+}
+
+.quotation-document .table {
+    font-size: 0.9rem;
+}
+
+.quotation-document .table th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.quotation-document .table td {
+    vertical-align: middle;
+}
+
+.quotation-document .text-end {
+    text-align: right;
+}
+
+.quotation-document .card {
+    border: 1px solid #dee2e6;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.quotation-document .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    font-weight: bold;
+}
+
+/* Print styles for quotation */
+@media print {
+    .quotation-document {
+        font-size: 12pt;
+    }
+    
+    .quotation-document .table {
+        font-size: 10pt;
+    }
+    
+    .quotation-document .card {
+        border: 1px solid #000;
+        box-shadow: none;
+    }
+    
+    .modal-footer {
+        display: none;
+    }
 }
 </style>
 

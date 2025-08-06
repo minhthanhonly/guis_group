@@ -27,7 +27,6 @@ class Project extends ApplicationModel {
             'progress' => array(), //0-100
             'estimated_hours' => array(), //float
             'actual_hours' => array(), //float
-            'customer_id' => array(),
             'building_size' => array(), //string
             'building_type' => array(), //string
             'buiding_number' => array(), //list of category_id
@@ -165,7 +164,8 @@ class Project extends ApplicationModel {
         // Get total records count
         $totalQuery = "SELECT COUNT(*) as count FROM {$this->table} p
         JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
-        JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+        LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
+        LEFT JOIN " . DB_PREFIX . "customer c ON c.company_name = pp.company_name AND c.name = pp.contact_name
         " . $where;
         $totalRecords = $this->fetchOne($totalQuery)['count'];
 
@@ -177,6 +177,7 @@ class Project extends ApplicationModel {
             "SELECT p.*, d.name as department_name,
             c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
             CONCAT(c.name, ' ', c.title) as customer_name,
+            pp.company_name as parent_company_name, pp.contact_name as parent_contact_name,
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
@@ -187,7 +188,8 @@ class Project extends ApplicationModel {
              WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id
             FROM {$this->table} p 
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
-            JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+            LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
+            LEFT JOIN " . DB_PREFIX . "customer c ON c.company_name = pp.company_name AND c.name = pp.contact_name
             %s
             %s
             LIMIT %d, %d",
@@ -365,7 +367,6 @@ class Project extends ApplicationModel {
             'progress' => isset($_POST['progress']) ? intval($_POST['progress']) : 0,
             'estimated_hours' => isset($_POST['estimated_hours']) ? floatval($_POST['estimated_hours']) : 0,
             'actual_hours' => 0,
-            'customer_id' => isset($_POST['customer_id']) ? $_POST['customer_id'] : null,
             'building_size' => isset($_POST['building_size']) ? $_POST['building_size'] : '',
             'building_type' => isset($_POST['building_type']) ? $_POST['building_type'] : '',
             'building_number' => isset($_POST['building_number']) ? $_POST['building_number'] : '',
@@ -506,7 +507,6 @@ class Project extends ApplicationModel {
             'teams' => isset($_POST['teams']) ? $_POST['teams'] : '',
             'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
-            'customer_id' => isset($_POST['customer_id']) ? $_POST['customer_id'] : '',
             'amount' => isset($_POST['amount']) ? floatval($_POST['amount']) : 0,
             'estimate_status' => isset($_POST['estimate_status']) ? $_POST['estimate_status'] : '未発行',
             'invoice_status' => isset($_POST['invoice_status']) ? $_POST['invoice_status'] : '未発行',

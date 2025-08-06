@@ -45,6 +45,8 @@ $view->heading('支社設定');
                             <thead>
                                 <tr>
                                     <th>支社名</th>
+                                    <th>会社名</th>
+                                    <th>登録番号</th>
                                     <th>タイプ</th>
                                     <th>従業員数</th>
                                     <th>操作</th>
@@ -53,6 +55,8 @@ $view->heading('支社設定');
                             <tbody>
                                 <tr v-for="branch in branches" :key="branch.id">
                                     <td>{{ branch.name }}</td>
+                                    <td>{{ branch.company_name || '-' }}</td>
+                                    <td>{{ branch.registration_number || '-' }}</td>
                                     <td>{{ branch.type == 1 ? '本社' : '支社' }}</td>
                                     <td>{{ branch.num_employees }}</td>
                                     <td>
@@ -90,6 +94,14 @@ $view->heading('支社設定');
                             <div class="mb-3">
                                 <label class="form-label">支社名(ふりがな)</label>
                                 <input type="text" class="form-control" v-model="newBranch.name_kana" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">登録番号</label>
+                                <input type="text" class="form-control" v-model="newBranch.registration_number">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">会社名</label>
+                                <input type="text" class="form-control" v-model="newBranch.company_name">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">タイプ</label>
@@ -151,6 +163,8 @@ $view->footing();
                     newBranch: {
                         name: '',
                         name_kana: '',
+                        registration_number: '',
+                        company_name: '',
                         type: '2',
                         postal_code: '',
                         address1: '',
@@ -211,7 +225,7 @@ $view->footing();
                         }
                         this.showNewBranchModal = false;
                         this.editingBranch = null;
-                        this.newBranch = { name: '', name_kana: '', type: '2', postal_code: '', address1: '', address2: '', tel: '', fax: '', email: '' };
+                        this.newBranch = { name: '', name_kana: '', registration_number: '', company_name: '', type: '2', postal_code: '', address1: '', address2: '', tel: '', fax: '', email: '' };
                         $('#branchModal').modal('hide');
                         showMessage('支社を保存しました。');
                         this.loadBranches();
@@ -222,7 +236,7 @@ $view->footing();
                 },
                 resetBranchData() {
                     this.editingBranch = null;
-                    this.newBranch = { name: '', name_kana: '', type: '2', postal_code: '', address1: '', address2: '', tel: '', fax: '', email: '' };
+                    this.newBranch = { name: '', name_kana: '', registration_number: '', company_name: '', type: '2', postal_code: '', address1: '', address2: '', tel: '', fax: '', email: '' };
                 },
                 searchAddress() {
                     const postalCode = this.newBranch.postal_code;

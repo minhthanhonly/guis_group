@@ -8,6 +8,7 @@ class ParentProject extends ApplicationModel {
             'company_name' => array('notnull'),
             'branch_name' => array(),
             'contact_name' => array(),
+            'customer_id' => array(),
             'guis_receiver' => array(),
             'request_date' => array(),
             'construction_number' => array(),
@@ -56,7 +57,7 @@ class ParentProject extends ApplicationModel {
 
         // Search functionality
         if (!empty($search)) {
-            $search = $this->escape($search);
+            $search = addslashes($search);
             $whereArr[] = "(p.company_name LIKE '%$search%' 
                 OR p.branch_name LIKE '%$search%' 
                 OR p.contact_name LIKE '%$search%' 
