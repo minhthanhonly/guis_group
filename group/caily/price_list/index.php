@@ -4,17 +4,17 @@ $view->heading('価格表管理');
 ?>
 
 <div id="app" class="container-fluid mt-4" v-cloak>
-    <!-- Department Navigation Bar -->
+    <!-- Type Navigation Bar -->
     <nav class="navbar navbar-expand-lg bg-dark mb-3">
         <div class="container-fluid">
-            <span class="navbar-brand text-white" href="javascript:void(0)">部署選択</span>
+            <span class="navbar-brand text-white" href="javascript:void(0)">商品タイプ選択</span>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse justify-content-start" id="navbarSupportedContent">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item" v-for="department in departments" :key="department.id" :class="{ 'active bg-primary text-white rounded-3': selectedDepartment && selectedDepartment.id === department.id }">
-                        <a href="#" class="nav-link" @click="viewProductsByDepartment(department)">{{ department.name }}</a>
+                    <li class="nav-item" v-for="type in productTypes" :key="type.value" :class="{ 'active bg-primary text-white rounded-3': selectedType && selectedType.value === type.value }">
+                        <a href="#" class="nav-link" @click="viewProductsByType(type)">{{ type.label }}</a>
                     </li>
                 </ul>
                 <div class="d-flex gap-2">
@@ -37,7 +37,7 @@ $view->heading('価格表管理');
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">
                             <span data-i18n="価格表管理">価格表管理</span>
-                            <span v-if="selectedDepartment" class="text-muted ms-2">- {{ selectedDepartment.name }}</span>
+                            <span v-if="selectedType" class="text-muted ms-2">- {{ selectedType.label }}</span>
                         </h5>
 
                     </div>
@@ -54,7 +54,9 @@ $view->heading('価格表管理');
                             <select v-model="sortBy" @change="filterProducts" class="form-select" id="sortSelect">
                                 <option value="code">コード</option>
                                 <option value="name">商品名</option>
+                                <option value="type">タイプ</option>
                                 <option value="price">価格</option>
+                                <option value="cost">売上原価</option>
                             </select>
                         </div>
                     </div>
@@ -66,8 +68,10 @@ $view->heading('価格表管理');
                                 <tr>
                                     <th>コード</th>
                                     <th>商品名</th>
+                                    <th>タイプ</th>
                                     <th>単位</th>
                                     <th>単価</th>
+                                    <th>売上原価</th>
                                     <th>作成日時</th>
                                     <th>操作</th>
                                 </tr>
@@ -86,6 +90,9 @@ $view->heading('価格表管理');
                                         <div class="invalid-feedback" v-if="validationErrors.name">{{ validationErrors.name }}</div>
                                     </td>
                                     <td>
+                                        <span class="badge bg-primary">{{ selectedType ? selectedType.label : 'タイプ未選択' }}</span>
+                                    </td>
+                                    <td>
                                         <input type="text" v-model="editingProduct.unit" class="form-control form-control-sm" 
                                                placeholder="単位" :class="{ 'is-invalid': validationErrors.unit }">
                                         <div class="invalid-feedback" v-if="validationErrors.unit">{{ validationErrors.unit }}</div>
@@ -94,6 +101,11 @@ $view->heading('価格表管理');
                                         <input type="number" v-model="editingProduct.price" class="form-control form-control-sm" 
                                                step="0.01" min="0" placeholder="単価" :class="{ 'is-invalid': validationErrors.price }">
                                         <div class="invalid-feedback" v-if="validationErrors.price">{{ validationErrors.price }}</div>
+                                    </td>
+                                    <td>
+                                        <input type="number" v-model="editingProduct.cost" class="form-control form-control-sm" 
+                                               step="0.01" min="0" placeholder="売上原価" :class="{ 'is-invalid': validationErrors.cost }">
+                                        <div class="invalid-feedback" v-if="validationErrors.cost">{{ validationErrors.cost }}</div>
                                     </td>
                                     <td>-</td>
                                     <td>
@@ -132,6 +144,14 @@ $view->heading('価格表管理');
                                          <div class="invalid-feedback" v-if="validationErrors.name">{{ validationErrors.name }}</div>
                                      </td>
                                     
+                                    <!-- Type -->
+                                    <td v-if="editingProduct.id !== product.id">
+                                        {{ product.type || '-' }}
+                                    </td>
+                                    <td v-else>
+                                        <span class="badge bg-primary">{{ selectedType ? selectedType.label : 'タイプ未選択' }}</span>
+                                    </td>
+                                    
                                     <!-- Unit -->
                                     <td v-if="editingProduct.id !== product.id">
                                         {{ product.unit || '-' }}
@@ -150,6 +170,16 @@ $view->heading('価格表管理');
                                         <input type="number" v-model="editingProduct.price" class="form-control form-control-sm" 
                                                step="0.01" min="0" :class="{ 'is-invalid': validationErrors.price }">
                                         <div class="invalid-feedback" v-if="validationErrors.price">{{ validationErrors.price }}</div>
+                                    </td>
+                                    
+                                    <!-- Cost -->
+                                    <td v-if="editingProduct.id !== product.id">
+                                        {{ formatPrice(product.cost || 0) }}
+                                    </td>
+                                    <td v-else>
+                                        <input type="number" v-model="editingProduct.cost" class="form-control form-control-sm" 
+                                               step="0.01" min="0" :class="{ 'is-invalid': validationErrors.cost }">
+                                        <div class="invalid-feedback" v-if="validationErrors.cost">{{ validationErrors.cost }}</div>
                                     </td>
                                     
                                                                          <!-- Created At -->
@@ -242,6 +272,9 @@ $view->heading('価格表管理');
                                 <dt class="col-sm-4">商品名</dt>
                                 <dd class="col-sm-8">{{ selectedProduct.name }}</dd>
                                 
+                                <dt class="col-sm-4">タイプ</dt>
+                                <dd class="col-sm-8">{{ selectedProduct.type }}</dd>
+                                
                                 <dt class="col-sm-4">部署</dt>
                                 <dd class="col-sm-8">{{ selectedProduct.department_name }}</dd>
                             </dl>
@@ -253,6 +286,9 @@ $view->heading('価格表管理');
                                 
                                 <dt class="col-sm-4">単価</dt>
                                 <dd class="col-sm-8">{{ formatPrice(selectedProduct.price) }}</dd>
+                                
+                                <dt class="col-sm-4">売上原価</dt>
+                                <dd class="col-sm-8">{{ formatPrice(selectedProduct.cost) }}</dd>
                                 
                                 <dt class="col-sm-4">作成日時</dt>
                                 <dd class="col-sm-8">{{ formatDateTime(selectedProduct.created_at) }}</dd>

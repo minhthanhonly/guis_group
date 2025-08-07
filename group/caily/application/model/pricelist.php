@@ -8,8 +8,10 @@ class PriceList extends ApplicationModel {
             'code' => array('notnull'),
             'name' => array('notnull'),
             'department_id' => array('notnull'),
+            'type' => array('notnull'),
             'unit' => array('notnull'),
             'price' => array('notnull'),
+            'cost' => array(),
             'notes' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search'))
@@ -93,8 +95,10 @@ class PriceList extends ApplicationModel {
             'code' => $code,
             'name' => $name,
             'department_id' => isset($_POST['department_id']) ? intval($_POST['department_id']) : 0,
+            'type' => isset($_POST['type']) ? $_POST['type'] : '',
             'unit' => $unit,
             'price' => isset($_POST['price']) ? floatval($_POST['price']) : 0,
+            'cost' => isset($_POST['cost']) ? floatval($_POST['cost']) : 0,
             'notes' => $notes,
             'created_at' => date('Y-m-d H:i:s')
         );
@@ -111,13 +115,6 @@ class PriceList extends ApplicationModel {
             return [
                 'status' => 'error',
                 'message' => '商品名は必須です'
-            ];
-        }
-
-        if (empty($data['department_id'])) {
-            return [
-                'status' => 'error',
-                'message' => '部署は必須です'
             ];
         }
 
@@ -181,8 +178,10 @@ class PriceList extends ApplicationModel {
             'code' => $code,
             'name' => $name,
             'department_id' => isset($_POST['department_id']) ? intval($_POST['department_id']) : 0,
+            'type' => isset($_POST['type']) ? $_POST['type'] : '',
             'unit' => $unit,
             'price' => isset($_POST['price']) ? floatval($_POST['price']) : 0,
+            'cost' => isset($_POST['cost']) ? floatval($_POST['cost']) : 0,
             'notes' => $notes,
             'updated_at' => date('Y-m-d H:i:s')
         );
@@ -199,13 +198,6 @@ class PriceList extends ApplicationModel {
             return [
                 'status' => 'error',
                 'message' => '商品名は必須です'
-            ];
-        }
-
-        if (empty($data['department_id'])) {
-            return [
-                'status' => 'error',
-                'message' => '部署は必須です'
             ];
         }
 
@@ -338,8 +330,10 @@ class PriceList extends ApplicationModel {
             'code' => $new_code,
             'name' => $new_name,
             'department_id' => $product['department_id'],
+            'type' => $product['type'],
             'unit' => $product['unit'],
             'price' => $product['price'],
+            'cost' => $product['cost'],
             'notes' => $product['notes'],
             'created_at' => date('Y-m-d H:i:s')
         );

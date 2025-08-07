@@ -13,6 +13,9 @@ class Quotation extends ApplicationModel {
             'receiver_company' => array('notnull'),
             'receiver_address' => array(),
             'receiver_contact' => array(),
+            'receiver_tel' => array(),
+            'receiver_fax' => array(),
+            'receiver_registration_number' => array(),
             'total_amount' => array('notnull'),
             'tax_rate' => array('notnull'),
             'total_with_tax' => array('notnull'),
@@ -44,6 +47,11 @@ class Quotation extends ApplicationModel {
         $data['total_amount'] = $data['total_amount'] ?? 0;
         $data['tax_rate'] = $data['tax_rate'] ?? 10;
         $data['total_with_tax'] = $data['total_with_tax'] ?? 0;
+        
+        // Set default values for new receiver fields
+        $data['receiver_tel'] = $data['receiver_tel'] ?? '';
+        $data['receiver_fax'] = $data['receiver_fax'] ?? '';
+        $data['receiver_registration_number'] = $data['receiver_registration_number'] ?? '';
 
         // Insert quotation
         $quotation_id = $this->insert($data);

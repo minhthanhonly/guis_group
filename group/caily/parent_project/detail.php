@@ -715,7 +715,7 @@ $view->heading('プロジェクト詳細');
          <div class="modal-dialog modal-xl">
              <div class="modal-content">
                  <div class="modal-header">
-                     <h5 class="modal-title" id="createQuotationModalLabel">注⽂請書作成</h5>
+                     <h5 class="modal-title" id="createQuotationModalLabel">見積書作成</h5>
                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                  </div>
                  <div class="modal-body">
@@ -746,7 +746,7 @@ $view->heading('プロジェクト詳細');
                              <div class="col-md-6">
                                  <div class="card">
                                      <div class="card-header">
-                                         <h6 class="mb-0">発注者情報</h6>
+                                         <h6 class="mb-0">受注者情報</h6>
                                      </div>
                                      <div class="card-body">
                                          <div class="mb-3">
@@ -758,7 +758,7 @@ $view->heading('プロジェクト詳細');
                                              <textarea class="form-control" v-model="newQuotation.sender_address" rows="2"></textarea>
                                          </div>
                                          <div class="mb-3">
-                                             <label class="form-label">担当者</label>
+                                             <label class="form-label">担当様</label>
                                              <input type="text" class="form-control" v-model="newQuotation.sender_contact">
                                          </div>
                                      </div>
@@ -769,9 +769,18 @@ $view->heading('プロジェクト詳細');
                              <div class="col-md-6">
                                  <div class="card">
                                      <div class="card-header">
-                                         <h6 class="mb-0">受注者情報</h6>
+                                         <h6 class="mb-0">発注者情報</h6>
                                      </div>
                                      <div class="card-body">
+                                         <div class="mb-3">
+                                             <label class="form-label">支社選択</label>
+                                             <select class="form-select" v-model="newQuotation.selected_branch_id" @change="onBranchSelect">
+                                                 <option value="">支社を選択してください</option>
+                                                 <option v-for="branch in quotationBranches" :key="branch.id" :value="branch.id">
+                                                     {{ branch.name }}
+                                                 </option>
+                                             </select>
+                                         </div>
                                          <div class="mb-3">
                                              <label class="form-label">会社名 <span class="text-danger">*</span></label>
                                              <input type="text" class="form-control" v-model="newQuotation.receiver_company" required>
@@ -781,8 +790,44 @@ $view->heading('プロジェクト詳細');
                                              <textarea class="form-control" v-model="newQuotation.receiver_address" rows="2"></textarea>
                                          </div>
                                          <div class="mb-3">
-                                             <label class="form-label">担当者</label>
-                                             <input type="text" class="form-control" v-model="newQuotation.receiver_contact">
+                                             <label class="form-label">TEL</label>
+                                             <input type="text" class="form-control" v-model="newQuotation.receiver_tel">
+                                         </div>
+                                         <div class="mb-3">
+                                             <label class="form-label">FAX</label>
+                                             <input type="text" class="form-control" v-model="newQuotation.receiver_fax">
+                                         </div>
+                                         <div class="mb-3">
+                                             <label class="form-label">登録番号</label>
+                                             <input type="text" class="form-control" v-model="newQuotation.receiver_registration_number">
+                                         </div>
+                                         <div class="mb-3">
+                                             <label class="form-label">担当</label>
+                                             <select class="form-select" v-model="newQuotation.receiver_contact" @change="onContactSelect">
+                                                 <option value="">担当者を選択してください</option>
+                                                 <option v-for="user in quotationUsers" :key="user.id" :value="user.realname">
+                                                     {{ user.realname }}
+                                                 </option>
+                                             </select>
+                                             <!-- Seal display area -->
+                                             <div v-if="selectedContactSeal" class="mt-2">
+                                                 <div class="alert alert-info d-flex align-items-center">
+                                                     <i class="bi bi-stamp me-2"></i>
+                                                     <div>
+                                                         <strong>印鑑:</strong> {{ selectedContactSeal.name }}
+                                                         <br>
+                                                         <img v-if="selectedContactSeal.image_path" :src="selectedContactSeal.image_path" 
+                                                              class="mt-1" style="max-width: 60px; max-height: 60px; object-fit: contain;" 
+                                                              alt="印鑑画像">
+                                                     </div>
+                                                 </div>
+                                             </div>
+                                             <div v-else-if="newQuotation.receiver_contact && !selectedContactSeal" class="mt-2">
+                                                 <div class="alert alert-warning d-flex align-items-center">
+                                                     <i class="bi bi-exclamation-triangle me-2"></i>
+                                                     <span>選択された担当者の印鑑が見つかりません。</span>
+                                                 </div>
+                                             </div>
                                          </div>
                                      </div>
                                  </div>
@@ -793,9 +838,14 @@ $view->heading('プロジェクト詳細');
                                  <div class="card">
                                      <div class="card-header d-flex justify-content-between align-items-center">
                                          <h6 class="mb-0">商品明細</h6>
-                                         <button type="button" class="btn btn-sm btn-outline-primary" @click="addOrderItem">
-                                             <i class="fa fa-plus me-1"></i> 商品追加
-                                         </button>
+                                         <div class="d-flex gap-2">
+                                             <button type="button" class="btn btn-sm btn-outline-success" @click="showPriceListModal">
+                                                 <i class="fa fa-search me-1"></i> 価格表から選択
+                                             </button>
+                                             <button type="button" class="btn btn-sm btn-outline-primary" @click="addOrderItem">
+                                                 <i class="fa fa-plus me-1"></i> 商品追加
+                                             </button>
+                                         </div>
                                      </div>
                                      <div class="card-body">
                                          <div class="table-responsive">
@@ -940,6 +990,9 @@ $view->heading('プロジェクト詳細');
                                  <h6>受注者</h6>
                                  <p class="mb-1"><strong>{{ selectedQuotation.receiver_company }}</strong></p>
                                  <p class="mb-1">{{ selectedQuotation.receiver_address }}</p>
+                                 <p class="mb-1" v-if="selectedQuotation.receiver_tel">TEL: {{ selectedQuotation.receiver_tel }}</p>
+                                 <p class="mb-1" v-if="selectedQuotation.receiver_fax">FAX: {{ selectedQuotation.receiver_fax }}</p>
+                                 <p class="mb-1" v-if="selectedQuotation.receiver_registration_number">登録番号: {{ selectedQuotation.receiver_registration_number }}</p>
                                  <p class="mb-0">担当: {{ selectedQuotation.receiver_contact }}</p>
                              </div>
                          </div>
@@ -1014,6 +1067,74 @@ $view->heading('プロジェクト詳細');
                          <i class="fa fa-print me-1"></i> 印刷
                      </button>
                  </div>
+             </div>
+         </div>
+     </div>
+ </div>
+ 
+ <!-- Price List Selection Modal -->
+ <div class="modal fade" id="priceListModal" tabindex="-1" aria-labelledby="priceListModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+     <div class="modal-dialog modal-xl">
+         <div class="modal-content">
+             <div class="modal-header">
+                 <h5 class="modal-title" id="priceListModalLabel">価格表から商品を選択</h5>
+                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+             </div>
+             <div class="modal-body">
+                 <!-- Department Filter -->
+                 <div class="row mb-3">
+                     <div class="col-md-6">
+                         <label class="form-label">部署フィルター</label>
+                         <select class="form-select" v-model="selectedPriceListDepartment" @change="filterPriceListProducts">
+                             <option value="">すべての部署</option>
+                             <option v-for="dept in priceListDepartments" :key="dept.id" :value="dept.id">
+                                 {{ dept.name }}
+                             </option>
+                         </select>
+                     </div>
+                     <div class="col-md-6">
+                         <label class="form-label">検索</label>
+                         <input type="text" class="form-control" v-model="priceListSearchTerm" @input="filterPriceListProducts" placeholder="コードまたは商品名で検索">
+                     </div>
+                 </div>
+                 
+                 <!-- Products Table -->
+                 <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                     <table class="table table-hover table-sm">
+                         <thead class="table-light sticky-top">
+                             <tr>
+                                 <th>コード</th>
+                                 <th>商品名</th>
+                                 <th>部署</th>
+                                 <th>単位</th>
+                                 <th>単価</th>
+                                 <th>操作</th>
+                             </tr>
+                         </thead>
+                         <tbody>
+                             <tr v-for="product in filteredPriceListProducts" :key="product.id" class="cursor-pointer" @click="selectPriceListProduct(product)">
+                                 <td>{{ product.code }}</td>
+                                 <td>{{ product.name }}</td>
+                                 <td>{{ product.department_name }}</td>
+                                 <td>{{ product.unit }}</td>
+                                 <td>{{ formatPrice(product.price) }}</td>
+                                 <td>
+                                     <button type="button" class="btn btn-sm btn-outline-primary" @click.stop="selectPriceListProduct(product)">
+                                         <i class="fa fa-plus"></i> 選択
+                                     </button>
+                                 </td>
+                             </tr>
+                             <tr v-if="filteredPriceListProducts.length === 0">
+                                 <td colspan="6" class="text-center text-muted">
+                                     商品が見つかりません
+                                 </td>
+                             </tr>
+                         </tbody>
+                     </table>
+                 </div>
+             </div>
+             <div class="modal-footer">
+                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
              </div>
          </div>
      </div>
@@ -1153,10 +1274,27 @@ $view->footing();
         display: none;
     }
 }
+
+/* Price list modal styles */
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.cursor-pointer:hover {
+    background-color: #f8f9fa;
+}
+
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+}
 </style>
 
 <script>
 const PARENT_PROJECT_ID = <?php echo $parent_project_id; ?>;
+const CURRENT_USER_ID = '<?php echo $_SESSION['userid'] ?? ''; ?>';
+const CURRENT_USER_NAME = '<?php echo $_SESSION['realname'] ?? $_SESSION['userid'] ?? ''; ?>';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="https://unpkg.com/@yaireo/tagify"></script>

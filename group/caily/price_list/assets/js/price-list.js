@@ -7,7 +7,7 @@ createApp({
             departments: [],
             filteredProducts: [],
             paginatedProducts: [],
-            selectedDepartment: '',
+            selectedType: null,
             searchTerm: '',
             sortBy: 'code',
             itemsPerPage: 25,
@@ -20,8 +20,10 @@ createApp({
                 code: '',
                 name: '',
                 department_id: '',
+                type: '',
                 unit: '',
                 price: '',
+                cost: '',
                 notes: ''
             },
             selectedProduct: null,
@@ -29,7 +31,11 @@ createApp({
             detailModal: null,
             showAddRow: false,
             originalProduct: null,
-            selectedDepartment: null
+            productTypes: [
+                { value: '新規', label: '新規' },
+                { value: '修正', label: '修正' },
+                { value: 'その他', label: 'その他' }
+            ]
         };
     },
     computed: {
@@ -64,9 +70,9 @@ createApp({
                     this.products = productsResponse.data;
                     this.departments = departmentsResponse.data;
                     
-                    // Set first department as default if departments exist
-                    if (this.departments.length > 0 && !this.selectedDepartment) {
-                        this.selectedDepartment = this.departments[0];
+                    // Set first type as default if no type is selected
+                    if (!this.selectedType) {
+                        this.selectedType = this.productTypes[0];
                     }
                     
                     this.filterProducts();
@@ -82,9 +88,9 @@ createApp({
         filterProducts() {
             let filtered = [...this.products];
 
-            // Filter by department (from navbar selection)
-            if (this.selectedDepartment && this.selectedDepartment.id) {
-                filtered = filtered.filter(product => (product.department_id || '') == this.selectedDepartment.id);
+            // Filter by type (from navbar selection)
+            if (this.selectedType && this.selectedType.value) {
+                filtered = filtered.filter(product => (product.type || '') === this.selectedType.value);
             }
 
             // Filter by search term
@@ -113,10 +119,14 @@ createApp({
                         return (a.code || '').toString().localeCompare((b.code || '').toString());
                     case 'name':
                         return (a.name || '').toString().localeCompare((b.name || '').toString());
+                    case 'type':
+                        return (a.type || '').toString().localeCompare((b.type || '').toString());
                     case 'department':
                         return (a.department_name || '').toString().localeCompare((b.department_name || '').toString());
                     case 'price':
                         return parseFloat(a.price || 0) - parseFloat(b.price || 0);
+                    case 'cost':
+                        return parseFloat(a.cost || 0) - parseFloat(b.cost || 0);
                     default:
                         return 0;
                 }
@@ -152,8 +162,10 @@ createApp({
                 code: '',
                 name: '',
                 department_id: this.selectedDepartment ? this.selectedDepartment.id : '',
+                type: this.selectedType ? this.selectedType.value : '',
                 unit: '',
                 price: '',
+                cost: '',
                 notes: ''
             };
             this.validationErrors = {};
@@ -166,6 +178,14 @@ createApp({
             this.originalProduct = { ...product };
             this.validationErrors = {};
             this.showAddRow = false;
+            
+            // Set the selected type to match the product's type for editing
+            if (product.type) {
+                const matchingType = this.productTypes.find(t => t.value === product.type);
+                if (matchingType) {
+                    this.selectedType = matchingType;
+                }
+            }
         },
 
         cancelEdit() {
@@ -176,8 +196,10 @@ createApp({
                 code: '',
                 name: '',
                 department_id: '',
+                type: '',
                 unit: '',
                 price: '',
+                cost: '',
                 notes: ''
             };
             this.validationErrors = {};
@@ -186,8 +208,8 @@ createApp({
 
 
 
-        viewProductsByDepartment(department) {
-            this.selectedDepartment = department;
+        viewProductsByType(type) {
+            this.selectedType = type;
             this.filterProducts();
         },
 
@@ -227,6 +249,11 @@ createApp({
         async saveProduct() {
             this.validationErrors = {};
             
+            // Set type from selected navbar type
+            if (this.selectedType) {
+                this.editingProduct.type = this.selectedType.value;
+            }
+            
             // Validation
             if (!this.editingProduct.code.trim()) {
                 this.validationErrors.code = 'コードは必須です';
@@ -239,6 +266,9 @@ createApp({
             }
             if (!this.editingProduct.price || parseFloat(this.editingProduct.price) <= 0) {
                 this.validationErrors.price = '有効な単価を入力してください';
+            }
+            if (this.editingProduct.cost && parseFloat(this.editingProduct.cost) < 0) {
+                this.validationErrors.cost = '売上原価は0以上で入力してください';
             }
 
             if (Object.keys(this.validationErrors).length > 0) {

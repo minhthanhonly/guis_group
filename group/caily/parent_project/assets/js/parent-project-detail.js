@@ -88,15 +88,22 @@ createApp({
             quotations: [],
             selectedQuotation: null,
             creatingQuotation: false,
+            quotationBranches: [],
+            quotationUsers: [],
+            selectedContactSeal: null,
             newQuotation: {
                 issue_date: '',
                 quotation_number: '',
                 sender_company: '',
                 sender_address: '',
                 sender_contact: '',
+                selected_branch_id: '',
                 receiver_company: '',
                 receiver_address: '',
                 receiver_contact: '',
+                receiver_tel: '',
+                receiver_fax: '',
+                receiver_registration_number: '',
                 items: [],
                 total_amount: 0,
                 tax_rate: 10,
@@ -109,7 +116,14 @@ createApp({
             },
             selectedQuotation: null,
             creatingQuotation: false,
-            quotationFormBackup: null
+            quotationFormBackup: null,
+            // Price list data
+            priceListProducts: [],
+            priceListDepartments: [],
+            filteredPriceListProducts: [],
+            selectedPriceListDepartment: '',
+            priceListSearchTerm: '',
+            priceListModal: null
         }
     },
     methods: {
@@ -1455,6 +1469,112 @@ createApp({
             }
         },
 
+        async loadQuotationBranches() {
+            try {
+                const response = await axios.get('/api/index.php?model=branch&method=list');
+                if (response.data && Array.isArray(response.data)) {
+                    this.quotationBranches = response.data;
+                    // Set default selection to first branch if available
+                    if (this.quotationBranches.length > 0 && !this.newQuotation.selected_branch_id) {
+                        this.newQuotation.selected_branch_id = this.quotationBranches[0].id;
+                        this.onBranchSelect();
+                    }
+                } else {
+                    this.quotationBranches = [];
+                }
+            } catch (error) {
+                console.error('Error loading quotation branches:', error);
+                this.quotationBranches = [];
+            }
+        },
+
+        onBranchSelect() {
+            if (this.newQuotation.selected_branch_id) {
+                const selectedBranch = this.quotationBranches.find(branch => branch.id == this.newQuotation.selected_branch_id);
+                if (selectedBranch) {
+                    this.newQuotation.receiver_company = selectedBranch.company_name || selectedBranch.name;
+                    // Include postal_code in the address field
+                    const addressParts = [];
+                    if (selectedBranch.postal_code) {
+                        addressParts.push(`〒${selectedBranch.postal_code}`);
+                    }
+                    if (selectedBranch.address1) {
+                        addressParts.push(selectedBranch.address1);
+                    }
+                    if (selectedBranch.address2) {
+                        addressParts.push(selectedBranch.address2);
+                    }
+                    this.newQuotation.receiver_address = addressParts.join(' ');
+                    this.newQuotation.receiver_tel = selectedBranch.tel || '';
+                    this.newQuotation.receiver_fax = selectedBranch.fax || '';
+                    this.newQuotation.receiver_registration_number = selectedBranch.registration_number || '';
+                }
+            } else {
+                // Clear fields if no branch is selected
+                this.newQuotation.receiver_company = '';
+                this.newQuotation.receiver_address = '';
+                this.newQuotation.receiver_tel = '';
+                this.newQuotation.receiver_fax = '';
+                this.newQuotation.receiver_registration_number = '';
+            }
+        },
+
+            async loadQuotationUsers() {
+        try {
+            const response = await axios.get('/api/index.php?model=user&method=searchMembers');
+            if (response.data && response.data.status === 'success') {
+                this.quotationUsers = response.data.data || [];
+                // Set default selection to current user if available
+                if (this.quotationUsers.length > 0 && !this.newQuotation.receiver_contact) {
+                    const currentUser = this.quotationUsers.find(user => user.userid === CURRENT_USER_ID);
+                    if (currentUser) {
+                        this.newQuotation.receiver_contact = currentUser.realname;
+                        // Load seal for the default user
+                        await this.loadContactSeal(currentUser.userid);
+                    }
+                }
+            } else {
+                this.quotationUsers = [];
+            }
+        } catch (error) {
+            console.error('Error loading quotation users:', error);
+            this.quotationUsers = [];
+        }
+    },
+
+            async loadContactSeal(userId) {
+        try {
+            const response = await axios.get(`/api/index.php?model=seal&method=getSealsByUser&user_id=${userId}`);
+            if (response.data && response.data.length > 0) {
+                // Get the first active seal for this user
+                this.selectedContactSeal = response.data[0];
+            } else {
+                this.selectedContactSeal = null;
+            }
+        } catch (error) {
+            console.error('Error loading contact seal:', error);
+            this.selectedContactSeal = null;
+        }
+    },
+
+    async onContactSelect() {
+        // Clear previous seal
+        this.selectedContactSeal = null;
+        
+        if (!this.newQuotation.receiver_contact) {
+            return;
+        }
+        
+        // Find the selected user to get their userid
+        const selectedUser = this.quotationUsers.find(user => user.realname === this.newQuotation.receiver_contact);
+        if (!selectedUser) {
+            return;
+        }
+        
+        // Load seal for the selected user
+        await this.loadContactSeal(selectedUser.userid);
+    },
+
         showCreateQuotationModal() {
             // Restore previous form data if available, otherwise reset
             if (this.quotationFormBackup) {
@@ -1468,6 +1588,14 @@ createApp({
             // Initialize Flatpickr for quotation date fields after modal is shown
             this.$nextTick(() => {
                 this.initializeQuotationDatePickers();
+                // Load branches if not already loaded
+                if (this.quotationBranches.length === 0) {
+                    this.loadQuotationBranches();
+                }
+                // Load users if not already loaded
+                if (this.quotationUsers.length === 0) {
+                    this.loadQuotationUsers();
+                }
             });
         },
 
@@ -1478,9 +1606,13 @@ createApp({
                 sender_company: this.parentProject?.company_name || '',
                 sender_address: '',
                 sender_contact: this.parentProject?.contact_name || '',
+                selected_branch_id: '',
                 receiver_company: '',
                 receiver_address: '',
-                receiver_contact: '',
+                receiver_contact: CURRENT_USER_NAME || '',
+                receiver_tel: '',
+                receiver_fax: '',
+                receiver_registration_number: '',
                 items: [],
                 total_amount: 0,
                 tax_rate: 10,
@@ -1491,7 +1623,12 @@ createApp({
                 notes: '',
                 parent_project_id: PARENT_PROJECT_ID
             };
+            this.selectedContactSeal = null;
             this.addOrderItem(); // Add one empty item by default
+            // Load branches and set default selection
+            this.loadQuotationBranches();
+            // Load users and set default contact
+            this.loadQuotationUsers();
         },
 
         addOrderItem() {
@@ -1685,6 +1822,78 @@ createApp({
 
         formatPrice(price) {
             return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(price);
+        },
+        
+        // Price list methods
+        async loadPriceListData() {
+            try {
+                const [productsResponse, departmentsResponse] = await Promise.all([
+                    axios.get('/api/index.php?model=pricelist&method=getAllProducts'),
+                    axios.get('/api/index.php?model=department&method=getAll')
+                ]);
+                
+                if (productsResponse.data && departmentsResponse.data) {
+                    this.priceListProducts = productsResponse.data;
+                    this.priceListDepartments = departmentsResponse.data;
+                    this.filterPriceListProducts();
+                }
+            } catch (error) {
+                console.error('Error loading price list data:', error);
+            }
+        },
+        
+        filterPriceListProducts() {
+            let filtered = [...this.priceListProducts];
+            
+            // Filter by department
+            if (this.selectedPriceListDepartment) {
+                filtered = filtered.filter(product => 
+                    (product.department_id || '') == this.selectedPriceListDepartment
+                );
+            }
+            
+            // Filter by search term
+            if (this.priceListSearchTerm) {
+                const term = this.priceListSearchTerm.toLowerCase();
+                filtered = filtered.filter(product => 
+                    (product.code || '').toLowerCase().includes(term) ||
+                    (product.name || '').toLowerCase().includes(term)
+                );
+            }
+            
+            this.filteredPriceListProducts = filtered;
+        },
+        
+        showPriceListModal() {
+            if (this.priceListProducts.length === 0) {
+                this.loadPriceListData();
+            }
+            this.priceListModal.show();
+        },
+        
+        selectPriceListProduct(product) {
+            // Add the selected product as a new order item
+            const newItem = {
+                title: product.name,
+                product_code: product.code,
+                product_name: product.name,
+                quantity: 1,
+                unit: product.unit,
+                unit_price: product.price,
+                amount: product.price,
+                notes: product.notes || ''
+            };
+            
+            this.newQuotation.items.push(newItem);
+            this.calculateTotalAmount();
+            
+            // Close the modal
+            this.priceListModal.hide();
+            
+            // Reset filters
+            this.selectedPriceListDepartment = '';
+            this.priceListSearchTerm = '';
+            this.filterPriceListProducts();
         }
     },
     async mounted() {
@@ -1692,6 +1901,9 @@ createApp({
             await this.loadParentProject();
             await this.loadChildProjects();
             await this.loadQuotations();
+            
+            // Initialize price list modal
+            this.priceListModal = new bootstrap.Modal(document.getElementById('priceListModal'));
             
             // Add event listeners for modal close events
             const createQuotationModal = document.getElementById('createQuotationModal');

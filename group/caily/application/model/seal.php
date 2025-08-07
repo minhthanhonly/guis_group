@@ -43,9 +43,6 @@ class Seal extends ApplicationModel {
     }
 
     function add() {
-        // Debug: Log received data
-        error_log("Seal add() - POST data: " . print_r($_POST, true));
-        
         $data = array(
             'name' => $_POST['name'],
             'type' => $_POST['type'],
@@ -58,9 +55,6 @@ class Seal extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s')
         );
         
-        // Debug: Log data to be inserted
-        error_log("Seal add() - Data to insert: " . print_r($data, true));
-        
         // Handle file upload if present
         if (isset($_FILES['seal_image']) && $_FILES['seal_image']['error'] === UPLOAD_ERR_OK) {
             $upload_result = $this->upload_file();
@@ -70,18 +64,11 @@ class Seal extends ApplicationModel {
             $data['mime_type'] = $upload_result['mime_type'];
         }
         
-        $result = $this->query_insert($data);
-        error_log("Seal add() - Insert result: " . print_r($result, true));
-        return $result;
+        return $this->query_insert($data);
     }
 
     function edit() {
         $id = $_GET['id'];
-        
-        // Debug: Log received data
-        error_log("Seal edit() - POST data: " . print_r($_POST, true));
-        error_log("Seal edit() - ID: " . $id);
-        
         $data = array(
             'name' => $_POST['name'],
             'type' => $_POST['type'],
@@ -91,9 +78,6 @@ class Seal extends ApplicationModel {
             'updated_by' => $_SESSION['userid'] ?? null,
             'updated_at' => date('Y-m-d H:i:s')
         );
-        
-        // Debug: Log data to be updated
-        error_log("Seal edit() - Data to update: " . print_r($data, true));
         
         // Handle file upload if present
         if (isset($_FILES['seal_image']) && $_FILES['seal_image']['error'] === UPLOAD_ERR_OK) {
@@ -113,9 +97,7 @@ class Seal extends ApplicationModel {
             $data['mime_type'] = $upload_result['mime_type'];
         }
         
-        $result = $this->query_update($data, ['id' => $id]);
-        error_log("Seal edit() - Update result: " . print_r($result, true));
-        return $result;
+        return $this->query_update($data, ['id' => $id]);
     }
 
     function delete() {
@@ -155,6 +137,28 @@ class Seal extends ApplicationModel {
         $query = sprintf(
             "SELECT userid, realname FROM %s WHERE is_suspend = 0 OR is_suspend IS NULL OR is_suspend = '' ORDER BY id ASC",
             DB_PREFIX . 'user'
+        );
+        return $this->fetchAll($query);
+    }
+
+    function getSealsByUser() {
+        $user_id = $_GET['user_id'] ?? null;
+        if (!$user_id) {
+            return array();
+        }
+        
+        $query = sprintf(
+            "SELECT s.*, 
+            CASE 
+                WHEN s.type = 'employee' AND s.owner_id IS NOT NULL THEN u.realname
+                ELSE s.owner_name 
+            END as display_owner_name
+            FROM {$this->table} s
+            LEFT JOIN %s u ON s.owner_id = u.userid
+            WHERE s.owner_id = '%s' AND s.is_active = 1
+            ORDER BY s.type ASC, s.name ASC",
+            DB_PREFIX . 'user',
+            $this->quote($user_id)
         );
         return $this->fetchAll($query);
     }

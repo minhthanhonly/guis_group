@@ -94,7 +94,7 @@ if (!$project_id) {
                                                 <input type="text" class="form-control" :value="project.branch_name || '-'" readonly>
                                             </div>
                                             <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="担当者名">担当者名</span></label>
+                                                <label class="form-label"><span data-i18n="担当様">担当様</span></label>
                                                 <input type="text" class="form-control" :value="project.contact_name || '-'" readonly>
                                             </div>
                                             <div class="col-md-4 mb-3">

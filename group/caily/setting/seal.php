@@ -548,7 +548,7 @@ $view->footing();
                         showMessage('印鑑の保存に失敗しました。', true);
                     }
                 },
-                                 resetSealData() {
+                resetSealData() {
                      this.editingSeal = null;
                      this.newSeal = {
                          name: '',
