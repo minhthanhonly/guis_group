@@ -123,7 +123,10 @@ createApp({
             filteredPriceListProducts: [],
             selectedPriceListDepartment: '',
             priceListSearchTerm: '',
-            priceListModal: null
+            priceListModal: null,
+            // Multiple product selection
+            selectedProducts: [],
+            allSelected: false
         }
     },
     methods: {
@@ -1842,59 +1845,139 @@ createApp({
             }
         },
         
-        filterPriceListProducts() {
-            let filtered = [...this.priceListProducts];
-            
-            // Filter by department
-            if (this.selectedPriceListDepartment) {
-                filtered = filtered.filter(product => 
-                    (product.department_id || '') == this.selectedPriceListDepartment
-                );
-            }
-            
-            // Filter by search term
-            if (this.priceListSearchTerm) {
-                const term = this.priceListSearchTerm.toLowerCase();
-                filtered = filtered.filter(product => 
-                    (product.code || '').toLowerCase().includes(term) ||
-                    (product.name || '').toLowerCase().includes(term)
-                );
-            }
-            
-            this.filteredPriceListProducts = filtered;
-        },
+                    filterPriceListProducts() {
+                let filtered = [...this.priceListProducts];
+                
+                // Filter by department
+                if (this.selectedPriceListDepartment) {
+                    filtered = filtered.filter(product => 
+                        (product.department_id || '') == this.selectedPriceListDepartment
+                    );
+                }
+                
+                // Filter by search term
+                if (this.priceListSearchTerm) {
+                    const term = this.priceListSearchTerm.toLowerCase();
+                    filtered = filtered.filter(product => 
+                        (product.code || '').toLowerCase().includes(term) ||
+                        (product.name || '').toLowerCase().includes(term)
+                    );
+                }
+                
+                this.filteredPriceListProducts = filtered;
+                
+                // Reset selection when filter changes
+                this.selectedProducts = [];
+                this.updateAllSelectedStatus();
+            },
         
-        showPriceListModal() {
-            if (this.priceListProducts.length === 0) {
-                this.loadPriceListData();
-            }
-            this.priceListModal.show();
-        },
+                    showPriceListModal() {
+                if (this.priceListProducts.length === 0) {
+                    this.loadPriceListData();
+                }
+                // Reset selection when opening modal
+                this.selectedProducts = [];
+                this.allSelected = false;
+                this.priceListModal.show();
+            },
         
-        selectPriceListProduct(product) {
-            // Add the selected product as a new order item
-            const newItem = {
-                title: product.name,
-                product_code: product.code,
-                product_name: product.name,
-                quantity: 1,
-                unit: product.unit,
-                unit_price: product.price,
-                amount: product.price,
-                notes: product.notes || ''
-            };
+                    selectPriceListProduct(product) {
+                // Add the selected product as a new order item
+                const newItem = {
+                    title: product.name,
+                    product_code: product.code,
+                    product_name: product.name,
+                    quantity: 1,
+                    unit: product.unit,
+                    unit_price: product.price,
+                    amount: product.price,
+                    notes: product.notes || ''
+                };
+                
+                this.newQuotation.items.push(newItem);
+                this.calculateTotalAmount();
+                
+                // Close the modal
+                this.priceListModal.hide();
+                
+                // Reset filters
+                this.selectedPriceListDepartment = '';
+                this.priceListSearchTerm = '';
+                this.filterPriceListProducts();
+            },
             
-            this.newQuotation.items.push(newItem);
-            this.calculateTotalAmount();
+            // Multiple product selection methods
+            toggleProductSelection(product) {
+                const index = this.selectedProducts.indexOf(product.id);
+                if (index > -1) {
+                    this.selectedProducts.splice(index, 1);
+                } else {
+                    this.selectedProducts.push(product.id);
+                }
+                this.updateAllSelectedStatus();
+            },
             
-            // Close the modal
-            this.priceListModal.hide();
+            toggleSelectAll() {
+                if (this.allSelected) {
+                    this.selectedProducts = [];
+                } else {
+                    this.selectedProducts = this.filteredPriceListProducts.map(p => p.id);
+                }
+                this.updateAllSelectedStatus();
+            },
             
-            // Reset filters
-            this.selectedPriceListDepartment = '';
-            this.priceListSearchTerm = '';
-            this.filterPriceListProducts();
-        }
+            updateAllSelectedStatus() {
+                this.allSelected = this.selectedProducts.length === this.filteredPriceListProducts.length && this.filteredPriceListProducts.length > 0;
+            },
+            
+            selectSingleProduct(product) {
+                // Single product selection (original behavior)
+                this.selectPriceListProduct(product);
+            },
+            
+            removeFromSelection(productId) {
+                const index = this.selectedProducts.indexOf(productId);
+                if (index > -1) {
+                    this.selectedProducts.splice(index, 1);
+                }
+                this.updateAllSelectedStatus();
+            },
+            
+            getSelectedProductsList() {
+                return this.priceListProducts.filter(p => this.selectedProducts.includes(p.id));
+            },
+            
+            getSelectedProductsTotal() {
+                return this.getSelectedProductsList().reduce((total, product) => total + product.price, 0);
+            },
+            
+            addSelectedProductsAsSet() {
+                const selectedProducts = this.getSelectedProductsList();
+                if (selectedProducts.length === 0) return;
+                
+                // Create a set item with combined information
+                const setItem = {
+                    title: `商品セット (${selectedProducts.length}件)`,
+                    product_code: selectedProducts.map(p => p.code).join(', '),
+                    product_name: selectedProducts.map(p => p.name).join(' + '),
+                    quantity: 1,
+                    unit: 'セット',
+                    unit_price: this.getSelectedProductsTotal(),
+                    amount: this.getSelectedProductsTotal(),
+                    notes: `セット内容: ${selectedProducts.map(p => `${p.name}(${this.formatPrice(p.price)})`).join(', ')}`
+                };
+                
+                this.newQuotation.items.push(setItem);
+                this.calculateTotalAmount();
+                
+                // Close the modal and reset
+                this.priceListModal.hide();
+                this.selectedProducts = [];
+                this.allSelected = false;
+                this.selectedPriceListDepartment = '';
+                this.priceListSearchTerm = '';
+                this.filterPriceListProducts();
+            }
     },
     async mounted() {
         try {

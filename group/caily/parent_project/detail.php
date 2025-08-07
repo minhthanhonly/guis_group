@@ -1103,6 +1103,9 @@ $view->heading('プロジェクト詳細');
                      <table class="table table-hover table-sm">
                          <thead class="table-light sticky-top">
                              <tr>
+                                 <th>
+                                     <input type="checkbox" class="form-check-input" @change="toggleSelectAll" :checked="allSelected">
+                                 </th>
                                  <th>コード</th>
                                  <th>商品名</th>
                                  <th>部署</th>
@@ -1112,28 +1115,72 @@ $view->heading('プロジェクト詳細');
                              </tr>
                          </thead>
                          <tbody>
-                             <tr v-for="product in filteredPriceListProducts" :key="product.id" class="cursor-pointer" @click="selectPriceListProduct(product)">
+                             <tr v-for="product in filteredPriceListProducts" :key="product.id" class="cursor-pointer" @click="toggleProductSelection(product)">
+                                 <td>
+                                     <input type="checkbox" class="form-check-input" :checked="selectedProducts.includes(product.id)" @click.stop>
+                                 </td>
                                  <td>{{ product.code }}</td>
                                  <td>{{ product.name }}</td>
                                  <td>{{ product.department_name }}</td>
                                  <td>{{ product.unit }}</td>
                                  <td>{{ formatPrice(product.price) }}</td>
                                  <td>
-                                     <button type="button" class="btn btn-sm btn-outline-primary" @click.stop="selectPriceListProduct(product)">
-                                         <i class="fa fa-plus"></i> 選択
+                                     <button type="button" class="btn btn-sm btn-outline-primary" @click.stop="selectSingleProduct(product)">
+                                         <i class="fa fa-plus"></i> 単品選択
                                      </button>
                                  </td>
                              </tr>
                              <tr v-if="filteredPriceListProducts.length === 0">
-                                 <td colspan="6" class="text-center text-muted">
+                                 <td colspan="7" class="text-center text-muted">
                                      商品が見つかりません
                                  </td>
                              </tr>
                          </tbody>
                      </table>
                  </div>
+                 
+                 <!-- Selected Products Summary -->
+                 <div v-if="selectedProducts.length > 0" class="mt-3">
+                     <div class="card">
+                         <div class="card-header">
+                             <h6 class="mb-0">選択された商品 ({{ selectedProducts.length }}件)</h6>
+                         </div>
+                         <div class="card-body">
+                             <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                                 <table class="table table-sm">
+                                     <thead>
+                                         <tr>
+                                             <th>コード</th>
+                                             <th>商品名</th>
+                                             <th>単価</th>
+                                             <th>操作</th>
+                                         </tr>
+                                     </thead>
+                                     <tbody>
+                                         <tr v-for="product in getSelectedProductsList()" :key="product.id">
+                                             <td>{{ product.code }}</td>
+                                             <td>{{ product.name }}</td>
+                                             <td>{{ formatPrice(product.price) }}</td>
+                                             <td>
+                                                 <button type="button" class="btn btn-sm btn-outline-danger" @click="removeFromSelection(product.id)">
+                                                     <i class="fa fa-times"></i>
+                                                 </button>
+                                             </td>
+                                         </tr>
+                                     </tbody>
+                                 </table>
+                             </div>
+                             <div class="mt-2">
+                                 <strong>合計単価: {{ formatPrice(getSelectedProductsTotal()) }}</strong>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
              </div>
              <div class="modal-footer">
+                 <button type="button" class="btn btn-success" @click="addSelectedProductsAsSet" :disabled="selectedProducts.length === 0">
+                     <i class="fa fa-plus me-1"></i> 選択セット追加 ({{ selectedProducts.length }}件)
+                 </button>
                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
              </div>
          </div>
@@ -1288,6 +1335,33 @@ $view->footing();
     position: sticky;
     top: 0;
     z-index: 1020;
+}
+
+/* Checkbox styles for product selection */
+.form-check-input {
+    cursor: pointer;
+}
+
+.form-check-input:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* Selected products summary styles */
+.selected-products-summary {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    background-color: #f8f9fa;
+}
+
+.selected-products-summary .card-header {
+    background-color: #e9ecef;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Table hover effect for selected products */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.1);
 }
 </style>
 
