@@ -343,15 +343,10 @@ class Quotation extends ApplicationModel {
     }
 
     function update($params = null) {
+        $data = $_POST;
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => '見積書IDが指定されていません'];
-        
-        // Get data from $params parameter (API call) or $_POST (direct call)
-        if ($params === null) {
-            $data = $_POST;
-        } else {
-            $data = $params;
-        }
+       
         
         // Validate required fields
         $errors = array();
@@ -377,12 +372,13 @@ class Quotation extends ApplicationModel {
         } elseif (!is_numeric($data['parent_project_id']) || intval($data['parent_project_id']) <= 0) {
             $errors['parent_project_id'] = '親プロジェクトIDは有効な数値で入力してください';
         }
-        
+
         // Check if items exist and are valid
         if (empty($data['items'])) {
             $errors['items'] = '商品明細は必須です';
         } else {
             $items = json_decode($data['items'], true);
+            
             if (!is_array($items) || count($items) === 0) {
                 $errors['items'] = '商品明細は必須です';
             } else {
@@ -392,11 +388,11 @@ class Quotation extends ApplicationModel {
                         $errors['items'] = '商品明細の件名は必須です';
                         break;
                     }
-                    if (empty($item['quantity']) || $item['quantity'] <= 0) {
+                    if (empty($item['quantity']) || floatval($item['quantity']) <= 0) {
                         $errors['items'] = '商品明細の数量は1以上で入力してください';
                         break;
                     }
-                    if (empty($item['unit_price']) || $item['unit_price'] < 0) {
+                    if (empty($item['unit_price']) || floatval($item['unit_price']) < 0) {
                         $errors['items'] = '商品明細の単価は0以上で入力してください';
                         break;
                     }
@@ -494,6 +490,20 @@ class Quotation extends ApplicationModel {
         $item_table = DB_PREFIX . 'quotation_items';
         
         foreach ($items as $index => $item) {
+            // Handle set_json_base64 decoding
+            $set_json = null;
+            if (!empty($item['set_json_base64'])) {
+                try {
+                    $set_json = base64_decode($item['set_json_base64']);
+                } catch (Exception $e) {
+                    error_log('Failed to decode set_json_base64: ' . $e->getMessage());
+                    $set_json = null;
+                }
+            } elseif (!empty($item['set_json'])) {
+                // Fallback to original set_json if base64 version not available
+                $set_json = $item['set_json'];
+            }
+            
             $item_data = array(
                 'quotation_id' => $quotation_id,
                 'project_id' => !empty($item['project_id']) ? intval($item['project_id']) : null,
@@ -506,7 +516,7 @@ class Quotation extends ApplicationModel {
                 'amount' => $item['amount'] ?? 0,
                 'notes' => $item['notes'] ?? '',
                 'is_set' => isset($item['is_set']) ? ($item['is_set'] ? 1 : 0) : 0,
-                'set_json' => $item['set_json'] ?? null,
+                'set_json' => $set_json,
                 'sort_order' => $index
             );
             

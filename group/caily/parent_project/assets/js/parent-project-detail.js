@@ -2125,7 +2125,7 @@ createApp({
             }, 0);
             
             this.newQuotation.total_amount = total;
-            this.newQuotation.total_with_tax = Math.floor(this.newQuotation.total_amount * (1 + (this.newQuotation.tax_rate || 0) / 100));
+            this.newQuotation.total_with_tax = this.newQuotation.total_amount * (1 + (this.newQuotation.tax_rate || 0) / 100);
         },
 
         onValidUntilTypeChange() {
@@ -2561,6 +2561,14 @@ createApp({
             // Take only the integer part of the price
             const integerPrice = Math.floor(price);
             return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(integerPrice);
+        },
+
+        formatNumberForInput(number) {
+            // Format number with 2 decimal places for input display
+            if (number === null || number === undefined || isNaN(number)) {
+                return '0.00';
+            }
+            return parseFloat(number).toFixed(2);
         },
         
         // Price list methods
@@ -3524,10 +3532,41 @@ createApp({
                     this.editingQuotation = JSON.parse(JSON.stringify(response.data.data));
                     
                     // Ensure project_id in items are integers for proper select binding
+                    // and fix set_json encoding issues
                     if (this.editingQuotation.items && this.editingQuotation.items.length > 0) {
                         this.editingQuotation.items.forEach(item => {
                             if (item.project_id) {
                                 item.project_id = parseInt(item.project_id);
+                            }
+                            
+                            // Fix set_json if it's double-encoded or has HTML entities
+                            if (item.is_set && item.set_json) {
+                                try {
+                                    let setJson = item.set_json;
+                                    
+                                    // If it's a string, try to parse it
+                                    if (typeof setJson === 'string') {
+                                        // Remove extra quotes if double-encoded
+                                        if (setJson.startsWith('""') && setJson.endsWith('""')) {
+                                            setJson = setJson.slice(2, -2);
+                                        } else if (setJson.startsWith('"') && setJson.endsWith('"')) {
+                                            setJson = setJson.slice(1, -1);
+                                        }
+                                        
+                                        // Decode HTML entities
+                                        setJson = setJson.replace(/&quot;/g, '"');
+                                        setJson = setJson.replace(/&amp;/g, '&');
+                                        setJson = setJson.replace(/&lt;/g, '<');
+                                        setJson = setJson.replace(/&gt;/g, '>');
+                                        
+                                        // Try to parse as JSON
+                                        const parsed = JSON.parse(setJson);
+                                        item.set_json = parsed; // Store as object for proper processing
+                                    }
+                                } catch (e) {
+                                    console.warn('Failed to parse set_json for item:', item.title, e);
+                                    // Keep original value if parsing fails
+                                }
                             }
                         });
                     }
@@ -3587,6 +3626,11 @@ createApp({
                     }
                     if (this.quotationUsers.length === 0) {
                         await this.loadQuotationUsers();
+                    }
+                    
+                    // Trigger branch selection to populate address if branch is selected
+                    if (this.editingQuotation.selected_branch_id) {
+                        this.onBranchSelectForEdit();
                     }
                     
                     // Show modal
@@ -3882,22 +3926,71 @@ createApp({
                 formData.append('notes', this.editingQuotation.notes);
                 formData.append('parent_project_id', this.editingQuotation.parent_project_id);
                 
-                // Add items
+                // Add items as JSON string (same as createQuotation)
                 if (this.editingQuotation.items && this.editingQuotation.items.length > 0) {
-                    this.editingQuotation.items.forEach((item, index) => {
-                        formData.append(`items[${index}][project_id]`, item.project_id || '');
-                        formData.append(`items[${index}][title]`, item.title || '');
-                        formData.append(`items[${index}][product_code]`, item.product_code || '');
-                        formData.append(`items[${index}][quantity]`, item.quantity || 0);
-                        formData.append(`items[${index}][unit]`, item.unit || '');
-                        formData.append(`items[${index}][unit_price]`, item.unit_price || 0);
-                        formData.append(`items[${index}][amount]`, item.amount || 0);
-                        formData.append(`items[${index}][notes]`, item.notes || '');
-                        formData.append(`items[${index}][is_set]`, item.is_set ? '1' : '0');
+                    // Create a deep copy of items and properly handle set_json
+                    const itemsCopy = this.editingQuotation.items.map(item => {
+                        // Create a clean copy without database-specific fields
+                        const cleanItem = {
+                            project_id: item.project_id,
+                            title: item.title,
+                            product_code: item.product_code,
+                            quantity: item.quantity,
+                            unit: item.unit,
+                            unit_price: item.unit_price,
+                            amount: item.amount,
+                            notes: item.notes,
+                            is_set: item.is_set ? true : false
+                        };
+                        
+                        // Handle set_json with proper encoding to avoid JSON syntax errors
                         if (item.is_set && item.set_json) {
-                            formData.append(`items[${index}][set_json]`, typeof item.set_json === 'string' ? item.set_json : JSON.stringify(item.set_json));
+                            try {
+                                let setJsonString;
+                                
+                                if (typeof item.set_json === 'object') {
+                                    // If object, stringify it
+                                    setJsonString = JSON.stringify(item.set_json);
+                                } else if (typeof item.set_json === 'string') {
+                                    // If already a string, validate and use
+                                    try {
+                                        // Parse to validate it's valid JSON
+                                        const parsed = JSON.parse(item.set_json);
+                                        // Re-stringify to ensure consistent format
+                                        setJsonString = JSON.stringify(parsed);
+                                    } catch (e) {
+                                        // If parsing fails, use as is
+                                        setJsonString = item.set_json;
+                                    }
+                                } else {
+                                    // Unknown type, stringify it
+                                    setJsonString = JSON.stringify(item.set_json);
+                                }
+                                
+                                // Encode as base64 to avoid JSON escaping issues
+                                cleanItem.set_json_base64 = btoa(unescape(encodeURIComponent(setJsonString)));
+                                
+                            } catch (e) {
+                                console.warn('Failed to encode set_json for item:', item.title, e);
+                                // If all else fails, skip set_json
+                            }
                         }
+                        
+                        return cleanItem;
                     });
+                    
+                    const itemsJson = JSON.stringify(itemsCopy);
+                    formData.append('items', itemsJson);
+                    
+                    // Debug: Check if items JSON is valid
+                    try {
+                        const parsed = JSON.parse(itemsJson);
+                    } catch (e) {
+                        console.error('Items JSON is invalid:', e);
+                    }
+                } else {
+                    // Send empty array as JSON string
+                    formData.append('items', JSON.stringify([]));
                 }
                 
                 // Add selected child project IDs
@@ -4044,41 +4137,69 @@ createApp({
         onBranchSelectForEdit() {
             // Handle branch selection for edit
             if (this.editingQuotation.selected_branch_id) {
-                const branch = this.quotationBranches.find(b => b.id == this.editingQuotation.selected_branch_id);
-                if (branch) {
-                    this.editingQuotation.receiver_company = branch.name;
-                    this.editingQuotation.receiver_address = branch.address || '';
-                    this.editingQuotation.receiver_tel = branch.tel || '';
-                    this.editingQuotation.receiver_fax = branch.fax || '';
-                    this.editingQuotation.receiver_registration_number = branch.registration_number || '';
+                const selectedBranch = this.quotationBranches.find(branch => branch.id == this.editingQuotation.selected_branch_id);
+                if (selectedBranch) {
+                    this.editingQuotation.receiver_company = selectedBranch.company_name || selectedBranch.name;
+                    // Include postal_code in the address field
+                    const addressParts = [];
+                    if (selectedBranch.postal_code) {
+                        addressParts.push(`〒${selectedBranch.postal_code}`);
+                    }
+                    if (selectedBranch.address1) {
+                        addressParts.push(selectedBranch.address1);
+                    }
+                    if (selectedBranch.address2) {
+                        addressParts.push(selectedBranch.address2);
+                    }
+                    this.editingQuotation.receiver_address = addressParts.join(' ');
+                    this.editingQuotation.receiver_tel = selectedBranch.tel || '';
+                    this.editingQuotation.receiver_fax = selectedBranch.fax || '';
+                    this.editingQuotation.receiver_registration_number = selectedBranch.registration_number || '';
                 }
+            } else {
+                // Clear fields if no branch is selected
+                this.editingQuotation.receiver_company = '';
+                this.editingQuotation.receiver_address = '';
+                this.editingQuotation.receiver_tel = '';
+                this.editingQuotation.receiver_fax = '';
+                this.editingQuotation.receiver_registration_number = '';
             }
         },
 
-        onContactSelectForEdit() {
-            // Handle contact selection for edit
-            if (this.editingQuotation.receiver_contact) {
-                const user = this.quotationUsers.find(u => u.realname === this.editingQuotation.receiver_contact);
-                if (user && user.seal_id) {
-                    // Load seal information
-                    this.loadSealForContact(user.seal_id);
+        async onContactSelectForEdit() {
+            // Clear previous seal
+            this.selectedContactSealForEdit = null;
+            
+            if (!this.editingQuotation.receiver_contact) {
+                return;
+            }
+            
+            // Find the selected user to get their userid
+            const selectedUser = this.quotationUsers.find(user => user.realname === this.editingQuotation.receiver_contact);
+            if (!selectedUser) {
+                return;
+            }
+            
+            // Load seal for the selected user using the same logic as create modal
+            await this.loadContactSealForEdit(selectedUser.userid);
+        },
+
+        async loadContactSealForEdit(userId) {
+            try {
+                const response = await axios.get(`/api/index.php?model=seal&method=getSealsByUser&user_id=${userId}`);
+                if (response.data && response.data.length > 0) {
+                    // Get the first active seal for this user
+                    this.selectedContactSealForEdit = response.data[0];
                 } else {
                     this.selectedContactSealForEdit = null;
                 }
-            }
-        },
-
-        async loadSealForContact(sealId) {
-            try {
-                const response = await axios.get(`/api/index.php?model=seal&method=getById&id=${sealId}`);
-                if (response.data && response.data.status === 'success') {
-                    this.selectedContactSealForEdit = response.data.data;
-                }
             } catch (error) {
-                console.error('Error loading seal:', error);
+                console.error('Error loading contact seal for edit:', error);
                 this.selectedContactSealForEdit = null;
             }
         },
+
+
 
         // Price list modal methods for edit
         showPriceListModalForEdit() {

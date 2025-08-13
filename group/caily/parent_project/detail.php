@@ -1272,8 +1272,8 @@ $view->heading('建物詳細');
                                         <div class="row g-3">
                                             <div class="col-md-3">
                                                 <label class="form-label">税抜価格</label>
-                                                <input type="number" class="form-control"
-                                                    v-model="newQuotation.total_amount" readonly>
+                                                <input type="text" class="form-control"
+                                                    :value="formatNumberForInput(newQuotation.total_amount)" readonly>
                                             </div>
                                             <div class="col-md-3">
                                                 <label class="form-label">
@@ -1286,14 +1286,14 @@ $view->heading('建物詳細');
                                             </div>
                                             <div class="col-md-3">
                                                 <label class="form-label">税額</label>
-                                                <input type="number" class="form-control"
-                                                    :value="newQuotation.total_amount * newQuotation.tax_rate / 100"
+                                                <input type="text" class="form-control"
+                                                    :value="formatNumberForInput(newQuotation.total_amount * newQuotation.tax_rate / 100)"
                                                     readonly>
                                             </div>
                                             <div class="col-md-3">
                                                 <label class="form-label">合計金額</label>
-                                                <input type="number" class="form-control"
-                                                    v-model="newQuotation.total_with_tax" readonly>
+                                                <input type="text" class="form-control"
+                                                    :value="formatNumberForInput(newQuotation.total_with_tax)" readonly>
                                             </div>
                                         </div>
                                     </div>
@@ -1813,8 +1813,8 @@ $view->heading('建物詳細');
                                     <div class="row g-3">
                                         <div class="col-md-3">
                                             <label class="form-label">税抜価格</label>
-                                            <input type="number" class="form-control"
-                                                v-model="editingQuotation.total_amount" readonly>
+                                            <input type="text" class="form-control"
+                                                :value="formatNumberForInput(editingQuotation.total_amount)" readonly>
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label">
@@ -1827,14 +1827,14 @@ $view->heading('建物詳細');
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label">税額</label>
-                                            <input type="number" class="form-control"
-                                                :value="editingQuotation.total_amount * editingQuotation.tax_rate / 100"
+                                            <input type="text" class="form-control"
+                                                :value="formatNumberForInput(editingQuotation.total_amount * editingQuotation.tax_rate / 100)"
                                                 readonly>
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label">合計金額</label>
-                                            <input type="number" class="form-control"
-                                                v-model="editingQuotation.total_with_tax" readonly>
+                                            <input type="text" class="form-control"
+                                                :value="formatNumberForInput(editingQuotation.total_with_tax)" readonly>
                                         </div>
                                     </div>
                                 </div>
@@ -1904,14 +1904,14 @@ $view->heading('建物詳細');
                         </div>
                     </form>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-warning" @click="resetEditQuotationForm">リセット</button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                <button type="button" class="btn btn-primary" @click="updateQuotation" :disabled="updatingQuotation">
-                    <span v-if="updatingQuotation" class="spinner-border spinner-border-sm me-1"></span>
-                    更新
-                </button>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-warning" @click="resetEditQuotationForm">リセット</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" @click="updateQuotation" :disabled="updatingQuotation">
+                        <span v-if="updatingQuotation" class="spinner-border spinner-border-sm me-1"></span>
+                        更新
+                    </button>
+                </div>
             </div>
         </div>
     </div>
