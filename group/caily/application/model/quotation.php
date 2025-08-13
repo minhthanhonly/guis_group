@@ -28,6 +28,7 @@ class Quotation extends ApplicationModel {
             'notes' => array(),
             'parent_project_id' => array('notnull'),
             'selected_child_project_ids' => array(),
+            'selected_branch_id' => array(),
             'status' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search'))

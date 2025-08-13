@@ -1309,6 +1309,8 @@ $view->heading('建物詳細');
                                                 <div class="input-group">
                                                     <input type="text" class="form-control" id="quotation_delivery_date"
                                                         v-model="newQuotation.delivery_date" placeholder="納入期限を入力（任意）">
+                                                    <!-- Hidden input for Flatpickr -->
+                                                    <input type="hidden" id="quotation_delivery_date_picker" style="display: none;">
                                                     <button class="btn btn-outline-secondary" type="button"
                                                         @click="openDeliveryDatePicker" title="日付を選択">
                                                         <i class="ti ti-calendar"></i>
@@ -1320,18 +1322,27 @@ $view->heading('建物詳細');
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
-                                                <label class="form-label">納入場所</label>
+                                                <label class="form-label">納入場所 <span class="text-danger">*</span></label>
                                                 <input type="text" class="form-control"
-                                                    v-model="newQuotation.delivery_location">
+                                                    :class="{ 'is-invalid': quotationValidationErrors.delivery_location }"
+                                                    v-model="newQuotation.delivery_location" placeholder="納入場所を入力">
+                                                <div v-if="quotationValidationErrors.delivery_location" class="text-danger small mt-1">
+                                                    {{ quotationValidationErrors.delivery_location }}
+                                                </div>
                                             </div>
                                             <div class="col-md-6">
-                                                <label class="form-label">取引方法</label>
+                                                <label class="form-label">取引方法 <span class="text-danger">*</span></label>
                                                 <input type="text" class="form-control"
-                                                    v-model="newQuotation.payment_method">
+                                                    :class="{ 'is-invalid': quotationValidationErrors.payment_method }"
+                                                    v-model="newQuotation.payment_method" placeholder="取引方法を入力">
+                                                <div v-if="quotationValidationErrors.payment_method" class="text-danger small mt-1">
+                                                    {{ quotationValidationErrors.payment_method }}
+                                                </div>
                                             </div>
                                             <div class="col-md-6">
-                                                <label class="form-label">有効期限</label>
+                                                <label class="form-label">有効期限 <span class="text-danger">*</span></label>
                                                 <select class="form-select" v-model="newQuotation.valid_until_type"
+                                                    :class="{ 'is-invalid': quotationValidationErrors.valid_until }"
                                                     @change="onValidUntilTypeChange">
                                                     <option value="1_week">発行から1週間</option>
                                                     <option value="1_month" selected>発行から1か月</option>
@@ -1339,7 +1350,11 @@ $view->heading('建物詳細');
                                                 </select>
                                                 <input v-if="newQuotation.valid_until_type === 'custom'" type="text"
                                                     class="form-control mt-2" id="quotation_valid_until"
+                                                    :class="{ 'is-invalid': quotationValidationErrors.valid_until }"
                                                     v-model="newQuotation.valid_until" placeholder="有効期限を選択">
+                                                <div v-if="quotationValidationErrors.valid_until" class="text-danger small mt-1">
+                                                    {{ quotationValidationErrors.valid_until }}
+                                                </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <label class="form-label">ステータス</label>
@@ -1851,6 +1866,8 @@ $view->heading('建物詳細');
                                                 <input type="text" class="form-control"
                                                     id="edit_quotation_delivery_date"
                                                     v-model="editingQuotation.delivery_date" placeholder="納入期限を入力（任意）">
+                                                <!-- Hidden input for Flatpickr -->
+                                                <input type="hidden" id="edit_quotation_delivery_date_picker" style="display: none;">
                                                 <button class="btn btn-outline-secondary" type="button"
                                                     @click="openDeliveryDatePickerForEdit" title="日付を選択">
                                                     <i class="ti ti-calendar"></i>
@@ -1862,18 +1879,27 @@ $view->heading('建物詳細');
                                             </div>
                                         </div>
                                         <div class="col-md-6">
-                                            <label class="form-label">納入場所</label>
+                                            <label class="form-label">納入場所 <span class="text-danger">*</span></label>
                                             <input type="text" class="form-control"
-                                                v-model="editingQuotation.delivery_location">
+                                                :class="{ 'is-invalid': editQuotationValidationErrors.delivery_location }"
+                                                v-model="editingQuotation.delivery_location" placeholder="納入場所を入力">
+                                            <div v-if="editQuotationValidationErrors.delivery_location" class="text-danger small mt-1">
+                                                {{ editQuotationValidationErrors.delivery_location }}
+                                            </div>
                                         </div>
                                         <div class="col-md-6">
-                                            <label class="form-label">取引方法</label>
+                                            <label class="form-label">取引方法 <span class="text-danger">*</span></label>
                                             <input type="text" class="form-control"
-                                                v-model="editingQuotation.payment_method">
+                                                :class="{ 'is-invalid': editQuotationValidationErrors.payment_method }"
+                                                v-model="editingQuotation.payment_method" placeholder="取引方法を入力">
+                                            <div v-if="editQuotationValidationErrors.payment_method" class="text-danger small mt-1">
+                                                {{ editQuotationValidationErrors.payment_method }}
+                                            </div>
                                         </div>
                                         <div class="col-md-6">
-                                            <label class="form-label">有効期限</label>
+                                            <label class="form-label">有効期限 <span class="text-danger">*</span></label>
                                             <select class="form-select" v-model="editingQuotation.valid_until_type"
+                                                :class="{ 'is-invalid': editQuotationValidationErrors.valid_until }"
                                                 @change="onValidUntilTypeChangeForEdit">
                                                 <option value="1_week">発行から1週間</option>
                                                 <option value="1_month" selected>発行から1か月</option>
@@ -1881,7 +1907,11 @@ $view->heading('建物詳細');
                                             </select>
                                             <input v-if="editingQuotation.valid_until_type === 'custom'" type="text"
                                                 class="form-control mt-2" id="edit_quotation_valid_until"
+                                                :class="{ 'is-invalid': editQuotationValidationErrors.valid_until }"
                                                 v-model="editingQuotation.valid_until" placeholder="有効期限を選択">
+                                            <div v-if="editQuotationValidationErrors.valid_until" class="text-danger small mt-1">
+                                                {{ editQuotationValidationErrors.valid_until }}
+                                            </div>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">ステータス</label>
@@ -2125,10 +2155,11 @@ $view->heading('建物詳細');
                                     class="cursor-pointer"
                                     :class="{ 'table-active': idx === highlightedIndex, 'table-light': isProductAlreadyAdded(product) }"
                                     @click="!isProductAlreadyAdded(product) && toggleProductSelection(product, $event)">
-                                    <td>
+                                    <td @click.stop>
                                         <input type="checkbox" class="form-check-input"
                                             :disabled="isProductAlreadyAdded(product)"
-                                            :checked="selectedProducts.includes(product.id)" @click.stop>
+                                            :checked="selectedProducts.includes(product.id)" 
+                                            @change="toggleProductSelection(product, $event)">
                                     </td>
                                     <td>{{ product.code }}</td>
                                     <td>{{ product.name }}</td>

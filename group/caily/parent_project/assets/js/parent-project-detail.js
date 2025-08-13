@@ -850,34 +850,31 @@ createApp({
                     }
                 }
                 
-                // Initialize delivery date picker
-                const deliveryDateEl = document.getElementById('quotation_delivery_date');
-                if (deliveryDateEl) {
-                    if (deliveryDateEl._flatpickr) {
-                        deliveryDateEl._flatpickr.destroy();
+                // Initialize delivery date picker using hidden input
+                const deliveryDatePickerEl = document.getElementById('quotation_delivery_date_picker');
+                if (deliveryDatePickerEl) {
+                    if (deliveryDatePickerEl._flatpickr) {
+                        deliveryDatePickerEl._flatpickr.destroy();
                     }
-                    deliveryDateEl._flatpickr = flatpickr(deliveryDateEl, {
+                    deliveryDatePickerEl._flatpickr = flatpickr(deliveryDatePickerEl, {
                         dateFormat: 'Y-m-d',
                         locale: 'ja',
-                        allowInput: true,
-                        clickOpens: true,
+                        allowInput: false,
+                        clickOpens: false,
                         onChange: (selectedDates, dateStr) => {
-                            this.newQuotation.delivery_date = dateStr;
-                        },
-                        onClose: (selectedDates, dateStr, instance) => {
-                            // If no date is selected, set to default value
-                            if (!dateStr || dateStr === '') {
-                                this.newQuotation.delivery_date = '御打ち合わせの上';
+                            // Update the visible input with the selected date
+                            if (dateStr) {
+                                this.newQuotation.delivery_date = dateStr;
                             }
                         }
                     });
                     
                     // Set initial date if available and it's a valid date
-                    if (this.newQuotation.delivery_date && this.newQuotation.delivery_date !== '御打ち合わせの上') {
+                    if (this.newQuotation.delivery_date) {
                         try {
                             const date = new Date(this.newQuotation.delivery_date);
                             if (!isNaN(date.getTime())) {
-                                deliveryDateEl._flatpickr.setDate(this.newQuotation.delivery_date);
+                                deliveryDatePickerEl._flatpickr.setDate(this.newQuotation.delivery_date);
                             }
                         } catch (e) {
                             // Ignore invalid date errors
@@ -2164,14 +2161,25 @@ createApp({
 
 
         openDeliveryDatePicker() {
-            const deliveryDateEl = document.getElementById('quotation_delivery_date');
-            if (deliveryDateEl && deliveryDateEl._flatpickr) {
-                deliveryDateEl._flatpickr.open();
+            const deliveryDatePickerEl = document.getElementById('quotation_delivery_date_picker');
+            if (deliveryDatePickerEl && deliveryDatePickerEl._flatpickr) {
+                deliveryDatePickerEl._flatpickr.open();
             }
         },
 
         clearDeliveryDate() {
             this.newQuotation.delivery_date = '御打ち合わせの上';
+        },
+
+        openDeliveryDatePickerForEdit() {
+            const deliveryDatePickerEl = document.getElementById('edit_quotation_delivery_date_picker');
+            if (deliveryDatePickerEl && deliveryDatePickerEl._flatpickr) {
+                deliveryDatePickerEl._flatpickr.open();
+            }
+        },
+
+        clearDeliveryDateForEdit() {
+            this.editingQuotation.delivery_date = '御打ち合わせの上';
         },
 
         onDeliveryDateInput(event) {
@@ -2346,10 +2354,10 @@ createApp({
                 issueDateEl._flatpickr.destroy();
             }
             
-            // Destroy delivery date picker
-            const deliveryDateEl = document.getElementById('quotation_delivery_date');
-            if (deliveryDateEl && deliveryDateEl._flatpickr) {
-                deliveryDateEl._flatpickr.destroy();
+            // Destroy delivery date picker (hidden input)
+            const deliveryDatePickerEl = document.getElementById('quotation_delivery_date_picker');
+            if (deliveryDatePickerEl && deliveryDatePickerEl._flatpickr) {
+                deliveryDatePickerEl._flatpickr.destroy();
             }
             
             // Destroy valid until date picker
@@ -2411,6 +2419,26 @@ createApp({
             // Validate child project selection
             if (!this.selectedChildProjectIds || this.selectedChildProjectIds.length === 0) {
                 this.quotationValidationErrors.childProjects = '子プロジェクトの選択は必須です';
+                isValid = false;
+            }
+            
+            // Delivery date is optional - user can input freely or use date picker
+            
+            // Validate delivery location
+            if (!this.newQuotation.delivery_location || this.newQuotation.delivery_location.trim() === '') {
+                this.quotationValidationErrors.delivery_location = '納入場所は必須です';
+                isValid = false;
+            }
+            
+            // Validate payment method
+            if (!this.newQuotation.payment_method || this.newQuotation.payment_method.trim() === '') {
+                this.quotationValidationErrors.payment_method = '取引方法は必須です';
+                isValid = false;
+            }
+            
+            // Validate valid until
+            if (!this.newQuotation.valid_until || this.newQuotation.valid_until.trim() === '') {
+                this.quotationValidationErrors.valid_until = '有効期限は必須です';
                 isValid = false;
             }
             
@@ -2731,10 +2759,17 @@ createApp({
                     this.selectedProducts.push(product.id);
                     if (!this.selectedProductQuantities[product.id]) this.selectedProductQuantities[product.id] = 1;
                 }
+                
+                // Force Vue reactivity by reassigning the array reference
+                this.selectedProducts = [...this.selectedProducts];
             }
             
             this.lastSelectedIndexGlobal = this.filteredPriceListProducts.findIndex(p => p.id === product.id);
-            this.updateAllSelectedStatus();
+            
+            // Force Vue reactivity update and update status in next tick
+            this.$nextTick(() => {
+                this.updateAllSelectedStatus();
+            });
         },
         
         toggleSelectAll() {
@@ -4050,6 +4085,7 @@ createApp({
                 formData.append('valid_until', this.editingQuotation.valid_until);
                 formData.append('notes', this.editingQuotation.notes);
                 formData.append('parent_project_id', this.editingQuotation.parent_project_id);
+                formData.append('selected_branch_id', this.editingQuotation.selected_branch_id || '');
                 
                 // Add items as JSON string (same as createQuotation)
                 if (this.editingQuotation.items && this.editingQuotation.items.length > 0) {
@@ -4201,6 +4237,26 @@ createApp({
                 }
             }
 
+            // Delivery date is optional - user can input freely or use date picker
+            
+            // Validate delivery location
+            if (!this.editingQuotation.delivery_location || this.editingQuotation.delivery_location.trim() === '') {
+                this.editQuotationValidationErrors.delivery_location = '納入場所は必須です';
+                isValid = false;
+            }
+            
+            // Validate payment method
+            if (!this.editingQuotation.payment_method || this.editingQuotation.payment_method.trim() === '') {
+                this.editQuotationValidationErrors.payment_method = '取引方法は必須です';
+                isValid = false;
+            }
+            
+            // Validate valid until
+            if (!this.editingQuotation.valid_until || this.editingQuotation.valid_until.trim() === '') {
+                this.editQuotationValidationErrors.valid_until = '有効期限は必須です';
+                isValid = false;
+            }
+
             return isValid;
         },
 
@@ -4341,15 +4397,36 @@ createApp({
                 });
             }
 
-            // Initialize delivery date picker
-            const deliveryDateInput = document.getElementById('edit_quotation_delivery_date');
-            if (deliveryDateInput) {
-                flatpickr(deliveryDateInput, {
+            // Initialize delivery date picker using hidden input
+            const deliveryDatePickerEl = document.getElementById('edit_quotation_delivery_date_picker');
+            if (deliveryDatePickerEl) {
+                if (deliveryDatePickerEl._flatpickr) {
+                    deliveryDatePickerEl._flatpickr.destroy();
+                }
+                deliveryDatePickerEl._flatpickr = flatpickr(deliveryDatePickerEl, {
                     dateFormat: 'Y-m-d',
                     locale: 'ja',
-                    allowInput: true,
-                    clickOpens: false
+                    allowInput: false,
+                    clickOpens: false,
+                    onChange: (selectedDates, dateStr) => {
+                        // Update the visible input with the selected date
+                        if (dateStr) {
+                            this.editingQuotation.delivery_date = dateStr;
+                        }
+                    }
                 });
+                
+                // Set initial date if available and it's a valid date
+                if (this.editingQuotation.delivery_date) {
+                    try {
+                        const date = new Date(this.editingQuotation.delivery_date);
+                        if (!isNaN(date.getTime())) {
+                            deliveryDatePickerEl._flatpickr.setDate(this.editingQuotation.delivery_date);
+                        }
+                    } catch (e) {
+                        // Ignore invalid date errors
+                    }
+                }
             }
 
             // Initialize valid until picker if custom
