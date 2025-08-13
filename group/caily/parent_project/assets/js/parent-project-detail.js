@@ -92,6 +92,7 @@ createApp({
             quotationBranches: [],
             quotationUsers: [],
             selectedContactSeal: null,
+            selectedContactSealForEdit: null,
             quotationValidationErrors: {}, // Add field-level validation errors
             newQuotation: {
                 issue_date: '',
@@ -149,7 +150,45 @@ createApp({
             // Optional custom name for the selected set
             selectedSetName: '',
             // Order items selection (for bulk delete)
-            selectedOrderItemIndexes: []
+            selectedOrderItemIndexes: [],
+            // Edit quotation data
+            editingQuotation: {
+                id: null,
+                issue_date: '',
+                quotation_number: '',
+                sender_company: '',
+                sender_address: '',
+                sender_contact: '',
+                selected_branch_id: '',
+                receiver_company: '',
+                receiver_address: '',
+                receiver_contact: '',
+                receiver_tel: '',
+                receiver_fax: '',
+                receiver_registration_number: '',
+                status: '下書き',
+                items: [],
+                total_amount: 0,
+                tax_rate: 10,
+                total_with_tax: 0,
+                delivery_date: '御打ち合わせの上',
+                delivery_location: '貴社指定場所',
+                payment_method: '電子納品',
+                valid_until_type: '1_month',
+                valid_until: '',
+                notes: '',
+                parent_project_id: PARENT_PROJECT_ID
+            },
+            editQuotationValidationErrors: {},
+            updatingQuotation: false,
+            // Child project selection for edit quotation
+            selectedChildProjectIdsForEdit: [],
+            allChildProjectsSelectedForEdit: false,
+            someChildProjectsSelectedForEdit: false,
+            // Order items selection for edit (for bulk delete)
+            selectedOrderItemIndexesForEdit: [],
+            // Edit quotation form backup
+            editQuotationFormBackup: null
         }
     },
     watch: {
@@ -188,6 +227,31 @@ createApp({
                 }
             },
             deep: true
+        },
+        'editingQuotation.items': {
+            handler(newItems, oldItems) {
+                // Ensure product_code is empty for set products
+                if (newItems && Array.isArray(newItems)) {
+                    newItems.forEach(item => {
+                        if (item && item.is_set && item.product_code && item.product_code.trim() !== '') {
+                            item.product_code = '';
+                        }
+                    });
+                }
+                
+                // Auto-validate project_id selection
+                this.validateProjectIdSelectionForEdit();
+                
+                // Calculate total amount
+                this.calculateTotalAmountForEdit();
+            },
+            deep: true
+        },
+        'selectedChildProjectIdsForEdit': {
+            handler(newIds, oldIds) {
+                // Clear unlinked order items when child projects are deselected
+                this.clearUnlinkedOrderItemsForEdit();
+            }
         }
     },
     computed: {
@@ -265,6 +329,17 @@ createApp({
         hasSetProductsInView() {
             // Check if any items in selectedQuotation are sets
             return this.selectedQuotation?.items?.some(item => item.is_set) || false;
+        },
+        // Edit quotation computed properties
+        allOrderItemsSelectedForEdit() {
+            const total = this.editingQuotation?.items?.length || 0;
+            const selected = this.selectedOrderItemIndexesForEdit.length;
+            return total > 0 && selected === total;
+        },
+        selectedChildProjectsForEditDropdown() {
+            // In edit mode, show all child projects so user can select any project
+            // This is different from create mode where we only show selected ones
+            return this.childProjects;
         }
     },
     methods: {
@@ -2177,6 +2252,13 @@ createApp({
                     }
                 });
                 
+                // Add selected child project IDs
+                if (this.selectedChildProjectIds && this.selectedChildProjectIds.length > 0) {
+                    this.selectedChildProjectIds.forEach((id, index) => {
+                        formData.append(`selected_child_project_ids[${index}]`, id);
+                    });
+                }
+                
                 // Debug: Check if items is actually in FormData
                 const itemsEntry = formData.get('items');
                 
@@ -2300,7 +2382,17 @@ createApp({
                 isValid = false;
             } else {
                 // Validate that all items have project_id selected
-                const itemsWithoutProject = this.newQuotation.items.filter(item => !item.project_id || item.project_id.trim() === '');
+                const itemsWithoutProject = this.newQuotation.items.filter(item => {
+                    // Handle both string and number project_id
+                    if (!item.project_id) return true;
+                    if (typeof item.project_id === 'string') {
+                        return item.project_id.trim() === '';
+                    }
+                    if (typeof item.project_id === 'number') {
+                        return item.project_id <= 0;
+                    }
+                    return true; // fallback for other types
+                });
                 if (itemsWithoutProject.length > 0) {
                     this.quotationValidationErrors.items = `${itemsWithoutProject.length}件の商品にプロジェクト番号が選択されていません`;
                     isValid = false;
@@ -2324,7 +2416,17 @@ createApp({
             
             // Check if all items have project_id selected
             if (this.newQuotation.items && Array.isArray(this.newQuotation.items) && this.newQuotation.items.length > 0) {
-                const itemsWithoutProject = this.newQuotation.items.filter(item => !item.project_id || item.project_id.trim() === '');
+                const itemsWithoutProject = this.newQuotation.items.filter(item => {
+                    // Handle both string and number project_id
+                    if (!item.project_id) return true;
+                    if (typeof item.project_id === 'string') {
+                        return item.project_id.trim() === '';
+                    }
+                    if (typeof item.project_id === 'number') {
+                        return item.project_id <= 0;
+                    }
+                    return true; // fallback for other types
+                });
                 if (itemsWithoutProject.length > 0) {
                     this.quotationValidationErrors.items = `${itemsWithoutProject.length}件の商品にプロジェクト番号が選択されていません`;
                 }
@@ -3409,6 +3511,710 @@ createApp({
                 this.editingSet.products = this.editingSet.products.filter(p => p.id !== productId);
                 this.updateEditingSetTotal();
             }
+        },
+
+        // Edit Quotation Methods
+        async editQuotation(quotation) {
+            // Load quotation details with items
+            try {
+                const response = await axios.get(`/api/index.php?model=quotation&method=getById&id=${quotation.id}`);
+                
+                if (response.data && response.data.status === 'success') {
+                    // Copy quotation data to editingQuotation
+                    this.editingQuotation = JSON.parse(JSON.stringify(response.data.data));
+                    
+                    // Ensure project_id in items are integers for proper select binding
+                    if (this.editingQuotation.items && this.editingQuotation.items.length > 0) {
+                        this.editingQuotation.items.forEach(item => {
+                            if (item.project_id) {
+                                item.project_id = parseInt(item.project_id);
+                            }
+                        });
+                    }
+                    
+                    // Set selected child projects based on saved data or items
+                    this.selectedChildProjectIdsForEdit = [];
+                    
+                    if (this.editingQuotation.selected_child_project_ids && this.editingQuotation.selected_child_project_ids.length > 0) {
+                        // Use saved selected child project IDs
+                        this.selectedChildProjectIdsForEdit = this.editingQuotation.selected_child_project_ids.map(id => parseInt(id));
+                    } else if (this.editingQuotation.items && this.editingQuotation.items.length > 0) {
+                        // Fallback: extract from items
+                        this.editingQuotation.items.forEach(item => {
+                            if (item.project_id && !this.selectedChildProjectIdsForEdit.includes(parseInt(item.project_id))) {
+                                this.selectedChildProjectIdsForEdit.push(parseInt(item.project_id));
+                            }
+                        });
+                    } else {
+                        // Fallback 2: If no items have project_id, select all child projects to show all options
+                        this.selectedChildProjectIdsForEdit = this.childProjects.map(p => p.id);
+                    }
+                    
+                    // Set valid_until_type based on valid_until value
+                    if (this.editingQuotation.valid_until) {
+                        const issueDate = new Date(this.editingQuotation.issue_date);
+                        const validUntil = new Date(this.editingQuotation.valid_until);
+                        const daysDiff = Math.round((validUntil - issueDate) / (1000 * 60 * 60 * 24));
+                        
+                        if (daysDiff === 7) {
+                            this.editingQuotation.valid_until_type = '1_week';
+                        } else if (daysDiff >= 28 && daysDiff <= 31) {
+                            this.editingQuotation.valid_until_type = '1_month';
+                        } else {
+                            this.editingQuotation.valid_until_type = 'custom';
+                        }
+                    } else {
+                        this.editingQuotation.valid_until_type = '1_month';
+                    }
+                    
+                    // Backup form data
+                    this.editQuotationFormBackup = JSON.parse(JSON.stringify(this.editingQuotation));
+                    
+                    // Reset validation errors
+                    this.editQuotationValidationErrors = {};
+                    
+                    // Reset selection states
+                    this.selectedOrderItemIndexesForEdit = [];
+                    this.allChildProjectsSelectedForEdit = false;
+                    this.someChildProjectsSelectedForEdit = false;
+                    
+                    // Update child project selection state
+                    this.updateChildProjectSelectionForEdit();
+                    
+                    // Load branches and users if not already loaded
+                    if (this.quotationBranches.length === 0) {
+                        await this.loadQuotationBranches();
+                    }
+                    if (this.quotationUsers.length === 0) {
+                        await this.loadQuotationUsers();
+                    }
+                    
+                    // Show modal
+                    const editModal = new bootstrap.Modal(document.getElementById('editQuotationModal'));
+                    editModal.show();
+                    
+                    // Initialize date pickers after modal is shown
+                    this.$nextTick(() => {
+                        this.initializeEditQuotationDatePickers();
+                        
+                        // Load seal for selected contact
+                        if (this.editingQuotation.receiver_contact) {
+                            this.onContactSelectForEdit();
+                        }
+                    });
+                } else {
+                    const errorMsg = response.data?.message || '見積書の詳細を取得できませんでした。';
+                    showMessage(errorMsg, true);
+                }
+            } catch (error) {
+                console.error('Error loading quotation details:', error);
+                const errorMsg = error.response?.data?.message || error.message || '見積書の読み込みに失敗しました。';
+                showMessage(errorMsg, true);
+            }
+        },
+
+        // Child project selection methods for edit
+        selectAllChildProjectsForEdit() {
+            this.selectedChildProjectIdsForEdit = this.childProjects.map(p => p.id);
+            this.allChildProjectsSelectedForEdit = true;
+            this.someChildProjectsSelectedForEdit = false;
+        },
+
+        deselectAllChildProjectsForEdit() {
+            this.selectedChildProjectIdsForEdit = [];
+            this.allChildProjectsSelectedForEdit = false;
+            this.someChildProjectsSelectedForEdit = false;
+        },
+
+        toggleAllChildProjectsForEdit() {
+            if (this.allChildProjectsSelectedForEdit) {
+                this.deselectAllChildProjectsForEdit();
+            } else {
+                this.selectAllChildProjectsForEdit();
+            }
+        },
+
+        updateChildProjectSelectionForEdit() {
+            const total = this.childProjects.length;
+            const selected = this.selectedChildProjectIdsForEdit.length;
+            
+            this.allChildProjectsSelectedForEdit = selected === total;
+            this.someChildProjectsSelectedForEdit = selected > 0 && selected < total;
+        },
+
+        // Order item methods for edit
+        addOrderItemForEdit() {
+            const newItem = {
+                project_id: '',
+                title: '',
+                product_code: '',
+                quantity: 1,
+                unit: '枚',
+                unit_price: 0,
+                amount: 0,
+                notes: '',
+                is_set: false,
+                set_json: null
+            };
+            
+            this.editingQuotation.items.push(newItem);
+            this.$nextTick(() => {
+                this.validateProjectIdSelectionForEdit();
+            });
+        },
+
+        removeOrderItemForEdit(index) {
+            if (index >= 0 && index < this.editingQuotation.items.length) {
+                const item = this.editingQuotation.items[index];
+                if (item.project_id) {
+                    this.updateProjectTotalAmountForEdit(item.project_id, index);
+                }
+                this.editingQuotation.items.splice(index, 1);
+                this.validateProjectIdSelectionForEdit();
+            }
+        },
+
+        calculateItemAmountForEdit(index) {
+            if (index >= 0 && index < this.editingQuotation.items.length) {
+                const item = this.editingQuotation.items[index];
+                const quantity = parseFloat(item.quantity) || 0;
+                const unitPrice = parseFloat(item.unit_price) || 0;
+                item.amount = quantity * unitPrice;
+                this.calculateTotalAmountForEdit();
+            }
+        },
+
+        calculateTotalAmountForEdit() {
+            const total = this.editingQuotation.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+            this.editingQuotation.total_amount = total;
+            this.editingQuotation.total_with_tax = total * (1 + this.editingQuotation.tax_rate / 100);
+        },
+
+        updateProjectTotalAmountForEdit(projectId, itemIndex) {
+            // Find the project in childProjects
+            const project = this.childProjects.find(p => p.id == projectId);
+            if (!project) {
+                return;
+            }
+            
+            // Auto-select the child project if it's not already selected
+            if (projectId && !this.selectedChildProjectIdsForEdit.includes(parseInt(projectId))) {
+                this.selectedChildProjectIdsForEdit.push(parseInt(projectId));
+            }
+            
+            // Calculate total amount for this project from all items
+            const projectItems = this.editingQuotation.items.filter(item => item.project_id == projectId);
+            const projectTotal = projectItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+            
+            // Update the project's total_amount in childProjects array
+            project.total_amount = projectTotal;
+            
+            // Force Vue reactivity update
+            this.$forceUpdate();
+        },
+
+        // Selection methods for edit
+        toggleSelectOrderItemForEdit(index) {
+            const itemIndex = this.selectedOrderItemIndexesForEdit.indexOf(index);
+            if (itemIndex > -1) {
+                this.selectedOrderItemIndexesForEdit.splice(itemIndex, 1);
+            } else {
+                this.selectedOrderItemIndexesForEdit.push(index);
+            }
+        },
+
+        selectAllOrderItemsForEdit() {
+            this.selectedOrderItemIndexesForEdit = this.editingQuotation.items.map((_, index) => index);
+        },
+
+        deleteSelectedOrderItemsForEdit() {
+            if (this.selectedOrderItemIndexesForEdit.length === 0) {
+                return;
+            }
+            
+            // Sort indices in descending order to avoid index shifting issues
+            const sortedIndices = [...this.selectedOrderItemIndexesForEdit].sort((a, b) => b - a);
+            
+            sortedIndices.forEach(index => {
+                if (index >= 0 && index < this.editingQuotation.items.length) {
+                    const item = this.editingQuotation.items[index];
+                    if (item.project_id) {
+                        this.updateProjectTotalAmountForEdit(item.project_id, index);
+                    }
+                }
+            });
+            
+            // Remove items
+            sortedIndices.forEach(index => {
+                if (index >= 0 && index < this.editingQuotation.items.length) {
+                    this.editingQuotation.items.splice(index, 1);
+                }
+            });
+            
+            // Clear selection
+            this.selectedOrderItemIndexesForEdit = [];
+            this.validateProjectIdSelectionForEdit();
+        },
+
+        // Quick project number selection for edit
+        quickSelectProjectNumberForCheckedItemsForEdit(projectId) {
+            if (this.selectedOrderItemIndexesForEdit.length === 0) {
+                showMessage('チェックされた商品がありません。先に商品を選択してください。', true);
+                return;
+            }
+            
+            let updatedCount = 0;
+            this.selectedOrderItemIndexesForEdit.forEach(index => {
+                if (index >= 0 && index < this.editingQuotation.items.length) {
+                    const item = this.editingQuotation.items[index];
+                    const oldProjectId = item.project_id;
+                    item.project_id = projectId;
+                    if (oldProjectId && oldProjectId !== projectId) {
+                        this.updateProjectTotalAmountForEdit(oldProjectId, index);
+                    }
+                    updatedCount++;
+                }
+            });
+            
+            if (updatedCount > 0) {
+                showMessage(`${updatedCount} 件のチェック済み商品にプロジェクト番号が適用されました。`, false);
+                this.validateProjectIdSelectionForEdit();
+            }
+        },
+
+        clearProjectNumbersForCheckedItemsForEdit() {
+            if (this.selectedOrderItemIndexesForEdit.length === 0) {
+                showMessage('チェックされた商品がありません。先に商品を選択してください。', true);
+                return;
+            }
+            
+            let updatedCount = 0;
+            this.selectedOrderItemIndexesForEdit.forEach(index => {
+                if (index >= 0 && index < this.editingQuotation.items.length) {
+                    const item = this.editingQuotation.items[index];
+                    const oldProjectId = item.project_id;
+                    item.project_id = '';
+                    if (oldProjectId) {
+                        this.updateProjectTotalAmountForEdit(oldProjectId, index);
+                    }
+                    updatedCount++;
+                }
+            });
+            
+            if (updatedCount > 0) {
+                showMessage(`${updatedCount} 件のチェック済み商品のプロジェクト番号がクリアされました。`, false);
+                this.validateProjectIdSelectionForEdit();
+            }
+        },
+
+        // Validation methods for edit
+        validateProjectIdSelectionForEdit() {
+            if (this.editQuotationValidationErrors.items && this.editQuotationValidationErrors.items.includes('プロジェクト番号が選択されていません')) {
+                delete this.editQuotationValidationErrors.items;
+            }
+            if (this.editingQuotation.items && Array.isArray(this.editingQuotation.items) && this.editingQuotation.items.length > 0) {
+                const itemsWithoutProject = this.editingQuotation.items.filter(item => {
+                    // Handle both string and number project_id
+                    if (!item.project_id) return true;
+                    if (typeof item.project_id === 'string') {
+                        return item.project_id.trim() === '';
+                    }
+                    if (typeof item.project_id === 'number') {
+                        return item.project_id <= 0;
+                    }
+                    return true; // fallback for other types
+                });
+                if (itemsWithoutProject.length > 0) {
+                    this.editQuotationValidationErrors.items = `${itemsWithoutProject.length}件の商品にプロジェクト番号が選択されていません`;
+                }
+            }
+        },
+
+        // Form reset and update methods
+        resetEditQuotationForm() {
+            if (this.editQuotationFormBackup) {
+                this.editingQuotation = JSON.parse(JSON.stringify(this.editQuotationFormBackup));
+                this.selectedChildProjectIdsForEdit = [];
+                if (this.editingQuotation.items && this.editingQuotation.items.length > 0) {
+                    this.editingQuotation.items.forEach(item => {
+                        if (item.project_id && !this.selectedChildProjectIdsForEdit.includes(parseInt(item.project_id))) {
+                            this.selectedChildProjectIdsForEdit.push(parseInt(item.project_id));
+                        }
+                    });
+                }
+                this.updateChildProjectSelectionForEdit();
+                this.editQuotationValidationErrors = {};
+                this.selectedOrderItemIndexesForEdit = [];
+            }
+        },
+
+        async updateQuotation() {
+            // Validate form
+            if (!this.validateEditQuotationForm()) {
+                return;
+            }
+
+            this.updatingQuotation = true;
+            
+            try {
+                // Prepare data for update
+                const formData = new FormData();
+                formData.append('id', this.editingQuotation.id);
+                formData.append('issue_date', this.editingQuotation.issue_date);
+                formData.append('quotation_number', this.editingQuotation.quotation_number);
+                formData.append('sender_company', this.editingQuotation.sender_company);
+                formData.append('sender_address', this.editingQuotation.sender_address);
+                formData.append('sender_contact', this.editingQuotation.sender_contact);
+                formData.append('receiver_company', this.editingQuotation.receiver_company);
+                formData.append('receiver_address', this.editingQuotation.receiver_address);
+                formData.append('receiver_contact', this.editingQuotation.receiver_contact);
+                formData.append('receiver_tel', this.editingQuotation.receiver_tel);
+                formData.append('receiver_fax', this.editingQuotation.receiver_fax);
+                formData.append('receiver_registration_number', this.editingQuotation.receiver_registration_number);
+                formData.append('status', this.editingQuotation.status);
+                formData.append('total_amount', this.editingQuotation.total_amount);
+                formData.append('tax_rate', this.editingQuotation.tax_rate);
+                formData.append('total_with_tax', this.editingQuotation.total_with_tax);
+                formData.append('delivery_date', this.editingQuotation.delivery_date);
+                formData.append('delivery_location', this.editingQuotation.delivery_location);
+                formData.append('payment_method', this.editingQuotation.payment_method);
+                formData.append('valid_until', this.editingQuotation.valid_until);
+                formData.append('notes', this.editingQuotation.notes);
+                formData.append('parent_project_id', this.editingQuotation.parent_project_id);
+                
+                // Add items
+                if (this.editingQuotation.items && this.editingQuotation.items.length > 0) {
+                    this.editingQuotation.items.forEach((item, index) => {
+                        formData.append(`items[${index}][project_id]`, item.project_id || '');
+                        formData.append(`items[${index}][title]`, item.title || '');
+                        formData.append(`items[${index}][product_code]`, item.product_code || '');
+                        formData.append(`items[${index}][quantity]`, item.quantity || 0);
+                        formData.append(`items[${index}][unit]`, item.unit || '');
+                        formData.append(`items[${index}][unit_price]`, item.unit_price || 0);
+                        formData.append(`items[${index}][amount]`, item.amount || 0);
+                        formData.append(`items[${index}][notes]`, item.notes || '');
+                        formData.append(`items[${index}][is_set]`, item.is_set ? '1' : '0');
+                        if (item.is_set && item.set_json) {
+                            formData.append(`items[${index}][set_json]`, typeof item.set_json === 'string' ? item.set_json : JSON.stringify(item.set_json));
+                        }
+                    });
+                }
+                
+                // Add selected child project IDs
+                if (this.selectedChildProjectIdsForEdit && this.selectedChildProjectIdsForEdit.length > 0) {
+                    this.selectedChildProjectIdsForEdit.forEach((id, index) => {
+                        formData.append(`selected_child_project_ids[${index}]`, id);
+                    });
+                }
+
+                // Update quotation
+                const response = await axios.post('/api/index.php?model=quotation&method=update', formData);
+                
+                if (response.data && response.data.status === 'success') {
+                    showMessage('見積書が正常に更新されました。', false);
+                    
+                    // Update child project amounts
+                    await this.updateChildProjectAmountsFromQuotation(this.editingQuotation.id);
+                    
+                    // Refresh data
+                    await this.loadQuotations();
+                    await this.loadChildProjects();
+                    
+                    // Close modal
+                    const editModal = bootstrap.Modal.getInstance(document.getElementById('editQuotationModal'));
+                    if (editModal) {
+                        editModal.hide();
+                    }
+                } else {
+                    showMessage(response.data?.message || '見積書の更新に失敗しました。', true);
+                }
+            } catch (error) {
+                console.error('Error updating quotation:', error);
+                showMessage('見積書の更新中にエラーが発生しました。', true);
+            } finally {
+                this.updatingQuotation = false;
+            }
+        },
+
+        validateEditQuotationForm() {
+            let isValid = true;
+            this.editQuotationValidationErrors = {};
+
+            // Validate required fields
+            if (!this.editingQuotation.issue_date) {
+                this.editQuotationValidationErrors.issue_date = '発行日は必須です';
+                isValid = false;
+            }
+
+            if (!this.editingQuotation.quotation_number) {
+                this.editQuotationValidationErrors.quotation_number = '見積番号は必須です';
+                isValid = false;
+            }
+
+            if (!this.editingQuotation.sender_company) {
+                this.editQuotationValidationErrors.sender_company = '受注者会社名は必須です';
+                isValid = false;
+            }
+
+            if (!this.editingQuotation.receiver_company) {
+                this.editQuotationValidationErrors.receiver_company = '発注者会社名は必須です';
+                isValid = false;
+            }
+
+            // Validate items
+            if (!this.editingQuotation.items || !Array.isArray(this.editingQuotation.items) || this.editingQuotation.items.length === 0) {
+                this.editQuotationValidationErrors.items = '商品明細は必須です';
+                isValid = false;
+            } else {
+                const itemsWithoutProject = this.editingQuotation.items.filter(item => {
+                    // Handle both string and number project_id
+                    if (!item.project_id) return true;
+                    if (typeof item.project_id === 'string') {
+                        return item.project_id.trim() === '';
+                    }
+                    if (typeof item.project_id === 'number') {
+                        return item.project_id <= 0;
+                    }
+                    return true; // fallback for other types
+                });
+                if (itemsWithoutProject.length > 0) {
+                    this.editQuotationValidationErrors.items = `${itemsWithoutProject.length}件の商品にプロジェクト番号が選択されていません`;
+                    isValid = false;
+                }
+            }
+
+            return isValid;
+        },
+
+        // Date picker methods for edit
+        openDeliveryDatePickerForEdit() {
+            // Initialize Flatpickr for delivery date
+            const deliveryDateInput = document.getElementById('edit_quotation_delivery_date');
+            if (deliveryDateInput) {
+                const picker = flatpickr(deliveryDateInput, {
+                    dateFormat: 'Y-m-d',
+                    locale: 'ja',
+                    allowInput: true,
+                    clickOpens: true
+                });
+                picker.open();
+            }
+        },
+
+        clearDeliveryDateForEdit() {
+            this.editingQuotation.delivery_date = '';
+        },
+
+        onValidUntilTypeChangeForEdit() {
+            if (this.editingQuotation.valid_until_type === 'custom') {
+                this.$nextTick(() => {
+                    const validUntilInput = document.getElementById('edit_quotation_valid_until');
+                    if (validUntilInput) {
+                        flatpickr(validUntilInput, {
+                            dateFormat: 'Y-m-d',
+                            locale: 'ja',
+                            allowInput: true,
+                            clickOpens: true,
+                            minDate: 'today'
+                        });
+                    }
+                });
+            } else {
+                // Calculate valid_until based on type
+                if (this.editingQuotation.issue_date) {
+                    const issueDate = new Date(this.editingQuotation.issue_date);
+                    let validUntil = new Date(issueDate);
+                    
+                    if (this.editingQuotation.valid_until_type === '1_week') {
+                        validUntil.setDate(validUntil.getDate() + 7);
+                    } else if (this.editingQuotation.valid_until_type === '1_month') {
+                        validUntil.setMonth(validUntil.getMonth() + 1);
+                    }
+                    
+                    // Format date as YYYY-MM-DD
+                    const year = validUntil.getFullYear();
+                    const month = String(validUntil.getMonth() + 1).padStart(2, '0');
+                    const day = String(validUntil.getDate()).padStart(2, '0');
+                    this.editingQuotation.valid_until = `${year}-${month}-${day}`;
+                }
+            }
+        },
+
+        // Branch and contact selection methods for edit
+        onBranchSelectForEdit() {
+            // Handle branch selection for edit
+            if (this.editingQuotation.selected_branch_id) {
+                const branch = this.quotationBranches.find(b => b.id == this.editingQuotation.selected_branch_id);
+                if (branch) {
+                    this.editingQuotation.receiver_company = branch.name;
+                    this.editingQuotation.receiver_address = branch.address || '';
+                    this.editingQuotation.receiver_tel = branch.tel || '';
+                    this.editingQuotation.receiver_fax = branch.fax || '';
+                    this.editingQuotation.receiver_registration_number = branch.registration_number || '';
+                }
+            }
+        },
+
+        onContactSelectForEdit() {
+            // Handle contact selection for edit
+            if (this.editingQuotation.receiver_contact) {
+                const user = this.quotationUsers.find(u => u.realname === this.editingQuotation.receiver_contact);
+                if (user && user.seal_id) {
+                    // Load seal information
+                    this.loadSealForContact(user.seal_id);
+                } else {
+                    this.selectedContactSealForEdit = null;
+                }
+            }
+        },
+
+        async loadSealForContact(sealId) {
+            try {
+                const response = await axios.get(`/api/index.php?model=seal&method=getById&id=${sealId}`);
+                if (response.data && response.data.status === 'success') {
+                    this.selectedContactSealForEdit = response.data.data;
+                }
+            } catch (error) {
+                console.error('Error loading seal:', error);
+                this.selectedContactSealForEdit = null;
+            }
+        },
+
+        // Price list modal methods for edit
+        showPriceListModalForEdit() {
+            // Show price list modal for edit
+            if (this.priceListModal) {
+                this.priceListModal.show();
+            }
+        },
+
+        initializeEditQuotationDatePickers() {
+            // Initialize issue date picker
+            const issueDateInput = document.getElementById('edit_quotation_issue_date');
+            if (issueDateInput) {
+                flatpickr(issueDateInput, {
+                    dateFormat: 'Y-m-d',
+                    locale: 'ja',
+                    defaultDate: this.editingQuotation.issue_date || 'today',
+                    allowInput: true
+                });
+            }
+
+            // Initialize delivery date picker
+            const deliveryDateInput = document.getElementById('edit_quotation_delivery_date');
+            if (deliveryDateInput) {
+                flatpickr(deliveryDateInput, {
+                    dateFormat: 'Y-m-d',
+                    locale: 'ja',
+                    allowInput: true,
+                    clickOpens: false
+                });
+            }
+
+            // Initialize valid until picker if custom
+            if (this.editingQuotation.valid_until_type === 'custom') {
+                const validUntilInput = document.getElementById('edit_quotation_valid_until');
+                if (validUntilInput) {
+                    flatpickr(validUntilInput, {
+                        dateFormat: 'Y-m-d',
+                        locale: 'ja',
+                        defaultDate: this.editingQuotation.valid_until,
+                        allowInput: true,
+                        minDate: 'today'
+                    });
+                }
+            }
+        },
+
+        showEditSetModalForEdit(index) {
+            // Show edit set modal for edit quotation
+            if (index >= 0 && index < this.editingQuotation.items.length) {
+                const item = this.editingQuotation.items[index];
+                if (item.is_set && item.set_json) {
+                    try {
+                        let products = [];
+                        if (typeof item.set_json === 'string') {
+                            products = JSON.parse(item.set_json);
+                        } else if (Array.isArray(item.set_json)) {
+                            products = item.set_json;
+                        }
+                        
+                        this.editingSet = {
+                            index: index,
+                            products: products,
+                            name: item.title || '商品セット'
+                        };
+                        
+                        // Show edit set modal
+                        if (this.setEditModal) {
+                            this.setEditModal.show();
+                        }
+                    } catch (error) {
+                        console.error('Error parsing set_json:', error);
+                        showMessage('セット商品の編集に失敗しました。', true);
+                    }
+                }
+            }
+        },
+
+        saveEditedSetForEdit() {
+            if (this.editingSet && this.editingSet.index >= 0 && this.editingSet.index < this.editingQuotation.items.length) {
+                const item = this.editingQuotation.items[this.editingSet.index];
+                if (item.is_set) {
+                    // Update the item with edited set data
+                    item.title = this.editingSet.name;
+                    item.set_json = JSON.stringify(this.editingSet.products);
+                    
+                    // Calculate total amount for the set
+                    const totalAmount = this.editingSet.products.reduce((sum, product) => {
+                        const quantity = parseFloat(product.quantity) || 0;
+                        const unitPrice = parseFloat(product.unit_price) || 0;
+                        return sum + (quantity * unitPrice);
+                    }, 0);
+                    
+                    item.amount = totalAmount;
+                    item.unit_price = totalAmount; // Set unit price to total amount for sets
+                    item.quantity = 1; // Sets always have quantity 1
+                    
+                    // Recalculate total amount
+                    this.calculateTotalAmountForEdit();
+                    
+                    // Close modal
+                    if (this.setEditModal) {
+                        this.setEditModal.hide();
+                    }
+                    
+                    // Reset editing set
+                    this.editingSet = null;
+                    
+                    showMessage('セット商品が正常に更新されました。', false);
+                }
+            }
+        },
+
+        clearUnlinkedOrderItemsForEdit() {
+            // Clear project_id from order items that are no longer linked to selected projects
+            if (!this.editingQuotation.items || this.editingQuotation.items.length === 0) {
+                return;
+            }
+            
+            let clearedCount = 0;
+            this.editingQuotation.items.forEach((item, index) => {
+                if (item.project_id && !this.selectedChildProjectIdsForEdit.includes(parseInt(item.project_id))) {
+                    item.project_id = '';
+                    clearedCount++;
+                    
+                    // Recalculate item amount since project link was removed
+                    this.calculateItemAmountForEdit(index);
+                }
+            });
+            
+            if (clearedCount > 0) {
+                // Update total amounts for all child projects
+                this.childProjects.forEach(project => {
+                    this.updateProjectTotalAmountForEdit(project.id);
+                });
+            }
         }
     },
     async mounted() {
@@ -3428,6 +4234,15 @@ createApp({
                     this.backupQuotationForm();
                     // Destroy Flatpickr instances
                     this.destroyQuotationDatePickers();
+                });
+            }
+
+            // Add event listeners for edit quotation modal
+            const editQuotationModal = document.getElementById('editQuotationModal');
+            if (editQuotationModal) {
+                editQuotationModal.addEventListener('hidden.bs.modal', () => {
+                    // Reset form when modal is closed
+                    this.resetEditQuotationForm();
                 });
             }
 

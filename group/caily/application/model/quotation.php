@@ -2,6 +2,7 @@
 
 class Quotation extends ApplicationModel {
     function __construct() {
+        parent::__construct();
         $this->table = DB_PREFIX . 'quotations';
         $this->schema = array(
             'id' => array('except' => array('search')),
@@ -26,6 +27,7 @@ class Quotation extends ApplicationModel {
             'valid_until' => array(),
             'notes' => array(),
             'parent_project_id' => array('notnull'),
+            'selected_child_project_ids' => array(),
             'status' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search'))
@@ -276,10 +278,41 @@ class Quotation extends ApplicationModel {
         $filtered_data['receiver_fax'] = $filtered_data['receiver_fax'] ?? '';
         $filtered_data['receiver_registration_number'] = $filtered_data['receiver_registration_number'] ?? '';
         
+        // Process selected_child_project_ids
+        $selected_project_ids = array();
+        
+        // Check if it's sent as array from FormData
+        foreach ($data as $key => $value) {
+            if (strpos($key, 'selected_child_project_ids[') === 0) {
+                $selected_project_ids[] = $value;
+            }
+        }
+        
+        if (!empty($selected_project_ids)) {
+            $filtered_data['selected_child_project_ids'] = implode(',', $selected_project_ids);
+        } elseif (isset($data['selected_child_project_ids'])) {
+            if (is_array($data['selected_child_project_ids'])) {
+                $filtered_data['selected_child_project_ids'] = implode(',', $data['selected_child_project_ids']);
+            } else {
+                $filtered_data['selected_child_project_ids'] = $data['selected_child_project_ids'];
+            }
+        } else {
+            // Extract unique project IDs from items if not explicitly provided
+            $project_ids = array();
+            if (isset($items) && is_array($items)) {
+                foreach ($items as $item) {
+                    if (!empty($item['project_id']) && !in_array($item['project_id'], $project_ids)) {
+                        $project_ids[] = $item['project_id'];
+                    }
+                }
+            }
+            $filtered_data['selected_child_project_ids'] = implode(',', $project_ids);
+        }
+        
         // Set creation timestamp
         $filtered_data['created_at'] = date('Y-m-d H:i:s');
 
-        error_log('Filtered data prepared for insertion: ' . print_r($filtered_data, true));
+        error_log('Filtered data prepared for insertion (with selected_child_project_ids): ' . print_r($filtered_data, true));
 
         // Insert quotation using query_insert method with filtered data
         error_log('About to call query_insert with filtered data: ' . print_r($filtered_data, true));
@@ -393,6 +426,40 @@ class Quotation extends ApplicationModel {
         $filtered_data['receiver_fax'] = $filtered_data['receiver_fax'] ?? '';
         $filtered_data['receiver_registration_number'] = $filtered_data['receiver_registration_number'] ?? '';
         
+        // Process selected_child_project_ids
+        $selected_project_ids = array();
+        
+        // Check if it's sent as array from FormData
+        foreach ($data as $key => $value) {
+            if (strpos($key, 'selected_child_project_ids[') === 0) {
+                $selected_project_ids[] = $value;
+            }
+        }
+        
+        if (!empty($selected_project_ids)) {
+            $filtered_data['selected_child_project_ids'] = implode(',', $selected_project_ids);
+        } elseif (isset($data['selected_child_project_ids'])) {
+            if (is_array($data['selected_child_project_ids'])) {
+                $filtered_data['selected_child_project_ids'] = implode(',', $data['selected_child_project_ids']);
+            } else {
+                $filtered_data['selected_child_project_ids'] = $data['selected_child_project_ids'];
+            }
+        } else {
+            // Extract unique project IDs from items if not explicitly provided
+            $project_ids = array();
+            if (!empty($data['items'])) {
+                $items = json_decode($data['items'], true);
+                if (is_array($items)) {
+                    foreach ($items as $item) {
+                        if (!empty($item['project_id']) && !in_array($item['project_id'], $project_ids)) {
+                            $project_ids[] = $item['project_id'];
+                        }
+                    }
+                }
+            }
+            $filtered_data['selected_child_project_ids'] = implode(',', $project_ids);
+        }
+        
         // Set update timestamp
         $filtered_data['updated_at'] = date('Y-m-d H:i:s');
 
@@ -429,6 +496,7 @@ class Quotation extends ApplicationModel {
         foreach ($items as $index => $item) {
             $item_data = array(
                 'quotation_id' => $quotation_id,
+                'project_id' => !empty($item['project_id']) ? intval($item['project_id']) : null,
                 'title' => $item['title'] ?? '',
                 'product_code' => $item['product_code'] ?? '',
                 'product_name' => $item['product_name'] ?? '',
@@ -448,7 +516,9 @@ class Quotation extends ApplicationModel {
             $quoted_values = array();
             
             foreach ($values as $value) {
-                if (is_numeric($value)) {
+                if ($value === null) {
+                    $quoted_values[] = 'NULL';
+                } elseif (is_numeric($value)) {
                     $quoted_values[] = $value;
                 } else {
                     $quoted_values[] = "'" . mysqli_real_escape_string($this->handler, $value) . "'";
@@ -504,25 +574,53 @@ class Quotation extends ApplicationModel {
         }
     }
 
-    function getById($id) {
-        $query = sprintf(
-            "SELECT * FROM %s WHERE id = %d",
-            $this->table,
-            intval($id)
-        );
-        $quotation = $this->fetchOne($query);
-        
-        if ($quotation) {
-            // Get quotation items
-            $items_query = sprintf(
-                "SELECT * FROM %s WHERE quotation_id = %d ORDER BY sort_order ASC",
-                DB_PREFIX . 'quotation_items',
-                intval($id)
-            );
-            $quotation['items'] = $this->fetchAll($items_query);
+    function getById($params = null) {
+        // Handle both direct ID parameter and params array from API
+        if (is_array($params)) {
+            $id = isset($params['id']) ? intval($params['id']) : 0;
+        } else {
+            $id = $params ? intval($params) : (isset($_GET['id']) ? intval($_GET['id']) : 0);
         }
         
-        return $quotation;
+        if (!$id) {
+            return ['status' => 'error', 'message' => '見積書IDが指定されていません'];
+        }
+        
+        try {
+            $query = sprintf(
+                "SELECT * FROM %s WHERE id = %d",
+                $this->table,
+                $id
+            );
+            $quotation = $this->fetchOne($query);
+            
+            if ($quotation) {
+                // Get quotation items
+                $items_query = sprintf(
+                    "SELECT * FROM %s WHERE quotation_id = %d ORDER BY sort_order ASC",
+                    DB_PREFIX . 'quotation_items',
+                    $id
+                );
+                $quotation['items'] = $this->fetchAll($items_query);
+                
+                // Convert selected_child_project_ids from comma-separated string to array
+                if (!empty($quotation['selected_child_project_ids'])) {
+                    $quotation['selected_child_project_ids'] = explode(',', $quotation['selected_child_project_ids']);
+                } else {
+                    $quotation['selected_child_project_ids'] = array();
+                }
+                
+                return [
+                    'status' => 'success',
+                    'data' => $quotation
+                ];
+            } else {
+                return ['status' => 'error', 'message' => '指定された見積書が見つかりません'];
+            }
+        } catch (Exception $e) {
+            error_log('Error in getById: ' . $e->getMessage());
+            return ['status' => 'error', 'message' => 'データベースエラーが発生しました'];
+        }
     }
 
     function delete() {
