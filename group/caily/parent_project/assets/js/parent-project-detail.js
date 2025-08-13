@@ -1875,6 +1875,48 @@ createApp({
             }
         },
 
+        quickSelectProjectNumberForCheckedItems(projectId) {
+            // Check if there are any selected items
+            if (this.selectedOrderItemIndexes.length === 0) {
+                showMessage('チェックされた商品がありません。先に商品を選択してください。', true);
+                return;
+            }
+
+            let updatedCount = 0;
+            const projectDisplayName = this.getProjectDisplayName(projectId);
+
+            // Update only the checked items
+            this.selectedOrderItemIndexes.forEach(index => {
+                if (index >= 0 && index < this.newQuotation.items.length) {
+                    const item = this.newQuotation.items[index];
+                    const oldProjectId = item.project_id;
+                    
+                    // Set the project_id for the checked item
+                    item.project_id = projectId;
+                    item._oldProjectId = projectId;
+                    
+                    // Update the project total amount
+                    this.updateChildProjectTotalAmount(projectId);
+                    
+                    // If the item had a different project_id before, update that project's total too
+                    if (oldProjectId && oldProjectId !== projectId) {
+                        this.updateChildProjectTotalAmount(oldProjectId);
+                    }
+                    
+                    // Calculate the item amount
+                    this.calculateItemAmount(index);
+                    
+                    updatedCount++;
+                }
+            });
+
+            if (updatedCount > 0) {
+                showMessage(`プロジェクト番号 "${projectDisplayName}" が ${updatedCount} 件のチェック済み商品に設定されました。`, false);
+            } else {
+                showMessage('チェックされた商品の更新に失敗しました。', true);
+            }
+        },
+
         getProjectDisplayName(projectId) {
             const project = this.childProjects.find(p => p.id == projectId);
             return project ? (project.project_number || project.name) : `ID: ${projectId}`;
@@ -3021,6 +3063,24 @@ createApp({
                 this.childProjects.forEach(project => {
                     this.updateChildProjectTotalAmount(project.id);
                 });
+            }
+        },
+
+        updateEditingSetTotal() {
+            // This function updates the total amount for the editing set
+            // It's called when quantities are changed in the edit set modal
+            if (this.editingSet && this.editingSet.products) {
+                // The total will be calculated automatically by the template
+                // This function can be extended if additional logic is needed
+                this.$forceUpdate();
+            }
+        },
+
+        removeProductFromSet(productId) {
+            // Remove a product from the editing set
+            if (this.editingSet && this.editingSet.products) {
+                this.editingSet.products = this.editingSet.products.filter(p => p.id !== productId);
+                this.updateEditingSetTotal();
             }
         }
     },
