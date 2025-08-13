@@ -987,7 +987,6 @@ $view->heading('建物詳細');
                                                          </th>
                                                          <th>プロジェクト番号</th>
                                                          <th>件名</th>
-                                                         <th>商品コード</th>
                                                          <th style="width:70px;">数量</th>
                                                          <th style="width:70px;">単位</th>
                                                          <th style="width:100px;">単価</th>
@@ -998,7 +997,7 @@ $view->heading('建物詳細');
                                                  </thead>
                                                  <tbody>
                                                      <tr v-if="newQuotation.items.length === 0">
-                                                         <td colspan="10" class="text-center text-muted py-4">
+                                                         <td colspan="9" class="text-center text-muted py-4">
                                                           商品がありません
                                                          </td>
                                                      </tr>
@@ -1019,9 +1018,6 @@ $view->heading('建物詳細');
                                                          </td>
                                                          <td>
                                                              <input type="text" class="form-control form-control-sm" v-model="item.title" placeholder="件名">
-                                                         </td>
-                                                         <td>
-                                                             <input type="text" class="form-control form-control-sm" v-model="item.product_code" placeholder="商品コード">
                                                          </td>
                                                          <td>
                                                              <input type="number" class="form-control form-control-sm" v-model="item.quantity" @input="calculateItemAmount(index)" min="0" step="1">
@@ -1062,14 +1058,15 @@ $view->heading('建物詳細');
                                          <!-- Quick Project Number Selection -->
                                          <div class="mt-3" v-if="selectedChildProjectsForDropdown.length > 0">
                                              <div class="d-flex flex-wrap gap-2 align-items-center">
-                                                 <span class="text-muted small me-2">プロジェクト番号を素早く選択:</span>
+                                                 <span class="text-muted small me-2">プロジェクト番号を素早く選択 (チェック済み商品のみ):</span>
                                                  <button 
                                                      v-for="project in selectedChildProjectsForDropdown" 
                                                      :key="project.id"
                                                      type="button" 
                                                      class="btn btn-outline-primary btn-sm"
-                                                     @click="quickSelectProjectNumber(project.id)"
-                                                     :title="'プロジェクト番号: ' + (project.project_number || project.name)"
+                                                     @click="quickSelectProjectNumberForCheckedItems(project.id)"
+                                                     :title="'プロジェクト番号: ' + (project.project_number || project.name) + ' をチェック済み商品に適用'"
+                                                     :disabled="selectedOrderItemIndexes.length === 0"
                                                  >
                                                      {{ project.project_number || project.name }}
                                                  </button>
@@ -1226,7 +1223,6 @@ $view->heading('建物詳細');
                                  <thead>
                                      <tr>
                                          <th>件名</th>
-                                         <th>商品コード</th>
                                          <th>品名</th>
                                          <th>数量</th>
                                          <th>単位</th>
@@ -1238,7 +1234,6 @@ $view->heading('建物詳細');
                                  <tbody>
                                      <tr v-for="item in selectedQuotation.items" :key="item.id">
                                          <td>{{ item.title }}</td>
-                                         <td>{{ item.product_code }}</td>
                                          <td>{{ item.product_name }}</td>
                                          <td class="text-end">{{ formatNumber(item.quantity) }}</td>
                                          <td>{{ item.unit }}</td>
@@ -1469,7 +1464,6 @@ $view->heading('建物詳細');
                         <table class="table table-sm">
                             <thead>
                                 <tr>
-                                    <th>商品コード</th>
                                     <th>商品名</th>
                                     <th>単価</th>
                                     <th>数量</th>
@@ -1479,7 +1473,6 @@ $view->heading('建物詳細');
                             </thead>
                             <tbody>
                                 <tr v-for="product in editingSet.products" :key="product.id">
-                                    <td>{{ product.code }}</td>
                                     <td>{{ product.name }}</td>
                                     <td class="text-end">¥{{ product.price?.toLocaleString() }}</td>
                                     <td>
@@ -1495,7 +1488,7 @@ $view->heading('建物詳細');
                                     </td>
                                 </tr>
                                 <tr v-if="!editingSet.products || editingSet.products.length === 0">
-                                    <td colspan="6" class="text-center text-muted py-4">
+                                    <td colspan="5" class="text-center text-muted py-4">
                                         商品がありません
                                     </td>
                                 </tr>
