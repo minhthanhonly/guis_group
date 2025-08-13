@@ -133,6 +133,11 @@ createApp({
             selectedPriceListType: '',
             priceListSearchTerm: '',
             priceListModal: null,
+            
+            // Sortable instances
+            createQuotationSortable: null,
+            editQuotationSortable: null,
+            
             // Multiple product selection
             selectedProducts: [],
             allSelected: false,
@@ -3357,17 +3362,24 @@ createApp({
 
                 // Group items by project_id and calculate totals
                 const projectAmounts = {};
+                
+                // Get tax rate from the new quotation
+                const taxRate = parseFloat(this.newQuotation.tax_rate) || 0;
+                
                 this.newQuotation.items.forEach(item => {
                     if (item.project_id && item.amount) {
                         const projectId = item.project_id;
                         if (!projectAmounts[projectId]) {
                             projectAmounts[projectId] = 0;
                         }
-                        projectAmounts[projectId] += item.amount || 0;
+                        // Add amount including tax (amount * (1 + tax_rate/100))
+                        const itemAmount = parseFloat(item.amount) || 0;
+                        const itemAmountWithTax = itemAmount * (1 + taxRate / 100);
+                        projectAmounts[projectId] += itemAmountWithTax;
                     }
                 });
 
-                // Update each child project's total_amount in the database
+                // Update each child project's amount in the database (including tax)
                 let successCount = 0;
                 let errorCount = 0;
 
@@ -3412,7 +3424,7 @@ createApp({
 
             } catch (error) {
                 console.error('Error updating child project amounts after quotation:', error);
-                showMessage('子プロジェクトの金額の更新中にエラーが発生しました。', true);
+                showMessage('子プロジェクトの金額（税込）の更新中にエラーが発生しました。', true);
             }
         },
 
@@ -4471,6 +4483,97 @@ createApp({
                     this.updateProjectTotalAmountForEdit(project.id);
                 });
             }
+        },
+
+        // Sortable functionality
+        initializeSortable() {
+            // Initialize sortable for create quotation modal
+            const createSortableEl = document.getElementById('quotation-items-sortable');
+            if (createSortableEl && typeof Sortable !== 'undefined') {
+                this.createQuotationSortable = Sortable.create(createSortableEl, {
+                    handle: '.drag-handle',
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    chosenClass: 'sortable-chosen',
+                    dragClass: 'sortable-drag',
+                    onEnd: (evt) => {
+                        this.reorderQuotationItems(evt.oldIndex, evt.newIndex, false);
+                    }
+                });
+            }
+
+            // Initialize sortable for edit quotation modal
+            const editSortableEl = document.getElementById('edit-quotation-items-sortable');
+            if (editSortableEl && typeof Sortable !== 'undefined') {
+                this.editQuotationSortable = Sortable.create(editSortableEl, {
+                    handle: '.drag-handle',
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    chosenClass: 'sortable-chosen',
+                    dragClass: 'sortable-drag',
+                    onEnd: (evt) => {
+                        this.reorderQuotationItems(evt.oldIndex, evt.newIndex, true);
+                    }
+                });
+            }
+        },
+
+        reorderQuotationItems(oldIndex, newIndex, isEditMode) {
+            if (oldIndex === newIndex) return;
+
+            const targetArray = isEditMode ? this.editingQuotation.items : this.newQuotation.items;
+            
+            // Move the item from oldIndex to newIndex
+            const movedItem = targetArray.splice(oldIndex, 1)[0];
+            targetArray.splice(newIndex, 0, movedItem);
+
+            // Update selected item indexes to maintain selection after reorder
+            if (isEditMode) {
+                this.updateSelectedIndexesAfterReorder(oldIndex, newIndex, this.selectedOrderItemIndexesForEdit);
+            } else {
+                this.updateSelectedIndexesAfterReorder(oldIndex, newIndex, this.selectedOrderItemIndexes);
+            }
+
+            // Recalculate totals
+            if (isEditMode) {
+                this.calculateTotalAmountForEdit();
+            } else {
+                this.calculateTotalAmount();
+            }
+        },
+
+        updateSelectedIndexesAfterReorder(oldIndex, newIndex, selectedIndexes) {
+            // Update the selected indexes array to reflect the new positions after drag & drop
+            const updatedIndexes = selectedIndexes.map(index => {
+                if (index === oldIndex) {
+                    // The dragged item moves to newIndex
+                    return newIndex;
+                } else if (oldIndex < newIndex && index > oldIndex && index <= newIndex) {
+                    // Items between oldIndex and newIndex shift left
+                    return index - 1;
+                } else if (oldIndex > newIndex && index >= newIndex && index < oldIndex) {
+                    // Items between newIndex and oldIndex shift right
+                    return index + 1;
+                } else {
+                    // Other items remain at the same index
+                    return index;
+                }
+            });
+
+            // Replace the original array with updated indexes
+            selectedIndexes.length = 0;
+            selectedIndexes.push(...updatedIndexes);
+        },
+
+        destroySortable() {
+            if (this.createQuotationSortable) {
+                this.createQuotationSortable.destroy();
+                this.createQuotationSortable = null;
+            }
+            if (this.editQuotationSortable) {
+                this.editQuotationSortable.destroy();
+                this.editQuotationSortable = null;
+            }
         }
     },
     async mounted() {
@@ -4481,6 +4584,9 @@ createApp({
             
             // Initialize price list modal
             this.priceListModal = new bootstrap.Modal(document.getElementById('priceListModal'));
+            
+            // Initialize sortable for drag & drop functionality
+            this.initializeSortable();
             
             // Add event listeners for modal close events
             const createQuotationModal = document.getElementById('createQuotationModal');
@@ -4518,5 +4624,10 @@ createApp({
         } finally {
             this.loading = false;
         }
+    },
+    
+    beforeUnmount() {
+        // Clean up sortable instances
+        this.destroySortable();
     }
 }).mount('#app'); 

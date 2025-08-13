@@ -1132,6 +1132,9 @@ $view->heading('建物詳細');
                                             <table class="table table-bordered" id="quotation-table">
                                                 <thead>
                                                     <tr>
+                                                        <th style="width:30px;">
+                                                            <i class="fa fa-arrows-alt text-muted" title="ドラッグして並び替え"></i>
+                                                        </th>
                                                         <th style="width:36px;">
                                                             <input type="checkbox" class="form-check-input"
                                                                 @change="selectAllOrderItems"
@@ -1148,13 +1151,17 @@ $view->heading('建物詳細');
                                                         <th>操作</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody>
+                                                <tbody id="quotation-items-sortable">
                                                     <tr v-if="newQuotation.items.length === 0">
-                                                        <td colspan="10" class="text-center text-muted py-4">
+                                                        <td colspan="11" class="text-center text-muted py-4">
                                                             商品がありません
                                                         </td>
                                                     </tr>
-                                                    <tr v-for="(item, index) in newQuotation.items" :key="index">
+                                                    <tr v-for="(item, index) in newQuotation.items" :key="index" class="sortable-item">
+                                                        <td class="text-center">
+                                                            <i class="fa fa-grip-vertical drag-handle text-muted cursor-move" 
+                                                               title="ドラッグして移動"></i>
+                                                        </td>
                                                         <td class="text-center">
                                                             <input type="checkbox" class="form-check-input"
                                                                 :checked="selectedOrderItemIndexes.includes(index)"
@@ -1313,11 +1320,11 @@ $view->heading('建物詳細');
                                                     <input type="hidden" id="quotation_delivery_date_picker" style="display: none;">
                                                     <button class="btn btn-outline-secondary" type="button"
                                                         @click="openDeliveryDatePicker" title="日付を選択">
-                                                        <i class="ti ti-calendar"></i>
+                                                        <i class="fa fa-calendar"></i>
                                                     </button>
                                                     <button class="btn btn-outline-danger" type="button"
                                                         @click="clearDeliveryDate" title="納入期限をクリア">
-                                                        <i class="ti ti-x"></i>
+                                                        <i class="fa fa-times"></i>
                                                     </button>
                                                 </div>
                                             </div>
@@ -1689,6 +1696,9 @@ $view->heading('建物詳細');
                                         <table class="table table-bordered" id="edit-quotation-table">
                                             <thead>
                                                 <tr>
+                                                    <th style="width:30px;">
+                                                        <i class="fa fa-arrows-alt text-muted" title="ドラッグして並び替え"></i>
+                                                    </th>
                                                     <th style="width:36px;">
                                                         <input type="checkbox" class="form-check-input"
                                                             @change="selectAllOrderItemsForEdit"
@@ -1705,13 +1715,17 @@ $view->heading('建物詳細');
                                                     <th>操作</th>
                                                 </tr>
                                             </thead>
-                                            <tbody>
+                                            <tbody id="edit-quotation-items-sortable">
                                                 <tr v-if="editingQuotation.items.length === 0">
-                                                    <td colspan="10" class="text-center text-muted py-4">
+                                                    <td colspan="11" class="text-center text-muted py-4">
                                                         商品がありません
                                                     </td>
                                                 </tr>
-                                                <tr v-for="(item, index) in editingQuotation.items" :key="index">
+                                                <tr v-for="(item, index) in editingQuotation.items" :key="index" class="sortable-item">
+                                                    <td class="text-center">
+                                                        <i class="fa fa-grip-vertical drag-handle text-muted cursor-move" 
+                                                           title="ドラッグして移動"></i>
+                                                    </td>
                                                     <td class="text-center">
                                                         <input type="checkbox" class="form-check-input"
                                                             :checked="selectedOrderItemIndexesForEdit.includes(index)"
@@ -1870,11 +1884,11 @@ $view->heading('建物詳細');
                                                 <input type="hidden" id="edit_quotation_delivery_date_picker" style="display: none;">
                                                 <button class="btn btn-outline-secondary" type="button"
                                                     @click="openDeliveryDatePickerForEdit" title="日付を選択">
-                                                    <i class="ti ti-calendar"></i>
+                                                    <i class="fa fa-calendar"></i>
                                                 </button>
                                                 <button class="btn btn-outline-danger" type="button"
                                                     @click="clearDeliveryDateForEdit" title="納入期限をクリア">
-                                                    <i class="ti ti-x"></i>
+                                                    <i class="fa fa-times"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -2536,6 +2550,45 @@ $view->footing();
     .modal-xxl {
         width: 90vw;
         max-width: 1400px;
+    }
+
+    /* Sortable drag & drop styles */
+    .cursor-move {
+        cursor: move;
+    }
+
+    .drag-handle {
+        opacity: 0.6;
+        transition: opacity 0.2s ease;
+    }
+
+    .drag-handle:hover {
+        opacity: 1;
+    }
+
+    .sortable-item.sortable-ghost {
+        opacity: 0.4;
+        background-color: #f8f9fa;
+    }
+
+    .sortable-item.sortable-drag {
+        opacity: 1;
+        transform: rotate(5deg);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        background-color: #fff;
+        border: 2px solid #007bff;
+    }
+
+    .sortable-item.sortable-chosen {
+        background-color: #e3f2fd;
+    }
+
+    /* Disable text selection during drag */
+    .sortable-item.sortable-drag {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
     }
 </style>
 
