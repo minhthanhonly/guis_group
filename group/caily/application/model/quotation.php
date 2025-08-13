@@ -525,7 +525,10 @@ class Quotation extends ApplicationModel {
         return $quotation;
     }
 
-    function delete($id) {
+    function delete() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) return ['status' => 'error', 'error' => '見積書IDが指定されていません'];
+        
         try {
             // Delete quotation items first (due to foreign key constraint)
             $this->deleteQuotationItems($id);

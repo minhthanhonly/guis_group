@@ -435,7 +435,7 @@ $view->heading('建物詳細');
                                      </td>
                                      <td class="text-end">
                                          <span class="fw-bold text-primary">
-                                             ¥{{ formatNumber(project.total_amount || 0) }}
+                                             {{ formatPrice(project.amount || project.total_amount || 0) }}
                                          </span>
                                      </td>
                                      <td>
@@ -804,6 +804,7 @@ $view->heading('建物詳細');
                                                                  <th>プロジェクト番号</th>
                                                                  <th>案件名</th>
                                                                  <th>部署</th>
+                                                                 <th>受注形態</th>
                                                                  <th>開始日</th>
                                                                  <th>期限日</th>
                                                                  <th>現在のステータス</th>
@@ -827,6 +828,12 @@ $view->heading('建物詳細');
                                                                      </a>
                                                                  </td>
                                                                  <td>{{ project.department_name || '-' }}</td>
+                                                                 <td>
+                                                                     <span v-if="project.project_order_type && project.project_order_type.split(',').length > 0">
+                                                                         <span v-for="item in project.project_order_type.split(',')" :key="item.trim()" class="badge bg-info me-1">{{ item.trim() }}</span>
+                                                                     </span>
+                                                                     <span v-else>-</span>
+                                                                 </td>
                                                                  <td>{{ formatDateTime(project.start_date) || '-' }}</td>
                                                                  <td>{{ formatDateTime(project.end_date) || '-' }}</td>
                                                                  <td>
@@ -843,7 +850,7 @@ $view->heading('建物詳細');
 
                                                              </tr>
                                                              <tr v-if="childProjects.length === 0">
-                                                                 <td colspan="7" class="text-center text-muted py-4">
+                                                                 <td colspan="8" class="text-center text-muted py-4">
                                                                      子プロジェクトがありません
                                                                  </td>
                                                              </tr>
@@ -1062,7 +1069,7 @@ $view->heading('建物詳細');
                                          <!-- Quick Project Number Selection -->
                                          <div class="mt-3" v-if="selectedChildProjectsForDropdown.length > 0">
                                              <div class="d-flex flex-wrap gap-2 align-items-center">
-                                                 <span class="text-muted small me-2">プロジェクト番号を素早く選択 (チェック済み商品のみ):</span>
+                                                 <span class="text-muted small me-2">プロジェクト番号を素早く選択:</span>
                                                  <button 
                                                      v-for="project in selectedChildProjectsForDropdown" 
                                                      :key="project.id"
@@ -1073,6 +1080,15 @@ $view->heading('建物詳細');
                                                      :disabled="selectedOrderItemIndexes.length === 0"
                                                  >
                                                      {{ project.project_number || project.name }}
+                                                 </button>
+                                                 <button 
+                                                     type="button" 
+                                                     class="btn btn-outline-danger btn-sm ms-2"
+                                                     @click="clearProjectNumbersForCheckedItems"
+                                                     :title="'チェック済み商品のプロジェクト番号をクリア'"
+                                                     :disabled="selectedOrderItemIndexes.length === 0"
+                                                 >
+                                                     <i class="fa fa-times me-1"></i>クリア
                                                  </button>
                                              </div>
                                          </div>
@@ -1239,7 +1255,7 @@ $view->heading('建物詳細');
                                  <tbody>
                                      <tr v-for="item in selectedQuotation.items" :key="item.id">
                                          <td>{{ item.title }}</td>
-                                         <td>{{ item.product_code }}</td>
+                                         <td>{{ item.is_set ? '-' : item.product_code }}</td>
                                          <td>{{ item.product_name }}</td>
                                          <td class="text-end">{{ formatNumber(item.quantity) }}</td>
                                          <td>{{ item.unit }}</td>

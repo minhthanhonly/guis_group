@@ -2351,6 +2351,62 @@ class Project extends ApplicationModel {
             ];
         }
     }
+
+    /**
+     * Update project amount
+     * @param array $params Array containing 'id' and 'amount'
+     * @return array Status response
+     */
+    function updateAmount($params = null) {
+        try {
+            // Get parameters
+            $id = isset($_POST['id']) ? intval($_POST['id']) : (isset($params['id']) ? intval($params['id']) : 0);
+            $amount = isset($_POST['amount']) ? floatval($_POST['amount']) : (isset($params['amount']) ? floatval($params['amount']) : 0);
+            
+            // Validate input
+            if (!$id) {
+                return ['status' => 'error', 'message' => 'Project ID is required'];
+            }
+            
+            if ($amount < 0) {
+                return ['status' => 'error', 'message' => 'Amount cannot be negative'];
+            }
+            
+            // Check if project exists
+            $existingProject = $this->getById($id);
+            if (!$existingProject) {
+                return ['status' => 'error', 'message' => 'Project not found'];
+            }
+            
+            // Prepare update data
+            $data = array(
+                'amount' => $amount,
+                'updated_at' => date('Y-m-d H:i:s'),
+                'updated_by' => $_SESSION['userid']
+            );
+            
+            // Perform update
+            $result = $this->query_update($data, ['id' => $id]);
+            
+            if ($result) {
+                return [
+                    'status' => 'success', 
+                    'message' => 'Project amount updated successfully',
+                    'data' => [
+                        'id' => $id,
+                        'amount' => $amount,
+                        'updated_at' => $data['updated_at']
+                    ]
+                ];
+            } else {
+                return ['status' => 'error', 'message' => 'Failed to update project amount'];
+            }
+            
+        } catch (Exception $e) {
+            error_log('Error in updateAmount: ' . $e->getMessage());
+            return ['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()];
+        }
+    }
 }
 
 ?>

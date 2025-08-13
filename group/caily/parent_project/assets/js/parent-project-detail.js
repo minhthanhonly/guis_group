@@ -155,13 +155,37 @@ createApp({
     watch: {
         'newQuotation.items': {
             handler(newItems, oldItems) {
-                // Items array changed
+                // Ensure product_code is empty for set products
+                if (newItems && Array.isArray(newItems)) {
+                    newItems.forEach(item => {
+                        if (item && item.is_set && item.product_code && item.product_code.trim() !== '') {
+                            item.product_code = '';
+                        }
+                    });
+                }
+                
+                // Auto-validate project_id selection
+                this.validateProjectIdSelection();
             },
             deep: true
         },
         'quotationValidationErrors': {
             handler(newErrors, oldErrors) {
                 // Validation errors changed
+            },
+            deep: true
+        },
+        'childProjects': {
+            handler(newProjects, oldProjects) {
+                // Ensure amounts are properly formatted and displayed
+                if (newProjects && Array.isArray(newProjects)) {
+                    newProjects.forEach(project => {
+                        // Ensure amount field exists and is properly formatted
+                        if (project && typeof project.amount === 'undefined') {
+                            project.amount = project.total_amount || 0;
+                        }
+                    });
+                }
             },
             deep: true
         }
@@ -233,6 +257,14 @@ createApp({
             return this.childProjects.filter(project => 
                 this.selectedChildProjectIds.includes(project.id)
             );
+        },
+        hasSetProducts() {
+            // Check if any items in newQuotation are sets
+            return this.newQuotation?.items?.some(item => item.is_set) || false;
+        },
+        hasSetProductsInView() {
+            // Check if any items in selectedQuotation are sets
+            return this.selectedQuotation?.items?.some(item => item.is_set) || false;
         }
     },
     methods: {
@@ -1728,11 +1760,15 @@ createApp({
                 // Restore previous form data if available, otherwise reset
                 this.newQuotation = JSON.parse(JSON.stringify(this.quotationFormBackup));
                 
-                // Ensure all items have _oldProjectId property initialized
+                // Ensure all items have _oldProjectId property initialized and product_code is empty for set products
                 if (this.newQuotation.items && this.newQuotation.items.length > 0) {
                     this.newQuotation.items.forEach(item => {
                         if (!item.hasOwnProperty('_oldProjectId')) {
                             item._oldProjectId = item.project_id || '';
+                        }
+                        // Ensure product_code is empty for set products
+                        if (item.is_set && item.product_code && item.product_code.trim() !== '') {
+                            item.product_code = '';
                         }
                     });
                 }
@@ -1848,6 +1884,11 @@ createApp({
             
             // Use spread operator to ensure reactivity
             this.newQuotation.items = [...this.newQuotation.items, newItem];
+            
+            // Validate project_id selection after adding new item
+            this.$nextTick(() => {
+                this.validateProjectIdSelection();
+            });
         },
 
         quickSelectProjectNumber(projectId) {
@@ -1869,6 +1910,8 @@ createApp({
                 }
                 
                 showMessage(`プロジェクト番号 "${this.getProjectDisplayName(projectId)}" が設定されました。`, false);
+                // Validate project_id selection after update
+                this.validateProjectIdSelection();
             } else {
                 // If all items have project_id, show a message
                 showMessage('すべての商品明細にプロジェクト番号が設定されています。新しい商品明細を追加してください。', true);
@@ -1912,6 +1955,45 @@ createApp({
 
             if (updatedCount > 0) {
                 showMessage(`プロジェクト番号 "${projectDisplayName}" が ${updatedCount} 件のチェック済み商品に設定されました。`, false);
+                // Validate project_id selection after update
+                this.validateProjectIdSelection();
+            } else {
+                showMessage('チェックされた商品の更新に失敗しました。', true);
+            }
+        },
+
+        clearProjectNumbersForCheckedItems() {
+            // Check if there are any selected items
+            if (this.selectedOrderItemIndexes.length === 0) {
+                showMessage('チェックされた商品がありません。先に商品を選択してください。', true);
+                return;
+            }
+
+            let updatedCount = 0;
+
+            // Clear project_id for all checked items
+            this.selectedOrderItemIndexes.forEach(index => {
+                if (index >= 0 && index < this.newQuotation.items.length) {
+                    const item = this.newQuotation.items[index];
+                    const oldProjectId = item.project_id;
+                    
+                    // Clear the project_id for the checked item
+                    item.project_id = '';
+                    item._oldProjectId = '';
+                    
+                    // If the item had a project_id before, update that project's total
+                    if (oldProjectId) {
+                        this.updateChildProjectTotalAmount(oldProjectId);
+                    }
+                    
+                    updatedCount++;
+                }
+            });
+
+            if (updatedCount > 0) {
+                showMessage(`${updatedCount} 件のチェック済み商品のプロジェクト番号がクリアされました。`, false);
+                // Validate project_id selection after clearing
+                this.validateProjectIdSelection();
             } else {
                 showMessage('チェックされた商品の更新に失敗しました。', true);
             }
@@ -2121,6 +2203,12 @@ createApp({
                         await this.updateSelectedChildProjectsStatus();
                     }
                     
+                    // Update child project amounts based on quotation items
+                    await this.updateChildProjectAmountsAfterQuotation();
+                    
+                    // Reload child projects to show updated amounts
+                    await this.loadChildProjects();
+                    
                     // Reload quotations
                     await this.loadQuotations();
                     
@@ -2210,6 +2298,13 @@ createApp({
             if (!this.newQuotation.items || !Array.isArray(this.newQuotation.items) || this.newQuotation.items.length === 0) {
                 this.quotationValidationErrors.items = '商品明細は必須です';
                 isValid = false;
+            } else {
+                // Validate that all items have project_id selected
+                const itemsWithoutProject = this.newQuotation.items.filter(item => !item.project_id || item.project_id.trim() === '');
+                if (itemsWithoutProject.length > 0) {
+                    this.quotationValidationErrors.items = `${itemsWithoutProject.length}件の商品にプロジェクト番号が選択されていません`;
+                    isValid = false;
+                }
             }
             
             // Validate child project selection
@@ -2219,6 +2314,21 @@ createApp({
             }
             
             return isValid;
+        },
+
+        validateProjectIdSelection() {
+            // Clear previous items validation error
+            if (this.quotationValidationErrors.items && this.quotationValidationErrors.items.includes('プロジェクト番号が選択されていません')) {
+                delete this.quotationValidationErrors.items;
+            }
+            
+            // Check if all items have project_id selected
+            if (this.newQuotation.items && Array.isArray(this.newQuotation.items) && this.newQuotation.items.length > 0) {
+                const itemsWithoutProject = this.newQuotation.items.filter(item => !item.project_id || item.project_id.trim() === '');
+                if (itemsWithoutProject.length > 0) {
+                    this.quotationValidationErrors.items = `${itemsWithoutProject.length}件の商品にプロジェクト番号が選択されていません`;
+                }
+            }
         },
 
         showQuotationModal(quotation) {
@@ -2251,12 +2361,18 @@ createApp({
                     
                     const response = await axios.post('/api/index.php?model=quotation&method=delete', formData);
                     
-                    if (response.data && response.data.status === 'success') {
-                        await this.loadQuotations();
-                        showMessage('見積書を削除しました', false);
-                    } else {
-                        showMessage(response.data?.message || 'エラーが発生しました', true);
-                    }
+                                    if (response.data && response.data.status === 'success') {
+                    // Update child project amounts after deletion (reset to 0 for affected projects)
+                    await this.resetChildProjectAmountsAfterQuotationDeletion(quotation);
+                    
+                    // Reload child projects to show updated amounts
+                    await this.loadChildProjects();
+                    
+                    await this.loadQuotations();
+                    showMessage('見積書を削除しました', false);
+                } else {
+                    showMessage(response.data?.message || 'エラーが発生しました', true);
+                }
                 }
             } catch (error) {
                 console.error('Error deleting quotation:', error);
@@ -2300,6 +2416,17 @@ createApp({
                     if (quotation) {
                         quotation.status = status;
                     }
+                    
+                    // Reload quotations to get updated data
+                    await this.loadQuotations();
+                    
+                    // Update child project amounts if status change affects project totals
+                    if (status === '承認済み' || status === '発行済み') {
+                        await this.updateChildProjectAmountsFromQuotation(quotationId);
+                        // Reload child projects to show updated amounts
+                        await this.loadChildProjects();
+                    }
+                    
                     showMessage('見積書のステータスが更新されました。', false);
                 } else {
                     showMessage('ステータスの更新に失敗しました。', true);
@@ -2571,7 +2698,7 @@ createApp({
                 project_id: '', // Add project_id field for consistency
                 _oldProjectId: '', // Add _oldProjectId field for consistency
                 title: computedTitle,
-                product_code: selectedProducts.map(p => p.code).join(', '),
+                product_code: '', // Set empty for set products
                 product_name: selectedProducts.map(p => {
                     const qty = this.selectedProductQuantities[p.id] || 1;
                     return `${p.name} x${qty}`;
@@ -2684,7 +2811,7 @@ createApp({
             }
             
             const total = products.reduce((sum, p) => sum + (p.price || 0) * (p.quantity || 1), 0);
-            item.product_code = products.map(p => p.code).join(', ');
+            item.product_code = ''; // Set empty for set products
             item.product_name = products.map(p => `${p.name} x${(p.quantity || 1)}`).join(' + ');
             item.unit_price = total;
             item.amount = total;
@@ -2993,6 +3120,206 @@ createApp({
             } catch (error) {
                 console.error('Error updating selected child projects status:', error);
                 showMessage('子プロジェクトのステータスの更新中にエラーが発生しました。', true);
+            }
+        },
+
+        async updateChildProjectAmountsAfterQuotation() {
+            try {
+                if (!this.newQuotation.items || this.newQuotation.items.length === 0) {
+                    return;
+                }
+
+                // Group items by project_id and calculate totals
+                const projectAmounts = {};
+                this.newQuotation.items.forEach(item => {
+                    if (item.project_id && item.amount) {
+                        const projectId = item.project_id;
+                        if (!projectAmounts[projectId]) {
+                            projectAmounts[projectId] = 0;
+                        }
+                        projectAmounts[projectId] += item.amount || 0;
+                    }
+                });
+
+                // Update each child project's total_amount in the database
+                let successCount = 0;
+                let errorCount = 0;
+
+                for (const [projectId, totalAmount] of Object.entries(projectAmounts)) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', projectId);
+                        formData.append('amount', totalAmount);
+                        
+                        const response = await axios.post('/api/index.php?model=project&method=updateAmount', formData);
+                        
+                        if (response.data && response.data.status === 'success') {
+                            successCount++;
+                            
+                            // Also update local childProjects array
+                            const localProject = this.childProjects.find(p => p.id == projectId);
+                            if (localProject) {
+                                localProject.total_amount = totalAmount;
+                                localProject.amount = totalAmount; // Update both fields for compatibility
+                            }
+                        } else {
+                            console.warn(`Failed to update child project ${projectId} total_amount:`, response.data?.message);
+                            errorCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Error updating child project ${projectId} total_amount:`, error);
+                        errorCount++;
+                    }
+                }
+
+                // Force Vue reactivity update
+                this.$forceUpdate();
+
+                // Show appropriate message based on results
+                if (successCount > 0 && errorCount === 0) {
+                    showMessage(`${successCount}件の子プロジェクトの金額が更新されました。`, false);
+                } else if (successCount > 0 && errorCount > 0) {
+                    showMessage(`${successCount}件の子プロジェクトの金額が更新されましたが、${errorCount}件の更新に失敗しました。`, true);
+                } else if (successCount === 0) {
+                    showMessage('子プロジェクトの金額の更新に失敗しました。', true);
+                }
+
+            } catch (error) {
+                console.error('Error updating child project amounts after quotation:', error);
+                showMessage('子プロジェクトの金額の更新中にエラーが発生しました。', true);
+            }
+        },
+
+        async updateChildProjectAmountsFromQuotation(quotationId) {
+            try {
+                // Find the quotation
+                const quotation = this.quotations.find(q => q.id === quotationId);
+                if (!quotation || !quotation.items || quotation.items.length === 0) {
+                    return;
+                }
+
+                // Group items by project_id and calculate totals
+                const projectAmounts = {};
+                quotation.items.forEach(item => {
+                    if (item.project_id && item.amount) {
+                        const projectId = item.project_id;
+                        if (!projectAmounts[projectId]) {
+                            projectAmounts[projectId] = 0;
+                        }
+                        projectAmounts[projectId] += item.amount || 0;
+                    }
+                });
+
+                // Update each child project's amount in the database
+                let successCount = 0;
+                let errorCount = 0;
+
+                for (const [projectId, totalAmount] of Object.entries(projectAmounts)) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', projectId);
+                        formData.append('amount', totalAmount);
+                        
+                        const response = await axios.post('/api/index.php?model=project&method=updateAmount', formData);
+                        
+                        if (response.data && response.data.status === 'success') {
+                            successCount++;
+                            
+                            // Also update local childProjects array
+                            const localProject = this.childProjects.find(p => p.id == projectId);
+                            if (localProject) {
+                                localProject.total_amount = totalAmount;
+                                localProject.amount = totalAmount; // Update both fields for compatibility
+                            }
+                        } else {
+                            console.warn(`Failed to update child project ${projectId} amount:`, response.data?.message);
+                            errorCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Error updating child project ${projectId} amount:`, error);
+                        errorCount++;
+                    }
+                }
+
+                // Force Vue reactivity update
+                this.$forceUpdate();
+
+                // Show appropriate message based on results
+                if (successCount > 0 && errorCount === 0) {
+                    showMessage(`${successCount}件の子プロジェクトの金額が更新されました。`, false);
+                } else if (successCount > 0 && errorCount > 0) {
+                    showMessage(`${successCount}件の子プロジェクトの金額が更新されましたが、${errorCount}件の更新に失敗しました。`, true);
+                } else if (successCount === 0) {
+                    showMessage('子プロジェクトの金額の更新に失敗しました。', true);
+                }
+
+            } catch (error) {
+                console.error('Error updating child project amounts from quotation:', error);
+                showMessage('子プロジェクトの金額の更新中にエラーが発生しました。', true);
+            }
+        },
+
+        async resetChildProjectAmountsAfterQuotationDeletion(quotation) {
+            try {
+                if (!quotation || !quotation.items || quotation.items.length === 0) {
+                    return;
+                }
+
+                // Get unique project IDs from the deleted quotation
+                const projectIds = [...new Set(quotation.items
+                    .filter(item => item.project_id)
+                    .map(item => item.project_id))];
+
+                if (projectIds.length === 0) {
+                    return;
+                }
+
+                // Reset amount to 0 for each affected project
+                let successCount = 0;
+                let errorCount = 0;
+
+                for (const projectId of projectIds) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', projectId);
+                        formData.append('amount', 0);
+                        
+                        const response = await axios.post('/api/index.php?model=project&method=updateAmount', formData);
+                        
+                        if (response.data && response.data.status === 'success') {
+                            successCount++;
+                            
+                            // Also update local childProjects array
+                            const localProject = this.childProjects.find(p => p.id == projectId);
+                            if (localProject) {
+                                localProject.total_amount = 0;
+                                localProject.amount = 0; // Update both fields for compatibility
+                            }
+                        } else {
+                            console.warn(`Failed to reset child project ${projectId} amount:`, response.data?.message);
+                            errorCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Error resetting child project ${projectId} amount:`, error);
+                        errorCount++;
+                    }
+                }
+
+                // Force Vue reactivity update
+                this.$forceUpdate();
+
+                // Show appropriate message based on results
+                if (successCount > 0 && errorCount === 0) {
+                    showMessage(`${successCount}件の子プロジェクトの金額がリセットされました。`, false);
+                } else if (successCount > 0 && errorCount > 0) {
+                    showMessage(`${successCount}件の子プロジェクトの金額がリセットされましたが、${errorCount}件のリセットに失敗しました。`, true);
+                } else if (successCount === 0) {
+                    showMessage('子プロジェクトの金額のリセットに失敗しました。', true);
+                }
+
+            } catch (error) {
+                console.error('Error resetting child project amounts after quotation deletion:', error);
+                showMessage('子プロジェクトの金額のリセット中にエラーが発生しました。', true);
             }
         },
 
