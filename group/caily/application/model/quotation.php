@@ -241,11 +241,11 @@ class Quotation extends ApplicationModel {
                         error_log('Item ' . $index . ' quantity validation failed: ' . ($item['quantity'] ?? 'NULL'));
                         break;
                     }
-                    if (empty($item['unit_price']) || $item['unit_price'] < 0) {
-                        $errors['items'] = '商品明細の単価は0以上で入力してください';
-                        error_log('Item ' . $index . ' unit_price validation failed: ' . ($item['unit_price'] ?? 'NULL'));
-                        break;
-                    }
+                    // if (empty($item['unit_price']) || $item['unit_price'] < 0) {
+                    //     $errors['items'] = '商品明細の単価は0以上で入力してください';
+                    //     error_log('Item ' . $index . ' unit_price validation failed: ' . ($item['unit_price'] ?? 'NULL'));
+                    //     break;
+                    // }
                     
                     error_log('Item ' . $index . ' validation passed');
                 }
@@ -393,10 +393,10 @@ class Quotation extends ApplicationModel {
                         $errors['items'] = '商品明細の数量は1以上で入力してください';
                         break;
                     }
-                    if (empty($item['unit_price']) || floatval($item['unit_price']) < 0) {
-                        $errors['items'] = '商品明細の単価は0以上で入力してください';
-                        break;
-                    }
+                    // if (empty($item['unit_price']) || floatval($item['unit_price']) < 0) {
+                    //     $errors['items'] = '商品明細の単価は0以上で入力してください';
+                    //     break;
+                    // }
                 }
             }
         }
