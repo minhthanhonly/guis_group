@@ -278,7 +278,13 @@ createApp({
         },
         alreadyAddedProductIds() {
             const idSet = new Set();
-            const items = this.newQuotation?.items || [];
+            
+            // Detect context: check if edit quotation modal is open
+            const editQuotationModal = document.getElementById('editQuotationModal');
+            const isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            
+            // Get the appropriate quotation items based on context
+            const items = isEditingQuotation ? (this.editingQuotation?.items || []) : (this.newQuotation?.items || []);
             
             for (const item of items) {
                 if (item && item.is_set && item.set_json) {
@@ -1957,6 +1963,9 @@ createApp({
                 notes: ''
             };
             
+            // Auto-select project if only one option available
+            this.autoSelectSingleProjectOption(newItem, false);
+            
             // Use spread operator to ensure reactivity
             this.newQuotation.items = [...this.newQuotation.items, newItem];
             
@@ -2650,6 +2659,10 @@ createApp({
         },
         
         selectPriceListProduct(product) {
+        // Detect context: check if edit quotation modal is open
+        const editQuotationModal = document.getElementById('editQuotationModal');
+        const isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+        
         // Clean and validate product data
         const cleanPrice = this.cleanPriceValue(product.price);
         
@@ -2663,12 +2676,21 @@ createApp({
             unit: product.unit || '枚',
             unit_price: cleanPrice,
             amount: cleanPrice,
-            notes: product.notes || ''
+            notes: product.notes || '',
+            is_set: false
         };
         
-        this.newQuotation.items.push(newItem);
+        // Auto-select project if only one option available
+        this.autoSelectSingleProjectOption(newItem, isEditingQuotation);
         
-        this.calculateTotalAmount();
+        // Add to appropriate quotation items based on context
+        if (isEditingQuotation) {
+            this.editingQuotation.items.push(newItem);
+            this.calculateTotalAmountForEdit();
+        } else {
+            this.newQuotation.items.push(newItem);
+            this.calculateTotalAmount();
+        }
         
         // Close the modal
         this.priceListModal.hide();
@@ -2762,6 +2784,20 @@ createApp({
             
             this.updateAllSelectedStatus();
         },
+
+        // Auto-select project if only one option available
+        autoSelectSingleProjectOption(item, isEditContext) {
+            const availableProjects = isEditContext ? this.selectedChildProjectsForEditDropdown : this.selectedChildProjectsForDropdown;
+            
+            // If there's exactly one project option available, auto-select it
+            if (availableProjects.length === 1) {
+                const singleProject = availableProjects[0];
+                item.project_id = singleProject.id;
+                if (!isEditContext) {
+                    item._oldProjectId = singleProject.id;
+                }
+            }
+        },
         
         // Helper function to clean price values
         cleanPriceValue(price) {
@@ -2826,6 +2862,9 @@ createApp({
                 set_json: setDetails // Store as object, not stringified
             };
             
+            // Auto-select project if only one option available
+            this.autoSelectSingleProjectOption(setItem, isEditingQuotation);
+            
             // Add to appropriate quotation items based on context
             if (isEditingQuotation) {
                 this.editingQuotation.items = [...this.editingQuotation.items, setItem];
@@ -2851,7 +2890,13 @@ createApp({
         
         // --- Set editing ---
         showEditSetModal(itemIndex) {
-            const item = this.newQuotation.items[itemIndex];
+            // Detect context: check if edit quotation modal is open
+            const editQuotationModal = document.getElementById('editQuotationModal');
+            const isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            
+            // Get the appropriate quotation items
+            const items = isEditingQuotation ? this.editingQuotation.items : this.newQuotation.items;
+            const item = items[itemIndex];
             
             if (!item || !item.is_set) {
                 return;
@@ -2875,7 +2920,12 @@ createApp({
                 products = [];
             }
             
-            this.editingSet = { index: itemIndex, products };
+            this.editingSet = { 
+                index: itemIndex, 
+                products,
+                isEditContext: isEditingQuotation,
+                name: item.title || '商品セット'
+            };
             
             if (!this.setEditModal) {
                 const el = document.getElementById('editSetModal');
@@ -2923,8 +2973,11 @@ createApp({
                 return;
             }
             
-            const { index, products } = this.editingSet;
-            const item = this.newQuotation.items[index];
+            const { index, products, isEditContext } = this.editingSet;
+            
+            // Get the appropriate quotation items based on context
+            const items = isEditContext ? this.editingQuotation.items : this.newQuotation.items;
+            const item = items[index];
             if (!item) {
                 return;
             }
@@ -2936,10 +2989,15 @@ createApp({
             item.amount = total;
             // Do not auto-fill notes when editing set
             item.is_set = true;
-            item.set_json = JSON.stringify(products);
+            item.set_json = products; // Store as object, not stringified for consistency
             item.title = `商品セット (${products.length}件)`;
             
-            this.calculateTotalAmount();
+            // Call appropriate calculation method based on context
+            if (isEditContext) {
+                this.calculateTotalAmountForEdit();
+            } else {
+                this.calculateTotalAmount();
+            }
             
             if (this.setEditModal) {
                 this.setEditModal.hide();
@@ -2996,6 +3054,10 @@ createApp({
                     notes: product.notes || '',
                     is_set: false
                 };
+                
+                // Auto-select project if only one option available
+                this.autoSelectSingleProjectOption(item, isEditingQuotation);
+                
                 newItems.push(item);
             });
             
@@ -3321,21 +3383,45 @@ createApp({
 
         async updateChildProjectAmountsFromQuotation(quotationId) {
             try {
-                // Find the quotation
-                const quotation = this.quotations.find(q => q.id === quotationId);
-                if (!quotation || !quotation.items || quotation.items.length === 0) {
+                // Use editingQuotation data if available and matches quotationId, otherwise find in quotations array
+                let quotationItems = null;
+                if (this.editingQuotation && parseInt(this.editingQuotation.id) === parseInt(quotationId)) {
+                    quotationItems = this.editingQuotation.items;
+                } else {
+                    const quotation = this.quotations.find(q => parseInt(q.id) === parseInt(quotationId));
+                    if (quotation) {
+                        quotationItems = quotation.items;
+                    }
+                }
+                
+                if (!quotationItems || quotationItems.length === 0) {
                     return;
                 }
 
                 // Group items by project_id and calculate totals
                 const projectAmounts = {};
-                quotation.items.forEach(item => {
+                
+                // Get tax rate from the quotation data
+                let taxRate = 0;
+                if (this.editingQuotation && parseInt(this.editingQuotation.id) === parseInt(quotationId)) {
+                    taxRate = parseFloat(this.editingQuotation.tax_rate) || 0;
+                } else {
+                    const quotation = this.quotations.find(q => parseInt(q.id) === parseInt(quotationId));
+                    if (quotation) {
+                        taxRate = parseFloat(quotation.tax_rate) || 0;
+                    }
+                }
+                
+                quotationItems.forEach(item => {
                     if (item.project_id && item.amount) {
                         const projectId = item.project_id;
                         if (!projectAmounts[projectId]) {
                             projectAmounts[projectId] = 0;
                         }
-                        projectAmounts[projectId] += item.amount || 0;
+                        // Add amount including tax (amount * (1 + tax_rate/100))
+                        const itemAmount = parseFloat(item.amount) || 0;
+                        const itemAmountWithTax = itemAmount * (1 + taxRate / 100);
+                        projectAmounts[projectId] += itemAmountWithTax;
                     }
                 });
 
@@ -3489,8 +3575,12 @@ createApp({
             const projectItems = this.newQuotation.items.filter(item => item.project_id == projectId);
             const projectTotal = projectItems.reduce((sum, item) => sum + (item.amount || 0), 0);
             
+            // Include tax in the total amount (total * (1 + tax_rate/100))
+            const taxRate = parseFloat(this.newQuotation.tax_rate) || 0;
+            const projectTotalWithTax = projectTotal * (1 + taxRate / 100);
+            
             // Update the project's total_amount in childProjects array
-            project.total_amount = projectTotal;
+            project.total_amount = projectTotalWithTax;
             
             // Force Vue reactivity update
             this.$forceUpdate();
@@ -3720,6 +3810,9 @@ createApp({
                 set_json: null
             };
             
+            // Auto-select project if only one option available
+            this.autoSelectSingleProjectOption(newItem, true);
+            
             this.editingQuotation.items.push(newItem);
             this.$nextTick(() => {
                 this.validateProjectIdSelectionForEdit();
@@ -3743,6 +3836,12 @@ createApp({
                 const quantity = parseFloat(item.quantity) || 0;
                 const unitPrice = parseFloat(item.unit_price) || 0;
                 item.amount = quantity * unitPrice;
+                
+                // Update project total amount if project_id is set
+                if (item.project_id) {
+                    this.updateProjectTotalAmountForEdit(item.project_id, index);
+                }
+                
                 this.calculateTotalAmountForEdit();
             }
         },
@@ -3772,8 +3871,12 @@ createApp({
             const projectItems = this.editingQuotation.items.filter(item => item.project_id == projectId);
             const projectTotal = projectItems.reduce((sum, item) => sum + (item.amount || 0), 0);
             
+            // Include tax in the total amount (total * (1 + tax_rate/100))
+            const taxRate = parseFloat(this.editingQuotation.tax_rate) || 0;
+            const projectTotalWithTax = projectTotal * (1 + taxRate / 100);
+            
             // Update the project's total_amount in childProjects array
-            project.total_amount = projectTotal;
+            project.total_amount = projectTotalWithTax;
             
             // Force Vue reactivity update
             this.$forceUpdate();
@@ -4029,7 +4132,7 @@ createApp({
                     showMessage('見積書が正常に更新されました。', false);
                     
                     // Update child project amounts
-                    await this.updateChildProjectAmountsFromQuotation(this.editingQuotation.id);
+                    await this.updateChildProjectAmountsFromQuotation(parseInt(this.editingQuotation.id));
                     
                     // Refresh data
                     await this.loadQuotations();
@@ -4264,71 +4367,9 @@ createApp({
             }
         },
 
-        showEditSetModalForEdit(index) {
-            // Show edit set modal for edit quotation
-            if (index >= 0 && index < this.editingQuotation.items.length) {
-                const item = this.editingQuotation.items[index];
-                if (item.is_set && item.set_json) {
-                    try {
-                        let products = [];
-                        if (typeof item.set_json === 'string') {
-                            products = JSON.parse(item.set_json);
-                        } else if (Array.isArray(item.set_json)) {
-                            products = item.set_json;
-                        }
-                        
-                        this.editingSet = {
-                            index: index,
-                            products: products,
-                            name: item.title || '商品セット'
-                        };
-                        
-                        // Show edit set modal
-                        if (this.setEditModal) {
-                            this.setEditModal.show();
-                        }
-                    } catch (error) {
-                        console.error('Error parsing set_json:', error);
-                        showMessage('セット商品の編集に失敗しました。', true);
-                    }
-                }
-            }
-        },
 
-        saveEditedSetForEdit() {
-            if (this.editingSet && this.editingSet.index >= 0 && this.editingSet.index < this.editingQuotation.items.length) {
-                const item = this.editingQuotation.items[this.editingSet.index];
-                if (item.is_set) {
-                    // Update the item with edited set data
-                    item.title = this.editingSet.name;
-                    item.set_json = JSON.stringify(this.editingSet.products);
-                    
-                    // Calculate total amount for the set
-                    const totalAmount = this.editingSet.products.reduce((sum, product) => {
-                        const quantity = parseFloat(product.quantity) || 0;
-                        const unitPrice = parseFloat(product.unit_price) || 0;
-                        return sum + (quantity * unitPrice);
-                    }, 0);
-                    
-                    item.amount = totalAmount;
-                    item.unit_price = totalAmount; // Set unit price to total amount for sets
-                    item.quantity = 1; // Sets always have quantity 1
-                    
-                    // Recalculate total amount
-                    this.calculateTotalAmountForEdit();
-                    
-                    // Close modal
-                    if (this.setEditModal) {
-                        this.setEditModal.hide();
-                    }
-                    
-                    // Reset editing set
-                    this.editingSet = null;
-                    
-                    showMessage('セット商品が正常に更新されました。', false);
-                }
-            }
-        },
+
+
 
         clearUnlinkedOrderItemsForEdit() {
             // Clear project_id from order items that are no longer linked to selected projects

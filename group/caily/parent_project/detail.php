@@ -570,7 +570,7 @@ $view->heading('建物詳細');
                                 <tr v-for="quotation in quotations" :key="quotation.id">
                                     <td>{{ quotation.quotation_number || '-' }}</td>
                                     <td>{{ formatDate(quotation.created_at) }}</td>
-                                    <td>{{ formatPrice(quotation.total_amount) }}</td>
+                                    <td>{{ formatPrice(quotation.total_with_tax) }}</td>
                                     <td>
                                         <select class="form-select form-select-sm" v-model="quotation.status"
                                             @change="updateQuotationStatus(quotation.id, quotation.status)"
@@ -1752,7 +1752,7 @@ $view->heading('建物詳細');
                                                         <div class="btn-group btn-group-sm" role="group">
                                                             <button type="button" class="btn btn-outline-secondary"
                                                                 v-if="item.is_set"
-                                                                @click="showEditSetModalForEdit(index)" title="編集">
+                                                                @click="showEditSetModal(index)" title="編集">
                                                                 <i class="fa fa-edit"></i>
                                                             </button>
                                                             <button type="button" class="btn btn-outline-danger"
