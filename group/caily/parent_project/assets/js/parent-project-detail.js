@@ -193,7 +193,10 @@ createApp({
             // Order items selection for edit (for bulk delete)
             selectedOrderItemIndexesForEdit: [],
             // Edit quotation form backup
-            editQuotationFormBackup: null
+            editQuotationFormBackup: null,
+            
+            // Context tracking for price list modal
+            isPriceListOpenFromEdit: false
         }
     },
     watch: {
@@ -284,9 +287,14 @@ createApp({
         alreadyAddedProductIds() {
             const idSet = new Set();
             
-            // Detect context: check if edit quotation modal is open
-            const editQuotationModal = document.getElementById('editQuotationModal');
-            const isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            // Detect context: use reactive data property and fallback to DOM check
+            let isEditingQuotation = this.isPriceListOpenFromEdit;
+            
+            // Fallback: check DOM if data property is false
+            if (!isEditingQuotation) {
+                const editQuotationModal = document.getElementById('editQuotationModal');
+                isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            }
             
             // Get the appropriate quotation items based on context
             const items = isEditingQuotation ? (this.editingQuotation?.items || []) : (this.newQuotation?.items || []);
@@ -2681,6 +2689,10 @@ createApp({
                 this.loadPriceListData();
             }
             
+            // Detect context: check if edit quotation modal is open
+            const editQuotationModal = document.getElementById('editQuotationModal');
+            this.isPriceListOpenFromEdit = editQuotationModal && editQuotationModal.classList.contains('show');
+            
             // Reset selection when opening modal
             this.selectedProducts = [];
             this.allSelected = false;
@@ -2692,9 +2704,12 @@ createApp({
         },
         
         selectPriceListProduct(product) {
-        // Detect context: check if edit quotation modal is open
-        const editQuotationModal = document.getElementById('editQuotationModal');
-        const isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+        // Detect context: use reactive data property and fallback to DOM check
+        let isEditingQuotation = this.isPriceListOpenFromEdit;
+        if (!isEditingQuotation) {
+            const editQuotationModal = document.getElementById('editQuotationModal');
+            isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+        }
         
         // Clean and validate product data
         const cleanPrice = this.cleanPriceValue(product.price);
@@ -2864,9 +2879,12 @@ createApp({
         },
         
         addSelectedProductsAsSet() {
-            // Detect context: check if edit quotation modal is open
-            const editQuotationModal = document.getElementById('editQuotationModal');
-            const isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            // Detect context: use reactive data property and fallback to DOM check
+            let isEditingQuotation = this.isPriceListOpenFromEdit;
+            if (!isEditingQuotation) {
+                const editQuotationModal = document.getElementById('editQuotationModal');
+                isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            }
             
             const selectedProducts = this.getSelectedProductsList();
             if (selectedProducts.length === 0) return;
@@ -2930,9 +2948,12 @@ createApp({
         
         // --- Set editing ---
         showEditSetModal(itemIndex) {
-            // Detect context: check if edit quotation modal is open
-            const editQuotationModal = document.getElementById('editQuotationModal');
-            const isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            // Detect context: use reactive data property and fallback to DOM check
+            let isEditingQuotation = this.isPriceListOpenFromEdit;
+            if (!isEditingQuotation) {
+                const editQuotationModal = document.getElementById('editQuotationModal');
+                isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            }
             
             // Get the appropriate quotation items
             const items = isEditingQuotation ? this.editingQuotation.items : this.newQuotation.items;
@@ -3071,9 +3092,12 @@ createApp({
         },
 
         addSelectedProductsIndividually() {
-            // Detect context: check if edit quotation modal is open
-            const editQuotationModal = document.getElementById('editQuotationModal');
-            const isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            // Detect context: use reactive data property and fallback to DOM check
+            let isEditingQuotation = this.isPriceListOpenFromEdit;
+            if (!isEditingQuotation) {
+                const editQuotationModal = document.getElementById('editQuotationModal');
+                isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            }
             
             const selectedProducts = this.getSelectedProductsList();
             if (selectedProducts.length === 0) return;
@@ -4617,6 +4641,8 @@ createApp({
                 });
                 priceListModalEl.addEventListener('hidden.bs.modal', () => {
                     document.removeEventListener('keydown', this.handlePriceListKeydown);
+                    // Reset context flag when price list modal is closed
+                    this.isPriceListOpenFromEdit = false;
                 });
             }
         } catch (error) {
