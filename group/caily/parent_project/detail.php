@@ -5,7 +5,7 @@ if (!$parent_project_id) {
     header('Location: index.php');
     exit;
 }
-$view->heading('プロジェクト詳細');
+$view->heading('建物詳細');
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
 
@@ -22,7 +22,7 @@ $view->heading('プロジェクト詳細');
             <div class="card" :class="{ 'edit-mode': isEditMode }">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h5 class="card-title"><span data-i18n="プロジェクト詳細">プロジェクト詳細</span></h5>
+                        <h5 class="card-title"><span data-i18n="建物詳細">建物詳細</span></h5>
                         <div>
                             <button v-if="!isEditMode" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode" title="編集">
                                 <i class="fa fa-pencil-alt"></i>
@@ -399,11 +399,13 @@ $view->heading('プロジェクト詳細');
                                      <th>期限日</th>
                                      <th>ステータス</th>
                                      <th>進捗</th>
+                                     <th>総額</th>
                                      <th>操作</th>
                                  </tr>
                              </thead>
                                                          <tbody>
-                                 <tr v-for="project in childProjects" :key="project.id">
+                                 <tr v-for="project in childProjects" :key="project.id" 
+                                     :class="{ 'table-active': selectedChildProjectIds.includes(project.id) }">
                                      <td>{{ project.project_number || '-' }}</td>
                                      <td>
                                          <span v-if="project.project_order_type && project.project_order_type.split(',').length > 0">
@@ -431,6 +433,11 @@ $view->heading('プロジェクト詳細');
                                              </div>
                                          </div>
                                      </td>
+                                     <td class="text-end">
+                                         <span class="fw-bold text-primary">
+                                             ¥{{ formatNumber(project.total_amount || 0) }}
+                                         </span>
+                                     </td>
                                      <td>
                                          <div class="btn-group btn-group-sm">
                                              <a :href="'../project/detail.php?id=' + project.id" class="btn btn-outline-primary" title="詳細">
@@ -440,6 +447,11 @@ $view->heading('プロジェクト詳細');
                                                  <i class="fa fa-edit"></i>
                                              </button>
                                          </div>
+                                     </td>
+                                 </tr>
+                                 <tr v-if="childProjects.length === 0">
+                                     <td colspan="9" class="text-center text-muted py-4">
+                                         子プロジェクトがありません
                                      </td>
                                  </tr>
                              </tbody>
@@ -482,6 +494,7 @@ $view->heading('プロジェクト詳細');
                                     <th>見積番号</th>
                                     <th>作成日</th>
                                     <th>金額</th>
+                                    <th>ステータス</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
@@ -490,6 +503,15 @@ $view->heading('プロジェクト詳細');
                                     <td>{{ quotation.quotation_number || '-' }}</td>
                                     <td>{{ formatDate(quotation.created_at) }}</td>
                                     <td>{{ formatPrice(quotation.total_amount) }}</td>
+                                    <td>
+                                        <select class="form-select form-select-sm" v-model="quotation.status" @change="updateQuotationStatus(quotation.id, quotation.status)" style="min-width: 120px;">
+                                            <option value="下書き">下書き</option>
+                                            <option value="発行済み">発行済み</option>
+                                            <option value="承認済み">承認済み</option>
+                                            <option value="却下">却下</option>
+                                            <option value="調整">調整</option>
+                                        </select>
+                                    </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <button class="btn btn-outline-primary" title="表示" @click="showQuotationModal(quotation)">
@@ -712,7 +734,7 @@ $view->heading('プロジェクト詳細');
  
      <!-- Create Quotation Modal -->
      <div class="modal fade" id="createQuotationModal" tabindex="-1" aria-labelledby="createQuotationModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-         <div class="modal-dialog modal-xl">
+         <div class="modal-dialog modal-xxl">
              <div class="modal-content">
                  <div class="modal-header">
                      <h5 class="modal-title" id="createQuotationModalLabel">見積書作成</h5>
@@ -731,11 +753,113 @@ $view->heading('プロジェクト詳細');
                                          <div class="row g-3">
                                              <div class="col-md-6">
                                                  <label class="form-label">発行日 <span class="text-danger">*</span></label>
-                                                 <input type="text" class="form-control" id="quotation_issue_date" v-model="newQuotation.issue_date" required>
+                                                 <input type="text" class="form-control" :class="{ 'is-invalid': quotationValidationErrors.issue_date }" id="quotation_issue_date" v-model="newQuotation.issue_date" readonly>
+                                                 <div v-if="quotationValidationErrors.issue_date" class="text-danger small mt-1">
+                                                     {{ quotationValidationErrors.issue_date }}
+                                                 </div>
                                              </div>
                                              <div class="col-md-6">
                                                  <label class="form-label">見積番号 <span class="text-danger">*</span></label>
-                                                 <input type="text" class="form-control" v-model="newQuotation.quotation_number" placeholder="GUIS-XXXX" required>
+                                                 <input type="text" class="form-control" :class="{ 'is-invalid': quotationValidationErrors.quotation_number }" v-model="newQuotation.quotation_number" readonly>
+                                                 <div v-if="quotationValidationErrors.quotation_number" class="text-danger small mt-1">
+                                                     {{ quotationValidationErrors.quotation_number }}
+                                                 </div>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+ 
+                             <!-- Child Projects Selection -->
+                             <div class="col-12">
+                                 <div class="card">
+                                     <div class="card-header">
+                                         <h6 class="mb-0">選択する子プロジェクト</h6>
+                                         <small class="text-muted">この見積書に関連する子プロジェクトを選択してください</small>
+                                     </div>
+                                     <div class="card-body">
+                                         <div class="row g-3">
+                                             <div class="col-12">
+                                                 <div class="d-flex justify-content-between align-items-center mb-2">
+                                                     <label class="form-label mb-0">子プロジェクト一覧</label>
+                                                     <div class="btn-group btn-group-sm">
+                                                         <button type="button" class="btn btn-outline-primary" @click="selectAllChildProjects">
+                                                             <i class="fa fa-check-square me-1"></i> 全選択
+                                                         </button>
+                                                         <button type="button" class="btn btn-outline-secondary" @click="deselectAllChildProjects">
+                                                             <i class="fa fa-square me-1"></i> 全解除
+                                                         </button>
+                                                     </div>
+                                                 </div>
+                                                 <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                                     <table class="table table-sm table-hover">
+                                                         <thead class="table-light sticky-top">
+                                                             <tr>
+                                                                 <th style="width: 50px;">
+                                                                     <input type="checkbox" class="form-check-input" 
+                                                                            @change="toggleAllChildProjects" 
+                                                                            :checked="allChildProjectsSelected"
+                                                                            :indeterminate="someChildProjectsSelected">
+                                                                 </th>
+                                                                 <th>プロジェクト番号</th>
+                                                                 <th>案件名</th>
+                                                                 <th>部署</th>
+                                                                 <th>開始日</th>
+                                                                 <th>期限日</th>
+                                                                 <th>現在のステータス</th>
+                                                                 <th>総額</th>
+                                                             </tr>
+                                                         </thead>
+                                                         <tbody>
+                                                             <tr v-for="project in childProjects" :key="project.id" 
+                                                                 :class="{ 'table-active': selectedChildProjectIds.includes(project.id) }">
+                                                                 <td>
+                                                                     <input type="checkbox" class="form-check-input" 
+                                                                            :value="project.id" 
+                                                                            v-model="selectedChildProjectIds"
+                                                                            @change="updateChildProjectSelection">
+                                                                 </td>
+                                                                 <td>{{ project.project_number || '-' }}</td>
+                                                                 <td>
+                                                                     <a :href="'../project/detail.php?id=' + project.id" 
+                                                                        class="text-decoration-none" target="_blank">
+                                                                          {{ project.name }}
+                                                                     </a>
+                                                                 </td>
+                                                                 <td>{{ project.department_name || '-' }}</td>
+                                                                 <td>{{ formatDateTime(project.start_date) || '-' }}</td>
+                                                                 <td>{{ formatDateTime(project.end_date) || '-' }}</td>
+                                                                 <td>
+                                                                     <span class="badge" :class="getProjectStatusBadgeClass(project.status)">
+                                                                         {{ getProjectStatusLabel(project.status) }}
+                                                                     </span>
+                                                                 </td>
+
+                                                                 <td class="text-end">
+                                                                     <span class="fw-bold text-primary">
+                                                                         ¥{{ formatNumber(project.total_amount || 0) }}
+                                                                     </span>
+                                                                 </td>
+
+                                                             </tr>
+                                                             <tr v-if="childProjects.length === 0">
+                                                                 <td colspan="7" class="text-center text-muted py-4">
+                                                                     子プロジェクトがありません
+                                                                 </td>
+                                                             </tr>
+                                                         </tbody>
+                                                     </table>
+                                                 </div>
+                                                 <div class="mt-2">
+                                                     <small class="text-muted">
+                                                         選択された子プロジェクト: {{ selectedChildProjectIds.length }} / {{ childProjects.length }}
+                                                     </small>
+                                                 </div>
+                                                 <div v-if="quotationValidationErrors.childProjects" class="mt-2">
+                                                     <div class="text-danger small">
+                                                         {{ quotationValidationErrors.childProjects }}
+                                                     </div>
+                                                 </div>
                                              </div>
                                          </div>
                                      </div>
@@ -751,7 +875,10 @@ $view->heading('プロジェクト詳細');
                                      <div class="card-body">
                                          <div class="mb-3">
                                              <label class="form-label">会社名 <span class="text-danger">*</span></label>
-                                             <input type="text" class="form-control" v-model="newQuotation.sender_company" required>
+                                             <input type="text" class="form-control" :class="{ 'is-invalid': quotationValidationErrors.sender_company }" v-model="newQuotation.sender_company" @input="quotationValidationErrors.sender_company = ''" required>
+                                             <div v-if="quotationValidationErrors.sender_company" class="text-danger small mt-1">
+                                                 {{ quotationValidationErrors.sender_company }}
+                                             </div>
                                          </div>
                                          <div class="mb-3">
                                              <label class="form-label">住所</label>
@@ -783,7 +910,10 @@ $view->heading('プロジェクト詳細');
                                          </div>
                                          <div class="mb-3">
                                              <label class="form-label">会社名 <span class="text-danger">*</span></label>
-                                             <input type="text" class="form-control" v-model="newQuotation.receiver_company" required>
+                                             <input type="text" class="form-control" :class="{ 'is-invalid': quotationValidationErrors.receiver_company }" v-model="newQuotation.receiver_company" @input="quotationValidationErrors.receiver_company = ''" required>
+                                             <div v-if="quotationValidationErrors.receiver_company" class="text-danger small mt-1">
+                                                 {{ quotationValidationErrors.receiver_company }}
+                                             </div>
                                          </div>
                                          <div class="mb-3">
                                              <label class="form-label">住所</label>
@@ -849,22 +979,44 @@ $view->heading('プロジェクト詳細');
                                      </div>
                                      <div class="card-body">
                                          <div class="table-responsive">
-                                             <table class="table table-bordered">
+                                             <table class="table table-bordered" id="quotation-table">
                                                  <thead>
                                                      <tr>
+                                                         <th style="width:36px;">
+                                                             <input type="checkbox" class="form-check-input" @change="selectAllOrderItems" :checked="allOrderItemsSelected">
+                                                         </th>
+                                                         <th>プロジェクト番号</th>
                                                          <th>件名</th>
                                                          <th>商品コード</th>
-                                                         <th>品名</th>
-                                                         <th>数量</th>
-                                                         <th>単位</th>
-                                                         <th>単価</th>
-                                                         <th>金額</th>
+                                                         <th style="width:70px;">数量</th>
+                                                         <th style="width:70px;">単位</th>
+                                                         <th style="width:100px;">単価</th>
+                                                         <th style="width:100px;">金額</th>
                                                          <th>備考</th>
                                                          <th>操作</th>
                                                      </tr>
                                                  </thead>
                                                  <tbody>
+                                                     <tr v-if="newQuotation.items.length === 0">
+                                                         <td colspan="10" class="text-center text-muted py-4">
+                                                          商品がありません
+                                                         </td>
+                                                     </tr>
                                                      <tr v-for="(item, index) in newQuotation.items" :key="index">
+                                                         <td class="text-center">
+                                                             <input type="checkbox" class="form-check-input" :checked="selectedOrderItemIndexes.includes(index)" @change="toggleSelectOrderItem(index)">
+                                                         </td>
+                                                         <td>
+                                                             <select class="form-select form-select-sm" v-model="item.project_id" @change="updateProjectTotalAmount(item.project_id, index)">
+                                                                 <option value="">選択してください</option>
+                                                                 <option v-for="project in selectedChildProjectsForDropdown" :key="project.id" :value="project.id">
+                                                                     {{ project.project_number || project.name }}
+                                                                 </option>
+                                                             </select>
+                                                             <small v-if="selectedChildProjectsForDropdown.length === 0" class="text-muted d-block mt-1">
+                                                                 子プロジェクトが選択されていません
+                                                             </small>
+                                                         </td>
                                                          <td>
                                                              <input type="text" class="form-control form-control-sm" v-model="item.title" placeholder="件名">
                                                          </td>
@@ -872,16 +1024,13 @@ $view->heading('プロジェクト詳細');
                                                              <input type="text" class="form-control form-control-sm" v-model="item.product_code" placeholder="商品コード">
                                                          </td>
                                                          <td>
-                                                             <input type="text" class="form-control form-control-sm" v-model="item.product_name" placeholder="品名">
-                                                         </td>
-                                                         <td>
                                                              <input type="number" class="form-control form-control-sm" v-model="item.quantity" @input="calculateItemAmount(index)" min="0" step="1">
                                                          </td>
                                                          <td>
-                                                             <input type="text" class="form-control form-control-sm" v-model="item.unit" placeholder="個">
+                                                             <input type="text" class="form-control form-control-sm" v-model="item.unit" placeholder="枚">
                                                          </td>
                                                          <td>
-                                                             <input type="number" class="form-control form-control-sm" v-model="item.unit_price" @input="calculateItemAmount(index)" min="0" step="0.01">
+                                                             <input type="number" class="form-control form-control-sm" v-model="item.unit_price" @input="calculateItemAmount(index)" min="0" step="1">
                                                          </td>
                                                          <td>
                                                              <input type="number" class="form-control form-control-sm" v-model="item.amount" readonly>
@@ -889,38 +1038,99 @@ $view->heading('プロジェクト詳細');
                                                          <td>
                                                              <input type="text" class="form-control form-control-sm" v-model="item.notes" placeholder="備考">
                                                          </td>
-                                                         <td>
-                                                             <button type="button" class="btn btn-sm btn-outline-danger" @click="removeOrderItem(index)">
-                                                                 <i class="fa fa-trash"></i>
-                                                             </button>
-                                                         </td>
+                                                          <td>
+                                                              <div class="btn-group btn-group-sm" role="group">
+                                                                  <button type="button" class="btn btn-outline-secondary" v-if="item.is_set" @click="showEditSetModal(index)" title="編集">
+                                                                      <i class="fa fa-edit"></i>
+                                                                  </button>
+                                                                  <button type="button" class="btn btn-outline-danger" @click="removeOrderItem(index)" title="削除">
+                                                                      <i class="fa fa-trash"></i>
+                                                                  </button>
+                                                              </div>
+                                                          </td>
                                                      </tr>
                                                  </tbody>
                                              </table>
                                          </div>
+                                          <div class="d-flex justify-content-between align-items-center mt-2">
+                                              <div class="text-muted small">選択中: {{ selectedOrderItemIndexes.length }} / {{ newQuotation.items.length }}</div>
+                                              <button type="button" class="btn btn-outline-danger btn-sm" @click="deleteSelectedOrderItems" :disabled="selectedOrderItemIndexes.length === 0">
+                                                  <i class="fa fa-trash me-1"></i> 選択行を削除
+                                              </button>
+                                          </div>
+                                          
+                                         <!-- Quick Project Number Selection -->
+                                         <div class="mt-3" v-if="selectedChildProjectsForDropdown.length > 0">
+                                             <div class="d-flex flex-wrap gap-2 align-items-center">
+                                                 <span class="text-muted small me-2">プロジェクト番号を素早く選択:</span>
+                                                 <button 
+                                                     v-for="project in selectedChildProjectsForDropdown" 
+                                                     :key="project.id"
+                                                     type="button" 
+                                                     class="btn btn-outline-primary btn-sm"
+                                                     @click="quickSelectProjectNumber(project.id)"
+                                                     :title="'プロジェクト番号: ' + (project.project_number || project.name)"
+                                                 >
+                                                     {{ project.project_number || project.name }}
+                                                 </button>
+                                             </div>
+                                         </div>
                                      </div>
+                                 </div>
+                             </div>
+                             
+                             <!-- Items validation error -->
+                             <div v-if="quotationValidationErrors.items" class="col-12">
+                                 <div class="alert alert-danger">
+                                     {{ quotationValidationErrors.items }}
                                  </div>
                              </div>
  
                              <!-- Summary Information -->
                              <div class="col-12">
+                             <div class="card">
+                                     
+                                     <div class="card-body">
+                                         <div class="row g-3">
+                                             <div class="col-md-3">
+                                                 <label class="form-label">税抜価格</label>
+                                                 <input type="number" class="form-control" v-model="newQuotation.total_amount" readonly>
+                                             </div>
+                                             <div class="col-md-3">
+                                                 <label class="form-label">
+                                                     消費税等 (%)
+                                                 </label>
+                                                 <input type="number" class="form-control ms-2" v-model="newQuotation.tax_rate" min="0" max="100" step="1" @input="calculateTotalAmount">
+                                                
+                                             </div>
+                                             <div class="col-md-3">
+                                                 <label class="form-label">税額</label>
+                                                 <input type="number" class="form-control" :value="newQuotation.total_amount * newQuotation.tax_rate / 100" readonly>
+                                             </div>
+                                             <div class="col-md-3">
+                                                 <label class="form-label">合計金額</label>
+                                                 <input type="number" class="form-control" v-model="newQuotation.total_with_tax" readonly>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </div>
                                  <div class="card">
                                      <div class="card-header">
                                          <h6 class="mb-0">その他情報</h6>
                                      </div>
                                      <div class="card-body">
                                          <div class="row g-3">
-                                             <div class="col-md-4">
-                                                 <label class="form-label">合計金額</label>
-                                                 <input type="number" class="form-control" v-model="newQuotation.total_amount" readonly>
-                                             </div>
-                                             <div class="col-md-4">
-                                                 <label class="form-label">消費税等 (%)</label>
-                                                 <input type="number" class="form-control" v-model="newQuotation.tax_rate" min="0" max="100" step="0.1">
-                                             </div>
-                                             <div class="col-md-4">
-                                                 <label class="form-label">税込合計</label>
-                                                 <input type="number" class="form-control" v-model="newQuotation.total_with_tax" readonly>
+                                            <div class="col-md-6">
+                                                 <label class="form-label">納入期限</label>
+                                                 <div class="input-group">
+                                                     <input type="text" class="form-control" id="quotation_delivery_date" v-model="newQuotation.delivery_date" placeholder="納入期限を入力（任意）">
+                                                     <button class="btn btn-outline-secondary" type="button" @click="openDeliveryDatePicker" title="日付を選択">
+                                                         <i class="ti ti-calendar"></i>
+                                                     </button>
+                                                     <button class="btn btn-outline-danger" type="button" @click="clearDeliveryDate" title="納入期限をクリア">
+                                                         <i class="ti ti-x"></i>
+                                                     </button>
+                                                 </div>
                                              </div>
                                              <div class="col-md-6">
                                                  <label class="form-label">納入場所</label>
@@ -928,17 +1138,26 @@ $view->heading('プロジェクト詳細');
                                              </div>
                                              <div class="col-md-6">
                                                  <label class="form-label">取引方法</label>
-                                                 <select class="form-select" v-model="newQuotation.payment_method">
-                                                     <option value="">選択してください</option>
-                                                     <option value="現金">現金</option>
-                                                     <option value="銀行振込">銀行振込</option>
-                                                     <option value="小切手">小切手</option>
-                                                     <option value="その他">その他</option>
-                                                 </select>
+                                                 <input type="text" class="form-control" v-model="newQuotation.payment_method">
                                              </div>
                                              <div class="col-md-6">
                                                  <label class="form-label">有効期限</label>
-                                                 <input type="text" class="form-control" id="quotation_valid_until" v-model="newQuotation.valid_until">
+                                                 <select class="form-select" v-model="newQuotation.valid_until_type" @change="onValidUntilTypeChange">
+                                                     <option value="1_week">発行から1週間</option>
+                                                     <option value="1_month" selected>発行から1か月</option>
+                                                     <option value="custom">日付指定</option>
+                                                 </select>
+                                                 <input v-if="newQuotation.valid_until_type === 'custom'" type="text" class="form-control mt-2" id="quotation_valid_until" v-model="newQuotation.valid_until" placeholder="有効期限を選択">
+                                             </div>
+                                             <div class="col-md-6">
+                                                 <label class="form-label">ステータス</label>
+                                                 <select class="form-select" v-model="newQuotation.status">
+                                                     <option value="下書き" selected>下書き</option>
+                                                     <option value="発行済み">発行済み</option>
+                                                     <option value="承認済み">承認済み</option>
+                                                     <option value="却下">却下</option>
+                                                     <option value="調整">調整</option>
+                                                 </select>
                                              </div>
                                              <div class="col-md-6">
                                                  <label class="form-label">備考</label>
@@ -954,7 +1173,7 @@ $view->heading('プロジェクト詳細');
                  <div class="modal-footer">
                      <button type="button" class="btn btn-warning" @click="clearQuotationFormBackup">リセット</button>
                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                     <button type="button" class="btn btn-primary" @click="createQuotation" :disabled="creatingQuotation">
+                     <button type="button" class="btn btn-primary" @click="createQuotationWithDelay" :disabled="creatingQuotation">
                          <span v-if="creatingQuotation" class="spinner-border spinner-border-sm me-1"></span>
                          作成
                      </button>
@@ -968,15 +1187,20 @@ $view->heading('プロジェクト詳細');
          <div class="modal-dialog modal-xl">
              <div class="modal-content">
                  <div class="modal-header">
-                     <h5 class="modal-title" id="viewQuotationModalLabel">注⽂請書</h5>
+                     <h5 class="modal-title" id="viewQuotationModalLabel">見積書</h5>
                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                  </div>
                  <div class="modal-body" v-if="selectedQuotation">
                      <div class="quotation-document">
                          <div class="text-center mb-4">
-                             <h3 class="mb-2">注⽂請書</h3>
+                             <h3 class="mb-2">見積書</h3>
                              <p class="text-muted">{{ formatJapaneseDate(selectedQuotation.issue_date) }}</p>
                              <p class="text-muted">#No: {{ selectedQuotation.quotation_number }}</p>
+                             <p class="text-muted">
+                                 <span class="badge" :class="getQuotationStatusBadgeClass(selectedQuotation.status)">
+                                     {{ selectedQuotation.status || '下書き' }}
+                                 </span>
+                             </p>
                          </div>
  
                          <div class="row mb-4">
@@ -1031,6 +1255,7 @@ $view->heading('プロジェクト詳細');
                                  <div class="card">
                                      <div class="card-body">
                                          <h6>その他情報</h6>
+                                         <p class="mb-1"><strong>納入期限:</strong> {{ selectedQuotation.delivery_date || '-' }}</p>
                                          <p class="mb-1"><strong>納入場所:</strong> {{ selectedQuotation.delivery_location || '-' }}</p>
                                          <p class="mb-1"><strong>取引方法:</strong> {{ selectedQuotation.payment_method || '-' }}</p>
                                          <p class="mb-1"><strong>有効期限:</strong> {{ formatDate(selectedQuotation.valid_until) || '-' }}</p>
@@ -1070,122 +1295,224 @@ $view->heading('プロジェクト詳細');
              </div>
          </div>
      </div>
+
+
+      <!-- Price List Selection Modal -->
+    <div class="modal fade" id="priceListModal" tabindex="-1" aria-labelledby="priceListModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="priceListModalLabel">価格表から商品を選択</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Product Type Filter -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">商品タイプフィルター</label>
+                            <select class="form-select" v-model="selectedPriceListType" @change="scheduleFilterPriceListProducts">
+                                <option value="">すべてのタイプ</option>
+                                <option value="新規">新規</option>
+                                <option value="修正">修正</option>
+                                <option value="その他">その他</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">検索</label>
+                            <input type="text" class="form-control" v-model="priceListSearchTerm" @input="scheduleFilterPriceListProducts" placeholder="コードまたは商品名で検索">
+                        </div>
+                    </div>
+                    <!-- Pagination and bulk actions -->
+                    <div class="row mb-2 align-items-center">
+                        <div class="col-md-4 d-flex align-items-center gap-2">
+                            <label class="me-2">表示件数</label>
+                            <select class="form-select form-select-sm w-auto" v-model.number="priceListPageSize" @change="onChangePriceListPageSize">
+                                <option :value="10">10</option>
+                                <option :value="25">25</option>
+                                <option :value="50">50</option>
+                                <option :value="100">100</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8 d-flex justify-content-end align-items-center gap-2">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @click="goToPrevPriceListPage" :disabled="priceListPage <= 1">
+                                <i class="fa fa-chevron-left"></i>
+                            </button>
+                            <span>{{ priceListPage }} / {{ totalPriceListPages }}</span>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @click="goToNextPriceListPage" :disabled="priceListPage >= totalPriceListPages">
+                                <i class="fa fa-chevron-right"></i>
+                            </button>
+                            <span class="ms-2 text-muted">表示: {{ (priceListPage - 1) * priceListPageSize + 1 }} - {{ Math.min(priceListPage * priceListPageSize, filteredPriceListProducts.length) }} / {{ filteredPriceListProducts.length }}</span>
+                            <button type="button" class="btn btn-outline-primary btn-sm ms-3" @click="selectAllFiltered" :disabled="filteredPriceListProducts.length === 0">
+                                フィルター結果を全選択
+                            </button>
+                        </div>
+                    </div>
+                    
+
+                    
+                    
+                    <!-- Products Table -->
+                    <div class="table-responsive" id="price-list-table" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-hover table-sm">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>
+                                        <input type="checkbox" class="form-check-input" @change="toggleSelectAll" :checked="allSelected">
+                                    </th>
+                                    <th>コード</th>
+                                    <th>商品名</th>
+                                    <th>タイプ</th>
+                                    <th>単位</th>
+                                    <th>単価</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                 <tr v-for="(product, idx) in paginatedPriceListProducts" :key="product.id" class="cursor-pointer" :class="{ 'table-active': idx === highlightedIndex, 'table-light': isProductAlreadyAdded(product) }" @click="!isProductAlreadyAdded(product) && toggleProductSelection(product, $event)">
+                                    <td>
+                                         <input type="checkbox" class="form-check-input" :disabled="isProductAlreadyAdded(product)" :checked="selectedProducts.includes(product.id)" @click.stop>
+                                    </td>
+                                    <td>{{ product.code }}</td>
+                                    <td>{{ product.name }}</td>
+                                    <td>{{ product.type }}</td>
+                                    <td>{{ product.unit }}</td>
+                                    <td>{{ formatPrice(product.price) }}</td>
+                                    <td>
+                                         <button type="button" class="btn btn-sm btn-outline-primary" @click.stop="selectSingleProduct(product)" :disabled="isProductAlreadyAdded(product)">
+                                            <i class="fa fa-plus"></i> 単品選択
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr v-if="filteredPriceListProducts.length === 0">
+                                    <td colspan="7" class="text-center text-muted">
+                                        商品が見つかりません
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Selected Products Summary -->
+                    <div v-if="selectedProducts.length > 0" class="mt-3">
+                        <div class="card">
+                         <div class="card-header d-flex align-items-center" style="gap: 8px;">
+                             <h6 class="mb-0">選択された商品 ({{ selectedProducts.length }}件)</h6>
+                             <input type="text" class="form-control form-control-sm ms-auto" v-model="displayedSetName" :placeholder="defaultSetName" style="width: 260px;">
+                         </div>
+                            <div class="card-body">
+                                <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>コード</th>
+                                                <th>商品名</th>
+                                                <th style="width:120px;">数量</th>
+                                                <th>単価</th>
+                                                <th>金額</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="product in getSelectedProductsList()" :key="product.id">
+                                                <td>{{ product.code }}</td>
+                                                <td>{{ product.name }}</td>
+                                                <td>
+                                                    <input type="number" min="1" step="1" class="form-control form-control-sm" v-model.number="selectedProductQuantities[product.id]" @change="normalizeSelectedQuantity(product.id)" style="width:100px;">
+                                                </td>
+                                                <td>{{ formatPrice(product.price) }}</td>
+                                                <td>{{ formatPrice((selectedProductQuantities[product.id] || 1) * product.price) }}</td>
+                                                <td>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" @click="removeFromSelection(product.id)">
+                                                        <i class="fa fa-times"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="mt-2">
+                                    <strong>合計金額: {{ formatPrice(getSelectedProductsTotal()) }}</strong>
+                                </div>
+                                <div class="mt-2 text-muted small">
+                                    Shift + Click で範囲選択、スペース/Enter でハイライト行の選択切替、先頭チェックボックスはページ単位で選択/解除します。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer d-flex justify-content-between">
+                    <div>
+                        <button type="button" class="btn btn-outline-primary me-2" @click="addSelectedProductsIndividually" :disabled="selectedProducts.length === 0">
+                            <i class="fa fa-plus me-1"></i> 個別に追加 ({{ selectedProducts.length }}件)
+                        </button>
+                        <button type="button" class="btn btn-success" @click="addSelectedProductsAsSet" :disabled="selectedProducts.length === 0">
+                            <i class="fa fa-layer-group me-1"></i> 選択セット追加 ({{ selectedProducts.length }}件)
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <!-- Edit Set Modal -->
+    <div class="modal fade" id="editSetModal" tabindex="-1" aria-labelledby="editSetModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editSetModalLabel">セット編集</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" v-if="editingSet">
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>商品コード</th>
+                                    <th>商品名</th>
+                                    <th>単価</th>
+                                    <th>数量</th>
+                                    <th>小計</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="product in editingSet.products" :key="product.id">
+                                    <td>{{ product.code }}</td>
+                                    <td>{{ product.name }}</td>
+                                    <td class="text-end">¥{{ product.price?.toLocaleString() }}</td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm" 
+                                               v-model="product.quantity" min="1" 
+                                               @input="updateEditingSetTotal()" style="width: 80px;">
+                                    </td>
+                                    <td class="text-end">¥{{ ((product.price || 0) * (product.quantity || 1)).toLocaleString() }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger" @click="removeProductFromSet(product.id)">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr v-if="!editingSet.products || editingSet.products.length === 0">
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        商品がありません
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" @click="saveEditedSet">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
  </div>
  
- <!-- Price List Selection Modal -->
- <div class="modal fade" id="priceListModal" tabindex="-1" aria-labelledby="priceListModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-     <div class="modal-dialog modal-xl">
-         <div class="modal-content">
-             <div class="modal-header">
-                 <h5 class="modal-title" id="priceListModalLabel">価格表から商品を選択</h5>
-                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-             </div>
-             <div class="modal-body">
-                 <!-- Department Filter -->
-                 <div class="row mb-3">
-                     <div class="col-md-6">
-                         <label class="form-label">部署フィルター</label>
-                         <select class="form-select" v-model="selectedPriceListDepartment" @change="filterPriceListProducts">
-                             <option value="">すべての部署</option>
-                             <option v-for="dept in priceListDepartments" :key="dept.id" :value="dept.id">
-                                 {{ dept.name }}
-                             </option>
-                         </select>
-                     </div>
-                     <div class="col-md-6">
-                         <label class="form-label">検索</label>
-                         <input type="text" class="form-control" v-model="priceListSearchTerm" @input="filterPriceListProducts" placeholder="コードまたは商品名で検索">
-                     </div>
-                 </div>
-                 
-                 <!-- Products Table -->
-                 <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                     <table class="table table-hover table-sm">
-                         <thead class="table-light sticky-top">
-                             <tr>
-                                 <th>
-                                     <input type="checkbox" class="form-check-input" @change="toggleSelectAll" :checked="allSelected">
-                                 </th>
-                                 <th>コード</th>
-                                 <th>商品名</th>
-                                 <th>部署</th>
-                                 <th>単位</th>
-                                 <th>単価</th>
-                                 <th>操作</th>
-                             </tr>
-                         </thead>
-                         <tbody>
-                             <tr v-for="product in filteredPriceListProducts" :key="product.id" class="cursor-pointer" @click="toggleProductSelection(product)">
-                                 <td>
-                                     <input type="checkbox" class="form-check-input" :checked="selectedProducts.includes(product.id)" @click.stop>
-                                 </td>
-                                 <td>{{ product.code }}</td>
-                                 <td>{{ product.name }}</td>
-                                 <td>{{ product.department_name }}</td>
-                                 <td>{{ product.unit }}</td>
-                                 <td>{{ formatPrice(product.price) }}</td>
-                                 <td>
-                                     <button type="button" class="btn btn-sm btn-outline-primary" @click.stop="selectSingleProduct(product)">
-                                         <i class="fa fa-plus"></i> 単品選択
-                                     </button>
-                                 </td>
-                             </tr>
-                             <tr v-if="filteredPriceListProducts.length === 0">
-                                 <td colspan="7" class="text-center text-muted">
-                                     商品が見つかりません
-                                 </td>
-                             </tr>
-                         </tbody>
-                     </table>
-                 </div>
-                 
-                 <!-- Selected Products Summary -->
-                 <div v-if="selectedProducts.length > 0" class="mt-3">
-                     <div class="card">
-                         <div class="card-header">
-                             <h6 class="mb-0">選択された商品 ({{ selectedProducts.length }}件)</h6>
-                         </div>
-                         <div class="card-body">
-                             <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
-                                 <table class="table table-sm">
-                                     <thead>
-                                         <tr>
-                                             <th>コード</th>
-                                             <th>商品名</th>
-                                             <th>単価</th>
-                                             <th>操作</th>
-                                         </tr>
-                                     </thead>
-                                     <tbody>
-                                         <tr v-for="product in getSelectedProductsList()" :key="product.id">
-                                             <td>{{ product.code }}</td>
-                                             <td>{{ product.name }}</td>
-                                             <td>{{ formatPrice(product.price) }}</td>
-                                             <td>
-                                                 <button type="button" class="btn btn-sm btn-outline-danger" @click="removeFromSelection(product.id)">
-                                                     <i class="fa fa-times"></i>
-                                                 </button>
-                                             </td>
-                                         </tr>
-                                     </tbody>
-                                 </table>
-                             </div>
-                             <div class="mt-2">
-                                 <strong>合計単価: {{ formatPrice(getSelectedProductsTotal()) }}</strong>
-                             </div>
-                         </div>
-                     </div>
-                 </div>
-             </div>
-             <div class="modal-footer">
-                 <button type="button" class="btn btn-success" @click="addSelectedProductsAsSet" :disabled="selectedProducts.length === 0">
-                     <i class="fa fa-plus me-1"></i> 選択セット追加 ({{ selectedProducts.length }}件)
-                 </button>
-                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-             </div>
-         </div>
-     </div>
- </div>
+
  
  <?php
 $view->footing();
@@ -1198,7 +1525,6 @@ $view->footing();
 }
 
 .modal-body {
-    max-height: 70vh;
     overflow-y: auto;
 }
 
@@ -1337,6 +1663,7 @@ $view->footing();
     z-index: 1020;
 }
 
+
 /* Checkbox styles for product selection */
 .form-check-input {
     cursor: pointer;
@@ -1362,6 +1689,47 @@ $view->footing();
 /* Table hover effect for selected products */
 .table-hover tbody tr:hover {
     background-color: rgba(0, 123, 255, 0.1);
+}
+
+/* Quotation status badge styles */
+.badge {
+    font-size: 0.75em;
+    padding: 0.35em 0.65em;
+}
+
+.badge.bg-draft {
+    background-color: #6c757d !important;
+}
+
+.badge.bg-issued {
+    background-color: #0d6efd !important;
+}
+
+.badge.bg-approved {
+    background-color: #198754 !important;
+}
+
+.badge.bg-rejected {
+    background-color: #dc3545 !important;
+}
+
+.badge.bg-adjustment {
+    background-color: #fd7e14 !important;
+}
+
+#quotation-table td,
+#quotation-table th {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+}
+#price-list-table td{
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+.modal-xxl{
+    width: 90vw;
+    max-width: 1400px;
 }
 </style>
 

@@ -39,6 +39,7 @@ createApp({
                 { value: 'confirming', label: '確認中', color: 'warning' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
+                { value: 'quoted', label: '已报价', color: 'info' },
                 { value: 'completed', label: '完了', color: 'success' },
                 { value: 'cancelled', label: 'キャンセル', color: 'danger' }
             ],
@@ -91,6 +92,7 @@ createApp({
             quotationBranches: [],
             quotationUsers: [],
             selectedContactSeal: null,
+            quotationValidationErrors: {}, // Add field-level validation errors
             newQuotation: {
                 issue_date: '',
                 quotation_number: '',
@@ -104,12 +106,15 @@ createApp({
                 receiver_tel: '',
                 receiver_fax: '',
                 receiver_registration_number: '',
+                status: '下書き',
                 items: [],
                 total_amount: 0,
                 tax_rate: 10,
                 total_with_tax: 0,
-                delivery_location: '',
-                payment_method: '',
+                delivery_date: '御打ち合わせの上',
+                delivery_location: '貴社指定場所',
+                payment_method: '電子納品',
+                valid_until_type: '1_month',
                 valid_until: '',
                 notes: '',
                 parent_project_id: PARENT_PROJECT_ID
@@ -117,16 +122,117 @@ createApp({
             selectedQuotation: null,
             creatingQuotation: false,
             quotationFormBackup: null,
+            // Child project selection for quotation
+            selectedChildProjectIds: [],
+            allChildProjectsSelected: false,
+            someChildProjectsSelected: false,
             // Price list data
             priceListProducts: [],
-            priceListDepartments: [],
             filteredPriceListProducts: [],
-            selectedPriceListDepartment: '',
+            selectedPriceListType: '',
             priceListSearchTerm: '',
             priceListModal: null,
             // Multiple product selection
             selectedProducts: [],
-            allSelected: false
+            allSelected: false,
+            // Price list pagination and UX
+            priceListPage: 1,
+            priceListPageSize: 50,
+            highlightedIndex: 0,
+            lastSelectedIndexGlobal: null,
+            filterDebounceTimer: null,
+            // Quantities per selected product id
+            selectedProductQuantities: {},
+            // Set editing state
+            editingSet: null,
+            setEditModal: null,
+            // Optional custom name for the selected set
+            selectedSetName: '',
+            // Order items selection (for bulk delete)
+            selectedOrderItemIndexes: []
+        }
+    },
+    watch: {
+        'newQuotation.items': {
+            handler(newItems, oldItems) {
+                // Items array changed
+            },
+            deep: true
+        },
+        'quotationValidationErrors': {
+            handler(newErrors, oldErrors) {
+                // Validation errors changed
+            },
+            deep: true
+        }
+    },
+    computed: {
+        paginatedPriceListProducts() {
+            const startIndex = (this.priceListPage - 1) * this.priceListPageSize;
+            const endIndex = startIndex + this.priceListPageSize;
+            return this.filteredPriceListProducts.slice(startIndex, endIndex);
+        },
+        totalPriceListPages() {
+            const total = Math.ceil((this.filteredPriceListProducts.length || 0) / (this.priceListPageSize || 1));
+            return Math.max(total, 1);
+        },
+        defaultSetName() {
+            const count = this.selectedProducts.length || 0;
+            return `商品セット (${count}件)`;
+        },
+        displayedSetName: {
+            get() {
+                return (this.selectedSetName && this.selectedSetName.trim()) ? this.selectedSetName : this.defaultSetName;
+            },
+            set(value) {
+                this.selectedSetName = value;
+            }
+        },
+        alreadyAddedProductIds() {
+            const idSet = new Set();
+            const items = this.newQuotation?.items || [];
+            
+            for (const item of items) {
+                if (item && item.is_set && item.set_json) {
+                    let products = [];
+                    
+                    // Handle both object and JSON string cases
+                    if (typeof item.set_json === 'object' && item.set_json !== null) {
+                        // set_json is already an object
+                        products = Array.isArray(item.set_json) ? item.set_json : [];
+                    } else if (typeof item.set_json === 'string') {
+                        // set_json is a JSON string, try to parse it
+                        try {
+                            const parsed = JSON.parse(item.set_json);
+                            products = Array.isArray(parsed) ? parsed : [];
+                        } catch (e) {
+                            console.error('Error parsing set_json in alreadyAddedProductIds:', e);
+                            products = [];
+                        }
+                    }
+                    
+                    if (Array.isArray(products)) {
+                        products.forEach(p => { 
+                            if (p && p.id != null) idSet.add(p.id); 
+                        });
+                    }
+                } else if (item && item.product_id != null) {
+                    idSet.add(item.product_id);
+                }
+            }
+            
+            return idSet;
+        },
+        allOrderItemsSelected() {
+            const total = this.newQuotation?.items?.length || 0;
+            const selected = this.selectedOrderItemIndexes.length;
+            return total > 0 && selected === total;
+        },
+        selectedChildProjectsForDropdown() {
+            // Filter child projects to only show the selected ones for the dropdown
+            return this.childProjects.filter(project => 
+                this.selectedChildProjectIds.includes(project.id)
+            );
         }
     },
     methods: {
@@ -152,12 +258,9 @@ createApp({
         },
         async loadChildProjects() {
             try {
-                console.log('Loading child projects for parent project ID:', PARENT_PROJECT_ID);
                 const response = await axios.get(`/api/index.php?model=parentproject&method=getChildProjects&parent_project_id=${PARENT_PROJECT_ID}`);
-                console.log('Child projects response:', response.data);
                 if (response.data) {
                     this.childProjects = response.data;
-                    console.log('Child projects loaded:', this.childProjects);
                 }
             } catch (error) {
                 console.error('Error loading child projects:', error);
@@ -621,12 +724,51 @@ createApp({
                         clickOpens: true,
                         onChange: (selectedDates, dateStr) => {
                             this.newQuotation.issue_date = dateStr;
+                            // Auto-calculate valid_until if not custom
+                            if (this.newQuotation.valid_until_type !== 'custom') {
+                                this.onValidUntilTypeChange();
+                            }
                         }
                     });
                     
                     // Set initial date if available
                     if (this.newQuotation.issue_date) {
                         issueDateEl._flatpickr.setDate(this.newQuotation.issue_date);
+                    }
+                }
+                
+                // Initialize delivery date picker
+                const deliveryDateEl = document.getElementById('quotation_delivery_date');
+                if (deliveryDateEl) {
+                    if (deliveryDateEl._flatpickr) {
+                        deliveryDateEl._flatpickr.destroy();
+                    }
+                    deliveryDateEl._flatpickr = flatpickr(deliveryDateEl, {
+                        dateFormat: 'Y-m-d',
+                        locale: 'ja',
+                        allowInput: true,
+                        clickOpens: true,
+                        onChange: (selectedDates, dateStr) => {
+                            this.newQuotation.delivery_date = dateStr;
+                        },
+                        onClose: (selectedDates, dateStr, instance) => {
+                            // If no date is selected, set to default value
+                            if (!dateStr || dateStr === '') {
+                                this.newQuotation.delivery_date = '御打ち合わせの上';
+                            }
+                        }
+                    });
+                    
+                    // Set initial date if available and it's a valid date
+                    if (this.newQuotation.delivery_date && this.newQuotation.delivery_date !== '御打ち合わせの上') {
+                        try {
+                            const date = new Date(this.newQuotation.delivery_date);
+                            if (!isNaN(date.getTime())) {
+                                deliveryDateEl._flatpickr.setDate(this.newQuotation.delivery_date);
+                            }
+                        } catch (e) {
+                            // Ignore invalid date errors
+                        }
                     }
                 }
                 
@@ -1579,12 +1721,31 @@ createApp({
     },
 
         showCreateQuotationModal() {
-            // Restore previous form data if available, otherwise reset
+            // Clear any existing validation errors
+            this.quotationValidationErrors = {};
+            
             if (this.quotationFormBackup) {
+                // Restore previous form data if available, otherwise reset
                 this.newQuotation = JSON.parse(JSON.stringify(this.quotationFormBackup));
+                
+                // Ensure all items have _oldProjectId property initialized
+                if (this.newQuotation.items && this.newQuotation.items.length > 0) {
+                    this.newQuotation.items.forEach(item => {
+                        if (!item.hasOwnProperty('_oldProjectId')) {
+                            item._oldProjectId = item.project_id || '';
+                        }
+                    });
+                }
+                
+                // Restore child project selection
+                if (this.quotationFormBackup.selectedChildProjectIds) {
+                    this.selectedChildProjectIds = [...this.quotationFormBackup.selectedChildProjectIds];
+                    this.updateChildProjectSelection();
+                }
             } else {
                 this.resetQuotationForm();
             }
+            
             const modal = new bootstrap.Modal(document.getElementById('createQuotationModal'));
             modal.show();
             
@@ -1602,10 +1763,35 @@ createApp({
             });
         },
 
+        generateQuotationNumber() {
+            // Generate quotation number in format G-1A2C3D
+            // G-4A2C3D where:
+            // 4 = last digit of year (2024 → 4)
+            // A = month as letter (1=A, 2=B, 3=C, ..., 12=L)
+            // 2 = day (01-31)
+            // C = hour as letter (0=A, 1=B, 2=C, ..., 23=X)
+            // 3 = minute (00-59)
+            // D = second (00-59)
+            const now = new Date();
+            const year = now.getFullYear().toString().slice(-2); // Last digit of year
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const day = now.getDate().toString().padStart(2, '0');
+            const hour = now.getHours().toString().padStart(2, '0');
+            const minute = now.getMinutes().toString().padStart(2, '0');
+            const second = now.getSeconds().toString().padStart(2, '0');
+            
+            // Convert numbers to letters (1=A, 2=B, 3=C, etc.)
+            const monthLetter = String.fromCharCode(64 + parseInt(month)); // 1=A, 2=B, 3=C, etc.
+            const dayLetter = String.fromCharCode(64 + parseInt(day)); // 1=A, 2=B, 3=C, etc.
+            const hourLetter = String.fromCharCode(65 + parseInt(hour)); // 0=A, 1=B, 2=C, etc.
+            
+            return `G-${year}${monthLetter}${dayLetter}${hourLetter}${minute}${second}`;
+        },
+
         resetQuotationForm() {
             this.newQuotation = {
                 issue_date: new Date().toISOString().split('T')[0],
-                quotation_number: `GUIS-${Date.now()}`,
+                quotation_number: this.generateQuotationNumber(),
                 sender_company: this.parentProject?.company_name || '',
                 sender_address: '',
                 sender_contact: this.parentProject?.contact_name || '',
@@ -1616,72 +1802,270 @@ createApp({
                 receiver_tel: '',
                 receiver_fax: '',
                 receiver_registration_number: '',
-                items: [],
+                status: '下書き',
+                items: [], // Ensure this is always an empty array
                 total_amount: 0,
-                tax_rate: 10,
+                tax_rate: 10, // Initialized
                 total_with_tax: 0,
-                delivery_location: '',
-                payment_method: '',
+                delivery_date: '御打ち合わせの上', // Set default value
+                delivery_location: '貴社指定場所', // Initialized
+                payment_method: '電子納品', // Initialized
+                valid_until_type: '1_month', // Initialized
                 valid_until: '',
                 notes: '',
                 parent_project_id: PARENT_PROJECT_ID
             };
             this.selectedContactSeal = null;
-            this.addOrderItem(); // Add one empty item by default
-            // Load branches and set default selection
+            this.quotationValidationErrors = {}; // Clear validation errors
+            
+            // Reset child project selection
+            this.selectedChildProjectIds = [];
+            this.allChildProjectsSelected = false;
+            this.someChildProjectsSelected = false;
+            
+            // Reset child project total amounts
+            this.childProjects.forEach(project => {
+                project.total_amount = 0;
+            });
+            
             this.loadQuotationBranches();
-            // Load users and set default contact
             this.loadQuotationUsers();
+            this.onValidUntilTypeChange(); // Calculate initial valid_until date
         },
 
         addOrderItem() {
-            this.newQuotation.items.push({
+            const newItem = {
+                project_id: '', // Add project_id field
+                _oldProjectId: '', // Track previous project_id for proper total calculation
                 title: '',
                 product_code: '',
-                product_name: '',
                 quantity: 1,
-                unit: '個',
+                unit: '枚',
                 unit_price: 0,
                 amount: 0,
                 notes: ''
-            });
+            };
+            
+            // Use spread operator to ensure reactivity
+            this.newQuotation.items = [...this.newQuotation.items, newItem];
+        },
+
+        quickSelectProjectNumber(projectId) {
+            // Find the first order item that doesn't have a project_id set
+            const firstUnassignedItem = this.newQuotation.items.find(item => !item.project_id);
+            
+            if (firstUnassignedItem) {
+                // Set the project_id for the first unassigned item
+                firstUnassignedItem.project_id = projectId;
+                firstUnassignedItem._oldProjectId = projectId;
+                
+                // Update the project total amount
+                this.updateChildProjectTotalAmount(projectId);
+                
+                // Calculate the item amount
+                const itemIndex = this.newQuotation.items.indexOf(firstUnassignedItem);
+                if (itemIndex !== -1) {
+                    this.calculateItemAmount(itemIndex);
+                }
+                
+                showMessage(`プロジェクト番号 "${this.getProjectDisplayName(projectId)}" が設定されました。`, false);
+            } else {
+                // If all items have project_id, show a message
+                showMessage('すべての商品明細にプロジェクト番号が設定されています。新しい商品明細を追加してください。', true);
+            }
+        },
+
+        getProjectDisplayName(projectId) {
+            const project = this.childProjects.find(p => p.id == projectId);
+            return project ? (project.project_number || project.name) : `ID: ${projectId}`;
         },
 
         removeOrderItem(index) {
-            this.newQuotation.items.splice(index, 1);
+            const itemToRemove = this.newQuotation.items[index];
+            const projectId = itemToRemove ? itemToRemove.project_id : null;
+            
+            // Use spread operator to ensure reactivity
+            this.newQuotation.items = this.newQuotation.items.filter((_, i) => i !== index);
+            
             this.calculateTotalAmount();
+            
+            // Update project total amount if the removed item had a project_id
+            if (projectId) {
+                this.updateChildProjectTotalAmount(projectId);
+            }
+            
+            // Clean up selection after removal
+            this.selectedOrderItemIndexes = this.selectedOrderItemIndexes
+                .filter(i => i !== index)
+                .map(i => (i > index ? i - 1 : i));
         },
 
         calculateItemAmount(index) {
             const item = this.newQuotation.items[index];
-            item.amount = (item.quantity || 0) * (item.unit_price || 0);
+            
+            if (item) {
+                const quantity = item.quantity || 0;
+                const unitPrice = item.unit_price || 0;
+                const amount = quantity * unitPrice;
+                
+                item.amount = amount;
+                
+                // Update project total amount if project_id is set
+                if (item.project_id) {
+                    this.updateChildProjectTotalAmount(item.project_id);
+                }
+            }
+            
             this.calculateTotalAmount();
         },
 
         calculateTotalAmount() {
-            this.newQuotation.total_amount = this.newQuotation.items.reduce((sum, item) => sum + (item.amount || 0), 0);
-            this.newQuotation.total_with_tax = this.newQuotation.total_amount * (1 + (this.newQuotation.tax_rate || 0) / 100);
+            const total = this.newQuotation.items.reduce((sum, item) => {
+                const amount = item.amount || 0;
+                return sum + amount;
+            }, 0);
+            
+            this.newQuotation.total_amount = total;
+            this.newQuotation.total_with_tax = Math.floor(this.newQuotation.total_amount * (1 + (this.newQuotation.tax_rate || 0) / 100));
+        },
+
+        onValidUntilTypeChange() {
+            const issueDate = new Date(this.newQuotation.issue_date);
+            let validUntilDate = new Date(issueDate);
+            
+            switch (this.newQuotation.valid_until_type) {
+                case '1_week':
+                    validUntilDate.setDate(issueDate.getDate() + 7);
+                    break;
+                case '1_month':
+                    validUntilDate.setMonth(issueDate.getMonth() + 1);
+                    break;
+                case 'custom':
+                    // Keep the existing valid_until value if it exists
+                    if (!this.newQuotation.valid_until) {
+                        this.newQuotation.valid_until = '';
+                    }
+                    return; // Don't update the date for custom
+                default:
+                    return;
+            }
+            
+            this.newQuotation.valid_until = validUntilDate.toISOString().split('T')[0];
+        },
+
+
+
+        openDeliveryDatePicker() {
+            const deliveryDateEl = document.getElementById('quotation_delivery_date');
+            if (deliveryDateEl && deliveryDateEl._flatpickr) {
+                deliveryDateEl._flatpickr.open();
+            }
+        },
+
+        clearDeliveryDate() {
+            this.newQuotation.delivery_date = '御打ち合わせの上';
+        },
+
+        onDeliveryDateInput(event) {
+            const value = event.target.value;
+            // If the user clears the field, set it to default value
+            if (!value || value.trim() === '') {
+                this.newQuotation.delivery_date = '御打ち合わせの上';
+            }
+        },
+
+        checkItemsReady() {
+            if (!this.newQuotation.items || !Array.isArray(this.newQuotation.items) || this.newQuotation.items.length === 0) {
+                showMessage('商品明細が追加されていません。先に商品を選択してください。', true);
+                return false;
+            }
+            
+            return true;
+        },
+
+        async createQuotationWithDelay() {
+            // Add a small delay to ensure Vue.js has updated the array
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            // Now call the original createQuotation function
+            await this.createQuotation();
         },
 
         async createQuotation() {
+            // Check if items are ready before proceeding
+            if (!this.checkItemsReady()) {
+                return;
+            }
+            
             if (!this.validateQuotationForm()) {
                 return;
             }
 
             this.creatingQuotation = true;
+            // Clear previous validation errors
+            this.quotationValidationErrors = {};
 
             try {
                 const formData = new FormData();
-                
-                // Add quotation data
+                // Add quotation data - send all fields including empty ones
                 Object.keys(this.newQuotation).forEach(key => {
                     if (key === 'items') {
-                        formData.append(key, JSON.stringify(this.newQuotation[key]));
-                    } else if (this.newQuotation[key] !== null && this.newQuotation[key] !== '') {
-                        formData.append(key, this.newQuotation[key]);
+                        // Create a deep copy of items and properly handle set_json
+                        const itemsCopy = this.newQuotation[key].map(item => {
+                            if (item.is_set && item.set_json) {
+                                // Ensure set_json is properly handled
+                                const itemCopy = { ...item };
+                                
+                                if (typeof item.set_json === 'object') {
+                                    // If object, stringify it
+                                    itemCopy.set_json = JSON.stringify(item.set_json);
+                                } else if (typeof item.set_json === 'string') {
+                                    // If already a string, validate and use as is
+                                    try {
+                                        JSON.parse(item.set_json); // Validate it's valid JSON
+                                        itemCopy.set_json = item.set_json;
+                                    } catch (e) {
+                                        // Try to re-stringify if it's invalid
+                                        itemCopy.set_json = JSON.stringify(item.set_json);
+                                    }
+                                } else {
+                                    // Unknown type, stringify it
+                                    itemCopy.set_json = JSON.stringify(item.set_json);
+                                }
+                                return itemCopy;
+                            }
+                            return item;
+                        });
+                        
+                        const itemsJson = JSON.stringify(itemsCopy);
+                        formData.append(key, itemsJson);
+                        
+                        // Debug: Check if items JSON is valid
+                        try {
+                            const parsed = JSON.parse(itemsJson);
+                        } catch (e) {
+                            console.error('Items JSON is invalid:', e);
+                        }
+                    } else {
+                        // Send all fields, including empty strings and null values
+                        const value = this.newQuotation[key] !== null ? this.newQuotation[key] : '';
+                        formData.append(key, value);
                     }
                 });
-
+                
+                // Debug: Check if items is actually in FormData
+                const itemsEntry = formData.get('items');
+                
+                // Debug: Try to parse items back to see if it's valid JSON
+                try {
+                    const parsedItems = JSON.parse(itemsEntry);
+                } catch (parseError) {
+                    console.error('Error parsing items from FormData:', parseError);
+                }
+              
+                // Debug: Check if FormData has the expected content
+                const formDataArray = Array.from(formData.entries());
+                
                 const response = await axios.post('/api/index.php?model=quotation&method=create', formData);
                 
                 if (response.data && response.data.status === 'success') {
@@ -1690,15 +2074,31 @@ createApp({
                     const modal = bootstrap.Modal.getInstance(document.getElementById('createQuotationModal'));
                     modal.hide();
                     
+                    // Update selected child projects status based on quotation status
+                    if (this.selectedChildProjectIds.length > 0) {
+                        await this.updateSelectedChildProjectsStatus();
+                    }
+                    
                     // Reload quotations
                     await this.loadQuotations();
                     
+                    // Reset the quotation form after successful creation
+                    this.resetQuotationForm();
+                    
                     showMessage('見積書を作成しました', false);
                 } else {
-                    showMessage(response.data?.message || 'エラーが発生しました', true);
+                    // Handle field-level validation errors
+                    if (response.data && response.data.errors) {
+                        this.quotationValidationErrors = response.data.errors;
+                    } else {
+                        showMessage(response.data?.message || 'エラーが発生しました', true);
+                    }
                 }
             } catch (error) {
                 console.error('Error creating quotation:', error);
+                if (error.response) {
+                    console.error('Error response data:', error.response.data);
+                }
                 showMessage('エラーが発生しました', true);
             } finally {
                 this.creatingQuotation = false;
@@ -1708,6 +2108,8 @@ createApp({
         backupQuotationForm() {
             // Backup current form data before closing
             this.quotationFormBackup = JSON.parse(JSON.stringify(this.newQuotation));
+            // Also backup child project selection
+            this.quotationFormBackup.selectedChildProjectIds = [...this.selectedChildProjectIds];
         },
 
         clearQuotationFormBackup() {
@@ -1717,12 +2119,19 @@ createApp({
         },
         
         destroyQuotationDatePickers() {
-            // Destroy Flatpickr instances for quotation date fields
+            // Destroy issue date picker
             const issueDateEl = document.getElementById('quotation_issue_date');
             if (issueDateEl && issueDateEl._flatpickr) {
                 issueDateEl._flatpickr.destroy();
             }
             
+            // Destroy delivery date picker
+            const deliveryDateEl = document.getElementById('quotation_delivery_date');
+            if (deliveryDateEl && deliveryDateEl._flatpickr) {
+                deliveryDateEl._flatpickr.destroy();
+            }
+            
+            // Destroy valid until date picker
             const validUntilEl = document.getElementById('quotation_valid_until');
             if (validUntilEl && validUntilEl._flatpickr) {
                 validUntilEl._flatpickr.destroy();
@@ -1732,28 +2141,38 @@ createApp({
         validateQuotationForm() {
             let isValid = true;
             
+            // Clear previous validation errors
+            this.quotationValidationErrors = {};
+            
             if (!this.newQuotation.issue_date) {
-                showMessage('発行日は必須です', true);
+                this.quotationValidationErrors.issue_date = '発行日は必須です';
                 isValid = false;
             }
             
             if (!this.newQuotation.quotation_number) {
-                showMessage('見積番号は必須です', true);
+                this.quotationValidationErrors.quotation_number = '見積番号は必須です';
                 isValid = false;
             }
             
             if (!this.newQuotation.sender_company) {
-                showMessage('発注者会社名は必須です', true);
+                this.quotationValidationErrors.sender_company = '発注者会社名は必須です';
                 isValid = false;
             }
             
             if (!this.newQuotation.receiver_company) {
-                showMessage('受注者会社名は必須です', true);
+                this.quotationValidationErrors.receiver_company = '受注者会社名は必須です';
                 isValid = false;
             }
             
-            if (this.newQuotation.items.length === 0) {
-                showMessage('商品明細は必須です', true);
+            // Improved items validation
+            if (!this.newQuotation.items || !Array.isArray(this.newQuotation.items) || this.newQuotation.items.length === 0) {
+                this.quotationValidationErrors.items = '商品明細は必須です';
+                isValid = false;
+            }
+            
+            // Validate child project selection
+            if (!this.selectedChildProjectIds || this.selectedChildProjectIds.length === 0) {
+                this.quotationValidationErrors.childProjects = '子プロジェクトの選択は必須です';
                 isValid = false;
             }
             
@@ -1820,164 +2239,790 @@ createApp({
         },
 
         formatNumber(number) {
-            return new Intl.NumberFormat('ja-JP').format(number);
+            // Take only the integer part of the number
+            const integerNumber = Math.floor(number);
+            return new Intl.NumberFormat('ja-JP').format(integerNumber);
+        },
+
+        // Update quotation status
+        async updateQuotationStatus(quotationId, status) {
+            try {
+                const formData = new FormData();    
+                formData.append('quotation_id', quotationId);
+                formData.append('status', status);
+                const response = await axios.post('/api/index.php?model=quotation&method=updateStatus', formData);
+                
+                if (response.data && response.data.status === 'success') {
+                    // Update the local quotation data
+                    const quotation = this.quotations.find(q => q.id === quotationId);
+                    if (quotation) {
+                        quotation.status = status;
+                    }
+                    showMessage('見積書のステータスが更新されました。', false);
+                } else {
+                    showMessage('ステータスの更新に失敗しました。', true);
+                }
+            } catch (error) {
+                console.error('Error updating quotation status:', error);
+                showMessage('ステータスの更新中にエラーが発生しました。', true);
+            }
+        },
+
+        // Get CSS class for quotation status badge
+        getQuotationStatusBadgeClass(status) {
+            switch (status) {
+                case '下書き':
+                    return 'bg-draft';
+                case '発行済み':
+                    return 'bg-issued';
+                case '承認済み':
+                    return 'bg-approved';
+                case '却下':
+                    return 'bg-rejected';
+                case '調整':
+                    return 'bg-adjustment';
+                default:
+                    return 'bg-draft';
+            }
         },
 
         formatPrice(price) {
-            return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(price);
+            // Take only the integer part of the price
+            const integerPrice = Math.floor(price);
+            return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(integerPrice);
         },
         
         // Price list methods
         async loadPriceListData() {
             try {
-                const [productsResponse, departmentsResponse] = await Promise.all([
-                    axios.get('/api/index.php?model=pricelist&method=getAllProducts'),
-                    axios.get('/api/index.php?model=department&method=getAll')
-                ]);
+                const productsResponse = await axios.get('/api/index.php?model=pricelist&method=getAllProducts');
                 
-                if (productsResponse.data && departmentsResponse.data) {
+                if (productsResponse.data) {
                     this.priceListProducts = productsResponse.data;
-                    this.priceListDepartments = departmentsResponse.data;
+                    
                     this.filterPriceListProducts();
+                } else {
+                    console.warn('No data received from API');
                 }
             } catch (error) {
                 console.error('Error loading price list data:', error);
+                console.error('Response:', error.response);
+                // Add some sample data for testing if API fails
+                this.priceListProducts = [
+                    { id: 1, code: '100', name: 'サンプル商品1', type: '新規', unit: '枚', price: 1000, cost: 800 },
+                    { id: 2, code: '101', name: 'サンプル商品2', type: '修正', unit: '枚', price: 2000, cost: 1600 },
+                    { id: 3, code: '102', name: 'サンプル商品3', type: 'その他', unit: '枚', price: 1500, cost: 1200 }
+                ];
+                this.filterPriceListProducts();
             }
         },
         
-                    filterPriceListProducts() {
-                let filtered = [...this.priceListProducts];
-                
-                // Filter by department
-                if (this.selectedPriceListDepartment) {
-                    filtered = filtered.filter(product => 
-                        (product.department_id || '') == this.selectedPriceListDepartment
-                    );
-                }
-                
-                // Filter by search term
-                if (this.priceListSearchTerm) {
-                    const term = this.priceListSearchTerm.toLowerCase();
-                    filtered = filtered.filter(product => 
-                        (product.code || '').toLowerCase().includes(term) ||
-                        (product.name || '').toLowerCase().includes(term)
-                    );
-                }
-                
-                this.filteredPriceListProducts = filtered;
-                
-                // Reset selection when filter changes
-                this.selectedProducts = [];
-                this.updateAllSelectedStatus();
-            },
-        
-                    showPriceListModal() {
-                if (this.priceListProducts.length === 0) {
-                    this.loadPriceListData();
-                }
-                // Reset selection when opening modal
-                this.selectedProducts = [];
-                this.allSelected = false;
-                this.priceListModal.show();
-            },
-        
-                    selectPriceListProduct(product) {
-                // Add the selected product as a new order item
-                const newItem = {
-                    title: product.name,
-                    product_code: product.code,
-                    product_name: product.name,
-                    quantity: 1,
-                    unit: product.unit,
-                    unit_price: product.price,
-                    amount: product.price,
-                    notes: product.notes || ''
-                };
-                
-                this.newQuotation.items.push(newItem);
-                this.calculateTotalAmount();
-                
-                // Close the modal
-                this.priceListModal.hide();
-                
-                // Reset filters
-                this.selectedPriceListDepartment = '';
-                this.priceListSearchTerm = '';
-                this.filterPriceListProducts();
-            },
+        filterPriceListProducts() {
+            let filtered = [...this.priceListProducts];
             
-            // Multiple product selection methods
-            toggleProductSelection(product) {
+            // Filter by type
+            if (this.selectedPriceListType) {
+                filtered = filtered.filter(product => 
+                    (product.type || '') === this.selectedPriceListType
+                );
+            }
+            
+            // Filter by search term
+            if (this.priceListSearchTerm) {
+                const term = this.priceListSearchTerm.toLowerCase();
+                filtered = filtered.filter(product => 
+                    (product.code || '').toLowerCase().includes(term) ||
+                    (product.name || '').toLowerCase().includes(term)
+                );
+            }
+            
+            this.filteredPriceListProducts = filtered;
+            
+            // Do not reset selected products when filter/search changes
+            // Only reset pagination and highlight for better UX
+            this.priceListPage = 1;
+            this.highlightedIndex = 0;
+            this.updateAllSelectedStatus();
+        },
+
+        scheduleFilterPriceListProducts() {
+            if (this.filterDebounceTimer) {
+                clearTimeout(this.filterDebounceTimer);
+            }
+            this.filterDebounceTimer = setTimeout(() => {
+                this.filterPriceListProducts();
+                this.filterDebounceTimer = null;
+            }, 200);
+        },
+        
+        showPriceListModal() {
+            if (this.priceListProducts.length === 0) {
+                this.loadPriceListData();
+            }
+            
+            // Reset selection when opening modal
+            this.selectedProducts = [];
+            this.allSelected = false;
+            this.priceListPage = 1;
+            this.highlightedIndex = 0;
+            this.selectedProductQuantities = {};
+            
+            this.priceListModal.show();
+        },
+        
+        selectPriceListProduct(product) {
+        // Clean and validate product data
+        const cleanPrice = this.cleanPriceValue(product.price);
+        
+        // Add the selected product as a new order item
+        const newItem = {
+            title: product.name || '',
+            product_code: product.code || '',
+            product_name: product.name || '',
+            product_id: product.id,
+            quantity: 1,
+            unit: product.unit || '枚',
+            unit_price: cleanPrice,
+            amount: cleanPrice,
+            notes: product.notes || ''
+        };
+        
+        this.newQuotation.items.push(newItem);
+        
+        this.calculateTotalAmount();
+        
+        // Close the modal
+        this.priceListModal.hide();
+        
+        // Reset filters
+        this.selectedPriceListType = '';
+        this.priceListSearchTerm = '';
+        this.filterPriceListProducts();
+    },
+            
+        // Multiple product selection methods
+        toggleProductSelection(product, event) {
+            // Ignore if product is already added to quotation (individually or in any set)
+            if (this.isProductAlreadyAdded(product)) {
+                return;
+            }
+            
+            if (event && event.shiftKey && this.lastSelectedIndexGlobal !== null) {
+                const currentIndex = this.filteredPriceListProducts.findIndex(p => p.id === product.id);
+                if (currentIndex !== -1) {
+                    const start = Math.min(this.lastSelectedIndexGlobal, currentIndex);
+                    const end = Math.max(this.lastSelectedIndexGlobal, currentIndex);
+                    for (let i = start; i <= end; i++) {
+                        const id = this.filteredPriceListProducts[i].id;
+                        if (this.isProductAlreadyAdded({ id })) continue;
+                        if (!this.selectedProducts.includes(id)) {
+                            this.selectedProducts.push(id);
+                            if (!this.selectedProductQuantities[id]) this.selectedProductQuantities[id] = 1;
+                        }
+                    }
+                }
+            } else {
                 const index = this.selectedProducts.indexOf(product.id);
                 if (index > -1) {
                     this.selectedProducts.splice(index, 1);
+                    delete this.selectedProductQuantities[product.id];
                 } else {
                     this.selectedProducts.push(product.id);
+                    if (!this.selectedProductQuantities[product.id]) this.selectedProductQuantities[product.id] = 1;
                 }
-                this.updateAllSelectedStatus();
-            },
-            
-            toggleSelectAll() {
-                if (this.allSelected) {
-                    this.selectedProducts = [];
-                } else {
-                    this.selectedProducts = this.filteredPriceListProducts.map(p => p.id);
-                }
-                this.updateAllSelectedStatus();
-            },
-            
-            updateAllSelectedStatus() {
-                this.allSelected = this.selectedProducts.length === this.filteredPriceListProducts.length && this.filteredPriceListProducts.length > 0;
-            },
-            
-            selectSingleProduct(product) {
-                // Single product selection (original behavior)
-                this.selectPriceListProduct(product);
-            },
-            
-            removeFromSelection(productId) {
-                const index = this.selectedProducts.indexOf(productId);
-                if (index > -1) {
-                    this.selectedProducts.splice(index, 1);
-                }
-                this.updateAllSelectedStatus();
-            },
-            
-            getSelectedProductsList() {
-                return this.priceListProducts.filter(p => this.selectedProducts.includes(p.id));
-            },
-            
-            getSelectedProductsTotal() {
-                return this.getSelectedProductsList().reduce((total, product) => total + product.price, 0);
-            },
-            
-            addSelectedProductsAsSet() {
-                const selectedProducts = this.getSelectedProductsList();
-                if (selectedProducts.length === 0) return;
-                
-                // Create a set item with combined information
-                const setItem = {
-                    title: `商品セット (${selectedProducts.length}件)`,
-                    product_code: selectedProducts.map(p => p.code).join(', '),
-                    product_name: selectedProducts.map(p => p.name).join(' + '),
-                    quantity: 1,
-                    unit: 'セット',
-                    unit_price: this.getSelectedProductsTotal(),
-                    amount: this.getSelectedProductsTotal(),
-                    notes: `セット内容: ${selectedProducts.map(p => `${p.name}(${this.formatPrice(p.price)})`).join(', ')}`
-                };
-                
-                this.newQuotation.items.push(setItem);
-                this.calculateTotalAmount();
-                
-                // Close the modal and reset
-                this.priceListModal.hide();
-                this.selectedProducts = [];
-                this.allSelected = false;
-                this.selectedPriceListDepartment = '';
-                this.priceListSearchTerm = '';
-                this.filterPriceListProducts();
             }
+            
+            this.lastSelectedIndexGlobal = this.filteredPriceListProducts.findIndex(p => p.id === product.id);
+            this.updateAllSelectedStatus();
+        },
+        
+        toggleSelectAll() {
+            const pageIds = this.paginatedPriceListProducts
+                .filter(p => !this.isProductAlreadyAdded(p))
+                .map(p => p.id);
+            
+            const allOnPageSelected = pageIds.every(id => this.selectedProducts.includes(id));
+            
+            if (allOnPageSelected) {
+                // Deselect only current page ids
+                this.selectedProducts = this.selectedProducts.filter(id => {
+                    const keep = !pageIds.includes(id);
+                    if (!keep) delete this.selectedProductQuantities[id];
+                    return keep;
+                });
+            } else {
+                // Add current page ids
+                pageIds.forEach(id => {
+                    if (!this.selectedProducts.includes(id)) this.selectedProducts.push(id);
+                    if (!this.selectedProductQuantities[id]) this.selectedProductQuantities[id] = 1;
+                });
+            }
+            
+            this.updateAllSelectedStatus();
+        },
+        
+        updateAllSelectedStatus() {
+            const pageIds = this.paginatedPriceListProducts
+                .filter(p => !this.isProductAlreadyAdded(p))
+                .map(p => p.id);
+            
+            this.allSelected = pageIds.length > 0 && pageIds.every(id => this.selectedProducts.includes(id));
+        },
+        
+        selectSingleProduct(product) {
+            // Single product selection (original behavior)
+            this.selectPriceListProduct(product);
+        },
+        
+        removeFromSelection(productId) {
+            const index = this.selectedProducts.indexOf(productId);
+            if (index > -1) {
+                this.selectedProducts.splice(index, 1);
+                delete this.selectedProductQuantities[productId];
+            }
+            
+            this.updateAllSelectedStatus();
+        },
+        
+        // Helper function to clean price values
+        cleanPriceValue(price) {
+            if (price === null || price === undefined || price === '') {
+                return 0;
+            }
+            // Convert to number and handle edge cases
+            const priceStr = String(price).replace(/[^\d.-]/g, ''); // Remove non-numeric chars except dots and minus
+            const cleanPrice = parseFloat(priceStr);
+            return isNaN(cleanPrice) ? 0 : cleanPrice;
+        },
+        
+        getSelectedProductsList() {
+            const selected = this.priceListProducts.filter(p => this.selectedProducts.includes(p.id));
+            return selected;
+        },
+        
+        getSelectedProductsTotal() {
+            return this.getSelectedProductsList().reduce((total, product) => {
+                const qty = this.selectedProductQuantities[product.id] || 1;
+                const cleanPrice = this.cleanPriceValue(product.price);
+                return total + (cleanPrice * qty);
+            }, 0);
+        },
+        
+        addSelectedProductsAsSet() {
+            const selectedProducts = this.getSelectedProductsList();
+            if (selectedProducts.length === 0) return;
+            
+            // Build set details to persist as JSON
+            const setDetails = selectedProducts.map(p => ({
+                id: p.id,
+                code: p.code,
+                name: p.name,
+                unit: p.unit,
+                price: p.price,
+                quantity: this.selectedProductQuantities[p.id] || 1
+            }));
+
+            // Create a set item with combined information
+            const fallbackTitle = `商品セット (${selectedProducts.length}件)`;
+            const computedTitle = (this.selectedSetName && this.selectedSetName.trim()) ? this.selectedSetName.trim() : fallbackTitle;
+            const setItem = {
+                project_id: '', // Add project_id field for consistency
+                _oldProjectId: '', // Add _oldProjectId field for consistency
+                title: computedTitle,
+                product_code: selectedProducts.map(p => p.code).join(', '),
+                product_name: selectedProducts.map(p => {
+                    const qty = this.selectedProductQuantities[p.id] || 1;
+                    return `${p.name} x${qty}`;
+                }).join(' + '),
+                quantity: 1,
+                unit: '式',
+                unit_price: this.getSelectedProductsTotal(),
+                amount: this.getSelectedProductsTotal(),
+                notes: '',
+                is_set: true,
+                set_json: setDetails // Store as object, not stringified
+            };
+            
+            // Use Vue.set or spread operator to ensure reactivity
+            this.newQuotation.items = [...this.newQuotation.items, setItem];
+            
+            // Force Vue to update the reactive array
+            this.$nextTick(() => {
+                this.calculateTotalAmount();
+            });
+            
+            // Close the modal and reset
+            this.priceListModal.hide();
+            this.selectedProducts = [];
+            this.allSelected = false;
+            this.selectedSetName = '';
+            this.selectedPriceListType = '';
+            this.priceListSearchTerm = '';
+            this.filterPriceListProducts();
+        },
+        
+        // --- Set editing ---
+        showEditSetModal(itemIndex) {
+            const item = this.newQuotation.items[itemIndex];
+            
+            if (!item || !item.is_set) {
+                return;
+            }
+            
+            let products = [];
+            
+            // Handle both object and JSON string cases
+            if (typeof item.set_json === 'object' && item.set_json !== null) {
+                // set_json is already an object
+                products = Array.isArray(item.set_json) ? item.set_json : [];
+            } else if (typeof item.set_json === 'string') {
+                // set_json is a JSON string, try to parse it
+                try {
+                    const parsed = JSON.parse(item.set_json || '[]');
+                    products = Array.isArray(parsed) ? parsed : [];
+                } catch (e) {
+                    products = [];
+                }
+            } else {
+                products = [];
+            }
+            
+            this.editingSet = { index: itemIndex, products };
+            
+            if (!this.setEditModal) {
+                const el = document.getElementById('editSetModal');
+                
+                if (el) {
+                    this.setEditModal = new bootstrap.Modal(el);
+                    
+                    // Bind stacking handlers once
+                    el.addEventListener('shown.bs.modal', () => {
+                        // Raise z-index of edit modal
+                        // Raise the last backdrop slightly above base backdrop
+                        const backdrops = document.querySelectorAll('.modal-backdrop');
+                        const lastBackdrop = backdrops[backdrops.length - 1];
+                        if (lastBackdrop) lastBackdrop.classList.add('edit-set-backdrop');
+                    }, { once: false });
+                    el.addEventListener('hidden.bs.modal', () => {
+                        const backdrops = document.querySelectorAll('.modal-backdrop.edit-set-backdrop');
+                        backdrops.forEach(b => b.classList.remove('edit-set-backdrop'));
+                    }, { once: false });
+                }
+            }
+            
+            if (this.setEditModal) {
+                this.setEditModal.show();
+            }
+        },
+        updateEditingSetQty(productId, value) {
+            if (!this.editingSet) return;
+            const target = this.editingSet.products.find(p => p.id === productId);
+            if (!target) return;
+            let qty = Number(value);
+            if (!Number.isFinite(qty) || qty <= 0) qty = 1;
+            target.quantity = Math.floor(qty);
+        },
+        removeFromEditingSet(productId) {
+            if (!this.editingSet) return;
+            this.editingSet.products = this.editingSet.products.filter(p => p.id !== productId);
+        },
+        getEditingSetTotal() {
+            if (!this.editingSet) return 0;
+            return this.editingSet.products.reduce((sum, p) => sum + (p.price || 0) * (p.quantity || 1), 0);
+        },
+        saveEditedSet() {
+            if (!this.editingSet) {
+                return;
+            }
+            
+            const { index, products } = this.editingSet;
+            const item = this.newQuotation.items[index];
+            if (!item) {
+                return;
+            }
+            
+            const total = products.reduce((sum, p) => sum + (p.price || 0) * (p.quantity || 1), 0);
+            item.product_code = products.map(p => p.code).join(', ');
+            item.product_name = products.map(p => `${p.name} x${(p.quantity || 1)}`).join(' + ');
+            item.unit_price = total;
+            item.amount = total;
+            // Do not auto-fill notes when editing set
+            item.is_set = true;
+            item.set_json = JSON.stringify(products);
+            item.title = `商品セット (${products.length}件)`;
+            
+            this.calculateTotalAmount();
+            
+            if (this.setEditModal) {
+                this.setEditModal.hide();
+            }
+        },
+
+        // --- Order items bulk selection/deletion ---
+        toggleSelectOrderItem(index) {
+            const pos = this.selectedOrderItemIndexes.indexOf(index);
+            if (pos >= 0) {
+                this.selectedOrderItemIndexes.splice(pos, 1);
+            } else {
+                this.selectedOrderItemIndexes.push(index);
+            }
+        },
+        selectAllOrderItems() {
+            if (this.allOrderItemsSelected) {
+                this.selectedOrderItemIndexes = [];
+            } else {
+                this.selectedOrderItemIndexes = (this.newQuotation.items || []).map((_, idx) => idx);
+            }
+        },
+        deleteSelectedOrderItems() {
+            if (!this.selectedOrderItemIndexes.length) return;
+            
+            const toDelete = new Set(this.selectedOrderItemIndexes);
+            this.newQuotation.items = (this.newQuotation.items || []).filter((_, idx) => !toDelete.has(idx));
+            
+            this.selectedOrderItemIndexes = [];
+            this.calculateTotalAmount();
+        },
+
+        addSelectedProductsIndividually() {
+            const selectedProducts = this.getSelectedProductsList();
+            if (selectedProducts.length === 0) return;
+            
+            const newItems = [];
+            selectedProducts.forEach(product => {
+                const cleanPrice = this.cleanPriceValue(product.price);
+                const quantity = this.selectedProductQuantities[product.id] || 1;
+                const item = {
+                    title: product.name,
+                    product_code: product.code,
+                    product_name: product.name,
+                    product_id: product.id,
+                    quantity: quantity,
+                    unit: product.unit,
+                    unit_price: cleanPrice,
+                    amount: cleanPrice * quantity,
+                    notes: product.notes || ''
+                };
+                newItems.push(item);
+            });
+            
+            // Use spread operator to ensure reactivity
+            this.newQuotation.items = [...this.newQuotation.items, ...newItems];
+            
+            this.calculateTotalAmount();
+            // Close and reset
+            this.priceListModal.hide();
+            this.selectedProducts = [];
+            this.allSelected = false;
+            this.selectedProductQuantities = {};
+            this.selectedPriceListType = '';
+            this.priceListSearchTerm = '';
+            this.filterPriceListProducts();
+        },
+
+        // Pagination controls
+        goToPrevPriceListPage() {
+            if (this.priceListPage > 1) {
+                this.priceListPage -= 1;
+                this.highlightedIndex = 0;
+                this.updateAllSelectedStatus();
+            }
+        },
+        goToNextPriceListPage() {
+            if (this.priceListPage < this.totalPriceListPages) {
+                this.priceListPage += 1;
+                this.highlightedIndex = 0;
+                this.updateAllSelectedStatus();
+            }
+        },
+        onChangePriceListPageSize() {
+            // Reset to first page when page size changes
+            this.priceListPage = 1;
+            this.highlightedIndex = 0;
+            this.updateAllSelectedStatus();
+        },
+        selectAllFiltered() {
+            this.selectedProducts = this.filteredPriceListProducts
+                .filter(p => !this.isProductAlreadyAdded(p))
+                .map(p => p.id);
+            
+            const map = {};
+            this.filteredPriceListProducts
+                .filter(p => !this.isProductAlreadyAdded(p))
+                .forEach(p => { map[p.id] = this.selectedProductQuantities[p.id] || 1; });
+            
+            this.selectedProductQuantities = map;
+            
+            this.updateAllSelectedStatus();
+        },
+
+        normalizeSelectedQuantity(productId) {
+            let qty = Number(this.selectedProductQuantities[productId] || 1);
+            if (!Number.isFinite(qty) || qty <= 0) qty = 1;
+            
+            this.selectedProductQuantities[productId] = Math.floor(qty);
+        },
+
+        // Keyboard navigation inside price list modal
+        handlePriceListKeydown(e) {
+            if (!document.body.classList.contains('modal-open')) return;
+            
+            const list = this.paginatedPriceListProducts;
+            if (!list || list.length === 0) return;
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                this.highlightedIndex = Math.min(this.highlightedIndex + 1, list.length - 1);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                this.highlightedIndex = Math.max(this.highlightedIndex - 1, 0);
+            } else if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const product = list[this.highlightedIndex];
+                if (product && !this.isProductAlreadyAdded(product)) {
+                    this.toggleProductSelection(product, e);
+                }
+            }
+        },
+
+        isProductAlreadyAdded(product) {
+            if (!product || product.id == null) return false;
+            return this.alreadyAddedProductIds.has(product.id);
+        },
+        
+        // Debug method to set test data
+        setTestData() {
+            this.priceListProducts = [
+                { id: 1, code: '100', name: 'サンプル商品1', type: '新規', unit: '枚', price: 1000, cost: 800 },
+                { id: 2, code: '101', name: 'サンプル商品2', type: '修正', unit: '枚', price: 2000, cost: 1600 },
+                { id: 3, code: '102', name: 'サンプル商品3', type: 'その他', unit: '枚', price: 1500, cost: 1200 },
+                { id: 4, code: '103', name: 'サンプル商品4', type: '新規', unit: '枚', price: 3000, cost: 2400 },
+                { id: 5, code: '104', name: 'サンプル商品5', type: '修正', unit: '枚', price: 2500, cost: 2000 }
+            ];
+            this.filterPriceListProducts();
+        },
+
+        testFormData() {
+            const testData = new FormData();
+            testData.append('test_field', 'test_value');
+            testData.append('test_array', JSON.stringify([1, 2, 3]));
+            
+            // Test JSON parsing
+            try {
+                const parsedArray = JSON.parse(testData.get('test_array'));
+            } catch (e) {
+                console.error('Error parsing test array:', e);
+            }
+        },
+
+        async testRequest() {
+            try {
+                const testData = new FormData();
+                testData.append('test_field', 'test_value');
+                testData.append('test_array', JSON.stringify([1, 2, 3]));
+                
+                const response = await axios.post('/api/index.php?model=quotation&method=create', testData);
+            } catch (error) {
+                console.error('Test request error:', error);
+                if (error.response) {
+                    console.error('Test response data:', error.response.data);
+                }
+            }
+        },
+
+        async testAlternativeRequest() {
+            try {
+                // Test with URLSearchParams instead of FormData
+                const testData = new URLSearchParams();
+                testData.append('test_field', 'test_value');
+                testData.append('test_array', JSON.stringify([1, 2, 3]));
+                
+                const response = await axios.post('/api/index.php?model=quotation&method=create', testData, {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                });
+            } catch (error) {
+                console.error('Alternative test request error:', error);
+                if (error.response) {
+                    console.error('Alternative test response data:', error.response.data);
+                }
+            }
+        },
+
+        // Child project selection methods
+        selectAllChildProjects() {
+            this.selectedChildProjectIds = this.childProjects.map(project => project.id);
+            this.updateChildProjectSelection();
+        },
+        
+        deselectAllChildProjects() {
+            this.selectedChildProjectIds = [];
+            this.updateChildProjectSelection();
+        },
+        
+        toggleAllChildProjects() {
+            if (this.allChildProjectsSelected) {
+                this.deselectAllChildProjects();
+            } else {
+                this.selectAllChildProjects();
+            }
+        },
+        
+        updateChildProjectSelection() {
+            const total = this.childProjects.length;
+            const selected = this.selectedChildProjectIds.length;
+            
+            this.allChildProjectsSelected = selected === total && total > 0;
+            this.someChildProjectsSelected = selected > 0 && selected < total;
+            
+
+            
+            // Clear project_id from order items that are no longer linked to selected projects
+            this.clearUnlinkedOrderItems();
+        },
+        
+        async updateSelectedChildProjectsStatus() {
+            try {
+                if (this.selectedChildProjectIds.length === 0) {
+                    return;
+                }
+                
+                const quotationStatus = this.newQuotation.status;
+                let newStatus = 'open'; // Default status
+                
+                // Map quotation status to project status
+                switch (quotationStatus) {
+                    case '下書き':
+                        newStatus = 'draft';
+                        break;
+                    case '発行済み':
+                        newStatus = 'quoted';
+                        break;
+                    case '承認済み':
+                        newStatus = 'confirming';
+                        break;
+                    case '却下':
+                        newStatus = 'cancelled';
+                        break;
+                    case '調整':
+                        newStatus = 'in_progress';
+                        break;
+                    default:
+                        newStatus = 'open';
+                }
+                
+                let successCount = 0;
+                let errorCount = 0;
+                
+                // Update each selected child project status
+                for (const projectId of this.selectedChildProjectIds) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', projectId);
+                        formData.append('status', newStatus);
+                        
+                        const response = await axios.post('/api/index.php?model=project&method=updateStatus', formData);
+                        
+                        if (response.data && response.data.status === 'success') {
+                            successCount++;
+                        } else {
+                            console.warn(`Failed to update child project ${projectId} status:`, response.data?.message);
+                            errorCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Error updating child project ${projectId} status:`, error);
+                        errorCount++;
+                    }
+                }
+                
+                // Reload child projects to reflect the changes
+                await this.loadChildProjects();
+                
+                // Show appropriate message based on results
+                if (successCount > 0 && errorCount === 0) {
+                    showMessage(`${successCount}件の子プロジェクトのステータスが「${this.getProjectStatusLabel(newStatus)}」に更新されました。`, false);
+                } else if (successCount > 0 && errorCount > 0) {
+                    showMessage(`${successCount}件の子プロジェクトのステータスが更新されましたが、${errorCount}件の更新に失敗しました。`, true);
+                } else if (successCount === 0) {
+                    showMessage('子プロジェクトのステータスの更新に失敗しました。', true);
+                }
+                
+            } catch (error) {
+                console.error('Error updating selected child projects status:', error);
+                showMessage('子プロジェクトのステータスの更新中にエラーが発生しました。', true);
+            }
+        },
+
+        updateProjectTotalAmount(projectId, itemIndex) {
+            const item = this.newQuotation.items[itemIndex];
+            if (!item) {
+                return;
+            }
+            
+            // Get the old project ID before the change
+            const oldProjectId = item._oldProjectId || null;
+            
+            // Store the new project ID for future reference
+            item._oldProjectId = projectId;
+            
+            // Calculate item amount first
+            this.calculateItemAmount(itemIndex);
+            
+            // If there was a previous project, update its total amount (decrement)
+            if (oldProjectId && oldProjectId !== projectId) {
+                this.updateChildProjectTotalAmount(oldProjectId);
+            }
+            
+            // Update new project total amount (increment)
+            if (projectId) {
+                this.updateChildProjectTotalAmount(projectId);
+            }
+        },
+
+        updateChildProjectTotalAmount(projectId) {
+            // Find the project in childProjects
+            const project = this.childProjects.find(p => p.id == projectId);
+            if (!project) {
+                return;
+            }
+            
+            // Calculate total amount for this project from all items
+            const projectItems = this.newQuotation.items.filter(item => item.project_id == projectId);
+            const projectTotal = projectItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+            
+            // Update the project's total_amount in childProjects array
+            project.total_amount = projectTotal;
+            
+            // Force Vue reactivity update
+            this.$forceUpdate();
+        },
+        
+        clearUnlinkedOrderItems() {
+            // Clear project_id from order items that are no longer linked to selected projects
+            if (!this.newQuotation.items || this.newQuotation.items.length === 0) {
+                return;
+            }
+            
+            let clearedCount = 0;
+            this.newQuotation.items.forEach((item, index) => {
+                if (item.project_id && !this.selectedChildProjectIds.includes(parseInt(item.project_id))) {
+                    item.project_id = '';
+                    item._oldProjectId = ''; // Reset old project ID when clearing
+                    clearedCount++;
+                    
+                    // Recalculate item amount since project link was removed
+                    this.calculateItemAmount(index);
+                }
+            });
+            
+            if (clearedCount > 0) {
+                // Update total amounts for all child projects
+                this.childProjects.forEach(project => {
+                    this.updateChildProjectTotalAmount(project.id);
+                });
+            }
+        }
     },
     async mounted() {
         try {
@@ -1996,6 +3041,18 @@ createApp({
                     this.backupQuotationForm();
                     // Destroy Flatpickr instances
                     this.destroyQuotationDatePickers();
+                });
+            }
+
+            // Keyboard navigation for price list modal
+            const priceListModalEl = document.getElementById('priceListModal');
+            if (priceListModalEl) {
+                priceListModalEl.addEventListener('shown.bs.modal', () => {
+                    this.highlightedIndex = 0;
+                    document.addEventListener('keydown', this.handlePriceListKeydown);
+                });
+                priceListModalEl.addEventListener('hidden.bs.modal', () => {
+                    document.removeEventListener('keydown', this.handlePriceListKeydown);
                 });
             }
         } catch (error) {
