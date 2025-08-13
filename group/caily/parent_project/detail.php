@@ -1186,7 +1186,7 @@ $view->heading('建物詳細');
                                                         </td>
                                                         <td>
                                                             <input type="number" class="form-control form-control-sm"
-                                                                v-model="item.quantity"
+                                                                v-model.number="item.quantity"
                                                                 @input="calculateItemAmount(index)" min="0" step="1">
                                                         </td>
                                                         <td>
@@ -1195,7 +1195,7 @@ $view->heading('建物詳細');
                                                         </td>
                                                         <td>
                                                             <input type="number" class="form-control form-control-sm"
-                                                                v-model="item.unit_price"
+                                                                v-model.number="item.unit_price"
                                                                 @input="calculateItemAmount(index)" min="0" step="1">
                                                         </td>
                                                         <td>
@@ -1280,7 +1280,7 @@ $view->heading('建物詳細');
                                                     消費税等 (%)
                                                 </label>
                                                 <input type="number" class="form-control ms-2"
-                                                    v-model="newQuotation.tax_rate" min="0" max="100" step="1"
+                                                    v-model.number="newQuotation.tax_rate" min="0" max="100" step="1"
                                                     @input="calculateTotalAmount">
 
                                             </div>
@@ -1660,7 +1660,7 @@ $view->heading('建物詳細');
                                     <h6 class="mb-0">商品明細</h6>
                                     <div class="d-flex gap-2">
                                         <button type="button" class="btn btn-sm btn-outline-success"
-                                            @click="showPriceListModalForEdit">
+                                            @click="showPriceListModal">
                                             <i class="fa fa-search me-1"></i> 価格表から選択
                                         </button>
                                         <button type="button" class="btn btn-sm btn-outline-primary"
@@ -1728,7 +1728,7 @@ $view->heading('建物詳細');
                                                     </td>
                                                     <td>
                                                         <input type="number" class="form-control form-control-sm"
-                                                            v-model="item.quantity"
+                                                            v-model.number="item.quantity"
                                                             @input="calculateItemAmountForEdit(index)" min="0" step="1">
                                                     </td>
                                                     <td>
@@ -1737,7 +1737,7 @@ $view->heading('建物詳細');
                                                     </td>
                                                     <td>
                                                         <input type="number" class="form-control form-control-sm"
-                                                            v-model="item.unit_price"
+                                                            v-model.number="item.unit_price"
                                                             @input="calculateItemAmountForEdit(index)" min="0" step="1">
                                                     </td>
                                                     <td>
@@ -1821,7 +1821,7 @@ $view->heading('建物詳細');
                                                 消費税等 (%)
                                             </label>
                                             <input type="number" class="form-control ms-2"
-                                                v-model="editingQuotation.tax_rate" min="0" max="100" step="1"
+                                                v-model.number="editingQuotation.tax_rate" min="0" max="100" step="1"
                                                 @input="calculateTotalAmountForEdit">
 
                                         </div>

@@ -2103,8 +2103,8 @@ createApp({
             const item = this.newQuotation.items[index];
             
             if (item) {
-                const quantity = item.quantity || 0;
-                const unitPrice = item.unit_price || 0;
+                const quantity = parseFloat(item.quantity) || 0;
+                const unitPrice = parseFloat(item.unit_price) || 0;
                 const amount = quantity * unitPrice;
                 
                 item.amount = amount;
@@ -2120,7 +2120,7 @@ createApp({
 
         calculateTotalAmount() {
             const total = this.newQuotation.items.reduce((sum, item) => {
-                const amount = item.amount || 0;
+                const amount = parseFloat(item.amount) || 0;
                 return sum + amount;
             }, 0);
             
@@ -2788,6 +2788,10 @@ createApp({
         },
         
         addSelectedProductsAsSet() {
+            // Detect context: check if edit quotation modal is open
+            const editQuotationModal = document.getElementById('editQuotationModal');
+            const isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            
             const selectedProducts = this.getSelectedProductsList();
             if (selectedProducts.length === 0) return;
             
@@ -2822,13 +2826,18 @@ createApp({
                 set_json: setDetails // Store as object, not stringified
             };
             
-            // Use Vue.set or spread operator to ensure reactivity
-            this.newQuotation.items = [...this.newQuotation.items, setItem];
-            
-            // Force Vue to update the reactive array
-            this.$nextTick(() => {
-                this.calculateTotalAmount();
-            });
+            // Add to appropriate quotation items based on context
+            if (isEditingQuotation) {
+                this.editingQuotation.items = [...this.editingQuotation.items, setItem];
+                this.$nextTick(() => {
+                    this.calculateTotalAmountForEdit();
+                });
+            } else {
+                this.newQuotation.items = [...this.newQuotation.items, setItem];
+                this.$nextTick(() => {
+                    this.calculateTotalAmount();
+                });
+            }
             
             // Close the modal and reset
             this.priceListModal.hide();
@@ -2964,6 +2973,10 @@ createApp({
         },
 
         addSelectedProductsIndividually() {
+            // Detect context: check if edit quotation modal is open
+            const editQuotationModal = document.getElementById('editQuotationModal');
+            const isEditingQuotation = editQuotationModal && editQuotationModal.classList.contains('show');
+            
             const selectedProducts = this.getSelectedProductsList();
             if (selectedProducts.length === 0) return;
             
@@ -2980,15 +2993,21 @@ createApp({
                     unit: product.unit,
                     unit_price: cleanPrice,
                     amount: cleanPrice * quantity,
-                    notes: product.notes || ''
+                    notes: product.notes || '',
+                    is_set: false
                 };
                 newItems.push(item);
             });
             
-            // Use spread operator to ensure reactivity
-            this.newQuotation.items = [...this.newQuotation.items, ...newItems];
+            // Add to appropriate quotation items based on context
+            if (isEditingQuotation) {
+                this.editingQuotation.items = [...this.editingQuotation.items, ...newItems];
+                this.calculateTotalAmountForEdit();
+            } else {
+                this.newQuotation.items = [...this.newQuotation.items, ...newItems];
+                this.calculateTotalAmount();
+            }
             
-            this.calculateTotalAmount();
             // Close and reset
             this.priceListModal.hide();
             this.selectedProducts = [];
@@ -3729,7 +3748,10 @@ createApp({
         },
 
         calculateTotalAmountForEdit() {
-            const total = this.editingQuotation.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+            const total = this.editingQuotation.items.reduce((sum, item) => {
+                const amount = parseFloat(item.amount) || 0;
+                return sum + amount;
+            }, 0);
             this.editingQuotation.total_amount = total;
             this.editingQuotation.total_with_tax = total * (1 + this.editingQuotation.tax_rate / 100);
         },
@@ -4201,13 +4223,8 @@ createApp({
 
 
 
-        // Price list modal methods for edit
-        showPriceListModalForEdit() {
-            // Show price list modal for edit
-            if (this.priceListModal) {
-                this.priceListModal.show();
-            }
-        },
+
+
 
         initializeEditQuotationDatePickers() {
             // Initialize issue date picker
