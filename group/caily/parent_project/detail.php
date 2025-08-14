@@ -1206,8 +1206,8 @@ $view->heading('建物詳細');
                                                                 @input="calculateItemAmount(index)" min="0" step="1">
                                                         </td>
                                                         <td>
-                                                            <input type="number" class="form-control form-control-sm"
-                                                                v-model="item.amount" readonly>
+                                                            <input type="text" class="form-control form-control-sm"
+                                                                :value="formatCurrency(item.amount)" readonly>
                                                         </td>
                                                         <td>
                                                             <input type="text" class="form-control form-control-sm"
@@ -1280,7 +1280,7 @@ $view->heading('建物詳細');
                                             <div class="col-md-3">
                                                 <label class="form-label">税抜価格</label>
                                                 <input type="text" class="form-control"
-                                                    :value="formatNumberForInput(newQuotation.total_amount)" readonly>
+                                                    :value="formatCurrency(newQuotation.total_amount)" readonly>
                                             </div>
                                             <div class="col-md-3">
                                                 <label class="form-label">
@@ -1294,13 +1294,13 @@ $view->heading('建物詳細');
                                             <div class="col-md-3">
                                                 <label class="form-label">税額</label>
                                                 <input type="text" class="form-control"
-                                                    :value="formatNumberForInput(newQuotation.total_amount * newQuotation.tax_rate / 100)"
+                                                    :value="formatCurrency(newQuotation.total_amount * newQuotation.tax_rate / 100)"
                                                     readonly>
                                             </div>
                                             <div class="col-md-3">
                                                 <label class="form-label">合計金額</label>
                                                 <input type="text" class="form-control"
-                                                    :value="formatNumberForInput(newQuotation.total_with_tax)" readonly>
+                                                    :value="formatCurrency(newQuotation.total_with_tax)" readonly>
                                             </div>
                                         </div>
                                     </div>
@@ -1770,8 +1770,8 @@ $view->heading('建物詳細');
                                                             @input="calculateItemAmountForEdit(index)" min="0" step="1">
                                                     </td>
                                                     <td>
-                                                        <input type="number" class="form-control form-control-sm"
-                                                            v-model="item.amount" readonly>
+                                                        <input type="text" class="form-control form-control-sm"
+                                                            :value="formatCurrency(item.amount)" readonly>
                                                     </td>
                                                     <td>
                                                         <input type="text" class="form-control form-control-sm"
@@ -1843,7 +1843,7 @@ $view->heading('建物詳細');
                                         <div class="col-md-3">
                                             <label class="form-label">税抜価格</label>
                                             <input type="text" class="form-control"
-                                                :value="formatNumberForInput(editingQuotation.total_amount)" readonly>
+                                                :value="formatCurrency(editingQuotation.total_amount)" readonly>
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label">
@@ -1857,13 +1857,13 @@ $view->heading('建物詳細');
                                         <div class="col-md-3">
                                             <label class="form-label">税額</label>
                                             <input type="text" class="form-control"
-                                                :value="formatNumberForInput(editingQuotation.total_amount * editingQuotation.tax_rate / 100)"
+                                                :value="formatCurrency(editingQuotation.total_amount * editingQuotation.tax_rate / 100)"
                                                 readonly>
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label">合計金額</label>
                                             <input type="text" class="form-control"
-                                                :value="formatNumberForInput(editingQuotation.total_with_tax)" readonly>
+                                                :value="formatCurrency(editingQuotation.total_with_tax)" readonly>
                                         </div>
                                     </div>
                                 </div>

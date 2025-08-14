@@ -1231,6 +1231,35 @@ const vueApp = createApp({
             this.project = { ...this.originalProject };
             this.loadMembers(); // Restore managers and members from backend for correct avatars
         },
+        async confirmKadaiProject() {
+            try {
+                const swal = await Swal.fire({
+                    title: 'プロジェクトを承認しますか？',
+                    text: 'このプロジェクトを正式に受け入れて、通常のプロジェクトとして開始します。',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '承認',
+                    cancelButtonText: 'キャンセル',
+                    confirmButtonColor: '#28a745'
+                });
+
+                if (swal.isConfirmed) {
+                    const formData = new FormData();
+                    formData.append('id', this.projectId);
+                    const response = await axios.post('/api/index.php?model=project&method=confirm', formData);
+                    if (response.data && response.data.status === 'success') {
+                        showMessage('プロジェクトを承認しました。');
+                        // Reload project data to reflect changes
+                        await this.loadProject();
+                    } else {
+                        showMessage(response.data?.message || 'プロジェクトの承認に失敗しました。', true);
+                    }
+                }
+            } catch (error) {
+                console.error('Error confirming kadai project:', error);
+                showMessage('プロジェクトの承認中にエラーが発生しました。', true);
+            }
+        },
         getCategoryName(id) {
             const cat = this.categories.find(c => String(c.id) === String(id));
             return cat ? cat.name : '-';

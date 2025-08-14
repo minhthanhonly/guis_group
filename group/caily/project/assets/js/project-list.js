@@ -154,6 +154,9 @@ var projectTable;
                 badges.push(`<span class="badge bg-label-info me-1" >残り時間: ${label}</span>`);
             }
         }
+        
+
+        
         if (badges.length > 0) {
             $('#activeFilters').html(`<span class="me-2 text-muted small" >適用中のフィルター:</span>` + badges.join(''));
         } else {
@@ -477,6 +480,8 @@ var projectTable;
             renderActiveFilters();
             if (projectTable) projectTable.ajax.reload();
         });
+        
+
         // $('#filterReset').on('click', function() {
         //     localStorage.removeItem(FILTER_STORAGE_KEY);
         //     $('#projectFilterForm')[0].reset();
@@ -934,7 +939,10 @@ var projectTable;
                 membersTagifyInstance: null,
                 managerTagifyInstance: null,
                 customerTagifyInstance: null,
-                formValidator: null
+                formValidator: null,
+                // Kadai queue properties
+                kadaiProjects: [],
+                isKadaiQueueExpanded: false
             }
         },
         computed: {
@@ -947,6 +955,14 @@ var projectTable;
         },
         mounted() {
             this.loadDepartments();
+            // Không load dự án ngay lập tức, chỉ load khi có department được chọn
+            
+            // Auto-refresh kadai queue every 5 minutes (chỉ khi có department được chọn)
+            setInterval(() => {
+                if (this.selectedDepartment && this.selectedDepartment.id) {
+                    this.loadKadaiProjects();
+                }
+            }, 5 * 60 * 1000);
 
             // Initialize Tagify for project_order_type
             this.$nextTick(() => {
@@ -1264,16 +1280,17 @@ var projectTable;
             async loadDepartments() {
                 try {
                     const response = await axios.get('/api/index.php?model=department&method=listByUser');
-                    this.departments = response.data;
+                    this.departments = response.data || [];
                     if(!this.selectedDepartment && this.departments.length > 0) {
                         this.selectedStatus = this.statuses[0];
-                        const firstDepartment = this.departments.find(d => d.can_project == 1);
+                        const firstDepartment = this.departments.find(d => d && d.can_project == 1);
                         if (firstDepartment) {
                             this.viewProjects(firstDepartment);
                         }
                     }
                 } catch (error) {
                     console.error('Error loading departments:', error);
+                    this.departments = [];
                     showMessage('部署の読み込みに失敗しました。', true);
                 }
             },
@@ -1330,6 +1347,11 @@ var projectTable;
                 }
             },
             viewProjects(department) {
+                if (!department || !department.id) {
+                    console.error('Invalid department object:', department);
+                    return;
+                }
+                
                 this.selectedDepartment = department;
                 this.loadProjects();
                 
@@ -1371,6 +1393,9 @@ var projectTable;
                         }));
                     }
                 });
+                
+                // Reload kadai projects for the new department
+                this.loadKadaiProjects();
             },
             filterProjectByStatus(status) {
                 this.selectedStatus = status;
@@ -1725,6 +1750,109 @@ var projectTable;
                     console.error('Error loading team members:', error);
                 }
             },
+            
+            // Kadai Queue Methods
+            async loadKadaiProjects() {
+                // Chỉ load dự án khi có department được chọn
+                if (!this.selectedDepartment || !this.selectedDepartment.id) {
+                    this.kadaiProjects = [];
+                    return;
+                }
+                
+                try {
+                    const url = `/api/index.php?model=project&method=list_kadai&department_id=${this.selectedDepartment.id}`;
+                    const response = await axios.get(url);
+                    if (response.data && response.data.data) {
+                        this.kadaiProjects = response.data.data;
+                    } else {
+                        this.kadaiProjects = [];
+                    }
+                } catch (error) {
+                    console.error('Error loading kadai projects:', error);
+                    this.kadaiProjects = [];
+                }
+            },
+            
+            toggleKadaiQueue() {
+                this.isKadaiQueueExpanded = !this.isKadaiQueueExpanded;
+            },
+            
+            async refreshKadaiQueue() {
+                await this.loadKadaiProjects();
+            },
+            
+            getStatusBadgeClass(status) {
+                const statusObj = this.statuses.find(s => s.key === status);
+                return statusObj ? `bg-${statusObj.color}` : 'bg-secondary';
+            },
+            
+            getStatusName(status) {
+                const statusObj = this.statuses.find(s => s.key === status);
+                return statusObj ? statusObj.name : status;
+            },
+            
+            formatDate(dateString) {
+                if (!dateString) return '-';
+                return moment(dateString).format('M/D H:mm');
+            },
+            
+            async moveToMainProject(project) {
+                try {
+                    const formData = new FormData();
+                    formData.append('model', 'project');
+                    formData.append('method', 'edit');
+                    formData.append('id', project.id);
+                    formData.append('is_kadai', '0');
+                    
+                    const response = await axios.post('/api/index.php?model=project&method=edit', formData);
+                    
+                    if (response.data.status === 'success') {
+                        showMessage('プロジェクトをメインプロジェクトに移動しました。');
+                        // Refresh both lists
+                        await this.loadKadaiProjects();
+                        if (projectTable) {
+                            projectTable.ajax.reload();
+                        }
+                    } else {
+                        showMessage('プロジェクトの移動に失敗しました。', true);
+                    }
+                } catch (error) {
+                    console.error('Error moving project:', error);
+                    showMessage('プロジェクトの移動に失敗しました。', true);
+                }
+            },
+            
+            async confirmProject(project) {
+                try {
+                    // Hiển thị confirm dialog
+                    if (!confirm(`プロジェクト「${project.name}」を承認しますか？\n\nこの操作により、プロジェクトは課題案件から削除され、メインプロジェクトリストに表示されます。`)) {
+                        return;
+                    }
+                    
+                    const formData = new FormData();
+                    formData.append('model', 'project');
+                    formData.append('method', 'confirm');
+                    formData.append('id', project.id);
+                    
+                    const response = await axios.post('/api/index.php?model=project&method=confirm', formData);
+                    
+                    if (response.data.status === 'success') {
+                        showMessage('プロジェクトを承認しました。課題案件から削除されました。');
+                        // Refresh both lists
+                        await this.loadKadaiProjects();
+                        if (projectTable) {
+                            projectTable.ajax.reload();
+                        }
+                    } else {
+                        showMessage(response.data.message || 'プロジェクトの承認に失敗しました。', true);
+                    }
+                } catch (error) {
+                    console.error('Error confirming project:', error);
+                    showMessage('プロジェクトの承認に失敗しました。', true);
+                }
+            },
+            
+
         },
         watch: {
             // 'newProject': {

@@ -146,6 +146,12 @@ class Project extends ApplicationModel {
             if (!$hasStatus && !$showInactive) {
                 $whereArr[] = "p.status NOT IN ('completed', 'cancelled', 'deleted')";
             }
+            
+            // Mặc định không hiển thị những dự án có is_kadai = 1, trừ khi showKadai = 1
+            $showKadai = isset($_GET['showKadai']) && $_GET['showKadai'] == '1';
+            if (!$showKadai) {
+                $whereArr[] = "p.is_kadai != 1";
+            }
         }
 
         $where = implode(" AND ", $whereArr);
@@ -206,6 +212,65 @@ class Project extends ApplicationModel {
             'draw' => $draw,
             'recordsTotal' => $totalRecords,
             'recordsFiltered' => $filteredRecords,
+            'data' => $data
+        );
+    }
+    
+    function list_kadai() {
+        $whereArr = [];
+
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : null;
+        
+        // Add permission check
+        $user_id = $_SESSION['id'];
+        $is_department_manager = false;
+        
+        if ($_SESSION['authority'] != 'administrator' && !$is_department_manager) {
+            $whereArr[] = sprintf(
+                "(p.created_by = %d OR EXISTS (
+                    SELECT 1 FROM " . DB_PREFIX . "project_members pm 
+                    WHERE pm.project_id = p.id AND pm.user_id = %d
+                ))",
+                $user_id,
+                $user_id
+            );
+        }
+        
+        // Only show kadai projects
+        $whereArr[] = "p.is_kadai = 1";
+        
+        // Exclude deleted projects
+        $whereArr[] = "p.status != 'deleted'";
+
+        // If department_id is set, add the department_id to the where clause
+        if ($department_id) {
+            $whereArr[] = sprintf("p.department_id = %d", $department_id);
+        }
+        
+        $where = implode(" AND ", $whereArr);
+        if (!empty($where)) {
+            $where = " WHERE " . $where;
+        }
+        
+        // Get data for kadai projects
+        $query = sprintf(
+            "SELECT p.*, d.name as department_name,
+            c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
+            CONCAT(c.name, ' ', c.title) as customer_name,
+            pp.company_name as parent_company_name, pp.contact_name as parent_contact_name
+            FROM {$this->table} p 
+            JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+            LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
+            LEFT JOIN " . DB_PREFIX . "customer c ON c.company_name = pp.company_name AND c.name = pp.contact_name
+            %s
+            ORDER BY p.created_at DESC",
+            $where
+        );
+        
+        $data = $this->fetchAll($query);
+        
+        return array(
+            'status' => 'success',
             'data' => $data
         );
     }
@@ -2404,6 +2469,63 @@ class Project extends ApplicationModel {
             
         } catch (Exception $e) {
             error_log('Error in updateAmount: ' . $e->getMessage());
+            return ['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Confirm a kadai project (change is_kadai from 1 to 0)
+     * @param array $params Array containing 'id'
+     * @return array Status response
+     */
+    function confirm($params = null) {
+        try {
+            // Get parameters
+            $id = isset($_POST['id']) ? intval($_POST['id']) : (isset($params['id']) ? intval($params['id']) : 0);
+            
+            // Validate input
+            if (!$id) {
+                return ['status' => 'error', 'message' => 'ID is required'];
+            }
+            
+            // Check if project exists
+            $existingProject = $this->getById($id);
+            if (!$existingProject) {
+                return ['status' => 'error', 'message' => 'Project not found'];
+            }
+            
+            // Check if project is currently a kadai project
+            if ($existingProject['is_kadai'] != 1) {
+                return ['status' => 'error', 'message' => 'This project is not a kadai project'];
+            }
+            
+            // Prepare update data
+            $data = array(
+                'status' => 'open',
+                'is_kadai' => 0,
+                'updated_at' => date('Y-m-d H:i:s'),
+                'updated_by' => $_SESSION['userid']
+            );
+            
+            // Perform update
+            $result = $this->query_update($data, ['id' => $id]);
+            
+            if ($result) {
+                return [
+                    'status' => 'success', 
+                    'message' => 'Project confirmed successfully',
+                    'data' => [
+                        'id' => $id,
+                        'is_kadai' => 0,
+                        'updated_at' => $data['updated_at']
+                    ]
+                ];
+            } else {
+                return ['status' => 'error', 'message' => 'Failed to confirm project'];
+            }
+            
+        } catch (Exception $e) {
+            error_log('Error in confirm: ' . $e->getMessage());
             return ['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()];
         }
     }

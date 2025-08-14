@@ -13,7 +13,7 @@ if (!$project_id) {
     <div v-if="canViewProject">
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">
-                <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-label-info">#P{{ project?.project_number }}</span></a>
+                <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-label-info">#{{ project?.project_number }}</span></a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar" aria-controls="projectNavbar" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
                 </button>
@@ -46,7 +46,7 @@ if (!$project_id) {
                 </a>
                 <a :href="'../parent_project/detail.php?id=' + project.parent_project_id" class="btn btn-outline-primary" title="親プロジェクト詳細">
                     <i class="fa fa-external-link me-2"></i>
-                    <span data-i18n="詳細">詳細</span>
+                    <span data-i18n="建物詳細">建物詳細</span>
                 </a>
             </div>
 
@@ -57,10 +57,15 @@ if (!$project_id) {
                         <div class="d-flex justify-content-between align-items-center mb-4">
                             <h5 class="card-title"><span data-i18n="基本情報">基本情報</span></h5>
                             <div>
+                                <!-- Confirm Project Button for Kadai Projects -->
+                                <button v-if="project && project.is_kadai == 1 && !isEditMode && canEditProject" class="btn btn-success btn-sm me-2" @click="confirmKadaiProject" title="プロジェクトを承認">
+                                    <i class="fa fa-check me-1"></i>プロジェクトを承認
+                                </button>
+                                
                                 <!-- <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
                                     <i class="fa fa-copy"></i>
                                 </button> -->
-                                <button v-if="!isEditMode && canEditProject" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode" title="編集">
+                                <button v-if="!isEditMode && canEditProject && !(project && project.is_kadai == 1)" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode" title="編集">
                                     <i class="fa fa-pencil-alt"></i>
                                 </button>
                                 <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject" title="保存">
@@ -69,7 +74,7 @@ if (!$project_id) {
                                 <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit" title="キャンセル">
                                     <i class="fa fa-times"></i>
                                 </button>  
-                                <button v-if="!isEditMode && canDeleteProject" class="btn btn-outline-danger btn-sm" @click="deleteProject" title="削除">
+                                <button v-if="!isEditMode && canDeleteProject && !(project && project.is_kadai == 1)" class="btn btn-outline-danger btn-sm" @click="deleteProject" title="削除">
                                     <i class="fa fa-trash"></i>
                                 </button>
                             </div>
@@ -324,24 +329,31 @@ if (!$project_id) {
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <div>
-                                    <div class="btn-group" v-if="canEditProject">
-                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
-                                                :class="getStatusButtonClass(project.status)"
-                                                id="statusDropdown"
-                                                data-bs-toggle="dropdown" aria-expanded="false">
-                                            {{ getStatusLabel(project.status) }}
-                                        </button>
-                                        <ul class="dropdown-menu">
-                                            <li v-for="status in statuses" :key="status.value">
-                                                <a class="dropdown-item waves-effect" href="javascript:void(0);" 
-                                                @click="selectStatus(status.value)">
-                                                    {{ status.label }}
-                                                </a>
-                                            </li>
-                                        </ul>
+                                    <!-- For Kadai projects, show waiting status -->
+                                    <div v-if="project.is_kadai == 1">
+                                        <span class="badge bg-warning">承認待ち</span>
                                     </div>
+                                    <!-- For normal projects, show actual status -->
                                     <div v-else>
-                                        <span class="badge" :class="getStatusBadgeClass(project.status)">{{ getStatusLabel(project.status) }}</span>
+                                        <div class="btn-group" v-if="canEditProject">
+                                            <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
+                                                    :class="getStatusButtonClass(project.status)"
+                                                    id="statusDropdown"
+                                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                                {{ getStatusLabel(project.status) }}
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li v-for="status in statuses" :key="status.value">
+                                                    <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                                    @click="selectStatus(status.value)">
+                                                        {{ status.label }}
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        <div v-else>
+                                            <span class="badge" :class="getStatusBadgeClass(project.status)">{{ getStatusLabel(project.status) }}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -522,33 +534,13 @@ if (!$project_id) {
                 <div class="card mb-4 project-status-block">
                     <div class="card-header d-flex justify-content-start align-items-center">
                         <h5 class="card-title mb-0">業務書類</h5>
-                        <i class="fa fa-question-circle text-muted ms-2" 
-                        data-bs-toggle="tooltip" 
-                        data-bs-placement="top" 
-                        title="システム見積書作成機能は開発中です"></i>
                     </div>
                     <div class="card-body" v-if="project">
                         <div class="row g-3">
                             <div class="col-6 col-xl-3">
                                 <label class="form-label">見積書</label>
                                 <div>
-                                    <div class="btn-group w-100" v-if="canDocumentProject">
-                                        <button type="button" class="btn dropdown-toggle waves-effect waves-light fs-small px-1" 
-                                                :class="getEstimateStatusButtonClass(project.estimate_status)"
-                                                id="estimateStatusDropdown"
-                                                data-bs-toggle="dropdown" aria-expanded="false">
-                                            {{ getEstimateStatusLabel(project.estimate_status) }}
-                                        </button>
-                                        <ul class="dropdown-menu">
-                                            <li v-for="status in estimateStatuses" :key="status.value">
-                                                <a class="dropdown-item waves-effect" href="javascript:void(0);" 
-                                                @click="selectEstimateStatus(status.value)">
-                                                    {{ status.label }}
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                    <div v-else>
+                                    <div>
                                         <span class="badge" :class="getEstimateStatusBadgeClass(project.estimate_status)">{{ getEstimateStatusLabel(project.estimate_status) }}</span>
                                     </div>
                                 </div>
@@ -556,23 +548,7 @@ if (!$project_id) {
                             <div class="col-6 col-xl-3">
                                 <label class="form-label">請求書</label>
                                 <div>
-                                    <div class="btn-group w-100" v-if="canDocumentProject">
-                                        <button type="button" class="btn dropdown-toggle waves-effect waves-light fs-small px-1" 
-                                                :class="getInvoiceStatusButtonClass(project.invoice_status)"
-                                                id="invoiceStatusDropdown"
-                                                data-bs-toggle="dropdown" aria-expanded="false">
-                                            {{ getInvoiceStatusLabel(project.invoice_status) }}
-                                        </button>
-                                        <ul class="dropdown-menu">
-                                            <li v-for="status in invoiceStatuses" :key="status.value">
-                                                <a class="dropdown-item waves-effect" href="javascript:void(0);" 
-                                                @click="selectInvoiceStatus(status.value)">
-                                                    {{ status.label }}
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                    <div v-else>
+                                    <div>
                                         <span class="badge" :class="getInvoiceStatusBadgeClass(project.invoice_status)">{{ getInvoiceStatusLabel(project.invoice_status) }}</span>
                                     </div>
                                 </div>
@@ -580,8 +556,7 @@ if (!$project_id) {
                             <div class="col-12 col-xl-6">
                                 <label class="form-label">総額</label>
                                 <div class="input-group">
-                                    <input type="number" class="form-control" v-model="project.amount" placeholder="0" step="100" @input="updateAmount" v-if="canDocumentProject">
-                                    <input type="text" class="form-control bg-light" :value="formatCurrency(project.amount || 0)" readonly v-else>
+                                    <input type="text" class="form-control bg-light" :value="formatCurrency(project.amount || 0)" readonly>
                                     <span class="input-group-text">円</span>
                                 </div>
                             </div>
@@ -925,6 +900,27 @@ $view->footing();
     100% {
         box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
     }
+}
+
+/* Kadai project confirmation button styling */
+.btn-success[title="プロジェクトを承認"] {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    border: none;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+    transition: all 0.3s ease;
+}
+
+.btn-success[title="プロジェクトを承認"]:hover {
+    background: linear-gradient(135deg, #218838 0%, #1ba085 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+}
+
+/* Kadai status badge styling */
+.badge.bg-warning {
+    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%) !important;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    box-shadow: 0 2px 4px rgba(255, 193, 7, 0.2);
 }
 
 </style>

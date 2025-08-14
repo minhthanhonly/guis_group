@@ -45,7 +45,7 @@
                 </li>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'index') echo 'active'; ?>">
                   <a href="<?=$root?>project/" class="menu-link">
-                    <div data-i18n="一覧">一覧</div>
+                    <div data-i18n="案件一覧">案件一覧</div>
                   </a>
                 </li>
                 <!-- <li class="menu-item <?php if($directory == 'project' && $page == 'mytask') echo 'active'; ?>">

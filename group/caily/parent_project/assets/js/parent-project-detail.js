@@ -2620,6 +2620,15 @@ createApp({
             }
             return parseFloat(number).toFixed(2);
         },
+
+        formatCurrency(amount) {
+            // Format currency amount as integer with comma thousands separator (no currency symbol)
+            if (amount === null || amount === undefined || isNaN(amount)) {
+                return '0';
+            }
+            const integerAmount = Math.floor(parseFloat(amount));
+            return new Intl.NumberFormat('ja-JP').format(integerAmount);
+        },
         
         // Price list methods
         async loadPriceListData() {
@@ -3073,6 +3082,8 @@ createApp({
             } else {
                 this.selectedOrderItemIndexes.push(index);
             }
+            // Force Vue reactivity update
+            this.selectedOrderItemIndexes = [...this.selectedOrderItemIndexes];
         },
         selectAllOrderItems() {
             if (this.allOrderItemsSelected) {
@@ -3080,6 +3091,10 @@ createApp({
             } else {
                 this.selectedOrderItemIndexes = (this.newQuotation.items || []).map((_, idx) => idx);
             }
+            // Force Vue reactivity update
+            this.$nextTick(() => {
+                this.$forceUpdate();
+            });
         },
         deleteSelectedOrderItems() {
             if (!this.selectedOrderItemIndexes.length) return;
@@ -3961,10 +3976,20 @@ createApp({
             } else {
                 this.selectedOrderItemIndexesForEdit.push(index);
             }
+            // Force Vue reactivity update
+            this.selectedOrderItemIndexesForEdit = [...this.selectedOrderItemIndexesForEdit];
         },
 
         selectAllOrderItemsForEdit() {
-            this.selectedOrderItemIndexesForEdit = this.editingQuotation.items.map((_, index) => index);
+            if (this.allOrderItemsSelectedForEdit) {
+                this.selectedOrderItemIndexesForEdit = [];
+            } else {
+                this.selectedOrderItemIndexesForEdit = (this.editingQuotation.items || []).map((_, idx) => idx);
+            }
+            // Force Vue reactivity update
+            this.$nextTick(() => {
+                this.$forceUpdate();
+            });
         },
 
         deleteSelectedOrderItemsForEdit() {
