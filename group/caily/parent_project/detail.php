@@ -18,7 +18,7 @@ $view->heading('建物詳細');
         </div>
 
         <!-- Left Column - Parent Project Details -->
-        <div class="col-xl-8">
+        <div class="col-12 mb-3">
             <div class="card" :class="{ 'edit-mode': isEditMode }">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -157,19 +157,9 @@ $view->heading('建物詳細');
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
                                     <span data-i18n="プロジェクト番号">プロジェクト番号</span>
-                                    <button v-if="isEditMode" class="btn btn-sm btn-outline-primary py-0 small ms-2"
-                                        @click="generateProjectNumber" title="生成">
-                                        生成
-                                    </button>
                                 </label>
-                                <template v-if="isEditMode">
-                                    <input type="text" class="form-control" v-model="parentProject.project_number"
-                                        placeholder="プロジェクト番号を入力">
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control" :value="parentProject.project_number || '-'"
-                                        readonly>
-                                </template>
+                                <input type="text" class="form-control" :value="parentProject.project_number || '-'"
+                                    readonly>
                             </div>
                         </div>
                         <div class="col-md-4 col-xl-3">
@@ -488,16 +478,15 @@ $view->heading('建物詳細');
                                     <td>{{ formatDateTime(project.start_date) || '-' }}</td>
                                     <td>{{ formatDateTime(project.end_date) || '-' }}</td>
                                     <td>
-                                        <span class="badge" :class="getProjectStatusBadgeClass(project.status)">
+                                        <span v-if="project.is_kadai == 1" class="badge bg-warning">
+                                            承認待ち
+                                        </span>
+                                        <span v-else class="badge" :class="getProjectStatusBadgeClass(project.status)">
                                             {{ getProjectStatusLabel(project.status) }}
                                         </span>
                                     </td>
-                                    <td>
-                                        <div class="progress" style="height: 20px;">
-                                            <div class="progress-bar" :style="{ width: project.progress + '%' }">
-                                                {{ project.progress }}%
-                                            </div>
-                                        </div>
+                                    <td class="text-center">
+                                        <span class="fw-bold">{{ project.progress }}%</span>
                                     </td>
                                     <td class="text-end">
                                         <span class="fw-bold text-primary">
@@ -539,7 +528,7 @@ $view->heading('建物詳細');
         </div>
 
         <!-- Right Column - Quotations -->
-        <div class="col-xl-4">
+        <div class="col-12">
             <div class="card">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">

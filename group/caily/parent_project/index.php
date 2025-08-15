@@ -56,6 +56,7 @@ $view->heading('建物一覧');
                         <table v-else class="table table-hover">
                             <thead>
                                 <tr>
+                                    <th>プロジェクト番号</th>
                                     <th>会社名</th>
                                     <th>お施主様名</th>
                                     <th>工事番号</th>
@@ -70,6 +71,9 @@ $view->heading('建物一覧');
                             </thead>
                             <tbody>
                                 <tr v-for="project in filteredParentProjects" :key="project.id">
+                                    <td>
+                                        <span class="badge bg-label-info">{{ project.project_number || '-' }}</span>
+                                    </td>
                                     <td>{{ project.company_name }}</td>
                                     <td>
                                         <a :href="'detail.php?id=' + project.id" class="text-decoration-none" 
@@ -113,7 +117,7 @@ $view->heading('建物一覧');
                                     </td>
                                 </tr>
                                 <tr v-if="filteredParentProjects.length === 0">
-                                    <td colspan="10" class="text-center py-4">
+                                    <td colspan="11" class="text-center py-4">
                                         <div class="text-muted">
                                             <i class="fa fa-inbox fa-2x mb-2"></i>
                                             <p>親プロジェクトが見つかりません</p>
