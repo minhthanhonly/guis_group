@@ -1955,118 +1955,14 @@ $view->heading('建物詳細');
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="viewQuotationModalLabel">見積書</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body" v-if="selectedQuotation">
-                    <div class="quotation-document">
-                        <div class="text-center mb-4">
-                            <h3 class="mb-2">見積書</h3>
-                            <p class="text-muted">{{ formatJapaneseDate(selectedQuotation.issue_date) }}</p>
-                            <p class="text-muted">#No: {{ selectedQuotation.quotation_number }}</p>
-                            <p class="text-muted">
-                                <span class="badge" :class="getQuotationStatusBadgeClass(selectedQuotation.status)">
-                                    {{ selectedQuotation.status || '下書き' }}
-                                </span>
-                            </p>
-                        </div>
-
-                        <div class="row mb-4">
-                            <div class="col-md-6">
-                                <h6>発注者</h6>
-                                <p class="mb-1"><strong>{{ selectedQuotation.sender_company }}</strong></p>
-                                <p class="mb-1">{{ selectedQuotation.sender_address }}</p>
-                                <p class="mb-0">担当: {{ selectedQuotation.sender_contact }}</p>
-                            </div>
-                            <div class="col-md-6">
-                                <h6>受注者</h6>
-                                <p class="mb-1"><strong>{{ selectedQuotation.receiver_company }}</strong></p>
-                                <p class="mb-1">{{ selectedQuotation.receiver_address }}</p>
-                                <p class="mb-1" v-if="selectedQuotation.receiver_tel">TEL: {{ selectedQuotation.receiver_tel
-                                    }}</p>
-                                <p class="mb-1" v-if="selectedQuotation.receiver_fax">FAX: {{ selectedQuotation.receiver_fax
-                                    }}</p>
-                                <p class="mb-1" v-if="selectedQuotation.receiver_registration_number">登録番号: {{
-                                    selectedQuotation.receiver_registration_number }}</p>
-                                <p class="mb-0">担当: {{ selectedQuotation.receiver_contact }}</p>
-                            </div>
-                        </div>
-
-                        <div class="table-responsive mb-4">
-                            <table class="table table-bordered">
-                                <thead>
-                                    <tr>
-                                        <th>件名</th>
-                                        <th>商品コード</th>
-                                        <th>品名</th>
-                                        <th>数量</th>
-                                        <th>単位</th>
-                                        <th>単価</th>
-                                        <th>金額</th>
-                                        <th>備考</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="item in selectedQuotation.items" :key="item.id">
-                                        <td>{{ item.title }}</td>
-                                        <td>{{ item.is_set ? '-' : item.product_code }}</td>
-                                        <td>{{ item.product_name }}</td>
-                                        <td class="text-end">{{ formatNumber(item.quantity) }}</td>
-                                        <td>{{ item.unit }}</td>
-                                        <td class="text-end">{{ formatPrice(item.unit_price) }}</td>
-                                        <td class="text-end">{{ formatPrice(item.amount) }}</td>
-                                        <td>{{ item.notes }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="card">
-                                    <div class="card-body">
-                                        <h6>その他情報</h6>
-                                        <p class="mb-1"><strong>納入期限:</strong> {{ selectedQuotation.delivery_date || '-' }}
-                                        </p>
-                                        <p class="mb-1"><strong>納入場所:</strong> {{ selectedQuotation.delivery_location || '-'
-                                            }}</p>
-                                        <p class="mb-1"><strong>取引方法:</strong> {{ selectedQuotation.payment_method || '-' }}
-                                        </p>
-                                        <p class="mb-1"><strong>有効期限:</strong> {{ formatDate(selectedQuotation.valid_until)
-                                            || '-' }}</p>
-                                        <p class="mb-0"><strong>備考:</strong> {{ selectedQuotation.notes || '-' }}</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="card">
-                                    <div class="card-body">
-                                        <h6>金額計算</h6>
-                                        <div class="d-flex justify-content-between">
-                                            <span>合計:</span>
-                                            <span>{{ formatPrice(selectedQuotation.total_amount) }}</span>
-                                        </div>
-                                        <div class="d-flex justify-content-between">
-                                            <span>消費税等 ({{ selectedQuotation.tax_rate }}%):</span>
-                                            <span>{{ formatPrice(selectedQuotation.total_amount * selectedQuotation.tax_rate
-                                                / 100) }}</span>
-                                        </div>
-                                        <hr>
-                                        <div class="d-flex justify-content-between">
-                                            <strong>税込合計:</strong>
-                                            <strong>{{ formatPrice(selectedQuotation.total_with_tax) }}</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-                    <button type="button" class="btn btn-primary" @click="printQuotation">
-                        <i class="fa fa-print me-1"></i> 印刷
-                    </button>
+                <div class="modal-body p-0" v-if="selectedQuotation">
+                    <iframe 
+                        :src="`quotation_view.php?id=${selectedQuotation.id}`"
+                        style="width: 100%; height: 80vh; border: none;"
+                        frameborder="0">
+                    </iframe>
                 </div>
             </div>
         </div>
@@ -2383,38 +2279,150 @@ $view->footing();
         margin: 2px;
     }
 
+    /* Quotation view modal background */
+    .quotation-view-body {
+        background-color: #ffffff !important;
+        padding: 40px !important;
+    }
+
+    .quotation-view-body .modal-content {
+        background-color: #ffffff !important;
+    }
+
+    #viewQuotationModal .modal-content {
+        background-color: #ffffff !important;
+    }
+
+    #viewQuotationModal .modal-body {
+        background-color: #ffffff !important;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+
     /* Quotation document styles */
     .quotation-document {
         font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
         line-height: 1.6;
+        background-color: #ffffff;
+        padding: 20px;
+        color: #000;
     }
 
-    .quotation-document h3 {
-        font-size: 1.5rem;
+    .quotation-document h2 {
+        font-size: 1.8rem;
         font-weight: bold;
-        color: #333;
+        color: #000;
+        text-decoration: underline;
+        text-decoration-thickness: 3px;
+    }
+
+    .quotation-document h5 {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #000;
+        margin-bottom: 0.5rem;
     }
 
     .quotation-document h6 {
         font-size: 1rem;
         font-weight: bold;
-        color: #555;
+        color: #000;
         margin-bottom: 0.5rem;
     }
 
-    .quotation-document .table {
+    /* Summary tables styling */
+    .quotation-summary-table,
+    .quotation-details-table {
         font-size: 0.9rem;
+        border: 2px solid #000 !important;
+        background-color: #ffffff;
     }
 
-    .quotation-document .table th {
+    .quotation-summary-table th,
+    .quotation-summary-table td,
+    .quotation-details-table th,
+    .quotation-details-table td {
+        border: 1px solid #000 !important;
+        padding: 8px 12px;
+        vertical-align: middle;
+        color: #000;
+        background-color: #ffffff;
+    }
+
+    .quotation-summary-table .fw-bold,
+    .quotation-details-table .fw-bold {
+        font-weight: bold;
         background-color: #f8f9fa;
+    }
+
+    /* Items table styling */
+    .quotation-items-table {
+        font-size: 0.85rem;
+        border: 2px solid #000 !important;
+        background-color: #ffffff;
+    }
+
+    .quotation-items-table th {
+        background-color: #f8f9fa !important;
         font-weight: bold;
         text-align: center;
         vertical-align: middle;
+        border: 1px solid #000 !important;
+        color: #000;
+        padding: 8px 4px;
     }
 
-    .quotation-document .table td {
+    .quotation-items-table td {
         vertical-align: middle;
+        border: 1px solid #000 !important;
+        color: #000;
+        background-color: #ffffff;
+        padding: 6px 4px;
+    }
+
+    .quotation-items-table .table-secondary {
+        background-color: #f8f9fa !important;
+    }
+
+    .quotation-items-table .table-secondary td {
+        background-color: #f8f9fa !important;
+        font-weight: bold;
+    }
+
+    /* Company seal styling */
+    .company-seal {
+        width: 60px;
+        height: 60px;
+        border: 2px solid #d32f2f;
+        border-radius: 50%;
+        background-color: #ffffff;
+        position: relative;
+    }
+
+    .company-seal::after {
+        content: "印";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #d32f2f;
+        font-weight: bold;
+        font-size: 1.2rem;
+    }
+
+    /* Text styling */
+    .quotation-details-text {
+        line-height: 1.4;
+        color: #000;
+    }
+
+    .sender-info {
+        color: #000;
+        font-size: 0.9rem;
+    }
+
+    .sender-info .fw-bold {
+        font-weight: bold;
     }
 
     .quotation-document .text-end {
@@ -2424,6 +2432,7 @@ $view->footing();
     .quotation-document .card {
         border: 1px solid #dee2e6;
         box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        background-color: #ffffff;
     }
 
     .quotation-document .card-header {
@@ -2434,12 +2443,57 @@ $view->footing();
 
     /* Print styles for quotation */
     @media print {
+        /* Hide everything by default */
+        body * {
+            visibility: hidden;
+        }
+        
+        /* Show only the quotation modal content */
+        #viewQuotationModal,
+        #viewQuotationModal * {
+            visibility: visible;
+        }
+        
+        /* Reset modal positioning for print */
+        #viewQuotationModal .modal-dialog {
+            position: static !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            transform: none !important;
+        }
+        
+        #viewQuotationModal .modal-content {
+            border: none !important;
+            box-shadow: none !important;
+            background: white !important;
+        }
+        
+        #viewQuotationModal .modal-body {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
         .quotation-document {
-            font-size: 12pt;
+            font-size: 11pt;
+            padding: 15px !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+            background: white !important;
         }
 
         .quotation-document .table {
-            font-size: 10pt;
+            font-size: 9pt;
+        }
+        
+        .quotation-document h2 {
+            font-size: 14pt;
+        }
+        
+        .quotation-document h5 {
+            font-size: 11pt;
         }
 
         .quotation-document .card {
@@ -2447,8 +2501,37 @@ $view->footing();
             box-shadow: none;
         }
 
-        .modal-footer {
-            display: none;
+        /* Hide modal chrome elements */
+        .modal-header,
+        .modal-footer,
+        .modal-backdrop,
+        .navbar,
+        .btn-close {
+            display: none !important;
+        }
+        
+        /* Page settings */
+        @page {
+            margin: 10mm;
+            size: A4;
+        }
+        
+        /* Ensure proper table borders for print */
+        .quotation-summary-table,
+        .quotation-details-table,
+        .quotation-items-table {
+            border-collapse: collapse !important;
+        }
+        
+        .quotation-summary-table th,
+        .quotation-summary-table td,
+        .quotation-details-table th,
+        .quotation-details-table td,
+        .quotation-items-table th,
+        .quotation-items-table td {
+            border: 1px solid #000 !important;
+            -webkit-print-color-adjust: exact;
+            color-adjust: exact;
         }
     }
 

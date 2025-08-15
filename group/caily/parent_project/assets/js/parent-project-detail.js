@@ -2532,8 +2532,52 @@ createApp({
             }
         },
 
+        // Open quotation in new tab for printing
+        openQuotationInNewTab() {
+            if (this.selectedQuotation && this.selectedQuotation.id) {
+                const url = `quotation_view.php?id=${this.selectedQuotation.id}`;
+                window.open(url, '_blank');
+            }
+        },
+
+        // Download PDF directly using html2pdf library
+        async downloadQuotationPDF() {
+            if (this.selectedQuotation && this.selectedQuotation.id) {
+                try {
+                    // First try to access iframe function
+                    const iframe = document.querySelector('#viewQuotationModal iframe');
+                    if (iframe && iframe.contentWindow && iframe.contentWindow.downloadPDF) {
+                        iframe.contentWindow.downloadPDF();
+                        return;
+                    }
+                } catch (error) {
+                    console.log('Iframe method failed, trying alternative approach');
+                }
+                
+                // Alternative: Load html2pdf and generate PDF from new window
+                const quotationWindow = window.open(`quotation_view.php?id=${this.selectedQuotation.id}`, '_blank');
+                
+                // Wait a bit for the window to load, then trigger PDF download
+                setTimeout(() => {
+                    try {
+                        if (quotationWindow && quotationWindow.downloadPDF) {
+                            quotationWindow.downloadPDF();
+                        }
+                    } catch (error) {
+                        console.log('Auto PDF download failed, user can use the PDF button in the new window');
+                    }
+                }, 2000);
+            }
+        },
+
+        // Legacy print function (for backward compatibility)
         printQuotation() {
-            window.print();
+            this.openQuotationInNewTab();
+        },
+
+        // Legacy export function (for backward compatibility)
+        exportQuotationPDF() {
+            this.downloadQuotationPDF();
         },
 
         formatJapaneseDate(dateString) {
