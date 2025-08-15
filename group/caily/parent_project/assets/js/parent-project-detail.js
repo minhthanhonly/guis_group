@@ -1767,12 +1767,14 @@ createApp({
                         addressParts.push(`〒${selectedBranch.postal_code}`);
                     }
                     if (selectedBranch.address1) {
+                        addressParts.push('　');
                         addressParts.push(selectedBranch.address1);
                     }
                     if (selectedBranch.address2) {
+                        addressParts.push('\n');
                         addressParts.push(selectedBranch.address2);
                     }
-                    this.newQuotation.receiver_address = addressParts.join(' ');
+                    this.newQuotation.receiver_address = addressParts.join('');
                     this.newQuotation.receiver_tel = selectedBranch.tel || '';
                     this.newQuotation.receiver_fax = selectedBranch.fax || '';
                     this.newQuotation.receiver_registration_number = selectedBranch.registration_number || '';
@@ -1928,7 +1930,7 @@ createApp({
                 quotation_number: this.generateQuotationNumber(),
                 sender_company: this.parentProject?.company_name || '',
                 sender_address: '',
-                sender_contact: this.parentProject?.contact_name || '',
+                sender_contact: this.parentProject?.contact_name ? this.parentProject.contact_name + '様' : '',
                 selected_branch_id: '',
                 receiver_company: '',
                 receiver_address: '',
@@ -3895,8 +3897,8 @@ createApp({
                         }
                     }
                     
-                    // Trigger branch selection to populate address if branch is selected
-                    if (this.editingQuotation.selected_branch_id) {
+                    // Trigger branch selection to populate address if branch is selected and address is empty
+                    if (this.editingQuotation.selected_branch_id && (!this.editingQuotation.receiver_address || this.editingQuotation.receiver_address.trim() === '')) {
                         this.onBranchSelectForEdit();
                     }
                     
@@ -4456,18 +4458,25 @@ createApp({
                 const selectedBranch = this.quotationBranches.find(branch => branch.id == this.editingQuotation.selected_branch_id);
                 if (selectedBranch) {
                     this.editingQuotation.receiver_company = selectedBranch.company_name || selectedBranch.name;
-                    // Include postal_code in the address field
-                    const addressParts = [];
-                    if (selectedBranch.postal_code) {
-                        addressParts.push(`〒${selectedBranch.postal_code}`);
+                    
+                    // Only update address if it's not already set or if branch has changed
+                    // This preserves existing line breaks in the address
+                    if (!this.editingQuotation.receiver_address || this.editingQuotation.receiver_address.trim() === '') {
+                        // Include postal_code in the address field
+                        const addressParts = [];
+                        if (selectedBranch.postal_code) {
+                            addressParts.push(`〒${selectedBranch.postal_code}`);
+                        }
+                        if (selectedBranch.address1) {
+                            addressParts.push('　');
+                            addressParts.push(selectedBranch.address1);
+                        }
+                        if (selectedBranch.address2) {
+                            addressParts.push('\n');
+                            addressParts.push(selectedBranch.address2);
+                        }
+                        this.editingQuotation.receiver_address = addressParts.join('');
                     }
-                    if (selectedBranch.address1) {
-                        addressParts.push(selectedBranch.address1);
-                    }
-                    if (selectedBranch.address2) {
-                        addressParts.push(selectedBranch.address2);
-                    }
-                    this.editingQuotation.receiver_address = addressParts.join(' ');
                     this.editingQuotation.receiver_tel = selectedBranch.tel || '';
                     this.editingQuotation.receiver_fax = selectedBranch.fax || '';
                     this.editingQuotation.receiver_registration_number = selectedBranch.registration_number || '';

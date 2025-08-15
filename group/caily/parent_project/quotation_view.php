@@ -507,7 +507,7 @@ function formatJapaneseDate($dateString) {
                 <!-- Left: Company info -->
                 <div class="col-md-6">
                     <div class="font-12"><?php echo htmlspecialchars($quotation['sender_company']); ?></div>
-                    <div class="font-10"><?php echo htmlspecialchars($quotation['sender_address']); ?></div>
+                    <div class="font-9"><?php echo str_replace("\n", '<br>', htmlspecialchars($quotation['sender_address'])); ?></div>
                     <?php if ($quotation['sender_contact']): ?>
                     <div class="mb-3 font-12"><?php echo htmlspecialchars($quotation['sender_contact']); ?></div>
                     <?php endif; ?>
@@ -530,10 +530,10 @@ function formatJapaneseDate($dateString) {
                             title="<?php echo htmlspecialchars($companySeal['name']); ?>">
                          <?php endif; ?>
                         <div class="font-10"><?php echo htmlspecialchars($quotation['receiver_company']); ?></div>
-                        <?php if ($quotation['receiver_address']): ?>
-                        <div class="font-9"><?php echo htmlspecialchars($quotation['receiver_address']); ?></div>
-                        <?php endif; ?>
-                        <div class="d-flex gap-4 font-9">
+                                <?php if ($quotation['receiver_address']): ?>
+        <div class="font-9"><?php echo str_replace("\n", '<br>', htmlspecialchars($quotation['receiver_address'])); ?></div>
+        <?php endif; ?>
+                        <div class="d-flex gap-2 font-9" style="padding-right: 7em;">
                             <?php if ($quotation['receiver_tel']): ?>
                             <div >TEL　<?php echo htmlspecialchars($quotation['receiver_tel']); ?></div>
                             <?php endif; ?>
