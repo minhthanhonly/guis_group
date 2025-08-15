@@ -1100,6 +1100,21 @@ $view->heading('建物詳細');
                                 </div>
                             </div>
 
+                            <!-- Subject -->
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">件名</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <input type="text" class="form-control" v-model="newQuotation.subject" 
+                                                placeholder="件名を入力してください">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Order Items -->
                             <div class="col-12">
                                 <div class="card">
@@ -1634,7 +1649,7 @@ $view->heading('建物詳細');
                                                 <option value="">担当者を選択してください</option>
                                                 <option v-for="user in quotationUsers" :key="user.id"
                                                     :value="user.realname">
-                                                    {{ user.realname }}
+                                                    {{ user.realname }}{{ user.is_inactive ? ' (退職済み)' : '' }}
                                                 </option>
                                             </select>
                                             <!-- Seal display area -->
@@ -1658,7 +1673,30 @@ $view->heading('建物詳細');
                                                     <span>選択された担当者の印鑑が見つかりません。</span>
                                                 </div>
                                             </div>
+                                            <!-- Warning for inactive user -->
+                                            <div v-if="editingQuotation.receiver_contact && quotationUsers.find(u => u.realname === editingQuotation.receiver_contact && u.is_inactive)"
+                                                class="mt-2">
+                                                <div class="alert alert-info d-flex align-items-center">
+                                                    <i class="bi bi-info-circle me-2"></i>
+                                                    <span>この担当者は退職済みです。印鑑は保存されたものが使用されます。</span>
+                                                </div>
+                                            </div>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Subject -->
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">件名</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <input type="text" class="form-control" v-model="editingQuotation.subject" 
+                                            placeholder="件名を入力してください">
                                     </div>
                                 </div>
                             </div>
@@ -1959,7 +1997,7 @@ $view->heading('建物詳細');
                 </div>
                 <div class="modal-body p-0" v-if="selectedQuotation">
                     <iframe 
-                        :src="`quotation_view.php?id=${selectedQuotation.id}`"
+                        :src="`quotation_view.php?id=${selectedQuotation.id}&t=${selectedQuotation.timestamp}`"
                         style="width: 100%; height: 80vh; border: none;"
                         frameborder="0">
                     </iframe>

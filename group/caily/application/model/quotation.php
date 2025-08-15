@@ -14,6 +14,7 @@ class Quotation extends ApplicationModel {
             'receiver_company' => array('notnull'),
             'receiver_address' => array(),
             'receiver_contact' => array(),
+            'receiver_seal_path' => array(),
             'receiver_tel' => array(),
             'receiver_fax' => array(),
             'receiver_registration_number' => array(),
@@ -25,6 +26,7 @@ class Quotation extends ApplicationModel {
             'payment_method' => array(),
             'valid_until_type' => array(),
             'valid_until' => array(),
+            'subject' => array(),
             'notes' => array(),
             'parent_project_id' => array('notnull'),
             'selected_child_project_ids' => array(),
@@ -694,6 +696,34 @@ class Quotation extends ApplicationModel {
         } catch (Exception $e) {
             error_log('Quotation status update error: ' . $e->getMessage());
             return ['status' => 'error', 'error' => 'データベースエラー: ' . $e->getMessage()];
+        }
+    }
+
+    function getCompanySeal() {
+        try {
+            $query = sprintf(
+                "SELECT image_path, name FROM %s 
+                WHERE type = 'company' 
+                AND is_active = 1 
+                ORDER BY created_at ASC 
+                LIMIT 1",
+                DB_PREFIX . 'seals'
+            );
+            
+            $result = $this->fetchOne($query);
+            
+            if ($result) {
+                return [
+                    'image_path' => $result['image_path'],
+                    'name' => $result['name']
+                ];
+            }
+            
+            return null;
+            
+        } catch (Exception $e) {
+            error_log("Error getting company seal: " . $e->getMessage());
+            return null;
         }
     }
 } 

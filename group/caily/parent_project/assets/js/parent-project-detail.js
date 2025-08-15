@@ -1810,7 +1810,7 @@ createApp({
         }
     },
 
-            async loadContactSeal(userId) {
+   async loadContactSeal(userId) {
         try {
             const response = await axios.get(`/api/index.php?model=seal&method=getSealsByUser&user_id=${userId}`);
             if (response.data && response.data.length > 0) {
@@ -1841,6 +1841,13 @@ createApp({
         
         // Load seal for the selected user
         await this.loadContactSeal(selectedUser.userid);
+        
+        // Save seal path to quotation data
+        if (this.selectedContactSeal && this.selectedContactSeal.image_path) {
+            this.newQuotation.receiver_seal_path = this.selectedContactSeal.image_path;
+        } else {
+            this.newQuotation.receiver_seal_path = '';
+        }
     },
 
         showCreateQuotationModal() {
@@ -1926,6 +1933,7 @@ createApp({
                 receiver_company: '',
                 receiver_address: '',
                 receiver_contact: CURRENT_USER_NAME || '',
+                receiver_seal_path: '',
                 receiver_tel: '',
                 receiver_fax: '',
                 receiver_registration_number: '',
@@ -1939,6 +1947,7 @@ createApp({
                 payment_method: '電子納品', // Initialized
                 valid_until_type: '1_month', // Initialized
                 valid_until: '',
+                subject: '',
                 notes: '',
                 parent_project_id: PARENT_PROJECT_ID
             };
@@ -2484,7 +2493,11 @@ createApp({
         },
 
         showQuotationModal(quotation) {
-            this.selectedQuotation = quotation;
+            // Create a copy with timestamp to force iframe reload
+            this.selectedQuotation = {
+                ...quotation,
+                timestamp: Date.now()
+            };
             const modal = new bootstrap.Modal(document.getElementById('viewQuotationModal'));
             modal.show();
         },
@@ -3867,6 +3880,21 @@ createApp({
                         await this.loadQuotationUsers();
                     }
                     
+                    // Ensure current receiver_contact is in the quotationUsers list
+                    // This handles cases where the user is no longer active
+                    if (this.editingQuotation.receiver_contact) {
+                        const existingUser = this.quotationUsers.find(user => user.realname === this.editingQuotation.receiver_contact);
+                        if (!existingUser) {
+                            // Add the inactive user to the list with a special flag
+                            this.quotationUsers.push({
+                                id: 'inactive_user',
+                                userid: 'inactive_user', 
+                                realname: this.editingQuotation.receiver_contact,
+                                is_inactive: true
+                            });
+                        }
+                    }
+                    
                     // Trigger branch selection to populate address if branch is selected
                     if (this.editingQuotation.selected_branch_id) {
                         this.onBranchSelectForEdit();
@@ -4169,6 +4197,7 @@ createApp({
                 // Prepare data for update
                 const formData = new FormData();
                 formData.append('id', this.editingQuotation.id);
+                formData.append('subject', this.editingQuotation.subject);
                 formData.append('issue_date', this.editingQuotation.issue_date);
                 formData.append('quotation_number', this.editingQuotation.quotation_number);
                 formData.append('sender_company', this.editingQuotation.sender_company);
@@ -4177,6 +4206,7 @@ createApp({
                 formData.append('receiver_company', this.editingQuotation.receiver_company);
                 formData.append('receiver_address', this.editingQuotation.receiver_address);
                 formData.append('receiver_contact', this.editingQuotation.receiver_contact);
+                formData.append('receiver_seal_path', this.editingQuotation.receiver_seal_path || '');
                 formData.append('receiver_tel', this.editingQuotation.receiver_tel);
                 formData.append('receiver_fax', this.editingQuotation.receiver_fax);
                 formData.append('receiver_registration_number', this.editingQuotation.receiver_registration_number);
@@ -4457,6 +4487,7 @@ createApp({
             this.selectedContactSealForEdit = null;
             
             if (!this.editingQuotation.receiver_contact) {
+                // Keep existing seal path if just clearing contact
                 return;
             }
             
@@ -4466,8 +4497,22 @@ createApp({
                 return;
             }
             
+            // If user is inactive, preserve existing seal path
+            if (selectedUser.is_inactive) {
+                console.log('Selected inactive user, preserving existing seal path');
+                // Don't clear the existing receiver_seal_path
+                return;
+            }
+            
             // Load seal for the selected user using the same logic as create modal
             await this.loadContactSealForEdit(selectedUser.userid);
+            
+            // Save seal path to quotation data
+            if (this.selectedContactSealForEdit && this.selectedContactSealForEdit.image_path) {
+                this.editingQuotation.receiver_seal_path = this.selectedContactSealForEdit.image_path;
+            } else {
+                this.editingQuotation.receiver_seal_path = '';
+            }
         },
 
         async loadContactSealForEdit(userId) {
