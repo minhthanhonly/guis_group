@@ -202,14 +202,8 @@ createApp({
     watch: {
         'newQuotation.items': {
             handler(newItems, oldItems) {
-                // Ensure product_code is empty for set products
-                if (newItems && Array.isArray(newItems)) {
-                    newItems.forEach(item => {
-                        if (item && item.is_set && item.product_code && item.product_code.trim() !== '') {
-                            item.product_code = '';
-                        }
-                    });
-                }
+                // Allow product_code to be freely entered even for set products
+                // Removed the restriction that was clearing product_code for set products
                 
                 // Auto-validate project_id selection
                 this.validateProjectIdSelection();
@@ -238,14 +232,8 @@ createApp({
         },
         'editingQuotation.items': {
             handler(newItems, oldItems) {
-                // Ensure product_code is empty for set products
-                if (newItems && Array.isArray(newItems)) {
-                    newItems.forEach(item => {
-                        if (item && item.is_set && item.product_code && item.product_code.trim() !== '') {
-                            item.product_code = '';
-                        }
-                    });
-                }
+                // Allow product_code to be freely entered even for set products
+                // Removed the restriction that was clearing product_code for set products
                 
                 // Auto-validate project_id selection
                 this.validateProjectIdSelectionForEdit();
@@ -1877,10 +1865,8 @@ createApp({
                         if (!item.hasOwnProperty('_oldProjectId')) {
                             item._oldProjectId = item.project_id || '';
                         }
-                        // Ensure product_code is empty for set products
-                        if (item.is_set && item.product_code && item.product_code.trim() !== '') {
-                            item.product_code = '';
-                        }
+                        // Allow product_code to be freely entered even for set products
+                        // Removed the restriction that was clearing product_code for set products
                     });
                 }
                 
@@ -3141,7 +3127,8 @@ createApp({
             }
             
             const total = products.reduce((sum, p) => sum + (p.price || 0) * (p.quantity || 1), 0);
-            item.product_code = ''; // Set empty for set products
+            // Allow product_code to be freely entered even for set products
+            // Removed the restriction that was clearing product_code for set products
             item.product_name = products.map(p => `${p.name} x${(p.quantity || 1)}`).join(' + ');
             item.unit_price = total;
             item.amount = total;
