@@ -599,6 +599,9 @@ $view->heading('建物詳細');
                                                 <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, '調整')">
                                                     <span class="badge bg-adjustment me-2">調整</span>
                                                 </a></li>
+                                                <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, 'キャンセル')">
+                                                    <span class="badge bg-danger me-2">キャンセル</span>
+                                                </a></li>
                                             </ul>
                                         </div>
                                     </td>
@@ -1407,6 +1410,7 @@ $view->heading('建物詳細');
                                                     <option value="承認済み">承認済み</option>
                                                     <option value="却下">却下</option>
                                                     <option value="調整">調整</option>
+                                                    <option value="キャンセル">キャンセル</option>
                                                 </select>
                                             </div>
                                             <div class="col-md-6">
@@ -1995,6 +1999,7 @@ $view->heading('建物詳細');
                                                 <option value="承認済み">承認済み</option>
                                                 <option value="却下">却下</option>
                                                 <option value="調整">調整</option>
+                                                <option value="キャンセル">キャンセル</option>
                                             </select>
                                         </div>
                                         <div class="col-md-6">

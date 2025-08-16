@@ -2658,6 +2658,8 @@ createApp({
                     return 'bg-rejected';
                 case '調整':
                     return 'bg-adjustment';
+                case 'キャンセル':
+                    return 'bg-danger';
                 default:
                     return 'bg-draft';
             }
@@ -2676,6 +2678,8 @@ createApp({
                     return 'btn-danger';
                 case '調整':
                     return 'btn-warning';
+                case 'キャンセル':
+                    return 'btn-danger';
                 default:
                     return 'btn-secondary';
             }

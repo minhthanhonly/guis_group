@@ -674,7 +674,7 @@ class Quotation extends ApplicationModel {
             $status = mysqli_real_escape_string($this->handler, $data['status']);
             
             // Validate status values
-            $valid_statuses = ['下書き', '発行済み', '承認済み', '却下', '調整'];
+            $valid_statuses = ['下書き', '発行済み', '承認済み', '却下', '調整', 'キャンセル'];
             if (!in_array($status, $valid_statuses)) {
                 return ['status' => 'error', 'error' => '無効なステータスです'];
             }
