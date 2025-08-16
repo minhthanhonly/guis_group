@@ -409,6 +409,17 @@ createApp({
             const s = this.projectStatuses.find(s => s.value === status);
             return `bg-${s?.color || 'secondary'}`;
         },
+        getOrderTypeBadgeClass(orderType) {
+            const type = orderType.trim().toLowerCase();
+            switch (type) {
+                case '修正':
+                    return 'bg-warning'; // Yellow for edit
+                case '新規':
+                    return 'bg-primary'; // Green for new
+                default:
+                    return 'bg-info'; // Gray for unknown types
+            }
+        },
         formatDate(dateString) {
             if (!dateString) return '-';
             const date = new Date(dateString);
@@ -2666,6 +2677,24 @@ createApp({
             }
         },
 
+        // Get CSS class for quotation status button
+        getStatusButtonClass(status) {
+            switch (status) {
+                case '下書き':
+                    return 'btn-secondary';
+                case '発行済み':
+                    return 'btn-primary';
+                case '承認済み':
+                    return 'btn-success';
+                case '却下':
+                    return 'btn-danger';
+                case '調整':
+                    return 'btn-warning';
+                default:
+                    return 'btn-secondary';
+            }
+        },
+
         formatPrice(price) {
             // Take only the integer part of the price
             const integerPrice = Math.floor(price);
@@ -3897,8 +3926,8 @@ createApp({
                         }
                     }
                     
-                    // Trigger branch selection to populate address if branch is selected and address is empty
-                    if (this.editingQuotation.selected_branch_id && (!this.editingQuotation.receiver_address || this.editingQuotation.receiver_address.trim() === '')) {
+                    // Trigger branch selection to populate address if branch is selected
+                    if (this.editingQuotation.selected_branch_id) {
                         this.onBranchSelectForEdit();
                     }
                     
@@ -4459,24 +4488,21 @@ createApp({
                 if (selectedBranch) {
                     this.editingQuotation.receiver_company = selectedBranch.company_name || selectedBranch.name;
                     
-                    // Only update address if it's not already set or if branch has changed
-                    // This preserves existing line breaks in the address
-                    if (!this.editingQuotation.receiver_address || this.editingQuotation.receiver_address.trim() === '') {
-                        // Include postal_code in the address field
-                        const addressParts = [];
-                        if (selectedBranch.postal_code) {
-                            addressParts.push(`〒${selectedBranch.postal_code}`);
-                        }
-                        if (selectedBranch.address1) {
-                            addressParts.push('　');
-                            addressParts.push(selectedBranch.address1);
-                        }
-                        if (selectedBranch.address2) {
-                            addressParts.push('\n');
-                            addressParts.push(selectedBranch.address2);
-                        }
-                        this.editingQuotation.receiver_address = addressParts.join('');
+                    // Always update address when branch changes in edit mode
+                    // Include postal_code in the address field
+                    const addressParts = [];
+                    if (selectedBranch.postal_code) {
+                        addressParts.push(`〒${selectedBranch.postal_code}`);
                     }
+                    if (selectedBranch.address1) {
+                        addressParts.push('　');
+                        addressParts.push(selectedBranch.address1);
+                    }
+                    if (selectedBranch.address2) {
+                        addressParts.push('\n');
+                        addressParts.push(selectedBranch.address2);
+                    }
+                    this.editingQuotation.receiver_address = addressParts.join('');
                     this.editingQuotation.receiver_tel = selectedBranch.tel || '';
                     this.editingQuotation.receiver_fax = selectedBranch.fax || '';
                     this.editingQuotation.receiver_registration_number = selectedBranch.registration_number || '';
@@ -4720,6 +4746,57 @@ createApp({
             if (this.editQuotationSortable) {
                 this.editQuotationSortable.destroy();
                 this.editQuotationSortable = null;
+            }
+        },
+
+        getQuotationProjectNumbers(quotation) {
+            // Check if required data is available
+            if (!quotation || !quotation.selected_child_project_ids) {
+                return [];
+            }
+            
+            if (!this.childProjects || this.childProjects.length === 0) {
+                console.warn('Child projects not loaded yet');
+                return [];
+            }
+            
+            try {
+                // Handle different possible formats of selected_child_project_ids
+                let selectedIds = [];
+                
+                if (typeof quotation.selected_child_project_ids === 'string') {
+                    // It's a comma-separated string
+                    selectedIds = quotation.selected_child_project_ids.split(',')
+                        .map(id => id.trim())
+                        .filter(id => id && id !== '');
+                } else if (Array.isArray(quotation.selected_child_project_ids)) {
+                    // It's already an array
+                    selectedIds = quotation.selected_child_project_ids;
+                } else {
+                    console.warn('Unexpected format for selected_child_project_ids:', quotation.selected_child_project_ids);
+                    return [];
+                }
+                
+                if (selectedIds.length === 0) {
+                    return [];
+                }
+                
+                // Debug logging
+                console.log('Quotation:', quotation.id, 'Selected IDs:', selectedIds);
+                console.log('Available child projects:', this.childProjects.map(cp => ({ id: cp.id, project_number: cp.project_number })));
+                
+                // Map the IDs to project numbers
+                const projectNumbers = selectedIds.map(id => {
+                    const childProject = this.childProjects.find(cp => cp.id == id || cp.id == parseInt(id));
+                    console.log('Looking for ID:', id, 'Found project:', childProject);
+                    return childProject ? childProject.project_number : null;
+                }).filter(projectNumber => projectNumber); // Remove null values
+                
+                console.log('Final project numbers:', projectNumbers);
+                return projectNumbers;
+            } catch (error) {
+                console.error('Error parsing quotation project IDs:', error, quotation);
+                return [];
             }
         }
     },

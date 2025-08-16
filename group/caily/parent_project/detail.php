@@ -464,7 +464,7 @@ $view->heading('建物詳細');
                                         <span
                                             v-if="project.project_order_type && project.project_order_type.split(',').length > 0">
                                             <span v-for="item in project.project_order_type.split(',')"
-                                                :key="item.trim()" class="badge bg-info me-1">{{ item.trim() }}</span>
+                                                :key="item.trim()" class="badge me-1" :class="getOrderTypeBadgeClass(item.trim())">{{ item.trim() }}</span>
                                         </span>
                                         <span v-else>-</span>
                                     </td>
@@ -549,6 +549,8 @@ $view->heading('建物詳細');
                             <thead>
                                 <tr>
                                     <th>見積番号</th>
+                                    <th>件名</th>
+                                    <th>プロジェクト番号</th>
                                     <th>作成日</th>
                                     <th>金額</th>
                                     <th>ステータス</th>
@@ -558,18 +560,47 @@ $view->heading('建物詳細');
                             <tbody>
                                 <tr v-for="quotation in quotations" :key="quotation.id">
                                     <td>{{ quotation.quotation_number || '-' }}</td>
-                                    <td>{{ formatDate(quotation.created_at) }}</td>
+                                    <td>{{ quotation.subject || '-' }}</td>
+                                    <td>
+                                        <div v-if="getQuotationProjectNumbers(quotation).length > 0">
+                                            <span v-for="projectNumber in getQuotationProjectNumbers(quotation)" 
+                                                  :key="projectNumber" 
+                                                  class="badge bg-primary border me-1">
+                                                {{ projectNumber }}
+                                            </span>
+                                        </div>
+                                        <span v-else class="text-muted">-</span>
+                                    </td>
+                                    <td>{{ formatDateTime(quotation.created_at) }}</td>
                                     <td>{{ formatPrice(quotation.total_with_tax) }}</td>
                                     <td>
-                                        <select class="form-select form-select-sm" v-model="quotation.status"
-                                            @change="updateQuotationStatus(quotation.id, quotation.status)"
-                                            style="min-width: 120px;">
-                                            <option value="下書き">下書き</option>
-                                            <option value="発行済み">発行済み</option>
-                                            <option value="承認済み">承認済み</option>
-                                            <option value="却下">却下</option>
-                                            <option value="調整">調整</option>
-                                        </select>
+                                        <div class="dropdown quotation-status-dropdown">
+                                            <button class="btn btn-sm dropdown-toggle" 
+                                                :class="getStatusButtonClass(quotation.status)"
+                                                type="button" 
+                                                data-bs-toggle="dropdown" 
+                                                aria-expanded="false"
+                                                style="min-width: 120px; text-align: left;">
+                                                    {{ quotation.status }}
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, '下書き')">
+                                                    <span class="badge bg-draft me-2">下書き</span>
+                                                </a></li>
+                                                <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, '発行済み')">
+                                                    <span class="badge bg-primary me-2">発行済み</span>
+                                                </a></li>
+                                                <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, '承認済み')">
+                                                    <span class="badge bg-approved me-2">承認済み</span>
+                                                </a></li>
+                                                <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, '却下')">
+                                                    <span class="badge bg-rejected me-2">却下</span>
+                                                </a></li>
+                                                <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, '調整')">
+                                                    <span class="badge bg-adjustment me-2">調整</span>
+                                                </a></li>
+                                            </ul>
+                                        </div>
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
@@ -939,7 +970,8 @@ $view->heading('建物詳細');
                                                                         <span
                                                                             v-for="item in project.project_order_type.split(',')"
                                                                             :key="item.trim()"
-                                                                            class="badge bg-info me-1">{{ item.trim()
+                                                                            class="badge me-1"
+                                                                            :class="getOrderTypeBadgeClass(item.trim())">{{ item.trim()
                                                                             }}</span>
                                                                     </span>
                                                                     <span v-else>-</span>
@@ -1516,7 +1548,8 @@ $view->heading('建物詳細');
                                                                         <span
                                                                             v-for="item in project.project_order_type.split(',')"
                                                                             :key="item.trim()"
-                                                                            class="badge bg-info me-1">{{ item.trim()
+                                                                            class="badge me-1"
+                                                                            :class="getOrderTypeBadgeClass(item.trim())">{{ item.trim()
                                                                             }}</span>
                                                                     </span>
                                                                     <span v-else>-</span>
@@ -2640,6 +2673,39 @@ $view->footing();
 
     .badge.bg-adjustment {
         background-color: #fd7e14 !important;
+    }
+
+    /* Quotation status dropdown styles */
+    .quotation-status-dropdown .dropdown-toggle {
+        border-radius: 0.375rem;
+        font-weight: 500;
+    }
+
+    .quotation-status-dropdown .dropdown-toggle:focus {
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+
+    .quotation-status-dropdown .dropdown-menu {
+        min-width: 140px;
+        padding: 0.5rem 0;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+
+    .quotation-status-dropdown .dropdown-item {
+        padding: 0.5rem 1rem;
+        display: flex;
+        align-items: center;
+        transition: background-color 0.15s ease-in-out;
+    }
+
+    .quotation-status-dropdown .dropdown-item:hover {
+        background-color: rgba(0, 123, 255, 0.1);
+    }
+
+    .quotation-status-dropdown .dropdown-item .badge {
+        font-size: 0.7em;
+        margin-right: 0.5rem;
     }
     #edit-quotation-table td,
     #edit-quotation-table th {
