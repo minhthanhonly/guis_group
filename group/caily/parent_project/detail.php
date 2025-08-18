@@ -952,12 +952,17 @@ $view->heading('建物詳細');
                                                         </thead>
                                                         <tbody>
                                                             <tr v-for="project in childProjects" :key="project.id"
-                                                                :class="{ 'table-active': selectedChildProjectIds.includes(project.id) }">
+                                                                :class="{ 
+                                                                    'table-active': selectedChildProjectIds.includes(parseInt(project.id)),
+                                                                    'table-warning': projectsUsedInActiveQuotations.has(parseInt(project.id))
+                                                                }">
                                                                 <td>
                                                                     <input type="checkbox" class="form-check-input"
-                                                                        :value="project.id"
+                                                                        :value="parseInt(project.id)"
                                                                         v-model="selectedChildProjectIds"
-                                                                        @change="updateChildProjectSelection">
+                                                                        @change="updateChildProjectSelection"
+                                                                        :disabled="projectsUsedInActiveQuotations.has(parseInt(project.id))"
+                                                                        :title="projectsUsedInActiveQuotations.has(parseInt(project.id)) ? 'このプロジェクトは他の見積書で既に使用されています' : ''">
                                                                 </td>
                                                                 <td>{{ project.project_number || '-' }}</td>
                                                                 <td>
@@ -1006,7 +1011,12 @@ $view->heading('建物詳細');
                                                 <div class="mt-2">
                                                     <small class="text-muted">
                                                         選択された子プロジェクト: {{ selectedChildProjectIds.length }} / {{
-                                                        childProjects.length }}
+                                                        childProjects.filter(p => !projectsUsedInActiveQuotations.has(parseInt(p.id))).length }}
+                                                        (利用可能) / {{ childProjects.length }} (全体)
+                                                    </small>
+                                                    <small v-if="projectsUsedInActiveQuotations.size > 0" class="d-block text-warning mt-1">
+                                                        <i class="fa fa-warning me-1"></i>
+                                                        {{ projectsUsedInActiveQuotations.size }}個のプロジェクトは他の見積書で既に使用されているため選択できません
                                                     </small>
                                                 </div>
                                                 <div v-if="quotationValidationErrors.childProjects" class="mt-2">
@@ -1531,10 +1541,10 @@ $view->heading('建物詳細');
                                                         </thead>
                                                         <tbody>
                                                             <tr v-for="project in childProjects" :key="project.id"
-                                                                :class="{ 'table-active': selectedChildProjectIdsForEdit.includes(project.id) }">
+                                                                :class="{ 'table-active': selectedChildProjectIdsForEdit.includes(parseInt(project.id)) }">
                                                                 <td>
                                                                     <input type="checkbox" class="form-check-input"
-                                                                        :value="project.id"
+                                                                        :value="parseInt(project.id)"
                                                                         v-model="selectedChildProjectIdsForEdit"
                                                                         @change="updateChildProjectSelectionForEdit">
                                                                 </td>

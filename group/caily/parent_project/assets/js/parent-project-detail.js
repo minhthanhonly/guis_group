@@ -325,8 +325,9 @@ createApp({
         },
         selectedChildProjectsForDropdown() {
             // Filter child projects to only show the selected ones for the dropdown
+            // Handle type mismatch: selectedChildProjectIds contains integers, project.id is string
             return this.childProjects.filter(project => 
-                this.selectedChildProjectIds.includes(project.id)
+                this.selectedChildProjectIds.includes(parseInt(project.id))
             );
         },
         hasSetProducts() {
@@ -344,9 +345,46 @@ createApp({
             return total > 0 && selected === total;
         },
         selectedChildProjectsForEditDropdown() {
-            // In edit mode, show all child projects so user can select any project
-            // This is different from create mode where we only show selected ones
-            return this.childProjects;
+            // Filter child projects to only show the selected ones for the dropdown
+            // This matches the behavior of create mode
+            // Handle type mismatch: selectedChildProjectIdsForEdit contains integers, project.id is string
+            return this.childProjects.filter(project => 
+                this.selectedChildProjectIdsForEdit.includes(parseInt(project.id))
+            );
+        },
+        projectsUsedInActiveQuotations() {
+            // Get list of project IDs that are already used in active quotations
+            // Active quotations are those not cancelled (却下) or canceled (キャンセル)
+            const activeStatuses = ['下書き', '発行済み', '承認済み', '調整'];
+            const usedProjectIds = new Set();
+            
+            if (!this.quotations || this.quotations.length === 0) {
+                return usedProjectIds;
+            }
+            
+            this.quotations.forEach(quotation => {
+                // Skip inactive quotations
+                if (!activeStatuses.includes(quotation.status)) {
+                    return;
+                }
+                
+                // Parse selected_child_project_ids
+                let selectedIds = [];
+                if (typeof quotation.selected_child_project_ids === 'string') {
+                    selectedIds = quotation.selected_child_project_ids.split(',')
+                        .map(id => id.trim())
+                        .filter(id => id && id !== '');
+                } else if (Array.isArray(quotation.selected_child_project_ids)) {
+                    selectedIds = quotation.selected_child_project_ids;
+                }
+                
+                // Add each used project ID to the set
+                selectedIds.forEach(id => {
+                    usedProjectIds.add(parseInt(id));
+                });
+            });
+            
+            return usedProjectIds;
         }
     },
     methods: {
@@ -3370,7 +3408,10 @@ createApp({
 
         // Child project selection methods
         selectAllChildProjects() {
-            this.selectedChildProjectIds = this.childProjects.map(project => project.id);
+            // Only select projects that are not disabled (not already used in active quotations)
+            this.selectedChildProjectIds = this.childProjects
+                .filter(project => !this.projectsUsedInActiveQuotations.has(parseInt(project.id)))
+                .map(project => parseInt(project.id));
             this.updateChildProjectSelection();
         },
         
@@ -3388,11 +3429,15 @@ createApp({
         },
         
         updateChildProjectSelection() {
-            const total = this.childProjects.length;
+            // Calculate totals excluding disabled projects
+            const availableProjects = this.childProjects.filter(project => 
+                !this.projectsUsedInActiveQuotations.has(parseInt(project.id))
+            );
+            const totalAvailable = availableProjects.length;
             const selected = this.selectedChildProjectIds.length;
             
-            this.allChildProjectsSelected = selected === total && total > 0;
-            this.someChildProjectsSelected = selected > 0 && selected < total;
+            this.allChildProjectsSelected = selected === totalAvailable && totalAvailable > 0;
+            this.someChildProjectsSelected = selected > 0 && selected < totalAvailable;
             
 
             
@@ -3860,7 +3905,7 @@ createApp({
                         });
                     } else {
                         // Fallback 2: If no items have project_id, select all child projects to show all options
-                        this.selectedChildProjectIdsForEdit = this.childProjects.map(p => p.id);
+                        this.selectedChildProjectIdsForEdit = this.childProjects.map(p => parseInt(p.id));
                     }
                     
                     // Set valid_until_type based on valid_until value
