@@ -545,14 +545,14 @@ if (!$project_id) {
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-6 col-xl-3">
+                            <!--<div class="col-6 col-xl-3">
                                 <label class="form-label">請求書</label>
                                 <div>
                                     <div>
                                         <span class="badge" :class="getInvoiceStatusBadgeClass(project.invoice_status)">{{ getInvoiceStatusLabel(project.invoice_status) }}</span>
                                     </div>
                                 </div>
-                            </div>
+                            </div>-->
                             <div class="col-12 col-xl-6">
                                 <label class="form-label">総額</label>
                                 <div class="input-group">

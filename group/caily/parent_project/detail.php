@@ -17,6 +17,30 @@ $view->heading('建物詳細');
             </a>
         </div>
 
+        <!-- Navigation Bar -->
+        <div class="col-12 mb-3">
+            <nav class="navbar navbar-expand-lg navbar-light bg-light">
+                <div class="container-fluid">
+                    <a class="navbar-brand fw-bold" href="#" v-if="parentProject">
+                        <span class="badge badge-sm bg-label-info">#{{ parentProject.project_number || 'N/A' }}</span>
+                    </a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#parentProjectNavbar" aria-controls="parentProjectNavbar" aria-expanded="false" aria-label="Toggle navigation">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="parentProjectNavbar">
+                        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                            <li class="nav-item">
+                                <a class="nav-link active" aria-current="page" href="detail.php?id=<?php echo $parent_project_id; ?>">建物詳細</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="attachment.php?id=<?php echo $parent_project_id; ?>">添付ファイル</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+        </div>
+
         <!-- Left Column - Parent Project Details -->
         <div class="col-12 mb-3">
             <div class="card" :class="{ 'edit-mode': isEditMode }">
