@@ -15,7 +15,7 @@ $view->heading('建物一覧');
                                 <i class="fa fa-list me-1"></i> <span data-i18n="価格表管理">価格表管理</span>
                             </a>
                             <a href="create.php" class="btn btn-primary btn-sm">
-                                <i class="fa fa-plus me-1"></i> <span data-i18n="新規作成">新規作成</span>
+                                <i class="fa fa-plus me-1"></i> <span data-i18n="建物登録">建物登録</span>
                             </a>
                         </div>
                     </div>

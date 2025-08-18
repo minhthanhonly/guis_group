@@ -1191,7 +1191,7 @@ createApp({
                 showMessage('更新に失敗しました。', true);
             }
         },
-        getStatusButtonClass(status) {
+        getParentProjectStatusButtonClass(status) {
             const s = this.statuses.find(s => s.value === status);
             return `btn-${s?.color || 'secondary'}`;
         },
@@ -1515,7 +1515,8 @@ createApp({
                 department_id: '',
                 project_number: '',
                 start_date: '',
-                end_date: ''
+                end_date: '',
+                project_order_type: ''
             };
             
             let isValid = true;
@@ -1542,6 +1543,23 @@ createApp({
             
             if (!this.editingChildProject.end_date) {
                 this.editChildProjectValidationErrors.end_date = '期限日は必須です。';
+                isValid = false;
+            }
+
+            // Validate that start date is before end date
+            if (this.editingChildProject.start_date && this.editingChildProject.end_date) {
+                const startDate = new Date(this.editingChildProject.start_date);
+                const endDate = new Date(this.editingChildProject.end_date);
+                
+                if (startDate >= endDate) {
+                    this.editChildProjectValidationErrors.end_date = '期限日は開始日より後である必要があります';
+                    isValid = false;
+                }
+            }
+
+            // Validate project order type is required
+            if (!this.editingChildProject.project_order_type || this.editingChildProject.project_order_type.trim() === '') {
+                this.editChildProjectValidationErrors.project_order_type = '受注形態は必須です';
                 isValid = false;
             }
             
@@ -1669,7 +1687,8 @@ createApp({
                 department_id: '',
                 project_number: '',
                 start_date: '',
-                end_date: ''
+                end_date: '',
+                project_order_type: ''
             };
 
             let isValid = true;
@@ -1698,6 +1717,23 @@ createApp({
 
             if (!this.newChildProject.end_date || this.newChildProject.end_date.trim() === '') {
                 this.childProjectValidationErrors.end_date = '期限日は必須です';
+                isValid = false;
+            }
+
+            // Validate that start date is before end date
+            if (this.newChildProject.start_date && this.newChildProject.end_date) {
+                const startDate = new Date(this.newChildProject.start_date);
+                const endDate = new Date(this.newChildProject.end_date);
+                
+                if (startDate >= endDate) {
+                    this.childProjectValidationErrors.end_date = '期限日は開始日より後である必要があります';
+                    isValid = false;
+                }
+            }
+
+            // Validate project order type is required
+            if (!this.newChildProject.project_order_type || this.newChildProject.project_order_type.trim() === '') {
+                this.childProjectValidationErrors.project_order_type = '受注形態は必須です';
                 isValid = false;
             }
 

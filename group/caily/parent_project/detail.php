@@ -305,7 +305,7 @@ $view->heading('建物詳細');
                                     <div class="btn-group" v-if="isEditMode">
                                         <button type="button"
                                             class="btn btn-sm dropdown-toggle waves-effect waves-light"
-                                            :class="getStatusButtonClass(parentProject.status)" id="statusDropdown"
+                                            :class="getParentProjectStatusButtonClass(parentProject.status)" id="statusDropdown"
                                             data-bs-toggle="dropdown" aria-expanded="false">
                                             {{ getStatusLabel(parentProject.status) }}
                                         </button>
@@ -692,7 +692,7 @@ $view->heading('建物詳細');
                                         {{ childProjectValidationErrors.project_number }}
                                     </div>
                                     <small class="form-text text-muted">
-                                        建物番号 + "-" + 連番 (例: PRJ001-01, PRJ001-02)
+                                        建物番号 + "-" + 連番
                                     </small>
                                 </div>
                             </div>
@@ -720,7 +720,7 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
+                                    <label class="form-label"><span data-i18n="受注形態">受注形態</span> <span class="text-danger">*</span></label>
                                     <div class="d-flex align-items-center gap-2">
                                         <input type="text" class="form-control tagify"
                                             v-model="newChildProject.project_order_type" id="child_project_order_type"
@@ -728,6 +728,10 @@ $view->heading('建物詳細');
                                         <button class="btn btn-outline-secondary btn-sm" type="button"
                                             @click="clearChildProjectTagifyTags('project_order_type')" title="すべて削除"><i
                                                 class="fa fa-times"></i></button>
+                                    </div>
+                                    <div v-if="childProjectValidationErrors.project_order_type"
+                                        class="invalid-feedback d-block">
+                                        {{ childProjectValidationErrors.project_order_type }}
                                     </div>
                                 </div>
                             </div>
@@ -826,7 +830,7 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
+                                    <label class="form-label"><span data-i18n="受注形態">受注形態</span> <span class="text-danger">*</span></label>
                                     <div class="d-flex align-items-center gap-2">
                                         <input type="text" class="form-control tagify"
                                             v-model="editingChildProject.project_order_type"
@@ -834,6 +838,10 @@ $view->heading('建物詳細');
                                         <button class="btn btn-outline-secondary btn-sm" type="button"
                                             @click="clearEditChildProjectTagifyTags('project_order_type')"
                                             title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
+                                    <div v-if="editChildProjectValidationErrors.project_order_type"
+                                        class="invalid-feedback d-block">
+                                        {{ editChildProjectValidationErrors.project_order_type }}
                                     </div>
                                 </div>
                             </div>
@@ -987,7 +995,10 @@ $view->heading('建物詳細');
                                                                 <td>{{ formatDateTime(project.start_date) || '-' }}</td>
                                                                 <td>{{ formatDateTime(project.end_date) || '-' }}</td>
                                                                 <td>
-                                                                    <span class="badge"
+                                                                    <span v-if="project.is_kadai == 1" class="badge bg-warning">
+                                                                        承認待ち
+                                                                    </span>
+                                                                    <span v-else class="badge"
                                                                         :class="getProjectStatusBadgeClass(project.status)">
                                                                         {{ getProjectStatusLabel(project.status) }}
                                                                     </span>
@@ -1571,7 +1582,10 @@ $view->heading('建物詳細');
                                                                 <td>{{ formatDateTime(project.start_date) || '-' }}</td>
                                                                 <td>{{ formatDateTime(project.end_date) || '-' }}</td>
                                                                 <td>
-                                                                    <span class="badge"
+                                                                    <span v-if="project.is_kadai == 1" class="badge bg-warning">
+                                                                        承認待ち
+                                                                    </span>
+                                                                    <span v-else class="badge"
                                                                         :class="getProjectStatusBadgeClass(project.status)">
                                                                         {{ getProjectStatusLabel(project.status) }}
                                                                     </span>

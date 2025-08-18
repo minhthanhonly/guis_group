@@ -708,9 +708,9 @@ class Project extends ApplicationModel {
         }
         if ($result) {
             $this->logProjectAction($id, 'updated', '案件情報を変更');
-            return ['success' => true, 'message' => 'Project updated successfully'];
+            return ['status' => 'success', 'message' => 'Project updated successfully'];
         } else {
-            return ['success' => false, 'message' => 'Update failed'];
+            return ['status' => 'error', 'message' => 'Update failed'];
         }
     }
 

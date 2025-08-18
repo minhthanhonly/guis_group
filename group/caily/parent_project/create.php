@@ -1,6 +1,6 @@
 <?php
 require_once('../application/loader.php');
-$view->heading('プロジェクト作成');
+$view->heading('建物登録');
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
 
@@ -17,7 +17,7 @@ $view->heading('プロジェクト作成');
             <div class="card edit-mode">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h5 class="card-title"><span data-i18n="プロジェクト作成">プロジェクト作成</span></h5>
+                        <h5 class="card-title"><span data-i18n="建物登録">建物登録</span></h5>
                         <div>
                             <button class="btn btn-success btn-sm me-2" @click="saveParentProject" title="保存">
                                 <i class="fa fa-save"></i>
