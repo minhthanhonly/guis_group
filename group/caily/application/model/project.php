@@ -192,6 +192,7 @@ class Project extends ApplicationModel {
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
              WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id
+           
             FROM {$this->table} p 
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
@@ -207,6 +208,13 @@ class Project extends ApplicationModel {
 
         
         $data = $this->fetchAll($query);
+        
+        // Set default quotation status for projects without quotations
+        foreach ($data as &$project) {
+            if (empty($project['quotation_status'])) {
+                $project['quotation_status'] = '未発行';
+            }
+        }
 
         return array(
             'draw' => $draw,
@@ -810,7 +818,15 @@ class Project extends ApplicationModel {
             WHERE p.id = %d",
             intval($id)
         );
-        return $this->fetchOne($query);
+        
+        $project = $this->fetchOne($query);
+        
+        // Add quotation status to the project data
+        if ($project) {
+            $project['quotation_status'] = $this->getQuotationStatus($id);
+        }
+        
+        return $project;
     }
 
     function updateProgress($params = null) {
@@ -2527,6 +2543,45 @@ class Project extends ApplicationModel {
         } catch (Exception $e) {
             error_log('Error in confirm: ' . $e->getMessage());
             return ['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Get quotation status for a project
+     * @param int $project_id The project ID
+     * @return string The quotation status
+     */
+    function getQuotationStatus($project_id) {
+        try {
+            $query = sprintf(
+                "SELECT q.status 
+                 FROM " . DB_PREFIX . "quotations q 
+                 WHERE FIND_IN_SET(%d, q.selected_child_project_ids) > 0 
+                 AND q.status NOT IN ('キャンセル', '却下')
+                 ORDER BY 
+                    CASE q.status 
+                        WHEN '承認済み' THEN 1
+                        WHEN '発行済み' THEN 2 
+                        WHEN '調整' THEN 3
+                        WHEN '下書き' THEN 4
+                        ELSE 5
+                    END ASC,
+                    q.updated_at DESC
+                 LIMIT 1",
+                intval($project_id)
+            );
+            
+            $result = $this->fetchOne($query);
+            
+            if ($result && !empty($result['status'])) {
+                return $result['status'];
+            }
+            
+            return '未発行';
+            
+        } catch (Exception $e) {
+            error_log('Error getting quotation status: ' . $e->getMessage());
+            return '未発行';
         }
     }
 }

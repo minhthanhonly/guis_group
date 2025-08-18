@@ -1492,6 +1492,33 @@ const vueApp = createApp({
                 }
             }
         },
+        
+        // Quotation status methods
+        getQuotationStatusLabel(status) {
+            const statusLabels = {
+                '下書き': '下書き',
+                '発行済み': '発行済み',
+                '承認済み': '承認済み',
+                '却下': '却下',
+                '調整': '調整',
+                'キャンセル': 'キャンセル',
+                '未発行': '未発行'
+            };
+            return statusLabels[status] || '未発行';
+        },
+        getQuotationStatusBadgeClass(status) {
+            const statusClasses = {
+                '下書き': 'bg-secondary',
+                '発行済み': 'bg-primary',
+                '承認済み': 'bg-success',
+                '却下': 'bg-danger',
+                '調整': 'bg-warning',
+                'キャンセル': 'bg-dark',
+                '未発行': 'bg-light text-dark'
+            };
+            return statusClasses[status] || 'bg-light text-dark';
+        },
+        
         // Invoice status methods
         getInvoiceStatusLabel(status) {
             const statusObj = this.invoiceStatuses.find(s => s.value === status);

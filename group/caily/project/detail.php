@@ -183,7 +183,7 @@ if (!$project_id) {
                             <div class="col-md-4  mt-4">
                                 <label class="form-label"><span data-i18n="プロジェクト番号">プロジェクト番号</span>  <span class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
-                                    <input type="text" class="form-control" v-model="project.project_number">
+                                    <input type="text" class="form-control" v-model="project.project_number" readonly>
                                     <div v-if="validationErrors.project_number" class="invalid-feedback d-block">
                                         {{ validationErrors.project_number }}
                                     </div>
@@ -541,7 +541,7 @@ if (!$project_id) {
                                 <label class="form-label">見積書</label>
                                 <div>
                                     <div>
-                                        <span class="badge" :class="getEstimateStatusBadgeClass(project.estimate_status)">{{ getEstimateStatusLabel(project.estimate_status) }}</span>
+                                        <span class="badge" :class="getQuotationStatusBadgeClass(project.quotation_status)">{{ getQuotationStatusLabel(project.quotation_status) }}</span>
                                     </div>
                                 </div>
                             </div>

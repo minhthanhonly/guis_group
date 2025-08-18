@@ -821,7 +821,7 @@ $view->heading('建物詳細');
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label">プロジェクト番号 <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.project_number"
-                                        required>
+                                        required readonly>
                                     <div v-if="editChildProjectValidationErrors.project_number"
                                         class="invalid-feedback d-block">
                                         {{ editChildProjectValidationErrors.project_number }}
@@ -2075,7 +2075,7 @@ $view->heading('建物詳細');
 
     <!-- View Quotation Modal -->
     <div class="modal fade" id="viewQuotationModal" tabindex="-1" aria-labelledby="viewQuotationModalLabel"
-        aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        aria-hidden="true">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">

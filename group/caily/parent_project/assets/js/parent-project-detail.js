@@ -1589,7 +1589,7 @@ createApp({
 
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
 
-                if (response.data.success) {
+                if (response.data.status === 'success') {
                     showMessage('課題が正常に更新されました。');
                     
                     // Close modal

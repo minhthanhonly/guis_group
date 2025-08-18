@@ -227,22 +227,9 @@ function formatJapaneseDate($dateString) {
         .company-seal {
             width: 60px;
             height: 60px;
-            border: 2px solid #d32f2f;
-            border-radius: 50%;
-            background-color: #ffffff;
             position: relative;
         }
 
-        .company-seal::after {
-            content: "印";
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #d32f2f;
-            font-weight: bold;
-            font-size: 1.2rem;
-        }
 
         .quotation-details-text {
             line-height: 1.4;
