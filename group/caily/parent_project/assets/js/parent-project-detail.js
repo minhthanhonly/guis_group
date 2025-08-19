@@ -2088,6 +2088,7 @@ createApp({
                 _oldProjectId: '', // Track previous project_id for proper total calculation
                 title: '',
                 product_code: '',
+                type: '',
                 quantity: 1,
                 unit: '枚',
                 unit_price: 0,
@@ -2885,6 +2886,13 @@ createApp({
                 });
             }
             
+            // Sort by product code in ascending order
+            filtered.sort((a, b) => {
+                const codeA = (a.code || '').toString().toLowerCase();
+                const codeB = (b.code || '').toString().toLowerCase();
+                return codeA.localeCompare(codeB);
+            });
+            
             this.filteredPriceListProducts = filtered;
             
             // Do not reset selected products when filter/search changes
@@ -2943,6 +2951,7 @@ createApp({
             title: product.name || '',
             product_code: product.code || '',
             product_name: product.name || '',
+            type: product.type || '',
             product_id: product.id,
             quantity: 1,
             unit: product.unit || '枚',
@@ -3136,6 +3145,7 @@ createApp({
                     const qty = this.selectedProductQuantities[p.id] || 1;
                     return `${p.name} x${qty}`;
                 }).join(' + '),
+                type: '', // Set type for set products
                 quantity: 1,
                 unit: '式',
                 unit_price: this.getSelectedProductsTotal(),
@@ -3343,6 +3353,7 @@ createApp({
                     title: product.name,
                     product_code: product.code,
                     product_name: product.name,
+                    type: product.type || '',
                     product_id: product.id,
                     quantity: quantity,
                     unit: product.unit,
@@ -4128,6 +4139,7 @@ createApp({
                 project_id: '',
                 title: '',
                 product_code: '',
+                type: '',
                 quantity: 1,
                 unit: '枚',
                 unit_price: 0,
@@ -4442,6 +4454,7 @@ createApp({
                             project_id: item.project_id,
                             title: item.title,
                             product_code: item.product_code,
+                            type: item.type || '',
                             quantity: item.quantity,
                             unit: item.unit,
                             unit_price: item.unit_price,

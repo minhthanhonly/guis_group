@@ -103,6 +103,10 @@ if (!$project_id) {
                                                 <input type="text" class="form-control" :value="project.contact_name || '-'" readonly>
                                             </div>
                                             <div class="col-md-4 mb-3">
+                                                <label class="form-label"><span data-i18n="お施主様名">お施主様名</span></label>
+                                                <input type="text" class="form-control" :value="project.building_name || '-'" readonly>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
                                                 <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
                                                 <input type="text" class="form-control" :value="project.building_number || '-'" readonly>
                                             </div>

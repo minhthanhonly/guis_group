@@ -330,12 +330,12 @@ function formatJapaneseDate($dateString) {
              
              .quotation-items-table th:nth-child(1),
              .quotation-items-table td:nth-child(1) {
-                 width: 12%!important;
+                 width: 10%!important;
              }
              
              .quotation-items-table th:nth-child(2),
              .quotation-items-table td:nth-child(2) {
-                 width: 25% !important;
+                 width: 30% !important;
              }
              
              .quotation-items-table th:nth-child(3),
@@ -350,17 +350,22 @@ function formatJapaneseDate($dateString) {
              
              .quotation-items-table th:nth-child(5),
              .quotation-items-table td:nth-child(5) {
-                 width: 12% !important;
+                 width: 8% !important;
              }
              
              .quotation-items-table th:nth-child(6),
              .quotation-items-table td:nth-child(6) {
-                 width: 12% !important;
+                 width: 10% !important;
              }
              
              .quotation-items-table th:nth-child(7),
              .quotation-items-table td:nth-child(7) {
-                 width: 27% !important;
+                 width: 10% !important;
+             }
+             
+             .quotation-items-table th:nth-child(8),
+             .quotation-items-table td:nth-child(8) {
+                 width: 20% !important;
              }
              
              /* Prevent table overflow */
@@ -617,13 +622,14 @@ function formatJapaneseDate($dateString) {
                 <table class="table table-bordered quotation-items-table font-10">
                     <thead class="table-light">
                         <tr>
-                            <th width="12%">商品コード</th>
-                            <th width="25%">品名</th>
+                            <th width="10%">商品コード</th>
+                            <th width="20%">品名</th>
+                            <th width="8%">タイプ</th>
                             <th width="8%">数量</th>
                             <th width="8%">単位</th>
                             <th width="12%">単価</th>
                             <th width="12%">金額</th>
-                            <th width="27%">備考</th>
+                            <th width="22%">備考</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -631,6 +637,7 @@ function formatJapaneseDate($dateString) {
                         <tr>
                             <td><?php echo htmlspecialchars($item['product_code']); ?></td>
                             <td><?php echo htmlspecialchars($item['title']); ?></td>
+                            <td class="text-center"><?php echo htmlspecialchars($item['type'] ?? ''); ?></td>
                             <td class="text-center"><?php echo formatNumber($item['quantity']); ?></td>
                             <td class="text-center"><?php echo htmlspecialchars($item['unit']); ?></td>
                             <td class="text-end"><?php echo formatPrice($item['unit_price']); ?></td>
@@ -645,6 +652,7 @@ function formatJapaneseDate($dateString) {
                         for ($i = 0; $i < $emptyRows; $i++): 
                         ?>
                         <tr>
+                            <td>&nbsp;</td>
                             <td>&nbsp;</td>
                             <td>&nbsp;</td>
                             <td>&nbsp;</td>

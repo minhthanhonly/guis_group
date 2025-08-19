@@ -139,7 +139,12 @@ class Customer extends ApplicationModel {
             'status' => 'error',
             'message_code' => 'error',
         );
-        $guis_department = implode(',', $_POST['guis_department']);
+        $guis_department = '';
+        if (isset($_POST['guis_department']) && is_array($_POST['guis_department'])) {
+            $guis_department = implode(',', $_POST['guis_department']);
+        } elseif (isset($_POST['guis_department']) && !empty($_POST['guis_department'])) {
+            $guis_department = $_POST['guis_department'];
+        }
         try {
             $data = array(
                 'name' => $_POST['name'],
@@ -179,7 +184,12 @@ class Customer extends ApplicationModel {
             'status' => 'error',
             'message_code' => 'error',
         );
-        $guis_department = implode(',', $_POST['guis_department']);
+        $guis_department = '';
+        if (isset($_POST['guis_department']) && is_array($_POST['guis_department'])) {
+            $guis_department = implode(',', $_POST['guis_department']);
+        } elseif (isset($_POST['guis_department']) && !empty($_POST['guis_department'])) {
+            $guis_department = $_POST['guis_department'];
+        }
         try {
             $id = $_GET['id'];
             $data = array(

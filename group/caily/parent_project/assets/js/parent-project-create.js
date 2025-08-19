@@ -44,7 +44,37 @@ createApp({
             },
             type1Tagify: null,
             type2Tagify: null,
-            constructionBranchTagify: null
+            constructionBranchTagify: null,
+            // Customer modal data
+            categories: [],
+            departments: [],
+            customers: [],
+            newCustomer: {
+                company_name: '',
+                company_name_kana: '',
+                name: '',
+                name_kana: '',
+                branch: '',
+                position: '',
+                department: '',
+                title: '',
+                tel: '',
+                fax: '',
+                phone: '',
+                email: '',
+                zip: '',
+                address1: '',
+                address2: '',
+                memo: '',
+                status: 1,
+                category_id: 0,
+                guis_department: [],
+            },
+            customerErrors: {
+                company_name: '',
+                name: '',
+                guis_department: ''
+            }
         }
     },
     methods: {
@@ -590,8 +620,338 @@ createApp({
                     this.constructionBranchTagify.on('remove', updateConstructionBranch);
                 }
             });
+        },
+
+        // Customer modal methods
+        async loadDepartments() {
+            try {
+                const response = await axios.get('/api/index.php?model=department&method=list_department');
+                this.departments = response.data;
+            } catch (error) {
+                console.error('Error loading departments:', error);
+                showMessage('部署の読み込みに失敗しました。', true);
+            }
+        },
+
+        async loadCategories() {
+            try {
+                const response = await axios.get('/api/index.php?model=customer&method=list_category');
+                this.categories = response.data;
+                if (this.categories.length > 0) {
+                    this.newCustomer.category_id = this.categories[0].id;
+                }
+            } catch (error) {
+                console.error('Error loading categories:', error);
+                showMessage('カテゴリーの読み込みに失敗しました。', true);
+            }
+        },
+
+        async loadCustomers() {
+            try {
+                // Only load customers if both company and branch are selected
+                if (!this.parentProject.company_name || !this.parentProject.branch_name) {
+                    this.customers = [];
+                    return;
+                }
+
+                // Load customers from all categories for the contact_name dropdown
+                // First get all categories, then get customers from each category
+                const categoriesResponse = await axios.get('/api/index.php?model=customer&method=list_category');
+                if (categoriesResponse.data && categoriesResponse.data.length > 0) {
+                    this.customers = [];
+                    for (const category of categoriesResponse.data) {
+                        try {
+                            const customersResponse = await axios.get(`/api/index.php?model=customer&method=list_customer&category_id=${category.id}`);
+                            if (customersResponse.data.status === 'success' && customersResponse.data.data) {
+                                // Filter customers by company and branch
+                                const filteredCustomers = customersResponse.data.data.filter(customer => 
+                                    customer.company_name === this.parentProject.company_name && 
+                                    customer.branch === this.parentProject.branch_name
+                                );
+                                this.customers = this.customers.concat(filteredCustomers);
+                            }
+                        } catch (error) {
+                            console.error(`Error loading customers for category ${category.id}:`, error);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading customers:', error);
+                showMessage('顧客の読み込みに失敗しました。', true);
+            }
+        },
+
+        openNewCustomerModal() {
+            this.resetCustomerData();
+            $('#customerModal').modal('show');
+        },
+
+        resetCustomerData() {
+            this.newCustomer = {
+                company_name: '',
+                company_name_kana: '',
+                name: '',
+                name_kana: '',
+                branch: '本社',
+                position: '',
+                department: '',
+                title: '',
+                tel: '',
+                fax: '',
+                phone: '',
+                email: '',
+                zip: '',
+                address1: '',
+                address2: '',
+                memo: '',
+                status: 1,
+                category_id: this.categories.length > 0 ? this.categories[0].id : 0,
+                guis_department: []
+            };
+            this.customerErrors = { company_name: '', name: '', guis_department: '' };
+        },
+
+        async saveCustomer() {
+            // Reset errors
+            this.customerErrors = { company_name: '', name: '', guis_department: '' };
+            let hasError = false;
+            
+            if (!this.newCustomer.company_name) {
+                this.customerErrors.company_name = '会社名は必須です。';
+                hasError = true;
+            }
+            if (!this.newCustomer.name) {
+                this.customerErrors.name = '担当者名は必須です。';
+                hasError = true;
+            }
+            if (!this.newCustomer.guis_department || this.newCustomer.guis_department.length === 0) {
+                this.customerErrors.guis_department = '自社担当部署名は必須です。';
+                hasError = true;
+            }
+            if (hasError) return;
+
+            // Set default branch to "本社" if empty
+            if (!this.newCustomer.branch || this.newCustomer.branch.trim() === '') {
+                this.newCustomer.branch = '本社';
+            }
+
+            try {
+                const response = await axios.post('/api/index.php?model=customer&method=add_customer', this.newCustomer, {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                });
+                
+                if (response.data.status == 'success') {
+                    showMessage('顧客を保存しました。');
+                    
+                    // Store customer data BEFORE doing anything else (since API doesn't return customer ID)
+                    const customerData = {
+                        company_name: this.newCustomer.company_name,
+                        branch: this.newCustomer.branch,
+                        name: this.newCustomer.name,
+                        id: null // We'll find this after reloading customers
+                    };
+                    
+                    // Close modal
+                    $('#customerModal').modal('hide');
+                    
+                    // Reset form data AFTER storing the data
+                    this.resetCustomerData();
+                    
+                    // Set the form values
+                    this.parentProject.company_name = customerData.company_name;
+                    this.parentProject.branch_name = customerData.branch;
+                    this.parentProject.contact_name = customerData.name;
+                    // customer_id will be set after we find the customer
+                    
+                    // Refresh data first, then update Select2
+                    Promise.all([
+                        this.loadCategories(),
+                        // Don't call loadCustomers here as it will be called by updateAllSelect2WithCustomer
+                    ]).then(() => {
+                        // Update Select2 dropdowns after data is refreshed
+                        setTimeout(() => {
+                            this.updateAllSelect2WithCustomer(customerData);
+                        }, 500);
+                    }).catch(error => {
+                        console.error('Error in Promise.all:', error);
+                    });
+                } else {
+                    showMessage(response.data.message_code, true);
+                }
+            } catch (error) {
+                console.error('Error saving customer:', error);
+                showMessage('顧客の保存に失敗しました。', true);
+            }
+        },
+
+        searchAddressCustomer() {
+            const postalCode = this.newCustomer.zip;
+            if (postalCode.length >= 7) {
+                const apiUrl = `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${postalCode}`;
+                axios.get(apiUrl)
+                    .then(response => {
+                        if (response.data.results && response.data.results.length > 0) {
+                            const result = response.data.results[0];
+                            this.newCustomer.address1 = result.address1;
+                            this.newCustomer.address2 = result.address2;
+                        } else {
+                            showMessage('郵便番号が見つかりません。', true);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error searching address:', error);
+                        showMessage('住所の検索に失敗しました。', true);
+                    });
+            } else {
+                showMessage('郵便番号が正しくありません。', true);
+            }
+        },
+
+        onContactNameChange() {
+            // Find the selected customer and set the customer_id
+            const selectedCustomer = this.customers.find(c => c.name === this.parentProject.contact_name);
+            if (selectedCustomer) {
+                this.parentProject.customer_id = selectedCustomer.id;
+            } else {
+                this.parentProject.customer_id = '';
+            }
+        },
+
+        onCompanyNameChange() {
+            // Clear branch and contact when company changes
+            this.parentProject.branch_name = '';
+            this.parentProject.contact_name = '';
+            this.parentProject.customer_id = '';
+            this.customers = []; // Clear customers list
+            
+            // Update Select2 dropdowns
+            this.$nextTick(() => {
+                const $branch = $('#branch_name');
+                if ($branch.length && $branch.data('select2')) {
+                    $branch.val(null).trigger('change');
+                }
+                
+                const $contact = $('#contact_name');
+                if ($contact.length && $contact.data('select2')) {
+                    $contact.val(null).trigger('change');
+                }
+            });
+        },
+
+        onBranchNameChange() {
+            // Clear contact when branch changes
+            this.parentProject.contact_name = '';
+            this.parentProject.customer_id = '';
+            
+            // Load customers for the selected company and branch
+            this.loadCustomers();
+            
+            // Update contact Select2
+            this.$nextTick(() => {
+                const $contact = $('#contact_name');
+                if ($contact.length && $contact.data('select2')) {
+                    $contact.val(null).trigger('change');
+                }
+            });
+        },
+
+        // Helper method to update Select2 with new options
+        updateSelect2WithNewOption(selectId, value, text) {
+            const $select = $(selectId);
+            if ($select.length && $select.data('select2')) {
+                // Remove existing option if it exists
+                $select.find(`option[value="${value}"]`).remove();
+                
+                // Add new option
+                const newOption = new Option(text, value, false, false);
+                $select.append(newOption);
+                
+                // Set value and trigger change
+                $select.val(value).trigger('change');
+                
+                // Force Select2 to refresh
+                $select.select2('destroy');
+                $select.select2({
+                    placeholder: '選択してください',
+                    dropdownParent: $select.parent(),
+                    allowClear: true,
+                    minimumResultsForSearch: 0
+                });
+                $select.val(value).trigger('change');
+            }
+        },
+
+        updateAllSelect2WithCustomer(customerData) {
+            // Update company name Select2
+            const $company = $('#company_name');
+            if ($company.length) {
+                // Check if option already exists
+                if (!$company.find(`option[value="${customerData.company_name}"]`).length) {
+                    $company.append(new Option(customerData.company_name, customerData.company_name, false, false));
+                }
+                $company.val(customerData.company_name).trigger('change');
+            }
+            
+            // Update branch name Select2
+            setTimeout(() => {
+                const $branch = $('#branch_name');
+                if ($branch.length) {
+                    // Check if option already exists
+                    if (!$branch.find(`option[value="${customerData.branch}"]`).length) {
+                        $branch.append(new Option(customerData.branch, customerData.branch, false, false));
+                    }
+                    $branch.val(customerData.branch).trigger('change');
+                }
+                
+                // Load customers for this company/branch combination and then update contact
+                setTimeout(() => {
+                    this.loadCustomers().then(() => {
+                        const $contact = $('#contact_name');
+                        if ($contact.length) {
+                            // Enable the contact dropdown since we now have company and branch
+                            $contact.prop('disabled', false);
+                            
+                            // Find the customer by name and company/branch (since we don't have ID from API)
+                            let targetCustomer = this.customers.find(c => 
+                                c.name === customerData.name && 
+                                c.company_name === customerData.company_name && 
+                                c.branch === customerData.branch
+                            );
+                            
+                            // If we found the customer, update the customerData with the real ID
+                            if (targetCustomer) {
+                                customerData.id = targetCustomer.id;
+                            }
+                            
+                            // Clear existing options except the first one (placeholder)
+                            $contact.find('option:not(:first)').remove();
+                            
+                            // Add all customers as options
+                            this.customers.forEach(customer => {
+                                const option = new Option(customer.name, customer.name, false, false);
+                                option.setAttribute('data-customer-id', customer.id);
+                                $contact.append(option);
+                            });
+                            
+                            // Set the value to the new customer
+                            $contact.val(customerData.name).trigger('change');
+                            
+                            // Update Vue model with the correct customer ID
+                            this.parentProject.contact_name = customerData.name;
+                            this.parentProject.customer_id = customerData.id;
+                        }
+                    }).catch(error => {
+                        console.error('Error loading customers:', error);
+                    });
+                }, 300);
+            }, 200);
         }
     },
+
+
+
     mounted() {
         // Initialize the form with default values
         this.parentProject = {
@@ -616,9 +976,32 @@ createApp({
             status: 'draft'
         };
         
+        // Load customer data
+        this.loadDepartments();
+        this.loadCategories();
+        // Don't load customers initially - only when company and branch are selected
+        
         // Initialize Select2 after Vue is mounted
         this.$nextTick(() => {
             this.initSelect2();
+            
+            // Initialize select2 for guis_department in customer modal
+            const guisDepartmentSelect = this.$refs.guisDepartmentSelect;
+            if (guisDepartmentSelect) {
+                $(guisDepartmentSelect).select2();
+                $(guisDepartmentSelect).on('change', (event) => {
+                    const val = $(event.target).val();
+                    this.newCustomer.guis_department = val ? val : [];
+                });
+            }
         });
+        
+        // Add event listener for modal hide
+        const customerModal = document.getElementById('customerModal');
+        if (customerModal) {
+            customerModal.addEventListener('hide.bs.modal', () => {
+                this.resetCustomerData();
+            });
+        }
     }
 }).mount('#app'); 

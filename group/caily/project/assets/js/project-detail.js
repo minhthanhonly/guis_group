@@ -237,6 +237,7 @@ const vueApp = createApp({
                 this.project.company_name = parentProject.company_name;
                 this.project.branch_name = parentProject.branch_name;
                 this.project.contact_name = parentProject.contact_name; // 担当様 from parent project
+                this.project.building_name = parentProject.project_name; // お施主様名 from parent project
                 this.project.building_number = parentProject.construction_number;
                 this.project.building_size = parentProject.scale;
                 this.project.building_type = parentProject.type1;

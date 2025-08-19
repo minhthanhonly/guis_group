@@ -354,6 +354,7 @@ class Quotation extends ApplicationModel {
                 'title' => $item['title'] ?? '',
                 'product_code' => $item['product_code'] ?? '',
                 'product_name' => $item['product_name'] ?? '',
+                'type' => $item['type'] ?? '',
                 'quantity' => $item['quantity'] ?? 0,
                 'unit' => $item['unit'] ?? '',
                 'unit_price' => $item['unit_price'] ?? 0,

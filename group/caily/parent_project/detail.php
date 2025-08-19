@@ -166,6 +166,15 @@ $view->heading('建物詳細');
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
+                                <label class="form-label">
+                                    <span data-i18n="管理番号">管理番号</span>
+                                </label>
+                                <input type="text" class="form-control" :value="parentProject.project_number || '-'"
+                                    readonly>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
                                 <template v-if="isEditMode">
                                     <input type="text" class="form-control" v-model="parentProject.construction_number"
@@ -177,15 +186,7 @@ $view->heading('建物詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label">
-                                    <span data-i18n="プロジェクト番号">プロジェクト番号</span>
-                                </label>
-                                <input type="text" class="form-control" :value="parentProject.project_number || '-'"
-                                    readonly>
-                            </div>
-                        </div>
+                        
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="工事支店">工事支店</span></label>
@@ -214,7 +215,7 @@ $view->heading('建物詳細');
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="案件名">案件名</span> <span
+                                <label class="form-label"><span data-i18n="お施主様名">お施主様名</span> <span
                                         class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
                                     <input type="text" class="form-control" v-model="parentProject.project_name"
@@ -1303,6 +1304,7 @@ $view->heading('建物詳細');
                                                         <th>プロジェクト番号</th>
                                                         <th>件名</th>
                                                         <th>商品コード</th>
+                                                        <th>タイプ</th>
                                                         <th style="width:70px;">数量</th>
                                                         <th style="width:70px;">単位</th>
                                                         <th style="width:100px;">単価</th>
@@ -1313,7 +1315,7 @@ $view->heading('建物詳細');
                                                 </thead>
                                                 <tbody id="quotation-items-sortable">
                                                     <tr v-if="newQuotation.items.length === 0">
-                                                        <td colspan="11" class="text-center text-muted py-4">
+                                                        <td colspan="12" class="text-center text-muted py-4">
                                                             商品がありません
                                                         </td>
                                                     </tr>
@@ -1350,6 +1352,10 @@ $view->heading('建物詳細');
                                                         <td>
                                                             <input type="text" class="form-control form-control-sm"
                                                                 v-model="item.product_code" placeholder="商品コード">
+                                                        </td>
+                                                        <td>
+                                                            <input type="text" class="form-control form-control-sm"
+                                                                v-model="item.type" placeholder="タイプ">
                                                         </td>
                                                         <td>
                                                             <input type="number" class="form-control form-control-sm"
@@ -1902,6 +1908,7 @@ $view->heading('建物詳細');
                                                     <th>プロジェクト番号</th>
                                                     <th>件名</th>
                                                     <th>商品コード</th>
+                                                    <th>タイプ</th>
                                                     <th style="width:70px;">数量</th>
                                                     <th style="width:70px;">単位</th>
                                                     <th style="width:100px;">単価</th>
@@ -1912,7 +1919,7 @@ $view->heading('建物詳細');
                                             </thead>
                                             <tbody id="edit-quotation-items-sortable">
                                                 <tr v-if="editingQuotation.items.length === 0">
-                                                    <td colspan="11" class="text-center text-muted py-4">
+                                                    <td colspan="12" class="text-center text-muted py-4">
                                                         商品がありません
                                                     </td>
                                                 </tr>
@@ -1949,6 +1956,10 @@ $view->heading('建物詳細');
                                                     <td>
                                                         <input type="text" class="form-control form-control-sm"
                                                             v-model="item.product_code" placeholder="商品コード">
+                                                    </td>
+                                                    <td>
+                                                        <input type="text" class="form-control form-control-sm"
+                                                            v-model="item.type" placeholder="タイプ">
                                                     </td>
                                                     <td>
                                                         <input type="number" class="form-control form-control-sm"
@@ -2311,6 +2322,7 @@ $view->heading('建物詳細');
                                             <tr>
                                                 <th>コード</th>
                                                 <th>商品名</th>
+                                                <th>タイプ</th>
                                                 <th style="width:70px;">数量</th>
                                                 <th style="width:70px;">単価</th>
                                                 <th>金額</th>
@@ -2321,6 +2333,7 @@ $view->heading('建物詳細');
                                             <tr v-for="product in getSelectedProductsList()" :key="product.id">
                                                 <td>{{ product.code }}</td>
                                                 <td>{{ product.name }}</td>
+                                                <td>{{ product.type }}</td>
                                                 <td>
                                                     <input type="number" min="1" step="1"
                                                         class="form-control form-control-sm"
