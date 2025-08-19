@@ -106,7 +106,7 @@ $view->heading('印鑑管理');
         </div>
 
         <!-- New/Edit Seal Modal -->
-        <div class="modal fade" id="sealModal" tabindex="-1">
+        <div class="modal fade" id="sealModal" tabindex="-1"  data-bs-backdrop="static" data-bs-keyboard="false">
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">

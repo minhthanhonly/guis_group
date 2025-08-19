@@ -331,7 +331,7 @@ $view->heading('建物詳細');
                                             class="btn btn-sm dropdown-toggle waves-effect waves-light"
                                             :class="getParentProjectStatusButtonClass(parentProject.status)" id="statusDropdown"
                                             data-bs-toggle="dropdown" aria-expanded="false">
-                                            {{ getStatusLabel(parentProject.status) }}
+                                            {{ getParentProjectStatusLabel(parentProject.status) }}
                                         </button>
                                         <ul class="dropdown-menu">
                                             <li v-for="status in statuses" :key="status.value">
@@ -343,8 +343,9 @@ $view->heading('建物詳細');
                                         </ul>
                                     </div>
                                     <div v-else>
-                                        <span class="badge" :class="getStatusBadgeClass(parentProject.status)">{{
-                                            getStatusLabel(parentProject.status) }}</span>
+                                        <span class="badge" :class="getParentProjectStatusBadgeClass(parentProject.status)">
+                                            {{ getParentProjectStatusLabel(parentProject.status) }}
+                                        </span>
                                     </div>
                                 </div>
                             </div>

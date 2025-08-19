@@ -71,6 +71,7 @@ var projectTable;
     ];
     // --- LocalStorage filter state ---
     const FILTER_STORAGE_KEY = 'projectListFilters';
+    const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment';
 
     function saveFiltersToLocalStorage() {
         const filters = {
@@ -1307,11 +1308,47 @@ var projectTable;
             }
         },
         methods: {
+            // Department localStorage methods
+            saveSelectedDepartmentToLocalStorage(department) {
+                if (department && department.id) {
+                    localStorage.setItem(SELECTED_DEPARTMENT_KEY, JSON.stringify({
+                        id: department.id,
+                        name: department.name,
+                        can_project: department.can_project
+                    }));
+                }
+            },
+            
+            loadSelectedDepartmentFromLocalStorage() {
+                try {
+                    const savedDepartment = localStorage.getItem(SELECTED_DEPARTMENT_KEY);
+                    if (savedDepartment) {
+                        return JSON.parse(savedDepartment);
+                    }
+                } catch (error) {
+                    console.error('Error loading selected department from localStorage:', error);
+                }
+                return null;
+            },
+            
             async loadDepartments() {
                 try {
                     const response = await axios.get('/api/index.php?model=department&method=listByUser');
                     this.departments = response.data || [];
-                    if(!this.selectedDepartment && this.departments.length > 0) {
+                    
+                    // Try to restore saved department from localStorage
+                    if (!this.selectedDepartment && this.departments.length > 0) {
+                        const savedDepartment = this.loadSelectedDepartmentFromLocalStorage();
+                        if (savedDepartment) {
+                            // Check if saved department still exists and user has access
+                            const department = this.departments.find(d => d && d.id == savedDepartment.id && d.can_project == 1);
+                            if (department) {
+                                this.viewProjects(department);
+                                return;
+                            }
+                        }
+                        
+                        // If no saved department or it's no longer accessible, use first available
                         this.selectedStatus = this.statuses[0];
                         const firstDepartment = this.departments.find(d => d && d.can_project == 1);
                         if (firstDepartment) {
@@ -1394,6 +1431,10 @@ var projectTable;
                 }
                 
                 this.selectedDepartment = department;
+                
+                // Save selected department to localStorage
+                this.saveSelectedDepartmentToLocalStorage(department);
+                
                 this.loadProjects();
                 
                 // Load user permissions for the selected department

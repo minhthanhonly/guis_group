@@ -424,13 +424,40 @@ createApp({
                 this.childProjects = [];
             }
         },
-        getStatusLabel(status) {
-            const s = this.statuses.find(s => s.value === status);
-            return s ? s.label : status;
+        getParentProjectStatusLabel(status) {
+            if (!status) return '-';
+            
+            // Handle both string and number status values
+            const statusStr = String(status).toLowerCase().trim();
+            
+            // Try exact match first
+            let s = this.statuses.find(s => s.value === statusStr);
+            
+            if (s) return s.label;
+            
+            // If no label found, format the raw status value nicely
+            if (typeof status === 'string') {
+                return status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
+            }
+            return status;
         },
-        getStatusBadgeClass(status) {
-            const s = this.statuses.find(s => s.value === status);
+        
+        getStatusLabel(status) {
+            // This is for quotation status - return as is since quotation uses Japanese labels
+            return status || '-';
+        },
+        getParentProjectStatusBadgeClass(status) {
+            if (!status) return 'bg-secondary';
+            // Handle both string and number status values
+            const statusStr = String(status).toLowerCase().trim();
+            const s = this.statuses.find(s => s.value === statusStr);
             return `bg-${s?.color || 'secondary'}`;
+        },
+        
+        getStatusBadgeClass(status) {
+            // This is for quotation status - return default class
+            if (!status) return 'bg-secondary';
+            return 'bg-primary';
         },
         getProjectStatusLabel(status) {
             const s = this.projectStatuses.find(s => s.value === status);
@@ -914,18 +941,19 @@ createApp({
                     if (deliveryDatePickerEl._flatpickr) {
                         deliveryDatePickerEl._flatpickr.destroy();
                     }
-                    deliveryDatePickerEl._flatpickr = flatpickr(deliveryDatePickerEl, {
-                        dateFormat: 'Y-m-d',
-                        locale: 'ja',
-                        allowInput: false,
-                        clickOpens: false,
-                        onChange: (selectedDates, dateStr) => {
-                            // Update the visible input with the selected date
-                            if (dateStr) {
-                                this.newQuotation.delivery_date = dateStr;
-                            }
+                                    deliveryDatePickerEl._flatpickr = flatpickr(deliveryDatePickerEl, {
+                    dateFormat: 'Y年n月j日',
+                    altFormat: 'Y年n月j日',
+                    locale: 'ja',
+                    allowInput: false,
+                    clickOpens: false,
+                    onChange: (selectedDates, dateStr) => {
+                        // Update the visible input with the selected date
+                        if (dateStr) {
+                            this.newQuotation.delivery_date = dateStr;
                         }
-                    });
+                    }
+                });
                     
                     // Set initial date if available and it's a valid date
                     if (this.newQuotation.delivery_date) {
@@ -1201,7 +1229,10 @@ createApp({
             }
         },
         getParentProjectStatusButtonClass(status) {
-            const s = this.statuses.find(s => s.value === status);
+            if (!status) return 'btn-secondary';
+            // Handle both string and number status values
+            const statusStr = String(status).toLowerCase();
+            const s = this.statuses.find(s => s.value === statusStr);
             return `btn-${s?.color || 'secondary'}`;
         },
         selectStatus(status) {
@@ -4587,7 +4618,8 @@ createApp({
             const deliveryDateInput = document.getElementById('edit_quotation_delivery_date');
             if (deliveryDateInput) {
                 const picker = flatpickr(deliveryDateInput, {
-                    dateFormat: 'Y-m-d',
+                    dateFormat: 'Y年n月j日',
+                    altFormat: 'Y年n月j日',
                     locale: 'ja',
                     allowInput: true,
                     clickOpens: true
@@ -4744,7 +4776,8 @@ createApp({
                     deliveryDatePickerEl._flatpickr.destroy();
                 }
                 deliveryDatePickerEl._flatpickr = flatpickr(deliveryDatePickerEl, {
-                    dateFormat: 'Y-m-d',
+                    dateFormat: 'Y年n月j日',
+                    altFormat: 'Y年n月j日',
                     locale: 'ja',
                     allowInput: false,
                     clickOpens: false,

@@ -84,10 +84,10 @@ class Seal extends ApplicationModel {
             // Delete old image if exists
             $old_seal = $this->get();
             if ($old_seal && !empty($old_seal['image_path'])) {
-                $old_file_path = $_SERVER['DOCUMENT_ROOT'] . $old_seal['image_path'];
-                if (file_exists($old_file_path)) {
-                    unlink($old_file_path);
-                }
+//$old_file_path = $_SERVER['DOCUMENT_ROOT'] . $old_seal['image_path'];
+                //if (file_exists($old_file_path)) {
+                 //   unlink($old_file_path);
+                //}
             }
             
             $upload_result = $this->upload_file();
