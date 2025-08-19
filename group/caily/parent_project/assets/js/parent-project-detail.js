@@ -14,6 +14,15 @@ createApp({
             users: [],
             departments: [],
             guisReceiverDisplayName: '', // Add this to store the display name
+            // Customer modal data
+            categories: [],
+            selectedCustomer: null,
+            customerErrors: {
+                company_name: '',
+                name: '',
+                guis_department: ''
+            },
+            updatingCustomer: false,
             type1Tagify: null,
             type2Tagify: null,
             constructionBranchTagify: null,
@@ -1965,7 +1974,7 @@ createApp({
         }
     },
 
-        showCreateQuotationModal() {
+        async showCreateQuotationModal() {
             // Clear any existing validation errors
             this.quotationValidationErrors = {};
             
@@ -1990,7 +1999,7 @@ createApp({
                     this.updateChildProjectSelection();
                 }
             } else {
-                this.resetQuotationForm();
+                await this.resetQuotationForm();
             }
             
             const modal = new bootstrap.Modal(document.getElementById('createQuotationModal'));
@@ -2035,12 +2044,22 @@ createApp({
             return `G-${year}${monthLetter}${dayLetter}${hourLetter}${minute}${second}`;
         },
 
-        resetQuotationForm() {
+        async resetQuotationForm() {
+            // Load customer data to get address
+            const customer = await this.loadCustomerDataByProject();
+            let customerAddress = '';
+            if (customer) {
+                const zip = customer.zip ? `〒${customer.zip}　` : '';
+                const address1 = customer.address1 || '';
+                const address2 = '\n' + customer.address2 || '';
+                customerAddress = `${zip}${address1}${address2}`.trim();
+            }
+
             this.newQuotation = {
                 issue_date: new Date().toISOString().split('T')[0],
                 quotation_number: this.generateQuotationNumber(),
                 sender_company: this.parentProject?.company_name || '',
-                sender_address: '',
+                sender_address: customerAddress,
                 sender_contact: this.parentProject?.contact_name ? this.parentProject.contact_name + '様' : '',
                 selected_branch_id: '',
                 receiver_company: '',
@@ -2480,10 +2499,10 @@ createApp({
             this.quotationFormBackup.selectedChildProjectIds = [...this.selectedChildProjectIds];
         },
 
-        clearQuotationFormBackup() {
+        async clearQuotationFormBackup() {
             // Clear backup and reset form
             this.quotationFormBackup = null;
-            this.resetQuotationForm();
+            await this.resetQuotationForm();
         },
         
         destroyQuotationDatePickers() {
@@ -5119,6 +5138,203 @@ createApp({
             }
         },
         
+        // Customer modal methods
+        async loadCategories() {
+            try {
+                const response = await axios.get('/api/index.php?model=customer&method=list_category');
+                this.categories = response.data;
+            } catch (error) {
+                console.error('Error loading categories:', error);
+                showMessage('カテゴリーの読み込みに失敗しました。', true);
+            }
+        },
+
+        async loadCustomerDataByProject() {
+            if (!this.parentProject.contact_name || !this.parentProject.company_name) {
+                return null;
+            }
+
+            try {
+                // Load categories if not already loaded
+                if (this.categories.length === 0) {
+                    await this.loadCategories();
+                }
+                
+                // Find customer by contact name, company name, and branch name
+                let customer = null;
+                for (const category of this.categories) {
+                    const customersResponse = await axios.get(`/api/index.php?model=customer&method=list_customer&category_id=${category.id}`);
+                    if (customersResponse.data.status === 'success' && customersResponse.data.data) {
+                        customer = customersResponse.data.data.find(c => 
+                            c.name === this.parentProject.contact_name &&
+                            c.company_name === this.parentProject.company_name &&
+                            c.branch === this.parentProject.branch_name
+                        );
+                        if (customer) break;
+                    }
+                }
+
+                return customer;
+            } catch (error) {
+                console.error('Error loading customer data:', error);
+                return null;
+            }
+        },
+
+        async openCustomerInfoModal() {
+            if (!this.parentProject.contact_name) {
+                showMessage('担当者が選択されていません。', true);
+                return;
+            }
+
+            try {
+                // Load departments first
+                await this.loadDepartments();
+                
+                // Load customer data
+                const customer = await this.loadCustomerDataByProject();
+
+                if (customer) {
+                    // Convert guis_department string to array of strings
+                    if (typeof customer.guis_department === 'string') {
+                        customer.guis_department = customer.guis_department ? customer.guis_department.split(',').map(id => id.trim()) : [];
+                    } else if (!Array.isArray(customer.guis_department)) {
+                        customer.guis_department = [];
+                    }
+                    
+                    this.selectedCustomer = { ...customer };
+                    
+                    // Show modal
+                    $('#customerInfoModal').modal('show');
+                    
+                    // Initialize Select2 for guis_department after modal is shown
+                    setTimeout(() => {
+                        const selectElement = $(this.$refs.customerGuisDepartmentSelect);
+                        if (selectElement.length) {
+                            // Destroy existing Select2 if any
+                            if (selectElement.hasClass('select2-hidden-accessible')) {
+                                selectElement.select2('destroy');
+                            }
+                            
+                            // Initialize Select2
+                            selectElement.select2({
+                                placeholder: '部署を選択してください',
+                                allowClear: true,
+                                width: '100%'
+                            });
+                            
+                            // Set values
+                            selectElement.val(this.selectedCustomer.guis_department).trigger('change');
+                            
+                            // Handle change event
+                            selectElement.off('change.customerModal').on('change.customerModal', (event) => {
+                                const val = $(event.target).val();
+                                this.selectedCustomer.guis_department = val ? val : [];
+                            });
+                        }
+                    }, 300);
+                } else {
+                    showMessage('顧客情報が見つかりません。', true);
+                }
+            } catch (error) {
+                console.error('Error loading customer info:', error);
+                showMessage('顧客情報の読み込みに失敗しました。', true);
+            }
+        },
+
+        async updateCustomer() {
+            // Reset errors
+            this.customerErrors = { company_name: '', name: '', guis_department: '' };
+            let hasError = false;
+            
+            if (!this.selectedCustomer.company_name) {
+                this.customerErrors.company_name = '会社名は必須です。';
+                hasError = true;
+            }
+            if (!this.selectedCustomer.name) {
+                this.customerErrors.name = '担当者名は必須です。';
+                hasError = true;
+            }
+            if (!this.selectedCustomer.guis_department || this.selectedCustomer.guis_department.length === 0) {
+                this.customerErrors.guis_department = '自社担当部署名は必須です。';
+                hasError = true;
+            }
+            if (hasError) return;
+
+            // Set default branch to "本社" if empty
+            if (!this.selectedCustomer.branch || this.selectedCustomer.branch.trim() === '') {
+                this.selectedCustomer.branch = '本社';
+            }
+
+            this.updatingCustomer = true;
+
+            try {
+                // Prepare data for submission - convert guis_department array to string
+                const customerData = { ...this.selectedCustomer };
+                if (Array.isArray(customerData.guis_department)) {
+                    customerData.guis_department = customerData.guis_department.join(',');
+                }
+
+                const response = await axios.post(`/api/index.php?model=customer&method=edit_customer&id=${this.selectedCustomer.id}`, customerData, {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                });
+                
+                if (response.data.status === 'success') {
+                    showMessage('顧客情報を更新しました。');
+                    
+                    // Update parent project if customer name or company changed
+                    if (this.selectedCustomer.name !== this.parentProject.contact_name ||
+                        this.selectedCustomer.company_name !== this.parentProject.company_name ||
+                        this.selectedCustomer.branch !== this.parentProject.branch_name) {
+                        
+                        // Update parent project data
+                        this.parentProject.contact_name = this.selectedCustomer.name;
+                        this.parentProject.company_name = this.selectedCustomer.company_name;
+                        this.parentProject.branch_name = this.selectedCustomer.branch;
+                        
+                        // Save parent project changes
+                        await this.saveParentProject();
+                    }
+                    
+                    // Close modal
+                    $('#customerInfoModal').modal('hide');
+                    this.selectedCustomer = null;
+                } else {
+                    showMessage(response.data.message_code, true);
+                }
+            } catch (error) {
+                console.error('Error updating customer:', error);
+                showMessage('顧客情報の更新に失敗しました。', true);
+            } finally {
+                this.updatingCustomer = false;
+            }
+        },
+
+        searchAddressCustomer() {
+            const postalCode = this.selectedCustomer.zip;
+            if (postalCode.length >= 7) {
+                const apiUrl = `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${postalCode}`;
+                axios.get(apiUrl)
+                    .then(response => {
+                        if (response.data.results && response.data.results.length > 0) {
+                            const result = response.data.results[0];
+                            this.selectedCustomer.address1 = result.address1;
+                            this.selectedCustomer.address2 = result.address2;
+                        } else {
+                            showMessage('郵便番号が見つかりません。', true);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error searching address:', error);
+                        showMessage('住所の検索に失敗しました。', true);
+                    });
+            } else {
+                showMessage('郵便番号が正しくありません。', true);  
+            }
+        },
+
         getInitials(name) {
             if (!name) return '?';
             
@@ -5178,6 +5394,21 @@ createApp({
                     setTimeout(() => {
                         this.cleanupModalBackdrop();
                     }, 200);
+                });
+            }
+
+            // Add event listener for customer info modal
+            const customerInfoModal = document.getElementById('customerInfoModal');
+            if (customerInfoModal) {
+                customerInfoModal.addEventListener('hidden.bs.modal', () => {
+                    // Cleanup Select2 when modal is closed
+                    const selectElement = $(this.$refs.customerGuisDepartmentSelect);
+                    if (selectElement.length && selectElement.hasClass('select2-hidden-accessible')) {
+                        selectElement.select2('destroy');
+                    }
+                    // Reset customer data
+                    this.selectedCustomer = null;
+                    this.customerErrors = { company_name: '', name: '', guis_department: '' };
                 });
             }
 

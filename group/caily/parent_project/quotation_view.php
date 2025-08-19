@@ -665,7 +665,7 @@ function formatJapaneseDate($dateString) {
                         
                         <!-- Total row -->
                         <tr class="table-secondary">
-                            <td colspan="5" class="text-end fw-bold">合計</td>
+                            <td colspan="6" class="text-end fw-bold">合計</td>
                             <td class="text-end fw-bold">¥<?php echo formatPrice($quotation['total_amount']); ?></td>
                             <td>&nbsp;</td>
                         </tr>

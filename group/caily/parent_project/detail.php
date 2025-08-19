@@ -111,7 +111,12 @@ $view->heading('建物詳細');
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="担当様">担当様</span></label>
+                                <label class="form-label">
+                                    <span data-i18n="担当様">担当様</span>
+                                    <button v-if="!isEditMode && parentProject.contact_name" type="button" class="btn btn-sm btn-outline-info py-0 small ms-2" @click="openCustomerInfoModal" title="顧客情報表示・編集">
+                                        <i class="fa fa-info-circle me-1"></i> 顧客情報
+                                    </button>
+                                </label>
                                 <template v-if="isEditMode">
                                     <select id="contact_name" class="form-select select2"
                                         v-model="parentProject.contact_name" name="contact_name">
@@ -2434,6 +2439,142 @@ $view->heading('建物詳細');
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
                     <button type="button" class="btn btn-primary" @click="saveEditedSet">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Info Modal -->
+    <div class="modal fade" id="customerInfoModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">顧客情報</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div v-if="selectedCustomer">
+                        <form @submit.prevent="updateCustomer">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">カテゴリー</label>
+                                    <select class="form-select" v-model="selectedCustomer.category_id" required>
+                                        <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">会社名/支店名 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.company_name" required>
+                                    <div v-if="customerErrors.company_name" class="text-danger small mt-1">{{ customerErrors.company_name }}</div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">会社名/支店名(ふりがな)</label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.company_name_kana" required>
+                                </div>
+                            
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">担当者名 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.name" required>
+                                    <div v-if="customerErrors.name" class="text-danger small mt-1">{{ customerErrors.name }}</div>
+                                </div> 
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">担当者名(ふりがな)</label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.name_kana" required>
+                                </div>
+                            
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">支店名</label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.branch" required>
+                                </div>
+                            
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">担当部署</label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.department" required>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">役職</label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.position" required>
+                                </div>
+                            
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">敬称</label>
+                                    <select class="form-select" v-model="selectedCustomer.title" required>
+                                        <option>様</option>
+                                        <option>御社</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">メールアドレス</label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.email" required>
+                                </div>
+                            
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">電話番号</label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.tel" required>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">FAX</label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.fax" required>
+                                </div>
+                            
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">携帯番号</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" v-model="selectedCustomer.phone" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">郵便番号</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" v-model="selectedCustomer.zip" required>
+                                        <button class="btn btn-outline-primary waves-effect" type="button" @click.prevent="searchAddressCustomer">住所検索</button>
+                                    </div>
+                                </div>
+                            
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">住所1</label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.address1" required>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">住所2</label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.address2" required>
+                                </div>
+                            
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">状況</label>
+                                    <select class="form-select" v-model="selectedCustomer.status" required>
+                                        <option value="1">有効</option>
+                                        <option value="0">無効</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">自社担当部署名 <span class="text-danger">*</span></label>
+                                    <select ref="customerGuisDepartmentSelect" class="form-select" v-model="selectedCustomer.guis_department" required multiple>
+                                        <option v-for="department in departments" :key="department.id" :value="department.id">{{ department.name }}</option>
+                                    </select>
+                                    <div v-if="customerErrors.guis_department" class="text-danger small mt-1">{{ customerErrors.guis_department }}</div>
+                                </div>
+                            
+                                <div class="col-md-12 mb-3">
+                                    <label class="form-label">メモ</label>
+                                    <textarea class="form-control" v-model="selectedCustomer.memo" required></textarea>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div v-else class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">読み込み中...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                    <button type="button" class="btn btn-primary" @click="updateCustomer" :disabled="updatingCustomer">
+                        <span v-if="updatingCustomer" class="spinner-border spinner-border-sm me-1"></span>
+                        更新
+                    </button>
                 </div>
             </div>
         </div>
