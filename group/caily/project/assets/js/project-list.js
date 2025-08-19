@@ -194,8 +194,8 @@ var projectTable;
                         start: d.start,
                         length: d.length,
                         search: d.search.value,
-                        order_column: d.columns[d.order[0].column].data,
-                        order_dir: d.order[0].dir,
+                        order_column: d.order && d.order[0] && d.columns[d.order[0].column]?.data || 'created_at',
+                        order_dir: d.order && d.order[0] ? d.order[0].dir : 'desc',
                         filterStartMonth,
                         filterEndMonth,
                         filterPriority,
@@ -245,33 +245,63 @@ var projectTable;
                     },
                     title: '<span data-i18n="顧客情報">顧客情報</span>'
                 },
-                { 
-                    data: 'building_type',
-                    render: function(data, type, row) {
-                        return `<div class="d-flex align-items-start justify-content-start flex-column">
-                                    <span class="project-type small">${row.building_type || '-'}</span>
-                                    <span class="project-type small">${row.building_size|| '-'}</span>
-                                </div>`;
-                    },
-                    title: '建物情報'
-                },
+
                 { 
                     data: 'project_order_type',
                     render: function(data, type, row) {
-                        if (Array.isArray(data)) {
-                            return `<ul class="mb-0 ps-3">${data.map(item => `<li class="small">${item}</li>`).join('')}</ul>`;
-                        } else if (typeof data === 'string') {
-                            try {
-                                const decoded = decodeHtmlEntities(data);
-                                const arr = JSON.parse(decoded);
-                                if (Array.isArray(arr)) {
-                                    return `<ul class="mb-0 list-unstyled">${arr.map(item => `<li class="small">${item}</li>`).join('')}</ul>`;
-                                }
-                            } catch (e) {
-                                return `<span class="small">${data || '-'}</span>`;
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        
+                        // Helper function to get badge class
+                        const getOrderTypeBadgeClass = function(orderType) {
+                            const type = orderType.trim().toLowerCase();
+                            switch (type) {
+                                case '修正':
+                                    return 'bg-warning'; // Yellow for edit
+                                case '新規':
+                                    return 'bg-primary'; // Blue for new
+                                default:
+                                    return 'bg-info'; // Gray for unknown types
+                            }
+                        };
+                        
+                        // Handle comma-separated string
+                        if (typeof data === 'string') {
+                            const items = data.split(',').map(item => item.trim()).filter(item => item);
+                            if (items.length > 0) {
+                                return items.map(item => {
+                                    const badgeClass = getOrderTypeBadgeClass(item);
+                                    return `<span class="badge ${badgeClass} me-1">${item}</span>`;
+                                }).join('');
                             }
                         }
-                        return `<span class="small">-</span>`;
+                        
+                        // Handle array format
+                        if (Array.isArray(data)) {
+                            return data.map(item => {
+                                const badgeClass = getOrderTypeBadgeClass(item);
+                                return `<span class="badge ${badgeClass} me-1">${item}</span>`;
+                            }).join('');
+                        }
+                        
+                        // Try to parse JSON if it's a string
+                        try {
+                            const decoded = decodeHtmlEntities(data);
+                            const arr = JSON.parse(decoded);
+                            if (Array.isArray(arr)) {
+                                return arr.map(item => {
+                                    const badgeClass = getOrderTypeBadgeClass(item);
+                                    return `<span class="badge ${badgeClass} me-1">${item}</span>`;
+                                }).join('');
+                            }
+                        } catch (e) {
+                            // If parsing fails, treat as single item
+                            const badgeClass = getOrderTypeBadgeClass(data);
+                            return `<span class="badge ${badgeClass}">${data}</span>`;
+                        }
+                        
+                        return '<span class="text-muted">-</span>';
                     },
                     title: '<span data-i18n="受注形態">受注形態</span>'
                 },
@@ -424,7 +454,7 @@ var projectTable;
                 //     title: '<span data-i18n="操作">操作</span>'
                 // }
             ],
-            order: [[11, 'asc']],
+            order: [[10, 'asc']],
            
             pageLength: 50,
             ordering: true,
@@ -1344,6 +1374,17 @@ var projectTable;
                 } catch (error) {
                     console.error('Error loading teams:', error);
                     return [];
+                }
+            },
+            getOrderTypeBadgeClass(orderType) {
+                const type = orderType.trim().toLowerCase();
+                switch (type) {
+                    case '修正':
+                        return 'bg-warning'; // Yellow for edit
+                    case '新規':
+                        return 'bg-primary'; // Blue for new
+                    default:
+                        return 'bg-info'; // Gray for unknown types
                 }
             },
             viewProjects(department) {

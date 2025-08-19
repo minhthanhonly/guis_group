@@ -132,6 +132,7 @@ createApp({
             filteredPriceListProducts: [],
             selectedPriceListType: '',
             priceListSearchTerm: '',
+            priceListTagSearchTerm: '',
             priceListModal: null,
             
             // Sortable instances
@@ -196,7 +197,11 @@ createApp({
             editQuotationFormBackup: null,
             
             // Context tracking for price list modal
-            isPriceListOpenFromEdit: false
+            isPriceListOpenFromEdit: false,
+            
+            // Quotation history data
+            quotationHistory: [],
+            selectedQuotationForHistory: null
         }
     },
     watch: {
@@ -709,7 +714,7 @@ createApp({
                             return {
                                 results: data.data.map(function(item) {
                                     return {
-                                        id: item.name,
+                                        id: item.id,
                                         text: item.name
                                     };
                                 })
@@ -717,15 +722,18 @@ createApp({
                         }
                     }
                 }).on('select2:select', (e) => {
-                    this.parentProject.contact_name = e.params.data.id;
+                    this.parentProject.contact_name = e.params.data.text;
+                    this.parentProject.customer_id = e.params.data.id;
                 }).on('select2:clear', () => {
                     this.parentProject.contact_name = '';
+                    this.parentProject.customer_id = '';
                 });
 
                 // Set current value if exists
                 if (this.parentProject.contact_name) {
-                    // Add the current option to the select
-                    const option = new Option(this.parentProject.contact_name, this.parentProject.contact_name, true, true);
+                    // Add the current option to the select using customer_id as value
+                    const optionValue = this.parentProject.customer_id || this.parentProject.contact_name;
+                    const option = new Option(this.parentProject.contact_name, optionValue, true, true);
                     $contact.append(option).trigger('change');
                 }
             }
@@ -1153,6 +1161,7 @@ createApp({
                 formData.append('company_name', this.parentProject.company_name || '');
                 formData.append('branch_name', this.parentProject.branch_name || '');
                 formData.append('contact_name', this.parentProject.contact_name || '');
+                formData.append('customer_id', this.parentProject.customer_id || '');
                 formData.append('guis_receiver', this.parentProject.guis_receiver || '');
                 formData.append('request_date', this.parentProject.request_date || '');
                 formData.append('construction_number', this.parentProject.construction_number || '');
@@ -2371,6 +2380,9 @@ createApp({
                     });
                 }
                 
+                // Add updated_by field
+                formData.append('updated_by', CURRENT_USER_NAME);
+                
                 // Debug: Check if items is actually in FormData
                 const itemsEntry = formData.get('items');
                 
@@ -2485,6 +2497,12 @@ createApp({
             
             if (!this.newQuotation.receiver_company) {
                 this.quotationValidationErrors.receiver_company = '受注者会社名は必須です';
+                isValid = false;
+            }
+            
+            // Validate subject
+            if (!this.newQuotation.subject || this.newQuotation.subject.trim() === '') {
+                this.quotationValidationErrors.subject = '件名は必須です';
                 isValid = false;
             }
             
@@ -2690,6 +2708,7 @@ createApp({
                 const formData = new FormData();    
                 formData.append('quotation_id', quotationId);
                 formData.append('status', status);
+                formData.append('updated_by', CURRENT_USER_NAME);
                 const response = await axios.post('/api/index.php?model=quotation&method=updateStatus', formData);
                 
                 if (response.data && response.data.status === 'success') {
@@ -2826,6 +2845,15 @@ createApp({
                 );
             }
             
+            // Filter by tags
+            if (this.priceListTagSearchTerm) {
+                const tagTerm = this.priceListTagSearchTerm.toLowerCase();
+                filtered = filtered.filter(product => {
+                    if (!product.tags) return false;
+                    return product.tags.toLowerCase().includes(tagTerm);
+                });
+            }
+            
             this.filteredPriceListProducts = filtered;
             
             // Do not reset selected products when filter/search changes
@@ -2860,6 +2888,10 @@ createApp({
             this.priceListPage = 1;
             this.highlightedIndex = 0;
             this.selectedProductQuantities = {};
+            // Reset filters
+            this.selectedPriceListType = '';
+            this.priceListSearchTerm = '';
+            this.priceListTagSearchTerm = '';
             
             this.priceListModal.show();
         },
@@ -2907,6 +2939,7 @@ createApp({
         // Reset filters
         this.selectedPriceListType = '';
         this.priceListSearchTerm = '';
+        this.priceListTagSearchTerm = '';
         this.filterPriceListProducts();
     },
             
@@ -3104,6 +3137,7 @@ createApp({
             this.selectedSetName = '';
             this.selectedPriceListType = '';
             this.priceListSearchTerm = '';
+            this.priceListTagSearchTerm = '';
             this.filterPriceListProducts();
         },
         
@@ -3309,6 +3343,7 @@ createApp({
             this.selectedProductQuantities = {};
             this.selectedPriceListType = '';
             this.priceListSearchTerm = '';
+            this.priceListTagSearchTerm = '';
             this.filterPriceListProducts();
         },
 
@@ -4270,6 +4305,48 @@ createApp({
             }
         },
 
+        // Modal cleanup helper method
+        cleanupModalBackdrop() {
+            // Check if there are any open modals before cleanup
+            const openModals = document.querySelectorAll('.modal.show');
+            
+            // Only cleanup if no modals are currently open
+            if (openModals.length === 0) {
+                // Remove any lingering modal backdrops
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(backdrop => {
+                    backdrop.remove();
+                });
+                
+                // Remove modal-open class from body
+                document.body.classList.remove('modal-open');
+                
+                // Reset body style
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
+        },
+
+        // Safe modal close method
+        safeCloseModal(modalId) {
+            const modalElement = document.getElementById(modalId);
+            if (modalElement) {
+                const modalInstance = bootstrap.Modal.getInstance(modalElement);
+                if (modalInstance) {
+                    modalInstance.hide();
+                    // Ensure cleanup after modal is hidden
+                    setTimeout(() => {
+                        this.cleanupModalBackdrop();
+                    }, 300);
+                }
+            }
+        },
+
+        // Close edit quotation modal safely
+        closeEditQuotationModal() {
+            this.safeCloseModal('editQuotationModal');
+        },
+
         // Form reset and update methods
         resetEditQuotationForm() {
             if (this.editQuotationFormBackup) {
@@ -4398,6 +4475,9 @@ createApp({
                         formData.append(`selected_child_project_ids[${index}]`, id);
                     });
                 }
+                
+                // Add updated_by field
+                formData.append('updated_by', CURRENT_USER_NAME);
 
                 // Update quotation
                 const response = await axios.post('/api/index.php?model=quotation&method=update', formData);
@@ -4412,11 +4492,8 @@ createApp({
                     await this.loadQuotations();
                     await this.loadChildProjects();
                     
-                    // Close modal
-                    const editModal = bootstrap.Modal.getInstance(document.getElementById('editQuotationModal'));
-                    if (editModal) {
-                        editModal.hide();
-                    }
+                    // Close modal safely
+                    this.safeCloseModal('editQuotationModal');
                 } else {
                     showMessage(response.data?.message || '見積書の更新に失敗しました。', true);
                 }
@@ -4450,6 +4527,12 @@ createApp({
 
             if (!this.editingQuotation.receiver_company) {
                 this.editQuotationValidationErrors.receiver_company = '発注者会社名は必須です';
+                isValid = false;
+            }
+
+            // Validate subject
+            if (!this.editingQuotation.subject || this.editingQuotation.subject.trim() === '') {
+                this.editQuotationValidationErrors.subject = '件名は必須です';
                 isValid = false;
             }
 
@@ -4870,6 +4953,142 @@ createApp({
                 console.error('Error parsing quotation project IDs:', error, quotation);
                 return [];
             }
+        },
+        
+        // Quotation history methods
+        async showQuotationHistory(quotation) {
+            try {
+                this.selectedQuotationForHistory = quotation;
+                this.quotationHistory = [];
+                
+                // Load quotation history
+                const response = await axios.get(`/api/index.php?model=quotation&method=getLogs&quotation_id=${quotation.id}`);
+                if (response.data && Array.isArray(response.data)) {
+                    this.quotationHistory = response.data;
+                }
+                
+                // Show the modal
+                const modal = new bootstrap.Modal(document.getElementById('quotationHistoryModal'));
+                modal.show();
+            } catch (error) {
+                console.error('Error loading quotation history:', error);
+                this.quotationHistory = [];
+                
+                // Still show the modal even if loading fails
+                const modal = new bootstrap.Modal(document.getElementById('quotationHistoryModal'));
+                modal.show();
+            }
+        },
+        
+        historyIcon(action) {
+            switch(action) {
+                case 'created': return 'fa fa-pencil-alt text-primary';
+                case 'updated': return 'fa fa-sync text-info';
+                case 'status_changed': return 'fa fa-random text-primary';
+                case 'deleted': return 'fa fa-trash text-danger';
+                default: return 'fa fa-history text-secondary';
+            }
+        },
+        
+        getLogBadgeClass(log, field) {
+            if (log.action === 'status_changed') {
+                return 'badge ' + this.getStatusBadgeClass(log[field]);
+            }
+            return field === 'value1' ? 'badge bg-secondary' : 'badge bg-primary';
+        },
+        
+        getLogBadgeLabel(log, field) {
+            if (log.action === 'status_changed') {
+                return this.getStatusLabel(log[field]);
+            }
+            return log[field];
+        },
+        
+        getStatusBadgeClass(status) {
+            switch(status) {
+                case '下書き': return 'bg-secondary';
+                case '発行済み': return 'bg-info';
+                case '承認済み': return 'bg-success';
+                case '却下': return 'bg-danger';
+                case '調整': return 'bg-warning';
+                case 'キャンセル': return 'bg-dark';
+                default: return 'bg-secondary';
+            }
+        },
+        
+        getStatusLabel(status) {
+            switch(status) {
+                case '下書き': return '下書き';
+                case '発行済み': return '発行済み';
+                case '承認済み': return '承認済み';
+                case '却下': return '却下';
+                case '調整': return '調整';
+                case 'キャンセル': return 'キャンセル';
+                default: return status;
+            }
+        },
+        
+        formatShortDateTime(dateTimeString) {
+            if (!dateTimeString) return '';
+            
+            try {
+                const date = new Date(dateTimeString);
+                if (isNaN(date.getTime())) return dateTimeString;
+                
+                const now = new Date();
+                const diffMs = now.getTime() - date.getTime();
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                
+                if (diffDays === 0) {
+                    // Today - show time only
+                    return date.toLocaleTimeString('ja-JP', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                } else if (diffDays === 1) {
+                    // Yesterday
+                    return '昨日 ' + date.toLocaleTimeString('ja-JP', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                } else if (diffDays < 7) {
+                    // Within a week - show day and time
+                    const days = ['日', '月', '火', '水', '木', '金', '土'];
+                    return days[date.getDay()] + ' ' + date.toLocaleTimeString('ja-JP', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                } else {
+                    // More than a week - show date and time
+                    return date.toLocaleDateString('ja-JP', { 
+                        month: '2-digit', 
+                        day: '2-digit' 
+                    }) + ' ' + date.toLocaleTimeString('ja-JP', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                }
+            } catch (error) {
+                return dateTimeString;
+            }
+        },
+        
+        getInitials(name) {
+            if (!name) return '?';
+            
+            try {
+                // Split by spaces and take first character of each part
+                const parts = name.trim().split(/\s+/);
+                if (parts.length === 1) {
+                    // Single word - take first character
+                    return name.charAt(0).toUpperCase();
+                } else {
+                    // Multiple words - take first character of first and last
+                    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+                }
+            } catch (error) {
+                return name.charAt(0).toUpperCase();
+            }
         }
     },
     async mounted() {
@@ -4901,6 +5120,18 @@ createApp({
                 editQuotationModal.addEventListener('hidden.bs.modal', () => {
                     // Reset form when modal is closed
                     this.resetEditQuotationForm();
+                    // Ensure backdrop cleanup
+                    setTimeout(() => {
+                        this.cleanupModalBackdrop();
+                    }, 100);
+                });
+
+                // Also handle hide.bs.modal event for additional cleanup
+                editQuotationModal.addEventListener('hide.bs.modal', () => {
+                    // Pre-cleanup before modal starts hiding
+                    setTimeout(() => {
+                        this.cleanupModalBackdrop();
+                    }, 200);
                 });
             }
 

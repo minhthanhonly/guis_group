@@ -67,12 +67,15 @@ $view->heading('建物登録');
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
-                                    <span data-i18n="依頼日">依頼日</span>
+                                    <span data-i18n="依頼日">依頼日</span> <span class="text-danger">*</span>
                                     <button type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2" @click="setCurrentDateTime">
                                         <i class="fa fa-clock me-1"></i> 現在時刻
                                     </button>
                                 </label>
-                                <input type="text" class="form-control" v-model="parentProject.request_date" id="request_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                <input type="text" class="form-control" v-model="parentProject.request_date" id="request_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off" required>
+                                <div v-if="validationErrors.request_date" class="invalid-feedback d-block">
+                                    {{ validationErrors.request_date }}
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -84,12 +87,15 @@ $view->heading('建物登録');
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
-                                    <span data-i18n="プロジェクト番号">プロジェクト番号</span>
+                                    <span data-i18n="プロジェクト番号">プロジェクト番号</span> <span class="text-danger">*</span>
                                     <button class="btn btn-sm btn-outline-primary py-0 small ms-2" @click="generateProjectNumber" title="生成">
                                         生成
                                     </button>
                                 </label>
-                                <input type="text" class="form-control" v-model="parentProject.project_number">
+                                <input type="text" class="form-control" v-model="parentProject.project_number" required>
+                                <div v-if="validationErrors.project_number" class="invalid-feedback d-block">
+                                    {{ validationErrors.project_number }}
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -132,12 +138,15 @@ $view->heading('建物登録');
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
-                                    <span data-i18n="希望納期">希望納期</span>
+                                    <span data-i18n="希望納期">希望納期</span> <span class="text-danger">*</span>
                                         <button type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2" @click="setTodayDate">
                                         <i class="fa fa-calendar me-1"></i> 今日
                                     </button>
                                 </label>
-                                <input type="text" class="form-control" v-model="parentProject.desired_delivery_date" id="desired_delivery_date_picker" placeholder="YYYY/MM/DD" autocomplete="off">
+                                <input type="text" class="form-control" v-model="parentProject.desired_delivery_date" id="desired_delivery_date_picker" placeholder="YYYY/MM/DD" autocomplete="off" required>
+                                <div v-if="validationErrors.desired_delivery_date" class="invalid-feedback d-block">
+                                    {{ validationErrors.desired_delivery_date }}
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">

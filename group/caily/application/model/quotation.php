@@ -33,7 +33,8 @@ class Quotation extends ApplicationModel {
             'selected_branch_id' => array(),
             'status' => array(),
             'created_at' => array('except' => array('search')),
-            'updated_at' => array('except' => array('search'))
+            'updated_at' => array('except' => array('search')),
+            'updated_by' => array()
         );
         $this->connect();
     }
@@ -51,217 +52,58 @@ class Quotation extends ApplicationModel {
     function create() {
         $data = $_POST;
         
-        // Debug: Log all received data
-        error_log('=== CREATE QUOTATION - RECEIVED DATA ===');
-        error_log('All POST data: ' . print_r($data, true));
-        error_log('Items field raw value: ' . ($data['items'] ?? 'NOT_SET'));
-        error_log('Items field type: ' . gettype($data['items'] ?? 'NOT_SET'));
-        error_log('Items field length: ' . (isset($data['items']) ? strlen($data['items']) : 'NOT_SET'));
-        error_log('Items field empty check: ' . (empty($data['items']) ? 'true' : 'false'));
-        error_log('=== END RECEIVED DATA ===');
+
 
         $errors = array();
         
         if (empty($data['quotation_number'])) {
             $errors['quotation_number'] = '見積番号は必須です';
-            error_log('quotation_number validation failed: ' . ($data['quotation_number'] ?? 'NULL'));
         }
         
         if (empty($data['issue_date'])) {
             $errors['issue_date'] = '発行日は必須です';
-            error_log('issue_date validation failed: ' . ($data['issue_date'] ?? 'NULL'));
         }
         
         if (empty($data['sender_company'])) {
             $errors['sender_company'] = '発注者会社名は必須です';
-            error_log('sender_company validation failed: ' . ($data['sender_company'] ?? 'NULL'));
         }
         
         if (empty($data['receiver_company'])) {
             $errors['receiver_company'] = '受注者会社名は必須です';
-            error_log('receiver_company validation failed: ' . ($data['receiver_company'] ?? 'NULL'));
         }
         
         if (empty($data['parent_project_id'])) {
             $errors['parent_project_id'] = '親プロジェクトIDは必須です';
-            error_log('parent_project_id validation failed: ' . ($data['parent_project_id'] ?? 'NULL'));
         } elseif (!is_numeric($data['parent_project_id']) || intval($data['parent_project_id']) <= 0) {
             $errors['parent_project_id'] = '親プロジェクトIDは有効な数値で入力してください';
-            error_log('parent_project_id validation failed: invalid value ' . ($data['parent_project_id'] ?? 'NULL'));
         }
         
         // Check if items exist and are valid
         if (empty($data['items'])) {
             $errors['items'] = '商品明細は必須です';
-            error_log('items validation failed: ' . ($data['items'] ?? 'NULL'));
         } else {
-            // Debug: Check JSON string before decode
-            $items_json = $data['items'];
-            error_log('Raw items JSON string: ' . $items_json);
-            error_log('JSON string length: ' . strlen($items_json));
-            error_log('JSON string first 100 chars: ' . substr($items_json, 0, 100));
-            error_log('JSON string last 100 chars: ' . substr($items_json, -100));
+            $items = json_decode($data['items'], true);
             
-            // Check for JSON syntax errors
-            $json_error = json_last_error();
-            $json_error_msg = json_last_error_msg();
-            error_log('Previous JSON error: ' . $json_error . ' - ' . $json_error_msg);
-            
-            $items = json_decode($items_json, true);
-            $json_error = json_last_error();
-            $json_error_msg = json_last_error_msg();
-            
-            error_log('JSON decode result: ' . print_r($items, true));
-            error_log('JSON decode error code: ' . $json_error);
-            error_log('JSON decode error message: ' . $json_error_msg);
-            
-            error_log('Decoded items: ' . print_r($items, true));
-            error_log('Items type: ' . gettype($items));
-            error_log('Items is array: ' . (is_array($items) ? 'true' : 'false'));
-            error_log('Items count: ' . (is_array($items) ? count($items) : 'N/A'));
-            
-            // Re-check after potential fixes
             if (!is_array($items) || count($items) === 0) {
                 $errors['items'] = '商品明細は必須です';
-                error_log('items validation failed: not array or empty');
-                error_log('Final items type: ' . gettype($items));
-                error_log('Final items is array: ' . (is_array($items) ? 'true' : 'false'));
-                error_log('Final items count: ' . (is_array($items) ? count($items) : 'N/A'));
-                
-                // Try to identify the JSON issue
-                if ($json_error !== JSON_ERROR_NONE) {
-                    error_log('JSON decode failed with error: ' . $json_error_msg);
-                    
-                    // Try to find the problematic character
-                    $problematic_chars = array();
-                    for ($i = 0; $i < strlen($items_json); $i++) {
-                        $char = $items_json[$i];
-                        $ord = ord($char);
-                        if ($ord < 32 && $ord !== 9 && $ord !== 10 && $ord !== 13) {
-                            $problematic_chars[] = "Position $i: char code $ord";
-                        }
-                    }
-                    if (!empty($problematic_chars)) {
-                        error_log('Problematic characters found: ' . print_r($problematic_chars, true));
-                    }
-                    
-                    // Try to identify JSON syntax issues
-                    error_log('JSON string analysis:');
-                    error_log('  - Contains double quotes: ' . (strpos($items_json, '"') !== false ? 'yes' : 'no'));
-                    error_log('  - Contains escaped quotes: ' . (strpos($items_json, '\"') !== false ? 'yes' : 'no'));
-                    error_log('  - Contains backslashes: ' . (strpos($items_json, '\\') !== false ? 'yes' : 'no'));
-                    error_log('  - Contains newlines: ' . (strpos($items_json, "\n") !== false ? 'yes' : 'no'));
-                    error_log('  - Contains carriage returns: ' . (strpos($items_json, "\r") !== false ? 'yes' : 'no'));
-                    
-                    // Try to find the exact position of the syntax error
-                    $lines = explode("\n", $items_json);
-                    foreach ($lines as $line_num => $line) {
-                        if (trim($line) !== '') {
-                            error_log("  Line " . ($line_num + 1) . ": " . substr($line, 0, 100));
-                        }
-                    }
-                    
-                    // Try to validate JSON step by step
-                    $test_json = $items_json;
-                    error_log('Attempting to fix JSON...');
-                    
-                    // Remove any BOM or hidden characters
-                    $test_json = trim($test_json);
-                    $test_json = preg_replace('/[\x00-\x1F\x7F]/', '', $test_json);
-                    error_log('After cleaning control characters: ' . substr($test_json, 0, 100));
-                    
-                    // Try to decode cleaned JSON
-                    $cleaned_items = json_decode($test_json, true);
-                    $cleaned_error = json_last_error();
-                    $cleaned_error_msg = json_last_error_msg();
-                    error_log('Cleaned JSON decode result: ' . print_r($cleaned_items, true));
-                    error_log('Cleaned JSON decode error: ' . $cleaned_error . ' - ' . $cleaned_error_msg);
-                    
-                    if ($cleaned_error === JSON_ERROR_NONE && is_array($cleaned_items)) {
-                        error_log('JSON fixed! Using cleaned version.');
-                        $items = $cleaned_items;
-                        $json_error = JSON_ERROR_NONE;
-                        $json_error_msg = 'No error (fixed)';
-                    } else {
-                        // Try to fix common JSON issues
-                        error_log('Attempting manual JSON fixes...');
-                        
-                        // Fix unescaped quotes in set_json
-                        $fixed_json = $items_json;
-                        
-                        // Pattern to find and fix set_json with unescaped quotes
-                        $pattern = '/"set_json":"(\[.*?\])"/';
-                        $fixed_json = preg_replace_callback($pattern, function($matches) {
-                            $inner_json = $matches[1];
-                            // Escape inner quotes
-                            $escaped_inner = str_replace('"', '\\"', $inner_json);
-                            return '"set_json":"' . $escaped_inner . '"';
-                        }, $fixed_json);
-                        
-                        error_log('After manual fix: ' . substr($fixed_json, 0, 200));
-                        
-                        $manual_items = json_decode($fixed_json, true);
-                        $manual_error = json_last_error();
-                        $manual_error_msg = json_last_error_msg();
-                        
-                        error_log('Manual fix decode result: ' . print_r($manual_items, true));
-                        error_log('Manual fix decode error: ' . $manual_error . ' - ' . $manual_error_msg);
-                        
-                        if ($manual_error === JSON_ERROR_NONE && is_array($manual_items)) {
-                            error_log('Manual fix successful! Using manually fixed version.');
-                            $items = $manual_items;
-                            $json_error = JSON_ERROR_NONE;
-                            $json_error_msg = 'No error (manually fixed)';
-                        }
-                    }
-                }
-            }
-            
-            // Final validation check after all fixes
-            error_log('Final validation check - items type: ' . gettype($items));
-            error_log('Final validation check - items is array: ' . (is_array($items) ? 'true' : 'false'));
-            error_log('Final validation check - items count: ' . (is_array($items) ? count($items) : 'N/A'));
-            
-            if (is_array($items) && count($items) > 0) {
-                // Clear previous items error since we have valid items now
-                if (isset($errors['items'])) {
-                    unset($errors['items']);
-                    error_log('Cleared previous items error - items are now valid');
-                }
-                
+            } else {
                 // Validate each item has required fields
                 foreach ($items as $index => $item) {
-                    error_log('Validating item ' . $index . ': ' . print_r($item, true));
-                    
                     if (empty($item['title'])) {
                         $errors['items'] = '商品明細の件名は必須です';
-                        error_log('Item ' . $index . ' title validation failed: ' . ($item['title'] ?? 'NULL'));
                         break;
                     }
                     if (empty($item['quantity']) || $item['quantity'] <= 0) {
                         $errors['items'] = '商品明細の数量は1以上で入力してください';
-                        error_log('Item ' . $index . ' quantity validation failed: ' . ($item['quantity'] ?? 'NULL'));
                         break;
                     }
-                    // if (empty($item['unit_price']) || $item['unit_price'] < 0) {
-                    //     $errors['items'] = '商品明細の単価は0以上で入力してください';
-                    //     error_log('Item ' . $index . ' unit_price validation failed: ' . ($item['unit_price'] ?? 'NULL'));
-                    //     break;
-                    // }
-                    
-                    error_log('Item ' . $index . ' validation passed');
                 }
-                
-                error_log('All items validation completed');
             }
         }
         
         if (!empty($errors)) {
-            error_log('Validation errors found: ' . print_r($errors, true));
             return array('status' => 'error', 'errors' => $errors);
         }
-
-        error_log('Validation passed, proceeding with quotation creation');
 
         // Filter data to only include fields defined in the schema
         $filtered_data = array();
@@ -314,34 +156,27 @@ class Quotation extends ApplicationModel {
         
         // Set creation timestamp
         $filtered_data['created_at'] = date('Y-m-d H:i:s');
-
-        error_log('Filtered data prepared for insertion (with selected_child_project_ids): ' . print_r($filtered_data, true));
+        
+        // Set updated_by field
+        if (!empty($data['updated_by'])) {
+            $filtered_data['updated_by'] = $data['updated_by'];
+        }
 
         // Insert quotation using query_insert method with filtered data
-        error_log('About to call query_insert with filtered data: ' . print_r($filtered_data, true));
         $quotation_id = $this->query_insert($filtered_data);
-        
-        error_log('Insert result: ' . ($quotation_id ? $quotation_id : 'false'));
         
         if ($quotation_id) {
             // Insert quotation items if provided
             if (!empty($data['items']) && isset($items) && is_array($items)) {
-                error_log('About to insert quotation items for quotation ID: ' . $quotation_id);
-                error_log('Items to insert: ' . print_r($items, true));
                 $this->insertQuotationItems($quotation_id, $items);
-                error_log('Quotation items inserted successfully');
-            } else {
-                error_log('No valid items to insert or items not properly decoded');
-                error_log('Data items present: ' . (!empty($data['items']) ? 'yes' : 'no'));
-                error_log('Items variable set: ' . (isset($items) ? 'yes' : 'no'));
-                error_log('Items is array: ' . (isset($items) && is_array($items) ? 'yes' : 'no'));
             }
             
-            error_log('Quotation created successfully with ID: ' . $quotation_id);
+            // Log the creation
+            $this->logQuotationAction($quotation_id, 'created', '見積書を作成しました');
+            
             return array('status' => 'success', 'id' => $quotation_id);
         }
         
-        error_log('Failed to create quotation');
         return array('status' => 'error', 'message' => '見積書の作成に失敗しました');
     }
 
@@ -461,6 +296,11 @@ class Quotation extends ApplicationModel {
         
         // Set update timestamp
         $filtered_data['updated_at'] = date('Y-m-d H:i:s');
+        
+        // Set updated_by field
+        if (!empty($data['updated_by'])) {
+            $filtered_data['updated_by'] = $data['updated_by'];
+        }
 
         try {
             // Update quotation using query_update method with filtered data
@@ -479,12 +319,14 @@ class Quotation extends ApplicationModel {
                     }
                 }
                 
+                // Log the update
+                $this->logQuotationAction($id, 'updated', '見積書を更新しました');
+                
                 return ['status' => 'success', 'message' => '見積書を更新しました'];
             } else {
                 return ['status' => 'error', 'error' => '更新に失敗しました'];
             }
         } catch (Exception $e) {
-            error_log('Quotation update error: ' . $e->getMessage());
             return ['status' => 'error', 'error' => 'データベースエラー: ' . $e->getMessage()];
         }
     }
@@ -499,7 +341,6 @@ class Quotation extends ApplicationModel {
                 try {
                     $set_json = base64_decode($item['set_json_base64']);
                 } catch (Exception $e) {
-                    error_log('Failed to decode set_json_base64: ' . $e->getMessage());
                     $set_json = null;
                 }
             } elseif (!empty($item['set_json'])) {
@@ -540,19 +381,10 @@ class Quotation extends ApplicationModel {
             
             $sql = "INSERT INTO " . $item_table . " (" . implode(", ", $keys) . ") VALUES (" . implode(", ", $quoted_values) . ")";
             
-            error_log('Inserting item SQL: ' . $sql);
-            error_log('Item data being inserted: ' . print_r($item_data, true));
-            if (isset($item['set_json'])) {
-                error_log('Set JSON data: ' . print_r($item['set_json'], true));
-                error_log('Set JSON type: ' . gettype($item['set_json']));
-            }
             $result = $this->query($sql);
             
             if (!$result) {
-                error_log('Failed to insert quotation item: ' . print_r($item_data, true));
-                error_log('SQL error: ' . mysqli_error($this->handler));
-            } else {
-                error_log('Successfully inserted item: ' . $item['title']);
+                // Failed to insert item
             }
         }
     }
@@ -631,7 +463,6 @@ class Quotation extends ApplicationModel {
                 return ['status' => 'error', 'message' => '指定された見積書が見つかりません'];
             }
         } catch (Exception $e) {
-            error_log('Error in getById: ' . $e->getMessage());
             return ['status' => 'error', 'message' => 'データベースエラーが発生しました'];
         }
     }
@@ -653,7 +484,6 @@ class Quotation extends ApplicationModel {
                 return ['status' => 'error', 'error' => '削除に失敗しました'];
             }
         } catch (Exception $e) {
-            error_log('Quotation delete error: ' . $e->getMessage());
             return ['status' => 'error', 'error' => 'データベースエラー: ' . $e->getMessage()];
         }
     }
@@ -680,21 +510,30 @@ class Quotation extends ApplicationModel {
             }
             
             $query = sprintf(
-                "UPDATE %s SET status = '%s', updated_at = NOW() WHERE id = %d",
+                "UPDATE %s SET status = '%s', updated_by = '%s', updated_at = NOW() WHERE id = %d",
                 $this->table,
                 $status,
+                $data['updated_by'],
                 $quotation_id
             );
             
             $result = $this->query($query);
             
             if ($result) {
+                // Log the status change
+                $this->logQuotationAction(
+                    $quotation_id, 
+                    'status_changed', 
+                    'ステータスを変更しました', 
+                    '', 
+                    $status
+                );
+                
                 return ['status' => 'success', 'message' => 'ステータスが更新されました'];
             } else {
                 return ['status' => 'error', 'error' => 'ステータスの更新に失敗しました'];
             }
         } catch (Exception $e) {
-            error_log('Quotation status update error: ' . $e->getMessage());
             return ['status' => 'error', 'error' => 'データベースエラー: ' . $e->getMessage()];
         }
     }
@@ -722,8 +561,59 @@ class Quotation extends ApplicationModel {
             return null;
             
         } catch (Exception $e) {
-            error_log("Error getting company seal: " . $e->getMessage());
             return null;
         }
     }
+
+    // Get quotation history/logs
+    function getLogs($params = null) {
+        $quotation_id = isset($_GET['quotation_id']) ? intval($_GET['quotation_id']) : 0;
+        if (!$quotation_id) return [];
+
+        try {
+            $query = sprintf(
+                "SELECT l.*, u.realname, u.user_image FROM " . DB_PREFIX . "quotation_history l
+                LEFT JOIN " . DB_PREFIX . "user u ON l.user_id = u.userid
+                WHERE l.quotation_id = %d ORDER BY l.time DESC",
+                $quotation_id
+            );
+            
+            $logs = $this->fetchAll($query);
+            return $logs ?: [];
+            
+        } catch (Exception $e) {
+            return [];
+        }
+    }
+
+    // Log quotation action
+    private function logQuotationAction($quotation_id, $action, $note = '', $value1 = '', $value2 = '') {
+        try {
+            $user_id = $_SESSION['userid'] ?? '';
+            $username = $_SESSION['realname'] ?? '';
+            
+            $data = [
+                'quotation_id' => $quotation_id,
+                'user_id' => $user_id,
+                'username' => $username,
+                'action' => $action,
+                'note' => $note,
+                'value1' => $value1,
+                'value2' => $value2,
+                'time' => date('Y-m-d H:i:s')
+            ];
+            
+            $this->table =DB_PREFIX . 'quotation_history';
+            $this->query_insert($data);
+            $this->table = DB_PREFIX . 'quotations'; // Reset table back
+        } catch (Exception $e) {
+            // Silently fail if logging fails
+        }
+    }
+
+
+
+
+
+
 } 

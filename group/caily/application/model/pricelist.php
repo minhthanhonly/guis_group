@@ -12,6 +12,8 @@ class PriceList extends ApplicationModel {
             'unit' => array('notnull'),
             'price' => array('notnull'),
             'cost' => array(),
+            'tags' => array(),
+            'updated_by' => array(),
             'notes' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search'))
@@ -46,7 +48,9 @@ class PriceList extends ApplicationModel {
             $search = $this->quote($search);
             $whereArr[] = "(p.code LIKE '%$search%' 
                 OR p.name LIKE '%$search%' 
-                OR p.unit LIKE '%$search%')";
+                OR p.unit LIKE '%$search%'
+                OR p.tags LIKE '%$search%'
+                OR p.updated_by LIKE '%$search%')";
         }
 
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
@@ -89,6 +93,7 @@ class PriceList extends ApplicationModel {
         $code = isset($_POST['code']) ? $this->validateUTF8MB4($_POST['code']) : '';
         $name = isset($_POST['name']) ? $this->validateUTF8MB4($_POST['name']) : '';
         $unit = isset($_POST['unit']) ? $this->validateUTF8MB4($_POST['unit']) : '';
+        $tags = isset($_POST['tags']) ? $this->validateUTF8MB4($_POST['tags']) : '';
         $notes = isset($_POST['notes']) ? $this->validateUTF8MB4($_POST['notes']) : '';
         
         $data = array(
@@ -99,8 +104,11 @@ class PriceList extends ApplicationModel {
             'unit' => $unit,
             'price' => isset($_POST['price']) ? floatval($_POST['price']) : 0,
             'cost' => isset($_POST['cost']) ? floatval($_POST['cost']) : 0,
+            'tags' => $tags,
+            'updated_by' => isset($_POST['updated_by']) ? $_POST['updated_by'] : '',
             'notes' => $notes,
-            'created_at' => date('Y-m-d H:i:s')
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s')
         );
 
         // Validate required fields
@@ -172,6 +180,7 @@ class PriceList extends ApplicationModel {
         $code = isset($_POST['code']) ? $this->validateUTF8MB4($_POST['code']) : '';
         $name = isset($_POST['name']) ? $this->validateUTF8MB4($_POST['name']) : '';
         $unit = isset($_POST['unit']) ? $this->validateUTF8MB4($_POST['unit']) : '';
+        $tags = isset($_POST['tags']) ? $this->validateUTF8MB4($_POST['tags']) : '';
         $notes = isset($_POST['notes']) ? $this->validateUTF8MB4($_POST['notes']) : '';
         
         $data = array(
@@ -182,6 +191,8 @@ class PriceList extends ApplicationModel {
             'unit' => $unit,
             'price' => isset($_POST['price']) ? floatval($_POST['price']) : 0,
             'cost' => isset($_POST['cost']) ? floatval($_POST['cost']) : 0,
+            'tags' => $tags,
+            'updated_by' => isset($_POST['updated_by']) ? $_POST['updated_by'] : '',
             'notes' => $notes,
             'updated_at' => date('Y-m-d H:i:s')
         );
@@ -307,9 +318,10 @@ class PriceList extends ApplicationModel {
             "SELECT p.*, d.name as department_name 
              FROM %s p 
              LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id 
-             WHERE p.code LIKE '%%%s%%' OR p.name LIKE '%%%s%%' 
+             WHERE p.code LIKE '%%%s%%' OR p.name LIKE '%%%s%%' OR p.tags LIKE '%%%s%%' 
              ORDER BY p.code",
             $this->table,
+            $search_term,
             $search_term,
             $search_term
         );
@@ -334,6 +346,8 @@ class PriceList extends ApplicationModel {
             'unit' => $product['unit'],
             'price' => $product['price'],
             'cost' => $product['cost'],
+            'tags' => $product['tags'] ?? '',
+            'updated_by' => '',
             'notes' => $product['notes'],
             'created_at' => date('Y-m-d H:i:s')
         );

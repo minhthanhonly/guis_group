@@ -1,6 +1,9 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('価格表管理');
+
+// Get current user name for JavaScript
+$current_user_name = $_SESSION['realname'] ?? $_SESSION['userid'] ?? 'ユーザー';
 ?>
 
 <div id="app" class="container-fluid mt-4" v-cloak>
@@ -18,9 +21,7 @@ $view->heading('価格表管理');
                     </li>
                 </ul>
                 <div class="d-flex gap-2">
-                    <a href="../parent_project/index.php" class="btn btn-outline-light btn-sm">
-                        <i class="fa fa-arrow-left me-1"></i> <span data-i18n="戻る">戻る</span>
-                    </a>
+                   
                     <button @click="startAddRow" class="btn btn-primary btn-sm" v-if="!showAddRow">
                         <i class="fa fa-plus me-1"></i> <span data-i18n="新規追加">新規追加</span>
                     </button>
@@ -45,11 +46,11 @@ $view->heading('価格表管理');
                 <div class="card-body">
                     <!-- Filters -->
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label for="searchInput" class="form-label">検索</label>
                             <input type="text" v-model="searchTerm" @input="filterProducts" class="form-control" id="searchInput" placeholder="コードまたは商品名で検索">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-3">
                             <label for="sortSelect" class="form-label">並び替え</label>
                             <select v-model="sortBy" @change="filterProducts" class="form-select" id="sortSelect">
                                 <option value="code">コード</option>
@@ -57,7 +58,23 @@ $view->heading('価格表管理');
                                 <option value="type">タイプ</option>
                                 <option value="price">価格</option>
                                 <option value="cost">売上原価</option>
+                                <option value="tags">タグ</option>
+                                <option value="updated_by">更新者</option>
                             </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="pageSizeSelect" class="form-label">表示件数</label>
+                            <select v-model="itemsPerPage" @change="changePageSize" class="form-select" id="pageSizeSelect">
+                                <option value="10">10件</option>
+                                <option value="25">25件</option>
+                                <option value="50">50件</option>
+                                <option value="100" selected>100件</option>
+                                <option value="0">すべて表示</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="tagsFilter" class="form-label">タグフィルター</label>
+                            <input type="text" v-model="selectedTagFilter" @input="filterProducts" class="form-control" id="tagsFilter" placeholder="タグで検索">
                         </div>
                     </div>
 
@@ -72,7 +89,9 @@ $view->heading('価格表管理');
                                     <th>単位</th>
                                     <th>単価</th>
                                     <th>売上原価</th>
-                                    <th>作成日時</th>
+                                    <th>タグ</th>
+                                    <th>更新者</th>
+                                    <th>更新日時</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
@@ -106,6 +125,14 @@ $view->heading('価格表管理');
                                         <input type="number" v-model="editingProduct.cost" class="form-control form-control-sm" 
                                                step="0.01" min="0" placeholder="売上原価" :class="{ 'is-invalid': validationErrors.cost }">
                                         <div class="invalid-feedback" v-if="validationErrors.cost">{{ validationErrors.cost }}</div>
+                                    </td>
+                                    <td>
+                                        <input type="text" v-model="editingProduct.tags" class="form-control form-control-sm" 
+                                               placeholder="タグ" :class="{ 'is-invalid': validationErrors.tags }">
+                                        <div class="invalid-feedback" v-if="validationErrors.tags">{{ validationErrors.tags }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ CURRENT_USER_NAME || 'ユーザー' }}</span>
                                     </td>
                                     <td>-</td>
                                     <td>
@@ -182,8 +209,33 @@ $view->heading('価格表管理');
                                         <div class="invalid-feedback" v-if="validationErrors.cost">{{ validationErrors.cost }}</div>
                                     </td>
                                     
+                                    <!-- Tags -->
+                                    <td v-if="editingProduct.id !== product.id">
+                                        <span class="tags-display">{{ product.tags || '-' }}</span>
+                                    </td>
+                                    <td v-else>
+                                        <input type="text" v-model="editingProduct.tags" class="form-control form-control-sm tags-input" 
+                                               :class="{ 'is-invalid': validationErrors.tags }">
+                                        <div class="invalid-feedback" v-if="validationErrors.tags">{{ validationErrors.tags }}</div>
+                                    </td>
+                                    
+                                    <!-- Updated By -->
+                                    <td v-if="editingProduct.id !== product.id">
+                                        <span v-if="product.updated_by" 
+                                              class="badge bg-info"
+                                              :title="'最終更新者: ' + product.updated_by">
+                                            {{ product.updated_by }}
+                                        </span>
+                                        <span v-else class="text-muted">-</span>
+                                    </td>
+                                    <td v-else>
+                                        <input type="text" v-model="editingProduct.updated_by" class="form-control form-control-sm" 
+                                               :class="{ 'is-invalid': validationErrors.updated_by }">
+                                        <div class="invalid-feedback" v-if="validationErrors.updated_by">{{ validationErrors.updated_by }}</div>
+                                    </td>
+                                    
                                                                          <!-- Created At -->
-                                     <td>{{ formatDateTime(product.created_at || '') }}</td>
+                                     <td>{{ formatDateTime(product.updated_at || '') }}</td>
                                     
                                     <!-- Actions -->
                                     <td>
@@ -195,10 +247,6 @@ $view->heading('価格表管理');
                                             <button v-if="editingProduct.id !== product.id" @click="startEdit(product)" 
                                                     class="btn btn-outline-primary btn-sm" title="編集">
                                                 <i class="fa fa-edit"></i>
-                                            </button>
-                                            <button v-if="editingProduct.id !== product.id" @click="duplicateProduct(product)" 
-                                                    class="btn btn-outline-secondary btn-sm" title="複製">
-                                                <i class="fa fa-copy"></i>
                                             </button>
                                             <button v-if="editingProduct.id !== product.id" @click="deleteProduct(product)" 
                                                     class="btn btn-outline-danger btn-sm" title="削除">
@@ -220,7 +268,7 @@ $view->heading('価格表管理');
                                 </tr>
                                 
                                 <tr v-if="paginatedProducts.length === 0 && !showAddRow">
-                                    <td colspan="6" class="text-center text-muted">
+                                    <td colspan="9" class="text-center text-muted">
                                         商品が見つかりません
                                     </td>
                                 </tr>
@@ -231,9 +279,14 @@ $view->heading('価格表管理');
                     <!-- Pagination -->
                     <div class="d-flex justify-content-between align-items-center mt-3">
                         <div class="text-muted">
-                            表示中: {{ (currentPage - 1) * itemsPerPage + 1 }}-{{ Math.min(currentPage * itemsPerPage, filteredProducts.length) }} / {{ filteredProducts.length }}件
+                            <span v-if="itemsPerPage > 0">
+                                表示中: {{ (currentPage - 1) * itemsPerPage + 1 }}-{{ Math.min(currentPage * itemsPerPage, filteredProducts.length) }} / {{ filteredProducts.length }}件
+                            </span>
+                            <span v-else>
+                                表示中: {{ filteredProducts.length }}件 (すべて表示)
+                            </span>
                         </div>
-                        <nav v-if="totalPages > 1">
+                        <nav v-if="totalPages > 1 && itemsPerPage > 0">
                             <ul class="pagination pagination-sm mb-0">
                                 <li class="page-item" :class="{ disabled: currentPage === 1 }">
                                     <a class="page-link" href="#" @click.prevent="changePage(currentPage - 1)">前へ</a>
@@ -289,6 +342,12 @@ $view->heading('価格表管理');
                                 
                                 <dt class="col-sm-4">売上原価</dt>
                                 <dd class="col-sm-8">{{ formatPrice(selectedProduct.cost) }}</dd>
+                                
+                                <dt class="col-sm-4">タグ</dt>
+                                <dd class="col-sm-8">{{ selectedProduct.tags || '-' }}</dd>
+                                
+                                <dt class="col-sm-4">更新者</dt>
+                                <dd class="col-sm-8">{{ selectedProduct.updated_by || '-' }}</dd>
                                 
                                 <dt class="col-sm-4">作成日時</dt>
                                 <dd class="col-sm-8">{{ formatDateTime(selectedProduct.created_at) }}</dd>
@@ -391,8 +450,54 @@ $view->footing();
         font-size: 0.8rem;
     }
 }
+
+/* Tags and Updated By column styling */
+.badge.bg-info {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+}
+
+/* Table column width adjustments */
+.table th:nth-child(7), .table td:nth-child(7) { /* Tags column */
+    min-width: 120px;
+}
+
+.table th:nth-child(8), .table td:nth-child(8) { /* Updated By column */
+    min-width: 100px;
+}
+
+/* Tags styling */
+.tags-display {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.tags-input {
+    font-size: 0.875rem;
+}
+
+/* Filter styling */
+.form-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.form-select, .form-control {
+    font-size: 0.875rem;
+}
+
+/* Responsive filter adjustments */
+@media (max-width: 768px) {
+    .col-md-2, .col-md-3, .col-md-4 {
+        margin-bottom: 1rem;
+    }
+}
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="../assets/js/axios.min.js"></script>
+<script>
+    const CURRENT_USER_NAME = '<?php echo htmlspecialchars($current_user_name); ?>';
+</script>
 <script src="assets/js/price-list.js"></script> 

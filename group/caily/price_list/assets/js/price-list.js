@@ -10,11 +10,12 @@ createApp({
             selectedType: null,
             searchTerm: '',
             sortBy: 'code',
-            itemsPerPage: 25,
+            itemsPerPage: 100,
             currentPage: 1,
             totalPages: 1,
             isEditing: false,
             saving: false,
+            selectedTagFilter: '',
             editingProduct: {
                 id: null,
                 code: '',
@@ -24,6 +25,8 @@ createApp({
                 unit: '',
                 price: '',
                 cost: '',
+                tags: '',
+                updated_by: '',
                 notes: ''
             },
             selectedProduct: null,
@@ -93,12 +96,23 @@ createApp({
                 filtered = filtered.filter(product => (product.type || '') === this.selectedType.value);
             }
 
+            // Filter by tags (text search)
+            if (this.selectedTagFilter) {
+                const tagTerm = this.selectedTagFilter.toLowerCase();
+                filtered = filtered.filter(product => {
+                    if (!product.tags) return false;
+                    return product.tags.toLowerCase().includes(tagTerm);
+                });
+            }
+
             // Filter by search term
             if (this.searchTerm) {
                 const term = this.searchTerm.toLowerCase();
                 filtered = filtered.filter(product => 
                     (product.code || '').toLowerCase().includes(term) ||
-                    (product.name || '').toLowerCase().includes(term)
+                    (product.name || '').toLowerCase().includes(term) ||
+                    (product.tags || '').toLowerCase().includes(term) ||
+                    (product.updated_by || '').toLowerCase().includes(term)
                 );
             }
 
@@ -127,6 +141,10 @@ createApp({
                         return parseFloat(a.price || 0) - parseFloat(b.price || 0);
                     case 'cost':
                         return parseFloat(a.cost || 0) - parseFloat(b.cost || 0);
+                    case 'tags':
+                        return (a.tags || '').toString().localeCompare((b.tags || '').toString());
+                    case 'updated_by':
+                        return (a.updated_by || '').toString().localeCompare((b.updated_by || '').toString());
                     default:
                         return 0;
                 }
@@ -138,13 +156,20 @@ createApp({
         },
 
         updatePagination() {
-            this.totalPages = Math.ceil(this.filteredProducts.length / this.itemsPerPage);
-            this.currentPage = Math.min(this.currentPage, this.totalPages);
-            this.currentPage = Math.max(1, this.currentPage);
-            
-            const start = (this.currentPage - 1) * this.itemsPerPage;
-            const end = start + this.itemsPerPage;
-            this.paginatedProducts = this.filteredProducts.slice(start, end);
+            if (this.itemsPerPage > 0) {
+                this.totalPages = Math.ceil(this.filteredProducts.length / this.itemsPerPage);
+                this.currentPage = Math.min(this.currentPage, this.totalPages);
+                this.currentPage = Math.max(1, this.currentPage);
+                
+                const start = (this.currentPage - 1) * this.itemsPerPage;
+                const end = start + this.itemsPerPage;
+                this.paginatedProducts = this.filteredProducts.slice(start, end);
+            } else {
+                // Show all items
+                this.totalPages = 1;
+                this.currentPage = 1;
+                this.paginatedProducts = [...this.filteredProducts];
+            }
         },
 
         changePage(page) {
@@ -152,6 +177,11 @@ createApp({
                 this.currentPage = page;
                 this.updatePagination();
             }
+        },
+
+        changePageSize() {
+            this.currentPage = 1;
+            this.updatePagination();
         },
 
         startAddRow() {
@@ -166,18 +196,23 @@ createApp({
                 unit: '',
                 price: '',
                 cost: '',
+                tags: '',
+                updated_by: CURRENT_USER_NAME || 'ユーザー',
                 notes: ''
             };
             this.validationErrors = {};
             this.originalProduct = null;
+            this.selectedTagFilter = ''; // Reset tag filter
         },
 
         startEdit(product) {
             this.isEditing = true;
             this.editingProduct = { ...product };
+            this.editingProduct.updated_by = CURRENT_USER_NAME || 'ユーザー';
             this.originalProduct = { ...product };
             this.validationErrors = {};
             this.showAddRow = false;
+            this.selectedTagFilter = ''; // Reset tag filter
             
             // Set the selected type to match the product's type for editing
             if (product.type) {
@@ -200,16 +235,20 @@ createApp({
                 unit: '',
                 price: '',
                 cost: '',
+                tags: '',
+                updated_by: '',
                 notes: ''
             };
             this.validationErrors = {};
             this.originalProduct = null;
+            this.selectedTagFilter = ''; // Reset tag filter
         },
 
 
 
         viewProductsByType(type) {
             this.selectedType = type;
+            this.selectedTagFilter = ''; // Reset tag filter
             this.filterProducts();
         },
 
@@ -227,25 +266,6 @@ createApp({
             }, 300);
         },
 
-        async duplicateProduct(product) {
-            try {
-                const formData = new FormData();
-                formData.append('id', product.id);
-                
-                const response = await axios.post('/api/index.php?model=pricelist&method=duplicateProduct', formData);
-                
-                if (response.data && response.data.status === 'success') {
-                    this.loadData();
-                    showMessage('商品を複製しました', false);
-                } else {
-                    showMessage(response.data?.message || 'エラーが発生しました', true);
-                }
-            } catch (error) {
-                console.error('Error duplicating product:', error);
-                showMessage('エラーが発生しました', true);
-            }
-        },
-
         async saveProduct() {
             this.validationErrors = {};
             
@@ -253,6 +273,9 @@ createApp({
             if (this.selectedType) {
                 this.editingProduct.type = this.selectedType.value;
             }
+            
+            // Set updated_by field
+            this.editingProduct.updated_by = CURRENT_USER_NAME || 'ユーザー';
             
             // Validation
             if (!this.editingProduct.code.trim()) {

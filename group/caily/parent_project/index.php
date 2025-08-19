@@ -56,14 +56,14 @@ $view->heading('建物一覧');
                         <table v-else class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>プロジェクト番号</th>
+                                    <th>番号</th>
                                     <th>会社名</th>
                                     <th>お施主様名</th>
                                     <th>工事番号</th>
                                     <th>依頼日</th>
                                     <th>希望納期</th>
                                     <th>ステータス</th>
-                                    <th>課題数</th>
+                                    <th>件数</th>
                                     <th>作成者</th>
                                     <th>作成日</th>
                                     <th>操作</th>

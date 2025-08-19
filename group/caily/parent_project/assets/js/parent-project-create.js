@@ -7,6 +7,7 @@ createApp({
                 company_name: '',
                 branch_name: '',
                 contact_name: '',
+                customer_id: '',
                 guis_receiver: '',
                 request_date: '',
                 construction_number: '',
@@ -36,7 +37,10 @@ createApp({
             ],
             validationErrors: {
                 company_name: '',
-                project_name: ''
+                project_name: '',
+                project_number: '',
+                request_date: '',
+                desired_delivery_date: ''
             },
             type1Tagify: null,
             type2Tagify: null,
@@ -66,7 +70,10 @@ createApp({
         validateParentProjectForm() {
             this.validationErrors = {
                 company_name: '',
-                project_name: ''
+                project_name: '',
+                project_number: '',
+                request_date: '',
+                desired_delivery_date: ''
             };
             let valid = true;
             
@@ -77,6 +84,21 @@ createApp({
             
             if (!this.parentProject.project_name) {
                 this.validationErrors.project_name = '案件名は必須です';
+                valid = false;
+            }
+            
+            if (!this.parentProject.project_number) {
+                this.validationErrors.project_number = 'プロジェクト番号は必須です';
+                valid = false;
+            }
+            
+            if (!this.parentProject.request_date) {
+                this.validationErrors.request_date = '依頼日は必須です';
+                valid = false;
+            }
+            
+            if (!this.parentProject.desired_delivery_date) {
+                this.validationErrors.desired_delivery_date = '希望納期は必須です';
                 valid = false;
             }
             
@@ -92,6 +114,7 @@ createApp({
                 formData.append('company_name', this.parentProject.company_name || '');
                 formData.append('branch_name', this.parentProject.branch_name || '');
                 formData.append('contact_name', this.parentProject.contact_name || '');
+                formData.append('customer_id', this.parentProject.customer_id || '');
                 formData.append('guis_receiver', this.parentProject.guis_receiver || '');
                 formData.append('request_date', this.parentProject.request_date || '');
                 formData.append('construction_number', this.parentProject.construction_number || '');
@@ -223,6 +246,7 @@ createApp({
             // Clear branch and contact when company changes
             this.parentProject.branch_name = '';
             this.parentProject.contact_name = '';
+            this.parentProject.customer_id = '';
             
             // Update branch select2 - trigger to reload data
             const $branch = $('#branch_name');
@@ -244,6 +268,7 @@ createApp({
         onBranchChange() {
             // Clear contact when branch changes
             this.parentProject.contact_name = '';
+            this.parentProject.customer_id = '';
             
             // Update contact select2
             const $contact = $('#contact_name');
@@ -316,7 +341,7 @@ createApp({
                             return {
                                 results: data.data.map(function(item) {
                                     return {
-                                        id: item.name,
+                                        id: item.id,
                                         text: item.name
                                     };
                                 })
@@ -324,9 +349,11 @@ createApp({
                         }
                     }
                 }).on('select2:select', (e) => {
-                    this.parentProject.contact_name = e.params.data.id;
+                    this.parentProject.contact_name = e.params.data.text;
+                    this.parentProject.customer_id = e.params.data.id;
                 }).on('select2:clear', () => {
                     this.parentProject.contact_name = '';
+                    this.parentProject.customer_id = '';
                 });
             }
         },
@@ -571,6 +598,7 @@ createApp({
             company_name: '',
             branch_name: '',
             contact_name: '',
+            customer_id: '',
             guis_receiver: '',
             request_date: '',
             construction_number: '',

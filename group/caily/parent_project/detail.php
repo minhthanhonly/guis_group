@@ -455,10 +455,10 @@ $view->heading('建物詳細');
             <div class="card mt-4">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0"><span data-i18n="課題">課題</span></h5>
+                        <h5 class="card-title mb-0"><span data-i18n="案件依頼">案件依頼</span></h5>
                         <div>
                             <button @click="showCreateChildProjectModal" class="btn btn-success btn-sm">
-                                <i class="fa fa-plus me-1"></i> <span data-i18n="課題作成">課題作成</span>
+                                <i class="fa fa-plus me-1"></i> <span data-i18n="案件依頼作成">案件依頼作成</span>
                             </button>
                         </div>
                     </div>
@@ -468,9 +468,9 @@ $view->heading('建物詳細');
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>課題番号</th>
+                                    <th>案件番号</th>
                                     <th>受注形態</th>
-                                    <th>課題名</th>
+                                    <th>案件名</th>
                                     <th>部署</th>
                                     <th>開始日</th>
                                     <th>期限日</th>
@@ -531,7 +531,7 @@ $view->heading('建物詳細');
                                     </td>
                                 </tr>
                                 <tr v-if="childProjects.length === 0">
-                                    <td colspan="9" class="text-center text-muted py-4">
+                                    <td colspan="10" class="text-center text-muted py-4">
                                         子プロジェクトがありません
                                     </td>
                                 </tr>
@@ -541,9 +541,9 @@ $view->heading('建物詳細');
                     <div v-else class="text-center py-4">
                         <div class="text-muted">
                             <i class="fa fa-folder-open fa-2x mb-2"></i>
-                            <p>課題がありません</p>
+                            <p>案件依頼がありません</p>
                             <button @click="showCreateChildProjectModal" class="btn btn-primary btn-sm">
-                                <i class="fa fa-plus me-1"></i> 課題を作成
+                                <i class="fa fa-plus me-1"></i> 案件依頼を作成
                             </button>
                         </div>
                     </div>
@@ -578,6 +578,7 @@ $view->heading('建物詳細');
                                     <th>作成日</th>
                                     <th>金額</th>
                                     <th>ステータス</th>
+                                    <th>更新者</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
@@ -630,6 +631,14 @@ $view->heading('建物詳細');
                                         </div>
                                     </td>
                                     <td>
+                                        <span v-if="quotation.updated_by" 
+                                              class=""
+                                              :title="'最終更新者: ' + quotation.updated_by + (quotation.updated_at ? ' (' + formatDateTime(quotation.updated_at) + ')' : '')">
+                                            {{ quotation.updated_by }}
+                                        </span>
+                                        <span v-else class="text-muted">-</span>
+                                    </td>
+                                    <td>
                                         <div class="btn-group btn-group-sm">
                                             <button class="btn btn-outline-primary" title="表示"
                                                 @click="showQuotationModal(quotation)">
@@ -638,6 +647,10 @@ $view->heading('建物詳細');
                                             <button class="btn btn-outline-secondary" title="編集"
                                                 @click="editQuotation(quotation)">
                                                 <i class="fa fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-info" title="履歴"
+                                                @click="showQuotationHistory(quotation)">
+                                                <i class="fa fa-history"></i>
                                             </button>
                                             <button class="btn btn-outline-danger" title="削除"
                                                 @click="deleteQuotation(quotation)">
@@ -664,13 +677,69 @@ $view->heading('建物詳細');
 
     </div>
 
+    <!-- Quotation History Modal -->
+    <div class="modal fade quotation-history-modal" id="quotationHistoryModal" tabindex="-1" aria-labelledby="quotationHistoryModalLabel"
+        aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="quotationHistoryModalLabel">見積書履歴</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div v-if="quotationHistory.length > 0">
+                        <ul class="list-group" style="max-height: 400px; overflow-y: auto;">
+                            <li v-for="log in quotationHistory" :key="log.id" class="list-group-item">
+                                <div class="d-flex">
+                                    <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
+                                        <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
+                                            <span v-if="log.user_image">
+                                                <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
+                                            </span>
+                                            <div class="avatar avatar-sm" v-else>
+                                                <span class="avatar-initial rounded-circle bg-label-primary">
+                                                    {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex flex-column align-items-start justify-content-center ms-2">
+                                            <span class="fw-bold small">{{ log.username || log.realname || log.user }}</span>
+                                            <span class="text-muted small">{{ formatDateTime(log.time) }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 d-flex align-items-center">
+                                        <span>
+                                            <i :class="historyIcon(log.action) + ' me-2'"></i>
+                                            <span class="me-2">{{ log.note }}</span>
+                                            <br>
+                                            <span v-if="log.value1" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getLogBadgeLabel(log, 'value1') }}</span>
+                                            <span v-if="log.value1 && log.value2" class="mx-1">→</span>
+                                            <span v-if="log.value2" :class="getLogBadgeClass(log, 'value2')" class="mx-1">{{ getLogBadgeLabel(log, 'value2') }}</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    <div v-else class="text-center text-muted py-3">
+                        <i class="fa fa-history fa-2x mb-2"></i>
+                        <p>履歴はありません。</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Child Project Modal -->
     <div class="modal fade" id="createChildProjectModal" tabindex="-1" aria-labelledby="createChildProjectModalLabel"
         aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="createChildProjectModalLabel">課題を作成</h5>
+                    <h5 class="modal-title" id="createChildProjectModalLabel">案件依頼を作成</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
@@ -678,7 +747,7 @@ $view->heading('建物詳細');
                         <div class="row g-3">
                             <div class="col-12">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">課題名 <span class="text-danger">*</span></label>
+                                    <label class="form-label">案件名 <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.name" required>
                                     <div v-if="childProjectValidationErrors.name" class="invalid-feedback d-block">
                                         {{ childProjectValidationErrors.name }}
@@ -702,7 +771,7 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-12">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">プロジェクト番号 <span class="text-danger">*</span></label>
+                                    <label class="form-label">案件番号 <span class="text-danger">*</span></label>
                                     <div class="input-group">
                                         <input type="text" class="form-control" v-model="newChildProject.project_number"
                                             readonly required>
@@ -787,7 +856,7 @@ $view->heading('建物詳細');
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="editChildProjectModalLabel">課題を編集</h5>
+                    <h5 class="modal-title" id="editChildProjectModalLabel">案件依頼を編集</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
@@ -795,7 +864,7 @@ $view->heading('建物詳細');
                         <div class="row g-3">
                             <div class="col-12">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">課題名 <span class="text-danger">*</span></label>
+                                    <label class="form-label">案件名 <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.name" required>
                                     <div v-if="editChildProjectValidationErrors.name" class="invalid-feedback d-block">
                                         {{ editChildProjectValidationErrors.name }}
@@ -819,7 +888,7 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-12">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">プロジェクト番号 <span class="text-danger">*</span></label>
+                                    <label class="form-label">案件番号 <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.project_number"
                                         required readonly>
                                     <div v-if="editChildProjectValidationErrors.project_number"
@@ -1036,7 +1105,7 @@ $view->heading('建物詳細');
 
                                                             </tr>
                                                             <tr v-if="childProjects.length === 0">
-                                                                <td colspan="8" class="text-center text-muted py-4">
+                                                                <td colspan="10" class="text-center text-muted py-4">
                                                                     子プロジェクトがありません
                                                                 </td>
                                                             </tr>
@@ -1184,12 +1253,18 @@ $view->heading('建物詳細');
                             <div class="col-12">
                                 <div class="card">
                                     <div class="card-header">
-                                        <h6 class="mb-0">件名</h6>
+                                        <h6 class="mb-0">件名 <span class="text-danger">*</span></h6>
                                     </div>
                                     <div class="card-body">
                                         <div class="mb-3">
-                                            <input type="text" class="form-control" v-model="newQuotation.subject" 
-                                                placeholder="件名を入力してください">
+                                            <input type="text" class="form-control" 
+                                                :class="{ 'is-invalid': quotationValidationErrors.subject }"
+                                                v-model="newQuotation.subject" 
+                                                @input="quotationValidationErrors.subject = ''"
+                                                placeholder="件名を入力してください" required>
+                                            <div v-if="quotationValidationErrors.subject" class="text-danger small mt-1">
+                                                {{ quotationValidationErrors.subject }}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1282,7 +1357,7 @@ $view->heading('建物詳細');
                                                         </td>
                                                         <td>
                                                             <input type="text" class="form-control form-control-sm"
-                                                                v-model="item.unit" placeholder="枚">
+                                                                v-model="item.unit" placeholder="">
                                                         </td>
                                                         <td>
                                                             <input type="number" class="form-control form-control-sm"
@@ -1622,7 +1697,7 @@ $view->heading('建物詳細');
                                                                 </td>
                                                             </tr>
                                                             <tr v-if="childProjects.length === 0">
-                                                                <td colspan="9" class="text-center text-muted py-4">
+                                                                <td colspan="10" class="text-center text-muted py-4">
                                                                     子プロジェクトがありません
                                                                 </td>
                                                             </tr>
@@ -1780,8 +1855,15 @@ $view->heading('建物詳細');
                                 </div>
                                 <div class="card-body">
                                     <div class="mb-3">
-                                        <input type="text" class="form-control" v-model="editingQuotation.subject" 
-                                            placeholder="件名を入力してください">
+                                        <label class="form-label">件名 <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" 
+                                            :class="{ 'is-invalid': editQuotationValidationErrors.subject }"
+                                            v-model="editingQuotation.subject" 
+                                            @input="editQuotationValidationErrors.subject = ''"
+                                            placeholder="件名を入力してください" required>
+                                        <div v-if="editQuotationValidationErrors.subject" class="text-danger small mt-1">
+                                            {{ editQuotationValidationErrors.subject }}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1874,7 +1956,7 @@ $view->heading('建物詳細');
                                                     </td>
                                                     <td>
                                                         <input type="text" class="form-control form-control-sm"
-                                                            v-model="item.unit" placeholder="枚">
+                                                            v-model="item.unit" placeholder="">
                                                     </td>
                                                     <td>
                                                         <input type="number" class="form-control form-control-sm"
@@ -2063,7 +2145,7 @@ $view->heading('建物詳細');
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-warning" @click="resetEditQuotationForm">リセット</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-secondary" @click="closeEditQuotationModal">キャンセル</button>
                     <button type="button" class="btn btn-primary" @click="updateQuotation" :disabled="updatingQuotation">
                         <span v-if="updatingQuotation" class="spinner-border spinner-border-sm me-1"></span>
                         更新
@@ -2105,7 +2187,7 @@ $view->heading('建物詳細');
                 <div class="modal-body">
                     <!-- Product Type Filter -->
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">商品タイプフィルター</label>
                             <select class="form-select" v-model="selectedPriceListType"
                                 @change="scheduleFilterPriceListProducts">
@@ -2115,10 +2197,15 @@ $view->heading('建物詳細');
                                 <option value="その他">その他</option>
                             </select>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">検索</label>
                             <input type="text" class="form-control" v-model="priceListSearchTerm"
                                 @input="scheduleFilterPriceListProducts" placeholder="コードまたは商品名で検索">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">タグ検索</label>
+                            <input type="text" class="form-control" v-model="priceListTagSearchTerm"
+                                @input="scheduleFilterPriceListProducts" placeholder="タグで検索">
                         </div>
                     </div>
                     <!-- Pagination and bulk actions -->
@@ -2168,6 +2255,7 @@ $view->heading('建物詳細');
                                     <th>コード</th>
                                     <th>商品名</th>
                                     <th>タイプ</th>
+                                    <th>タグ</th>
                                     <th>単位</th>
                                     <th>単価</th>
                                     <th>操作</th>
@@ -2187,6 +2275,7 @@ $view->heading('建物詳細');
                                     <td>{{ product.code }}</td>
                                     <td>{{ product.name }}</td>
                                     <td>{{ product.type }}</td>
+                                    <td class="tags-cell">{{ product.tags }}</td>
                                     <td>{{ product.unit }}</td>
                                     <td>{{ formatPrice(product.price) }}</td>
                                     <td>
@@ -2198,7 +2287,7 @@ $view->heading('建物詳細');
                                     </td>
                                 </tr>
                                 <tr v-if="filteredPriceListProducts.length === 0">
-                                    <td colspan="7" class="text-center text-muted">
+                                    <td colspan="8" class="text-center text-muted">
                                         商品が見つかりません
                                     </td>
                                 </tr>
@@ -2703,10 +2792,6 @@ $view->footing();
     }
 
     /* Quotation status badge styles */
-    .badge {
-        font-size: 0.75em;
-        padding: 0.35em 0.65em;
-    }
 
     .badge.bg-draft {
         background-color: #6c757d !important;
@@ -2760,6 +2845,17 @@ $view->footing();
         font-size: 0.7em;
         margin-right: 0.5rem;
     }
+    
+    /* Updated by column styling */
+    .quotation-updated-by {
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    
+    .quotation-updated-by .badge {
+        font-size: 0.75rem;
+        padding: 0.35em 0.65em;
+    }
     #edit-quotation-table td,
     #edit-quotation-table th {
         padding-left: 0.25rem;
@@ -2774,6 +2870,14 @@ $view->footing();
     #price-list-table td {
         padding-top: 0.25rem;
         padding-bottom: 0.25rem;
+    }
+
+    /* Tags column styling */
+    #price-list-table .tags-cell {
+        max-width: 150px;
+        word-wrap: break-word;
+        font-size: 0.85rem;
+        color: #6c757d;
     }
 
     .modal-xxl {
@@ -2818,6 +2922,36 @@ $view->footing();
         -moz-user-select: none;
         -ms-user-select: none;
         user-select: none;
+    }
+    
+    /* Quotation history modal styling */
+    .quotation-history-modal .list-group-item {
+        border-left: none;
+        border-right: none;
+        border-radius: 0;
+    }
+    
+    .quotation-history-modal .list-group-item:first-child {
+        border-top: none;
+    }
+    
+    .quotation-history-modal .list-group-item:last-child {
+        border-bottom: none;
+    }
+    
+    .quotation-history-modal .avatar-initial {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    
+    .quotation-history-modal .badge {
+        font-size: 0.75rem;
+        padding: 0.35em 0.65em;
     }
 </style>
 

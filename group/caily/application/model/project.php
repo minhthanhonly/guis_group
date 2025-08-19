@@ -269,7 +269,7 @@ class Project extends ApplicationModel {
             FROM {$this->table} p 
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
-            LEFT JOIN " . DB_PREFIX . "customer c ON c.company_name = pp.company_name AND c.name = pp.contact_name
+            LEFT JOIN " . DB_PREFIX . "customer c ON c.id = pp.customer_id
             %s
             ORDER BY p.created_at DESC",
             $where
@@ -380,7 +380,8 @@ class Project extends ApplicationModel {
              WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
-            JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+            LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
+            LEFT JOIN " . DB_PREFIX . "customer c ON c.id = pp.customer_id
             %s
             ORDER BY p.start_date ASC, p.created_at DESC",
             $where

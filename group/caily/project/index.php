@@ -358,6 +358,19 @@ $view->footing();
         transform: translateY(0);
     }
 }
+
+/* Order Type Badge Styling */
+#projectTable .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
+    display: inline-block;
+}
+
+#projectTable .badge:last-child {
+    margin-right: 0;
+}
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>

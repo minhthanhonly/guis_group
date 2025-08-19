@@ -113,6 +113,7 @@ class ParentProject extends ApplicationModel {
             'company_name' => $company_name,
             'branch_name' => isset($_POST['branch_name']) ? $_POST['branch_name'] : '',
             'contact_name' => isset($_POST['contact_name']) ? $_POST['contact_name'] : '',
+            'customer_id' => isset($_POST['customer_id']) ? intval($_POST['customer_id']) : null,
             'guis_receiver' => isset($_POST['guis_receiver']) ? $_POST['guis_receiver'] : '',
             'request_date' => isset($_POST['request_date']) ? $_POST['request_date'] : null,
             'construction_number' => isset($_POST['construction_number']) ? $_POST['construction_number'] : '',
@@ -148,6 +149,13 @@ class ParentProject extends ApplicationModel {
             ];
         }
 
+        if (empty($data['desired_delivery_date'])) {
+            return [
+                'status' => 'error',
+                'message' => '希望納期は必須です'
+            ];
+        }
+
         // Insert parent project data
         $parent_project_id = $this->query_insert($data);
         
@@ -179,6 +187,7 @@ class ParentProject extends ApplicationModel {
             'company_name' => $company_name,
             'branch_name' => isset($_POST['branch_name']) ? $_POST['branch_name'] : '',
             'contact_name' => isset($_POST['contact_name']) ? $_POST['contact_name'] : '',
+            'customer_id' => isset($_POST['customer_id']) ? intval($_POST['customer_id']) : null,
             'guis_receiver' => isset($_POST['guis_receiver']) ? $_POST['guis_receiver'] : '',
             'request_date' => isset($_POST['request_date']) ? $_POST['request_date'] : null,
             'construction_number' => isset($_POST['construction_number']) ? $_POST['construction_number'] : '',
