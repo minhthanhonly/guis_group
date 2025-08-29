@@ -67,10 +67,10 @@ $view->heading('建物詳細');
                                 @click="showLogs" title="アクティビティログ">
                                 <i class="fa fa-history"></i>
                             </button>
-                            <button v-if="!isEditMode" class="btn btn-outline-danger btn-sm"
+                            <!-- <button v-if="!isEditMode" class="btn btn-outline-danger btn-sm"
                                 @click="deleteParentProject" title="削除">
                                 <i class="fa fa-trash"></i>
-                            </button>
+                            </button> -->
                         </div>
                     </div>
                     <div v-if="parentProject" class="row g-3">
