@@ -38,11 +38,13 @@
                 <div><span data-i18n="プロジェクト">プロジェクト</span><span class="badge bg-label-primary ms-2"><?=$_SESSION['isProjectManager'] ? 'PM' : ''?></span></div>
               </a>
               <ul class="menu-sub">
+                <?php if($_SESSION['isProjectManager']){ ?>
                 <li class="menu-item <?php if($directory == 'parent_project' && $page == 'index') echo 'active'; ?>">
                   <a href="<?=$root?>parent_project/" class="menu-link">
                     <div data-i18n="建物一覧">建物一覧</div>
                   </a>
                 </li>
+                <?php } ?>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'index') echo 'active'; ?>">
                   <a href="<?=$root?>project/" class="menu-link">
                     <div data-i18n="案件一覧">案件一覧</div>
@@ -62,6 +64,11 @@
                 <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
                   <a href="<?=$root?>project/custom_fields.php" class="menu-link">
                     <div data-i18n="設定">設定</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php if($directory == 'pricelist') echo 'active'; ?>">
+                  <a href="<?=$root?>price_list" class="menu-link">
+                    <div data-i18n="価格表管理">価格表管理</div>
                   </a>
                 </li>
                 <?php } ?>

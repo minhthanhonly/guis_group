@@ -1,6 +1,9 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('建物登録');
+if(!$_SESSION['isProjectManager']){
+    die('権限がありません。');
+}
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
 
@@ -190,6 +193,45 @@ $view->heading('建物登録');
                                                 </a>
                                             </li>
                                         </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="依頼">依頼</span></label>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="request_design" v-model="parentProject.request_design">
+                                            <label class="form-check-label" for="request_design">
+                                                意匠
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="request_equipment" v-model="parentProject.request_equipment">
+                                            <label class="form-check-label" for="request_equipment">
+                                                設備
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="request_energy_saving" v-model="parentProject.request_energy_saving">
+                                            <label class="form-check-label" for="request_energy_saving">
+                                                省エネ
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="request_other" v-model="parentProject.request_other">
+                                            <label class="form-check-label" for="request_other">
+                                                その他
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -416,5 +458,13 @@ $view->footing();
 }
 </style>
 
+<script>
+// Pass current user data to JavaScript
+window.currentUser = {
+    id: <?= json_encode($_SESSION['userid'] ?? '') ?>,
+    name: <?= json_encode($_SESSION['realname'] ?? '') ?>,
+    username: <?= json_encode($_SESSION['username'] ?? '') ?>
+};
+</script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="assets/js/parent-project-create.js?v=<?=CACHE_VERSION?>"></script> 

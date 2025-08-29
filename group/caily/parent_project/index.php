@@ -1,6 +1,10 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('建物一覧');
+
+if(!$_SESSION['isProjectManager']){
+    die('権限がありません。');
+}
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
 
@@ -109,10 +113,11 @@ $view->heading('建物一覧');
                                                title="編集">
                                                 <i class="fa fa-edit"></i>
                                             </a>
-                                            <button class="btn btn-outline-danger" @click="deleteParentProject(project.id)" 
-                                                    title="削除" :disabled="project.child_project_count > 0">
-                                                <i class="fa fa-trash"></i>
-                                            </button>
+                                            <button v-if="project.child_project_count == 0" class="btn btn-outline-danger" @click="deleteParentProject(project.id)" 
+                                                     title="削除" 
+                                                     :disabled="project.child_project_count > 0">
+                                                 <i class="fa fa-trash"></i>
+                                             </button>
                                         </div>
                                     </td>
                                 </tr>

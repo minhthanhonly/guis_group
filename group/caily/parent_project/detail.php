@@ -5,6 +5,9 @@ if (!$parent_project_id) {
     header('Location: index.php');
     exit;
 }
+if(!$_SESSION['isProjectManager']){
+    die('権限がありません。');
+}
 $view->heading('建物詳細');
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
@@ -59,6 +62,10 @@ $view->heading('建物詳細');
                             <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit"
                                 title="キャンセル">
                                 <i class="fa fa-times"></i>
+                            </button>
+                            <button v-if="!isEditMode" class="btn btn-outline-info btn-sm me-2"
+                                @click="showLogs" title="アクティビティログ">
+                                <i class="fa fa-history"></i>
                             </button>
                             <button v-if="!isEditMode" class="btn btn-outline-danger btn-sm"
                                 @click="deleteParentProject" title="削除">
@@ -332,7 +339,7 @@ $view->heading('建物詳細');
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <div>
-                                    <div class="btn-group" v-if="isEditMode">
+                                    <div class="btn-group">
                                         <button type="button"
                                             class="btn btn-sm dropdown-toggle waves-effect waves-light"
                                             :class="getParentProjectStatusButtonClass(parentProject.status)" id="statusDropdown"
@@ -348,12 +355,74 @@ $view->heading('建物詳細');
                                             </li>
                                         </ul>
                                     </div>
-                                    <div v-else>
-                                        <span class="badge" :class="getParentProjectStatusBadgeClass(parentProject.status)">
-                                            {{ getParentProjectStatusLabel(parentProject.status) }}
-                                        </span>
-                                    </div>
                                 </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="依頼">依頼</span></label>
+                                <template v-if="isEditMode">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="request_design"
+                                                    v-model="request_design">
+                                                <label class="form-check-label" for="request_design">
+                                                    意匠
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="request_equipment"
+                                                    v-model="request_equipment">
+                                                <label class="form-check-label" for="request_equipment">
+                                                    設備
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="request_energy_saving"
+                                                    v-model="request_energy_saving">
+                                                <label class="form-check-label" for="request_energy_saving">
+                                                    省エネ
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="request_other"
+                                                    v-model="request_other">
+                                                <label class="form-check-label" for="request_other">
+                                                    その他
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <div class="form-control-plaintext">
+                                        <div class="row">
+                                            <div class="col-md-3"
+                                                v-if="parentProject.requests && parentProject.requests.includes('意匠')">
+                                                <i class="fa fa-check text-success me-2"></i>意匠
+                                            </div>
+                                            <div class="col-md-3"
+                                                v-if="parentProject.requests && parentProject.requests.includes('設備')">
+                                                <i class="fa fa-check text-success me-2"></i>設備
+                                            </div>
+                                            <div class="col-md-3"
+                                                v-if="parentProject.requests && parentProject.requests.includes('省エネ')">
+                                                <i class="fa fa-check text-success me-2"></i>省エネ
+                                            </div>
+                                            <div class="col-md-3"
+                                                v-if="parentProject.requests && parentProject.requests.includes('その他')">
+                                                <i class="fa fa-check text-success me-2"></i>その他
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                         <div class="col-12">
@@ -509,7 +578,7 @@ $view->heading('建物詳細');
                                     <td>{{ formatDateTime(project.start_date) || '-' }}</td>
                                     <td>{{ formatDateTime(project.end_date) || '-' }}</td>
                                     <td>
-                                        <span v-if="project.is_kadai == 1" class="badge bg-warning">
+                                        <span v-if="project.is_kadai == 1 && project.status !== 'cancelled'" class="badge bg-warning">
                                             承認待ち
                                         </span>
                                         <span v-else class="badge" :class="getProjectStatusBadgeClass(project.status)">
@@ -533,6 +602,11 @@ $view->heading('建物詳細');
                                             <button class="btn btn-outline-secondary" title="編集"
                                                 @click="showEditChildProjectModal(project)">
                                                 <i class="fa fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" title="削除"
+                                                @click="cancelChildProject(project)"
+                                                v-if="project.status !== 'cancelled'">
+                                                <i class="fa fa-trash"></i>
                                             </button>
                                         </div>
                                     </td>
@@ -682,6 +756,61 @@ $view->heading('建物詳細');
             </div>
         </div>
 
+    </div>
+
+    <!-- Activity Logs Modal -->
+    <div class="modal fade" id="logsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">履歴</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div v-if="logs.length > 0">
+                        <ul class="list-group" style="max-height: 400px; overflow-y: auto;">
+                            <li v-for="log in logs" :key="log.id" class="list-group-item">
+                                <div class="d-flex">
+                                    <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
+                                        <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
+                                            <span v-if="log.user_image">
+                                                <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
+                                            </span>
+                                            <div class="avatar avatar-sm" v-else>
+                                                <span class="avatar-initial rounded-circle bg-label-primary">
+                                                    {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex flex-column align-items-start justify-content-center ms-2">
+                                            <span class="fw-bold small">{{ log.username || log.realname || log.user }}</span>
+                                            <span class="text-muted small">{{ formatShortDateTime(log.time) }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 d-flex align-items-center">
+                                        <span>
+                                            <i :class="historyIcon(log.action) + ' me-2'"></i>
+                                            <span class="me-2">{{ log.note }}</span>
+                                            <br>
+                                            <span v-if="log.value1" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getLogBadgeLabel(log, 'value1') }}</span>
+                                            <span v-if="log.value1 && log.value2" class="mx-1">→</span>
+                                            <span v-if="log.value2" :class="getLogBadgeClass(log, 'value2')" class="mx-1">{{ getLogBadgeLabel(log, 'value2') }}</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    <div v-else class="text-center text-muted py-3">
+                        <i class="fa fa-history fa-2x mb-2"></i>
+                        <p>履歴はありません。</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Quotation History Modal -->
@@ -838,8 +967,10 @@ $view->heading('建物詳細');
                             <div class="col-12">
                                 <div class="mb-3">
                                     <label class="form-label">説明</label>
-                                    <textarea class="form-control" v-model="newChildProject.description"
-                                        rows="3"></textarea>
+                                    <div class="custom_editor">
+                                        <div class="custom_editor_content" id="create_child_project_quill_description"></div>
+                                        <textarea class="custom_editor_textarea d-none" v-model="newChildProject.description" id="create_child_project_quill_description_textarea"></textarea>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -948,20 +1079,32 @@ $view->heading('建物詳細');
                             <div class="col-12">
                                 <div class="mb-3">
                                     <label class="form-label">説明</label>
-                                    <textarea class="form-control" v-model="editingChildProject.description"
-                                        rows="3"></textarea>
+                                    <div class="custom_editor">
+                                        <div class="custom_editor_content" id="edit_child_project_quill_description"></div>
+                                        <textarea class="custom_editor_textarea d-none" v-model="editingChildProject.description" id="edit_child_project_quill_description_textarea"></textarea>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                    <button type="button" class="btn btn-primary" @click="updateChildProject"
-                        :disabled="updatingChildProject">
-                        <span v-if="updatingChildProject" class="spinner-border spinner-border-sm me-1"></span>
-                        更新
-                    </button>
+                    <div v-if="editingChildProject && editingChildProject.status === 'cancelled'" class="me-auto">
+                        <button type="button" class="btn btn-warning" @click="restoreChildProject"
+                            :disabled="restoringChildProject">
+                            <span v-if="restoringChildProject" class="spinner-border spinner-border-sm me-1"></span>
+                            <i class="fa fa-undo me-1"></i>
+                            復元
+                        </button>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                        <button type="button" class="btn btn-primary" @click="updateChildProject"
+                            :disabled="updatingChildProject">
+                            <span v-if="updatingChildProject" class="spinner-border spinner-border-sm me-1"></span>
+                            更新
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3108,7 +3251,111 @@ $view->footing();
         font-size: 0.75rem;
         padding: 0.35em 0.65em;
     }
+
+    /* Avatar styles for logs */
+    .avatar {
+        display: inline-block;
+        position: relative;
+    }
+
+    .avatar-sm {
+        width: 32px;
+        height: 32px;
+    }
+
+    .avatar-initial {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+
+    .bg-label-primary {
+        background-color: #e7f1ff !important;
+        color: #0d6efd !important;
+    }
+
+    .bg-label-info {
+        background-color: #e7f3ff !important;
+        color: #0dcaf0 !important;
+    }
+
+    /* Badge styles for logs */
+    .badge {
+        display: inline-block;
+        padding: 0.35em 0.65em;
+        font-size: 0.75em;
+        font-weight: 700;
+        line-height: 1;
+        text-align: center;
+        white-space: nowrap;
+        vertical-align: baseline;
+        border-radius: 0.375rem;
+    }
+
+    .badge.bg-secondary {
+        background-color: #6c757d !important;
+        color: #fff !important;
+    }
+
+    .badge.bg-primary {
+        background-color: #0d6efd !important;
+        color: #fff !important;
+    }
+
+    /* List group styles for logs */
+    .list-group {
+        display: flex;
+        flex-direction: column;
+        padding-left: 0;
+        margin-bottom: 0;
+        border-radius: 0.375rem;
+    }
+
+    .list-group-item {
+        position: relative;
+        display: block;
+        padding: 0.75rem 1.25rem;
+        background-color: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.125);
+        border-left: 0;
+        border-right: 0;
+        border-radius: 0;
+    }
+
+    .list-group-item:first-child {
+        border-top: 0;
+    }
+
+    .list-group-item:last-child {
+        border-bottom: 0;
+    }
+
+    /* Quill Editor styles */
+    .custom_editor {
+        position: relative;
+    }
+    
+    .custom_editor_content {
+        min-height: 120px;
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+    }
+    
+    .custom_editor_textarea {
+        display: none;
+    }
+    
+    .ql-editor {
+        min-height: 120px;
+    }
+
 </style>
+
+<!-- Quill Editor CSS -->
+<link rel="stylesheet" href="../assets/vendor/libs/quill/typography.css" />
+<link rel="stylesheet" href="../assets/vendor/libs/quill/editor.css" />
 
 <script>
     const PARENT_PROJECT_ID = <?php echo $parent_project_id; ?>;
@@ -3117,4 +3364,5 @@ $view->footing();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="https://unpkg.com/@yaireo/tagify"></script>
+<script src="../assets/vendor/libs/quill/quill.js"></script>
 <script src="assets/js/parent-project-detail.js?v=<?= CACHE_VERSION ?>"></script>

@@ -10,7 +10,7 @@ class ApplicationModel extends Model {
 	}
 	function findProjectManager(){
 		$this->connect();
-		$query = "SELECT count(id) as count FROM ".DB_PREFIX."user_department WHERE userid = '".$_SESSION['userid']."'";
+		$query = "SELECT count(id) as count FROM ".DB_PREFIX."user_department WHERE userid = '".$_SESSION['userid']."' AND project_manager = 1";
 		$data = $this->fetchOne($query);
 		return $_SESSION['group'] == ADMIN_GROUP || $data['count'] > 0;
 	}

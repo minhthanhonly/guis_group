@@ -287,7 +287,7 @@ createApp({
             if (!this.editingProduct.unit.trim()) {
                 this.validationErrors.unit = '単位は必須です';
             }
-            if (!this.editingProduct.price || parseFloat(this.editingProduct.price) <= 0) {
+            if (!this.editingProduct.price || parseFloat(this.editingProduct.price) < 0) {
                 this.validationErrors.price = '有効な単価を入力してください';
             }
             if (this.editingProduct.cost && parseFloat(this.editingProduct.cost) < 0) {

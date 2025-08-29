@@ -21,10 +21,12 @@ class ParentProject extends ApplicationModel {
             'type3' => array(),
             'request_type' => array(),
             'desired_delivery_date' => array(),
+            'requests' => array(),
             'materials' => array(),
             'structural_office' => array(),
             'notes' => array(),
             'status' => array(),
+            'department_id' => array(),
             'created_by' => array(),
             'updated_by' => array(),
             'created_at' => array('except' => array('search')),
@@ -106,6 +108,7 @@ class ParentProject extends ApplicationModel {
         // Validate and sanitize input to ensure UTF-8 MB4 compatibility
         $company_name = isset($_POST['company_name']) ? $this->validateUTF8MB4($_POST['company_name']) : '';
         $project_name = isset($_POST['project_name']) ? $this->validateUTF8MB4($_POST['project_name']) : '';
+        $requests = isset($_POST['requests']) ? $this->validateUTF8MB4($_POST['requests']) : '';
         $materials = isset($_POST['materials']) ? $this->validateUTF8MB4($_POST['materials']) : '';
         $notes = isset($_POST['notes']) ? $this->validateUTF8MB4($_POST['notes']) : '';
         
@@ -124,12 +127,14 @@ class ParentProject extends ApplicationModel {
             'type3' => isset($_POST['type3']) ? $_POST['type3'] : '',
             'request_type' => isset($_POST['request_type']) ? $_POST['request_type'] : '',
             'desired_delivery_date' => isset($_POST['desired_delivery_date']) ? $_POST['desired_delivery_date'] : null,
+            'requests' => $requests,
             'materials' => $materials,
             'structural_office' => isset($_POST['structural_office']) ? $_POST['structural_office'] : '',
             'notes' => $notes,
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
             'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
             'construction_branch' => isset($_POST['construction_branch']) ? $_POST['construction_branch'] : '',
+            'department_id' => isset($_POST['department_id']) ? intval($_POST['department_id']) : null,
             'created_by' => $_SESSION['userid'],
             'created_at' => date('Y-m-d H:i:s')
         );
@@ -156,7 +161,7 @@ class ParentProject extends ApplicationModel {
             ];
         }
 
-        // Insert parent project data
+                // Insert parent project data
         $parent_project_id = $this->query_insert($data);
         
         if (!$parent_project_id) {
@@ -165,6 +170,15 @@ class ParentProject extends ApplicationModel {
                 'message' => '親プロジェクトの作成に失敗しました'
             ];
         }
+        
+        // Log the creation
+        $this->logParentProjectAction($parent_project_id, 'created', '親プロジェクト作成', '', '');
+        
+        // Send notification to department managers if department is specified
+        // $department_id = isset($_POST['department_id']) ? intval($_POST['department_id']) : 0;
+        // if ($department_id > 0) {
+        //     $this->notifyParentProjectCreated($parent_project_id, $project_name, $department_id);
+        // }
 
         return [
             'status' => 'success',
@@ -180,6 +194,7 @@ class ParentProject extends ApplicationModel {
         // Validate and sanitize input to ensure UTF-8 MB4 compatibility
         $company_name = isset($_POST['company_name']) ? $this->validateUTF8MB4($_POST['company_name']) : '';
         $project_name = isset($_POST['project_name']) ? $this->validateUTF8MB4($_POST['project_name']) : '';
+        $requests = isset($_POST['requests']) ? $this->validateUTF8MB4($_POST['requests']) : '';
         $materials = isset($_POST['materials']) ? $this->validateUTF8MB4($_POST['materials']) : '';
         $notes = isset($_POST['notes']) ? $this->validateUTF8MB4($_POST['notes']) : '';
         
@@ -198,6 +213,7 @@ class ParentProject extends ApplicationModel {
             'type3' => isset($_POST['type3']) ? $_POST['type3'] : '',
             'request_type' => isset($_POST['request_type']) ? $_POST['request_type'] : '',
             'desired_delivery_date' => isset($_POST['desired_delivery_date']) ? $_POST['desired_delivery_date'] : null,
+            'requests' => $requests,
             'materials' => $materials,
             'structural_office' => isset($_POST['structural_office']) ? $_POST['structural_office'] : '',
             'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
@@ -212,12 +228,53 @@ class ParentProject extends ApplicationModel {
             $result = $this->query_update($data, ['id' => $id]);
             
             if ($result) {
+                // Log the update action
+                $this->logParentProjectAction($id, 'updated', '親プロジェクト情報を変更');
                 return ['status' => 'success', 'message' => '親プロジェクトを更新しました'];
             } else {
                 return ['status' => 'error', 'error' => '更新に失敗しました'];
             }
         } catch (Exception $e) {
             error_log('Parent project update error: ' . $e->getMessage());
+            return ['status' => 'error', 'error' => 'データベースエラー: ' . $e->getMessage()];
+        }
+    }
+
+    function updateStatus($params = null) {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) return ['status' => 'error', 'error' => '親プロジェクトIDが指定されていません'];
+        
+        $status = isset($_POST['status']) ? $_POST['status'] : '';
+        if (empty($status)) return ['status' => 'error', 'error' => 'ステータスが指定されていません'];
+        
+        // Get current status for logging
+        $currentProject = $this->getById($id);
+        $oldStatus = $currentProject ? $currentProject['status'] : '';
+        
+        // Validate status value (you can add more validation if needed)
+        $validStatuses = ['draft', 'under_contract', 'in_progress', 'completed', 'cancelled'];
+        if (!in_array($status, $validStatuses)) {
+            return ['status' => 'error', 'error' => '無効なステータス値です'];
+        }
+        
+        $data = array(
+            'status' => $status,
+            'updated_by' => $_SESSION['userid'],
+            'updated_at' => date('Y-m-d H:i:s')
+        );
+
+        try {
+            $result = $this->query_update($data, ['id' => $id]);
+            
+            if ($result) {
+                // Log the status change
+                $this->logParentProjectAction($id, 'status_changed', 'ステータス変更', $oldStatus, $status);
+                return ['status' => 'success', 'message' => 'ステータスを更新しました'];
+            } else {
+                return ['status' => 'error', 'error' => 'ステータスの更新に失敗しました'];
+            }
+        } catch (Exception $e) {
+            error_log('Parent project status update error: ' . $e->getMessage());
             return ['status' => 'error', 'error' => 'データベースエラー: ' . $e->getMessage()];
         }
     }
@@ -243,6 +300,8 @@ class ParentProject extends ApplicationModel {
         $result = $this->query_delete(['id' => $id]);
         
         if ($result) {
+            // Log the deletion
+            $this->logParentProjectAction($id, 'deleted', '親プロジェクトを削除', $currentProject['status'] ?? '', 'deleted');
             return ['status' => 'success', 'message' => '親プロジェクトを削除しました'];
         } else {
             return ['status' => 'error', 'error' => '削除に失敗しました'];
@@ -776,6 +835,146 @@ class ParentProject extends ApplicationModel {
         // Output file
         readfile($filePath);
         exit;
+    }
+
+    /**
+     * Send notification when parent project is created
+     * @param int $parentProjectId Parent project ID
+     * @param string $projectName Project name
+     * @param int $departmentId Department ID
+     * @return bool Success status
+     */
+    function notifyParentProjectCreated($parentProjectId, $projectName, $departmentId) {
+        try {
+            // Get department managers
+            $managerIds = $this->getDepartmentManagers($departmentId);
+            error_log('managerIds: ' . print_r($managerIds, true));
+            
+            if (empty($managerIds)) {
+                return false; // No managers found
+            }
+
+            require_once('NotificationService.php');
+            $notiService = new NotificationService();
+            
+            $params = [
+                'event' => 'parent_project_created',
+                'title' => '新しい親プロジェクトが作成されました',
+                'message' => sprintf('%sが親プロジェクト「%s」を作成しました', $this->getUserRealname(), $projectName),
+                'data' => [
+                    'parent_project_id' => $parentProjectId,
+                    'project_name' => $projectName,
+                    'department_id' => $departmentId,
+                    'action' => 'created',
+                    'avatar' => $this->getUserImage(),
+                    'url' => "/parent_project/detail.php?id=$parentProjectId",
+                    'sender_id' => $_SESSION['userid'],
+                    'sender_name' => $_SESSION['realname'] ?? 'Unknown',
+                    'timestamp' => date('Y-m-d H:i:s')
+                ],
+                'user_ids' => $managerIds
+            ];
+            
+            $result = $notiService->create($params);
+            
+            // Return true if notification was sent successfully
+            return is_array($result) && isset($result['status']) && $result['status'] === 'success';
+            
+        } catch (Exception $e) {
+            error_log('Failed to send parent project creation notification: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get department managers user IDs
+     * @param int $departmentId Department ID
+     * @return array Array of user IDs
+     */
+    private function getDepartmentManagers($departmentId) {
+        try {
+            $query = sprintf(
+                "SELECT ud.userid 
+                 FROM " . DB_PREFIX . "user_department ud
+                 LEFT JOIN " . DB_PREFIX . "user u ON ud.userid = u.userid
+                 WHERE ud.department_id = %d 
+                 AND ud.project_manager = 1
+                 AND (u.is_suspend = 0 OR u.is_suspend IS NULL OR u.is_suspend = '')",
+                intval($departmentId)
+            );
+            
+            $managers = $this->fetchAll($query);
+            
+            if (!$managers) {
+                return [];
+            }
+            
+            return array_column($managers, 'userid');
+            
+        } catch (Exception $e) {
+            error_log('Error getting department managers: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get current user's image
+     * @return string User image path
+     */
+    private function getUserImage() {
+        if (isset($_SESSION['user_image']) && $_SESSION['user_image'] != '') {
+            return '/assets/upload/avatar/' . $_SESSION['user_image'];
+        }
+        return '/assets/img/avatars/1.png';
+    }
+
+    /**
+     * Get current user's real name with honorific
+     * @return string User real name with さん
+     */
+    private function getUserRealname() {
+        if (isset($_SESSION['lastname']) && $_SESSION['lastname'] != '') {
+            return $_SESSION['lastname'] . 'さん';
+        }
+        return $_SESSION['realname'] . 'さん';
+    }
+
+    /**
+     * Get logs for a parent project
+     */
+    function getLogs($params = null) {
+        $parent_project_id = isset($_GET['parent_project_id']) ? intval($_GET['parent_project_id']) : 0;
+        if (!$parent_project_id) return [];
+
+        $query = sprintf(
+            "SELECT l.*, u.realname, u.user_image FROM " . DB_PREFIX . "parent_projects_logs l
+            LEFT JOIN " . DB_PREFIX . "user u ON l.user_id = u.userid
+            WHERE l.parent_project_id = %d ORDER BY l.time DESC",
+            $parent_project_id
+        );
+        $logs = $this->fetchAll($query);
+        return $logs;
+    }
+
+    /**
+     * Log parent project action
+     */
+    private function logParentProjectAction($parent_project_id, $action, $note = '', $value1 = '', $value2 = '') {
+        $user_id = $_SESSION['userid'] ?? '';
+        $username = $_SESSION['realname'] ?? '';
+        $data = [
+            'parent_project_id' => $parent_project_id,
+            'user_id' => $user_id,
+            'username' => $username,
+            'action' => $action,
+            'note' => $note,
+            'value1' => $value1,
+            'value2' => $value2,
+            'time' => date('Y-m-d H:i:s')
+        ];
+        $this->table = DB_PREFIX . 'parent_projects_logs';
+        $this->query_insert($data);
+        $this->table = DB_PREFIX . 'parent_projects'; // reset table
     }
 }
 ?> 

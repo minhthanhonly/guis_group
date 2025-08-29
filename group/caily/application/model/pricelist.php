@@ -133,7 +133,7 @@ class PriceList extends ApplicationModel {
             ];
         }
 
-        if ($data['price'] <= 0) {
+        if ($data['price'] < 0) {
             return [
                 'status' => 'error',
                 'message' => '有効な単価を入力してください'
@@ -219,7 +219,7 @@ class PriceList extends ApplicationModel {
             ];
         }
 
-        if ($data['price'] <= 0) {
+        if ($data['price'] < 0) {
             return [
                 'status' => 'error',
                 'message' => '有効な単価を入力してください'

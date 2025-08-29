@@ -8,6 +8,9 @@ if (!$parent_project_id) {
     header('Location: index.php');
     exit;
 }
+if(!$_SESSION['isProjectManager']){
+    die('権限がありません。');
+}
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
     <!-- Service Worker Status Indicator -->

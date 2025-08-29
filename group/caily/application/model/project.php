@@ -15,6 +15,7 @@ class Project extends ApplicationModel {
             'description' => array(),
             'priority' => array(), //low, medium, high, urgent
             'status' => array(), //draft, open, in_progress, completed, paused, cancelled, deleted
+            'previous_status' => array(), //stores the previous status before being cancelled
             'start_date' => array(), //timestamp
             'end_date' => array(), //timestamp
             'actual_start_date' => array(), //timestamp
@@ -230,25 +231,22 @@ class Project extends ApplicationModel {
         $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : null;
         
         // Add permission check
-        $user_id = $_SESSION['id'];
-        $is_department_manager = false;
-        
-        if ($_SESSION['authority'] != 'administrator' && !$is_department_manager) {
-            $whereArr[] = sprintf(
-                "(p.created_by = %d OR EXISTS (
-                    SELECT 1 FROM " . DB_PREFIX . "project_members pm 
-                    WHERE pm.project_id = p.id AND pm.user_id = %d
-                ))",
-                $user_id,
-                $user_id
+        $user_id = $_SESSION['userid'];
+        $managerIds = $this->getDepartmentManagers($department_id);
+
+        if($_SESSION['authority'] != 'administrator' && !in_array($user_id, $managerIds)){
+            return array(
+                'status' => 'error',
+                'message' => '権限がありません'
             );
         }
+
         
         // Only show kadai projects
         $whereArr[] = "p.is_kadai = 1";
         
-        // Exclude deleted projects
-        $whereArr[] = "p.status != 'deleted'";
+        // Exclude deleted and cancelled projects
+        $whereArr[] = "p.status NOT IN ('deleted', 'cancelled')";
 
         // If department_id is set, add the department_id to the where clause
         if ($department_id) {
@@ -871,6 +869,11 @@ class Project extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s')
         );
         
+        // Save previous status when cancelling
+        if ($status === 'cancelled' && $old['status'] !== 'cancelled') {
+            $data['previous_status'] = $old['status'];
+        }
+        
         // Cập nhật actual_start_date nếu chuyển sang in_progress
         if ($status == 'in_progress') {
             $project = $this->getById($id);
@@ -901,7 +904,11 @@ class Project extends ApplicationModel {
             $this->query($query);
         }
         
-        return $result;
+        if ($result) {
+            return ['status' => 'success', 'message' => 'Status updated successfully'];
+        } else {
+            return ['status' => 'error', 'message' => 'Failed to update status'];
+        }
     }
 
     function updateProjectDate() {
@@ -1483,15 +1490,66 @@ class Project extends ApplicationModel {
     }
     
     /**
+     * Get department managers user IDs
+     * @param int $departmentId Department ID
+     * @return array Array of user IDs
+     */
+    private function getDepartmentManagers($departmentId) {
+        try {
+            $query = sprintf(
+                "SELECT ud.userid 
+                 FROM " . DB_PREFIX . "user_department ud
+                 LEFT JOIN " . DB_PREFIX . "user u ON ud.userid = u.userid
+                 WHERE ud.department_id = %d 
+                 AND ud.project_manager = 1
+                 AND (u.is_suspend = 0 OR u.is_suspend IS NULL OR u.is_suspend = '')",
+                intval($departmentId)
+            );
+            
+            $managers = $this->fetchAll($query);
+            
+            if (!$managers) {
+                return [];
+            }
+            
+            return array_column($managers, 'userid');
+            
+        } catch (Exception $e) {
+            error_log('Error getting department managers: ' . $e->getMessage());
+            return [];
+        }
+    }
+    
+    /**
      * Hàm tiện ích để gửi thông báo khi tạo dự án mới
      */
     function notifyProjectCreated($projectId, $projectName, $userIds = null) {
+        // Get project information to get department_id
+        $project = $this->getById($projectId);
+        $departmentId = $project ? $project['department_id'] : 0;
+        
+        // Get department managers if department is specified
+        $managerIds = [];
+        if ($departmentId > 0) {
+            $managerIds = $this->getDepartmentManagers($departmentId);
+        }
+        
+        // Combine member IDs and manager IDs, remove duplicates
+        $allUserIds = [];
+        if ($userIds) {
+            $allUserIds = array_merge($allUserIds, $userIds);
+        }
+        if (!empty($managerIds)) {
+            $allUserIds = array_merge($allUserIds, $managerIds);
+        }
+        $allUserIds = array_unique($allUserIds);
+        
         $params = [
             'event' => 'project_created',
             'title' => '新しい案件が作成されました',
             'message' => sprintf('%sが案件「%s」を作成しました', $this->getUserRealname(), $projectName),
             'project_id' => $projectId,
-            'user_ids' => $userIds ? $userIds : [],
+            'user_ids' => $allUserIds,
             'data' => [
                 'project_name' => $projectName,
                 'action' => 'created',
@@ -2528,6 +2586,9 @@ class Project extends ApplicationModel {
             $result = $this->query_update($data, ['id' => $id]);
             
             if ($result) {
+                // Log the confirm action
+                $this->logProjectAction($id, 'confirmed', '案件承認', '', '');
+                
                 return [
                     'status' => 'success', 
                     'message' => 'Project confirmed successfully',

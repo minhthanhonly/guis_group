@@ -26,6 +26,10 @@ createApp({
             type1Tagify: null,
             type2Tagify: null,
             constructionBranchTagify: null,
+            request_design: false,
+            request_equipment: false,
+            request_energy_saving: false,
+            request_other: false,
             materials_layout: false,
             materials_rental: false,
             materials_contract: false,
@@ -94,6 +98,18 @@ createApp({
             },
             creatingChildProject: false,
             updatingChildProject: false,
+            // Activity logs data
+            logs: [],
+            loadingLogs: false,
+            restoringChildProject: false,
+            // Quill editor instance for edit child project modal
+            editChildProjectQuillInstance: null,
+            editChildProjectQuillContent: '',
+            editChildProjectQuillInitializing: false,
+            // Quill editor instance for create child project modal
+            createChildProjectQuillInstance: null,
+            createChildProjectQuillContent: '',
+            createChildProjectQuillInitializing: false,
             // Quotation data
             quotations: [],
             selectedQuotation: null,
@@ -512,6 +528,7 @@ createApp({
             this.isEditMode = true;
             this.originalParentProject = JSON.parse(JSON.stringify(this.parentProject));
             this.loadInitialData();
+            this.parseRequests();
             this.parseMaterials();
             this.$nextTick(async () => {
                 await this.loadBranches();
@@ -1143,6 +1160,20 @@ createApp({
                 $guisReceiver.select2('destroy');
             }
         },
+        parseRequests() {
+            if (!this.parentProject.requests) {
+                this.request_design = false;
+                this.request_equipment = false;
+                this.request_energy_saving = false;
+                this.request_other = false;
+                return;
+            }
+            const requests = this.parentProject.requests.split(',').map(r => r.trim());
+            this.request_design = requests.includes('意匠');
+            this.request_equipment = requests.includes('設備');
+            this.request_energy_saving = requests.includes('省エネ');
+            this.request_other = requests.includes('その他');
+        },
         parseMaterials() {
             if (!this.parentProject.materials) {
                 this.materials_layout = false;
@@ -1183,6 +1214,14 @@ createApp({
                 return;
             }
 
+            // Convert checkbox requests to comma-separated string
+            const requestsArray = [];
+            if (this.request_design) requestsArray.push('意匠');
+            if (this.request_equipment) requestsArray.push('設備');
+            if (this.request_energy_saving) requestsArray.push('省エネ');
+            if (this.request_other) requestsArray.push('その他');
+            this.parentProject.requests = requestsArray.join(',');
+
             // Convert checkbox materials to comma-separated string
             const materialsArray = [];
             if (this.materials_layout) materialsArray.push('配置図');
@@ -1214,6 +1253,7 @@ createApp({
                 formData.append('structural_office', this.parentProject.structural_office || '');
                 formData.append('notes', this.parentProject.notes || '');
                 formData.append('status', this.parentProject.status || 'draft');
+                formData.append('requests', this.parentProject.requests || '');
                 
                 const response = await axios.post('/api/index.php?model=parentproject&method=update', formData);
                 if (response.data && response.data.status == 'success') {
@@ -1244,15 +1284,54 @@ createApp({
             const s = this.statuses.find(s => s.value === statusStr);
             return `btn-${s?.color || 'secondary'}`;
         },
-        selectStatus(status) {
-            this.parentProject.status = status;
-            // Close dropdown
-            const dropdownElement = document.querySelector('#statusDropdown');
-            if (dropdownElement) {
-                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
-                if (dropdown) {
-                    dropdown.hide();
+        async selectStatus(status) {
+            try {
+                // Update local data first for immediate UI feedback
+                this.parentProject.status = status;
+                
+                // Close dropdown
+                const dropdownElement = document.querySelector('#statusDropdown');
+                if (dropdownElement) {
+                    const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                    if (dropdown) {
+                        dropdown.hide();
+                    }
                 }
+
+                                 // Call API to update status in database
+                 const formData = new FormData();
+                 formData.append('id', this.parentProject.id);
+                 formData.append('status', status);
+                 
+                 const response = await axios.post('/api/index.php?model=parentproject&method=updateStatus', formData);
+                
+                if (response.data && response.data.status === 'success') {
+                    Swal.fire({
+                        title: '成功',
+                        text: 'ステータスを更新しました',
+                        icon: 'success',
+                        confirmButtonText: 'OK'
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'エラー',
+                        text: response.data?.error || 'ステータスの更新に失敗しました',
+                        icon: 'error',
+                        confirmButtonText: 'OK'
+                    });
+                    // Revert local change if API call failed
+                    this.parentProject.status = this.originalParentProject.status;
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+                Swal.fire({
+                    title: 'エラー',
+                    text: 'ステータスの更新に失敗しました',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                // Revert local change if API call failed
+                this.parentProject.status = this.originalParentProject.status;
             }
         },
         async generateProjectNumber() {
@@ -1318,12 +1397,22 @@ createApp({
 
             
             this.generateChildProjectNumber();
-            const modal = new bootstrap.Modal(document.getElementById('createChildProjectModal'));
+            
+            // Reuse existing modal instance or create new one
+            const modalEl = document.getElementById('createChildProjectModal');
+            let modal = bootstrap.Modal.getInstance(modalEl);
+            if (!modal) {
+                modal = new bootstrap.Modal(modalEl);
+            }
             modal.show();
             
             this.$nextTick(() => {
                 this.initializeChildProjectDatePickers();
                 this.initializeChildProjectTagify();
+                // Add delay for Quill initialization to ensure DOM is ready
+                setTimeout(() => {
+                    this.initializeCreateChildProjectQuill();
+                }, 100);
             });
         },
 
@@ -1340,6 +1429,13 @@ createApp({
                 is_kadai: true,
 
             };
+            
+            // Clear Quill content
+            this.createChildProjectQuillContent = '';
+            if (this.createChildProjectQuillInstance) {
+                this.createChildProjectQuillInstance.setText('');
+            }
+            
             this.childProjectValidationErrors = {
                 name: '',
                 department_id: '',
@@ -1469,18 +1565,29 @@ createApp({
                 project_order_type: project.project_order_type || '',
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
-
+                status: project.status || '',
+                previous_status: project.previous_status || ''
             };
             
 
             
             this.loadDepartments();
-            const modal = new bootstrap.Modal(document.getElementById('editChildProjectModal'));
+            
+            // Reuse existing modal instance or create new one
+            const modalEl = document.getElementById('editChildProjectModal');
+            let modal = bootstrap.Modal.getInstance(modalEl);
+            if (!modal) {
+                modal = new bootstrap.Modal(modalEl);
+            }
             modal.show();
             
             this.$nextTick(() => {
                 this.initializeEditChildProjectDatePickers();
                 this.initializeEditChildProjectTagify();
+                // Add delay for Quill initialization to ensure DOM is ready
+                setTimeout(() => {
+                    this.initializeEditChildProjectQuill();
+                }, 100);
             });
         },
         
@@ -1557,6 +1664,387 @@ createApp({
                 this.editChildProjectOrderTypeTagify = null;
             }
         },
+
+        initializeEditChildProjectQuill() {
+            // Prevent multiple simultaneous initializations
+            if (this.editChildProjectQuillInitializing) {
+                console.log('Quill editor already initializing, skipping...');
+                return;
+            }
+            
+            try {
+                this.editChildProjectQuillInitializing = true;
+                
+                const el = document.getElementById('edit_child_project_quill_description');
+                if (!el) {
+                    console.log('Quill editor element not found');
+                    this.editChildProjectQuillInitializing = false;
+                    return;
+                }
+                
+                // Check if element already has Quill toolbar (indicating duplicate initialization)
+                const existingToolbar = el.parentElement.querySelector('.ql-toolbar');
+                if (existingToolbar) {
+                    console.log('Found existing Quill toolbar, removing...');
+                    existingToolbar.remove();
+                }
+                
+                // Check if element has Quill classes
+                if (el.classList.contains('ql-container')) {
+                    console.log('Element has Quill classes, cleaning...');
+                    el.className = 'custom_editor_content';
+                    el.setAttribute('id', 'edit_child_project_quill_description');
+                }
+                
+                // Completely reset the element
+                el.innerHTML = '';
+                
+                // Destroy existing instance if any
+                if (this.editChildProjectQuillInstance) {
+                    try {
+                        this.editChildProjectQuillInstance = null;
+                    } catch (e) {
+                        console.log('Error destroying existing instance:', e);
+                    }
+                }
+                
+                // Create new Quill instance
+                this.editChildProjectQuillInstance = new Quill(el, {
+                    bounds: el,
+                    placeholder: '説明を入力してください...',
+                    modules: {
+                        toolbar: [
+                            ['bold', 'italic', 'underline', 'strike'],
+                            ['blockquote', 'code-block'],
+                            [{ 'header': 1 }, { 'header': 2 }],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            [{ 'script': 'sub'}, { 'script': 'super' }],
+                            [{ 'indent': '-1'}, { 'indent': '+1' }],
+                            [{ 'direction': 'rtl' }, { 'align': [] }],
+                            ['link'],
+                            ['clean']
+                        ]
+                    },
+                    theme: 'snow'
+                });
+                
+                // Set initial content
+                if (this.editingChildProject.description) {
+                    this.editChildProjectQuillInstance.root.innerHTML = this.decodeHtmlEntities(this.editingChildProject.description);
+                }
+                
+                // Store content in a separate variable
+                this.editChildProjectQuillContent = this.editChildProjectQuillInstance.getSemanticHTML();
+                
+                // Update content when text changes
+                this.editChildProjectQuillInstance.on('text-change', () => {
+                    this.editChildProjectQuillContent = this.editChildProjectQuillInstance.getSemanticHTML();
+                });
+                
+                console.log('New Quill editor initialized successfully');
+            } catch (error) {
+                console.error('Error initializing Quill editor:', error);
+            } finally {
+                this.editChildProjectQuillInitializing = false;
+            }
+        },
+
+        destroyEditChildProjectQuill() {
+            try {
+                // Destroy Quill instance if it exists
+                if (this.editChildProjectQuillInstance) {
+                    this.editChildProjectQuillInstance.setText('');
+                    this.editChildProjectQuillInstance = null;
+                    console.log('Quill editor instance destroyed');
+                }
+                
+                // Clear stored content
+                this.editChildProjectQuillContent = '';
+                
+                // Get the container element
+                const quillContainer = document.getElementById('edit_child_project_quill_description');
+                if (quillContainer) {
+                    // Remove all Quill-generated elements from parent
+                    const parent = quillContainer.parentElement;
+                    if (parent) {
+                        // Remove toolbar if exists
+                        const toolbar = parent.querySelector('.ql-toolbar');
+                        if (toolbar) {
+                            toolbar.remove();
+                        }
+                        
+                        // Remove any other Quill elements
+                        const quillElements = parent.querySelectorAll('.ql-container, .ql-editor');
+                        quillElements.forEach(el => {
+                            if (el !== quillContainer) {
+                                el.remove();
+                            }
+                        });
+                    }
+                    
+                    // Reset the container element completely
+                    quillContainer.innerHTML = '';
+                    quillContainer.className = 'custom_editor_content';
+                    quillContainer.setAttribute('id', 'edit_child_project_quill_description');
+                    
+                    // Remove any Quill-added attributes
+                    quillContainer.removeAttribute('contenteditable');
+                    quillContainer.removeAttribute('data-gramm');
+                    quillContainer.removeAttribute('data-gramm_editor');
+                    quillContainer.removeAttribute('data-enable-grammarly');
+                }
+                
+                console.log('Quill editor DOM cleaned successfully');
+            } catch (e) {
+                console.log('Error destroying quill editor:', e);
+            } finally {
+                // Always reset the initialization flag
+                this.editChildProjectQuillInitializing = false;
+            }
+        },
+
+        initializeCreateChildProjectQuill() {
+            // Prevent multiple simultaneous initializations
+            if (this.createChildProjectQuillInitializing) {
+                console.log('Create Quill editor already initializing, skipping...');
+                return;
+            }
+            
+            try {
+                this.createChildProjectQuillInitializing = true;
+                
+                const el = document.getElementById('create_child_project_quill_description');
+                if (!el) {
+                    console.log('Create Quill editor element not found');
+                    this.createChildProjectQuillInitializing = false;
+                    return;
+                }
+                
+                // Check if element already has Quill toolbar (indicating duplicate initialization)
+                const existingToolbar = el.parentElement.querySelector('.ql-toolbar');
+                if (existingToolbar) {
+                    console.log('Found existing Create Quill toolbar, removing...');
+                    existingToolbar.remove();
+                }
+                
+                // Check if element has Quill classes
+                if (el.classList.contains('ql-container')) {
+                    console.log('Create element has Quill classes, cleaning...');
+                    el.className = 'custom_editor_content';
+                    el.setAttribute('id', 'create_child_project_quill_description');
+                }
+                
+                // Completely reset the element
+                el.innerHTML = '';
+                
+                // Destroy existing instance if any
+                if (this.createChildProjectQuillInstance) {
+                    try {
+                        this.createChildProjectQuillInstance = null;
+                    } catch (e) {
+                        console.log('Error destroying existing create instance:', e);
+                    }
+                }
+                
+                // Create new Quill instance
+                this.createChildProjectQuillInstance = new Quill(el, {
+                    bounds: el,
+                    placeholder: '説明を入力してください...',
+                    modules: {
+                        toolbar: [
+                            ['bold', 'italic', 'underline', 'strike'],
+                            ['blockquote', 'code-block'],
+                            [{ 'header': 1 }, { 'header': 2 }],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            [{ 'script': 'sub'}, { 'script': 'super' }],
+                            [{ 'indent': '-1'}, { 'indent': '+1' }],
+                            [{ 'direction': 'rtl' }, { 'align': [] }],
+                            ['link'],
+                            ['clean']
+                        ]
+                    },
+                    theme: 'snow'
+                });
+                
+                // Set initial content (empty for create modal)
+                this.createChildProjectQuillContent = '';
+                
+                // Update content when text changes
+                this.createChildProjectQuillInstance.on('text-change', () => {
+                    this.createChildProjectQuillContent = this.createChildProjectQuillInstance.getSemanticHTML();
+                    // Also update the Vue model
+                    this.newChildProject.description = this.createChildProjectQuillContent;
+                });
+                
+                console.log('New Create Quill editor initialized successfully');
+            } catch (error) {
+                console.error('Error initializing Create Quill editor:', error);
+            } finally {
+                this.createChildProjectQuillInitializing = false;
+            }
+        },
+
+        destroyCreateChildProjectQuill() {
+            try {
+                // Destroy Quill instance if it exists
+                if (this.createChildProjectQuillInstance) {
+                    this.createChildProjectQuillInstance.setText('');
+                    this.createChildProjectQuillInstance = null;
+                    console.log('Create Quill editor instance destroyed');
+                }
+                
+                // Clear stored content
+                this.createChildProjectQuillContent = '';
+                
+                // Get the container element
+                const quillContainer = document.getElementById('create_child_project_quill_description');
+                if (quillContainer) {
+                    // Remove all Quill-generated elements from parent
+                    const parent = quillContainer.parentElement;
+                    if (parent) {
+                        // Remove toolbar if exists
+                        const toolbar = parent.querySelector('.ql-toolbar');
+                        if (toolbar) {
+                            toolbar.remove();
+                        }
+                        
+                        // Remove any other Quill elements
+                        const quillElements = parent.querySelectorAll('.ql-container, .ql-editor');
+                        quillElements.forEach(el => {
+                            if (el !== quillContainer) {
+                                el.remove();
+                            }
+                        });
+                    }
+                    
+                    // Reset the container element completely
+                    quillContainer.innerHTML = '';
+                    quillContainer.className = 'custom_editor_content';
+                    quillContainer.setAttribute('id', 'create_child_project_quill_description');
+                    
+                    // Remove any Quill-added attributes
+                    quillContainer.removeAttribute('contenteditable');
+                    quillContainer.removeAttribute('data-gramm');
+                    quillContainer.removeAttribute('data-gramm_editor');
+                    quillContainer.removeAttribute('data-enable-grammarly');
+                }
+                
+                console.log('Create Quill editor DOM cleaned successfully');
+            } catch (e) {
+                console.log('Error destroying create quill editor:', e);
+            } finally {
+                // Always reset the initialization flag
+                this.createChildProjectQuillInitializing = false;
+            }
+        },
+
+        decodeHtmlEntities(str) {
+            if (!str) return '';
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = str;
+            return textarea.value;
+        },
+
+        async cancelChildProject(project) {
+            try {
+                const result = await Swal.fire({
+                    title: '案件依頼をキャンセルしますか？',
+                    text: `案件「${project.name}」をキャンセルします。`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'OK',
+                    cancelButtonText: '取消'
+                });
+
+                if (result.isConfirmed) {
+                    const formData = new FormData();
+                    formData.append('id', project.id);
+                    formData.append('status', 'cancelled');
+                    // The backend will automatically save the current status as previous_status
+
+                    const response = await axios.post('/api/index.php?model=project&method=updateStatus', formData);
+
+                    if (response.data && response.data.status === 'success') {
+                        await Swal.fire({
+                            title: '完了',
+                            text: '案件依頼をキャンセルしました。',
+                            icon: 'success',
+                            confirmButtonText: 'OK'
+                        });
+
+                        // Reload child projects to show updated status
+                        await this.loadChildProjects();
+                        
+                        // Reload quotations as cancelled projects might affect quotation status
+                        await this.loadQuotations();
+                    } else {
+                        throw new Error(response.data.error || response.data.message || 'キャンセルに失敗しました');
+                    }
+                }
+            } catch (error) {
+                console.error('Error cancelling child project:', error);
+                await Swal.fire({
+                    title: 'エラー',
+                    text: error.message || '案件依頼のキャンセル中にエラーが発生しました。',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+            }
+        },
+
+        async restoreChildProject() {
+            try {
+                const result = await Swal.fire({
+                    title: '案件依頼を復元しますか？',
+                    text: `案件「${this.editingChildProject.name}」を復元します。`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#28a745',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: '復元',
+                    cancelButtonText: '取消'
+                });
+
+                if (result.isConfirmed) {
+                    this.restoringChildProject = true;
+                    
+                    const formData = new FormData();
+                    formData.append('id', this.editingChildProject.id);
+                    // Restore to previous status or default to 'open' if no previous status
+                    formData.append('status', this.editingChildProject.previous_status || 'open');
+
+                    const response = await axios.post('/api/index.php?model=project&method=updateStatus', formData);
+
+                    if (response.data.status === 'success') {
+                        await Swal.fire({
+                            title: '完了',
+                            text: '案件依頼を復元しました。',
+                            icon: 'success',
+                            confirmButtonText: 'OK'
+                        });
+
+                        // Close modal and reload data
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('editChildProjectModal'));
+                        modal.hide();
+                        await this.loadChildProjects();
+                    } else {
+                        throw new Error(response.data.error || response.data.message || '復元に失敗しました');
+                    }
+                }
+            } catch (error) {
+                console.error('Error restoring child project:', error);
+                await Swal.fire({
+                    title: 'エラー',
+                    text: error.message || '案件依頼の復元に失敗しました。',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+            } finally {
+                this.restoringChildProject = false;
+            }
+        },
         
         validateEditChildProjectForm() {
             this.editChildProjectValidationErrors = {
@@ -1620,6 +2108,11 @@ createApp({
                 return;
             }
 
+            // Sync Quill content with the form data
+            if (this.editChildProjectQuillInstance) {
+                this.editChildProjectQuillContent = this.editChildProjectQuillInstance.getSemanticHTML();
+            }
+
             this.updatingChildProject = true;
 
             try {
@@ -1628,7 +2121,7 @@ createApp({
                 formData.append('name', this.editingChildProject.name);
                 formData.append('department_id', this.editingChildProject.department_id);
                 formData.append('project_number', this.editingChildProject.project_number);
-                formData.append('description', this.editingChildProject.description || '');
+                formData.append('description', this.editChildProjectQuillContent || '');
                 formData.append('start_date', this.editingChildProject.start_date);
                 formData.append('end_date', this.editingChildProject.end_date);
                 formData.append('project_order_type', this.editingChildProject.project_order_type || '');
@@ -1664,6 +2157,9 @@ createApp({
                         is_kadai: true,
         
                     };
+                    
+                    // Reset Quill content
+                    this.editChildProjectQuillContent = '';
                 } else if (response.data && response.data.message === 'Project number already exists') {
                     this.editChildProjectValidationErrors.project_number = 'このプロジェクト番号は既に存在します。';
                 } else {
@@ -1797,6 +2293,12 @@ createApp({
             this.creatingChildProject = true;
 
             try {
+                // Sync Quill content to form data
+                if (this.createChildProjectQuillInstance) {
+                    this.createChildProjectQuillContent = this.createChildProjectQuillInstance.getSemanticHTML();
+                    this.newChildProject.description = this.createChildProjectQuillContent;
+                }
+
                 const formData = new FormData();
                 formData.append('name', this.newChildProject.name);
                 formData.append('department_id', this.newChildProject.department_id);
@@ -5093,49 +5595,9 @@ createApp({
             }
         },
         
-        formatShortDateTime(dateTimeString) {
-            if (!dateTimeString) return '';
-            
-            try {
-                const date = new Date(dateTimeString);
-                if (isNaN(date.getTime())) return dateTimeString;
-                
-                const now = new Date();
-                const diffMs = now.getTime() - date.getTime();
-                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                
-                if (diffDays === 0) {
-                    // Today - show time only
-                    return date.toLocaleTimeString('ja-JP', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    });
-                } else if (diffDays === 1) {
-                    // Yesterday
-                    return '昨日 ' + date.toLocaleTimeString('ja-JP', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    });
-                } else if (diffDays < 7) {
-                    // Within a week - show day and time
-                    const days = ['日', '月', '火', '水', '木', '金', '土'];
-                    return days[date.getDay()] + ' ' + date.toLocaleTimeString('ja-JP', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    });
-                } else {
-                    // More than a week - show date and time
-                    return date.toLocaleDateString('ja-JP', { 
-                        month: '2-digit', 
-                        day: '2-digit' 
-                    }) + ' ' + date.toLocaleTimeString('ja-JP', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    });
-                }
-            } catch (error) {
-                return dateTimeString;
-            }
+        formatShortDateTime(datetime) {
+            if (!datetime) return '-';
+            return moment(datetime).format('M月D日 HH:mm');
         },
         
         // Customer modal methods
@@ -5351,6 +5813,65 @@ createApp({
             } catch (error) {
                 return name.charAt(0).toUpperCase();
             }
+        },
+
+        // Activity logs methods
+        async showLogs() {
+            try {
+                this.loadingLogs = true;
+                const response = await axios.get(`/api/index.php?model=parentproject&method=getLogs&parent_project_id=${PARENT_PROJECT_ID}`);
+                if (response.data && Array.isArray(response.data)) {
+                    this.logs = response.data;
+                } else {
+                    this.logs = [];
+                }
+                $('#logsModal').modal('show');
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                showMessage('ログの読み込みに失敗しました。', true);
+                this.logs = [];
+            } finally {
+                this.loadingLogs = false;
+            }
+        },
+
+        historyIcon(action) {
+            const iconMap = {
+                'created': 'fa fa-plus text-success',
+                'updated': 'fa fa-edit text-primary',
+                'status_changed': 'fa fa-exchange-alt text-warning',
+                'deleted': 'fa fa-trash text-danger'
+            };
+            return iconMap[action] || 'fa fa-info-circle text-muted';
+        },
+
+        getLogBadgeClass(log, field) {
+            if (field === 'value1') {
+                return 'badge bg-secondary';
+            } else if (field === 'value2') {
+                return 'badge bg-primary';
+            }
+            return 'badge bg-secondary';
+        },
+
+        getLogBadgeLabel(log, field) {
+            const value = log[field];
+            if (!value) return '';
+            
+            // Handle status values
+            if (field === 'value1' || field === 'value2') {
+                const statusMap = {
+                    'draft': '下書き',
+                    'under_contract': '契約中',
+                    'in_progress': '進行中',
+                    'completed': '完了',
+                    'cancelled': 'キャンセル',
+                    'deleted': '削除済み'
+                };
+                return statusMap[value] || value;
+            }
+            
+            return value;
         }
     },
     async mounted() {
@@ -5412,6 +5933,26 @@ createApp({
                 });
             }
 
+            // Add event listener for edit child project modal
+            const editChildProjectModal = document.getElementById('editChildProjectModal');
+            if (editChildProjectModal) {
+                editChildProjectModal.addEventListener('hidden.bs.modal', () => {
+                    // Cleanup Quill editor when modal is closed
+                    this.destroyEditChildProjectQuill();
+                    // Cleanup Tagify
+                    this.destroyEditChildProjectTagify();
+                });
+            }
+
+            // Add event listener for create child project modal
+            const createChildProjectModal = document.getElementById('createChildProjectModal');
+            if (createChildProjectModal) {
+                createChildProjectModal.addEventListener('hidden.bs.modal', () => {
+                    // Cleanup Quill editor when modal is closed
+                    this.destroyCreateChildProjectQuill();
+                });
+            }
+
             // Keyboard navigation for price list modal
             const priceListModalEl = document.getElementById('priceListModal');
             if (priceListModalEl) {
@@ -5435,5 +5976,9 @@ createApp({
     beforeUnmount() {
         // Clean up sortable instances
         this.destroySortable();
+        
+        // Clean up Quill editor instances
+        this.destroyEditChildProjectQuill();
+        this.destroyCreateChildProjectQuill();
     }
 }).mount('#app'); 

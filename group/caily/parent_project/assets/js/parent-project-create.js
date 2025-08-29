@@ -8,7 +8,7 @@ createApp({
                 branch_name: '',
                 contact_name: '',
                 customer_id: '',
-                guis_receiver: '',
+                guis_receiver: window.currentUser?.id || '',
                 request_date: '',
                 construction_number: '',
                 project_number: '',
@@ -19,6 +19,10 @@ createApp({
                 type2: '',
                 request_type: '',
                 desired_delivery_date: '',
+                request_design: false,
+                request_equipment: false,
+                request_energy_saving: false,
+                request_other: false,
                 materials_layout: false,
                 materials_rental: false,
                 materials_contract: false,
@@ -156,6 +160,13 @@ createApp({
                 formData.append('type2', this.parentProject.type2 || '');
                 formData.append('request_type', this.parentProject.request_type || '');
                 formData.append('desired_delivery_date', this.parentProject.desired_delivery_date || '');
+                // Convert checkbox requests to comma-separated string
+                const requestsArray = [];
+                if (this.parentProject.request_design) requestsArray.push('意匠');
+                if (this.parentProject.request_equipment) requestsArray.push('設備');
+                if (this.parentProject.request_energy_saving) requestsArray.push('省エネ');
+                if (this.parentProject.request_other) requestsArray.push('その他');
+                formData.append('requests', requestsArray.join(','));
                 // Convert checkbox materials to comma-separated string
                 const materialsArray = [];
                 if (this.parentProject.materials_layout) materialsArray.push('配置図');
@@ -442,6 +453,11 @@ createApp({
                             const option = new Option(user.text, user.id, false, false);
                             $guisReceiver.append(option);
                         });
+                        
+                        // Set the current user as selected if available
+                        if (window.currentUser?.id && this.parentProject.guis_receiver === window.currentUser.id) {
+                            $guisReceiver.val(window.currentUser.id).trigger('change');
+                        }
                     }
                 }
             } catch (error) {
@@ -959,7 +975,7 @@ createApp({
             branch_name: '',
             contact_name: '',
             customer_id: '',
-            guis_receiver: '',
+            guis_receiver: window.currentUser?.id || '',
             request_date: '',
             construction_number: '',
             project_number: '',
