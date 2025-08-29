@@ -101,6 +101,10 @@ createApp({
             // Activity logs data
             logs: [],
             loadingLogs: false,
+            // Child project logs data
+            childProjectLogs: [],
+            loadingChildProjectLogs: false,
+            selectedChildProject: null,
             restoringChildProject: false,
             // Quill editor instance for edit child project modal
             editChildProjectQuillInstance: null,
@@ -5835,6 +5839,36 @@ createApp({
             }
         },
 
+        async showChildProjectLogs(project) {
+            try {
+                this.selectedChildProject = project;
+                this.loadingChildProjectLogs = true;
+                this.childProjectLogs = [];
+                
+                const response = await axios.get(`/api/index.php?model=project&method=getLogs&project_id=${project.id}`);
+                if (response.data && Array.isArray(response.data)) {
+                    this.childProjectLogs = response.data;
+                } else {
+                    this.childProjectLogs = [];
+                }
+                
+                // Show the modal using Bootstrap 5 method
+                const modal = new bootstrap.Modal(document.getElementById('childProjectLogsModal'));
+                modal.show();
+            } catch (error) {
+                console.error('Error loading child project logs:', error);
+                Swal.fire({
+                    title: 'エラー',
+                    text: '子プロジェクトログの読み込みに失敗しました。',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                this.childProjectLogs = [];
+            } finally {
+                this.loadingChildProjectLogs = false;
+            }
+        },
+
         historyIcon(action) {
             const iconMap = {
                 'created': 'fa fa-plus text-success',
@@ -5846,6 +5880,33 @@ createApp({
         },
 
         getLogBadgeClass(log, field) {
+            const value = log[field];
+            if (!value) return 'badge bg-secondary';
+            
+            // Check if this is a status change action and the value is a status
+            if (log.action === 'status_changed' || log.action === 'confirmed') {
+                // Try to find the status in projectStatuses array
+                const projectStatus = this.projectStatuses.find(s => s.value === value);
+                if (projectStatus) {
+                    return `badge bg-${projectStatus.color}`;
+                }
+                
+                // Try to find by Japanese label
+                const projectStatusByLabel = this.projectStatuses.find(s => s.label === value);
+                if (projectStatusByLabel) {
+                    return `badge bg-${projectStatusByLabel.color}`;
+                }
+                
+                // Special handling for kadai/project conversion
+                if (value === 'kadai') {
+                    return 'badge bg-warning'; // Same as 承認待ち
+                }
+                if (value === 'project') {
+                    return 'badge bg-success'; // Confirmed project
+                }
+            }
+            
+            // Default colors for value1 and value2
             if (field === 'value1') {
                 return 'badge bg-secondary';
             } else if (field === 'value2') {
@@ -5858,8 +5919,23 @@ createApp({
             const value = log[field];
             if (!value) return '';
             
-            // Handle status values
+            // Handle status values - try project statuses first
             if (field === 'value1' || field === 'value2') {
+                // Try to find the status in projectStatuses array
+                const projectStatus = this.projectStatuses.find(s => s.value === value);
+                if (projectStatus) {
+                    return projectStatus.label;
+                }
+                
+                // Special handling for kadai/project conversion
+                if (value === 'kadai') {
+                    return '承認待ち';
+                }
+                if (value === 'project') {
+                    return 'プロジェクト';
+                }
+                
+                // Fallback status map for other statuses
                 const statusMap = {
                     'draft': '下書き',
                     'under_contract': '契約中',

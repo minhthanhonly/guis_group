@@ -603,6 +603,10 @@ $view->heading('建物詳細');
                                                 @click="showEditChildProjectModal(project)">
                                                 <i class="fa fa-edit"></i>
                                             </button>
+                                            <button class="btn btn-outline-info" title="ログ"
+                                                @click="showChildProjectLogs(project)">
+                                                <i class="fa fa-history"></i>
+                                            </button>
                                             <button class="btn btn-outline-danger" title="削除"
                                                 @click="cancelChildProject(project)"
                                                 v-if="project.status !== 'cancelled'">
@@ -770,6 +774,66 @@ $view->heading('建物詳細');
                     <div v-if="logs.length > 0">
                         <ul class="list-group" style="max-height: 400px; overflow-y: auto;">
                             <li v-for="log in logs" :key="log.id" class="list-group-item">
+                                <div class="d-flex">
+                                    <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
+                                        <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
+                                            <span v-if="log.user_image">
+                                                <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
+                                            </span>
+                                            <div class="avatar avatar-sm" v-else>
+                                                <span class="avatar-initial rounded-circle bg-label-primary">
+                                                    {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex flex-column align-items-start justify-content-center ms-2">
+                                            <span class="fw-bold small">{{ log.username || log.realname || log.user }}</span>
+                                            <span class="text-muted small">{{ formatShortDateTime(log.time) }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 d-flex align-items-center">
+                                        <span>
+                                            <i :class="historyIcon(log.action) + ' me-2'"></i>
+                                            <span class="me-2">{{ log.note }}</span>
+                                            <br>
+                                            <span v-if="log.value1" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getLogBadgeLabel(log, 'value1') }}</span>
+                                            <span v-if="log.value1 && log.value2" class="mx-1">→</span>
+                                            <span v-if="log.value2" :class="getLogBadgeClass(log, 'value2')" class="mx-1">{{ getLogBadgeLabel(log, 'value2') }}</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    <div v-else class="text-center text-muted py-3">
+                        <i class="fa fa-history fa-2x mb-2"></i>
+                        <p>履歴はありません。</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Child Project Logs Modal -->
+    <div class="modal fade" id="childProjectLogsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">子プロジェクト履歴 - {{ selectedChildProject?.name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div v-if="loadingChildProjectLogs" class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">読み込み中...</span>
+                        </div>
+                    </div>
+                    <div v-else-if="childProjectLogs.length > 0">
+                        <ul class="list-group" style="max-height: 400px; overflow-y: auto;">
+                            <li v-for="log in childProjectLogs" :key="log.id" class="list-group-item">
                                 <div class="d-flex">
                                     <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
                                         <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
