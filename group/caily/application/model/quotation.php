@@ -344,8 +344,14 @@ class Quotation extends ApplicationModel {
                     $set_json = null;
                 }
             } elseif (!empty($item['set_json'])) {
-                // Fallback to original set_json if base64 version not available
-                $set_json = $item['set_json'];
+                // Handle set_json - it could be array/object or string
+                if (is_array($item['set_json']) || is_object($item['set_json'])) {
+                    // Convert array/object to JSON string
+                    $set_json = json_encode($item['set_json']);
+                } else {
+                    // Already a string, use as is
+                    $set_json = $item['set_json'];
+                }
             }
             
             $item_data = array(
@@ -375,7 +381,12 @@ class Quotation extends ApplicationModel {
                     $quoted_values[] = 'NULL';
                 } elseif (is_numeric($value)) {
                     $quoted_values[] = $value;
+                } elseif (is_array($value) || is_object($value)) {
+                    // Convert array/object to JSON string and escape it
+                    $json_string = json_encode($value);
+                    $quoted_values[] = "'" . mysqli_real_escape_string($this->handler, $json_string) . "'";
                 } else {
+                    // Regular string value
                     $quoted_values[] = "'" . mysqli_real_escape_string($this->handler, $value) . "'";
                 }
             }

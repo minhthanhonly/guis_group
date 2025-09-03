@@ -2626,6 +2626,8 @@ createApp({
             
             // Use spread operator to ensure reactivity
             this.newQuotation.items = [...this.newQuotation.items, newItem];
+            // Clear items validation error when items are added
+            delete this.quotationValidationErrors.items;
             
             // Validate project_id selection after adding new item
             this.$nextTick(() => {
@@ -2873,7 +2875,6 @@ createApp({
             if (!this.checkItemsReady()) {
                 return;
             }
-            
             if (!this.validateQuotationForm()) {
                 return;
             }
@@ -2884,44 +2885,58 @@ createApp({
 
             try {
                 const formData = new FormData();
+                
+
+                
                 // Add quotation data - send all fields including empty ones
                 Object.keys(this.newQuotation).forEach(key => {
                     if (key === 'items') {
+                        // Ensure items exist and are not empty before processing
+                        if (!this.newQuotation[key] || !Array.isArray(this.newQuotation[key]) || this.newQuotation[key].length === 0) {
+                            console.error('DEBUG: Items are empty or invalid when trying to send!');
+                            formData.append(key, JSON.stringify([]));
+                            return;
+                        }
+                        
                         // Create a deep copy of items and properly handle set_json
                         const itemsCopy = this.newQuotation[key].map(item => {
-                            if (item.is_set && item.set_json) {
-                                // Ensure set_json is properly handled
                                 const itemCopy = { ...item };
                                 
-                                if (typeof item.set_json === 'object') {
-                                    // If object, stringify it
-                                    itemCopy.set_json = JSON.stringify(item.set_json);
-                                } else if (typeof item.set_json === 'string') {
-                                    // If already a string, validate and use as is
+                            if (item.is_set && item.set_json) {
+                                // Handle set_json properly - convert to object if it's a string, then back to object for proper JSON encoding
+                                if (typeof item.set_json === 'string') {
                                     try {
-                                        JSON.parse(item.set_json); // Validate it's valid JSON
-                                        itemCopy.set_json = item.set_json;
+                                        // Parse the JSON string to object so it gets properly encoded when the whole item is stringified
+                                        itemCopy.set_json = JSON.parse(item.set_json);
                                     } catch (e) {
-                                        // Try to re-stringify if it's invalid
-                                        itemCopy.set_json = JSON.stringify(item.set_json);
+                                        console.error('Error parsing set_json:', e, item.set_json);
+                                        // If parsing fails, keep as string but log error
+                                        itemCopy.set_json = item.set_json;
                                     }
+                                } else if (typeof item.set_json === 'object') {
+                                    // Already an object, keep as is
+                                    itemCopy.set_json = item.set_json;
                                 } else {
-                                    // Unknown type, stringify it
-                                    itemCopy.set_json = JSON.stringify(item.set_json);
+                                    // Unknown type, convert to string first then parse
+                                    try {
+                                        itemCopy.set_json = JSON.parse(String(item.set_json));
+                                    } catch (e) {
+                                        itemCopy.set_json = item.set_json;
+                                    }
                                 }
-                                return itemCopy;
                             }
-                            return item;
+                            
+                            return itemCopy;
                         });
                         
                         const itemsJson = JSON.stringify(itemsCopy);
                         formData.append(key, itemsJson);
                         
-                        // Debug: Check if items JSON is valid
+                        // Validate the generated JSON
                         try {
-                            const parsed = JSON.parse(itemsJson);
+                            JSON.parse(itemsJson);
                         } catch (e) {
-                            console.error('Items JSON is invalid:', e);
+                            console.error('Generated items JSON is invalid:', e);
                         }
                     } else {
                         // Send all fields, including empty strings and null values
@@ -2950,8 +2965,9 @@ createApp({
                     console.error('Error parsing items from FormData:', parseError);
                 }
               
-                // Debug: Check if FormData has the expected content
-                const formDataArray = Array.from(formData.entries());
+
+                
+
                 
                 const response = await axios.post('/api/index.php?model=quotation&method=create', formData);
                 
@@ -3034,7 +3050,7 @@ createApp({
         validateQuotationForm() {
             let isValid = true;
             
-            // Clear previous validation errors
+            // Clear previous validation errors completely
             this.quotationValidationErrors = {};
             
             if (!this.newQuotation.issue_date) {
@@ -3063,28 +3079,18 @@ createApp({
                 isValid = false;
             }
             
-            // Improved items validation
+
+            
+            // Items validation - only check if items exist
             if (!this.newQuotation.items || !Array.isArray(this.newQuotation.items) || this.newQuotation.items.length === 0) {
                 this.quotationValidationErrors.items = '商品明細は必須です';
                 isValid = false;
             } else {
-                // Validate that all items have project_id selected
-                const itemsWithoutProject = this.newQuotation.items.filter(item => {
-                    // Handle both string and number project_id
-                    if (!item.project_id) return true;
-                    if (typeof item.project_id === 'string') {
-                        return item.project_id.trim() === '';
-                    }
-                    if (typeof item.project_id === 'number') {
-                        return item.project_id <= 0;
-                    }
-                    return true; // fallback for other types
-                });
-                if (itemsWithoutProject.length > 0) {
-                    this.quotationValidationErrors.items = `${itemsWithoutProject.length}件の商品にプロジェクト番号が選択されていません`;
-                    isValid = false;
-                }
+                // Clear items error if validation passes
+                delete this.quotationValidationErrors.items;
             }
+
+            // Note: Project ID assignment is optional at creation time - users can assign them later
             
             // Validate child project selection
             if (!this.selectedChildProjectIds || this.selectedChildProjectIds.length === 0) {
@@ -3111,32 +3117,32 @@ createApp({
                 this.quotationValidationErrors.valid_until = '有効期限は必須です';
                 isValid = false;
             }
+
+
+            
+            // Show SweetAlert2 notification if there are validation errors
+            if (!isValid) {
+                const errorMessages = Object.values(this.quotationValidationErrors).filter(error => error !== undefined && error !== null && error !== '');
+                const errorList = errorMessages.map(error => `• ${error}`).join('<br>');
+                
+                Swal.fire({
+                    title: '入力エラー',
+                    html: `以下の項目を確認してください：<br><br>${errorList}`,
+                    icon: 'error',
+                    confirmButtonText: 'OK',
+                    confirmButtonColor: '#d33'
+                });
+            }
             
             return isValid;
         },
 
         validateProjectIdSelection() {
-            // Clear previous items validation error
+            // Don't validate project IDs - this is now optional
+            // Project ID assignment can be done later by users
+            // Clear any existing project ID validation errors
             if (this.quotationValidationErrors.items && this.quotationValidationErrors.items.includes('プロジェクト番号が選択されていません')) {
                 delete this.quotationValidationErrors.items;
-            }
-            
-            // Check if all items have project_id selected
-            if (this.newQuotation.items && Array.isArray(this.newQuotation.items) && this.newQuotation.items.length > 0) {
-                const itemsWithoutProject = this.newQuotation.items.filter(item => {
-                    // Handle both string and number project_id
-                    if (!item.project_id) return true;
-                    if (typeof item.project_id === 'string') {
-                        return item.project_id.trim() === '';
-                    }
-                    if (typeof item.project_id === 'number') {
-                        return item.project_id <= 0;
-                    }
-                    return true; // fallback for other types
-                });
-                if (itemsWithoutProject.length > 0) {
-                    this.quotationValidationErrors.items = `${itemsWithoutProject.length}件の商品にプロジェクト番号が選択されていません`;
-                }
             }
         },
 
@@ -3686,11 +3692,16 @@ createApp({
             // Add to appropriate quotation items based on context
             if (isEditingQuotation) {
                 this.editingQuotation.items = [...this.editingQuotation.items, setItem];
+                // Clear items validation error when items are added
+                delete this.editQuotationValidationErrors.items;
                 this.$nextTick(() => {
                     this.calculateTotalAmountForEdit();
                 });
             } else {
                 this.newQuotation.items = [...this.newQuotation.items, setItem];
+                // Clear items validation error when items are added
+                this.quotationValidationErrors.items = undefined;
+
                 this.$nextTick(() => {
                     this.calculateTotalAmount();
                 });
@@ -3897,9 +3908,13 @@ createApp({
             // Add to appropriate quotation items based on context
             if (isEditingQuotation) {
                 this.editingQuotation.items = [...this.editingQuotation.items, ...newItems];
+                // Clear items validation error when items are added
+                delete this.editQuotationValidationErrors.items;
                 this.calculateTotalAmountForEdit();
             } else {
                 this.newQuotation.items = [...this.newQuotation.items, ...newItems];
+                // Clear items validation error when items are added
+                this.quotationValidationErrors.items = undefined;
                 this.calculateTotalAmount();
             }
             
@@ -4678,6 +4693,8 @@ createApp({
             this.autoSelectSingleProjectOption(newItem, true);
             
             this.editingQuotation.items.push(newItem);
+            // Clear items validation error when items are added
+            delete this.editQuotationValidationErrors.items;
             this.$nextTick(() => {
                 this.validateProjectIdSelectionForEdit();
             });
@@ -4852,24 +4869,11 @@ createApp({
 
         // Validation methods for edit
         validateProjectIdSelectionForEdit() {
+            // Don't validate project IDs - this is now optional
+            // Project ID assignment can be done later by users
+            // Clear any existing project ID validation errors
             if (this.editQuotationValidationErrors.items && this.editQuotationValidationErrors.items.includes('プロジェクト番号が選択されていません')) {
                 delete this.editQuotationValidationErrors.items;
-            }
-            if (this.editingQuotation.items && Array.isArray(this.editingQuotation.items) && this.editingQuotation.items.length > 0) {
-                const itemsWithoutProject = this.editingQuotation.items.filter(item => {
-                    // Handle both string and number project_id
-                    if (!item.project_id) return true;
-                    if (typeof item.project_id === 'string') {
-                        return item.project_id.trim() === '';
-                    }
-                    if (typeof item.project_id === 'number') {
-                        return item.project_id <= 0;
-                    }
-                    return true; // fallback for other types
-                });
-                if (itemsWithoutProject.length > 0) {
-                    this.editQuotationValidationErrors.items = `${itemsWithoutProject.length}件の商品にプロジェクト番号が選択されていません`;
-                }
             }
         },
 
@@ -4990,34 +4994,26 @@ createApp({
                         
                         // Handle set_json with proper encoding to avoid JSON syntax errors
                         if (item.is_set && item.set_json) {
-                            try {
-                                let setJsonString;
-                                
-                                if (typeof item.set_json === 'object') {
-                                    // If object, stringify it
-                                    setJsonString = JSON.stringify(item.set_json);
-                                } else if (typeof item.set_json === 'string') {
-                                    // If already a string, validate and use
-                                    try {
-                                        // Parse to validate it's valid JSON
-                                        const parsed = JSON.parse(item.set_json);
-                                        // Re-stringify to ensure consistent format
-                                        setJsonString = JSON.stringify(parsed);
+                            // Handle set_json properly - convert to object if it's a string, then back to object for proper JSON encoding
+                            if (typeof item.set_json === 'string') {
+                                try {
+                                    // Parse the JSON string to object so it gets properly encoded when the whole item is stringified
+                                    cleanItem.set_json = JSON.parse(item.set_json);
                                     } catch (e) {
-                                        // If parsing fails, use as is
-                                        setJsonString = item.set_json;
+                                    console.error('Error parsing set_json in edit:', e, item.set_json);
+                                    // If parsing fails, keep as string but log error
+                                    cleanItem.set_json = item.set_json;
                                     }
+                            } else if (typeof item.set_json === 'object') {
+                                // Already an object, keep as is
+                                cleanItem.set_json = item.set_json;
                                 } else {
-                                    // Unknown type, stringify it
-                                    setJsonString = JSON.stringify(item.set_json);
-                                }
-                                
-                                // Encode as base64 to avoid JSON escaping issues
-                                cleanItem.set_json_base64 = btoa(unescape(encodeURIComponent(setJsonString)));
-                                
+                                // Unknown type, convert to string first then parse
+                                try {
+                                    cleanItem.set_json = JSON.parse(String(item.set_json));
                             } catch (e) {
-                                console.warn('Failed to encode set_json for item:', item.title, e);
-                                // If all else fails, skip set_json
+                                    cleanItem.set_json = item.set_json;
+                                }
                             }
                         }
                         
@@ -5105,27 +5101,16 @@ createApp({
                 isValid = false;
             }
 
-            // Validate items
+            // Items validation - only check if items exist
             if (!this.editingQuotation.items || !Array.isArray(this.editingQuotation.items) || this.editingQuotation.items.length === 0) {
                 this.editQuotationValidationErrors.items = '商品明細は必須です';
                 isValid = false;
             } else {
-                const itemsWithoutProject = this.editingQuotation.items.filter(item => {
-                    // Handle both string and number project_id
-                    if (!item.project_id) return true;
-                    if (typeof item.project_id === 'string') {
-                        return item.project_id.trim() === '';
-                    }
-                    if (typeof item.project_id === 'number') {
-                        return item.project_id <= 0;
-                    }
-                    return true; // fallback for other types
-                });
-                if (itemsWithoutProject.length > 0) {
-                    this.editQuotationValidationErrors.items = `${itemsWithoutProject.length}件の商品にプロジェクト番号が選択されていません`;
-                    isValid = false;
-                }
+                // Clear items error if validation passes
+                delete this.editQuotationValidationErrors.items;
             }
+
+            // Note: Project ID assignment is optional - users can assign them later
 
             // Delivery date is optional - user can input freely or use date picker
             
@@ -5145,6 +5130,20 @@ createApp({
             if (!this.editingQuotation.valid_until || this.editingQuotation.valid_until.trim() === '') {
                 this.editQuotationValidationErrors.valid_until = '有効期限は必須です';
                 isValid = false;
+            }
+
+            // Show SweetAlert2 notification if there are validation errors
+            if (!isValid) {
+                const errorMessages = Object.values(this.editQuotationValidationErrors).filter(error => error !== undefined && error !== null && error !== '');
+                const errorList = errorMessages.map(error => `• ${error}`).join('<br>');
+                
+                Swal.fire({
+                    title: '入力エラー',
+                    html: `以下の項目を確認してください：<br><br>${errorList}`,
+                    icon: 'error',
+                    confirmButtonText: 'OK',
+                    confirmButtonColor: '#d33'
+                });
             }
 
             return isValid;
