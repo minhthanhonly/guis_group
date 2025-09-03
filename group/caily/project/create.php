@@ -72,9 +72,12 @@ $parent_project_id = isset($_GET['parent_project_id']) ? intval($_GET['parent_pr
                                             {{ contact.name }}
                                         </option>
                                     </select>
-                                    <div v-if="validationErrors.customer_id" class="invalid-feedback d-block">
-                                        {{ validationErrors.customer_id }}
-                                    </div>
+                                                                    <div v-if="validationErrors.customer_id" class="invalid-feedback d-block">
+                                    {{ validationErrors.customer_id }}
+                                </div>
+                                <div v-else-if="contacts.length === 0 && newProject.company_name && !newProject.customer_id" class="form-text text-muted">
+                                    選択した会社・支店に担当者が見つかりません
+                                </div>
                                 </div>
                             </div>
                         </div>

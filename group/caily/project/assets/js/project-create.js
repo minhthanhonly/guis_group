@@ -299,6 +299,7 @@ createApp({
         },
         onCompanyChange() {
             this.newProject.customer_id = '';
+            this.validationErrors.customer_id = ''; // Clear previous validation error
             this.loadContactsByCompany();
         },
         onDepartmentChange() {
@@ -763,6 +764,7 @@ createApp({
                     }
                 }).on('select2:select', (e) => {
                     this.newProject.customer_id = e.params.data.id;
+                    this.validationErrors.customer_id = ''; // Clear validation error when contact is selected
                 }).on('select2:clear', () => {
                     this.newProject.customer_id = '';
                 });
@@ -1140,8 +1142,11 @@ createApp({
                 valid = false;
             }
             if (!this.newProject.customer_id) {
-                this.validationErrors.customer_id = '担当者名は必須です';
-                valid = false;
+                // Only show error if company is selected but no contact is chosen
+                if (this.newProject.company_name) {
+                    this.validationErrors.customer_id = '担当者名は必須です';
+                    valid = false;
+                }
             }
             if (!this.project.project_number) {
                 this.validationErrors.project_number = 'プロジェクト番号は必須です';

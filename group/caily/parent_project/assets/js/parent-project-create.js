@@ -41,6 +41,9 @@ createApp({
             ],
             validationErrors: {
                 company_name: '',
+                branch_name: '',
+                contact_name: '',
+                guis_receiver: '',
                 project_name: '',
                 project_number: '',
                 request_date: '',
@@ -104,6 +107,9 @@ createApp({
         validateParentProjectForm() {
             this.validationErrors = {
                 company_name: '',
+                branch_name: '',
+                contact_name: '',
+                guis_receiver: '',
                 project_name: '',
                 project_number: '',
                 request_date: '',
@@ -113,6 +119,21 @@ createApp({
             
             if (!this.parentProject.company_name) {
                 this.validationErrors.company_name = '会社名は必須です';
+                valid = false;
+            }
+            
+            if (!this.parentProject.branch_name) {
+                this.validationErrors.branch_name = '支店名は必須です';
+                valid = false;
+            }
+            
+            if (!this.parentProject.contact_name) {
+                this.validationErrors.contact_name = '担当様は必須です';
+                valid = false;
+            }
+            
+            if (!this.parentProject.guis_receiver) {
+                this.validationErrors.guis_receiver = 'GUIS　受付者は必須です';
                 valid = false;
             }
             
@@ -236,6 +257,7 @@ createApp({
                     }
                 }).on('select2:select', (e) => {
                     this.parentProject.company_name = e.params.data.id;
+                    this.validationErrors.company_name = ''; // Clear validation error
                     this.onCompanyChange();
                 }).on('select2:clear', () => {
                     this.parentProject.company_name = '';
@@ -351,6 +373,7 @@ createApp({
                     }
                 }).on('select2:select', (e) => {
                     this.parentProject.branch_name = e.params.data.id;
+                    this.validationErrors.branch_name = ''; // Clear validation error
                     this.onBranchChange();
                 }).on('select2:clear', () => {
                     this.parentProject.branch_name = '';
@@ -392,6 +415,7 @@ createApp({
                 }).on('select2:select', (e) => {
                     this.parentProject.contact_name = e.params.data.text;
                     this.parentProject.customer_id = e.params.data.id;
+                    this.validationErrors.contact_name = ''; // Clear validation error
                 }).on('select2:clear', () => {
                     this.parentProject.contact_name = '';
                     this.parentProject.customer_id = '';
@@ -429,6 +453,7 @@ createApp({
                     }
                 }).on('select2:select', (e) => {
                     this.parentProject.guis_receiver = e.params.data.id;
+                    this.validationErrors.guis_receiver = ''; // Clear validation error
                 }).on('select2:clear', () => {
                     this.parentProject.guis_receiver = '';
                 });

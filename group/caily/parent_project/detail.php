@@ -3369,32 +3369,7 @@ $view->footing();
     }
 
     /* List group styles for logs */
-    .list-group {
-        display: flex;
-        flex-direction: column;
-        padding-left: 0;
-        margin-bottom: 0;
-        border-radius: 0.375rem;
-    }
-
-    .list-group-item {
-        position: relative;
-        display: block;
-        padding: 0.75rem 1.25rem;
-        background-color: #fff;
-        border: 1px solid rgba(0, 0, 0, 0.125);
-        border-left: 0;
-        border-right: 0;
-        border-radius: 0;
-    }
-
-    .list-group-item:first-child {
-        border-top: 0;
-    }
-
-    .list-group-item:last-child {
-        border-bottom: 0;
-    }
+  
 
     /* Quill Editor styles */
     .custom_editor {

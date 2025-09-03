@@ -134,7 +134,7 @@ class ParentProject extends ApplicationModel {
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
             'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
             'construction_branch' => isset($_POST['construction_branch']) ? $_POST['construction_branch'] : '',
-            'department_id' => isset($_POST['department_id']) ? intval($_POST['department_id']) : null,
+         //   'department_id' => isset($_POST['department_id']) ? intval($_POST['department_id']) : null,
             'created_by' => $_SESSION['userid'],
             'created_at' => date('Y-m-d H:i:s')
         );
