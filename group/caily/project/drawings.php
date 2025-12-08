@@ -299,14 +299,14 @@ if (!$project_id) {
                         <!-- Empty State -->
                         <div v-else class="text-center py-5">
                             <i class="fa fa-file-alt fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">ファイルがありません</h5>
-                            <p class="text-muted">最初のファイルを追加してください</p>
+                            <h5 class="text-muted">図面がありません</h5>
+                            <p class="text-muted">最初の図面を追加してください</p>
                             <div class="d-flex gap-2 justify-content-center">
                                 <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#importModal">
                                     <i class="fa fa-upload me-1"></i>インポート
                                 </button>
                                 <button class="btn btn-primary" @click="openAddModal()">
-                                    <i class="fa fa-plus me-1"></i>ファイル追加
+                                    <i class="fa fa-plus me-1"></i>図面追加
                                 </button>
                             </div>
                         </div>
@@ -328,7 +328,7 @@ if (!$project_id) {
                     <div class="modal-body">
                         <form @submit.prevent="saveDrawing">
                             <div class="mb-3">
-                                <label class="form-label">ファイル名 <span class="text-danger">*</span></label>
+                                <label class="form-label">図面名 <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" v-model="editingDrawing.name" required>
                             </div>
                             <div class="mb-3">
@@ -359,7 +359,7 @@ if (!$project_id) {
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="importModalLabel">ファイルインポート</h5>
+                        <h5 class="modal-title" id="importModalLabel">図面インポート</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -372,7 +372,7 @@ if (!$project_id) {
                                  style="border-style: dashed; min-height: 120px; display: flex; align-items: center; justify-content: center;">
                                 <div>
                                     <i class="fa fa-cloud-upload fa-3x text-primary mb-2"></i>
-                                    <p class="mb-1">ファイルをここにドラッグ＆ドロップ</p>
+                                    <p class="mb-1">図面をここにドラッグ＆ドロップ</p>
                                     <p class="text-muted small">または</p>
                                     <button class="btn btn-outline-primary btn-sm" @click="$refs.fileInput.click()">
                                         ファイルを選択

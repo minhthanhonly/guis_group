@@ -344,12 +344,12 @@ if(!$_SESSION['isProjectManager']){
                                 </select>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">会社名/支店名 <span class="text-danger">*</span></label>
+                                <label class="form-label">会社名 <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" v-model="newCustomer.company_name" required>
                                 <div v-if="customerErrors.company_name" class="text-danger small mt-1">{{ customerErrors.company_name }}</div>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">会社名/支店名(ふりがな)</label>
+                                <label class="form-label">会社名(ふりがな)</label>
                                 <input type="text" class="form-control" v-model="newCustomer.company_name_kana" required>
                             </div>
                         

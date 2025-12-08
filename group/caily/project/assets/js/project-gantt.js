@@ -863,15 +863,15 @@ $(document).ready(function() {
                         return date.getMonth() + 1 + '月' + date.getDate() + '日';
                     }},
                     { name: "progress", label: "進捗", width: 80, align: "left", min_width: 60, template: function(obj) {
-                        return Math.round(obj.progress * 100) + "%";
+                        return Math.round((obj.progress || 0) * 100) + "%";
                     }},
                     { name: "status", label: "状況", width: 100, align: "left", min_width: 80, template: function(obj) {
                         const status = statuses.find(s => s.key === obj.status);
-                        return status ? status.name : obj.status;
+                        return status ? status.name : (obj.status || 'N/A');
                     }},
                     { name: "priority", label: "優先度", width: 100, align: "left", min_width: 80, template: function(obj) {
                         const priority = priorities.find(p => p.key === obj.priority);
-                        return priority ? priority.name : obj.priority;
+                        return priority ? priority.name : (obj.priority || 'N/A');
                     }}
                 ];
                 
@@ -904,18 +904,22 @@ $(document).ready(function() {
                 
                 // // Customize tooltip
                 gantt.templates.tooltip_text = function(start, end, task) {
+                    // Safely find status and priority with fallback
+                    const status = statuses.find(s => s.key === task.status);
+                    const priority = priorities.find(p => p.key === task.priority);
+                    
                     return `
                         <div class="gantt-tooltip">
-                            <h6>${task.text}</h6>
-                            <p class="m-0"><strong>顧客:</strong> ${task.customer}</p>
-                            <p class="m-0"><strong>会社:</strong> ${task.company}</p>
-                            <p class="m-0"><strong>建物種類:</strong> ${task.building_type}</p>
-                            <p class="m-0"><strong>建物規模:</strong> ${task.building_size}</p>
-                            <p class="m-0"><strong>受注形態:</strong> ${task.project_order_type}</p>
-                            <p class="m-0"><strong>管理:</strong> ${task.manager}</p>
-                            <p class="m-0"><strong>進捗:</strong> ${Math.round(task.progress * 100)}%</p>
-                            <p class="m-0"><strong>状況:</strong> ${statuses.find(s => s.key === task.status).name}</p>
-                            <p class="m-0"><strong>優先度:</strong> ${priorities.find(p => p.key === task.priority).name}</p>
+                            <h6>${task.text || 'N/A'}</h6>
+                            <p class="m-0"><strong>顧客:</strong> ${task.customer || 'N/A'}</p>
+                            <p class="m-0"><strong>会社:</strong> ${task.company || 'N/A'}</p>
+                            <p class="m-0"><strong>建物種類:</strong> ${task.building_type || 'N/A'}</p>
+                            <p class="m-0"><strong>建物規模:</strong> ${task.building_size || 'N/A'}</p>
+                            <p class="m-0"><strong>受注形態:</strong> ${task.project_order_type || 'N/A'}</p>
+                            <p class="m-0"><strong>管理:</strong> ${task.manager || 'N/A'}</p>
+                            <p class="m-0"><strong>進捗:</strong> ${Math.round((task.progress || 0) * 100)}%</p>
+                            <p class="m-0"><strong>状況:</strong> ${status ? status.name : (task.status || 'N/A')}</p>
+                            <p class="m-0"><strong>優先度:</strong> ${priority ? priority.name : (task.priority || 'N/A')}</p>
                             <p class="m-0"><strong>開始日:</strong> ${gantt.templates.tooltip_date_format(start)}</p>
                             <p class="m-0"><strong>終了日:</strong> ${gantt.templates.tooltip_date_format(end)}</p>
                         </div>

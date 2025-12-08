@@ -111,12 +111,23 @@ $(document).ready(function() {
             
         },
         beforeUnmount() {
+            // Clean up intervals
+            if (this.markerInterval) {
+                clearInterval(this.markerInterval);
+                this.markerInterval = null;
+            }
+            
             // Clean up Gantt when component is destroyed
             if (gantt && this.ganttInitialized) {
-                gantt.clearAll();
-                gantt.destructor();
+                try {
+                    gantt.clearAll();
+                    gantt.destructor();
+                } catch (error) {
+                    console.warn('Error during Gantt cleanup:', error);
+                }
                 this.ganttInitialized = false;
             }
+            
             // Remove resize listener
             window.removeEventListener('resize', this.handleResize);
         },
@@ -226,9 +237,20 @@ $(document).ready(function() {
             },
 
             updateGanttData() {
-                if (gantt && this.ganttInitialized) {
+                if (!gantt || !this.ganttInitialized) return;
+                
+                try {
                     const ganttData = this.convertTasksToGanttData(this.filteredTasks);
+                    
+                    // Validate gantt data before parsing
+                    if (!ganttData || !Array.isArray(ganttData.data)) {
+                        console.warn('Invalid gantt data structure:', ganttData);
+                        return;
+                    }
+                    
                     gantt.clearAll();
+                    
+                    // Parse data with error handling
                     gantt.parse({
                         data: ganttData.data,
                         links: (this.ganttLinks || []).map(link => ({
@@ -238,66 +260,100 @@ $(document).ready(function() {
                             type: link.link_type
                         }))
                     });
+                    
                     if (!this.startDate || !this.endDate) {
                         this.setDefaultDateRange();
                     }
                     
-                    gantt.addMarker({
-                        start_date: new Date(),
-                        css: "current_time_marker",
-                        title: "現在時刻",
-                        text: "現在"
-                    });
+                    // Add markers with error handling
+                    try {
+                        // Remove existing markers first
+                        gantt.deleteMarker("current_time_marker");
+                        gantt.deleteMarker("end_status_line");
+                        gantt.deleteMarker("start_status_line");
+                        
+                        gantt.addMarker({
+                            start_date: new Date(),
+                            css: "current_time_marker",
+                            title: "現在時刻",
+                            text: "現在"
+                        });
 
-                    gantt.addMarker({
-                        start_date: new Date(this.projectInfo.end_date),
-                        css: "end_status_line",
-                        text: "終了",
-                        title: "終了: " + this.formatDateTimeFull(new Date(this.projectInfo.end_date))
-                    });
-                    gantt.addMarker({
-                        start_date: new Date(this.projectInfo.start_date),
-                        css: "start_status_line",
-                        text: "開始",
-                        title: "開始: " + this.formatDateTimeFull(new Date(this.projectInfo.start_date))
-                    });
-                    setInterval(function() {
-                        gantt.updateMarker("current_time_marker");
-                    }, 6000);
+                        if (this.projectInfo.end_date) {
+                            gantt.addMarker({
+                                start_date: new Date(this.projectInfo.end_date),
+                                css: "end_status_line",
+                                text: "終了",
+                                title: "終了: " + this.formatDateTimeFull(new Date(this.projectInfo.end_date))
+                            });
+                        }
+                        
+                        if (this.projectInfo.start_date) {
+                            gantt.addMarker({
+                                start_date: new Date(this.projectInfo.start_date),
+                                css: "start_status_line",
+                                text: "開始",
+                                title: "開始: " + this.formatDateTimeFull(new Date(this.projectInfo.start_date))
+                            });
+                        }
+                        
+                        // Clear previous interval if exists
+                        if (this.markerInterval) {
+                            clearInterval(this.markerInterval);
+                        }
+                        
+                        this.markerInterval = setInterval(function() {
+                            if (gantt && gantt.updateMarker) {
+                                gantt.updateMarker("current_time_marker");
+                            }
+                        }, 60000); // Update every minute instead of 6 seconds
+                    } catch (markerError) {
+                        console.warn('Error handling markers:', markerError);
+                    }
+                } catch (error) {
+                    console.error('Error updating Gantt data:', error);
                 }
-                
             },
 
             convertTasksToGanttData(tasks) {
                 const ganttTasks = [];
                 if (!this.projectInfo || !this.projectInfo.id) return { data: [], links: [] };
 
-                // Tìm min/max ngày của các task con
+                // Validate tasks array
+                if (!Array.isArray(tasks)) {
+                    console.warn('Tasks is not an array:', tasks);
+                    return { data: [], links: [] };
+                }
+
+                // Find min/max dates from child tasks
                 let minDate = null, maxDate = null;
                 tasks.forEach(task => {
-                    if (task.start_date) {
+                    if (task && task.start_date) {
                         const d = new Date(task.start_date);
-                        if (!minDate || d < minDate) minDate = d;
+                        if (!isNaN(d.getTime()) && (!minDate || d < minDate)) minDate = d;
                     }
-                    if (task.due_date) {
+                    if (task && task.due_date) {
                         const d = new Date(task.due_date);
-                        if (!maxDate || d > maxDate) maxDate = d;
+                        if (!isNaN(d.getTime()) && (!maxDate || d > maxDate)) maxDate = d;
                     }
                 });
 
-                // Nếu projectInfo có ngày thì ưu tiên
-                const projectStart = this.projectInfo.start_date ? new Date(this.projectInfo.start_date) : minDate;
-                const projectEnd = this.projectInfo.end_date ? new Date(this.projectInfo.end_date) : maxDate;
+                // Use project dates if available, otherwise use task dates
+                const projectStart = this.projectInfo.start_date ? new Date(this.projectInfo.start_date) : (minDate || new Date());
+                const projectEnd = this.projectInfo.end_date ? new Date(this.projectInfo.end_date) : (maxDate || new Date());
 
-                // Thêm task project ở trên cùng
+                // Create a unique project ID that won't conflict with task IDs
+                const PROJECT_ROOT_ID = 'project_' + this.projectInfo.id;
+
+                // Add project task at the top
                 ganttTasks.push({
-                    id: 1,
+                    id: PROJECT_ROOT_ID,
                     text: this.projectInfo.name || 'プロジェクト',
                     type: 'project',
                     start_date: projectStart,
                     end_date: projectEnd,
-                    progress: this.projectInfo.progress / 100 || 0,
-                    parent: null,
+                    progress: isNaN(this.projectInfo.progress) ? 0 : Math.max(0, Math.min(100, this.projectInfo.progress)) / 100,
+                    parent: 0, // Root level
                     open: true,
                     status: '',
                     priority: '',
@@ -305,17 +361,40 @@ $(document).ready(function() {
                     priorityColor: 'primary'
                 });
 
-                // Thêm các task con, nếu parent_id null thì parent là 1
+                // Add child tasks, ensuring no cyclic references
                 tasks.forEach(task => {
+                    if (!task || !task.id) {
+                        console.warn('Invalid task data:', task);
+                        return;
+                    }
+
+                    // Ensure task ID is unique and doesn't conflict with project ID
+                    const taskId = String(task.id);
+                    if (taskId === PROJECT_ROOT_ID) {
+                        console.warn('Task ID conflicts with project ID:', taskId);
+                        return;
+                    }
+
                     const statusObj = statuses.find(s => s.key === task.status);
                     const priorityObj = priorities.find(p => p.key === task.priority);
+                    
+                    // Determine parent - if no parent_id or parent_id is null, make it child of project
+                    let parentId = PROJECT_ROOT_ID; // Default to project root
+                    if (task.parent_id && String(task.parent_id) !== taskId) {
+                        // Only set parent if it's not self-referencing
+                        parentId = String(task.parent_id);
+                    }
+
+                    // Validate progress value
+                    const progress = isNaN(task.progress) ? 0 : Math.max(0, Math.min(100, task.progress)) / 100;
+
                     ganttTasks.push({
-                        id: task.id,
-                        text: task.title,
+                        id: taskId,
+                        text: task.title || 'Untitled Task',
                         start_date: this.parseDate(task.start_date),
                         end_date: this.parseDate(task.due_date),
-                        progress: task.progress / 100 || 0,
-                        parent: task.parent_id ? task.parent_id : 1,
+                        progress: progress,
+                        parent: parentId,
                         priority: task.priority || 'medium',
                         status: task.status || 'todo',
                         type: 'task',
@@ -329,10 +408,43 @@ $(document).ready(function() {
                     });
                 });
 
+                // Validate the task tree structure to prevent cycles
+                const taskMap = new Map();
+                ganttTasks.forEach(task => {
+                    taskMap.set(task.id, task);
+                });
+
+                // Check for cycles and fix them
+                ganttTasks.forEach(task => {
+                    if (this.hasCyclicReference(task, taskMap, new Set())) {
+                        console.warn('Cyclic reference detected for task:', task.id, 'Setting parent to project root');
+                        task.parent = PROJECT_ROOT_ID;
+                    }
+                });
+
                 return {
                     data: ganttTasks,
                     links: [] // No links needed, using parent-child structure
                 };
+            },
+
+            hasCyclicReference(task, taskMap, visited) {
+                if (visited.has(task.id)) {
+                    return true; // Cycle detected
+                }
+                
+                if (!task.parent || task.parent === 0) {
+                    return false; // Reached root
+                }
+
+                visited.add(task.id);
+                const parentTask = taskMap.get(task.parent);
+                
+                if (!parentTask) {
+                    return false; // Parent not found, no cycle
+                }
+
+                return this.hasCyclicReference(parentTask, taskMap, visited);
             },
 
             sortTasksByHierarchy(tasks) {
@@ -468,8 +580,10 @@ $(document).ready(function() {
             setDefaultScale() {
                 this.currentScale = 'week';
                 if (gantt && this.ganttInitialized) {
-                    gantt.config.scale_unit = 'week';
-                    gantt.config.date_scale = '%M %d';
+                    gantt.config.scales = [
+                        { unit: "week", step: 1, format: "%m月" },
+                        { unit: "day", step: 1, format: "%d日" }
+                    ];
                     gantt.render();
                 }
             },
@@ -477,10 +591,9 @@ $(document).ready(function() {
             setMonthScale() {
                 if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'month';
-                gantt.config.scale_unit = "month";
-                gantt.config.date_scale = "%m月";
-                gantt.config.subscales = [
-                    { unit: "week", step: 1, date: "%d日" }
+                gantt.config.scales = [
+                    { unit: "month", step: 1, format: "%m月" },
+                    { unit: "week", step: 1, format: "%d日" }
                 ];
                 gantt.render();
             },
@@ -488,10 +601,9 @@ $(document).ready(function() {
             setWeekScale() {
                 if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'week';
-                gantt.config.scale_unit = "week";
-                gantt.config.date_scale = "%m月";
-                gantt.config.subscales = [
-                    { unit: "day", step: 1, date: "%d日" }
+                gantt.config.scales = [
+                    { unit: "week", step: 1, format: "%m月" },
+                    { unit: "day", step: 1, format: "%d日" }
                 ];
                 gantt.render();
             },
@@ -499,10 +611,9 @@ $(document).ready(function() {
             setDayScale() {
                 if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'hour';
-                gantt.config.scale_unit = "hour";
-                gantt.config.date_scale = "%m月%d日";
-                gantt.config.subscales = [
-                    { unit: "hour", step: 1, date: "%H:%i" }
+                gantt.config.scales = [
+                    { unit: "hour", step: 1, format: "%m月%d日" },
+                    { unit: "hour", step: 1, format: "%H:%i" }
                 ];
                 gantt.render();
             },
@@ -573,12 +684,11 @@ $(document).ready(function() {
                     return;
                 }
 
-                // Configure Gantt - using same config as project-gantt
+                // Configure Gantt with new scale configuration
                 gantt.config.date_format = "%m月%d日";
-                gantt.config.scale_unit = "week";
-                gantt.config.date_scale = "%m月";
-                gantt.config.subscales = [
-                    { unit: "day", step: 1, date: "%d日" }
+                gantt.config.scales = [
+                    { unit: "week", step: 1, format: "%m月" },
+                    { unit: "day", step: 1, format: "%d日" }
                 ];
                 
                 gantt.plugins({
