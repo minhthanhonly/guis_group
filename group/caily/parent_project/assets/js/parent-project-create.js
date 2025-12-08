@@ -138,12 +138,12 @@ createApp({
             }
             
             if (!this.parentProject.project_name) {
-                this.validationErrors.project_name = '案件名は必須です';
+                this.validationErrors.project_name = 'お施主様名は必須です';
                 valid = false;
             }
             
             if (!this.parentProject.project_number) {
-                this.validationErrors.project_number = 'プロジェクト番号は必須です';
+                this.validationErrors.project_number = '管理番号は必須です';
                 valid = false;
             }
             
@@ -152,10 +152,10 @@ createApp({
                 valid = false;
             }
             
-            if (!this.parentProject.desired_delivery_date) {
-                this.validationErrors.desired_delivery_date = '希望納期は必須です';
-                valid = false;
-            }
+            // if (!this.parentProject.desired_delivery_date) {
+            //     this.validationErrors.desired_delivery_date = '希望納期は必須です';
+            //     valid = false;
+            // }
             
             return valid;
         },
@@ -163,6 +163,7 @@ createApp({
             if (!this.validateParentProjectForm()) {
                 return;
             }
+            console.log(this.parentProject);
             
             try {
                 const formData = new FormData();
@@ -198,7 +199,7 @@ createApp({
                 formData.append('materials', materialsArray.join(','));
                 formData.append('structural_office', this.parentProject.structural_office || '');
                 formData.append('notes', this.parentProject.notes || '');
-                formData.append('status', this.parentProject.status || 'draft');
+                formData.append('status', this.parentProject.status || 'in_progress');
                 
                 const response = await axios.post('/api/index.php?model=parentproject&method=create', formData);
                 if (response.data && response.data.status == 'success') {

@@ -35,16 +35,6 @@ if(!$_SESSION['isProjectManager']){
                                 </button>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <select class="form-select" v-model="statusFilter" @change="onStatusFilterChange">
-                                <option value="all">すべてのステータス</option>
-                                <option value="draft">下書き</option>
-                                <option value="under_contract">契約中</option>
-                                <option value="in_progress">進行中</option>
-                                <option value="completed">完了</option>
-                                <option value="cancelled">キャンセル</option>
-                            </select>
-                        </div>
                     </div>
 
                     <!-- Parent Projects Table -->
@@ -65,8 +55,6 @@ if(!$_SESSION['isProjectManager']){
                                     <th>お施主様名</th>
                                     <th>工事番号</th>
                                     <th>依頼日</th>
-                                    <th>希望納期</th>
-                                    <th>ステータス</th>
                                     <th>件数</th>
                                     <th>作成者</th>
                                     <th>作成日</th>
@@ -87,16 +75,9 @@ if(!$_SESSION['isProjectManager']){
                                     </td>
                                     <td>{{ project.construction_number || '-' }}</td>
                                     <td>{{ formatDate(project.request_date) }}</td>
-                                    <td>{{ formatDate2(project.desired_delivery_date) }}</td>
-                                    <td>
-                                        <span class="badge" :class="getStatusBadgeClass(project.status)" 
-                                              :title="getStatusLabel(project.status)">
-                                            {{ getStatusLabel(project.status) }}
-                                        </span>
-                                    </td>
                                     <td>
                                         <span v-if="project.child_project_count > 0" class="badge bg-info" 
-                                              :title="project.child_project_count + ' 個の子プロジェクトがあります'">
+                                              :title="project.child_project_count + ' 個の案件があります'">
                                             {{ project.child_project_count }}
                                         </span>
                                         <span v-else class="text-muted">0</span>
@@ -125,7 +106,7 @@ if(!$_SESSION['isProjectManager']){
                                     <td colspan="11" class="text-center py-4">
                                         <div class="text-muted">
                                             <i class="fa fa-inbox fa-2x mb-2"></i>
-                                            <p>親プロジェクトが見つかりません</p>
+                                            <p>建物が見つかりません</p>
                                         </div>
                                     </td>
                                 </tr>

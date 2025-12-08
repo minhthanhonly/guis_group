@@ -23,10 +23,10 @@ if(!$_SESSION['isProjectManager']){
                         <h5 class="card-title"><span data-i18n="建物登録">建物登録</span></h5>
                         <div>
                             <button class="btn btn-success btn-sm me-2" @click="saveParentProject" title="保存">
-                                <i class="fa fa-save"></i>
+                                <i class="fa fa-save me-1"></i><span data-i18n="保存">保存</span>
                             </button>
                             <a href="index.php" class="btn btn-secondary btn-sm" title="キャンセル">
-                                <i class="fa fa-times"></i>
+                                <i class="fa fa-times me-1"></i><span data-i18n="キャンセル">キャンセル</span>
                             </a>
                         </div>
                     </div>
@@ -115,7 +115,7 @@ if(!$_SESSION['isProjectManager']){
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
-                                    <span data-i18n="プロジェクト番号">プロジェクト番号</span> <span class="text-danger">*</span>
+                                    <span data-i18n="管理番号">管理番号</span> <span class="text-danger">*</span>
                                     <button class="btn btn-sm btn-outline-primary py-0 small ms-2" @click="generateProjectNumber" title="生成">
                                         生成
                                     </button>
@@ -126,7 +126,7 @@ if(!$_SESSION['isProjectManager']){
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <!-- <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="工事支店">工事支店</span></label>
                                 <div class="d-flex align-items-center gap-2">
@@ -134,10 +134,10 @@ if(!$_SESSION['isProjectManager']){
                                     <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('construction_branch')" title="すべて削除"><i class="fa fa-times"></i></button>
                                 </div>
                             </div>
-                        </div>
+                        </div> -->
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="案件名">案件名</span> <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="お施主様名">お施主様名</span> <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" v-model="parentProject.project_name" required>
                                 <div v-if="validationErrors.project_name" class="invalid-feedback d-block">
                                     {{ validationErrors.project_name }}
@@ -163,7 +163,7 @@ if(!$_SESSION['isProjectManager']){
                             </div>
                         </div>
 
-                        <div class="col-md-6">
+                        <!-- <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
                                     <span data-i18n="希望納期">希望納期</span> <span class="text-danger">*</span>
@@ -176,14 +176,14 @@ if(!$_SESSION['isProjectManager']){
                                     {{ validationErrors.desired_delivery_date }}
                                 </div>
                             </div>
-                        </div>
+                        </div> -->
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
                                 <input type="text" class="form-control" v-model="parentProject.structural_office">
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <!-- <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <div>
@@ -205,7 +205,7 @@ if(!$_SESSION['isProjectManager']){
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </div> -->
                         <div class="col-12">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="依頼">依頼</span></label>
@@ -304,6 +304,16 @@ if(!$_SESSION['isProjectManager']){
                             <span class="visually-hidden">Loading...</span>
                         </div>
                     </div>
+                    <div class="col-12 mt-4">
+                        <div class="d-flex justify-content-center">
+                            <button class="btn btn-success me-3" @click="saveParentProject">
+                                <i class="fa fa-save me-1"></i><span data-i18n="保存">保存</span>
+                            </button>
+                            <button class="btn btn-secondary" @click="cancelParentProject">
+                                <i class="fa fa-times me-1"></i><span data-i18n="キャンセル">キャンセル</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -324,6 +334,7 @@ if(!$_SESSION['isProjectManager']){
                 </div>
             </div>
         </div>
+        
     </div>
 
     <!-- New Customer Modal -->

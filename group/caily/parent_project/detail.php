@@ -159,6 +159,23 @@ $view->heading('建物詳細');
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="お施主様名">お施主様名</span> <span
+                                        class="text-danger">*</span></label>
+                                <template v-if="isEditMode">
+                                    <input type="text" class="form-control" v-model="parentProject.project_name"
+                                        placeholder="案件名を入力" required>
+                                    <div v-if="validationErrors.project_name" class="invalid-feedback d-block">
+                                        {{ validationErrors.project_name }}
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <input type="text" class="form-control" :value="parentProject.project_name"
+                                        readonly>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="依頼日">依頼日</span></label>
                                 <template v-if="isEditMode">
                                     <div class="input-group">
@@ -199,49 +216,7 @@ $view->heading('建物詳細');
                             </div>
                         </div>
                         
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="工事支店">工事支店</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="text" class="form-control tagify"
-                                            v-model="parentProject.construction_branch" id="construction_branch_tags"
-                                            name="construction_branch_tags">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button"
-                                            @click="clearTagifyTags('construction_branch')" title="すべて削除"><i
-                                                class="fa fa-times"></i></button>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div style="min-height:38px;">
-                                        <span
-                                            v-if="parentProject.construction_branch && parentProject.construction_branch.split(',').length > 0">
-                                            <span v-for="item in parentProject.construction_branch.split(',')"
-                                                :key="item.trim()" class="badge bg-primary me-1">{{ item.trim()
-                                                }}</span>
-                                        </span>
-                                        <span v-else>-</span>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="お施主様名">お施主様名</span> <span
-                                        class="text-danger">*</span></label>
-                                <template v-if="isEditMode">
-                                    <input type="text" class="form-control" v-model="parentProject.project_name"
-                                        placeholder="案件名を入力" required>
-                                    <div v-if="validationErrors.project_name" class="invalid-feedback d-block">
-                                        {{ validationErrors.project_name }}
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control" :value="parentProject.project_name"
-                                        readonly>
-                                </template>
-                            </div>
-                        </div>
+                        
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
@@ -252,6 +227,19 @@ $view->heading('建物詳細');
                                 <template v-else>
                                     <input type="text" class="form-control" :value="parentProject.scale || '-'"
                                         readonly>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
+                                <template v-if="isEditMode">
+                                    <input type="text" class="form-control" v-model="parentProject.structural_office"
+                                        placeholder="構造事務所を入力">
+                                </template>
+                                <template v-else>
+                                    <input type="text" class="form-control"
+                                        :value="parentProject.structural_office || '-'" readonly>
                                 </template>
                             </div>
                         </div>
@@ -301,63 +289,7 @@ $view->heading('建物詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="希望納期">希望納期</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="input-group">
-                                        <input type="text" class="form-control"
-                                            v-model="parentProject.desired_delivery_date"
-                                            id="desired_delivery_date_picker" placeholder="YYYY/MM/DD"
-                                            autocomplete="off">
-                                        <button class="btn btn-outline-secondary" type="button" @click="setTodayDate"
-                                            title="今日">
-                                            今日
-                                        </button>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control"
-                                        :value="formatDate(parentProject.desired_delivery_date)" readonly>
-                                </template>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
-                                <template v-if="isEditMode">
-                                    <input type="text" class="form-control" v-model="parentProject.structural_office"
-                                        placeholder="構造事務所を入力">
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control"
-                                        :value="parentProject.structural_office || '-'" readonly>
-                                </template>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
-                                <div>
-                                    <div class="btn-group">
-                                        <button type="button"
-                                            class="btn btn-sm dropdown-toggle waves-effect waves-light"
-                                            :class="getParentProjectStatusButtonClass(parentProject.status)" id="statusDropdown"
-                                            data-bs-toggle="dropdown" aria-expanded="false">
-                                            {{ getParentProjectStatusLabel(parentProject.status) }}
-                                        </button>
-                                        <ul class="dropdown-menu">
-                                            <li v-for="status in statuses" :key="status.value">
-                                                <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                                    @click="selectStatus(status.value)">
-                                                    {{ status.label }}
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        
                         <div class="col-12">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="依頼">依頼</span></label>

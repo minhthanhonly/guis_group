@@ -126,7 +126,7 @@ class ParentProject extends ApplicationModel {
             'type2' => isset($_POST['type2']) ? $_POST['type2'] : '',
             'type3' => isset($_POST['type3']) ? $_POST['type3'] : '',
             'request_type' => isset($_POST['request_type']) ? $_POST['request_type'] : '',
-            'desired_delivery_date' => isset($_POST['desired_delivery_date']) ? $_POST['desired_delivery_date'] : null,
+            //'desired_delivery_date' => isset($_POST['desired_delivery_date']) ? $_POST['desired_delivery_date'] : null,
             'requests' => $requests,
             'materials' => $materials,
             'structural_office' => isset($_POST['structural_office']) ? $_POST['structural_office'] : '',
@@ -154,12 +154,12 @@ class ParentProject extends ApplicationModel {
             ];
         }
 
-        if (empty($data['desired_delivery_date'])) {
-            return [
-                'status' => 'error',
-                'message' => '希望納期は必須です'
-            ];
-        }
+        // if (empty($data['desired_delivery_date'])) {
+        //     return [
+        //         'status' => 'error',
+        //         'message' => '希望納期は必須です'
+        //     ];
+        // }
 
                 // Insert parent project data
         $parent_project_id = $this->query_insert($data);
@@ -167,12 +167,12 @@ class ParentProject extends ApplicationModel {
         if (!$parent_project_id) {
             return [
                 'status' => 'error',
-                'message' => '親プロジェクトの作成に失敗しました'
+                'message' => '建物の作成に失敗しました'
             ];
         }
         
         // Log the creation
-        $this->logParentProjectAction($parent_project_id, 'created', '親プロジェクト作成', '', '');
+        $this->logParentProjectAction($parent_project_id, 'created', '建物作成', '', '');
         
         // Send notification to department managers if department is specified
         // $department_id = isset($_POST['department_id']) ? intval($_POST['department_id']) : 0;
@@ -183,13 +183,13 @@ class ParentProject extends ApplicationModel {
         return [
             'status' => 'success',
             'parent_project_id' => $parent_project_id,
-            'message' => '親プロジェクトを作成しました'
+            'message' => '建物を作成しました'
         ];
     }
 
     function update($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
-        if (!$id) return ['status' => 'error', 'error' => '親プロジェクトIDが指定されていません'];
+        if (!$id) return ['status' => 'error', 'error' => '建物IDが指定されていません'];
         
         // Validate and sanitize input to ensure UTF-8 MB4 compatibility
         $company_name = isset($_POST['company_name']) ? $this->validateUTF8MB4($_POST['company_name']) : '';
@@ -229,8 +229,8 @@ class ParentProject extends ApplicationModel {
             
             if ($result) {
                 // Log the update action
-                $this->logParentProjectAction($id, 'updated', '親プロジェクト情報を変更');
-                return ['status' => 'success', 'message' => '親プロジェクトを更新しました'];
+                $this->logParentProjectAction($id, 'updated', '建物情報を変更');
+                return ['status' => 'success', 'message' => '建物を更新しました'];
             } else {
                 return ['status' => 'error', 'error' => '更新に失敗しました'];
             }
@@ -242,7 +242,7 @@ class ParentProject extends ApplicationModel {
 
     function updateStatus($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
-        if (!$id) return ['status' => 'error', 'error' => '親プロジェクトIDが指定されていません'];
+        if (!$id) return ['status' => 'error', 'error' => '建物IDが指定されていません'];
         
         $status = isset($_POST['status']) ? $_POST['status'] : '';
         if (empty($status)) return ['status' => 'error', 'error' => 'ステータスが指定されていません'];
@@ -281,7 +281,7 @@ class ParentProject extends ApplicationModel {
 
     function delete($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
-        if (!$id) return ['status' => 'error', 'error' => '親プロジェクトIDが指定されていません'];
+        if (!$id) return ['status' => 'error', 'error' => '建物IDが指定されていません'];
 
         // Check if there are child projects
         $childProjectsQuery = sprintf(
@@ -293,7 +293,7 @@ class ParentProject extends ApplicationModel {
         if ($childCount > 0) {
             return [
                 'status' => 'error', 
-                'error' => 'この親プロジェクトには子プロジェクトが存在するため削除できません。先に子プロジェクトを削除してください。'
+                'error' => 'この建物には案件が存在するため削除できません。先に案件を削除してください。'
             ];
         }
 
@@ -301,8 +301,8 @@ class ParentProject extends ApplicationModel {
         
         if ($result) {
             // Log the deletion
-            $this->logParentProjectAction($id, 'deleted', '親プロジェクトを削除', $currentProject['status'] ?? '', 'deleted');
-            return ['status' => 'success', 'message' => '親プロジェクトを削除しました'];
+            $this->logParentProjectAction($id, 'deleted', '建物を削除', $currentProject['status'] ?? '', 'deleted');
+            return ['status' => 'success', 'message' => '建物を削除しました'];
         } else {
             return ['status' => 'error', 'error' => '削除に失敗しました'];
         }
@@ -859,8 +859,8 @@ class ParentProject extends ApplicationModel {
             
             $params = [
                 'event' => 'parent_project_created',
-                'title' => '新しい親プロジェクトが作成されました',
-                'message' => sprintf('%sが親プロジェクト「%s」を作成しました', $this->getUserRealname(), $projectName),
+                'title' => '新しい建物が作成されました',
+                'message' => sprintf('%sが建物「%s」を作成しました', $this->getUserRealname(), $projectName),
                 'data' => [
                     'parent_project_id' => $parentProjectId,
                     'project_name' => $projectName,
