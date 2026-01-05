@@ -40,16 +40,31 @@ class ParentProject extends ApplicationModel {
         $start = isset($_GET['start']) ? intval($_GET['start']) : 0;
         $length = isset($_GET['length']) ? intval($_GET['length']) : 10;
         $search = isset($_GET['search']) ? $_GET['search'] : '';
+        
+        // Validate and sanitize order_column to prevent SQL injection
+        $allowed_columns = [
+            'id', 'project_number', 'project_name', 'construction_number', 
+            'company_name', 'request_date', 'created_at', 'updated_at',
+            'status', 'child_project_count', 'created_by_name'
+        ];
         $order_column = isset($_GET['order_column']) ? $_GET['order_column'] : 'created_at';
-        $order_dir = isset($_GET['order_dir']) ? $_GET['order_dir'] : 'DESC';
+        if (!in_array($order_column, $allowed_columns)) {
+            $order_column = 'created_at';
+        }
+        
+        // Validate order_dir
+        $order_dir = isset($_GET['order_dir']) ? strtoupper($_GET['order_dir']) : 'DESC';
+        if (!in_array($order_dir, ['ASC', 'DESC'])) {
+            $order_dir = 'DESC';
+        }
         
         $whereArr = [];
         
         // Add permission check
         $user_id = $_SESSION['id'];
-        if ($_SESSION['authority'] != 'administrator') {
-            $whereArr[] = sprintf("p.created_by = %d", $user_id);
-        }
+        // if ($_SESSION['authority'] != 'administrator') {
+        //     $whereArr[] = sprintf("p.created_by = %d", $user_id);
+        // }
 
         if (isset($_GET['status']) && $_GET['status'] != '') {
             $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
@@ -76,8 +91,15 @@ class ParentProject extends ApplicationModel {
         // Get filtered count
         $filteredRecords = $totalRecords;
         
-        // Order by
-        $orderBy = "ORDER BY p.$order_column $order_dir";
+        // Handle special columns that are computed (child_project_count, created_by_name)
+        if ($order_column === 'child_project_count') {
+            $orderBy = "ORDER BY child_project_count $order_dir";
+        } elseif ($order_column === 'created_by_name') {
+            $orderBy = "ORDER BY u.realname $order_dir";
+        } else {
+            // Regular column from parent_projects table
+            $orderBy = "ORDER BY p.$order_column $order_dir";
+        }
         
         // Get data for current page
         $query = sprintf(

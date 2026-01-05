@@ -9,6 +9,7 @@ class Drawing extends ApplicationModel {
             'name' => array(),
             'status' => array(),
             'file_path' => array(),
+            'price' => array(), // unit price for each drawing
             'created_by' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search')),
@@ -159,6 +160,70 @@ class Drawing extends ApplicationModel {
         }
         return [
             'status' => 'error'
+        ];
+    }
+
+    /**
+     * Update price for a single drawing
+     */
+    function updatePrice() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) {
+            return [
+                'status' => 'error',
+                'message' => 'ファイルIDが指定されていません'
+            ];
+        }
+
+        // Get drawing to verify creator/assignee
+        $drawing = $this->getById(['id' => $id]);
+        if (!$drawing) {
+            return [
+                'status' => 'error',
+                'message' => 'ファイルが見つかりません'
+            ];
+        }
+
+        // Check if created_by (作成者) is set
+        if (empty($drawing['created_by'])) {
+            return [
+                'status' => 'error',
+                'message' => '作成者が割り当てられていません。単価を変更する前に作成者を割り当ててください。'
+            ];
+        }
+
+        // Allow empty price (NULL) or numeric value
+        $price = isset($_POST['price']) && $_POST['price'] !== '' ? $_POST['price'] : null;
+
+        // Basic numeric validation (optional)
+        if ($price !== null && !is_numeric($price)) {
+            return [
+                'status' => 'error',
+                'message' => '単価が不正です'
+            ];
+        }
+
+        $data = array(
+            'updated_at' => date('Y-m-d H:i:s')
+        );
+
+        if ($price === null) {
+            // Set price to NULL
+            $data['price'] = null;
+        } else {
+            $data['price'] = $price;
+        }
+
+        $result = $this->query_update($data, ['id' => $id]);
+
+        if ($result) {
+            return [
+                'status' => 'success'
+            ];
+        }
+        return [
+            'status' => 'error',
+            'message' => '単価の更新に失敗しました'
         ];
     }
 

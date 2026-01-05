@@ -74,20 +74,33 @@ class Controller {
 		$modelfile = DIR_MODEL.$model.'.php';
 		$class = ucfirst($model);
 		$hash = array();
+		
 		if (file_exists($modelfile)) {
-			require_once($modelfile);
-			if (class_exists($class)) {
-				$model = new $class;
-				if (method_exists($model, $method)) {
-					$model->connect();
-					$hash = $model->$method($params);
-					$hash = $model->sanitize($hash);
-					$model->close();
-					if (isset($model->error) && count($model->error) > 0) {
-						$hash['error'] = $model->error;
+			try {
+				require_once($modelfile);
+				if (class_exists($class)) {
+					$model = new $class;
+					if (method_exists($model, $method)) {
+						$model->connect();
+						$hash = $model->$method($params);
+						$hash = $model->sanitize($hash);
+						$model->close();
+						if (isset($model->error) && count($model->error) > 0) {
+							$hash['error'] = $model->error;
+						}
+					} else {
+						$hash['error'] = 'Method ' . $method . ' not found in class ' . $class;
 					}
+				} else {
+					$hash['error'] = 'Class ' . $class . ' not found in file ' . $modelfile;
 				}
+			} catch (Exception $e) {
+				$hash['error'] = 'Error loading model: ' . $e->getMessage();
+			} catch (Error $e) {
+				$hash['error'] = 'Fatal error: ' . $e->getMessage();
 			}
+		} else {
+			$hash['error'] = 'Model file not found: ' . $modelfile;
 		}
 		return json_encode($hash);
 	}

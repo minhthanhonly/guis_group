@@ -1,51 +1,15 @@
 var projectTable;
     var projectData = [];
     var statuses = [
-        {
-            key: 'all',
-            name: 'すべて',
-            color: 'secondary'
-        },
-        {
-            key: 'open',
-            name: 'オープン',
-            color: 'info'
-        },
-        {
-            key: 'confirming',
-            name: '確認中',
-            color: 'warning'
-        },
-        {
-            key: 'in_progress',
-            name: '進行中',
-            color: 'primary'
-        },
-        {
-            key: 'paused',
-            name: '一時停止',
-            color: 'warning'
-        },
-        {
-            key: 'completed',
-            name: '完了',
-            color: 'success'
-        },
-        {
-            key: 'cancelled',
-            name: 'キャンセル',
-            color: 'danger'
-        },
-        {
-            key: 'draft',
-            name: '下書き',
-            color: 'secondary'
-        },
-        {
-            key: 'deleted',
-            name: '削除',
-            color: 'danger'
-        },
+        { key: 'draft', name: '受付', color: 'secondary' },
+        { key: 'open', name: '納期検討', color: 'info' },
+        { key: 'confirming', name: '仮受', color: 'info' },
+        { key: 'quotation', name: '見積', color: 'info' },
+        { key: 'contract', name: '請負', color: 'info' },
+        { key: 'in_progress', name: '進行中', color: 'primary' },
+        { key: 'completed', name: '納品', color: 'success' },
+        { key: 'paused', name: '一時停止', color: 'warning' },
+        { key: 'cancelled', name: '中止', color: 'danger' }
     ];
     var priorities = [
         {
@@ -81,7 +45,8 @@ var projectTable;
             filterProgress: $('#filterProgress').val(),
             filterTimeLeft: $('#filterTimeLeft').val(),
             filterKeyword: $('#filterKeyword').val(),
-            showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0
+            showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
+            myProjects: app.filterMyProjects ? 1 : 0
         };
         localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
     }
@@ -95,6 +60,7 @@ var projectTable;
         if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
         if (filters.filterKeyword !== undefined) $('#filterKeyword').val(filters.filterKeyword);
         if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
+        if (filters.myProjects !== undefined && app) app.filterMyProjects = filters.myProjects == 1;
     }
 
     function getFiltersFromLocalStorage() {
@@ -166,7 +132,9 @@ var projectTable;
     }
 
     $(document).ready(function() {
-
+        if(!app.selectedDepartment){
+            return;
+        }
         // Khôi phục filter từ localStorage trước khi load projectTable
         loadFiltersFromLocalStorage();
         // Khởi tạo DataTable sau khi filter đã được khôi phục
@@ -186,6 +154,7 @@ var projectTable;
                     const filterTimeLeft = $('#filterTimeLeft').val();
                     const filterKeyword = $('#filterKeyword').val();
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
+                    const myProjects = app.filterMyProjects ? 1 : 0;
                     return {
                         model: 'project',
                         method: 'list',
@@ -202,6 +171,7 @@ var projectTable;
                         filterPriority,
                         filterProgress,
                         filterTimeLeft,
+                        my_projects: myProjects,
                         filterKeyword,
                         showInactive
                     };
@@ -471,6 +441,15 @@ var projectTable;
                     last: '<span data-i18n="最終">最終</span>'
                 }
             },
+            createdRow: function(row, data, dataIndex) {
+                // Set background color based on status
+                if (data.status) {
+                    const status = statuses.find(s => s.key === data.status);
+                    if (status) {
+                        $(row).addClass(`table-row-status-${status.color}`);
+                    }
+                }
+            }
             
         });
 
@@ -836,8 +815,12 @@ var projectTable;
             $('#filterProgress').val('');
             $('#filterTimeLeft').val('');
             $('#filterKeyword').val('');
-            $('#showInactiveSwitch').prop('checked', false); // hoặc giá trị mặc định
+            $('#showInactiveSwitch').prop('checked', true); // hoặc giá trị mặc định
             localStorage.removeItem(FILTER_STORAGE_KEY);
+            // Reset status filter
+            if (app && app.selectedStatus) {
+                app.selectedStatus = null;
+            }
             renderActiveFilters();
             projectTable.ajax.reload();
         });
@@ -985,6 +968,12 @@ var projectTable;
             }
         },
         mounted() {
+            // Load filter state from localStorage
+            const filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+            if (filters.myProjects !== undefined) {
+                this.filterMyProjects = filters.myProjects == 1;
+            }
+            
             this.loadDepartments();
             // Không load dự án ngay lập tức, chỉ load khi có department được chọn
             
@@ -1335,7 +1324,6 @@ var projectTable;
                 try {
                     const response = await axios.get('/api/index.php?model=department&method=listByUser');
                     this.departments = response.data || [];
-                    
                     // Try to restore saved department from localStorage
                     if (!this.selectedDepartment && this.departments.length > 0) {
                         const savedDepartment = this.loadSelectedDepartmentFromLocalStorage();
@@ -1349,16 +1337,17 @@ var projectTable;
                         }
                         
                         // If no saved department or it's no longer accessible, use first available
-                        this.selectedStatus = this.statuses[0];
                         const firstDepartment = this.departments.find(d => d && d.can_project == 1);
                         if (firstDepartment) {
                             this.viewProjects(firstDepartment);
                         }
+                    } else {
+                        throw new Error('No department found');
                     }
                 } catch (error) {
                     console.error('Error loading departments:', error);
                     this.departments = [];
-                    showMessage('部署の読み込みに失敗しました。', true);
+                    showMessage('どの部署にも所属していません。管理者に問い合わせてください。', true);
                 }
             },
             async getUserPermissions(departmentId) {
@@ -1937,11 +1926,9 @@ var projectTable;
 
         },
         watch: {
-            // 'newProject': {
-            //     handler: function(newVal) {
-            //         console.log(newVal);
-            //     },
-            //     deep: true
-            // }
+            filterMyProjects(newVal) {
+                // Save to localStorage when filter changes
+                saveFiltersToLocalStorage();
+            }
         }
     }).mount('#app');

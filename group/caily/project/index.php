@@ -73,9 +73,10 @@ $view->heading('プロジェクト管理');
             <input type="text" class="form-control form-control-sm" id="filterKeyword" placeholder="検索...">
             </div>
             <div class="col-md-2 col-12 d-flex align-items-end">
-            <button class="btn btn-sm btn-outline-primary w-100" id="filterReset" type="button">
-                <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
-            </button>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="filterMyProjects" v-model="filterMyProjects" @change="loadProjects">
+                <label class="form-check-label" for="filterMyProjects" data-i18n="私のプロジェクト">私のプロジェクト</label>
+            </div>
             </div>
         </form>
         </div>
@@ -88,7 +89,7 @@ $view->heading('プロジェクト管理');
                     <button 
                         v-for="status in statuses" 
                         :key="status.key"
-                        class="btn btn-sm"
+                        class="btn btn-sm status-filter-btn"
                         :data-i18n="status.name"
                         :class="{
                             [`btn-label-${status.color}`]: !selectedStatus || selectedStatus?.key !== status.key,
@@ -98,12 +99,18 @@ $view->heading('プロジェクト管理');
                         @click="filterProjectByStatus(status)"
                     >
                         {{ status.name }}
+                        <span v-show="selectedStatus && selectedStatus.key === status.key" class="active-indicator"></span>
                     </button>
                 </div>
                 <div class="form-check form-switch ms-2">
-                    <input class="form-check-input" type="checkbox" id="showInactiveSwitch">
-                    <label class="form-check-label small" for="showInactiveSwitch" data-i18n="完了案件等も表示">完了等も表示</label>
+                    <input class="form-check-input" type="checkbox" id="showInactiveSwitch" checked>
+                    <label class="form-check-label small" for="showInactiveSwitch" data-i18n="完了・中止案件等も表示">完了・中止案件等も表示</label>
+                    
+                
                 </div>
+                <button class="btn btn-sm btn-outline-primary" id="filterReset" type="button">
+                    <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
+                </button>
 
             </div>
             <!-- Active Filters Display -->
@@ -370,6 +377,99 @@ $view->footing();
 
 #projectTable .badge:last-child {
     margin-right: 0;
+}
+
+/* Row background colors based on status (70% lighter = 30% opacity) */
+#projectTable tbody tr.table-row-status-secondary {
+    background-color: rgba(108, 117, 125, 0) !important;
+}
+
+#projectTable tbody tr.table-row-status-info {
+    background-color: rgba(13, 202, 240, 0.2) !important;
+}
+
+#projectTable tbody tr.table-row-status-primary {
+    background-color: rgba(13, 110, 253, 0.2) !important;
+}
+
+#projectTable tbody tr.table-row-status-success {
+    background-color: rgba(25, 135, 84, 0.2) !important;
+}
+
+#projectTable tbody tr.table-row-status-warning {
+    background-color: rgba(255, 193, 7, 0.2) !important;
+}
+
+#projectTable tbody tr.table-row-status-danger {
+    background-color: rgba(220, 53, 69, 0.2) !important;
+}
+
+#projectTable tbody tr.table-row-status-secondary:hover,
+#projectTable tbody tr.table-row-status-info:hover,
+#projectTable tbody tr.table-row-status-primary:hover,
+#projectTable tbody tr.table-row-status-success:hover,
+#projectTable tbody tr.table-row-status-warning:hover,
+#projectTable tbody tr.table-row-status-danger:hover {
+    background-color: inherit;
+    opacity: 0.8;
+}
+
+/* Active indicator dot for status filter buttons */
+.btn-group {
+    overflow: visible !important;
+}
+
+.status-filter-btn {
+    position: relative;
+    overflow: visible;
+}
+
+.status-filter-btn::after {
+    content: '';
+    position: absolute;
+    bottom: -1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+    z-index: 10;
+    pointer-events: none;
+    display: none;
+}
+.status-filter-btn.active::after{
+    display: block;
+}
+/* Color for each status - handle both btn-* and btn-label-* classes when active */
+.status-filter-btn.btn-secondary.active::after,
+.status-filter-btn.btn-label-secondary.active::after {
+    background-color: #6c757d !important;
+}
+
+.status-filter-btn.btn-info.active::after,
+.status-filter-btn.btn-label-info.active::after {
+    background-color: #0dcaf0 !important;
+}
+
+.status-filter-btn.btn-primary.active::after,
+.status-filter-btn.btn-label-primary.active::after {
+    background-color: #7650b0 !important;
+}
+
+.status-filter-btn.btn-success.active::after,
+.status-filter-btn.btn-label-success.active::after {
+    background-color: #198754 !important;
+}
+
+.status-filter-btn.btn-warning.active::after,
+.status-filter-btn.btn-label-warning.active::after {
+    background-color: #ffc107 !important;
+}
+
+.status-filter-btn.btn-danger.active::after,
+.status-filter-btn.btn-label-danger.active::after {
+    background-color: #dc3545 !important;
 }
 </style>
 

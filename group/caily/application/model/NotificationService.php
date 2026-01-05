@@ -66,11 +66,18 @@ class NotificationService {
         return ['success' => true, 'notification_id' => $notification_id];
     }
 
-    function sendProjectCommentNotification($project_id, $comment_id) {
-        $this->firebase->sendNotification('project_' . $project_id, 'new-comment', [
+    function sendProjectCommentNotification($project_id, $comment_id, $thread_id = null) {
+        $data = [
             'comment_id' => $comment_id,
             'project_id' => $project_id
-        ]);
+        ];
+        
+        // Add thread_id if provided
+        if ($thread_id) {
+            $data['thread_id'] = $thread_id;
+        }
+        
+        $this->firebase->sendNotification('project_' . $project_id, 'new-comment', $data);
         return ['success' => true];
     }
 

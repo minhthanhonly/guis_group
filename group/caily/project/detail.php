@@ -10,7 +10,7 @@ if (!$project_id) {
 }
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
-    <div v-if="canViewProject">
+    <div v-if="true">
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">
                 <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-label-info">#{{ project?.project_number }}</span></a>
@@ -44,7 +44,7 @@ if (!$project_id) {
                 <a href="index.php" class="btn btn-outline-primary me-2">
                     <i class="fa fa-arrow-left me-2"></i><span data-i18n="戻る">戻る</span>
                 </a>
-                <a :href="'../parent_project/detail.php?id=' + project.parent_project_id" class="btn btn-outline-primary" title="親プロジェクト詳細">
+                <a v-if="project && project.parent_project_id" :href="'../parent_project/detail.php?id=' + project.parent_project_id" class="btn btn-outline-primary">
                     <i class="fa fa-external-link me-2"></i>
                     <span data-i18n="建物詳細">建物詳細</span>
                 </a>
@@ -58,7 +58,7 @@ if (!$project_id) {
                             <h5 class="card-title"><span data-i18n="基本情報">基本情報</span></h5>
                             <div>
                                 <!-- Confirm Project Button for Kadai Projects -->
-                                <button v-if="project && project.is_kadai == 1 && !isEditMode && canEditProject" class="btn btn-success btn-sm me-2" @click="confirmKadaiProject" title="プロジェクトを承認">
+                                <button v-if="project && project.is_kadai == 1 && project.status !== 'cancelled' && !isEditMode && canEditProject" class="btn btn-success btn-sm me-2" @click="confirmKadaiProject" title="プロジェクトを承認">
                                     <i class="fa fa-check me-1"></i>プロジェクトを承認
                                 </button>
                                 
@@ -87,97 +87,106 @@ if (!$project_id) {
                             
                             <!-- Parent Project Information Accordion (for child projects) -->
                             <div v-if="project.parent_project_id" class="col-12 mb-4">
-                                <div id="parentProjectCollapse">
-                                    <div class="border p-3">
-                                        <div class="row">
-                                            <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="会社名">会社名</span></label>
-                                                <input type="text" class="form-control" :value="project.company_name || '-'" readonly>
-                                            </div>
-                                            <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="支店名">支店名</span></label>
-                                                <input type="text" class="form-control" :value="project.branch_name || '-'" readonly>
-                                            </div>
-                                            <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="担当様">担当様</span></label>
-                                                <input type="text" class="form-control" :value="project.contact_name || '-'" readonly>
-                                            </div>
-                                            <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="お施主様名">お施主様名</span></label>
-                                                <input type="text" class="form-control" :value="project.building_name || '-'" readonly>
-                                            </div>
-                                            <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
-                                                <input type="text" class="form-control" :value="project.building_number || '-'" readonly>
-                                            </div>
-                                            <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
-                                                <input type="text" class="form-control" :value="project.building_size || '-'" readonly>
-                                            </div>
-                                            <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="GUIS　受付者">GUIS　受付者</span></label>
-                                                <input type="text" class="form-control" :value="project.guis_receiver_display_name || project.guis_receiver || '-'" readonly>
-                                            </div>
-                                            <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="工事支店">工事支店</span></label>
-                                                <div style="min-height:38px;">
-                                                    <span v-if="project.building_branch && project.building_branch.split(',').length > 0">
-                                                        <span v-for="item in project.building_branch.split(',')" :key="item.trim()" class="badge bg-primary me-1">{{ item.trim() }}</span>
-                                                    </span>
-                                                    <span v-else>-</span>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="種類1">種類1</span></label>
-                                                <div style="min-height:38px;">
-                                                    <span v-if="project.type1 && project.type1.split(',').length > 0">
-                                                        <span v-for="item in project.type1.split(',')" :key="item.trim()" class="badge bg-info me-1">{{ item.trim() }}</span>
-                                                    </span>
-                                                    <span v-else>-</span>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="種類2">種類2</span></label>
-                                                <div style="min-height:38px;">
-                                                    <span v-if="project.type2 && project.type2.split(',').length > 0">
-                                                        <span v-for="item in project.type2.split(',')" :key="item.trim()" class="badge bg-info me-1">{{ item.trim() }}</span>
-                                                    </span>
-                                                    <span v-else>-</span>
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="col-md-4 mb-3">
-                                                <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
-                                                <input type="text" class="form-control" :value="project.structural_office || '-'" readonly>
-                                            </div>
-                                            <div class="col-12 mb-3">
-                                                <label class="form-label"><span data-i18n="資料">資料</span></label>
-                                                <div class="form-control-plaintext">
-                                                    <div class="row">
-                                                        <div class="col-md-4" v-if="project.materials && project.materials.includes('配置図')">
-                                                            <i class="fa fa-check text-success me-2"></i>配置図
+                                <div class="accordion" id="parentProjectAccordion">
+                                    <div class="accordion-item border-primary">
+                                        <h2 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#parentProjectCollapse" aria-expanded="false" aria-controls="parentProjectCollapse">
+                                                <span data-i18n="建物情報">建物情報</span>
+                                            </button>
+                                        </h2>
+                                        <div id="parentProjectCollapse" class="accordion-collapse collapse" data-bs-parent="#parentProjectAccordion">
+                                            <div class="accordion-body">
+                                                <div class="row">
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="会社名">会社名</span></label>
+                                                        <input type="text" class="form-control" :value="project.company_name || '-'" readonly>
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="支店名">支店名</span></label>
+                                                        <input type="text" class="form-control" :value="project.branch_name || '-'" readonly>
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="担当様">担当様</span></label>
+                                                        <input type="text" class="form-control" :value="project.contact_name || '-'" readonly>
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="お施主様名">お施主様名</span></label>
+                                                        <input type="text" class="form-control" :value="project.building_name || '-'" readonly>
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
+                                                        <input type="text" class="form-control" :value="project.building_number || '-'" readonly>
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
+                                                        <input type="text" class="form-control" :value="project.building_size || '-'" readonly>
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="GUIS　受付者">GUIS　受付者</span></label>
+                                                        <input type="text" class="form-control" :value="project.guis_receiver_display_name || project.guis_receiver || '-'" readonly>
+                                                    </div>
+                                                    <!--<div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="工事支店">工事支店</span></label>
+                                                        <div style="min-height:38px;">
+                                                            <span v-if="project.building_branch && project.building_branch.split(',').length > 0">
+                                                                <span v-for="item in project.building_branch.split(',')" :key="item.trim()" class="badge bg-primary me-1">{{ item.trim() }}</span>
+                                                            </span>
+                                                            <span v-else>-</span>
                                                         </div>
-                                                        <div class="col-md-4" v-if="project.materials && project.materials.includes('家賃審査書')">
-                                                            <i class="fa fa-check text-success me-2"></i>家賃審査書
-                                                        </div>
-                                                        <div class="col-md-4" v-if="project.materials && project.materials.includes('契約図')">
-                                                            <i class="fa fa-check text-success me-2"></i>契約図
-                                                        </div>
-                                                        <div class="col-md-4" v-if="project.materials && project.materials.includes('TAC図')">
-                                                            <i class="fa fa-check text-success me-2"></i>TAC図
-                                                        </div>
-                                                        <div class="col-md-4" v-if="project.materials && project.materials.includes('その他')">
-                                                            <i class="fa fa-check text-success me-2"></i>その他
-                                                        </div>
-                                                        <div v-if="!project.materials || project.materials.length === 0" class="col-12">
-                                                            <span class="text-muted">-</span>
+                                                    </div>-->
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="種類1">種類1</span></label>
+                                                        <div style="min-height:38px;">
+                                                            <span v-if="project.type1 && project.type1.split(',').length > 0">
+                                                                <span v-for="item in project.type1.split(',')" :key="item.trim()" class="badge bg-info me-1">{{ item.trim() }}</span>
+                                                            </span>
+                                                            <span v-else>-</span>
                                                         </div>
                                                     </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="種類2">種類2</span></label>
+                                                        <div style="min-height:38px;">
+                                                            <span v-if="project.type2 && project.type2.split(',').length > 0">
+                                                                <span v-for="item in project.type2.split(',')" :key="item.trim()" class="badge bg-info me-1">{{ item.trim() }}</span>
+                                                            </span>
+                                                            <span v-else>-</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
+                                                        <input type="text" class="form-control" :value="project.structural_office || '-'" readonly>
+                                                    </div>
+                                                    <div class="col-12 mb-3">
+                                                        <label class="form-label"><span data-i18n="資料">資料</span></label>
+                                                        <div class="form-control-plaintext">
+                                                            <div class="row">
+                                                                <div class="col-md-4" v-if="project.materials && project.materials.includes('配置図')">
+                                                                    <i class="fa fa-check text-success me-2"></i>配置図
+                                                                </div>
+                                                                <div class="col-md-4" v-if="project.materials && project.materials.includes('家賃審査書')">
+                                                                    <i class="fa fa-check text-success me-2"></i>家賃審査書
+                                                                </div>
+                                                                <div class="col-md-4" v-if="project.materials && project.materials.includes('契約図')">
+                                                                    <i class="fa fa-check text-success me-2"></i>契約図
+                                                                </div>
+                                                                <div class="col-md-4" v-if="project.materials && project.materials.includes('TAC図')">
+                                                                    <i class="fa fa-check text-success me-2"></i>TAC図
+                                                                </div>
+                                                                <div class="col-md-4" v-if="project.materials && project.materials.includes('その他')">
+                                                                    <i class="fa fa-check text-success me-2"></i>その他
+                                                                </div>
+                                                                <div v-if="!project.materials || project.materials.length === 0" class="col-12">
+                                                                    <span class="text-muted">-</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-12 mb-3">
+                                                        <label class="form-label"><span data-i18n="備考">備考</span></label>
+                                                        <div class="form-control-plaintext" style="white-space: pre-wrap;">{{ project.notes || '-' }}</div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-12 mb-3">
-                                                <label class="form-label"><span data-i18n="備考">備考</span></label>
-                                                <div class="form-control-plaintext" style="white-space: pre-wrap;">{{ project.notes || '-' }}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -334,7 +343,7 @@ if (!$project_id) {
                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <div>
                                     <!-- For Kadai projects, show waiting status -->
-                                    <div v-if="project.is_kadai == 1">
+                                    <div v-if="project.is_kadai == 1 && project.status !== 'cancelled'">
                                         <span class="badge bg-warning">承認待ち</span>
                                     </div>
                                     <!-- For normal projects, show actual status -->
@@ -518,11 +527,11 @@ if (!$project_id) {
                         </h5>
                     </div>
                     <div class="card-body">
-                        <!-- Comment Component -->
                         <comment-component
                              :entity-type="'project'"
                              :entity-id="projectId"
                              :current-user="currentUser"
+                             :enable-threads="true"
                              @comment-added="onCommentAdded"
                              @message="onCommentMessage"
                              @error="onCommentError">

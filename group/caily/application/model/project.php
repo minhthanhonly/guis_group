@@ -51,32 +51,22 @@ class Project extends ApplicationModel {
         $search = isset($_GET['search']) ? $_GET['search'] : '';
         $order_column = isset($_GET['order_column']) ? $_GET['order_column'] : 'end_date';
         $order_dir = isset($_GET['order_dir']) ? $_GET['order_dir'] : 'ASC';
+        $status = isset($_GET['status']) ? $_GET['status'] : 'all';
         
         $whereArr = [];
         
-        // Add permission check
         $user_id = $_SESSION['id'];
-        $is_department_manager = false;
-        if (isset($_GET['department_id'])) {
-            $department_id = $_GET['department_id'];
-            $query = sprintf(
-                "SELECT COUNT(id) as count FROM " . DB_PREFIX . "user_department WHERE userid = '%s' AND department_id = %d AND (project_manager = 1 OR project_director = 1)",
-                $_SESSION['userid'],
-                $department_id);
-            $is_department_manager = $this->fetchOne($query)['count'] > 0;
-        }
-
-        if ($_SESSION['authority'] != 'administrator' && !$is_department_manager) {
+        
+        // Filter "My Projects" - show only projects where user is member or manager
+        if (isset($_GET['my_projects']) && $_GET['my_projects'] == '1') {
             $whereArr[] = sprintf(
-                "(p.created_by = %d OR EXISTS (
+                "EXISTS (
                     SELECT 1 FROM " . DB_PREFIX . "project_members pm 
-                    WHERE pm.project_id = p.id AND pm.user_id = %d
-                ))",
-                $user_id,
+                    WHERE pm.project_id = p.id AND pm.user_id = %d AND pm.role IN ('member', 'manager')
+                )",
                 $user_id
             );
         }
-
 
         if (isset($_GET['department_id'])) {
             $whereArr[] = sprintf("p.department_id = %d", intval($_GET['department_id']));
@@ -148,11 +138,14 @@ class Project extends ApplicationModel {
                 $whereArr[] = "p.status NOT IN ('completed', 'cancelled', 'deleted')";
             }
             
-            // Mặc định không hiển thị những dự án có is_kadai = 1, trừ khi showKadai = 1
-            $showKadai = isset($_GET['showKadai']) && $_GET['showKadai'] == '1';
-            if (!$showKadai) {
-                $whereArr[] = "p.is_kadai != 1";
-            }
+            // if($status != 'cancelled') {
+            //    // Mặc định không hiển thị những dự án có is_kadai = 1, trừ khi showKadai = 1
+            //     // $showKadai = isset($_GET['showKadai']) && $_GET['showKadai'] == '1';
+            //     // if (!$showKadai) {
+            //     //     $whereArr[] = "p.is_kadai != 1";
+            //     // }
+            // }
+            
         }
 
         $where = implode(" AND ", $whereArr);
@@ -207,7 +200,6 @@ class Project extends ApplicationModel {
             $length
         );
 
-        
         $data = $this->fetchAll($query);
         
         // Set default quotation status for projects without quotations
@@ -232,14 +224,14 @@ class Project extends ApplicationModel {
         
         // Add permission check
         $user_id = $_SESSION['userid'];
-        $managerIds = $this->getDepartmentManagers($department_id);
+        // $managerIds = $this->getDepartmentManagers($department_id);
 
-        if($_SESSION['authority'] != 'administrator' && !in_array($user_id, $managerIds)){
-            return array(
-                'status' => 'error',
-                'message' => '権限がありません'
-            );
-        }
+        // if($_SESSION['authority'] != 'administrator' && !in_array($user_id, $managerIds)){
+        //     return array(
+        //         'status' => 'error',
+        //         'message' => '権限がありません'
+        //     );
+        // }
 
         
         // Only show kadai projects
@@ -967,6 +959,15 @@ class Project extends ApplicationModel {
         $per_page = isset($_GET['per_page']) ? intval($_GET['per_page']) : 20;
         $offset = ($page - 1) * $per_page;
         
+        // Get thread_id filter if provided
+        $thread_id = isset($_GET['thread_id']) ? intval($_GET['thread_id']) : null;
+        
+        $whereClause = "c.project_id = " . intval($project_id);
+        if ($thread_id !== null && $thread_id > 0) {
+            $whereClause .= " AND c.thread_id = " . intval($thread_id);
+        }
+        // If thread_id is null or 0, get all comments (for backward compatibility and search)
+        
         $query = sprintf(
             "SELECT c.*, u.realname as user_name, u.user_image,
                     (SELECT COUNT(*) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as like_count,
@@ -976,10 +977,10 @@ class Project extends ApplicationModel {
                      WHERE cl.comment_id = c.id) as liked_by_names
             FROM " . DB_PREFIX . "comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
-            WHERE c.project_id = %d 
+            WHERE %s
             ORDER BY c.created_at DESC
             LIMIT %d OFFSET %d",
-            intval($project_id),
+            $whereClause,
             intval($per_page),
             intval($offset)
         );
@@ -1014,8 +1015,293 @@ class Project extends ApplicationModel {
         
         return $comments;
     }
-
     
+    // Get latest comment info for polling (without Firebase)
+    function getLatestCommentInfo() {
+        $project_id = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
+        $since = isset($_GET['since']) ? $_GET['since'] : null; // Timestamp or comment ID to check from
+        
+        if (!$project_id) return ['latest_comment_id' => null, 'latest_comment_at' => null, 'thread_id' => null];
+        
+        $whereClause = "c.project_id = " . intval($project_id);
+        
+        // If since is provided, only get comments after that time/ID
+        if ($since) {
+            // Check if since is a timestamp or comment ID
+            if (is_numeric($since) && strlen($since) > 10) {
+                // It's a timestamp
+                $sinceDate = date('Y-m-d H:i:s', intval($since) / 1000);
+                $whereClause .= " AND c.created_at > '" . $this->quote($sinceDate) . "'";
+            } else {
+                // It's a comment ID
+                $whereClause .= " AND c.id > " . intval($since);
+            }
+        }
+        
+        $query = sprintf(
+            "SELECT c.id, c.thread_id, c.created_at
+            FROM " . DB_PREFIX . "comments c 
+            WHERE %s
+            ORDER BY c.created_at DESC, c.id DESC
+            LIMIT 1",
+            $whereClause
+        );
+        
+        $latest = $this->fetchOne($query);
+        
+        if ($latest) {
+            return [
+                'latest_comment_id' => $latest['id'],
+                'latest_comment_at' => $latest['created_at'],
+                'thread_id' => $latest['thread_id']
+            ];
+        }
+        
+        return ['latest_comment_id' => null, 'latest_comment_at' => null, 'thread_id' => null];
+    }
+
+    // Thread management methods
+    function createThread() {
+        $data = $_POST;
+        $project_id = isset($data['project_id']) ? intval($data['project_id']) : 0;
+        $title = isset($data['title']) ? trim($data['title']) : '';
+        $user_id = isset($data['user_id']) ? $data['user_id'] : '';
+        
+        if (!$project_id || !$title || !$user_id) {
+            return ['success' => false, 'message' => '必要な情報が不足しています'];
+        }
+        
+        $threadData = array(
+            'project_id' => $project_id,
+            'title' => $title,
+            'created_by' => $user_id,
+            'created_at' => date('Y-m-d H:i:s')
+        );
+        
+        $this->table = DB_PREFIX . 'comment_threads';
+        $result = $this->query_insert($threadData);
+        $this->table = DB_PREFIX . 'projects';
+        
+        if ($result) {
+            return ['success' => true, 'id' => $result, 'message' => 'スレッドを作成しました'];
+        }
+        return ['success' => false, 'message' => 'スレッドの作成に失敗しました'];
+    }
+    
+    function getThreads() {
+        $project_id = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
+        $user_id = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
+        
+        if (!$project_id) return [];
+        
+        $query = sprintf(
+            "SELECT t.*, u.realname as creator_name, u.user_image as creator_image,
+                    (SELECT COUNT(*) FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id) as comment_count,
+                    (SELECT MAX(c.created_at) FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id) as last_comment_at,
+                    (SELECT c.content FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1) as last_comment_content,
+                    (SELECT c.user_id FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1) as last_comment_user_id,
+                    (SELECT u2.realname FROM " . DB_PREFIX . "comments c 
+                     LEFT JOIN " . DB_PREFIX . "user u2 ON c.user_id = u2.userid 
+                     WHERE c.thread_id = t.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1) as last_comment_user_name,
+                    (SELECT c.id FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1) as last_comment_id
+            FROM " . DB_PREFIX . "comment_threads t
+            LEFT JOIN " . DB_PREFIX . "user u ON t.created_by = u.userid
+            WHERE t.project_id = %d
+            ORDER BY COALESCE((SELECT MAX(c.created_at) FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id), t.created_at) DESC",
+            intval($project_id)
+        );
+        
+        $threads = $this->fetchAll($query);
+        
+        // Calculate unread count for each thread
+        foreach ($threads as &$thread) {
+            // Get last read comment ID for this thread and user
+            $lastReadQuery = sprintf(
+                "SELECT last_read_comment_id FROM " . DB_PREFIX . "comment_thread_reads 
+                 WHERE thread_id = %d AND user_id = '%s' LIMIT 1",
+                intval($thread['id']),
+                $this->quote($user_id)
+            );
+            $lastRead = $this->fetchOne($lastReadQuery);
+            $lastReadCommentId = $lastRead ? intval($lastRead['last_read_comment_id']) : 0;
+            
+            // Count unread comments (comments with ID > last_read_comment_id)
+            if ($thread['last_comment_id']) {
+                // If last_read_comment_id is 0, it means user hasn't read any comments yet
+                // So count all comments as unread
+                if ($lastReadCommentId == 0) {
+                    $unreadQuery = sprintf(
+                        "SELECT COUNT(*) as unread_count FROM " . DB_PREFIX . "comments 
+                         WHERE thread_id = %d",
+                        intval($thread['id'])
+                    );
+                } else {
+                    // Count comments with ID > last_read_comment_id
+                    $unreadQuery = sprintf(
+                        "SELECT COUNT(*) as unread_count FROM " . DB_PREFIX . "comments 
+                         WHERE thread_id = %d AND id > %d",
+                        intval($thread['id']),
+                        $lastReadCommentId
+                    );
+                }
+                $unreadResult = $this->fetchOne($unreadQuery);
+                $thread['unread_count'] = intval($unreadResult['unread_count'] ?? 0);
+            } else {
+                // Thread has no comments, so unread count is 0
+                $thread['unread_count'] = 0;
+            }
+            
+            // Strip HTML tags from last comment content for preview
+            if ($thread['last_comment_content']) {
+                $thread['last_comment_preview'] = $this->stripHtmlTags($thread['last_comment_content'], 100);
+            } else {
+                $thread['last_comment_preview'] = '';
+            }
+        }
+        
+        return $threads;
+    }
+    
+    // Helper function to strip HTML and get preview
+    private function stripHtmlTags($html, $maxLength = 100) {
+        // Remove HTML tags
+        $text = strip_tags($html);
+        // Decode HTML entities
+        $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+        // Remove extra whitespace
+        $text = preg_replace('/\s+/', ' ', $text);
+        $text = trim($text);
+        // Truncate if too long
+        if (mb_strlen($text) > $maxLength) {
+            $text = mb_substr($text, 0, $maxLength) . '...';
+        }
+        return $text;
+    }
+    
+    function getCommentsByThread() {
+        $thread_id = isset($_GET['thread_id']) ? intval($_GET['thread_id']) : 0;
+        if (!$thread_id) return [];
+        
+        $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
+        $per_page = isset($_GET['per_page']) ? intval($_GET['per_page']) : 20;
+        $offset = ($page - 1) * $per_page;
+        
+        $query = sprintf(
+            "SELECT c.*, u.realname as user_name, u.user_image,
+                    (SELECT COUNT(*) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as like_count,
+                    (SELECT GROUP_CONCAT(cl.user_id) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as liked_by,
+                    (SELECT GROUP_CONCAT(CONCAT(cl.user_id, ':', cl.name) SEPARATOR '|') 
+                     FROM " . DB_PREFIX . "comment_likes cl 
+                     WHERE cl.comment_id = c.id) as liked_by_names
+            FROM " . DB_PREFIX . "comments c 
+            LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
+            WHERE c.thread_id = %d 
+            ORDER BY c.created_at DESC
+            LIMIT %d OFFSET %d",
+            intval($thread_id),
+            intval($per_page),
+            intval($offset)
+        );
+        
+        $comments = $this->fetchAll($query);
+        
+        // Process liked_by string to array and liked_by_names
+        foreach ($comments as &$comment) {
+            if ($comment['liked_by']) {
+                $comment['liked_by'] = explode(',', $comment['liked_by']);
+            } else {
+                $comment['liked_by'] = [];
+            }
+            
+            if ($comment['liked_by_names']) {
+                $likedByNames = [];
+                $namePairs = explode('|', $comment['liked_by_names']);
+                foreach ($namePairs as $pair) {
+                    if (strpos($pair, ':') !== false) {
+                        list($userId, $name) = explode(':', $pair, 2);
+                        $likedByNames[] = $name;
+                    }
+                }
+                $comment['liked_by_names'] = $likedByNames;
+            } else {
+                $comment['liked_by_names'] = [];
+            }
+            
+            $comment['like_count'] = intval($comment['like_count']);
+        }
+        
+        return $comments;
+    }
+    
+    function searchComments() {
+        $project_id = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
+        $search_term = isset($_GET['search']) ? trim($_GET['search']) : '';
+        
+        if (!$project_id || !$search_term) return [];
+        
+        // Encode search term to HTML entities to match database content
+        // Convert spaces to &nbsp; and encode other special characters
+        $encoded_search = htmlentities($search_term, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // Also replace spaces with &nbsp; entity
+        $encoded_search = str_replace(' ', '&nbsp;', $encoded_search);
+        
+        // Escape both original and encoded versions for SQL
+        $escaped_original = $this->quote($search_term);
+        $escaped_encoded = $this->quote($encoded_search);
+        
+        $pattern_original = '%' . $escaped_original . '%';
+        $pattern_encoded = '%' . $escaped_encoded . '%';
+        
+        // Search in both original and encoded formats
+        $query = sprintf(
+            "SELECT c.*, u.realname as user_name, u.user_image, t.title as thread_title, t.id as thread_id,
+                    (SELECT COUNT(*) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as like_count,
+                    (SELECT GROUP_CONCAT(cl.user_id) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as liked_by,
+                    (SELECT GROUP_CONCAT(CONCAT(cl.user_id, ':', cl.name) SEPARATOR '|') 
+                     FROM " . DB_PREFIX . "comment_likes cl 
+                     WHERE cl.comment_id = c.id) as liked_by_names
+            FROM " . DB_PREFIX . "comments c 
+            LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid
+            LEFT JOIN " . DB_PREFIX . "comment_threads t ON c.thread_id = t.id
+            WHERE c.project_id = %d 
+            AND (c.content LIKE '%s' OR c.content LIKE '%s' OR t.title LIKE '%s')
+            ORDER BY c.created_at DESC
+            LIMIT 100",
+            intval($project_id),
+            $pattern_original,
+            $pattern_encoded,
+            $pattern_original
+        );
+        
+        $comments = $this->fetchAll($query);
+        
+        // Process liked_by
+        foreach ($comments as &$comment) {
+            if ($comment['liked_by']) {
+                $comment['liked_by'] = explode(',', $comment['liked_by']);
+            } else {
+                $comment['liked_by'] = [];
+            }
+            
+            if ($comment['liked_by_names']) {
+                $likedByNames = [];
+                $namePairs = explode('|', $comment['liked_by_names']);
+                foreach ($namePairs as $pair) {
+                    if (strpos($pair, ':') !== false) {
+                        list($userId, $name) = explode(':', $pair, 2);
+                        $likedByNames[] = $name;
+                    }
+                }
+                $comment['liked_by_names'] = $likedByNames;
+            } else {
+                $comment['liked_by_names'] = [];
+            }
+            
+            $comment['like_count'] = intval($comment['like_count']);
+        }
+        
+        return $comments;
+    }
 
     function addComment($data) {
         $data = $_POST;
@@ -1026,16 +1312,107 @@ class Project extends ApplicationModel {
             'created_at' => date('Y-m-d H:i:s')
         );
         
+        // Add thread_id if provided
+        if (isset($data['thread_id']) && $data['thread_id']) {
+            $commentData['thread_id'] = intval($data['thread_id']);
+        }
+        
         $this->table = DB_PREFIX . 'comments';
         $result = $this->query_insert($commentData);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
         
         // Send mention notifications if comment was added successfully
         if ($result) {
-            $this->sendMentionNotifications($data['project_id'], $data['content'], $data['user_id'], $result);
-            return ['success' => true, 'message' => 'Comment added successfully'];
+            $threadId = isset($data['thread_id']) && $data['thread_id'] ? intval($data['thread_id']) : null;
+            
+            // Send mention notifications (only for mentions)
+            $this->sendMentionNotifications($data['project_id'], $data['content'], $data['user_id'], $result, $threadId);
+            
+            // Note: We removed Firebase notification - using polling instead
+            // No need to send Firebase notification for every comment
+            
+            return [
+                'success' => true, 
+                'message' => 'Comment added successfully',
+                'comment_id' => $result,
+                'thread_id' => $threadId
+            ];
         }
         return ['success' => false, 'message' => 'Comment addition failed'];
+    }
+    
+    // Mark thread as read (update last_read_comment_id)
+    function markThreadAsRead() {
+        $thread_id = isset($_POST['thread_id']) ? intval($_POST['thread_id']) : 0;
+        $user_id = isset($_POST['user_id']) ? $_POST['user_id'] : (isset($_SESSION['userid']) ? $_SESSION['userid'] : '');
+        $last_comment_id = isset($_POST['last_comment_id']) ? intval($_POST['last_comment_id']) : 0;
+        
+        if (!$thread_id || !$user_id || !$last_comment_id) {
+            return ['success' => false, 'message' => 'Invalid parameters'];
+        }
+        
+        // Check if record exists
+        $existing = $this->fetchOne(sprintf(
+            "SELECT id FROM " . DB_PREFIX . "comment_thread_reads 
+             WHERE thread_id = %d AND user_id = '%s'",
+            intval($thread_id),
+            $this->quote($user_id)
+        ));
+        
+        $this->table = DB_PREFIX . 'comment_thread_reads';
+        
+        if ($existing) {
+            // Update existing record - use direct query because user_id is string
+            $query = sprintf(
+                "UPDATE " . DB_PREFIX . "comment_thread_reads 
+                 SET last_read_comment_id = %d 
+                 WHERE thread_id = %d AND user_id = '%s'",
+                intval($last_comment_id),
+                intval($thread_id),
+                $this->quote($user_id)
+            );
+            $result = $this->query($query);
+        } else {
+            // Insert new record
+            $result = $this->query_insert([
+                'thread_id' => $thread_id,
+                'user_id' => $user_id,
+                'last_read_comment_id' => $last_comment_id
+            ]);
+        }
+        
+        $this->table = DB_PREFIX . 'projects';
+        
+        return ['success' => (bool)$result];
+    }
+    
+    // Get comment info including thread_id by comment ID
+    function getCommentInfo() {
+        $comment_id = isset($_GET['comment_id']) ? intval($_GET['comment_id']) : 0;
+        if (!$comment_id) {
+            return ['success' => false, 'message' => 'Invalid comment ID'];
+        }
+        
+        $query = sprintf(
+            "SELECT c.id, c.thread_id, c.project_id, c.user_id, c.content, c.created_at,
+                    t.title as thread_title
+            FROM " . DB_PREFIX . "comments c
+            LEFT JOIN " . DB_PREFIX . "comment_threads t ON c.thread_id = t.id
+            WHERE c.id = %d
+            LIMIT 1",
+            intval($comment_id)
+        );
+        
+        $comment = $this->fetchOne($query);
+        
+        if ($comment) {
+            return [
+                'success' => true,
+                'comment' => $comment
+            ];
+        }
+        
+        return ['success' => false, 'message' => 'Comment not found'];
     }
 
     function toggleLike() {
@@ -1119,7 +1496,7 @@ class Project extends ApplicationModel {
     }
 
     // Detect mentions and send notifications
-    private function sendMentionNotifications($projectId, $content, $commentUserId, $commentId) {
+    private function sendMentionNotifications($projectId, $content, $commentUserId, $commentId, $threadId = null) {
         try {
             require_once('NotificationService.php');
             $notiService = new NotificationService();
@@ -2576,7 +2953,6 @@ class Project extends ApplicationModel {
             
             // Prepare update data
             $data = array(
-                'status' => 'open',
                 'is_kadai' => 0,
                 'updated_at' => date('Y-m-d H:i:s'),
                 'updated_by' => $_SESSION['userid']

@@ -174,7 +174,12 @@ class Quotation extends ApplicationModel {
             // Log the creation
             $this->logQuotationAction($quotation_id, 'created', '見積書を作成しました');
             
-            return array('status' => 'success', 'id' => $quotation_id);
+            // Update child project amounts based on status if status is provided
+            if (isset($filtered_data['status'])) {
+                $this->updateChildProjectAmountsFromQuotationStatus($quotation_id, $filtered_data['status']);
+            }
+            
+            return array('status' => 'success', 'id' => $quotation_id, 'data' => ['id' => $quotation_id]);
         }
         
         return array('status' => 'error', 'message' => '見積書の作成に失敗しました');
@@ -321,6 +326,11 @@ class Quotation extends ApplicationModel {
                 
                 // Log the update
                 $this->logQuotationAction($id, 'updated', '見積書を更新しました');
+                
+                // Update child project amounts based on status if status is provided
+                if (isset($filtered_data['status'])) {
+                    $this->updateChildProjectAmountsFromQuotationStatus($id, $filtered_data['status']);
+                }
                 
                 return ['status' => 'success', 'message' => '見積書を更新しました'];
             } else {
@@ -541,12 +551,110 @@ class Quotation extends ApplicationModel {
                     $status
                 );
                 
+                // Update child project amounts based on status
+                $this->updateChildProjectAmountsFromQuotationStatus($quotation_id, $status);
+                
                 return ['status' => 'success', 'message' => 'ステータスが更新されました'];
             } else {
                 return ['status' => 'error', 'error' => 'ステータスの更新に失敗しました'];
             }
         } catch (Exception $e) {
             return ['status' => 'error', 'error' => 'データベースエラー: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Update child project amounts based on quotation status
+     * @param int $quotation_id The quotation ID
+     * @param string $status The new status
+     */
+    private function updateChildProjectAmountsFromQuotationStatus($quotation_id, $status) {
+        try {
+            // Get quotation data including total_with_tax
+            $quotation_query = sprintf(
+                "SELECT total_with_tax FROM %s WHERE id = %d",
+                $this->table,
+                $quotation_id
+            );
+            $quotation = $this->fetchOne($quotation_query);
+            
+            if (!$quotation) {
+                return;
+            }
+            
+            $quotation_total = floatval($quotation['total_with_tax'] ?? 0);
+            
+            // Get quotation items
+            $items_query = sprintf(
+                "SELECT project_id, amount FROM %s WHERE quotation_id = %d AND project_id IS NOT NULL AND project_id != ''",
+                DB_PREFIX . 'quotation_items',
+                $quotation_id
+            );
+            $items = $this->fetchAll($items_query);
+            
+            if (empty($items)) {
+                return;
+            }
+            
+            // Calculate total amount of all items (without tax)
+            $total_items_amount = 0;
+            foreach ($items as $item) {
+                $total_items_amount += floatval($item['amount'] ?? 0);
+            }
+            
+            // Group items by project_id and calculate totals based on quotation total_with_tax
+            $projectAmounts = array();
+            if ($total_items_amount > 0) {
+                // Calculate ratio to distribute quotation total_with_tax proportionally
+                $ratio = $quotation_total / $total_items_amount;
+                
+                foreach ($items as $item) {
+                    $project_id = intval($item['project_id']);
+                    if ($project_id > 0) {
+                        $item_amount = floatval($item['amount'] ?? 0);
+                        // Calculate proportional amount from quotation total_with_tax
+                        $project_amount = $item_amount * $ratio;
+                        
+                        if (!isset($projectAmounts[$project_id])) {
+                            $projectAmounts[$project_id] = 0;
+                        }
+                        $projectAmounts[$project_id] += $project_amount;
+                    }
+                }
+            }
+            
+            if (empty($projectAmounts)) {
+                return;
+            }
+            
+            // Update project amounts
+            $project_table = DB_PREFIX . 'projects';
+            foreach ($projectAmounts as $project_id => $total_amount) {
+                if ($status === 'キャンセル' || $status === '却下') {
+                    // Set amount to 0 for cancelled or rejected quotations
+                    $update_query = sprintf(
+                        "UPDATE %s SET amount = 0, updated_at = NOW(), updated_by = '%s' WHERE id = %d",
+                        $project_table,
+                        mysqli_real_escape_string($this->handler, $_SESSION['userid'] ?? ''),
+                        $project_id
+                    );
+                } else {
+                    // Update amount based on quotation items for other statuses
+                    $update_query = sprintf(
+                        "UPDATE %s SET amount = %.2f, updated_at = NOW(), updated_by = '%s' WHERE id = %d",
+                        $project_table,
+                        $total_amount,
+                        mysqli_real_escape_string($this->handler, $_SESSION['userid'] ?? ''),
+                        $project_id
+                    );
+                }
+                
+                $this->query($update_query);
+            }
+            
+        } catch (Exception $e) {
+            // Log error but don't fail the status update
+            error_log('Error updating child project amounts from quotation status: ' . $e->getMessage());
         }
     }
 

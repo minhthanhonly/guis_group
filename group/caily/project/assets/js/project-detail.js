@@ -20,13 +20,15 @@ const vueApp = createApp({
                 totalDays: 0
             },
             statuses: [
-                { value: 'draft', label: '下書き', color: 'secondary' },
-                { value: 'open', label: 'オープン', color: 'info' },
-                { value: 'confirming', label: '確認中', color: 'warning' },
+                { value: 'draft', label: '受付', color: 'secondary' },
+                { value: 'open', label: '納期検討', color: 'info' },
+                { value: 'confirming', label: '仮受', color: 'info' },
+                { value: 'quotation', label: '見積', color: 'info' },
+                { value: 'contract', label: '請負', color: 'info' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
+                { value: 'completed', label: '納品', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
-                { value: 'completed', label: '完了', color: 'success' },
-                { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+                { value: 'cancelled', label: '中止', color: 'danger' }
             ],
             priorities: [
                 { value: 'low', label: '低', color: 'secondary' },
@@ -136,7 +138,34 @@ const vueApp = createApp({
             return this.departmentCustomFieldSets.find(set => String(set.id) === String(this.project.department_custom_fields_set_id)) || null;
         },
         canViewProject() {
-            return this.permission.is_member;
+            // Administrator can always view
+            if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
+            
+            // Check permission from API
+            if (this.permission && this.permission.is_member) return true;
+            
+            // Check if user is creator of the project
+            if (this.project && this.project.created_by && typeof USER_ID !== 'undefined') {
+                if (String(this.project.created_by) === String(USER_ID)) return true;
+            }
+            
+            // Check if user is manager or member
+            if (this.managers && typeof USER_AUTH_ID !== 'undefined') {
+                if (this.managers.some(m => String(m.user_id) === String(USER_AUTH_ID))) return true;
+            }
+            if (this.members && typeof USER_AUTH_ID !== 'undefined') {
+                if (this.members.some(m => String(m.user_id) === String(USER_AUTH_ID))) return true;
+            }
+            
+            // Check if user has project_manager or project_director permission
+            if (this.permission && this.permission.rule) {
+                if (this.permission.rule.project_manager == 1 || this.permission.rule.project_director == 1) return true;
+            }
+            
+            // Check if user is in the same department (even if not a member)
+            if (this.permission && this.permission.is_in_department) return true;
+            
+            return false;
         },
         canEditProject() {
             return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_edit == 1);
@@ -199,13 +228,11 @@ const vueApp = createApp({
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
                 this.project = response.data;
-                
                 // Load parent project information if this is a child project
                 if (this.project.parent_project_id) {
                     await this.loadParentProjectInfo();
                 }
                 
-               // await this.getUserPermissions(this.project.department_id);
                 this.calculateStats();
                 
                 if (this.project.teams) {
@@ -213,15 +240,14 @@ const vueApp = createApp({
                 } else {
                     this.project.team_list = [];
                 }
-                // if (this.project.department_id) {
-                //     this.loadDepartment();
-                // }
+               
                 this.loadMembers();
                 // Ensure Tagify is updated after loading project and team_list
                 this.$nextTick(() => { 
                     //this.initTagify(); 
                     this.setConnectedUsers();
                 });
+                
             } catch (error) {
                 console.error('Error loading project:', error);
                 alert('プロジェクトの読み込みに失敗しました。');
@@ -2363,13 +2389,13 @@ const vueApp = createApp({
     },
     async mounted() {
         await this.loadPermission();
-        if(!this.permission.is_member){
-            this.showMessage('権限がありません。', true);
-            setTimeout(() => {
-                window.location.href = 'index.php';
-            }, 1000);
-            return;
-        }
+        // if(!this.permission.is_member){
+        //     this.showMessage('権限がありません。', true);
+        //     setTimeout(() => {
+        //         window.location.href = 'index.php';
+        //     }, 1000);
+        //     return;
+        // }
         await this.loadProject();
         this.loadCategories();
         this.loadDepartmentCustomFieldSets();

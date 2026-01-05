@@ -7,9 +7,12 @@ createApp({
             searchKeyword: '',
             statusFilter: 'all',
             currentPage: 1,
-            pageSize: 20,
+            pageSize: 50,
             totalRecords: 0,
             loading: false,
+            isProjectManager: typeof IS_PROJECT_MANAGER !== 'undefined' ? IS_PROJECT_MANAGER : false,
+            sortColumn: 'created_at',
+            sortDirection: 'DESC', // 'ASC' or 'DESC'
             statuses: [
                 { value: 'draft', label: '下書き', color: 'secondary' },
                 { value: 'under_contract', label: '契約中', color: 'info' },
@@ -21,24 +24,7 @@ createApp({
     },
     computed: {
         filteredParentProjects() {
-            let filtered = this.parentProjects;
-            
-            // Apply search filter
-            if (this.searchKeyword) {
-                const keyword = this.searchKeyword.toLowerCase();
-                filtered = filtered.filter(project => 
-                    project.company_name.toLowerCase().includes(keyword) ||
-                    project.project_name.toLowerCase().includes(keyword) ||
-                    (project.construction_number && project.construction_number.toLowerCase().includes(keyword))
-                );
-            }
-            
-            // Apply status filter
-            if (this.statusFilter !== 'all') {
-                filtered = filtered.filter(project => project.status === this.statusFilter);
-            }
-            
-            return filtered;
+            return this.parentProjects;
         },
         totalPages() {
             return Math.ceil(this.totalRecords / this.pageSize);
@@ -75,13 +61,15 @@ createApp({
                     start: (this.currentPage - 1) * this.pageSize,
                     length: this.pageSize,
                     search: this.searchKeyword,
-                    status: this.statusFilter === 'all' ? '' : this.statusFilter
+                    status: this.statusFilter === 'all' ? '' : this.statusFilter,
+                    order_column: this.sortColumn,
+                    order_dir: this.sortDirection
                 });
                 
                 const response = await axios.get(`/api/index.php?model=parentproject&method=list&${params.toString()}`);
                 if (response.data && response.data.data) {
                     this.parentProjects = response.data.data;
-                    this.totalRecords = response.data.recordsTotal;
+                    this.totalRecords = response.data.recordsTotal || 0;
                 }
             } catch (error) {
                 console.error('Error loading parent projects:', error);
@@ -89,6 +77,54 @@ createApp({
             } finally {
                 this.loading = false;
             }
+        },
+        sortBy(column) {
+            // Map frontend column names to database column names
+            const columnMap = {
+                'project_number': 'project_number',
+                'project_name': 'project_name',
+                'construction_number': 'construction_number',
+                'company_name': 'company_name',
+                'request_date': 'request_date',
+                'child_project_count': 'child_project_count',
+                'created_by_name': 'created_by_name',
+                'created_at': 'created_at'
+            };
+            
+            const dbColumn = columnMap[column] || column;
+            
+            if (this.sortColumn === dbColumn) {
+                // Toggle direction if same column
+                this.sortDirection = this.sortDirection === 'ASC' ? 'DESC' : 'ASC';
+            } else {
+                // New column, default to ascending
+                this.sortColumn = dbColumn;
+                this.sortDirection = 'ASC';
+            }
+            // Reset to first page when sorting
+            this.currentPage = 1;
+            // Reload data with new sort
+            this.loadParentProjects();
+        },
+        getSortIcon(column) {
+            // Map frontend column names to database column names
+            const columnMap = {
+                'project_number': 'project_number',
+                'project_name': 'project_name',
+                'construction_number': 'construction_number',
+                'company_name': 'company_name',
+                'request_date': 'request_date',
+                'child_project_count': 'child_project_count',
+                'created_by_name': 'created_by_name',
+                'created_at': 'created_at'
+            };
+            
+            const dbColumn = columnMap[column] || column;
+            
+            if (this.sortColumn !== dbColumn) {
+                return 'fa-sort text-muted';
+            }
+            return this.sortDirection === 'ASC' ? 'fa-sort-up' : 'fa-sort-down';
         },
         onSearch() {
             this.currentPage = 1;

@@ -55,14 +55,24 @@ class Task extends ApplicationModel {
         
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
         
+        // Current user for reaction info
+        $current_user_id = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
+        
         $query = sprintf(
             "SELECT t.*, p.name as project_name, u.realname as assigned_to_name,
-            (SELECT COUNT(*) FROM {$this->table} WHERE parent_id = t.id) as subtask_count
+            (SELECT COUNT(*) FROM {$this->table} WHERE parent_id = t.id) as subtask_count,
+            -- Task like/dislike counts
+            (SELECT COUNT(*) FROM " . DB_PREFIX . "task_reactions tr WHERE tr.task_id = t.id AND tr.type = 'like') as like_count,
+            (SELECT COUNT(*) FROM " . DB_PREFIX . "task_reactions tr2 WHERE tr2.task_id = t.id AND tr2.type = 'dislike') as dislike_count,
+            -- Current user's reaction type (like/dislike)
+            (SELECT tr3.type FROM " . DB_PREFIX . "task_reactions tr3 
+             WHERE tr3.task_id = t.id AND tr3.user_id = '%s' LIMIT 1) as current_user_reaction
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id 
             LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             %s
             ORDER BY t.position, t.created_at DESC",
+            $this->quote($current_user_id),
             $where
         );
         
@@ -672,11 +682,32 @@ class Task extends ApplicationModel {
 
             $isDepartmentManager = ($departmentCheck && $departmentCheck['project_manager'] == 1);
         }
+        
+        // Check if user is project creator
+        $isCreator = false;
+        if (!$isAdmin && isset($project['created_by'])) {
+            $isCreator = (String($project['created_by']) === String($currentUserId));
+        }
+        
+        // Check if user is in the same department (even if not a member)
+        $isInDepartment = false;
+        if (!$isAdmin && $departmentCheck) {
+            $isInDepartment = true;
+        }
+        
+        // Fix: Check project_director safely
+        $isProjectDirector = false;
+        if ($departmentCheck && isset($departmentCheck['project_director'])) {
+            $isProjectDirector = ($departmentCheck['project_director'] == 1);
+        }
+        
         return [
-            'is_member' => $isAdmin || $isProjectManager || $isDepartmentManager || $departmentCheck['project_director'] == 1 || $isMember,
-            'is_director' => $isAdmin || $isProjectManager || $isDepartmentManager || $departmentCheck['project_director'] == 1,
+            'is_member' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector || $isMember || $isCreator || $isInDepartment,
+            'is_director' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector,
             'can_manage_project' => $isAdmin || $isProjectManager || $isDepartmentManager,
             'can_manage_department' => $isAdmin || $isDepartmentManager,
+            'is_creator' => $isCreator,
+            'is_in_department' => $isInDepartment,
             'rule' => $departmentCheck
         ];
     }
@@ -1083,6 +1114,74 @@ class Task extends ApplicationModel {
             'success' => true,
             'like_count' => intval($result['like_count']),
             'liked_by_names' => $result['liked_by_names'] ? explode(',', $result['liked_by_names']) : []
+        ];
+    }
+
+    /**
+     * Toggle like/dislike reaction for a task (with optional note)
+     */
+    function toggleTaskReaction() {
+        $task_id = isset($_POST['task_id']) ? intval($_POST['task_id']) : 0;
+        $type = isset($_POST['type']) ? $_POST['type'] : '';
+        $note = isset($_POST['note']) ? trim($_POST['note']) : '';
+        $user_id = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
+        
+        if (!$task_id || !$user_id || !in_array($type, ['like', 'dislike'])) {
+            return ['success' => false, 'message' => 'Invalid parameters'];
+        }
+        
+        $this->table = DB_PREFIX . 'task_reactions';
+        
+        // Check existing reaction for this user & task
+        $existing = $this->fetchOne(sprintf(
+            "SELECT * FROM %s WHERE task_id = %d AND user_id = '%s'",
+            $this->table,
+            $task_id,
+            $this->quote($user_id)
+        ));
+        
+        $now = date('Y-m-d H:i:s');
+        
+        if ($existing) {
+            // Update type & note
+            $data = [
+                'type' => $type,
+                'note' => $note,
+                'updated_at' => $now
+            ];
+            $this->query_update($data, ['id' => $existing['id']]);
+        } else {
+            // Insert new reaction
+            $data = [
+                'task_id' => $task_id,
+                'user_id' => $user_id,
+                'type' => $type,
+                'note' => $note,
+                'created_at' => $now,
+                'updated_at' => $now
+            ];
+            $this->query_insert($data);
+        }
+        
+        // Recalculate like/dislike counts
+        $countQuery = sprintf(
+            "SELECT 
+                SUM(CASE WHEN type = 'like' THEN 1 ELSE 0 END) as like_count,
+                SUM(CASE WHEN type = 'dislike' THEN 1 ELSE 0 END) as dislike_count
+            FROM " . DB_PREFIX . "task_reactions
+            WHERE task_id = %d",
+            $task_id
+        );
+        $counts = $this->fetchOne($countQuery);
+        
+        $this->table = DB_PREFIX . 'tasks'; // Reset table
+        
+        return [
+            'success' => true,
+            'task_id' => $task_id,
+            'like_count' => intval($counts['like_count'] ?? 0),
+            'dislike_count' => intval($counts['dislike_count'] ?? 0),
+            'current_user_reaction' => $type
         ];
     }
     

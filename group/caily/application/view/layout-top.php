@@ -32,20 +32,18 @@
             </li>
 
             <!-- Layouts -->
-            <li class="menu-item <?php if($directory == 'project') echo 'active open'; ?>">
+            <li class="menu-item <?php if($directory == 'project' || $directory == 'parent_project' || $directory == 'price_list') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base ti tabler-briefcase"></i>
                 <div><span data-i18n="プロジェクト">プロジェクト</span><span class="badge bg-label-primary ms-2"><?=$_SESSION['isProjectManager'] ? 'PM' : ''?></span></div>
               </a>
               <ul class="menu-sub">
-                <?php if($_SESSION['isProjectManager']){ ?>
-                <li class="menu-item <?php if($directory == 'parent_project' && $page == 'index') echo 'active'; ?>">
+                <li class="menu-item <?php if($directory == 'parent_project') echo 'active'; ?>">
                   <a href="<?=$root?>parent_project/" class="menu-link">
                     <div data-i18n="建物一覧">建物一覧</div>
                   </a>
                 </li>
-                <?php } ?>
-                <li class="menu-item <?php if($directory == 'project' && $page == 'index') echo 'active'; ?>">
+                <li class="menu-item <?php if($directory == 'project' && $page != 'project_gantt' && $page != 'custom_fields') echo 'active'; ?>">
                   <a href="<?=$root?>project/" class="menu-link">
                     <div data-i18n="案件一覧">案件一覧</div>
                   </a>
@@ -55,7 +53,7 @@
                     <div data-i18n="マイタスク">マイタスク</div>
                   </a>
                 </li> -->
-                <li class="menu-item <?php if($directory == 'project' && $page == 'gantt') echo 'active'; ?>">
+                <li class="menu-item <?php if($directory == 'project' && $page == 'project_gantt') echo 'active'; ?>">
                   <a href="<?=$root?>project/project_gantt.php" class="menu-link">
                     <div data-i18n="ガントチャート">ガントチャート</div>
                   </a>
@@ -66,11 +64,18 @@
                     <div data-i18n="設定">設定</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'pricelist') echo 'active'; ?>">
+                <li class="menu-item <?php if($directory == 'price_list') echo 'active'; ?>">
                   <a href="<?=$root?>price_list" class="menu-link">
                     <div data-i18n="価格表管理">価格表管理</div>
                   </a>
                 </li>
+                <?php if($_SESSION['authority'] == 'administrator'){ ?>
+                <li class="menu-item <?php if($directory == 'project' && $page == 'employeestatistics') echo 'active'; ?>">
+                  <a href="<?=$root?>project/employee_statistics.php" class="menu-link">
+                    <div data-i18n="従業員統計">従業員統計</div>
+                  </a>
+                </li>
+                <?php } ?>
                 <?php } ?>
                 
               </ul>

@@ -612,7 +612,8 @@ class NotificationManager {
             if (data && data.last_comment_id) {
                 reloadCallback({
                     last_comment_id: data.last_comment_id,
-                    timestamp: Date.now()
+                    thread_id: data.thread_id || null,
+                    timestamp: data.timestamp || Date.now()
                 });
             }
         });

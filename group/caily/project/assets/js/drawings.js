@@ -18,7 +18,8 @@ createApp({
                 id: null,
                 name: '',
                 status: 'draft',
-                file_path: ''
+                file_path: '',
+                price: null
             },
             
             // Bulk operations
@@ -268,7 +269,11 @@ createApp({
             try {
                 const response = await axios.get(`/api/index.php?model=drawing&method=list&project_id=${PROJECT_ID}`);
                 if (Array.isArray(response.data)) {
-                    this.drawings = response.data;
+                    this.drawings = response.data.map(d => ({
+                        ...d,
+                        // Ensure price is numeric or null
+                        price: d.price !== undefined && d.price !== null ? Number(d.price) : null
+                    }));
                 } else {
                     this.showError('ファイルの読み込みに失敗しました');
                 }
@@ -490,6 +495,9 @@ createApp({
                     formData.append('id', this.editingDrawing.id);
                     formData.append('name', this.editingDrawing.name);
                     formData.append('status', this.editingDrawing.status);
+                    if (this.editingDrawing.price != null && this.editingDrawing.price !== '') {
+                        formData.append('price', this.editingDrawing.price);
+                    }
                     
                     response = await axios.post('/api/index.php?model=drawing&method=edit', formData);
                 } else {
@@ -498,6 +506,9 @@ createApp({
                     formData.append('project_id', PROJECT_ID);
                     formData.append('name', this.editingDrawing.name);
                     formData.append('status', this.editingDrawing.status);
+                    if (this.editingDrawing.price != null && this.editingDrawing.price !== '') {
+                        formData.append('price', this.editingDrawing.price);
+                    }
                     
                     response = await axios.post('/api/index.php?model=drawing&method=add', formData);
                 }
@@ -681,7 +692,28 @@ createApp({
             }
         },
         
+        
+        // Update price for a single drawing when input changes
+        async updatePrice(drawing) {
+            try {
+                const formData = new FormData();
+                formData.append('id', drawing.id);
+                // If price is empty or null, send empty to allow backend to handle (e.g., set NULL)
+                formData.append('price', drawing.price != null && drawing.price !== '' ? drawing.price : '');
 
+                const response = await axios.post('/api/index.php?model=drawing&method=updatePrice', formData);
+
+                if (!(response.data && response.data.status === 'success')) {
+                    this.showError(response.data?.message || '単価の更新に失敗しました');
+                    // Reload drawings to revert on error
+                    this.loadDrawings();
+                }
+            } catch (error) {
+                console.error('Error updating price:', error);
+                this.showError('単価の更新に失敗しました');
+                this.loadDrawings();
+            }
+        },
         
         bulkChangeStatus() {
             if (this.selectedDrawings.length === 0) {

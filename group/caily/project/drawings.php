@@ -167,29 +167,10 @@ if (!$project_id) {
                                                 <i class="fa ms-1" :class="getSortIcon('status')"></i>
                                             </div>
                                         </th>
-                                        <th @click="sortBy('check_date')" style="cursor: pointer;">
+                                        <!-- Price column -->
+                                        <th style="min-width: 140px;">
                                             <div class="d-flex align-items-center">
-                                                <span>チェック日</span>
-                                                <i class="fa ms-1" :class="getSortIcon('check_date')"></i>
-                                            </div>
-                                        </th>
-                                        <th @click="sortBy('checked_by_name')" style="cursor: pointer;">
-                                            <div class="d-flex align-items-center">
-                                                <span>チェッカー</span>
-                                                <i class="fa ms-1" :class="getSortIcon('checked_by_name')"></i>
-                                            </div>
-                                        </th>
-                                        
-                                        <th @click="sortBy('revise_date')" style="cursor: pointer;">
-                                            <div class="d-flex align-items-center">
-                                                <span>修正日</span>
-                                                <i class="fa ms-1" :class="getSortIcon('revise_date')"></i>
-                                            </div>
-                                        </th>
-                                        <th @click="sortBy('revise_by_name')" style="cursor: pointer;">
-                                            <div class="d-flex align-items-center">
-                                                <span>修正者</span>
-                                                <i class="fa ms-1" :class="getSortIcon('revise_by_name')"></i>
+                                                <span>単価</span>
                                             </div>
                                         </th>
                                         <th width="150">操作</th>
@@ -253,23 +234,17 @@ if (!$project_id) {
                                                 </ul>
                                             </div>
                                         </td>
-                                        <td>{{ drawing.check_date ? formatDateTime(drawing.check_date) : '-' }}</td>
+                                        <!-- Price input column -->
                                         <td>
-                                            <div class="d-flex align-items-center">
-                                                <div class="avatar me-2" v-for="(userid, user_index) in (drawing.checked_by || '').split(',')" :key="userid && userid.trim()" data-bs-toggle="tooltip" :title="getUserCheckerFullNameText(drawing, user_index)">
-                                                    <img :src="getUserAvatar(userid.trim())" class="avatar-img rounded-circle" v-if="getUserAvatar(userid.trim()) && userid.trim()">
-                                                    <span class="avatar-initial rounded-circle bg-label-primary" v-else-if="userid.trim()!= ''">{{ getUserCheckerAvatarText(drawing, user_index) }}</span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        
-                                        <td>{{ drawing.revise_date ? formatDateTime(drawing.revise_date) : '-' }}</td>
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                <div class="avatar me-2" v-for="(userid, user_index) in (drawing.revise_by || '').split(',')" :key="userid && userid.trim()" data-bs-toggle="tooltip" :title="getUserReviseByFullNameText(drawing, user_index)">
-                                                    <img :src="getUserAvatar(userid.trim())" class="avatar-img rounded-circle" v-if="getUserAvatar(userid.trim()) && userid.trim()">
-                                                    <span class="avatar-initial rounded-circle bg-label-primary" v-else-if="userid.trim()!= ''">{{ getUserReviseByAvatarText(drawing, user_index) }}</span>
-                                                </div>
+                                            <div class="input-group input-group-sm" style="max-width: 140px;">
+                                                <span class="input-group-text">¥</span>
+                                                <input type="number"
+                                                       class="form-control text-end"
+                                                       v-model.number="drawing.price"
+                                                       min="0"
+                                                       step="1"
+                                                       @click.stop
+                                                       @change="updatePrice(drawing)">
                                             </div>
                                         </td>
                                         <td>

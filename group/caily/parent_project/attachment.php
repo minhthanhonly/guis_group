@@ -8,9 +8,6 @@ if (!$parent_project_id) {
     header('Location: index.php');
     exit;
 }
-if(!$_SESSION['isProjectManager']){
-    die('権限がありません。');
-}
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
     <!-- Service Worker Status Indicator -->
@@ -53,7 +50,7 @@ if(!$_SESSION['isProjectManager']){
             </div>
 
             <!-- Main Content -->
-            <div class="col-12">
+            <div class="col-12" v-if="isProjectManager">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">
@@ -268,6 +265,12 @@ if(!$_SESSION['isProjectManager']){
                     </div>
                 </div>
             </div>
+            <div class="col-12" v-else> <div class="text-center py-5">
+                <div class="text-muted">
+                    <i class="fa fa-folder-open fa-3x mb-2"></i>
+                    <p>権限がありません</p>
+                </div>
+            </div></div>
         </div>
 
         <!-- Create Folder Modal -->
@@ -380,7 +383,7 @@ if(!$_SESSION['isProjectManager']){
             </div>
         </div>
     </div>
-    
+  
     <!-- Fixed Bulk Actions Bar -->
     <div v-if="selectedFileIds.length > 0" class="bulk-actions-bar">
         <div class="container-fluid">
@@ -666,6 +669,7 @@ $view->footing();
 <!-- Define PARENT_PROJECT_ID before loading Vue and attachment.js -->
 <script>
 const PARENT_PROJECT_ID = <?php echo $parent_project_id; ?>;
+const IS_PROJECT_MANAGER = <?php echo isset($_SESSION['isProjectManager']) && $_SESSION['isProjectManager'] ? 'true' : 'false'; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="<?=ROOT?>assets/js/sw-manager.js?v=<?=CACHE_VERSION?>"></script>

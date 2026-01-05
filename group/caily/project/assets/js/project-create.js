@@ -40,13 +40,15 @@ createApp({
                 totalDays: 0
             },
             statuses: [
-                { value: 'draft', label: '下書き', color: 'secondary' },
-                { value: 'open', label: 'オープン', color: 'info' },
-                { value: 'confirming', label: '確認中', color: 'warning' },
+                { value: 'draft', label: '受付', color: 'secondary' },
+                { value: 'open', label: '納期検討', color: 'info' },
+                { value: 'confirming', label: '仮受', color: 'warning' },
+                { value: 'quotation', label: '見積', color: 'warning' },
+                { value: 'contract', label: '請負', color: 'warning' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
+                { value: 'completed', label: '納品', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
-                { value: 'completed', label: '完了', color: 'success' },
-                { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+                { value: 'cancelled', label: '中止', color: 'danger' }
             ],
             priorities: [
                 { value: 'low', label: '低', color: 'secondary' },

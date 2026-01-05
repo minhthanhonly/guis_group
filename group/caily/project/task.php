@@ -339,10 +339,34 @@ if (!$project_id) {
                     </div>
                     <div class="col-md-2">
                         <div class="d-flex align-items-center justify-content-end gap-1 pe-2">
-                            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.project_comment == 1)"class="btn btn-sm btn-outline-info position-relative" @click="openTaskComments(task)" title="コメント">
+                            <!-- Like button -->
+                            <button 
+                                class="position-relative"
+                                :class="getTaskReactionButtonClass(task, 'like')"
+                                @click="openReactionModal(task, 'like')"
+                                title="いいね">
+                                <i class="fas fa-thumbs-up"></i>
+                                <span v-if="getTaskReactionCount(task, 'like') > 0" class="ms-1">
+                                    {{ getTaskReactionCount(task, 'like') }}
+                                </span>
+                            </button>
+                            <!-- Dislike button -->
+                            <button 
+                                class="position-relative"
+                                :class="getTaskReactionButtonClass(task, 'dislike')"
+                                @click="openReactionModal(task, 'dislike')"
+                                title="よくない">
+                                <i class="fas fa-thumbs-down"></i>
+                                <span v-if="getTaskReactionCount(task, 'dislike') > 0" class="ms-1">
+                                    {{ getTaskReactionCount(task, 'dislike') }}
+                                </span>
+                            </button>
+                            <!-- Comment button -->
+                            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.project_comment == 1)" class="btn btn-sm btn-outline-info position-relative" @click="openTaskComments(task)" title="コメント">
                                     <i class="fas fa-comment"></i>
                                     <span v-if="getUnreadCommentCount(task.id) > 0" class="position-absolute top-0 start-100 translate-middle text-white badge rounded-pill bg-danger" style="font-size:10px;">{{ getUnreadCommentCount(task.id) }}</span>
                             </button>
+                            <!-- Edit / indent / delete buttons -->
                             <button v-if="permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task))" class="btn btn-sm btn-outline-primary" @click="editTaskInline(task)"><i class="fas fa-edit"></i></button>
                             
                             <button v-if="task.indent_level > 0 && (permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))" class="btn btn-sm btn-outline-secondary" @click="decreaseIndent(task)" title="サブタスクを解除">
@@ -390,6 +414,34 @@ if (!$project_id) {
         </div>
     </div>
 
+    <!-- Task Reaction Modal -->
+    <div class="modal fade" id="taskReactionModal" tabindex="-1" aria-labelledby="taskReactionModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="taskReactionModalLabel">
+                        <span v-if="reactionModal.type === 'like'">いいねの理由</span>
+                        <span v-else-if="reactionModal.type === 'dislike'">よくないの理由</span>
+                        <span v-else>リアクション</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">メモ / 理由（任意）</label>
+                        <textarea class="form-control" rows="3" v-model="reactionModal.note"
+                                  placeholder="リアクションの理由を入力してください..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" @click="submitReaction">
+                        <i class="fas fa-save me-1"></i>保存
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Task Details Modal -->
     <div class="modal fade" id="taskDetailsModal" tabindex="-1" aria-labelledby="taskDetailsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-fullscreen" style="max-width: 70%;max-height: 98vh; margin: 1% auto; 0">
@@ -413,7 +465,7 @@ if (!$project_id) {
                                         <i class="fas fa-file-alt d-sm-none"></i>
                                     </button>
                                 </li>
-                                <li class="nav-item" role="presentation">
+                                <!--<li class="nav-item" role="presentation">
                                     <button type="button" class="nav-link waves-effect" role="tab" data-bs-toggle="tab" data-bs-target="#comments" aria-controls="comments" aria-selected="false" tabindex="-1">
                                         <span class="d-none d-sm-inline-flex align-items-center">
                                             <i class="fas fa-comments me-1_5"></i>コメント
@@ -421,7 +473,7 @@ if (!$project_id) {
                                         </span>
                                         <i class="fas fa-comments d-sm-none"></i>
                                     </button>
-                                </li>
+                                </li>-->
                                 <li class="nav-item" role="presentation">
                                     <button type="button" class="nav-link waves-effect" role="tab" data-bs-toggle="tab" data-bs-target="#history" aria-controls="history" aria-selected="false" tabindex="-1">
                                         <span class="d-none d-sm-inline-flex align-items-center">

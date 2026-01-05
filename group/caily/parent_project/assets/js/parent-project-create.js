@@ -133,7 +133,7 @@ createApp({
             }
             
             if (!this.parentProject.guis_receiver) {
-                this.validationErrors.guis_receiver = 'GUIS　受付者は必須です';
+                this.validationErrors.guis_receiver = 'GUIS受付者は必須です';
                 valid = false;
             }
             
@@ -163,7 +163,6 @@ createApp({
             if (!this.validateParentProjectForm()) {
                 return;
             }
-            console.log(this.parentProject);
             
             try {
                 const formData = new FormData();
@@ -206,7 +205,7 @@ createApp({
                     // Show success message with SweetAlert2
                     Swal.fire({
                         title: '成功',
-                        text: '親プロジェクトを作成しました。',
+                        text: '建築物を登録しました。',
                         icon: 'success',
                         confirmButtonText: 'OK',
                         confirmButtonColor: '#3085d6'
@@ -219,11 +218,11 @@ createApp({
                         }
                     });
                 } else {
-                    showMessage('親プロジェクトの作成に失敗しました。', true);
+                    showMessage('建物の登録に失敗しました。', true);
                 }
             } catch (error) {
                 console.error('Error creating parent project:', error);
-                showMessage('親プロジェクトの作成に失敗しました。', true);
+                showMessage('建物の作成に失敗しました。', true);
             }
         },
         initSelect2() {

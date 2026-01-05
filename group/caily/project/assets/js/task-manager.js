@@ -88,6 +88,13 @@ const TaskApp = createApp({
                 toggleLike: '/api/index.php?model=task&method=toggleLike'
             },
             unreadComments: {}, // { taskId: count }
+            // Task like/dislike reaction modal
+            reactionModal: {
+                show: false,
+                taskId: null,
+                type: null, // 'like' or 'dislike'
+                note: ''
+            }
         }
     },
     
@@ -1782,6 +1789,81 @@ const TaskApp = createApp({
         
         getUnreadCommentCount(taskId) {
             return this.unreadComments[taskId] || 0;
+        },
+        
+        // --- Task like/dislike reactions ---
+        getTaskReactionCount(task, type) {
+            if (!task) return 0;
+            return type === 'like' ? (task.like_count || 0) : (task.dislike_count || 0);
+        },
+
+        getTaskReactionButtonClass(task, type) {
+            const base = 'btn btn-sm';
+            const isActive = task && task.current_user_reaction === type;
+            if (type === 'like') {
+                return `${base} ${isActive ? 'btn-success' : 'btn-outline-success'}`;
+            } else {
+                return `${base} ${isActive ? 'btn-danger' : 'btn-outline-danger'}`;
+            }
+        },
+
+        async openReactionModal(task, type) {
+            if (!task || !task.id) return;
+            this.reactionModal.taskId = task.id;
+            this.reactionModal.type = type;
+            this.reactionModal.note = '';
+            this.reactionModal.show = true;
+
+            // Open Bootstrap modal
+            this.$nextTick(() => {
+                const modalEl = document.getElementById('taskReactionModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.show();
+                }
+            });
+        },
+
+        async submitReaction() {
+            if (!this.reactionModal.taskId || !this.reactionModal.type) return;
+            try {
+                const formData = new FormData();
+                formData.append('task_id', this.reactionModal.taskId);
+                formData.append('type', this.reactionModal.type);
+                formData.append('note', this.reactionModal.note || '');
+
+                const response = await axios.post('/api/index.php?model=task&method=toggleTaskReaction', formData);
+                const data = response.data || {};
+
+                if (!data.success) {
+                    this.showMessage(data.message || 'リアクションの更新に失敗しました', true);
+                    return;
+                }
+
+                // Update counts and current_user_reaction for the task
+                const task = this.tasks.find(t => t.id == this.reactionModal.taskId);
+                if (task) {
+                    task.like_count = data.like_count;
+                    task.dislike_count = data.dislike_count;
+                    task.current_user_reaction = data.current_user_reaction;
+                }
+
+                // Close modal
+                const modalEl = document.getElementById('taskReactionModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+                }
+                this.reactionModal.show = false;
+                this.reactionModal.taskId = null;
+                this.reactionModal.type = null;
+                this.reactionModal.note = '';
+
+                this.showMessage('リアクションを保存しました', false);
+            } catch (error) {
+                console.error('Error submitting reaction:', error);
+                this.showMessage('リアクションの更新に失敗しました', true);
+            }
         },
         
         openTaskComments(task) {

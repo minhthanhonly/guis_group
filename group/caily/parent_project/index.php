@@ -1,10 +1,6 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('建物一覧');
-
-if(!$_SESSION['isProjectManager']){
-    die('権限がありません。');
-}
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
 
@@ -50,14 +46,38 @@ if(!$_SESSION['isProjectManager']){
                         <table v-else class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>番号</th>
-                                    <th>会社名</th>
-                                    <th>お施主様名</th>
-                                    <th>工事番号</th>
-                                    <th>依頼日</th>
-                                    <th>件数</th>
-                                    <th>作成者</th>
-                                    <th>作成日</th>
+                                    <th @click="sortBy('project_number')" style="cursor: pointer;" class="user-select-none">
+                                        番号
+                                        <i class="fa fa-fw" :class="getSortIcon('project_number')"></i>
+                                    </th>
+                                    <th @click="sortBy('project_name')" style="cursor: pointer;" class="user-select-none">
+                                        お施主様名
+                                        <i class="fa fa-fw" :class="getSortIcon('project_name')"></i>
+                                    </th>
+                                    <th @click="sortBy('construction_number')" style="cursor: pointer;" class="user-select-none">
+                                        工事番号
+                                        <i class="fa fa-fw" :class="getSortIcon('construction_number')"></i>
+                                    </th>
+                                    <th @click="sortBy('company_name')" style="cursor: pointer;" class="user-select-none">
+                                        会社名
+                                        <i class="fa fa-fw" :class="getSortIcon('company_name')"></i>
+                                    </th>
+                                    <th @click="sortBy('request_date')" style="cursor: pointer;" class="user-select-none">
+                                        依頼日
+                                        <i class="fa fa-fw" :class="getSortIcon('request_date')"></i>
+                                    </th>
+                                    <th @click="sortBy('child_project_count')" style="cursor: pointer;" class="user-select-none">
+                                        件数
+                                        <i class="fa fa-fw" :class="getSortIcon('child_project_count')"></i>
+                                    </th>
+                                    <th @click="sortBy('created_by_name')" style="cursor: pointer;" class="user-select-none">
+                                        作成者
+                                        <i class="fa fa-fw" :class="getSortIcon('created_by_name')"></i>
+                                    </th>
+                                    <th @click="sortBy('created_at')" style="cursor: pointer;" class="user-select-none">
+                                        作成日
+                                        <i class="fa fa-fw" :class="getSortIcon('created_at')"></i>
+                                    </th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
@@ -66,7 +86,6 @@ if(!$_SESSION['isProjectManager']){
                                     <td>
                                         <span class="badge bg-label-info">{{ project.project_number || '-' }}</span>
                                     </td>
-                                    <td>{{ project.company_name }}</td>
                                     <td>
                                         <a :href="'detail.php?id=' + project.id" class="text-decoration-none" 
                                            :title="'詳細を表示: ' + project.project_name">
@@ -74,6 +93,7 @@ if(!$_SESSION['isProjectManager']){
                                         </a>
                                     </td>
                                     <td>{{ project.construction_number || '-' }}</td>
+                                    <td>{{ project.company_name }}</td>
                                     <td>{{ formatDate(project.request_date) }}</td>
                                     <td>
                                         <span v-if="project.child_project_count > 0" class="badge bg-info" 
@@ -90,15 +110,14 @@ if(!$_SESSION['isProjectManager']){
                                                title="詳細を表示">
                                                 <i class="fa fa-eye"></i>
                                             </a>
-                                            <a :href="'detail.php?id=' + project.id + '&edit=1'" class="btn btn-outline-secondary" 
-                                               title="編集">
-                                                <i class="fa fa-edit"></i>
-                                            </a>
-                                            <button v-if="project.child_project_count == 0" class="btn btn-outline-danger" @click="deleteParentProject(project.id)" 
-                                                     title="削除" 
-                                                     :disabled="project.child_project_count > 0">
-                                                 <i class="fa fa-trash"></i>
-                                             </button>
+                                            
+                                            <template v-if="isProjectManager">
+                                                <button v-if="project.child_project_count == 0" class="btn btn-outline-danger" @click="deleteParentProject(project.id)" 
+                                                         title="削除" 
+                                                         :disabled="project.child_project_count > 0">
+                                                     <i class="fa fa-trash"></i>
+                                                 </button>
+                                            </template>
                                         </div>
                                     </td>
                                 </tr>
@@ -149,6 +168,10 @@ $view->footing();
     border-top: none;
     font-weight: 600;
     color: #495057;
+}
+
+.table th[style*="cursor: pointer"]:hover {
+    background-color: #e9ecef;
 }
 
 .table td {
@@ -224,5 +247,6 @@ function showMessage(message, isError = false) {
         });
     }
 }
+const IS_PROJECT_MANAGER = <?php echo isset($_SESSION['isProjectManager']) && $_SESSION['isProjectManager'] ? 'true' : 'false'; ?>;
 </script>
 <script src="assets/js/parent-project-index.js?v=<?=CACHE_VERSION?>"></script> 

@@ -3,6 +3,7 @@ const { createApp } = Vue;
 createApp({
     data() {
         return {
+            isProjectManager: typeof IS_PROJECT_MANAGER !== 'undefined' ? IS_PROJECT_MANAGER : false,
             parentProject: null,
             childProjects: [],
             loading: true,
@@ -47,14 +48,15 @@ createApp({
                 { value: 'cancelled', label: 'キャンセル', color: 'danger' }
             ],
             projectStatuses: [
-                { value: 'draft', label: '下書き', color: 'secondary' },
-                { value: 'open', label: 'オープン', color: 'info' },
-                { value: 'confirming', label: '確認中', color: 'warning' },
+                { value: 'draft', label: '受付', color: 'secondary' },
+                { value: 'open', label: '納期検討', color: 'info' },
+                { value: 'confirming', label: '仮受', color: 'info' },
+                { value: 'quotation', label: '見積', color: 'info' },
+                { value: 'contract', label: '請負', color: 'info' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
+                { value: 'completed', label: '納品', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
-                { value: 'quoted', label: '已报价', color: 'info' },
-                { value: 'completed', label: '完了', color: 'success' },
-                { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+                { value: 'cancelled', label: '中止', color: 'danger' }
             ],
             // Child project modal data
             newChildProject: {
@@ -971,19 +973,22 @@ createApp({
                     if (deliveryDatePickerEl._flatpickr) {
                         deliveryDatePickerEl._flatpickr.destroy();
                     }
-                                    deliveryDatePickerEl._flatpickr = flatpickr(deliveryDatePickerEl, {
-                    dateFormat: 'Y年n月j日',
-                    altFormat: 'Y年n月j日',
-                    locale: 'ja',
-                    allowInput: false,
-                    clickOpens: false,
-                    onChange: (selectedDates, dateStr) => {
-                        // Update the visible input with the selected date
-                        if (dateStr) {
-                            this.newQuotation.delivery_date = dateStr;
+                    const modalElement = document.getElementById('createQuotationModal');
+                    deliveryDatePickerEl._flatpickr = flatpickr(deliveryDatePickerEl, {
+                        dateFormat: 'Y年n月j日',
+                        altFormat: 'Y年n月j日',
+                        locale: 'ja',
+                        allowInput: false,
+                        clickOpens: false,
+                        static: false,
+                        appendTo: modalElement ? modalElement : document.body,
+                        onChange: (selectedDates, dateStr) => {
+                            // Update the visible input with the selected date
+                            if (dateStr) {
+                                this.newQuotation.delivery_date = dateStr;
+                            }
                         }
-                    }
-                });
+                    });
                     
                     // Set initial date if available and it's a valid date
                     if (this.newQuotation.delivery_date) {
@@ -1396,9 +1401,18 @@ createApp({
 
         async showCreateChildProjectModal() {
             this.resetChildProjectForm();
+            // Set default name from parent project's project_name (お施主様名)
+            if (this.parentProject && this.parentProject.project_name) {
+                this.newChildProject.name = this.parentProject.project_name;
+            }
+            // Set default start_date (9:00) and end_date (18:00) for today
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            this.newChildProject.start_date = `${year}/${month}/${day} 09:00`;
+            this.newChildProject.end_date = `${year}/${month}/${day} 18:00`;
             this.loadDepartments();
-            
-
             
             this.generateChildProjectNumber();
             
@@ -1481,7 +1495,7 @@ createApp({
             // Initialize start date picker
             const startDatePicker = document.getElementById('start_date_picker');
             if (startDatePicker) {
-                flatpickr(startDatePicker, {
+                const startDateOptions = {
                     enableTime: true,
                     dateFormat: "Y/m/d H:i",
                     time_24hr: true,
@@ -1491,13 +1505,18 @@ createApp({
                     onChange: (selectedDates, dateStr) => {
                         this.newChildProject.start_date = dateStr;
                     }
-                });
+                };
+                // Set default date if value exists
+                if (this.newChildProject.start_date) {
+                    startDateOptions.defaultDate = this.newChildProject.start_date;
+                }
+                flatpickr(startDatePicker, startDateOptions);
             }
             
             // Initialize end date picker
             const endDatePicker = document.getElementById('end_date_picker');
             if (endDatePicker) {
-                flatpickr(endDatePicker, {
+                const endDateOptions = {
                     enableTime: true,
                     dateFormat: "Y/m/d H:i",
                     time_24hr: true,
@@ -1507,7 +1526,12 @@ createApp({
                     onChange: (selectedDates, dateStr) => {
                         this.newChildProject.end_date = dateStr;
                     }
-                });
+                };
+                // Set default date if value exists
+                if (this.newChildProject.end_date) {
+                    endDateOptions.defaultDate = this.newChildProject.end_date;
+                }
+                flatpickr(endDatePicker, endDateOptions);
             }
         },
         
@@ -2313,7 +2337,7 @@ createApp({
                 formData.append('project_order_type', this.newChildProject.project_order_type || '');
                 formData.append('parent_project_id', this.newChildProject.parent_project_id);
 
-                formData.append('is_kadai', '1');
+                formData.append('is_kadai', '0');
                 formData.append('status', 'draft');
 
                 const response = await axios.post('/api/index.php?model=project&method=create', formData);
@@ -2982,8 +3006,14 @@ createApp({
                         await this.updateSelectedChildProjectsStatus();
                     }
                     
-                    // Update child project amounts based on quotation items
-                    await this.updateChildProjectAmountsAfterQuotation();
+                    // Update child project amounts based on quotation status
+                    if (this.newQuotation.status === 'キャンセル' || this.newQuotation.status === '却下') {
+                        // Set project amounts to 0 for cancelled or rejected quotations
+                        await this.resetChildProjectAmountsFromItems(this.newQuotation.items);
+                    } else {
+                        // Update project amounts from quotation items for other statuses
+                        await this.updateChildProjectAmountsAfterQuotation();
+                    }
                     
                     // Reload child projects to show updated amounts
                     await this.loadChildProjects();
@@ -3088,9 +3118,17 @@ createApp({
             } else {
                 // Clear items error if validation passes
                 delete this.quotationValidationErrors.items;
+                
+                // Validate that all items have project_id
+                const itemsWithoutProjectId = this.newQuotation.items.filter((item, index) => {
+                    return !item.project_id || item.project_id === '' || item.project_id === null;
+                });
+                
+                if (itemsWithoutProjectId.length > 0) {
+                    this.quotationValidationErrors.items = 'すべての商品明細に案件番号を選択してください';
+                    isValid = false;
+                }
             }
-
-            // Note: Project ID assignment is optional at creation time - users can assign them later
             
             // Validate child project selection
             if (!this.selectedChildProjectIds || this.selectedChildProjectIds.length === 0) {
@@ -3138,11 +3176,20 @@ createApp({
         },
 
         validateProjectIdSelection() {
-            // Don't validate project IDs - this is now optional
-            // Project ID assignment can be done later by users
-            // Clear any existing project ID validation errors
-            if (this.quotationValidationErrors.items && this.quotationValidationErrors.items.includes('プロジェクト番号が選択されていません')) {
-                delete this.quotationValidationErrors.items;
+            // Validate project IDs for all items
+            if (this.newQuotation.items && Array.isArray(this.newQuotation.items) && this.newQuotation.items.length > 0) {
+                const itemsWithoutProjectId = this.newQuotation.items.filter((item) => {
+                    return !item.project_id || item.project_id === '' || item.project_id === null;
+                });
+                
+                if (itemsWithoutProjectId.length > 0) {
+                    this.quotationValidationErrors.items = 'すべての商品明細に案件番号を選択してください';
+                } else {
+                    // Clear error if all items have project_id
+                    if (this.quotationValidationErrors.items && this.quotationValidationErrors.items.includes('案件番号')) {
+                        delete this.quotationValidationErrors.items;
+                    }
+                }
             }
         },
 
@@ -3284,14 +3331,13 @@ createApp({
                     // Reload quotations to get updated data
                     await this.loadQuotations();
                     
-                    // Update child project amounts if status change affects project totals
-                    if (status === '承認済み' || status === '発行済み') {
-                        await this.updateChildProjectAmountsFromQuotation(quotationId);
-                        // Reload child projects to show updated amounts
-                        await this.loadChildProjects();
-                    }
+                    // Note: Backend API already updates project amounts automatically
+                    // We only need to reload child projects to show the updated amounts
+                    // Frontend update is optional and only for immediate UI feedback
+                    // Reload child projects to show updated amounts (this ensures we have the latest data from backend)
+                    await this.loadChildProjects();
                     
-                    showMessage('見積書のステータスが更新されました。', false);
+                    showMessage('見積書のステータスが更新され、関連プロジェクトの金額も更新されました。', false);
                 } else {
                     showMessage('ステータスの更新に失敗しました。', true);
                 }
@@ -4248,43 +4294,72 @@ createApp({
             try {
                 // Use editingQuotation data if available and matches quotationId, otherwise find in quotations array
                 let quotationItems = null;
+                let quotationTotal = 0;
+                
                 if (this.editingQuotation && parseInt(this.editingQuotation.id) === parseInt(quotationId)) {
                     quotationItems = this.editingQuotation.items;
+                    quotationTotal = parseFloat(this.editingQuotation.total_with_tax) || 0;
                 } else {
                     const quotation = this.quotations.find(q => parseInt(q.id) === parseInt(quotationId));
                     if (quotation) {
                         quotationItems = quotation.items;
+                        quotationTotal = parseFloat(quotation.total_with_tax) || 0;
+                    }
+                }
+                
+                // If items not found, load quotation detail from API
+                if (!quotationItems || quotationItems.length === 0) {
+                    try {
+                        const detailResponse = await axios.get(`/api/index.php?model=quotation&method=get&id=${quotationId}`);
+                        if (detailResponse.data && detailResponse.data.status === 'success' && detailResponse.data.data) {
+                            quotationItems = detailResponse.data.data.items || [];
+                            quotationTotal = parseFloat(detailResponse.data.data.total_with_tax) || 0;
+                            
+                            // Update local quotation data
+                            const quotation = this.quotations.find(q => parseInt(q.id) === parseInt(quotationId));
+                            if (quotation) {
+                                quotation.items = quotationItems;
+                            }
+                        }
+                    } catch (error) {
+                        // Silently handle error - backend API should have already updated the amounts
                     }
                 }
                 
                 if (!quotationItems || quotationItems.length === 0) {
+                    // Backend API should have already updated the amounts
                     return;
                 }
 
-                // Group items by project_id and calculate totals
-                const projectAmounts = {};
-                
-                // Get tax rate from the quotation data
-                let taxRate = 0;
-                if (this.editingQuotation && parseInt(this.editingQuotation.id) === parseInt(quotationId)) {
-                    taxRate = parseFloat(this.editingQuotation.tax_rate) || 0;
-                } else {
-                    const quotation = this.quotations.find(q => parseInt(q.id) === parseInt(quotationId));
-                    if (quotation) {
-                        taxRate = parseFloat(quotation.tax_rate) || 0;
+                // Calculate total amount of all items (without tax)
+                let totalItemsAmount = 0;
+                quotationItems.forEach(item => {
+                    if (item.project_id && item.amount) {
+                        totalItemsAmount += parseFloat(item.amount) || 0;
                     }
+                });
+
+                if (totalItemsAmount === 0) {
+                    return;
                 }
+
+                // Calculate ratio to distribute quotation total_with_tax proportionally
+                const ratio = quotationTotal / totalItemsAmount;
+
+                // Group items by project_id and calculate totals based on quotation total_with_tax
+                const projectAmounts = {};
                 
                 quotationItems.forEach(item => {
                     if (item.project_id && item.amount) {
                         const projectId = item.project_id;
+                        const itemAmount = parseFloat(item.amount) || 0;
+                        // Calculate proportional amount from quotation total_with_tax
+                        const projectAmount = itemAmount * ratio;
+                        
                         if (!projectAmounts[projectId]) {
                             projectAmounts[projectId] = 0;
                         }
-                        // Add amount including tax (amount * (1 + tax_rate/100))
-                        const itemAmount = parseFloat(item.amount) || 0;
-                        const itemAmountWithTax = itemAmount * (1 + taxRate / 100);
-                        projectAmounts[projectId] += itemAmountWithTax;
+                        projectAmounts[projectId] += projectAmount;
                     }
                 });
 
@@ -4333,6 +4408,115 @@ createApp({
 
             } catch (error) {
                 console.error('Error updating child project amounts from quotation:', error);
+                showMessage('子プロジェクトの金額の更新中にエラーが発生しました。', true);
+            }
+        },
+
+        async resetChildProjectAmountsFromItems(items) {
+            try {
+                if (!items || items.length === 0) {
+                    return;
+                }
+
+                // Get unique project IDs from the items
+                const projectIds = [...new Set(items
+                    .filter(item => item.project_id)
+                    .map(item => item.project_id))];
+
+                if (projectIds.length === 0) {
+                    return;
+                }
+
+                // Reset amount to 0 for each affected project
+                let successCount = 0;
+                let errorCount = 0;
+
+                for (const projectId of projectIds) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', projectId);
+                        formData.append('amount', 0);
+                        
+                        const response = await axios.post('/api/index.php?model=project&method=updateAmount', formData);
+                        
+                        if (response.data && response.data.status === 'success') {
+                            successCount++;
+                            
+                            // Also update local childProjects array
+                            const localProject = this.childProjects.find(p => p.id == projectId);
+                            if (localProject) {
+                                localProject.total_amount = 0;
+                                localProject.amount = 0; // Update both fields for compatibility
+                            }
+                        } else {
+                            console.warn(`Failed to reset child project ${projectId} amount:`, response.data?.message);
+                            errorCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Error resetting child project ${projectId} amount:`, error);
+                        errorCount++;
+                    }
+                }
+
+                // Force Vue reactivity update
+                this.$forceUpdate();
+
+                // Show appropriate message based on results
+                if (successCount > 0 && errorCount === 0) {
+                    showMessage(`${successCount}件の子プロジェクトの金額が0に設定されました。`, false);
+                } else if (successCount > 0 && errorCount > 0) {
+                    showMessage(`${successCount}件の子プロジェクトの金額が0に設定されましたが、${errorCount}件の更新に失敗しました。`, true);
+                } else if (successCount === 0) {
+                    showMessage('子プロジェクトの金額の更新に失敗しました。', true);
+                }
+
+            } catch (error) {
+                console.error('Error resetting child project amounts from items:', error);
+                showMessage('子プロジェクトの金額の更新中にエラーが発生しました。', true);
+            }
+        },
+
+        async resetChildProjectAmountsFromQuotation(quotationId) {
+            try {
+                // Get quotation data
+                let quotationItems = null;
+                if (this.editingQuotation && parseInt(this.editingQuotation.id) === parseInt(quotationId)) {
+                    quotationItems = this.editingQuotation.items;
+                } else {
+                    const quotation = this.quotations.find(q => parseInt(q.id) === parseInt(quotationId));
+                    if (quotation) {
+                        quotationItems = quotation.items;
+                    }
+                }
+                
+                // If items not found, load quotation detail from API
+                if (!quotationItems || quotationItems.length === 0) {
+                    try {
+                        const detailResponse = await axios.get(`/api/index.php?model=quotation&method=get&id=${quotationId}`);
+                        if (detailResponse.data && detailResponse.data.status === 'success' && detailResponse.data.data) {
+                            quotationItems = detailResponse.data.data.items || [];
+                            
+                            // Update local quotation data
+                            const quotation = this.quotations.find(q => parseInt(q.id) === parseInt(quotationId));
+                            if (quotation) {
+                                quotation.items = quotationItems;
+                            }
+                        }
+                    } catch (error) {
+                        // Silently handle error - backend API should have already updated the amounts
+                    }
+                }
+                
+                if (!quotationItems || quotationItems.length === 0) {
+                    // Backend API should have already updated the amounts
+                    return;
+                }
+
+                // Use the helper function
+                await this.resetChildProjectAmountsFromItems(quotationItems);
+
+            } catch (error) {
+                console.error('Error resetting child project amounts from quotation:', error);
                 showMessage('子プロジェクトの金額の更新中にエラーが発生しました。', true);
             }
         },
@@ -4869,11 +5053,20 @@ createApp({
 
         // Validation methods for edit
         validateProjectIdSelectionForEdit() {
-            // Don't validate project IDs - this is now optional
-            // Project ID assignment can be done later by users
-            // Clear any existing project ID validation errors
-            if (this.editQuotationValidationErrors.items && this.editQuotationValidationErrors.items.includes('プロジェクト番号が選択されていません')) {
-                delete this.editQuotationValidationErrors.items;
+            // Validate project IDs for all items
+            if (this.editingQuotation.items && Array.isArray(this.editingQuotation.items) && this.editingQuotation.items.length > 0) {
+                const itemsWithoutProjectId = this.editingQuotation.items.filter((item) => {
+                    return !item.project_id || item.project_id === '' || item.project_id === null;
+                });
+                
+                if (itemsWithoutProjectId.length > 0) {
+                    this.editQuotationValidationErrors.items = 'すべての商品明細に案件番号を選択してください';
+                } else {
+                    // Clear error if all items have project_id
+                    if (this.editQuotationValidationErrors.items && this.editQuotationValidationErrors.items.includes('案件番号')) {
+                        delete this.editQuotationValidationErrors.items;
+                    }
+                }
             }
         },
 
@@ -5050,8 +5243,14 @@ createApp({
                 if (response.data && response.data.status === 'success') {
                     showMessage('見積書が正常に更新されました。', false);
                     
-                    // Update child project amounts
-                    await this.updateChildProjectAmountsFromQuotation(parseInt(this.editingQuotation.id));
+                    // Update child project amounts based on status
+                    if (this.editingQuotation.status === 'キャンセル' || this.editingQuotation.status === '却下') {
+                        // Set project amounts to 0 for cancelled or rejected quotations
+                        await this.resetChildProjectAmountsFromQuotation(parseInt(this.editingQuotation.id));
+                    } else {
+                        // Update project amounts from quotation items for other statuses
+                        await this.updateChildProjectAmountsFromQuotation(parseInt(this.editingQuotation.id));
+                    }
                     
                     // Refresh data
                     await this.loadQuotations();
@@ -5108,9 +5307,17 @@ createApp({
             } else {
                 // Clear items error if validation passes
                 delete this.editQuotationValidationErrors.items;
+                
+                // Validate that all items have project_id
+                const itemsWithoutProjectId = this.editingQuotation.items.filter((item, index) => {
+                    return !item.project_id || item.project_id === '' || item.project_id === null;
+                });
+                
+                if (itemsWithoutProjectId.length > 0) {
+                    this.editQuotationValidationErrors.items = 'すべての商品明細に案件番号を選択してください';
+                    isValid = false;
+                }
             }
-
-            // Note: Project ID assignment is optional - users can assign them later
 
             // Delivery date is optional - user can input freely or use date picker
             
@@ -5312,12 +5519,15 @@ createApp({
                 if (deliveryDatePickerEl._flatpickr) {
                     deliveryDatePickerEl._flatpickr.destroy();
                 }
+                const modalElement = document.getElementById('editQuotationModal');
                 deliveryDatePickerEl._flatpickr = flatpickr(deliveryDatePickerEl, {
                     dateFormat: 'Y年n月j日',
                     altFormat: 'Y年n月j日',
                     locale: 'ja',
                     allowInput: false,
                     clickOpens: false,
+                    static: false,
+                    appendTo: modalElement ? modalElement : document.body,
                     onChange: (selectedDates, dateStr) => {
                         // Update the visible input with the selected date
                         if (dateStr) {
@@ -5506,18 +5716,12 @@ createApp({
                     return [];
                 }
                 
-                // Debug logging
-                console.log('Quotation:', quotation.id, 'Selected IDs:', selectedIds);
-                console.log('Available child projects:', this.childProjects.map(cp => ({ id: cp.id, project_number: cp.project_number })));
-                
                 // Map the IDs to project numbers
                 const projectNumbers = selectedIds.map(id => {
                     const childProject = this.childProjects.find(cp => cp.id == id || cp.id == parseInt(id));
-                    console.log('Looking for ID:', id, 'Found project:', childProject);
                     return childProject ? childProject.project_number : null;
                 }).filter(projectNumber => projectNumber); // Remove null values
                 
-                console.log('Final project numbers:', projectNumbers);
                 return projectNumbers;
             } catch (error) {
                 console.error('Error parsing quotation project IDs:', error, quotation);
@@ -5858,7 +6062,7 @@ createApp({
                 console.error('Error loading child project logs:', error);
                 Swal.fire({
                     title: 'エラー',
-                    text: '子プロジェクトログの読み込みに失敗しました。',
+                    text: '案件ログの読み込みに失敗しました。',
                     icon: 'error',
                     confirmButtonText: 'OK'
                 });
@@ -5931,7 +6135,7 @@ createApp({
                     return '承認待ち';
                 }
                 if (value === 'project') {
-                    return 'プロジェクト';
+                    return '案件';
                 }
                 
                 // Fallback status map for other statuses

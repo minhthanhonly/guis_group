@@ -22,7 +22,13 @@ class FirebaseHelper {
         
         $notification = [
             'last_comment_id' => $data['comment_id'],
+            'timestamp' => time()
         ];
+        
+        // Add thread_id if provided
+        if (isset($data['thread_id'])) {
+            $notification['thread_id'] = $data['thread_id'];
+        }
         
         $url = $this->databaseUrl . '/notifications/' . $channel . '.json';
         
