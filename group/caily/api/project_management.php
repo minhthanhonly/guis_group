@@ -86,7 +86,15 @@ class ProjectManagementAPI {
     }
 
     function addProjectMember($project_id, $user_id, $role = 'member') {
-        return $this->project->addMember($project_id, $user_id, $role);
+        // Get username from user_id
+        $user = $this->project->fetchOne("SELECT userid FROM " . DB_PREFIX . "user WHERE id = " . intval($user_id));
+        if (!$user || !$user['userid']) {
+            return [
+                'status' => 'error',
+                'message' => 'User not found'
+            ];
+        }
+        return $this->project->addMember($project_id, $user_id, $user['userid'], $role);
     }
 
     function removeProjectMember($project_id, $user_id) {

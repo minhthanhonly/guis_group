@@ -37,20 +37,14 @@ createApp({
             
             // Sorting
             sortField: 'name',
-            sortDirection: 'asc'
+            sortDirection: 'asc',
+            permission: {}
         }
     },
     
     computed: {
         canViewProject() {
-            if (USER_ROLE == 'administrator') return true;
-            if (!this.project) return false;
-            if (this.project.created_by && this.project.created_by == USER_ID) return true;
-            if (this.managers && this.managers.some(m => String(m.user_id) === String(USER_AUTH_ID))) return true;
-            if (this.members && this.members.some(m => String(m.user_id) === String(USER_AUTH_ID))) return true;
-            if (this.hasPermission('project_manager')) return true;
-            if (this.hasPermission('project_director')) return true;
-            return false;
+            return this.permission.can_manage_project || this.permission.is_member;
         },
         
         canManageProject() {
@@ -161,6 +155,11 @@ createApp({
             if (USER_ROLE == 'administrator') return true;
             if (!this.userPermissions) return false;
             return this.userPermissions[permission] == 1;
+        },
+
+        async loadPermission() {
+            const response = await axios.get('/api/index.php?model=task&method=getPermission&project_id=' + PROJECT_ID);
+            this.permission = response.data;
         },
         
         async loadProject() {
@@ -814,6 +813,7 @@ createApp({
     },
     
     async mounted() {
+        await this.loadPermission();
         await this.loadProject();
         
         // Check if folder_id is provided in URL

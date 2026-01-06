@@ -46,7 +46,7 @@ if (!$project_id) {
             </div>
         </div>
 
-    <div class="card">
+    <div class="card" v-show="canViewTaskList">
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">ガントチャート - {{ projectInfo.name || 'プロジェクト' }}</h5>
@@ -125,6 +125,14 @@ if (!$project_id) {
                         <p class="mt-2">ガントチャートを初期化中...</p>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12" v-show="!canViewTaskList">
+        <div class="text-center py-5">
+            <div class="text-muted">
+                <i class="fa fa-lock fa-3x mb-2"></i>
+                <p>権限がありません</p>
             </div>
         </div>
     </div>

@@ -267,7 +267,7 @@ if (!$parent_project_id) {
             </div>
             <div class="col-12" v-else> <div class="text-center py-5">
                 <div class="text-muted">
-                    <i class="fa fa-folder-open fa-3x mb-2"></i>
+                    <i class="fa fa-lock fa-3x mb-2"></i>
                     <p>権限がありません</p>
                 </div>
             </div></div>

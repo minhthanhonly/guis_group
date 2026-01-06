@@ -132,6 +132,23 @@ class Task extends ApplicationModel {
         // }
         if($task_id){
             $this->logTaskAction($task_id, 'created', 'タスク作成', '', '');
+            
+            // Send notification to assigned users if task is assigned
+            if (!empty($data['assigned_to']) && $data['project_id']) {
+                // Get project information
+                $project = $this->fetchOne(
+                    "SELECT project_number, name FROM " . DB_PREFIX . "projects WHERE id = " . intval($data['project_id'])
+                );
+                
+                if ($project) {
+                    $projectNumber = $project['project_number'] ?? '';
+                    $projectName = $project['name'] ?? '';
+                    $assignedUserIds = $data['assigned_to'];
+                    
+                    $this->notifyTaskCreated($task_id, $data['title'], $data['project_id'], $projectNumber, $projectName, $assignedUserIds);
+                }
+            }
+            
             return [
                 'status' => 'success'
             ];
@@ -215,8 +232,31 @@ class Task extends ApplicationModel {
                     }
                 }
             }
-            //TODO: Log assigned_to
-
+            
+            // Check if assigned_to changed and send notifications
+            $oldAssignedTo = $old['assigned_to'] ?? '';
+            $newAssignedTo = $data['assigned_to'] ?? '';
+            if ($oldAssignedTo != $newAssignedTo && !empty($newAssignedTo) && $data['project_id']) {
+                // Log assigned_to change
+                $this->logTaskAction($id, 'assigned', '担当者変更', $oldAssignedTo, $newAssignedTo);
+                
+                // Get project information
+                $project = $this->fetchOne(
+                    "SELECT project_number, name FROM " . DB_PREFIX . "projects WHERE id = " . intval($data['project_id'])
+                );
+                
+                if ($project) {
+                    $projectNumber = $project['project_number'] ?? '';
+                    $projectName = $project['name'] ?? '';
+                    $taskTitle = $data['title'] ?? $old['title'] ?? '';
+                    
+                    // Send notification to newly assigned users
+                    $this->notifyTaskAssigneeChanged($id, $taskTitle, $data['project_id'], $projectNumber, $projectName, $newAssignedTo, $oldAssignedTo);
+                }
+            } else if ($oldAssignedTo != $newAssignedTo) {
+                // Log even if no notification is sent
+                $this->logTaskAction($id, 'assigned', '担当者変更', $oldAssignedTo, $newAssignedTo);
+            }
 
             return [
                 'status' => 'success'
@@ -632,9 +672,10 @@ class Task extends ApplicationModel {
             );
             $isProjectManager = ($departmentCheck && $departmentCheck['count'] > 0);
         }
+
+        $isTaskCreator = $task['created_by'] == $currentUserIdNumber;
         
-        
-        return $isAssigned || $isProjectManager;
+        return $isAssigned || $isProjectManager || $isTaskCreator;
     }
 
 
@@ -686,7 +727,7 @@ class Task extends ApplicationModel {
         // Check if user is project creator
         $isCreator = false;
         if (!$isAdmin && isset($project['created_by'])) {
-            $isCreator = (String($project['created_by']) === String($currentUserId));
+            $isCreator = $project['created_by'] == $currentUserId;
         }
         
         // Check if user is in the same department (even if not a member)
@@ -702,7 +743,7 @@ class Task extends ApplicationModel {
         }
         
         return [
-            'is_member' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector || $isMember || $isCreator || $isInDepartment,
+            'is_member' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector || $isMember || $isCreator,
             'is_director' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector,
             'can_manage_project' => $isAdmin || $isProjectManager || $isDepartmentManager,
             'can_manage_department' => $isAdmin || $isDepartmentManager,
@@ -1446,5 +1487,224 @@ class Task extends ApplicationModel {
             $this->query($insert);
         }
         return ['success' => true];
+    }
+
+    /**
+     * Send task notification
+     */
+    function sendTaskNotification($params = null) {
+        try {
+            require_once('NotificationService.php');
+            $notiService = new NotificationService();
+            
+            // Validate required parameters
+            if (!isset($params['event']) || !isset($params['title']) || !isset($params['message'])) {
+                return false;
+            }
+            
+            // Default values
+            $defaultParams = [
+                'project_id' => 0,
+                'task_id' => 0,
+                'user_ids' => [],
+                'data' => [],
+                'url' => '',
+                'priority' => 'normal',
+                'type' => 'task'
+            ];
+            
+            $params = array_merge($defaultParams, $params);
+            
+            // Get target users
+            $targetUserIds = [];
+            
+            // Direct user IDs
+            if (!empty($params['user_ids'])) {
+                $targetUserIds = array_merge($targetUserIds, $params['user_ids']);
+            }
+            
+            // Remove duplicates and current user
+            $targetUserIds = array_unique($targetUserIds);
+            $targetUserIds = array_diff($targetUserIds, [$_SESSION['userid']]);
+            
+            if (empty($targetUserIds)) {
+                return false;
+            }
+            
+            // Prepare notification payload
+            $payload = [
+                'event' => $params['event'],
+                'title' => $params['title'],
+                'message' => $params['message'],
+                'data' => array_merge($params['data'], [
+                    'project_id' => $params['project_id'],
+                    'task_id' => $params['task_id'],
+                    'type' => $params['type'],
+                    'priority' => $params['priority'],
+                    'sender_id' => $_SESSION['userid'],
+                    'sender_name' => $_SESSION['realname'] ?? 'Unknown',
+                    'timestamp' => date('Y-m-d H:i:s')
+                ]),
+                'url' => $params['url'],
+                'user_ids' => array_values($targetUserIds)
+            ];
+            
+            // Send notification
+            $result = $notiService->create($payload);
+            
+            return $result ? true : false;
+            
+        } catch (Exception $e) {
+            error_log('Error sending task notification: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get user realname for notifications
+     */
+    function getUserRealname() {
+        if (isset($_SESSION['lastname']) && $_SESSION['lastname'] != '') {
+            return $_SESSION['lastname'] . 'さん';
+        }
+        return (isset($_SESSION['realname']) ? $_SESSION['realname'] : 'Unknown') . 'さん';
+    }
+
+    /**
+     * Get user image URL for notifications
+     */
+    private function getUserImageUrl() {
+        $userImage = $this->getUserImage();
+        if ($userImage && $userImage != '') {
+            return '/assets/upload/avatar/' . $userImage;
+        }
+        return '/assets/img/avatars/1.png';
+    }
+
+    /**
+     * Convert user IDs (numeric id) to userid (string)
+     */
+    private function convertIdsToUserIds($ids) {
+        if (empty($ids)) {
+            return [];
+        }
+        
+        // Convert to array if string
+        if (is_string($ids)) {
+            $ids = array_filter(array_map('trim', explode(',', $ids)));
+        }
+        
+        if (empty($ids)) {
+            return [];
+        }
+        
+        // Convert to integers and filter
+        $ids = array_map('intval', $ids);
+        $ids = array_filter($ids);
+        
+        if (empty($ids)) {
+            return [];
+        }
+        
+        // Query user table to get userid from id
+        $placeholders = str_repeat('%d,', count($ids) - 1) . '%d';
+        $query = sprintf(
+            "SELECT userid FROM " . DB_PREFIX . "user WHERE id IN ($placeholders)",
+            ...$ids
+        );
+        
+        $users = $this->fetchAll($query);
+        
+        if (empty($users)) {
+            return [];
+        }
+        
+        return array_column($users, 'userid');
+    }
+
+    /**
+     * Notify users when a task is created and assigned
+     */
+    function notifyTaskCreated($taskId, $taskTitle, $projectId, $projectNumber, $projectName, $assignedUserIds) {
+        error_log("notifyTaskCreated: " . print_r($assignedUserIds, true));
+        if (empty($assignedUserIds)) {
+            return false;
+        }
+        
+        // Convert numeric IDs to userid strings
+        $userIds = $this->convertIdsToUserIds($assignedUserIds);
+        
+        if (empty($userIds)) {
+            return false;
+        }
+        
+        $params = [
+            'event' => 'task_created',
+            'title' => '#'.$projectNumber.': タスクが作成されました',
+            'message' => sprintf('%sがあなたにタスク「%s」を割り当てました', $this->getUserRealname(), $taskTitle),
+            'project_id' => $projectId,
+            'task_id' => $taskId,
+            'user_ids' => $userIds,
+            'data' => [
+                'task_title' => $taskTitle,
+                'project_name' => $projectName,
+                'project_number' => $projectNumber,
+                'avatar' => $this->getUserImageUrl(),
+                'action' => 'task_created',
+                'url' => "/project/task.php?project_id=$projectId",
+            ],
+            'type' => 'task',
+            'priority' => 'normal'
+        ];
+        
+        return $this->sendTaskNotification($params);
+    }
+
+    /**
+     * Notify users when task assignees are changed
+     */
+    function notifyTaskAssigneeChanged($taskId, $taskTitle, $projectId, $projectNumber, $projectName, $newAssignedUserIds, $oldAssignedUserIds = []) {
+        // Convert to arrays if strings
+        if (is_string($newAssignedUserIds)) {
+            $newAssignedUserIds = array_filter(array_map('trim', explode(',', $newAssignedUserIds)));
+        }
+        if (is_string($oldAssignedUserIds)) {
+            $oldAssignedUserIds = array_filter(array_map('trim', explode(',', $oldAssignedUserIds)));
+        }
+        
+        // Find newly assigned IDs (numeric IDs in new but not in old)
+        $newlyAssignedIds = array_diff($newAssignedUserIds, $oldAssignedUserIds);
+        
+        if (empty($newlyAssignedIds)) {
+            return false;
+        }
+        
+        // Convert only newly assigned IDs to userid strings
+        $newlyAssigned = $this->convertIdsToUserIds($newlyAssignedIds);
+        
+        if (empty($newlyAssigned)) {
+            return false;
+        }
+        
+        $params = [
+            'event' => 'task_assigned',
+            'title' => '#'.$projectNumber.': タスクが割り当てられました',
+            'message' => sprintf('%sがあなたにタスク「%s」を割り当てました', $this->getUserRealname(), $taskTitle),
+            'project_id' => $projectId,
+            'task_id' => $taskId,
+            'user_ids' => array_values($newlyAssigned),
+            'data' => [
+                'task_title' => $taskTitle,
+                'project_name' => $projectName,
+                'project_number' => $projectNumber,
+                'avatar' => $this->getUserImageUrl(),
+                'action' => 'task_assigned',
+                'url' => "/project/task.php?project_id=$projectId",
+            ],
+            'type' => 'task',
+            'priority' => 'normal'
+        ];
+        
+        return $this->sendTaskNotification($params);
     }
 } 

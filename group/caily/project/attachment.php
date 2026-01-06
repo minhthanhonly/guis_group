@@ -16,7 +16,7 @@ if (!$project_id) {
         <span id="sw-status-text">Service Worker</span>
     </div>
     
-    <div v-if="canViewProject">
+    <div>
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">
                 <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-label-info">#{{ project?.project_number }}</span></a>
@@ -54,7 +54,7 @@ if (!$project_id) {
             </div>
 
             <!-- Main Content -->
-            <div class="col-12">
+            <div class="col-12" v-if="canViewProject">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">
@@ -269,6 +269,14 @@ if (!$project_id) {
                     </div>
                 </div>
             </div>
+            <div class="col-12" v-else>
+                <div class="text-center py-5">
+                    <div class="text-muted">
+                        <i class="fa fa-lock fa-3x mb-2"></i>
+                        <p>権限がありません</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Create Folder Modal -->
@@ -381,6 +389,7 @@ if (!$project_id) {
             </div>
         </div>
     </div>
+
     
     <!-- Fixed Bulk Actions Bar -->
     <div v-if="selectedFileIds.length > 0" class="bulk-actions-bar">

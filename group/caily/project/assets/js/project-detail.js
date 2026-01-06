@@ -121,6 +121,7 @@ const vueApp = createApp({
                 name: ''
             },
             timeRemainingTimer: null,
+            autoRefreshTimer: null,
         }
     },
     computed: {
@@ -166,6 +167,22 @@ const vueApp = createApp({
             if (this.permission && this.permission.is_in_department) return true;
             
             return false;
+        },
+        canAddNote() {
+            return this.permission.can_manage_project || (this.permission.is_member && (this.permission.rule && this.permission.rule.project_note == 1));
+        },
+        isProjectMember() {
+            // Check if current user is already a member or manager
+            if (typeof USER_AUTH_ID === 'undefined') return false;
+            
+            if (this.managers && this.managers.some(m => String(m.user_id) === String(USER_AUTH_ID))) return true;
+            if (this.members && this.members.some(m => String(m.user_id) === String(USER_AUTH_ID))) return true;
+            
+            return false;
+        },
+        canJoinProject() {
+            // User can join if they can view the project but are not yet a member
+            return !this.isProjectMember;
         },
         canEditProject() {
             return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_edit == 1);
@@ -1285,6 +1302,47 @@ const vueApp = createApp({
             } catch (error) {
                 console.error('Error confirming kadai project:', error);
                 showMessage('プロジェクトの承認中にエラーが発生しました。', true);
+            }
+        },
+        async joinProject() {
+            if (!this.canJoinProject) return;
+            
+            try {
+                const swal = await Swal.fire({
+                    title: 'プロジェクトに参加しますか？',
+                    text: 'このプロジェクトのメンバーとして参加します。',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '参加',
+                    cancelButtonText: 'キャンセル',
+                    confirmButtonColor: '#0d6efd'
+                });
+
+                if (swal.isConfirmed) {
+                    if (typeof USER_AUTH_ID === 'undefined') {
+                        showMessage('ユーザー情報が取得できませんでした。', true);
+                        return;
+                    }
+                    
+                    const formData = new FormData();
+                    formData.append('project_id', this.projectId);
+                    formData.append('user_id', USER_AUTH_ID);
+                    formData.append('role', 'member');
+                    
+                    const response = await axios.post('/api/index.php?model=project&method=addMemberApi', formData);
+                    
+                    if (response.data && (response.data.status === 'success' || (response.data && !response.data.status))) {
+                        showMessage('プロジェクトに参加しました。');
+                        // Reload project data to reflect changes
+                        await this.loadProject();
+                        await this.loadPermission();
+                    } else {
+                        showMessage(response.data?.message || 'プロジェクトへの参加に失敗しました。', true);
+                    }
+                }
+            } catch (error) {
+                console.error('Error joining project:', error);
+                showMessage('プロジェクトへの参加中にエラーが発生しました。', true);
             }
         },
         getCategoryName(id) {
@@ -2491,6 +2549,15 @@ const vueApp = createApp({
         //     });
         // }
         this.addZoomToDescriptionImages();
+        
+        // Auto-refresh project information and history every 10 seconds if not in edit mode
+        this.autoRefreshTimer = setInterval(() => {
+            // Only refresh if not in edit mode
+            if (!this.isEditMode) {
+                this.loadProject();
+                this.loadLogs();
+            }
+        }, 60000); // 60 seconds
 
     },
     updated() {
@@ -2500,9 +2567,12 @@ const vueApp = createApp({
         });
     },
     beforeUnmount() {
-        // Clean up timer
+        // Clean up timers
         if (this.timeRemainingTimer) {
             clearInterval(this.timeRemainingTimer);
+        }
+        if (this.autoRefreshTimer) {
+            clearInterval(this.autoRefreshTimer);
         }
     }
 });

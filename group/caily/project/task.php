@@ -48,7 +48,7 @@ if (!$project_id) {
         </div>
     </div>
 
-    <div class="">
+    <div v-if="canViewTaskList">
         <!-- ボー lọc -->
         <div class="row mb-4">
            
@@ -151,7 +151,7 @@ if (!$project_id) {
                 <option value="low">低</option>
             </select>
             </div>
-            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.task_add == 1)" class="btn btn-primary ms-2" @click="openNewTaskModal">
+            <button v-if="permission.can_manage_project || permission.is_member || (permission.rule && permission.rule.task_add == 1)" class="btn btn-primary ms-2" @click="openNewTaskModal">
                 <i class="bi bi-plus"></i> 新規タスク
             </button>
         </div>
@@ -340,7 +340,7 @@ if (!$project_id) {
                     <div class="col-md-2">
                         <div class="d-flex align-items-center justify-content-end gap-1 pe-2">
                             <!-- Like button -->
-                            <button 
+                            <button v-if="permission.can_manage_project"
                                 class="position-relative"
                                 :class="getTaskReactionButtonClass(task, 'like')"
                                 @click="openReactionModal(task, 'like')"
@@ -351,7 +351,7 @@ if (!$project_id) {
                                 </span>
                             </button>
                             <!-- Dislike button -->
-                            <button 
+                            <button v-if="permission.can_manage_project"
                                 class="position-relative"
                                 :class="getTaskReactionButtonClass(task, 'dislike')"
                                 @click="openReactionModal(task, 'dislike')"
@@ -362,7 +362,7 @@ if (!$project_id) {
                                 </span>
                             </button>
                             <!-- Comment button -->
-                            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.project_comment == 1)" class="btn btn-sm btn-outline-info position-relative" @click="openTaskComments(task)" title="コメント">
+                            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.project_comment == 1)" class="btn btn-sm btn-outline-info position-relative" @click="openTaskComments(task)" title="詳細">
                                     <i class="fas fa-comment"></i>
                                     <span v-if="getUnreadCommentCount(task.id) > 0" class="position-absolute top-0 start-100 translate-middle text-white badge rounded-pill bg-danger" style="font-size:10px;">{{ getUnreadCommentCount(task.id) }}</span>
                             </button>
@@ -383,6 +383,14 @@ if (!$project_id) {
             </div>
         </div>
         
+    </div>
+    <div class="col-12" v-else>
+        <div class="text-center py-5">
+            <div class="text-muted">
+                <i class="fa fa-lock fa-3x mb-2"></i>
+                <p>権限がありません</p>
+            </div>
+        </div>
     </div>
 
 
@@ -637,6 +645,12 @@ if (!$project_id) {
 
 #taskDetailsModal .comment-input-section {
     flex-shrink: 0;
+}
+.prevent-click .btn::after{
+    display: none !important;
+}
+.subtask .avatar-initial{
+    background: #fff!important;
 }
 
 </style>

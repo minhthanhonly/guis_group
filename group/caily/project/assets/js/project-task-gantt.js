@@ -86,16 +86,12 @@ $(document).ready(function() {
             canEditProject() {
                 return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_edit == 1);
             },
+            canViewTaskList() {
+                return this.permission.can_manage_project || this.permission.is_member;
+            },
         },
         async mounted() {
             await this.loadPermission();
-            if(!this.permission.is_member){
-                this.showMessage('権限がありません。', true);
-                setTimeout(() => {
-                    window.location.href = 'index.php';
-                }, 1000);
-                return;
-            }
             await this.loadProjectInfo();
             await this.loadTasks();
             await this.loadLinks();

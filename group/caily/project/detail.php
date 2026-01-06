@@ -57,25 +57,30 @@ if (!$project_id) {
                         <div class="d-flex justify-content-between align-items-center mb-4">
                             <h5 class="card-title"><span data-i18n="基本情報">基本情報</span></h5>
                             <div>
+                                <!-- Join Project Button -->
+                                <button v-if="!isEditMode && canJoinProject" class="btn btn-primary btn-sm me-2" @click="joinProject" title="プロジェクトに参加">
+                                    <i class="fa fa-user-plus me-1"></i><span data-i18n="プロジェクトに参加">プロジェクトに参加</span>
+                                </button>
+                                
                                 <!-- Confirm Project Button for Kadai Projects -->
                                 <button v-if="project && project.is_kadai == 1 && project.status !== 'cancelled' && !isEditMode && canEditProject" class="btn btn-success btn-sm me-2" @click="confirmKadaiProject" title="プロジェクトを承認">
                                     <i class="fa fa-check me-1"></i>プロジェクトを承認
                                 </button>
                                 
                                 <!-- <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
-                                    <i class="fa fa-copy"></i>
+                                    <i class="fa fa-copy"></i> <span data-i18n="プロジェクトをコピー">プロジェクトをコピー</span>
                                 </button> -->
                                 <button v-if="!isEditMode && canEditProject && !(project && project.is_kadai == 1)" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode" title="編集">
-                                    <i class="fa fa-pencil-alt"></i>
+                                    <i class="fa fa-pencil-alt me-1"></i> <span data-i18n="編集">編集</span>
                                 </button>
                                 <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject" title="保存">
-                                    <i class="fa fa-save"></i>
+                                    <i class="fa fa-save me-1"></i> <span data-i18n="保存">保存</span>
                                 </button>
                                 <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit" title="キャンセル">
-                                    <i class="fa fa-times"></i>
+                                    <i class="fa fa-times me-1"></i> <span data-i18n="キャンセル">キャンセル</span>
                                 </button>  
                                 <button v-if="!isEditMode && canDeleteProject && !(project && project.is_kadai == 1)" class="btn btn-outline-danger btn-sm" @click="deleteProject" title="削除">
-                                    <i class="fa fa-trash"></i>
+                                    <i class="fa fa-trash me-1"></i> <span data-i18n="削除">削除</span>
                                 </button>
                             </div>
                         </div>
@@ -586,7 +591,7 @@ if (!$project_id) {
                 <div class="card mb-4">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">メモ</h5>
-                        <button class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
+                        <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
                             <i class="fa fa-plus"></i>
                         </button>
                     </div>
@@ -614,7 +619,7 @@ if (!$project_id) {
                         <div v-else class="text-center text-muted py-3">
                             <i class="fa fa-sticky-note fa-2x mb-2"></i>
                             <p>メモがありません</p>
-                            <button class="btn btn-outline-primary btn-sm" @click="openNoteModal()">
+                            <button v-if="canAddNote" class="btn btn-outline-primary btn-sm" @click="openNoteModal()">
                                 最初のメモを追加
                             </button>
                         </div>

@@ -24,7 +24,8 @@ const TaskApp = createApp({
                 parent_id: null,
                 category_id: null,
                 estimated_hours: 0,
-                progress: 0
+                progress: 0,
+                created_by: this.currentUserId
             },
             editingTask: null,
             users: [],
@@ -99,6 +100,9 @@ const TaskApp = createApp({
     },
     
     computed: {
+        canViewTaskList() {
+            return this.permission.can_manage_project || this.permission.is_member;
+        },
         sortedTaskLogs() {
             if (!this.taskLogs) return [];
             // Sắp xếp giảm dần theo thời gian
@@ -177,6 +181,9 @@ const TaskApp = createApp({
             }).length;
 
             return { total, completed, overdue };
+        },
+        isInEditMode() {
+            return this.inlineTasks.length > 0 || this.editingInlineId !== null;
         }
     },
     
@@ -208,13 +215,14 @@ const TaskApp = createApp({
         }
         (async()=>{
             await this.loadPermission();
-            if(!this.permission.is_member || (this.permission.rule && this.permission.rule.task_view != 1)){
-                this.showMessage('権限がありません。', true);
-                setTimeout(() => {
-                    window.location.href = 'index.php';
-                }, 1000);
-                return;
-            }
+            console.log(this.permission);
+            // if(!this.permission.is_member || (this.permission.rule && this.permission.rule.task_view != 1)){
+            //     this.showMessage('権限がありません。', true);
+            //     setTimeout(() => {
+            //         window.location.href = 'index.php';
+            //     }, 1000);
+            //     return;
+            // }
             await this.loadProjectInfo();
             await this.loadTasks();
             await this.loadProjectMembers();
@@ -252,6 +260,57 @@ const TaskApp = createApp({
             const { error, fileName } = event.detail;
             this.handleUploadError(fileName, error);
         });
+        
+        // Auto-refresh task list every 10 seconds if no task is in edit mode
+        setInterval(() => {
+            // Check if any task is in edit mode
+            const hasEditMode = this.inlineTasks.length > 0 || this.editingInlineId !== null;
+            
+            // Only refresh if no task is being edited
+            if (!hasEditMode) {
+                this.loadTasks();
+            }
+        }, 10000); // 10 seconds
+        
+        // Warn user when navigating away if in edit mode
+        window.addEventListener('beforeunload', (e) => {
+            if (this.isInEditMode) {
+                e.preventDefault();
+                e.returnValue = '編集中のタスクがあります。ページを離れると変更が失われる可能性があります。';
+                return e.returnValue;
+            }
+        });
+        
+        // Intercept link clicks to warn before navigation
+        this.linkClickHandler = (e) => {
+            const link = e.target.closest('a');
+            if (link && link.href && this.isInEditMode) {
+                // Skip if it's a hash link (same page anchor)
+                if (link.href.startsWith('#') || link.getAttribute('href')?.startsWith('#')) {
+                    return;
+                }
+                
+                // Check if it's an external link (different page)
+                try {
+                    const currentPath = window.location.pathname;
+                    const linkUrl = new URL(link.href, window.location.origin);
+                    const linkPath = linkUrl.pathname;
+                    
+                    // If navigating to a different page
+                    if (linkPath !== currentPath) {
+                        if (!confirm('編集中のタスクがあります。ページを離れると変更が失われる可能性があります。続行しますか？')) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return false;
+                        }
+                    }
+                } catch (err) {
+                    // If URL parsing fails, allow navigation
+                    console.warn('Error parsing link URL:', err);
+                }
+            }
+        };
+        document.addEventListener('click', this.linkClickHandler, true); // Use capture phase to intercept before navigation
     },
     
     updated() {
@@ -816,6 +875,7 @@ const TaskApp = createApp({
                 formData.append('start_date', inlineTask.start_date);
                 formData.append('due_date', inlineTask.due_date);
                 formData.append('assigned_to', inlineTask.assignees.join(','));
+                formData.append('created_by', this.currentUserId);
                 formData.append('status', inlineTask.status);
                 formData.append('progress', inlineTask.progress);
 
@@ -1889,7 +1949,7 @@ const TaskApp = createApp({
         },
 
         checkAssignee(task) {
-            return task.assigned_to.split(',').includes(this.currentUserId);
+            return task.assigned_to.split(',').includes(this.currentUserId) || task.created_by == this.currentUserId;
         },
         
         async removeAssignee(task, userId) {

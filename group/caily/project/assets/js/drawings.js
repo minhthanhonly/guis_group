@@ -51,16 +51,15 @@ createApp({
             // Click selection
             lastClickedIndex: -1,
             isCtrlPressed: false,
-            isShiftPressed: false
+            isShiftPressed: false,
+            permission: {}
         }
     },
     
     computed: {
         canViewProject() {
-            return true; // Implement permission check
+            return this.permission.can_manage_project || this.permission.is_member;
         },
-
-        
         
         filteredDrawings() {
             let filtered = this.drawings;
@@ -174,6 +173,7 @@ createApp({
     },
     
     mounted() {
+        this.loadPermission();
         this.loadProject();
         this.loadDrawings();
 
@@ -236,6 +236,10 @@ createApp({
     },
     
     methods: {
+        async loadPermission() {
+            const response = await axios.get('/api/index.php?model=task&method=getPermission&project_id=' + PROJECT_ID);
+            this.permission = response.data;
+        },
         // Project loading
         async loadProject() {
             try {

@@ -120,7 +120,7 @@ $view->heading('建物詳細');
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
                                     <span data-i18n="担当様">担当様</span>
-                                    <button v-if="!isEditMode && parentProject.contact_name" type="button" class="btn btn-sm btn-outline-info py-0 small ms-2" @click="openCustomerInfoModal" title="顧客情報表示・編集">
+                                    <button v-if="!isEditMode && parentProject.contact_name " type="button" class="btn btn-sm btn-outline-info py-0 small ms-2" @click="openCustomerInfoModal" title="顧客情報表示・編集">
                                         <i class="fa fa-info-circle me-1"></i> 顧客情報
                                     </button>
                                 </label>
@@ -531,7 +531,7 @@ $view->heading('建物詳細');
                                                 class="btn btn-outline-primary" title="詳細">
                                                 <i class="fa fa-eye"></i>
                                             </a>
-                                            <button class="btn btn-outline-secondary" title="編集"
+                                            <button v-if="isProjectManager" class="btn btn-outline-secondary" title="編集"
                                                 @click="showEditChildProjectModal(project)">
                                                 <i class="fa fa-edit"></i>
                                             </button>
@@ -539,7 +539,7 @@ $view->heading('建物詳細');
                                                 @click="showChildProjectLogs(project)">
                                                 <i class="fa fa-history"></i>
                                             </button>
-                                            <button class="btn btn-outline-danger" title="削除"
+                                            <button v-if="isProjectManager" class="btn btn-outline-danger" title="削除"
                                                 @click="cancelChildProject(project)"
                                                 v-if="project.status !== 'cancelled'">
                                                 <i class="fa fa-trash"></i>
@@ -616,7 +616,7 @@ $view->heading('建物詳細');
                                     <td>{{ formatDateTime(quotation.created_at) }}</td>
                                     <td>{{ formatPrice(quotation.total_with_tax) }}</td>
                                     <td>
-                                        <div class="dropdown quotation-status-dropdown">
+                                        <div v-if="isProjectManager" class="dropdown quotation-status-dropdown">
                                             <button class="btn btn-sm dropdown-toggle" 
                                                 :class="getStatusButtonClass(quotation.status)"
                                                 type="button" 
@@ -646,6 +646,7 @@ $view->heading('建物詳細');
                                                 </a></li>
                                             </ul>
                                         </div>
+                                        <span v-else class="badge" :class="getQuotationStatusBadgeClass(quotation.status)">{{ quotation.status }}</span>
                                     </td>
                                     <td>
                                         <span v-if="quotation.updated_by" 
@@ -657,11 +658,11 @@ $view->heading('建物詳細');
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-primary" title="表示"
+                                            <button v-if="isProjectManager" class="btn btn-outline-primary" title="表示"
                                                 @click="showQuotationModal(quotation)">
                                                 <i class="fa fa-eye"></i>
                                             </button>
-                                            <button class="btn btn-outline-secondary" title="編集"
+                                            <button v-if="isProjectManager" class="btn btn-outline-secondary" title="編集"
                                                 @click="editQuotation(quotation)">
                                                 <i class="fa fa-edit"></i>
                                             </button>
@@ -669,7 +670,7 @@ $view->heading('建物詳細');
                                                 @click="showQuotationHistory(quotation)">
                                                 <i class="fa fa-history"></i>
                                             </button>
-                                            <button class="btn btn-outline-danger" title="削除"
+                                            <button v-if="isProjectManager" class="btn btn-outline-danger" title="削除"
                                                 @click="deleteQuotation(quotation)">
                                                 <i class="fa fa-trash"></i>
                                             </button>
@@ -2717,7 +2718,7 @@ $view->heading('建物詳細');
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="閉じる">閉じる</span></button>
-                    <button type="button" class="btn btn-primary" @click="updateCustomer" :disabled="updatingCustomer">
+                    <button v-if="isProjectManager" type="button" class="btn btn-primary" @click="updateCustomer" :disabled="updatingCustomer">
                         <span v-if="updatingCustomer" class="spinner-border spinner-border-sm me-1"></span>
                         <span data-i18n="更新">更新</span>
                     </button>

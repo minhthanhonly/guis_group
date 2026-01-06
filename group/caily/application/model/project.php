@@ -764,6 +764,24 @@ class Project extends ApplicationModel {
         
         if(!$user_id) return false;
         
+        // If username is not provided, get it from user_id
+        if (!$username) {
+            $user = $this->fetchOne("SELECT userid FROM " . DB_PREFIX . "user WHERE id = " . intval($user_id));
+            if (!$user || !$user['userid']) {
+                return false;
+            }
+            $username = $user['userid'];
+        }
+        
+        // Check if member already exists
+        $existing = $this->fetchOne(
+            "SELECT id FROM " . DB_PREFIX . "project_members " .
+            "WHERE project_id = " . intval($project_id) . " " .
+            "AND user_id = " . intval($user_id)
+        );
+        if ($existing) {
+            return false;
+        }
 
         $data = array(
             'project_id' => $project_id,
@@ -775,9 +793,71 @@ class Project extends ApplicationModel {
         $this->table = DB_PREFIX . 'project_members';
         $result = $this->query_insert($data);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
-        // if ($result) {
-        // }
+        
+        if ($result) {
+            // Log the action
+            $this->logProjectAction($project_id, 'member_added', 'メンバー追加', '', '');
+        }
+        
         return $result;
+    }
+    
+    function addMemberApi($params = null) {
+        // Get parameters from $_POST or $params array
+        if (is_array($params)) {
+            $project_id = isset($params['project_id']) ? intval($params['project_id']) : (isset($_POST['project_id']) ? intval($_POST['project_id']) : 0);
+            $user_id = isset($params['user_id']) ? intval($params['user_id']) : (isset($_POST['user_id']) ? intval($_POST['user_id']) : 0);
+            $role = isset($params['role']) ? $params['role'] : (isset($_POST['role']) ? $_POST['role'] : 'member');
+        } else {
+            $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+            $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+            $role = isset($_POST['role']) ? $_POST['role'] : 'member';
+        }
+        
+        if(!$project_id || !$user_id) {
+            return [
+                'status' => 'error',
+                'message' => 'Project ID and User ID are required'
+            ];
+        }
+        
+        // Get username from user_id
+        $user = $this->fetchOne("SELECT userid FROM " . DB_PREFIX . "user WHERE id = " . intval($user_id));
+        if (!$user || !$user['userid']) {
+            return [
+                'status' => 'error',
+                'message' => 'User not found'
+            ];
+        }
+        $username = $user['userid'];
+        
+        // Check if member already exists
+        $existing = $this->fetchOne(
+            "SELECT id FROM " . DB_PREFIX . "project_members " .
+            "WHERE project_id = " . intval($project_id) . " " .
+            "AND user_id = " . intval($user_id)
+        );
+        if ($existing) {
+            return [
+                'status' => 'error',
+                'message' => 'User is already a member of this project'
+            ];
+        }
+
+        // Call the original addMember method
+        $result = $this->addMember($project_id, $user_id, $username, $role);
+        
+        if ($result) {
+            return [
+                'status' => 'success',
+                'message' => 'Member added successfully'
+            ];
+        }
+        
+        return [
+            'status' => 'error',
+            'message' => 'Failed to add member'
+        ];
     }
 
     function removeMember($project_id, $user_id) {
