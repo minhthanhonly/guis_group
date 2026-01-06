@@ -1,5 +1,7 @@
 var projectTable;
     var projectData = [];
+    var isInitializingTable = false;
+    var autoRefreshTimer = null;
     var statuses = [
         { key: 'draft', name: '受付', color: 'secondary' },
         { key: 'open', name: '納期検討', color: 'info' },
@@ -131,10 +133,28 @@ var projectTable;
         }
     }
 
-    $(document).ready(function() {
-        if(!app.selectedDepartment){
+    // Function to initialize DataTable
+    function initializeProjectTable() {
+        // Check if DataTable is already initialized
+        if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+            return; // Already initialized
+        }
+        
+        // Check if already initializing to avoid race condition
+        if (isInitializingTable) {
+            console.log('DataTable initialization already in progress');
             return;
         }
+        
+        // Check if selectedDepartment exists
+        if (!app || !app.selectedDepartment || !app.selectedDepartment.id) {
+            console.warn('Cannot initialize DataTable: selectedDepartment is not set');
+            return;
+        }
+        
+        // Set flag to prevent multiple initializations
+        isInitializingTable = true;
+        
         // Khôi phục filter từ localStorage trước khi load projectTable
         loadFiltersFromLocalStorage();
         // Khởi tạo DataTable sau khi filter đã được khôi phục
@@ -452,6 +472,9 @@ var projectTable;
             }
             
         });
+        
+        // Reset flag after initialization
+        isInitializingTable = false;
 
         // Khởi tạo lại tooltip mỗi khi DataTable vẽ lại
         $('#projectTable').on('draw.dt', function() {
@@ -466,13 +489,6 @@ var projectTable;
                 $('[data-bs-toggle="tooltip"]').tooltip();
             }
         });
-
-        // Timer để cập nhật thời gian còn lại mỗi phút
-        setInterval(function() {
-            if (projectTable) {
-                projectTable.ajax.reload(null, false); // false để giữ nguyên trang hiện tại
-            }
-        }, 60000); // Cập nhật mỗi phút
 
         // Khôi phục filter từ localStorage khi load trang
         // Khi thay đổi filter thì lưu lại
@@ -825,6 +841,25 @@ var projectTable;
             projectTable.ajax.reload();
         });
         
+    }
+    
+    // Setup auto-refresh timer once (independent of DataTable initialization)
+    $(document).ready(function() {
+        // Setup auto-refresh timer for project list
+        if (!autoRefreshTimer) {
+            autoRefreshTimer = setInterval(function() {
+                if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+                    projectTable.ajax.reload(null, false); // false để giữ nguyên trang hiện tại
+                }
+            }, 60000); // Cập nhật mỗi phút
+        }
+        
+        // Wait a bit for Vue app to mount
+        setTimeout(function() {
+            if (app && app.selectedDepartment && app.selectedDepartment.id) {
+                initializeProjectTable();
+            }
+        }, 100);
     });
 
     // Helper function to get initials from name
@@ -978,11 +1013,11 @@ var projectTable;
             // Không load dự án ngay lập tức, chỉ load khi có department được chọn
             
             // Auto-refresh kadai queue every 5 minutes (chỉ khi có department được chọn)
-            setInterval(() => {
-                if (this.selectedDepartment && this.selectedDepartment.id) {
-                    this.loadKadaiProjects();
-                }
-            }, 5 * 60 * 1000);
+            // setInterval(() => {
+            //     if (this.selectedDepartment && this.selectedDepartment.id) {
+            //         this.loadKadaiProjects();
+            //     }
+            // }, 5 * 60 * 1000);
 
             // Initialize Tagify for project_order_type
             this.$nextTick(() => {
@@ -1354,7 +1389,6 @@ var projectTable;
                 try {
                     const response = await axios.get(`/api/index.php?model=department&method=get_user_permission_by_department&userid=${USER_ID}&department_id=${departmentId}`);
                     this.userPermissions = response.data;
-                    console.log('User permissions loaded:', this.userPermissions);
                     return this.userPermissions;
                 } catch (error) {
                     console.error('Error loading user permissions:', error);
@@ -1424,7 +1458,13 @@ var projectTable;
                 // Save selected department to localStorage
                 this.saveSelectedDepartmentToLocalStorage(department);
                 
+                // Initialize DataTable if not already initialized
+                this.$nextTick(() => {
+                    initializeProjectTable();
+                });
+                
                 this.loadProjects();
+
                 
                 // Load user permissions for the selected department
                 this.getUserPermissions(department.id);
@@ -1466,7 +1506,7 @@ var projectTable;
                 });
                 
                 // Reload kadai projects for the new department
-                this.loadKadaiProjects();
+               // this.loadKadaiProjects();
             },
             filterProjectByStatus(status) {
                 this.selectedStatus = status;
@@ -1474,7 +1514,12 @@ var projectTable;
             },
             async loadProjects() {
                 try {
-                    projectTable.ajax.reload();
+                    // Ensure DataTable is initialized before reloading
+                    if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
+                        initializeProjectTable();
+                    } else {
+                        projectTable.ajax.reload();
+                    }
                 } catch (error) {
                     console.error('Error loading projects:', error);
                 }
@@ -1566,11 +1611,6 @@ var projectTable;
                         const companyName = companySelect.select2('data')[0]?.id || '';
                         const customerId = customerSelect.select2('data')[0]?.id || '';
                         
-                        console.log('Select2 Data:');
-                        console.log('Category:', categorySelect.select2('data'));
-                        console.log('Company:', companySelect.select2('data'));
-                        console.log('Customer:', customerSelect.select2('data'));
-                        
                         // Update newProject with Select2 values
                         this.newProject.category_id = categoryId;
                         this.newProject.company_name = companyName;
@@ -1617,9 +1657,6 @@ var projectTable;
                             formData.set('customer_id', customerId);
                         }
 
-                        for (let [key, value] of formData.entries()) {
-                            console.log(`${key}: ${value}`);
-                        }
 
                         const response = await axios.post('/api/index.php?model=project&method=add', formData);
                         

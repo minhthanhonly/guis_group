@@ -213,7 +213,7 @@ class Employeestatistics extends ApplicationModel {
                 FROM " . DB_PREFIX . "user u
                 INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
                 INNER JOIN " . DB_PREFIX . "team t ON tm.team_id = t.id AND t.is_active = 1
-                ORDER BY u.id ASC, t.id ASC"
+                ORDER BY u.id ASC, tm.team_id ASC"
             );
         }
         
