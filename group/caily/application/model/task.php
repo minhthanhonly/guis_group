@@ -1707,4 +1707,231 @@ class Task extends ApplicationModel {
         
         return $this->sendTaskNotification($params);
     }
-} 
+
+    /**
+     * Overview of all tasks grouped by department / team / user
+     *
+     * Returns:
+     * - departments: [{id, name}]
+     * - teams:       [{id, name, department_id}]
+     * - users:       [{id, userid, realname, department_id, department_name, teams:[{id,name}]}]
+     * - tasks:       [{
+     *                    id, title, status, priority, project_id, project_number, project_name,
+     *                    department_id, department_name, assigned_to_ids:[]
+     *                 }]
+     * - unassigned_users: same structure as users (no tasks assigned)
+     */
+    function listOverview($params = null) {
+        // Optional filters - support both $params array and $_GET
+        if (is_array($params)) {
+            $department_id     = isset($params['department_id']) ? intval($params['department_id']) : 0;
+            $team_id           = isset($params['team_id']) ? intval($params['team_id']) : 0;
+            $user_id           = isset($params['user_id']) ? intval($params['user_id']) : 0;
+            $exclude_completed = isset($params['exclude_completed']) ? intval($params['exclude_completed']) : 0;
+        } else {
+            $department_id     = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+            $team_id           = isset($_GET['team_id']) ? intval($_GET['team_id']) : 0;
+            $user_id           = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
+            $exclude_completed = isset($_GET['exclude_completed']) ? intval($_GET['exclude_completed']) : 0;
+        }
+
+        // 1. Load departments
+        // Hiển thị cùng thứ tự như department.php (Department::list): is_active = 1, ORDER BY id ASC
+        $departments = $this->fetchAll(
+            "SELECT id, name 
+             FROM " . DB_PREFIX . "departments 
+             WHERE is_active = 1
+             ORDER BY id ASC"
+        );
+
+        // 2. Load teams
+        $teamWhere = "WHERE t.is_active = 1";
+        if ($department_id > 0) {
+            $teamWhere .= " AND t.department_id = " . intval($department_id);
+        }
+        $teams = $this->fetchAll(
+            "SELECT t.id, t.name, t.department_id 
+             FROM " . DB_PREFIX . "team t
+             $teamWhere
+             ORDER BY t.department_id ASC, t.name ASC"
+        );
+
+        // 3. Load users with department & team info
+        $userWhereArr = ["(u.is_suspend = 0 OR u.is_suspend IS NULL OR u.is_suspend = '')"];
+        if ($department_id > 0) {
+            $userWhereArr[] = "ud.department_id = " . intval($department_id);
+        }
+        if ($team_id > 0) {
+            $userWhereArr[] = "tm.team_id = " . intval($team_id);
+        }
+        if ($user_id > 0) {
+            $userWhereArr[] = "u.id = " . intval($user_id);
+        }
+        $userWhere = "WHERE " . implode(" AND ", $userWhereArr);
+
+        $userRows = $this->fetchAll(
+            "SELECT 
+                u.id,
+                u.userid,
+                u.realname,
+                ud.department_id,
+                d.name AS department_name,
+                tm.team_id,
+                t.name AS team_name
+             FROM " . DB_PREFIX . "user u
+             LEFT JOIN " . DB_PREFIX . "user_department ud ON ud.userid = u.userid
+             LEFT JOIN " . DB_PREFIX . "departments d ON ud.department_id = d.id
+             LEFT JOIN " . DB_PREFIX . "team_members tm ON tm.user_id = u.id
+             LEFT JOIN " . DB_PREFIX . "team t ON tm.team_id = t.id AND t.is_active = 1
+             $userWhere
+             ORDER BY u.id ASC"
+        );
+
+        // Aggregate user data (one row per user, with teams array)
+        $users = [];
+        foreach ($userRows as $row) {
+            $uid = $row['id'];
+            if (!isset($users[$uid])) {
+                $users[$uid] = [
+                    'id' => $uid,
+                    'userid' => $row['userid'],
+                    'realname' => $row['realname'],
+                    'department_id' => $row['department_id'],
+                    'department_name' => $row['department_name'],
+                    'teams' => []
+                ];
+            }
+            if (!empty($row['team_id'])) {
+                // Avoid duplicate team entries
+                $exists = false;
+                foreach ($users[$uid]['teams'] as $t) {
+                    if ($t['id'] == $row['team_id']) {
+                        $exists = true;
+                        break;
+                    }
+                }
+                if (!$exists) {
+                    $users[$uid]['teams'][] = [
+                        'id' => $row['team_id'],
+                        'name' => $row['team_name']
+                    ];
+                }
+            }
+        }
+
+        // 4. Load tasks with project & department info
+        $taskWhereArr = ["1=1"];
+        if ($department_id > 0) {
+            $taskWhereArr[] = "p.department_id = " . intval($department_id);
+        }
+        // Filter by user (internal user id in assigned_to CSV)
+        if ($user_id > 0) {
+            $taskWhereArr[] = "FIND_IN_SET(" . intval($user_id) . ", t.assigned_to) > 0";
+        }
+        // Loại bỏ completed & cancelled từ phía DB nếu được yêu cầu
+        if ($exclude_completed) {
+            $taskWhereArr[] = "t.status NOT IN ('completed','cancelled')";
+        }
+        $taskWhere = "WHERE " . implode(" AND ", $taskWhereArr);
+        // We do not filter by team here because team is derived from users
+        $taskRows = $this->fetchAll(
+            "SELECT 
+                t.id,
+                t.project_id,
+                t.title,
+                t.status,
+                t.priority,
+                t.assigned_to,
+                t.due_date,
+                t.start_date,
+                t.progress,
+                p.project_number,
+                p.name AS project_name,
+                p.department_id,
+                d.name AS department_name
+             FROM " . DB_PREFIX . "tasks t
+             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+             $taskWhere
+             ORDER BY p.department_id ASC, t.project_id ASC, t.position ASC, t.created_at DESC"
+        );
+
+        $tasks = [];
+        $assignedUserIdSet = [];
+        foreach ($taskRows as $row) {
+            // Parse assigned_to (internal user IDs, comma separated)
+            $assignedIds = [];
+            if (!empty($row['assigned_to'])) {
+                $parts = explode(',', $row['assigned_to']);
+                foreach ($parts as $part) {
+                    $id = intval(trim($part));
+                    if ($id > 0) {
+                        $assignedIds[] = $id;
+                        $assignedUserIdSet[$id] = true;
+                    }
+                }
+            }
+
+            $tasks[] = [
+                'id' => $row['id'],
+                'project_id' => $row['project_id'],
+                'project_number' => $row['project_number'],
+                'project_name' => $row['project_name'],
+                'title' => $row['title'],
+                'status' => $row['status'],
+                'priority' => $row['priority'],
+                'due_date' => $row['due_date'],
+                'start_date' => $row['start_date'],
+                'progress' => $row['progress'],
+                'department_id' => $row['department_id'],
+                'department_name' => $row['department_name'],
+                'assigned_to_ids' => $assignedIds
+            ];
+        }
+
+        // 5. Determine unassigned users (no active tasks: exclude completed & cancelled)
+        // Build set of users that have at least one active task
+        $activeAssignedUserIdSet = [];
+        $activeWhereArr = ["1=1", "t.status NOT IN ('completed','cancelled')"];
+        if ($department_id > 0) {
+            $activeWhereArr[] = "p.department_id = " . intval($department_id);
+        }
+        $activeWhere = "WHERE " . implode(" AND ", $activeWhereArr);
+        $activeRows = $this->fetchAll(
+            "SELECT t.assigned_to
+             FROM " . DB_PREFIX . "tasks t
+             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+             $activeWhere"
+        );
+        foreach ($activeRows as $row) {
+            if (!empty($row['assigned_to'])) {
+                $parts = explode(',', $row['assigned_to']);
+                foreach ($parts as $part) {
+                    $id = intval(trim($part));
+                    if ($id > 0) {
+                        $activeAssignedUserIdSet[$id] = true;
+                    }
+                }
+            }
+        }
+
+        $unassigned_users = [];
+        foreach ($users as $u) {
+            $uid = $u['id'];
+            if (!isset($activeAssignedUserIdSet[$uid])) {
+                $unassigned_users[] = $u;
+            }
+        }
+
+        // Re-index users array (drop numeric keys)
+        $usersList = array_values($users);
+
+        return [
+            'departments' => $departments,
+            'teams' => $teams,
+            'users' => $usersList,
+            'tasks' => $tasks,
+            'unassigned_users' => $unassigned_users
+        ];
+    }
+}

@@ -58,17 +58,17 @@ if (!$project_id) {
                             <h5 class="card-title"><span data-i18n="基本情報">基本情報</span></h5>
                             <div>
                                 <!-- Join Project Button -->
-                                <button v-if="!isEditMode && canJoinProject" class="btn btn-primary btn-sm me-2" @click="joinProject" title="プロジェクトに参加">
-                                    <i class="fa fa-user-plus me-1"></i><span data-i18n="プロジェクトに参加">プロジェクトに参加</span>
+                            <button v-if="!isEditMode && canJoinProject" class="btn btn-primary btn-sm me-2" @click="joinProject" title="案件に参加">
+                                    <i class="fa fa-user-plus me-1"></i><span data-i18n="案件に参加">案件に参加</span>
                                 </button>
                                 
                                 <!-- Confirm Project Button for Kadai Projects -->
-                                <button v-if="project && project.is_kadai == 1 && project.status !== 'cancelled' && !isEditMode && canEditProject" class="btn btn-success btn-sm me-2" @click="confirmKadaiProject" title="プロジェクトを承認">
-                                    <i class="fa fa-check me-1"></i>プロジェクトを承認
+                                <button v-if="project && project.is_kadai == 1 && project.status !== 'cancelled' && !isEditMode && canEditProject" class="btn btn-success btn-sm me-2" @click="confirmKadaiProject" title="案件を承認">
+                                    <i class="fa fa-check me-1"></i>案件を承認
                                 </button>
                                 
-                                <!-- <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="プロジェクトをコピー">
-                                    <i class="fa fa-copy"></i> <span data-i18n="プロジェクトをコピー">プロジェクトをコピー</span>
+                                <!-- <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="案件をコピー">
+                                    <i class="fa fa-copy"></i> <span data-i18n="案件をコピー">案件をコピー</span>
                                 </button> -->
                                 <button v-if="!isEditMode && canEditProject && !(project && project.is_kadai == 1)" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode" title="編集">
                                     <i class="fa fa-pencil-alt me-1"></i> <span data-i18n="編集">編集</span>
@@ -957,8 +957,8 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="<?=ROOT?>assets/js/sw-manager.js"></script>
-<script src="/assets/js/mention.js"></script>
-<script src="/assets/js/comment-component.js"></script>
-<script src="<?=ROOT?>assets/vendor/libs/tagify/tagify.js"></script>
-<script src="assets/js/project-detail.js"></script>
+<script src="/assets/js/mention.js?v=<?=CACHE_VERSION?>"></script>
+<script src="/assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
+<script src="<?=ROOT?>assets/vendor/libs/tagify/tagify.j?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/project-detail.js?v=<?=CACHE_VERSION?>"></script>
 

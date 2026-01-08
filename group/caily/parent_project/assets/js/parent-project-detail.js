@@ -69,7 +69,7 @@ createApp({
                 project_order_type: '',
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
-
+                status: 'draft'
             },
             editingChildProject: {
                 id: null,
@@ -82,7 +82,8 @@ createApp({
                 project_order_type: '',
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
-
+                status: 'draft',
+                previous_status: ''
             },
             childProjectValidationErrors: {
                 name: '',
@@ -497,6 +498,33 @@ createApp({
         getProjectStatusBadgeClass(status) {
             const s = this.projectStatuses.find(s => s.value === status);
             return `bg-${s?.color || 'secondary'}`;
+        },
+        getProjectStatusButtonClass(status) {
+            const s = this.projectStatuses.find(s => s.value === status);
+            return `btn-${s?.color || 'secondary'}`;
+        },
+        selectProjectStatus(status, isEdit = false) {
+            if (isEdit) {
+                this.editingChildProject.status = status;
+                // Close dropdown
+                const dropdownElement = document.querySelector('#editChildProjectStatusDropdown');
+                if (dropdownElement) {
+                    const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                    if (dropdown) {
+                        dropdown.hide();
+                    }
+                }
+            } else {
+                this.newChildProject.status = status;
+                // Close dropdown
+                const dropdownElement = document.querySelector('#createChildProjectStatusDropdown');
+                if (dropdownElement) {
+                    const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                    if (dropdown) {
+                        dropdown.hide();
+                    }
+                }
+            }
         },
         getOrderTypeBadgeClass(orderType) {
             const type = orderType.trim().toLowerCase();
@@ -1445,7 +1473,7 @@ createApp({
                 project_order_type: '',
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
-
+                status: 'draft'
             };
             
             // Clear Quill content
@@ -2154,8 +2182,9 @@ createApp({
                 formData.append('end_date', this.editingChildProject.end_date);
                 formData.append('project_order_type', this.editingChildProject.project_order_type || '');
                 formData.append('parent_project_id', this.editingChildProject.parent_project_id);
+                formData.append('status', this.editingChildProject.status || 'draft');
 
-                formData.append('is_kadai', '1');
+                formData.append('is_kadai', '0');
 
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
 
@@ -2183,7 +2212,8 @@ createApp({
                         project_order_type: '',
                         parent_project_id: PARENT_PROJECT_ID,
                         is_kadai: true,
-        
+                        status: 'draft',
+                        previous_status: ''
                     };
                     
                     // Reset Quill content
@@ -2338,7 +2368,7 @@ createApp({
                 formData.append('parent_project_id', this.newChildProject.parent_project_id);
 
                 formData.append('is_kadai', '0');
-                formData.append('status', 'draft');
+                formData.append('status', this.newChildProject.status || 'draft');
 
                 const response = await axios.post('/api/index.php?model=project&method=create', formData);
 

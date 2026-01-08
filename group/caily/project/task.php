@@ -663,9 +663,9 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="<?=ROOT?>assets/js/sw-manager.js"></script>
 <link rel="stylesheet" href="<?=ROOT?>assets/css/comment-component.css" />
-<script src="<?=ROOT?>assets/js/comment-component.js"></script>
-<script src="<?=ROOT?>assets/js/mention.js"></script>
-<script src="assets/js/task-manager.js"></script>
+<script src="<?=ROOT?>assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
+<script src="<?=ROOT?>assets/js/mention.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/task-manager.js?v=<?=CACHE_VERSION?>"></script>
 
 <script>
 // Reset Quill editor when modal is closed

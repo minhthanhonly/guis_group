@@ -510,10 +510,7 @@ $view->heading('建物詳細');
                                     <td>{{ formatDateTime(project.start_date) || '-' }}</td>
                                     <td>{{ formatDateTime(project.end_date) || '-' }}</td>
                                     <td>
-                                        <span v-if="project.is_kadai == 1 && project.status !== 'cancelled'" class="badge bg-warning">
-                                            承認待ち
-                                        </span>
-                                        <span v-else class="badge" :class="getProjectStatusBadgeClass(project.status)">
+                                        <span class="badge" :class="getProjectStatusBadgeClass(project.status)">
                                             {{ getProjectStatusLabel(project.status) }}
                                         </span>
                                     </td>
@@ -961,6 +958,28 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
+                                    <div class="btn-group" style="width: 100%;">
+                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
+                                                :class="getProjectStatusButtonClass(newChildProject.status)"
+                                                id="createChildProjectStatusDropdown"
+                                                data-bs-toggle="dropdown" aria-expanded="false"
+                                                style="width: 100%; text-align: left;">
+                                            {{ getProjectStatusLabel(newChildProject.status) }}
+                                        </button>
+                                        <ul class="dropdown-menu" style="width: 100%;">
+                                            <li v-for="status in projectStatuses" :key="status.value">
+                                                <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                                @click="selectProjectStatus(status.value, false)">
+                                                    {{ status.label }}
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="col-12">
                                 <div class="mb-3">
                                     <label class="form-label">説明</label>
@@ -1073,6 +1092,28 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
+                                    <div class="btn-group" style="width: 100%;">
+                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
+                                                :class="getProjectStatusButtonClass(editingChildProject.status)"
+                                                id="editChildProjectStatusDropdown"
+                                                data-bs-toggle="dropdown" aria-expanded="false"
+                                                style="width: 100%; text-align: left;">
+                                            {{ getProjectStatusLabel(editingChildProject.status) }}
+                                        </button>
+                                        <ul class="dropdown-menu" style="width: 100%;">
+                                            <li v-for="status in projectStatuses" :key="status.value">
+                                                <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                                @click="selectProjectStatus(status.value, true)">
+                                                    {{ status.label }}
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="col-12">
                                 <div class="mb-3">
                                     <label class="form-label"><span data-i18n="説明">説明</span></label>
@@ -1086,7 +1127,7 @@ $view->heading('建物詳細');
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <div v-if="editingChildProject && editingChildProject.status === 'cancelled'" class="me-auto">
+                    <div v-if="editingChildProject && editingChildProject.status === 'cancelled'" class="me-2">
                         <button type="button" class="btn btn-warning" @click="restoreChildProject"
                             :disabled="restoringChildProject">
                             <span v-if="restoringChildProject" class="spinner-border spinner-border-sm me-1"></span>
@@ -1095,7 +1136,7 @@ $view->heading('建物詳細');
                         </button>
                     </div>
                     <div>
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                        <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">キャンセル</button>
                         <button type="button" class="btn btn-primary" @click="updateChildProject"
                             :disabled="updatingChildProject">
                             <span v-if="updatingChildProject" class="spinner-border spinner-border-sm me-1"></span>
@@ -3275,39 +3316,7 @@ $view->footing();
         font-size: 0.875rem;
     }
 
-    .bg-label-primary {
-        background-color: #e7f1ff !important;
-        color: #0d6efd !important;
-    }
-
-    .bg-label-info {
-        background-color: #e7f3ff !important;
-        color: #0dcaf0 !important;
-    }
-
-    /* Badge styles for logs */
-    .badge {
-        display: inline-block;
-        padding: 0.35em 0.65em;
-        font-size: 0.75em;
-        font-weight: 700;
-        line-height: 1;
-        text-align: center;
-        white-space: nowrap;
-        vertical-align: baseline;
-        border-radius: 0.375rem;
-    }
-
-    .badge.bg-secondary {
-        background-color: #6c757d !important;
-        color: #fff !important;
-    }
-
-    .badge.bg-primary {
-        background-color: #0d6efd !important;
-        color: #fff !important;
-    }
-
+ 
     /* List group styles for logs */
   
 

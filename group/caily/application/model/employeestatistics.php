@@ -300,11 +300,12 @@ class Employeestatistics extends ApplicationModel {
     }
     
     /**
-     * Insert statistics with proper NULL handling
+     * Insert statistics with proper NULL handling and duplicate key handling
      */
     private function insertStatistics($data) {
         $keys = array();
         $values = array();
+        $updates = array();
         
         foreach ($data as $key => $value) {
             $keys[] = $key;
@@ -315,9 +316,25 @@ class Employeestatistics extends ApplicationModel {
             } else {
                 $values[] = "'" . $this->quote($value) . "'";
             }
+            
+            // Prepare update clause for ON DUPLICATE KEY UPDATE
+            if ($key !== 'user_id' && $key !== 'period_type' && $key !== 'period_start' && $key !== 'period_end') {
+                if ($value === null) {
+                    $updates[] = $key . " = NULL";
+                } elseif (is_numeric($value)) {
+                    $updates[] = $key . " = " . $value;
+                } else {
+                    $updates[] = $key . " = '" . $this->quote($value) . "'";
+                }
+            }
         }
         
+        // Use INSERT ... ON DUPLICATE KEY UPDATE to handle race conditions
         $query = "INSERT INTO {$this->table} (" . implode(", ", $keys) . ") VALUES (" . implode(", ", $values) . ")";
+        if (!empty($updates)) {
+            $query .= " ON DUPLICATE KEY UPDATE " . implode(", ", $updates) . ", updated_at = CURRENT_TIMESTAMP";
+        }
+        
         $result = $this->query($query);
         return $result ? $this->insertid() : false;
     }

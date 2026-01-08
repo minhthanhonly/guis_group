@@ -43,7 +43,7 @@
                     <div data-i18n="建物一覧">建物一覧</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'project' && $page != 'project_gantt' && $page != 'custom_fields') echo 'active'; ?>">
+                <li class="menu-item <?php if($directory == 'project' && $page != 'project_gantt' && $page != 'custom_fields' && $page != 'task_overview' && $page != 'employee_statistics') echo 'active'; ?>">
                   <a href="<?=$root?>project/" class="menu-link">
                     <div data-i18n="案件一覧">案件一覧</div>
                   </a>
@@ -53,6 +53,11 @@
                     <div data-i18n="マイタスク">マイタスク</div>
                   </a>
                 </li> -->
+                <li class="menu-item <?php if($directory == 'project' && $page == 'task_overview') echo 'active'; ?>">
+                  <a href="<?=$root?>project/task_overview.php" class="menu-link">
+                    <div data-i18n="タスク一覧">タスク一覧</div>
+                  </a>
+                </li>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'project_gantt') echo 'active'; ?>">
                   <a href="<?=$root?>project/project_gantt.php" class="menu-link">
                     <div data-i18n="ガントチャート">ガントチャート</div>
@@ -69,13 +74,11 @@
                     <div data-i18n="価格表管理">価格表管理</div>
                   </a>
                 </li>
-                <?php if($_SESSION['authority'] == 'administrator'){ ?>
-                <li class="menu-item <?php if($directory == 'project' && $page == 'employeestatistics') echo 'active'; ?>">
+                <li class="menu-item <?php if($directory == 'project' && $page == 'employee_statistics') echo 'active'; ?>">
                   <a href="<?=$root?>project/employee_statistics.php" class="menu-link">
                     <div data-i18n="従業員統計">従業員統計</div>
                   </a>
                 </li>
-                <?php } ?>
                 <?php } ?>
                 
               </ul>
