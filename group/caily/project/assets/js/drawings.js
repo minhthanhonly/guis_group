@@ -774,7 +774,6 @@ createApp({
                     if (modal) {
                         modal.hide();
                     }
-                    this.selectedDrawings = [];
                     this.loadDrawings();
                 } else {
                     this.showError(response.data?.message || '一括更新に失敗しました');
@@ -814,7 +813,6 @@ createApp({
                 
                 if (response.data && response.data.status === 'success') {
                     this.showSuccess('ファイルを一括削除しました');
-                    this.selectedDrawings = [];
                     this.loadDrawings();
                 } else {
                     this.showError(response.data?.message || '一括削除に失敗しました');
@@ -869,7 +867,6 @@ createApp({
                 
                 if (response.data && response.data.status === 'success') {
                     this.showSuccess(response.data.message || '一括割り当て解除が完了しました');
-                    this.selectedDrawings = [];
                     this.loadDrawings();
                 } else {
                     this.showError(response.data?.message || '一括割り当て解除に失敗しました');
@@ -953,7 +950,6 @@ createApp({
                     
                     if (response.data && response.data.status === 'success') {
                         this.showSuccess(response.data.message || '一括割り当てが完了しました');
-                        this.selectedDrawings = [];
                         this.closeAssigneeModal();
                         this.loadDrawings();
                     } else {

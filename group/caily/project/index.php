@@ -113,6 +113,17 @@ $view->heading('プロジェクト管理');
                 </button>
 
             </div>
+            <div class="d-flex align-items-center gap-2">
+                <div class="form-check d-flex align-items-center">
+                    <input class="form-check-input me-1" type="checkbox" id="filterFavoritesOnly" @change="onFavoritesFilterChange">
+                    <label class="form-check-label mb-0" for="filterFavoritesOnly">
+                        <i class="fa fa-star text-warning me-1"></i><span data-i18n="お気に入りのみ">お気に入りのみ</span>
+                    </label>
+                </div>
+                <button v-if="showClearAllFavoritesBtn" class="btn btn-sm btn-outline-danger ms-2" @click="clearAllFavorites">
+                    <i class="fa fa-trash me-1"></i><span data-i18n="お気に入りをすべて削除">お気に入りをすべて削除</span>
+                </button>
+            </div>
             <!-- Active Filters Display -->
             <div id="activeFilters" class="mb-2"></div>
             <table id="projectTable" class="table table-striped">

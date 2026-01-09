@@ -67,6 +67,15 @@ class Project extends ApplicationModel {
                 $user_id
             );
         }
+        
+        // Filter favorites only
+        $favoritesOnly = isset($_GET['favorites_only']) && $_GET['favorites_only'] == '1';
+        if ($favoritesOnly) {
+            $whereArr[] = sprintf(
+                "EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d)",
+                $user_id
+            );
+        }
 
         if (isset($_GET['department_id'])) {
             $whereArr[] = sprintf("p.department_id = %d", intval($_GET['department_id']));
@@ -194,6 +203,17 @@ class Project extends ApplicationModel {
 
         // Get filtered records count
         $filteredRecords = $totalRecords;
+        
+        // Recalculate counts if favorites filter is applied
+        if ($favoritesOnly) {
+            $totalQuery = "SELECT COUNT(*) as count FROM {$this->table} p
+            JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+            LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
+            LEFT JOIN " . DB_PREFIX . "customer c ON c.company_name = pp.company_name AND c.name = pp.contact_name
+            " . $where;
+            $totalRecords = $this->fetchOne($totalQuery)['count'];
+            $filteredRecords = $totalRecords;
+        }
 
         // Get data for current page
         $query = sprintf(
@@ -201,6 +221,7 @@ class Project extends ApplicationModel {
             c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
             CONCAT(c.name, ' ', c.title) as customer_name,
             pp.company_name as parent_company_name, pp.contact_name as parent_contact_name,
+            CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite,
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
@@ -210,13 +231,14 @@ class Project extends ApplicationModel {
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
              WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id
            
-            FROM {$this->table} p 
+            FROM {$this->table} p
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.company_name = pp.company_name AND c.name = pp.contact_name
             %s
             %s
             LIMIT %d, %d",
+            $user_id,
             $where,
             $orderBy,
             $start,
@@ -900,9 +922,12 @@ class Project extends ApplicationModel {
             $id = $params;
         }
         
+        $user_id = $_SESSION['id'];
+        
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
             c.name as contact_name, c.company_name, c.department as branch_name, c.category_id as category_id, 
+            CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite,
             (SELECT COUNT(*) FROM " . DB_PREFIX . "tasks WHERE project_id = p.id) as task_count,
             (SELECT COUNT(*) FROM " . DB_PREFIX . "project_drawings WHERE project_id = p.id) as drawing_count,
             (SELECT COUNT(*) FROM " . DB_PREFIX . "project_members WHERE project_id = p.id) as member_count
@@ -910,6 +935,7 @@ class Project extends ApplicationModel {
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
             WHERE p.id = %d",
+            $user_id,
             intval($id)
         );
         
@@ -921,6 +947,86 @@ class Project extends ApplicationModel {
         }
         
         return $project;
+    }
+    
+    /**
+     * Toggle favorite status for a project
+     */
+    function toggleFavorite($params = null) {
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        $user_id = $_SESSION['id'];
+        
+        if (!$project_id || !$user_id) {
+            return array(
+                'status' => 'error',
+                'message' => 'Invalid parameters'
+            );
+        }
+        
+        // Check if favorite exists
+        $checkQuery = sprintf(
+            "SELECT id FROM " . DB_PREFIX . "project_favorites 
+             WHERE project_id = %d AND user_id = %d",
+            $project_id,
+            $user_id
+        );
+        $existing = $this->fetchOne($checkQuery);
+        
+        if ($existing) {
+            // Remove favorite
+            $deleteQuery = sprintf(
+                "DELETE FROM " . DB_PREFIX . "project_favorites 
+                 WHERE project_id = %d AND user_id = %d",
+                $project_id,
+                $user_id
+            );
+            $this->query($deleteQuery);
+            return array(
+                'status' => 'success',
+                'is_favorite' => false,
+                'message' => 'お気に入りから削除しました'
+            );
+        } else {
+            // Add favorite
+            $insertQuery = sprintf(
+                "INSERT INTO " . DB_PREFIX . "project_favorites (project_id, user_id, created_at) 
+                 VALUES (%d, %d, NOW())",
+                $project_id,
+                $user_id
+            );
+            $this->query($insertQuery);
+            return array(
+                'status' => 'success',
+                'is_favorite' => true,
+                'message' => 'お気に入りに追加しました'
+            );
+        }
+    }
+
+    /**
+     * Clear all favorites for current user
+     */
+    function clearAllFavorites($params = null) {
+        $user_id = $_SESSION['id'];
+        
+        if (!$user_id) {
+            return array(
+                'status' => 'error',
+                'message' => 'Invalid user'
+            );
+        }
+        
+        $deleteQuery = sprintf(
+            "DELETE FROM " . DB_PREFIX . "project_favorites 
+             WHERE user_id = %d",
+            $user_id
+        );
+        $this->query($deleteQuery);
+        
+        return array(
+            'status' => 'success',
+            'message' => 'すべてのお気に入りを削除しました'
+        );
     }
 
     function updateProgress($params = null) {

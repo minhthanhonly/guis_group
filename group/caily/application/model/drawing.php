@@ -646,7 +646,6 @@ class Drawing extends ApplicationModel {
 
     function bulkUnassignUser() {
         $ids = json_decode($_POST['ids'], true);
-        $current_user_id = $_SESSION['userid'];
         
         if (empty($ids) || !is_array($ids)) {
             return [
@@ -654,6 +653,18 @@ class Drawing extends ApplicationModel {
                 'message' => 'IDが指定されていません'
             ];
         }
+        
+        // Get user_ids from POST to unassign (can be JSON array or single value)
+        $user_ids_to_remove = [];
+        if (isset($_POST['user_ids'])) {
+            $decoded = json_decode($_POST['user_ids'], true);
+            if (is_array($decoded)) {
+                $user_ids_to_remove = $decoded;
+            } else {
+                $user_ids_to_remove = [$_POST['user_ids']];
+            }
+        }
+        // If no user_ids provided, remove all users (same logic as unassignUser)
         
         $success_count = 0;
         $not_assigned_count = 0;
@@ -664,25 +675,39 @@ class Drawing extends ApplicationModel {
             
             $existing_created_by = $drawing['created_by'];
             
-            if (empty($existing_created_by)) {
+            if (empty($existing_created_by) || trim($existing_created_by) === '') {
                 $not_assigned_count++;
                 continue;
             }
             
-            // Remove current user from the list
-            $existing_user_ids = array_filter(array_map('trim', explode(',', $existing_created_by)));
-            $new_user_ids = array_filter($existing_user_ids, function($id) use ($current_user_id) {
-                return $id !== $current_user_id;
+            // Parse existing user IDs
+            $existing_user_ids = array_filter(array_map('trim', explode(',', $existing_created_by)), function($id) {
+                return !empty(trim($id));
             });
             
-            // Check if user was in the list
+            if (count($existing_user_ids) === 0) {
+                $not_assigned_count++;
+                continue;
+            }
+            
+            // If no specific user_ids provided, remove all users
+            if (empty($user_ids_to_remove)) {
+                $new_user_ids = [];
+            } else {
+                // Remove specified user IDs from the list
+                $new_user_ids = array_filter($existing_user_ids, function($id) use ($user_ids_to_remove) {
+                    return !in_array(trim($id), array_map('trim', $user_ids_to_remove));
+                });
+            }
+            
+            // Check if anything changed
             if (count($new_user_ids) === count($existing_user_ids)) {
                 $not_assigned_count++;
                 continue;
             }
             
             // Update the drawing
-            $new_created_by = implode(',', $new_user_ids);
+            $new_created_by = !empty($new_user_ids) ? implode(',', $new_user_ids) : '';
             $data = array(
                 'created_by' => $new_created_by,
                 'updated_at' => date('Y-m-d H:i:s')
@@ -702,6 +727,13 @@ class Drawing extends ApplicationModel {
             return [
                 'status' => 'success',
                 'message' => $message
+            ];
+        }
+        
+        if ($not_assigned_count > 0 && $not_assigned_count === count($ids)) {
+            return [
+                'status' => 'error',
+                'message' => '選択されたファイルはすべて割り当てられていませんでした'
             ];
         }
         

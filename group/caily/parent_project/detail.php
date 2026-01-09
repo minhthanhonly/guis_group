@@ -483,6 +483,7 @@ $view->heading('建物詳細');
                         <table class="table table-hover">
                             <thead>
                                 <tr>
+                                    <th class="text-center"><span data-i18n="お気に入り">お気に入り</span></th>
                                     <th><span data-i18n="案件番号">案件番号</span></th>
                                     <th><span data-i18n="受注形態">受注形態</span></th>
                                     <th><span data-i18n="案件名">案件名</span></th>
@@ -498,6 +499,13 @@ $view->heading('建物詳細');
                             <tbody>
                                 <tr v-for="project in childProjects" :key="project.id"
                                     :class="{ 'table-active': selectedChildProjectIds.includes(project.id) }">
+                                    <td class="text-center">
+                                        <i class="fa fa-star" 
+                                           :class="project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
+                                           style="cursor: pointer; font-size: 1.2em;"
+                                           @click="toggleProjectFavorite(project)"
+                                           :title="project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
+                                    </td>
                                     <td><span class="badge bg-primary border me-1">{{ project.project_number || '-' }}</span></td>
                                     <td>
                                         <span
@@ -552,7 +560,7 @@ $view->heading('建物詳細');
                                     </td>
                                 </tr>
                                 <tr v-if="childProjects.length === 0">
-                                    <td colspan="10" class="text-center text-muted py-4">
+                                    <td colspan="11" class="text-center text-muted py-4">
                                         子プロジェクトがありません
                                     </td>
                                 </tr>

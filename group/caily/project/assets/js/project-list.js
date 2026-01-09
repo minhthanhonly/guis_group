@@ -175,6 +175,7 @@ var projectTable;
                     const filterKeyword = $('#filterKeyword').val();
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
                     const myProjects = app.filterMyProjects ? 1 : 0;
+                    const favoritesOnly = $('#filterFavoritesOnly').is(':checked') ? 1 : 0;
                     return {
                         model: 'project',
                         method: 'list',
@@ -193,7 +194,8 @@ var projectTable;
                         filterTimeLeft,
                         my_projects: myProjects,
                         filterKeyword,
-                        showInactive
+                        showInactive,
+                        favorites_only: favoritesOnly
                     };
                 },
                 dataSrc: function(response) {
@@ -205,6 +207,22 @@ var projectTable;
             searching: false,
             scrollX: true,
             columns: [
+                { 
+                    data: 'is_favorite',
+                    render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            return data || 0;
+                        }
+                        const isFavorite = row.is_favorite == 1;
+                        return `<i class="fa fa-star ${isFavorite ? 'text-warning' : 'text-muted'}" 
+                                   style="cursor: pointer; font-size: 1.2em;"
+                                   onclick="window.toggleProjectFavorite(${row.id}, this)"
+                                   title="${isFavorite ? 'お気に入りから削除' : 'お気に入りに追加'}"></i>`;
+                    },
+                    title: '<span data-i18n="お気に入り">お気に入り</span>',
+                    orderable: false,
+                    width: '70px'
+                },
                 { 
                     data: 'project_number',
                     render: function(data, type, row) {
@@ -427,7 +445,7 @@ var projectTable;
                 { data: 'end_date', title: '<span data-i18n="終了日">終了日</span>', render: function(data, type, row) {
                     if(data) {
                         const timeRemaining = getTimeRemaining(data, row.status);
-                        const dateStr = moment(data).format('M月D日 H:mm');
+                        const dateStr = moment(data).format('YYYY年M月D日 H:mm');
                         
                         if (timeRemaining) {
                             const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
@@ -456,7 +474,7 @@ var projectTable;
                 //     title: '<span data-i18n="操作">操作</span>'
                 // }
             ],
-            order: [[10, 'desc']],
+            order: [[11, 'desc']],
            
             pageLength: 50,
             ordering: true,
@@ -843,6 +861,11 @@ var projectTable;
             $('#filterTimeLeft').val('');
             $('#filterKeyword').val('');
             $('#showInactiveSwitch').prop('checked', true); // hoặc giá trị mặc định
+            // Reset favorites filter
+            $('#filterFavoritesOnly').prop('checked', false);
+            if (app) {
+                app.showClearAllFavoritesBtn = false;
+            }
             localStorage.removeItem(FILTER_STORAGE_KEY);
             // Reset status filter
             if (app && app.selectedStatus) {
@@ -952,6 +975,7 @@ var projectTable;
         data() {
             return {
                 selectedDepartment: null,
+                showClearAllFavoritesBtn: false,
                 projects: [],
                 departments: [],
                 branches: [],
@@ -1523,6 +1547,75 @@ var projectTable;
                 this.selectedStatus = status;
                 this.loadProjects();
             },
+            onFavoritesFilterChange() {
+                const isChecked = $('#filterFavoritesOnly').is(':checked');
+                this.showClearAllFavoritesBtn = isChecked;
+                if (projectTable) {
+                    projectTable.ajax.reload();
+                }
+            },
+            async toggleProjectFavorite(projectId, element) {
+                try {
+                    const formData = new FormData();
+                    formData.append('project_id', projectId);
+                    
+                    const response = await axios.post('/api/index.php?model=project&method=toggleFavorite', formData);
+                    
+                    if (response.data && response.data.status === 'success') {
+                        // Update icon appearance
+                        const isFavorite = response.data.is_favorite;
+                        $(element).toggleClass('text-warning', isFavorite).toggleClass('text-muted', !isFavorite);
+                        $(element).attr('title', isFavorite ? 'お気に入りから削除' : 'お気に入りに追加');
+                        
+                        // Update row data if table exists
+                        if (projectTable) {
+                            const row = $(element).closest('tr');
+                            const rowData = projectTable.row(row).data();
+                            if (rowData) {
+                                rowData.is_favorite = isFavorite ? 1 : 0;
+                            }
+                        }
+                    } else {
+                        showMessage(response.data?.message || '操作に失敗しました。', true);
+                    }
+                } catch (error) {
+                    console.error('Error toggling favorite:', error);
+                    showMessage('操作に失敗しました。', true);
+                }
+            },
+            async clearAllFavorites() {
+                try {
+                    const result = await Swal.fire({
+                        title: '確認',
+                        text: 'すべてのお気に入りを削除しますか？',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        cancelButtonColor: '#3085d6',
+                        confirmButtonText: '削除',
+                        cancelButtonText: 'キャンセル'
+                    });
+                    
+                    if (result.isConfirmed) {
+                        const response = await axios.post('/api/index.php?model=project&method=clearAllFavorites');
+                        
+                        if (response.data && response.data.status === 'success') {
+                            // Uncheck the favorites filter
+                            $('#filterFavoritesOnly').prop('checked', false);
+                            this.showClearAllFavoritesBtn = false;
+                            // Reload the table
+                            if (projectTable) {
+                                projectTable.ajax.reload();
+                            }
+                        } else {
+                            showMessage(response.data?.message || '削除に失敗しました。', true);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error clearing all favorites:', error);
+                    showMessage('削除に失敗しました。', true);
+                }
+            },
             async loadProjects() {
                 try {
                     // Ensure DataTable is initialized before reloading
@@ -1980,3 +2073,34 @@ var projectTable;
             }
         }
     }).mount('#app');
+
+    // Global function for toggling favorite from DataTable render
+    window.toggleProjectFavorite = async function(projectId, element) {
+        try {
+            const formData = new FormData();
+            formData.append('project_id', projectId);
+            
+            const response = await axios.post('/api/index.php?model=project&method=toggleFavorite', formData);
+            
+            if (response.data && response.data.status === 'success') {
+                // Update icon appearance
+                const isFavorite = response.data.is_favorite;
+                $(element).toggleClass('text-warning', isFavorite).toggleClass('text-muted', !isFavorite);
+                $(element).attr('title', isFavorite ? 'お気に入りから削除' : 'お気に入りに追加');
+                
+                // Update row data if table exists
+                if (projectTable) {
+                    const row = $(element).closest('tr');
+                    const rowData = projectTable.row(row).data();
+                    if (rowData) {
+                        rowData.is_favorite = isFavorite ? 1 : 0;
+                    }
+                }
+            } else {
+                showMessage(response.data?.message || '操作に失敗しました。', true);
+            }
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
+            showMessage('操作に失敗しました。', true);
+        }
+    };

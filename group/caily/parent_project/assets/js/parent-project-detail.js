@@ -476,6 +476,34 @@ createApp({
                 showMessage('操作に失敗しました。', true);
             }
         },
+        async toggleProjectFavorite(project) {
+            if (!project || !project.id) return;
+            
+            try {
+                const formData = new FormData();
+                formData.append('project_id', project.id);
+                
+                const response = await axios.post('/api/index.php?model=project&method=toggleFavorite', formData);
+                
+                if (response.data && response.data.status === 'success') {
+                    // Update the project's favorite status (convert boolean to number for consistency)
+                    project.is_favorite = response.data.is_favorite ? 1 : 0;
+                } else {
+                    if (typeof showMessage === 'function') {
+                        showMessage(response.data?.message || '操作に失敗しました。', true);
+                    } else {
+                        alert(response.data?.message || '操作に失敗しました。');
+                    }
+                }
+            } catch (error) {
+                console.error('Error toggling project favorite:', error);
+                if (typeof showMessage === 'function') {
+                    showMessage('操作に失敗しました。', true);
+                } else {
+                    alert('操作に失敗しました。');
+                }
+            }
+        },
         getParentProjectStatusLabel(status) {
             if (!status) return '-';
             

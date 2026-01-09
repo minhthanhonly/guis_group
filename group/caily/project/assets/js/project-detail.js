@@ -169,7 +169,7 @@ const vueApp = createApp({
             return false;
         },
         canAddNote() {
-            return this.permission.can_manage_project || (this.permission.is_member && (this.permission.rule && this.permission.rule.project_note == 1));
+            return this.permission.can_manage_project || this.permission.is_member;
         },
         isProjectMember() {
             // Check if current user is already a member or manager
@@ -268,6 +268,35 @@ const vueApp = createApp({
             } catch (error) {
                 console.error('Error loading project:', error);
                 alert('プロジェクトの読み込みに失敗しました。');
+            }
+        },
+        
+        async toggleFavorite() {
+            if (!this.project || !this.project.id) return;
+            
+            try {
+                const formData = new FormData();
+                formData.append('project_id', this.project.id);
+                
+                const response = await axios.post('/api/index.php?model=project&method=toggleFavorite', formData);
+                
+                if (response.data && response.data.status === 'success') {
+                    // Update the project's favorite status (convert boolean to number for consistency)
+                    this.project.is_favorite = response.data.is_favorite ? 1 : 0;
+                } else {
+                    if (typeof showMessage === 'function') {
+                        showMessage(response.data?.message || '操作に失敗しました。', true);
+                    } else {
+                        alert(response.data?.message || '操作に失敗しました。');
+                    }
+                }
+            } catch (error) {
+                console.error('Error toggling favorite:', error);
+                if (typeof showMessage === 'function') {
+                    showMessage('操作に失敗しました。', true);
+                } else {
+                    alert('操作に失敗しました。');
+                }
             }
         },
         
@@ -1331,10 +1360,11 @@ const vueApp = createApp({
                     
                     const response = await axios.post('/api/index.php?model=project&method=addMemberApi', formData);
                     
-                    if (response.data && (response.data.status === 'success' || (response.data && !response.data.status))) {
+                    if (response.data && response.data.status === 'success') {
                         showMessage('プロジェクトに参加しました。');
                         // Reload project data to reflect changes
                         await this.loadProject();
+                        // Reload permission after joining project
                         await this.loadPermission();
                     } else {
                         showMessage(response.data?.message || 'プロジェクトへの参加に失敗しました。', true);

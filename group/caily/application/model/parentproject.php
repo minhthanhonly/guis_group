@@ -378,14 +378,18 @@ class ParentProject extends ApplicationModel {
             $parent_project_id = $params;
         }
         
+        $user_id = $_SESSION['id'];
+        
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name, c.department as branch_name
+            c.name as contact_name, c.company_name, c.department as branch_name,
+            CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite
             FROM " . DB_PREFIX . "projects p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
             WHERE p.parent_project_id = %d
             ORDER BY p.created_at DESC",
+            $user_id,
             intval($parent_project_id)
         );
         return $this->fetchAll($query);

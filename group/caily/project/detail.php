@@ -55,7 +55,14 @@ if (!$project_id) {
                 <div class="card" :class="{ 'edit-mode': isEditMode }">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h5 class="card-title"><span data-i18n="基本情報">基本情報</span></h5>
+                            <h5 class="card-title">
+                                <i class="fa fa-star me-2" 
+                                   :class="project && project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
+                                   style="cursor: pointer; font-size: 1.2em;"
+                                   @click="toggleFavorite"
+                                   :title="project && project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
+                                <span data-i18n="案件詳細">案件詳細</span>
+                            </h5>
                             <div>
                                 <!-- Join Project Button -->
                             <button v-if="!isEditMode && canJoinProject" class="btn btn-primary btn-sm me-2" @click="joinProject" title="案件に参加">
@@ -199,7 +206,7 @@ if (!$project_id) {
                             </div>
                         
                             <div class="col-md-4  mt-4">
-                                <label class="form-label"><span data-i18n="プロジェクト番号">プロジェクト番号</span>  <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="案件番号">案件番号</span>  <span class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
                                     <input type="text" class="form-control" v-model="project.project_number" readonly>
                                     <div v-if="validationErrors.project_number" class="invalid-feedback d-block">
@@ -211,7 +218,7 @@ if (!$project_id) {
                                 </template>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="プロジェクト名">プロジェクト名</span>  <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="案件名">案件名</span>  <span class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
                                     <input type="text" class="form-control" v-model="project.name">
                                     <div v-if="validationErrors.name" class="invalid-feedback d-block">
@@ -592,7 +599,7 @@ if (!$project_id) {
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">メモ</h5>
                         <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
-                            <i class="fa fa-plus"></i>
+                            <i class="fa fa-plus"></i> <span data-i18n="メモを追加">メモを追加</span>
                         </button>
                     </div>
                     <div class="card-body">
@@ -600,7 +607,7 @@ if (!$project_id) {
                             <div v-for="note in notes" :key="note.id" class="list-group-item d-flex justify-content-between align-items-start">
                                 <div class="flex-grow-1" style="cursor: pointer;" @click="openNoteModal(note)">
                                     <div class="d-flex align-items-center mb-1">
-                                        <i v-if="note.is_important == 1" class="fa fa-star text-warning me-2"></i>
+                                        <i v-if="note.is_important == 1" class="fa fa-exclamation-circle text-danger me-2"></i>
                                         <span class="fw-medium text-primary">{{ note.title }}</span>
                                     </div>
                                     <div v-if="note.content" class="text-muted small note-content">
@@ -769,16 +776,16 @@ if (!$project_id) {
                         <div v-if="editingNote.id && !isNoteEditMode">
                             <div class="mb-3">
                                 <label class="form-label">タイトル</label>
-                                <div class="form-control bg-light">{{ editingNote.title }}</div>
+                                <div class="form-control">{{ editingNote.title }}</div>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">内容</label>
-                                <div class="form-control bg-light" style="min-height:100px;white-space:pre-line;">{{ editingNote.content || '-' }}</div>
+                                <div class="form-control" style="min-height:100px;white-space:pre-line;">{{ editingNote.content || '-' }}</div>
                             </div>
                             <div class="mb-3" v-if="editingNote.is_important">
                                 <label class="form-label">重要メモ</label>
                                 <div>
-                                    <i class="fa fa-star text-warning"></i>
+                                    <i class="fa fa-exclamation-circle text-danger"></i>
                                 </div>
                             </div>
                            
@@ -797,7 +804,7 @@ if (!$project_id) {
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant">
                                     <label class="form-check-label" for="isImportant">
-                                        <i class="fa fa-star text-warning me-2"></i> 重要メモ
+                                        <i class="fa fa-exclamation-circle text-danger me-2"></i> 重要メモ
                                     </label>
                                 </div>
                             </div>
