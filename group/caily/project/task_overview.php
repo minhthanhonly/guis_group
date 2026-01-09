@@ -114,10 +114,10 @@ $view->heading('タスク一覧');
                                         {{ getAssigneeNames(task) }}
                                     </td>
                                     <td>
-                                        <span class="badge bg-secondary text-uppercase">{{ task.status || '-' }}</span>
+                                        <span class="badge" :class="'bg-' + getStatusColor(task.status)">{{ getStatusLabel(task.status) || '-' }}</span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-info">{{ task.priority || '-' }}</span>
+                                        <span class="badge" :class="'bg-' + getPriorityColor(task.priority)">{{ getPriorityLabel(task.priority) || '-' }}</span>
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center">
@@ -132,7 +132,7 @@ $view->heading('タスク一覧');
                                     </td>
                                     <td>
                                         <small class="text-muted">
-                                            {{ task.start_date || '-' }} ～ {{ task.due_date || '-' }}
+                                            {{ formatDate(task.start_date) }} ～ {{ formatDate(task.due_date) }}
                                         </small>
                                     </td>
                                 </tr>

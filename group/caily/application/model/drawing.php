@@ -412,12 +412,32 @@ class Drawing extends ApplicationModel {
 
     function assignUser() {
         $drawing_id = isset($_POST['drawing_id']) ? intval($_POST['drawing_id']) : 0;
-        $current_user_id = $_SESSION['userid'];
         
         if (!$drawing_id) {
             return [
                 'status' => 'error',
                 'message' => 'ファイルIDが指定されていません'
+            ];
+        }
+        
+        // Get user_ids from POST (can be JSON array or single value)
+        $user_ids = [];
+        if (isset($_POST['user_ids'])) {
+            $decoded = json_decode($_POST['user_ids'], true);
+            if (is_array($decoded)) {
+                $user_ids = $decoded;
+            } else {
+                $user_ids = [$_POST['user_ids']];
+            }
+        } else {
+            // Fallback to current user if no user_ids provided
+            $user_ids = [$_SESSION['userid']];
+        }
+        
+        if (empty($user_ids)) {
+            return [
+                'status' => 'error',
+                'message' => '担当者が指定されていません'
             ];
         }
         
@@ -430,43 +450,18 @@ class Drawing extends ApplicationModel {
             ];
         }
         
-        // Get current user info
-        $user_query = sprintf(
-            "SELECT realname FROM " . DB_PREFIX . "user WHERE userid = %d",
-            $current_user_id
-        );
-        $user = $this->fetchOne($user_query);
+        // Only allow one user per drawing - use the first user_id from the array
+        $assigned_userid = is_array($user_ids) && !empty($user_ids) ? trim($user_ids[0]) : (is_string($user_ids) ? trim($user_ids) : '');
         
-        if (!$user) {
+        if (empty($assigned_userid)) {
             return [
                 'status' => 'error',
-                'message' => 'ユーザー情報が見つかりません'
+                'message' => '担当者が指定されていません'
             ];
         }
         
-        $current_user_name = $user['realname'];
-        
-        // Handle existing created_by
-        $existing_created_by = $drawing['created_by'];
-        
-        if (empty($existing_created_by)) {
-            // First assignment
-            $new_created_by = $current_user_id;
-        } else {
-            // Check if user is already assigned
-            $existing_user_ids = explode(',', $existing_created_by);
-            if (in_array($current_user_id, $existing_user_ids)) {
-                return [
-                    'status' => 'error',
-                    'message' => '既に割り当てられています'
-                ];
-            }
-            
-            // Add new user to existing list
-            $new_created_by = $existing_created_by . ',' . $current_user_id;
-        }
-        
-        // Update the drawing
+        // Update the drawing with single user (replace existing)
+        $new_created_by = $assigned_userid;
         $data = array(
             'created_by' => $new_created_by,
             'updated_at' => date('Y-m-d H:i:s')
@@ -489,13 +484,27 @@ class Drawing extends ApplicationModel {
 
     function unassignUser() {
         $drawing_id = isset($_POST['drawing_id']) ? intval($_POST['drawing_id']) : 0;
-        $current_user_id = $_SESSION['userid'];
         
         if (!$drawing_id) {
             return [
                 'status' => 'error',
                 'message' => 'ファイルIDが指定されていません'
             ];
+        }
+        
+        // Get user_ids from POST to unassign (can be JSON array or single value)
+        $user_ids_to_remove = [];
+        if (isset($_POST['user_ids'])) {
+            $decoded = json_decode($_POST['user_ids'], true);
+            if (is_array($decoded)) {
+                $user_ids_to_remove = $decoded;
+            } else {
+                $user_ids_to_remove = [$_POST['user_ids']];
+            }
+        } else {
+            // Fallback: remove all users if no user_ids provided
+            // Or you can use current user: $user_ids_to_remove = [$_SESSION['userid']];
+            // For now, remove all assigned users
         }
         
         // Get current drawing to check existing created_by
@@ -509,29 +518,38 @@ class Drawing extends ApplicationModel {
         
         $existing_created_by = $drawing['created_by'];
         
-        if (empty($existing_created_by)) {
+        if (empty($existing_created_by) || trim($existing_created_by) === '') {
             return [
                 'status' => 'error',
                 'message' => '割り当てられていません'
             ];
         }
         
-        // Remove current user from the list
-        $existing_user_ids = array_filter(array_map('trim', explode(',', $existing_created_by)));
-        $new_user_ids = array_filter($existing_user_ids, function($id) use ($current_user_id) {
-            return $id !== $current_user_id;
+        // Parse existing user IDs (userid strings)
+        $existing_user_ids = array_filter(array_map('trim', explode(',', $existing_created_by)), function($id) {
+            return !empty(trim($id));
         });
         
-        // Check if user was in the list
-        if (count($new_user_ids) === count($existing_user_ids)) {
+        // If after parsing we have no valid user IDs, return error
+        if (count($existing_user_ids) === 0) {
             return [
                 'status' => 'error',
                 'message' => '割り当てられていません'
             ];
+        }
+        
+        // If no specific user_ids provided, remove all users
+        if (empty($user_ids_to_remove)) {
+            $new_user_ids = [];
+        } else {
+            // Remove specified user IDs from the list
+            $new_user_ids = array_filter($existing_user_ids, function($id) use ($user_ids_to_remove) {
+                return !in_array(trim($id), array_map('trim', $user_ids_to_remove));
+            });
         }
         
         // Update the drawing
-        $new_created_by = implode(',', $new_user_ids);
+        $new_created_by = !empty($new_user_ids) ? implode(',', $new_user_ids) : '';
         $data = array(
             'created_by' => $new_created_by,
             'updated_at' => date('Y-m-d H:i:s')
@@ -554,7 +572,6 @@ class Drawing extends ApplicationModel {
 
     function bulkAssignUser() {
         $ids = json_decode($_POST['ids'], true);
-        $current_user_id = $_SESSION['userid'];
         
         if (empty($ids) || !is_array($ids)) {
             return [
@@ -563,31 +580,45 @@ class Drawing extends ApplicationModel {
             ];
         }
         
+        // Get user_ids from POST (can be JSON array or single value)
+        $user_ids = [];
+        if (isset($_POST['user_ids'])) {
+            $decoded = json_decode($_POST['user_ids'], true);
+            if (is_array($decoded)) {
+                $user_ids = $decoded;
+            } else {
+                $user_ids = [$_POST['user_ids']];
+            }
+        } else {
+            // Fallback to current user if no user_ids provided
+            $user_ids = [$_SESSION['userid']];
+        }
+        
+        if (empty($user_ids)) {
+            return [
+                'status' => 'error',
+                'message' => '担当者が指定されていません'
+            ];
+        }
+        
+        // Only allow one user per drawing - use the first user_id from the array
+        $assigned_userid = is_array($user_ids) && !empty($user_ids) ? trim($user_ids[0]) : (is_string($user_ids) ? trim($user_ids) : '');
+        
+        if (empty($assigned_userid)) {
+            return [
+                'status' => 'error',
+                'message' => '担当者が指定されていません'
+            ];
+        }
+        
         $success_count = 0;
-        $already_assigned_count = 0;
         
         foreach ($ids as $drawing_id) {
             $drawing = $this->getById(['id' => intval($drawing_id)]);
             if (!$drawing) continue;
             
-            $existing_created_by = $drawing['created_by'];
-            
-            if (empty($existing_created_by)) {
-                // First assignment
-                $new_created_by = $current_user_id;
-            } else {
-                // Check if user is already assigned
-                $existing_user_ids = explode(',', $existing_created_by);
-                if (in_array($current_user_id, $existing_user_ids)) {
-                    $already_assigned_count++;
-                    continue;
-                }
-                
-                // Add new user to existing list
-                $new_created_by = $existing_created_by . ',' . $current_user_id;
-            }
-            
-            // Update the drawing
+            // Update the drawing with single user (replace existing)
+            $new_created_by = $assigned_userid;
             $data = array(
                 'created_by' => $new_created_by,
                 'updated_at' => date('Y-m-d H:i:s')
@@ -601,9 +632,6 @@ class Drawing extends ApplicationModel {
         
         if ($success_count > 0) {
             $message = $success_count . '件の割り当てが完了しました';
-            if ($already_assigned_count > 0) {
-                $message .= '（' . $already_assigned_count . '件は既に割り当て済み）';
-            }
             return [
                 'status' => 'success',
                 'message' => $message

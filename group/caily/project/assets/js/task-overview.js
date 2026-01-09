@@ -16,7 +16,21 @@ createApp({
                 user_id: '',
                 // Mặc định loại bỏ completed để giảm tải
                 excludeCompleted: true
-            }
+            },
+            taskStatuses: [
+                { value: 'todo', label: '未開始', color: 'secondary' },
+                { value: 'in-progress', label: '進行中', color: 'primary' },
+                { value: 'confirming', label: '確認中', color: 'warning' },
+                { value: 'paused', label: '一時停止', color: 'warning' },
+                { value: 'completed', label: '完了', color: 'success' },
+                { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+            ],
+            taskPriorities: [
+                { value: 'low', label: '低', color: 'secondary' },
+                { value: 'medium', label: '中', color: 'primary' },
+                { value: 'high', label: '高', color: 'warning' },
+                { value: 'urgent', label: '緊急', color: 'danger' }
+            ]
         };
     },
     computed: {
@@ -135,6 +149,26 @@ createApp({
             this.filters.team_id = '';
             this.filters.user_id = '';
             this.loadOverview();
+        },
+        getStatusLabel(status) {
+            const s = this.taskStatuses.find(s => s.value === status);
+            return s ? s.label : status;
+        },
+        getStatusColor(status) {
+            const s = this.taskStatuses.find(s => s.value === status);
+            return s ? s.color : 'secondary';
+        },
+        getPriorityLabel(priority) {
+            const p = this.taskPriorities.find(p => p.value === priority);
+            return p ? p.label : priority;
+        },
+        getPriorityColor(priority) {
+            const p = this.taskPriorities.find(p => p.value === priority);
+            return p ? p.color : 'secondary';
+        },
+        formatDate(dateString) {
+            if (!dateString) return '-';
+            return moment(dateString).format('M月D日 H:mm');
         }
     },
     mounted() {

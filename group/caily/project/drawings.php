@@ -43,7 +43,7 @@ if (!$project_id) {
             <!-- Back button -->
             <div class="col-12 mb-3">
                 <a href="detail.php?id=<?php echo $project_id; ?>" class="btn btn-outline-primary">
-                    <i class="fa fa-arrow-left me-2"></i><span data-i18n="戻る">戻る</span>
+                    <i class="fa fa-arrow-left me-2"></i><span data-i18n="案件概要へ戻る">案件概要へ戻る</span>
                 </a>
             </div>
 
@@ -440,6 +440,34 @@ if (!$project_id) {
                         <button type="button" class="btn btn-primary" @click="confirmBulkStatusChange">
                             <i class="fa fa-check"></i> 変更
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assignee Selection Modal -->
+        <div class="modal fade" tabindex="-1" :class="{show: assigneeModal.show}" style="display: block;" v-if="assigneeModal.show">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">{{ assigneeModal.isBulk ? '担当者を一括割り当て' : '担当者を選択' }}</h5>
+                        <button type="button" class="btn-close" @click="closeAssigneeModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="d-flex flex-wrap">
+                            <div v-for="member in projectMembers" :key="member.userid || member.user_id" class="m-2 text-center" style="cursor:pointer;">
+                                <div @click="toggleAssignee(member.userid || member.user_id)" :class="{'border border-primary': assigneeModal.selected.includes(member.userid || member.user_id)}" style="display:inline-block;border-radius:50%;padding:2px;">
+                                    <img v-if="!member.avatarError && getAvatarSrc(member)" class="rounded-circle" :src="getAvatarSrc(member)" :alt="member.user_name" width="40" height="40" @error="handleAvatarError(member)">
+                                    <span v-else class="avatar-initial rounded-circle bg-label-primary" style="width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;">{{ getInitials(member.user_name) }}</span>
+                                </div>
+                                <div style="font-size:12px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ member.user_name }}</div>
+                                <input type="radio" class="form-check-input mt-1" name="assignee_radio" :checked="assigneeModal.selected.includes(member.userid || member.user_id)" @change="toggleAssignee(member.userid || member.user_id)">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @click="closeAssigneeModal">キャンセル</button>
+                        <button class="btn btn-primary" @click="confirmAssigneeModal">OK</button>
                     </div>
                 </div>
             </div>

@@ -66,12 +66,24 @@ class Task extends ApplicationModel {
             (SELECT COUNT(*) FROM " . DB_PREFIX . "task_reactions tr2 WHERE tr2.task_id = t.id AND tr2.type = 'dislike') as dislike_count,
             -- Current user's reaction type (like/dislike)
             (SELECT tr3.type FROM " . DB_PREFIX . "task_reactions tr3 
-             WHERE tr3.task_id = t.id AND tr3.user_id = '%s' LIMIT 1) as current_user_reaction
+             WHERE tr3.task_id = t.id AND tr3.user_id = '%s' LIMIT 1) as current_user_reaction,
+            -- Current user's reaction note
+            (SELECT tr4.note FROM " . DB_PREFIX . "task_reactions tr4 
+             WHERE tr4.task_id = t.id AND tr4.user_id = '%s' LIMIT 1) as current_user_reaction_note,
+            -- Users who liked
+            (SELECT GROUP_CONCAT(u1.realname) FROM " . DB_PREFIX . "task_reactions tr5
+             LEFT JOIN " . DB_PREFIX . "user u1 ON tr5.user_id = u1.userid
+             WHERE tr5.task_id = t.id AND tr5.type = 'like') as liked_by_names,
+            -- Users who disliked
+            (SELECT GROUP_CONCAT(u2.realname) FROM " . DB_PREFIX . "task_reactions tr6
+             LEFT JOIN " . DB_PREFIX . "user u2 ON tr6.user_id = u2.userid
+             WHERE tr6.task_id = t.id AND tr6.type = 'dislike') as disliked_by_names
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id 
             LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             %s
             ORDER BY t.position, t.created_at DESC",
+            $this->quote($current_user_id),
             $this->quote($current_user_id),
             $where
         );
@@ -87,6 +99,15 @@ class Task extends ApplicationModel {
                 if ($task['subtask_count'] > 0) {
                     $task['subtasks'] = $this->getSubtasks($task['id']);
                 }
+                // Parse reaction user names
+                $task['liked_by_names'] = $task['liked_by_names'] ? explode(',', $task['liked_by_names']) : [];
+                $task['disliked_by_names'] = $task['disliked_by_names'] ? explode(',', $task['disliked_by_names']) : [];
+            }
+        } else {
+            // Parse reaction user names even if not including subtasks
+            foreach ($tasks as &$task) {
+                $task['liked_by_names'] = $task['liked_by_names'] ? explode(',', $task['liked_by_names']) : [];
+                $task['disliked_by_names'] = $task['disliked_by_names'] ? explode(',', $task['disliked_by_names']) : [];
             }
         }
         
@@ -1182,8 +1203,16 @@ class Task extends ApplicationModel {
         ));
         
         $now = date('Y-m-d H:i:s');
+        $is_delete = isset($_POST['delete']) && $_POST['delete'] == '1';
         
-        if ($existing) {
+        if ($is_delete && $existing) {
+            // Delete reaction
+            $this->query(sprintf(
+                "DELETE FROM %s WHERE id = %d",
+                $this->table,
+                $existing['id']
+            ));
+        } else if ($existing) {
             // Update type & note
             $data = [
                 'type' => $type,
@@ -1191,7 +1220,7 @@ class Task extends ApplicationModel {
                 'updated_at' => $now
             ];
             $this->query_update($data, ['id' => $existing['id']]);
-        } else {
+        } else if (!$is_delete) {
             // Insert new reaction
             $data = [
                 'task_id' => $task_id,
@@ -1215,6 +1244,14 @@ class Task extends ApplicationModel {
         );
         $counts = $this->fetchOne($countQuery);
         
+        // Get current user's reaction after update/delete
+        $current_reaction = null;
+        if (!$is_delete) {
+            $current_reaction = $type;
+        } else {
+            $current_reaction = null;
+        }
+        
         $this->table = DB_PREFIX . 'tasks'; // Reset table
         
         return [
@@ -1222,7 +1259,42 @@ class Task extends ApplicationModel {
             'task_id' => $task_id,
             'like_count' => intval($counts['like_count'] ?? 0),
             'dislike_count' => intval($counts['dislike_count'] ?? 0),
-            'current_user_reaction' => $type
+            'current_user_reaction' => $current_reaction
+        ];
+    }
+    
+    /**
+     * Get task reaction details (for editing existing reaction)
+     */
+    function getTaskReaction() {
+        $task_id = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
+        $user_id = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
+        
+        if (!$task_id || !$user_id) {
+            return ['success' => false, 'message' => 'Invalid parameters'];
+        }
+        
+        $this->table = DB_PREFIX . 'task_reactions';
+        $reaction = $this->fetchOne(sprintf(
+            "SELECT * FROM %s WHERE task_id = %d AND user_id = '%s'",
+            $this->table,
+            $task_id,
+            $this->quote($user_id)
+        ));
+        
+        $this->table = DB_PREFIX . 'tasks'; // Reset table
+        
+        if ($reaction) {
+            return [
+                'success' => true,
+                'type' => $reaction['type'],
+                'note' => $reaction['note'] || ''
+            ];
+        }
+        
+        return [
+            'success' => false,
+            'message' => 'Reaction not found'
         ];
     }
     

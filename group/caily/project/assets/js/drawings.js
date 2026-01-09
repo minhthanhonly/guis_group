@@ -52,7 +52,16 @@ createApp({
             lastClickedIndex: -1,
             isCtrlPressed: false,
             isShiftPressed: false,
-            permission: {}
+            permission: {},
+            
+            // Project members for assignment
+            projectMembers: [],
+            assigneeModal: {
+                show: false,
+                drawingId: null,
+                isBulk: false,
+                selected: []
+            }
         }
     },
     
@@ -175,6 +184,7 @@ createApp({
     mounted() {
         this.loadPermission();
         this.loadProject();
+        this.loadProjectMembers();
         this.loadDrawings();
 
         
@@ -209,13 +219,19 @@ createApp({
             this.endDragSelection();
         });
         
-        // Add keyboard event listeners for Ctrl and Shift keys
+        // Add keyboard event listeners for Ctrl / Shift / Esc keys
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Control' || event.key === 'Meta') {
                 this.handleCtrlKeyChange(true);
             }
             if (event.key === 'Shift') {
                 this.handleShiftKeyChange(true);
+            }
+            // ESC: clear bulk selection (hide bulk actions bar)
+            if (event.key === 'Escape') {
+                if (this.selectedDrawings && this.selectedDrawings.length > 0) {
+                    this.clearSelection();
+                }
             }
         });
         
@@ -252,7 +268,22 @@ createApp({
                 this.showError('プロジェクトの読み込みに失敗しました');
             }
         },
-
+        
+        async loadProjectMembers() {
+            try {
+                const response = await axios.get(`/api/index.php?model=project&method=getMembers&project_id=${PROJECT_ID}`);
+                let members = response.data || [];
+                // Remove duplicate userid
+                const seen = new Set();
+                this.projectMembers = members.filter(m => {
+                    if (!m || !m.userid || seen.has(m.userid)) return false;
+                    seen.add(m.userid);
+                    return true;
+                });
+            } catch (error) {
+                console.error('Error loading project members:', error);
+            }
+        },
 
         initTooltips() {
             // Initialize Bootstrap tooltips
@@ -820,23 +851,7 @@ createApp({
                 return;
             }
             
-            try {
-                const formData = new FormData();
-                formData.append('ids', JSON.stringify(this.selectedDrawings));
-                
-                const response = await axios.post('/api/index.php?model=drawing&method=bulkAssignUser', formData);
-                
-                if (response.data && response.data.status === 'success') {
-                    this.showSuccess(response.data.message || '一括割り当てが完了しました');
-                    this.selectedDrawings = [];
-                    this.loadDrawings();
-                } else {
-                    this.showError(response.data?.message || '一括割り当てに失敗しました');
-                }
-            } catch (error) {
-                console.error('Error bulk assigning:', error);
-                this.showError('一括割り当てに失敗しました');
-            }
+            this.openAssigneeModal(null, true);
         },
 
         // Bulk unassign current user from selected drawings
@@ -871,23 +886,123 @@ createApp({
         },
 
         // Assign current user to drawing
-        async assignDrawing(drawingId) {
-            try {
-                const formData = new FormData();
-                formData.append('drawing_id', drawingId);
-                
-                const response = await axios.post('/api/index.php?model=drawing&method=assignUser', formData);
-                
-                if (response.data && response.data.status === 'success') {
-                    this.showSuccess('割り当てが完了しました');
-                    this.loadDrawings(); // Reload to get updated data
-                } else {
-                    this.showError(response.data?.message || '割り当てに失敗しました');
+        openAssigneeModal(drawingId = null, isBulk = false) {
+            this.assigneeModal.drawingId = drawingId;
+            this.assigneeModal.isBulk = isBulk;
+            this.assigneeModal.selected = [];
+            
+            // If single assignment, pre-select current assignee if exists
+            if (!isBulk && drawingId) {
+                const drawing = this.drawings.find(d => d.id === drawingId);
+                if (drawing && drawing.created_by) {
+                    const assignees = drawing.created_by.split(',').map(id => id.trim()).filter(id => id);
+                    this.assigneeModal.selected = assignees;
                 }
-            } catch (error) {
-                console.error('Error assigning drawing:', error);
-                this.showError('割り当てに失敗しました');
             }
+            
+            this.assigneeModal.show = true;
+        },
+        
+        // Get userid from member object
+        getMemberUserid(member) {
+            return member.userid || member.user_id || '';
+        },
+        
+        closeAssigneeModal() {
+            this.assigneeModal.show = false;
+            this.assigneeModal.drawingId = null;
+            this.assigneeModal.isBulk = false;
+            this.assigneeModal.selected = [];
+        },
+        
+        toggleAssignee(userId) {
+            // Only allow one user selection - replace previous selection
+            if (this.assigneeModal.selected.includes(userId)) {
+                // If clicking the same user, deselect
+                this.assigneeModal.selected = [];
+            } else {
+                // Select only this user
+                this.assigneeModal.selected = [userId];
+            }
+        },
+        
+        async confirmAssigneeModal() {
+            if (this.assigneeModal.isBulk) {
+                // Bulk assignment
+                if (this.selectedDrawings.length === 0) {
+                    this.showError('ファイルを選択してください');
+                    this.closeAssigneeModal();
+                    return;
+                }
+                
+                if (this.assigneeModal.selected.length === 0) {
+                    this.showError('担当者を選択してください');
+                    return;
+                }
+                
+                // Only use the first selected user (single selection)
+                const selectedUserid = this.assigneeModal.selected[0];
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('ids', JSON.stringify(this.selectedDrawings));
+                    // Send only the first selected user (single user per drawing)
+                    formData.append('user_ids', JSON.stringify([selectedUserid]));
+                    
+                    const response = await axios.post('/api/index.php?model=drawing&method=bulkAssignUser', formData);
+                    
+                    if (response.data && response.data.status === 'success') {
+                        this.showSuccess(response.data.message || '一括割り当てが完了しました');
+                        this.selectedDrawings = [];
+                        this.closeAssigneeModal();
+                        this.loadDrawings();
+                    } else {
+                        this.showError(response.data?.message || '一括割り当てに失敗しました');
+                    }
+                } catch (error) {
+                    console.error('Error bulk assigning:', error);
+                    this.showError('一括割り当てに失敗しました');
+                }
+            } else {
+                // Single assignment
+                if (!this.assigneeModal.drawingId) {
+                    this.showError('ファイルIDがありません');
+                    this.closeAssigneeModal();
+                    return;
+                }
+                
+                if (this.assigneeModal.selected.length === 0) {
+                    this.showError('担当者を選択してください');
+                    return;
+                }
+                
+                // Only use the first selected user (single selection)
+                const selectedUserid = this.assigneeModal.selected[0];
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('drawing_id', this.assigneeModal.drawingId);
+                    // Send only the first selected user (single user per drawing)
+                    formData.append('user_ids', JSON.stringify([selectedUserid]));
+                    
+                    const response = await axios.post('/api/index.php?model=drawing&method=assignUser', formData);
+                    
+                    if (response.data && response.data.status === 'success') {
+                        this.showSuccess('割り当てが完了しました');
+                        this.closeAssigneeModal();
+                        this.loadDrawings();
+                    } else {
+                        this.showError(response.data?.message || '割り当てに失敗しました');
+                    }
+                } catch (error) {
+                    console.error('Error assigning drawing:', error);
+                    this.showError('割り当てに失敗しました');
+                }
+            }
+        },
+        
+        async assignDrawing(drawingId) {
+            this.openAssigneeModal(drawingId, false);
         },
 
         // Unassign current user from drawing
@@ -910,11 +1025,11 @@ createApp({
             }
         },
 
-        // Check if current user is assigned to drawing
+        // Check if any user is assigned to drawing
         isUserAssigned(drawing) {
             if (!drawing.created_by) return false;
-            const userIds = drawing.created_by.split(',').map(id => id.trim());
-            return userIds.includes(USER_ID.toString());
+            const userIds = drawing.created_by.split(',').map(id => id.trim()).filter(id => id);
+            return userIds.length > 0;
         },
         
         clearFilters() {
@@ -1051,15 +1166,17 @@ createApp({
             return '#';
         },
         
-        getAvatarSrc(user) {
-            if (user && user.avatar) {
-                return `/assets/upload/avatar/${user.avatar}`;
+        getAvatarSrc(member) {
+            if (member && member.user_image) {
+                return '/assets/upload/avatar/' + member.user_image;
             }
             return '';
         },
         
-        handleAvatarError(user) {
-            // Fallback to initials
+        handleAvatarError(member) {
+            if (member) {
+                member.avatarError = true;
+            }
         },
         
         getInitials(name) {

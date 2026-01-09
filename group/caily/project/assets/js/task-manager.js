@@ -95,7 +95,9 @@ const TaskApp = createApp({
                 taskId: null,
                 type: null, // 'like' or 'dislike'
                 note: ''
-            }
+            },
+            // Sortable instance
+            sortableInstance: null
         }
     },
     
@@ -418,6 +420,12 @@ const TaskApp = createApp({
                 tasks.forEach(task => {
                     this.unreadComments[task.id] = task.unread_count || 0;
                 });
+                
+                // Reinitialize sortable after tasks are loaded
+                this.$nextTick(() => {
+                    this.initSortable();
+                });
+                
                 // Sau khi load tasks, load số comment chưa đọc
                 // await this.loadUnreadComments( );
             } catch (error) {
@@ -1101,39 +1109,69 @@ const TaskApp = createApp({
         
         initSortable() {
             const taskList = document.querySelector('.task-list');
-            if (taskList) {
-                Sortable.create(taskList, {
-                    animation: 150,
-                    handle: '.drag-handle',
-                    onEnd: (evt) => {
-                        console.log('Drag ended');
-                        const taskElements = Array.from(taskList.children);
-                        console.log('Task elements:', taskElements);
-                        
-                        // Get the dragged task ID
-                        const draggedTaskId = evt.item.getAttribute('data-id');
-                        console.log('Dragged task ID:', draggedTaskId);
-                        
-                        // Calculate new parent_id based on position
-                        const newParentId = this.calculateNewParentId(evt.newIndex, taskElements);
-                        console.log('New parent ID:', newParentId);
-                        
-                        const newOrder = taskElements
-                            .map(el => {
-                                const id = el.getAttribute('data-id');
-                                console.log('Element:', el, 'Task ID:', id);
-                                return id;
-                            })
-                            .filter(id => id !== null);
-                        console.log('New order:', newOrder);
-                        
-                        if (newOrder.length > 0) {
-                            console.log('Calling updateTaskOrder');
-                            this.updateTaskOrder(newOrder, draggedTaskId, newParentId);
-                        }
-                    }
-                });
+            if (!taskList) return;
+            
+            // Destroy existing Sortable instance if it exists
+            if (this.sortableInstance) {
+                this.sortableInstance.destroy();
+                this.sortableInstance = null;
             }
+            
+            // Check if Sortable is available
+            if (typeof Sortable === 'undefined') {
+                console.warn('Sortable.js is not loaded');
+                return;
+            }
+            
+            // Create new Sortable instance
+            this.sortableInstance = Sortable.create(taskList, {
+                animation: 150,
+                handle: '.drag-handle',
+                filter: function(evt) {
+                    // Prevent dragging if the drag handle has prevent-click class
+                    const dragHandle = evt.target.closest('.drag-handle');
+                    return dragHandle && dragHandle.classList.contains('prevent-click');
+                },
+                preventOnFilter: true,
+                onEnd: (evt) => {
+                    // Don't process if dragged element has prevent-click class
+                    const dragHandle = evt.item.querySelector('.drag-handle');
+                    if (dragHandle && dragHandle.classList.contains('prevent-click')) {
+                        return;
+                    }
+                    
+                    console.log('Drag ended');
+                    const taskElements = Array.from(taskList.children);
+                    console.log('Task elements:', taskElements);
+                    
+                    // Get the dragged task ID
+                    const draggedTaskId = evt.item.getAttribute('data-id');
+                    console.log('Dragged task ID:', draggedTaskId);
+                    
+                    if (!draggedTaskId) {
+                        console.warn('No task ID found for dragged element');
+                        return;
+                    }
+                    
+                    // Calculate new parent_id based on position
+                    const newParentId = this.calculateNewParentId(evt.newIndex, taskElements);
+                    console.log('New parent ID:', newParentId);
+                    
+                    const newOrder = taskElements
+                        .map(el => {
+                            const id = el.getAttribute('data-id');
+                            console.log('Element:', el, 'Task ID:', id);
+                            return id;
+                        })
+                        .filter(id => id !== null);
+                    console.log('New order:', newOrder);
+                    
+                    if (newOrder.length > 0) {
+                        console.log('Calling updateTaskOrder');
+                        this.updateTaskOrder(newOrder, draggedTaskId, newParentId);
+                    }
+                }
+            });
         },
         
         calculateNewParentId(newIndex, taskElements) {
@@ -1866,12 +1904,48 @@ const TaskApp = createApp({
                 return `${base} ${isActive ? 'btn-danger' : 'btn-outline-danger'}`;
             }
         },
+        
+        getTaskReactionTooltip(task, type) {
+            if (!task) return '';
+            const names = type === 'like' ? (task.liked_by_names || []) : (task.disliked_by_names || []);
+            if (names.length === 0) {
+                return type === 'like' ? 'いいね' : 'よくない';
+            }
+            return names.join(', ');
+        },
 
         async openReactionModal(task, type) {
             if (!task || !task.id) return;
+            
+            // Hide any open tooltips
+            const tooltipElements = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltipElements.forEach(el => {
+                const tooltipInstance = bootstrap.Tooltip.getInstance(el);
+                if (tooltipInstance) {
+                    tooltipInstance.hide();
+                }
+            });
+            
             this.reactionModal.taskId = task.id;
             this.reactionModal.type = type;
-            this.reactionModal.note = '';
+            
+            // If user already reacted with this type, load existing note
+            if (task.current_user_reaction === type) {
+                try {
+                    const response = await axios.get(`/api/index.php?model=task&method=getTaskReaction&task_id=${task.id}`);
+                    if (response.data && response.data.success) {
+                        this.reactionModal.note = response.data.note || '';
+                    } else {
+                        this.reactionModal.note = '';
+                    }
+                } catch (error) {
+                    console.error('Error loading reaction:', error);
+                    this.reactionModal.note = '';
+                }
+            } else {
+                this.reactionModal.note = '';
+            }
+            
             this.reactionModal.show = true;
 
             // Open Bootstrap modal
@@ -1900,13 +1974,13 @@ const TaskApp = createApp({
                     return;
                 }
 
-                // Update counts and current_user_reaction for the task
-                const task = this.tasks.find(t => t.id == this.reactionModal.taskId);
-                if (task) {
-                    task.like_count = data.like_count;
-                    task.dislike_count = data.dislike_count;
-                    task.current_user_reaction = data.current_user_reaction;
-                }
+                // Reload tasks to get updated reaction data
+                await this.loadTasks();
+                
+                // Reinitialize tooltips after reload
+                this.$nextTick(() => {
+                    this.initTooltips();
+                });
 
                 // Close modal
                 const modalEl = document.getElementById('taskReactionModal');
@@ -1923,6 +1997,48 @@ const TaskApp = createApp({
             } catch (error) {
                 console.error('Error submitting reaction:', error);
                 this.showMessage('リアクションの更新に失敗しました', true);
+            }
+        },
+        
+        async removeReaction() {
+            if (!this.reactionModal.taskId || !this.reactionModal.type) return;
+            try {
+                const formData = new FormData();
+                formData.append('task_id', this.reactionModal.taskId);
+                formData.append('type', this.reactionModal.type);
+                formData.append('delete', '1');
+
+                const response = await axios.post('/api/index.php?model=task&method=toggleTaskReaction', formData);
+                const data = response.data || {};
+
+                if (!data.success) {
+                    this.showMessage(data.message || 'リアクションの削除に失敗しました', true);
+                    return;
+                }
+
+                // Reload tasks to get updated reaction data
+                await this.loadTasks();
+                
+                // Reinitialize tooltips after reload
+                this.$nextTick(() => {
+                    this.initTooltips();
+                });
+
+                // Close modal
+                const modalEl = document.getElementById('taskReactionModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+                }
+                this.reactionModal.show = false;
+                this.reactionModal.taskId = null;
+                this.reactionModal.type = null;
+                this.reactionModal.note = '';
+
+                this.showMessage('リアクションを削除しました', false);
+            } catch (error) {
+                console.error('Error removing reaction:', error);
+                this.showMessage('リアクションの削除に失敗しました', true);
             }
         },
         

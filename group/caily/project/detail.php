@@ -42,7 +42,7 @@ if (!$project_id) {
             <!-- Back button -->
             <div class="col-12 mb-3">
                 <a href="index.php" class="btn btn-outline-primary me-2">
-                    <i class="fa fa-arrow-left me-2"></i><span data-i18n="戻る">戻る</span>
+                    <i class="fa fa-arrow-left me-2"></i><span data-i18n="案件一覧へ戻る">案件一覧へ戻る</span>
                 </a>
                 <a v-if="project && project.parent_project_id" :href="'../parent_project/detail.php?id=' + project.parent_project_id" class="btn btn-outline-primary">
                     <i class="fa fa-external-link me-2"></i>

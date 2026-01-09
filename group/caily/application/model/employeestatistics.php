@@ -140,7 +140,7 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
-     * Get drawings revenue for user
+     * Get drawings revenue for user (only approved drawings)
      */
     private function getDrawingsRevenue($user_id, $period_start, $period_end) {
         $query = sprintf(
@@ -150,7 +150,8 @@ class Employeestatistics extends ApplicationModel {
             FROM " . DB_PREFIX . "project_drawings
             WHERE created_by LIKE '%%%s%%'
             AND DATE(created_at) BETWEEN '%s' AND '%s'
-            AND price IS NOT NULL",
+            AND price IS NOT NULL
+            AND status = 'approved'",
             $this->quote($user_id),
             $this->quote($period_start),
             $this->quote($period_end)

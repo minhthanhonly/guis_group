@@ -43,7 +43,7 @@ if (!$project_id) {
         <!-- Back button -->
         <div class="col-12">
             <a href="detail.php?id=<?php echo $project_id; ?>" class="btn btn-outline-primary">
-                <i class="fa fa-arrow-left me-2"></i><span data-i18n="戻る">戻る</span>
+                <i class="fa fa-arrow-left me-2"></i><span data-i18n="案件概要へ戻る">案件概要へ戻る</span>
             </a>
         </div>
     </div>
@@ -344,7 +344,9 @@ if (!$project_id) {
                                 class="position-relative"
                                 :class="getTaskReactionButtonClass(task, 'like')"
                                 @click="openReactionModal(task, 'like')"
-                                title="いいね">
+                                :title="getTaskReactionTooltip(task, 'like')"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top">
                                 <i class="fas fa-thumbs-up"></i>
                                 <span v-if="getTaskReactionCount(task, 'like') > 0" class="ms-1">
                                     {{ getTaskReactionCount(task, 'like') }}
@@ -355,7 +357,9 @@ if (!$project_id) {
                                 class="position-relative"
                                 :class="getTaskReactionButtonClass(task, 'dislike')"
                                 @click="openReactionModal(task, 'dislike')"
-                                title="よくない">
+                                :title="getTaskReactionTooltip(task, 'dislike')"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top">
                                 <i class="fas fa-thumbs-down"></i>
                                 <span v-if="getTaskReactionCount(task, 'dislike') > 0" class="ms-1">
                                     {{ getTaskReactionCount(task, 'dislike') }}
@@ -442,6 +446,10 @@ if (!$project_id) {
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <button v-if="reactionModal.taskId && tasks.find(t => t.id == reactionModal.taskId)?.current_user_reaction === reactionModal.type" 
+                            type="button" class="btn btn-danger" @click="removeReaction">
+                        <i class="fas fa-trash me-1"></i>解除
+                    </button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
                     <button type="button" class="btn btn-primary" @click="submitReaction">
                         <i class="fas fa-save me-1"></i>保存
