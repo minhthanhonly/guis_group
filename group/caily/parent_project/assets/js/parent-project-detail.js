@@ -456,6 +456,26 @@ createApp({
                 this.childProjects = [];
             }
         },
+        async toggleFavorite() {
+            if (!this.parentProject || !this.parentProject.id) return;
+            
+            try {
+                const formData = new FormData();
+                formData.append('parent_project_id', this.parentProject.id);
+                
+                const response = await axios.post('/api/index.php?model=parentproject&method=toggleFavorite', formData);
+                
+                if (response.data && response.data.status === 'success') {
+                    // Update the project's favorite status (convert boolean to number for consistency)
+                    this.parentProject.is_favorite = response.data.is_favorite ? 1 : 0;
+                } else {
+                    showMessage(response.data?.message || '操作に失敗しました。', true);
+                }
+            } catch (error) {
+                console.error('Error toggling favorite:', error);
+                showMessage('操作に失敗しました。', true);
+            }
+        },
         getParentProjectStatusLabel(status) {
             if (!status) return '-';
             

@@ -6,6 +6,7 @@ createApp({
             parentProjects: [],
             searchKeyword: '',
             statusFilter: 'all',
+            favoritesOnly: false,
             currentPage: 1,
             pageSize: 50,
             totalRecords: 0,
@@ -62,6 +63,7 @@ createApp({
                     length: this.pageSize,
                     search: this.searchKeyword,
                     status: this.statusFilter === 'all' ? '' : this.statusFilter,
+                    favorites_only: this.favoritesOnly ? '1' : '0',
                     order_column: this.sortColumn,
                     order_dir: this.sortDirection
                 });
@@ -137,6 +139,58 @@ createApp({
         onStatusFilterChange() {
             this.currentPage = 1;
             this.loadParentProjects();
+        },
+        onFavoritesFilterChange() {
+            this.currentPage = 1;
+            this.loadParentProjects();
+        },
+        async toggleFavorite(project) {
+            try {
+                const formData = new FormData();
+                formData.append('parent_project_id', project.id);
+                
+                const response = await axios.post('/api/index.php?model=parentproject&method=toggleFavorite', formData);
+                
+                if (response.data && response.data.status === 'success') {
+                    // Update the project's favorite status (convert boolean to number for consistency)
+                    project.is_favorite = response.data.is_favorite ? 1 : 0;
+                } else {
+                    showMessage(response.data?.message || '操作に失敗しました。', true);
+                }
+            } catch (error) {
+                console.error('Error toggling favorite:', error);
+                showMessage('操作に失敗しました。', true);
+            }
+        },
+        async clearAllFavorites() {
+            try {
+                const result = await Swal.fire({
+                    title: '確認',
+                    text: 'すべてのお気に入りを削除しますか？',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: '削除',
+                    cancelButtonText: 'キャンセル'
+                });
+                
+                if (result.isConfirmed) {
+                    const response = await axios.post('/api/index.php?model=parentproject&method=clearAllFavorites');
+                    
+                    if (response.data && response.data.status === 'success') {
+                        // Uncheck the favorites filter
+                        this.favoritesOnly = false;
+                        // Reload the list to refresh favorite status
+                        this.loadParentProjects();
+                    } else {
+                        showMessage(response.data?.message || '削除に失敗しました。', true);
+                    }
+                }
+            } catch (error) {
+                console.error('Error clearing all favorites:', error);
+                showMessage('削除に失敗しました。', true);
+            }
         },
         changePage(page) {
             if (page >= 1 && page <= this.totalPages) {

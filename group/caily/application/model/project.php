@@ -155,10 +155,33 @@ class Project extends ApplicationModel {
 
         // Sắp xếp ưu tiên nếu showInactive=1
         $orderBy = '';
-        $orderBy = sprintf('ORDER BY p.%s %s', $this->escape($order_column), $this->escape($order_dir));
+        
+        // Sắp xếp status theo thứ tự giống JS: draft, open, confirming, quotation, contract, in_progress, completed, paused, cancelled
+        $statusOrder = "CASE p.status 
+            WHEN 'draft' THEN 1 
+            WHEN 'open' THEN 2 
+            WHEN 'confirming' THEN 3 
+            WHEN 'quotation' THEN 4 
+            WHEN 'contract' THEN 5 
+            WHEN 'in_progress' THEN 6 
+            WHEN 'completed' THEN 9 
+            WHEN 'paused' THEN 7 
+            WHEN 'cancelled' THEN 8 
+            ELSE 10 
+        END";
+        
+        // Ưu tiên sắp xếp theo status trước
+        if ($order_column === 'status') {
+            // Nếu đang sắp xếp theo status, chỉ sắp xếp theo status
+            $orderBy = sprintf('ORDER BY %s %s', $statusOrder, $this->escape($order_dir));
+        } else {
+            // Sắp xếp theo status trước, sau đó mới đến cột chính
+            $orderBy = sprintf('ORDER BY %s ASC, p.%s %s', $statusOrder, $this->escape($order_column), $this->escape($order_dir));
+        }
+        
         if (isset($_GET['showInactive']) && $_GET['showInactive'] == '1') {
             // Active lên trước, sau đó mới completed/cancelled/deleted, rồi mới sắp xếp end_date, status
-            $orderBy .= ", (CASE WHEN p.status IN ('completed','cancelled','deleted') THEN 1 ELSE 0 END) ASC, p.end_date ASC, p.status ASC";
+            $orderBy .= ", (CASE WHEN p.status IN ('completed','cancelled','deleted') THEN 1 ELSE 0 END) ASC, p.end_date ASC";
         }
 
         // Get total records count

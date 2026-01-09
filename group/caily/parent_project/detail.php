@@ -16,7 +16,7 @@ $view->heading('建物詳細');
         <!-- Back button -->
         <div class="col-12 mb-3">
             <a href="index.php" class="btn btn-outline-primary">
-                <i class="fa fa-arrow-left me-1"></i> <span data-i18n="戻る">戻る</span>
+                <i class="fa fa-arrow-left me-1"></i> <span data-i18n="建物一覧へ戻る">建物一覧へ戻る</span>
             </a>
         </div>
 
@@ -49,7 +49,14 @@ $view->heading('建物詳細');
             <div class="card" :class="{ 'edit-mode': isEditMode }">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h5 class="card-title"><span data-i18n="建物詳細">建物詳細</span></h5>
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fa fa-star" 
+                               :class="parentProject && parentProject.is_favorite == 1 ? 'text-warning' : 'text-muted'"
+                               style="cursor: pointer; font-size: 1.3em;"
+                               @click="toggleFavorite"
+                               :title="parentProject && parentProject.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
+                            <h5 class="card-title mb-0"><span data-i18n="建物詳細">建物詳細</span></h5>
+                        </div>
                         <div v-if="isProjectManager">
                             <button v-if="!isEditMode" class="btn btn-outline-warning btn-sm me-2"
                                 @click="toggleEditMode" title="編集">

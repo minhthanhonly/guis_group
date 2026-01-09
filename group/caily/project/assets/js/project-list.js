@@ -378,7 +378,12 @@ var projectTable;
                 },
                 {
                     data: 'priority',
-                    render: function(data) {
+                    render: function(data, type, row) {
+                        // Return original data value for sorting
+                        if (type === 'sort' || type === 'type') {
+                            return data || '';
+                        }
+                        // Return HTML for display
                         const priority = priorities.find(priority => priority.key === data);
                         return `<span class="badge bg-${priority?.color || 'secondary'}">${priority?.name || data}</span>`;
                     },
@@ -386,11 +391,17 @@ var projectTable;
                 },
                 {
                     data: 'status',
-                    render: function(data) {
+                    render: function(data, type, row) {
+                        // Return original data value for sorting
+                        if (type === 'sort' || type === 'type') {
+                            return data || '';
+                        }
+                        // Return HTML for display
                         const status = statuses.find(status => status.key === data);
                         return `<span class="badge bg-${status?.color || 'secondary'}">${status?.name || data}</span>`;
                     },
-                    title: '<span data-i18n="案件状況">案件状況</span>'
+                    title: '<span data-i18n="案件状況">案件状況</span>',
+                    orderable: false,
                 },
                 {
                     data: 'progress',
@@ -445,7 +456,7 @@ var projectTable;
                 //     title: '<span data-i18n="操作">操作</span>'
                 // }
             ],
-            order: [[10, 'asc']],
+            order: [[10, 'desc']],
            
             pageLength: 50,
             ordering: true,

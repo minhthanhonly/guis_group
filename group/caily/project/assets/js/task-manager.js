@@ -1909,7 +1909,7 @@ const TaskApp = createApp({
             if (!task) return '';
             const names = type === 'like' ? (task.liked_by_names || []) : (task.disliked_by_names || []);
             if (names.length === 0) {
-                return type === 'like' ? 'いいね' : 'よくない';
+                return type === 'like' ? '良い' : '悪い';
             }
             return names.join(', ');
         },

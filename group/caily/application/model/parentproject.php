@@ -101,14 +101,32 @@ class ParentProject extends ApplicationModel {
             $orderBy = "ORDER BY p.$order_column $order_dir";
         }
         
+        // Check if filtering by favorites
+        $user_id = $_SESSION['id'];
+        $favoritesOnly = isset($_GET['favorites_only']) && $_GET['favorites_only'] == '1';
+        
+        if ($favoritesOnly) {
+            $whereArr[] = sprintf(
+                "EXISTS (SELECT 1 FROM " . DB_PREFIX . "parent_project_favorites f WHERE f.parent_project_id = p.id AND f.user_id = %d)",
+                $user_id
+            );
+            $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
+            // Recalculate counts with favorite filter
+            $countQuery = sprintf("SELECT COUNT(*) as total FROM %s p %s", $this->table, $where);
+            $totalRecords = $this->fetchOne($countQuery)['total'];
+            $filteredRecords = $totalRecords;
+        }
+        
         // Get data for current page
         $query = sprintf(
             "SELECT p.*, 
                     (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE parent_project_id = p.id) as child_project_count,
-                    u.realname as created_by_name
+                    u.realname as created_by_name,
+                    CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "parent_project_favorites f WHERE f.parent_project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite
              FROM %s p 
              LEFT JOIN " . DB_PREFIX . "user u ON p.created_by = u.userid
              %s %s LIMIT %d, %d",
+            $user_id,
             $this->table,
             $where,
             $orderBy,
@@ -338,8 +356,14 @@ class ParentProject extends ApplicationModel {
             $id = $params;
         }
         
+        $user_id = $_SESSION['id'];
+        
         $query = sprintf(
-            "SELECT * FROM %s WHERE id = %d",
+            "SELECT p.*, 
+                    CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "parent_project_favorites f WHERE f.parent_project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite
+             FROM %s p 
+             WHERE p.id = %d",
+            $user_id,
             $this->table,
             intval($id)
         );
@@ -976,6 +1000,86 @@ class ParentProject extends ApplicationModel {
         );
         $logs = $this->fetchAll($query);
         return $logs;
+    }
+
+    /**
+     * Toggle favorite status for a parent project
+     */
+    function toggleFavorite($params = null) {
+        $parent_project_id = isset($_POST['parent_project_id']) ? intval($_POST['parent_project_id']) : 0;
+        $user_id = $_SESSION['id'];
+        
+        if (!$parent_project_id || !$user_id) {
+            return array(
+                'status' => 'error',
+                'message' => 'Invalid parameters'
+            );
+        }
+        
+        // Check if favorite exists
+        $checkQuery = sprintf(
+            "SELECT id FROM " . DB_PREFIX . "parent_project_favorites 
+             WHERE parent_project_id = %d AND user_id = %d",
+            $parent_project_id,
+            $user_id
+        );
+        $existing = $this->fetchOne($checkQuery);
+        
+        if ($existing) {
+            // Remove favorite
+            $deleteQuery = sprintf(
+                "DELETE FROM " . DB_PREFIX . "parent_project_favorites 
+                 WHERE parent_project_id = %d AND user_id = %d",
+                $parent_project_id,
+                $user_id
+            );
+            $this->query($deleteQuery);
+            return array(
+                'status' => 'success',
+                'is_favorite' => false,
+                'message' => 'お気に入りから削除しました'
+            );
+        } else {
+            // Add favorite
+            $insertQuery = sprintf(
+                "INSERT INTO " . DB_PREFIX . "parent_project_favorites (parent_project_id, user_id, created_at) 
+                 VALUES (%d, %d, NOW())",
+                $parent_project_id,
+                $user_id
+            );
+            $this->query($insertQuery);
+            return array(
+                'status' => 'success',
+                'is_favorite' => true,
+                'message' => 'お気に入りに追加しました'
+            );
+        }
+    }
+
+    /**
+     * Clear all favorites for current user
+     */
+    function clearAllFavorites($params = null) {
+        $user_id = $_SESSION['id'];
+        
+        if (!$user_id) {
+            return array(
+                'status' => 'error',
+                'message' => 'Invalid user'
+            );
+        }
+        
+        $deleteQuery = sprintf(
+            "DELETE FROM " . DB_PREFIX . "parent_project_favorites 
+             WHERE user_id = %d",
+            $user_id
+        );
+        $this->query($deleteQuery);
+        
+        return array(
+            'status' => 'success',
+            'message' => 'すべてのお気に入りを削除しました'
+        );
     }
 
     /**

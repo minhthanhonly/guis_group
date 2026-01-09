@@ -102,11 +102,11 @@ $view->heading('従業員統計');
                                         <strong>¥{{ formatNumber(stat.total_revenue) }}</strong>
                                     </div>
                                     <div class="d-flex justify-content-between mb-2">
-                                        <span class="text-muted">いいね:</span>
+                                        <span class="text-muted">良い:</span>
                                         <strong class="text-success">{{ stat.total_likes }}</strong>
                                     </div>
                                     <div class="d-flex justify-content-between mb-2">
-                                        <span class="text-muted">よくないね:</span>
+                                        <span class="text-muted">悪い:</span>
                                         <strong class="text-danger">{{ stat.total_dislikes }}</strong>
                                     </div>
                                     <div class="d-flex justify-content-between mb-2">
@@ -163,10 +163,10 @@ $view->heading('従業員統計');
                                     <th class="text-center">図面数</th>
                                     <th class="text-center">タスク数</th>
                                     <th class="text-center">
-                                        <i class="fa fa-thumbs-up text-success"></i> いいね
+                                        <i class="fa fa-thumbs-up text-success"></i> 良い
                                     </th>
                                     <th class="text-center">
-                                        <i class="fa fa-thumbs-down text-danger"></i> よくないね
+                                        <i class="fa fa-thumbs-down text-danger"></i> 悪い
                                     </th>
                                     <th>更新日時</th>
                                 </tr>

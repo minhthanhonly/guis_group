@@ -31,6 +31,19 @@ $view->heading('建物一覧');
                                 </button>
                             </div>
                         </div>
+                        <div class="col-md-2 d-flex align-items-center">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="favoritesOnly" v-model="favoritesOnly" @change="onFavoritesFilterChange">
+                                <label class="form-check-label" for="favoritesOnly">
+                                    <i class="fa fa-star text-warning me-1"></i>お気に入りのみ
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-center" v-if="favoritesOnly">
+                            <button class="btn btn-outline-danger btn-sm" @click="clearAllFavorites" :disabled="loading">
+                                <i class="fa fa-trash me-1"></i>お気に入りをすべて削除
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Parent Projects Table -->
@@ -46,6 +59,7 @@ $view->heading('建物一覧');
                         <table v-else class="table table-hover">
                             <thead>
                                 <tr>
+                                    <th class="text-center">お気に入り</th>
                                     <th @click="sortBy('project_number')" style="cursor: pointer;" class="user-select-none">
                                         番号
                                         <i class="fa fa-fw" :class="getSortIcon('project_number')"></i>
@@ -83,6 +97,13 @@ $view->heading('建物一覧');
                             </thead>
                             <tbody>
                                 <tr v-for="project in filteredParentProjects" :key="project.id">
+                                    <td class="text-center">
+                                        <i class="fa fa-star" 
+                                           :class="project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
+                                           style="cursor: pointer; font-size: 1.2em;"
+                                           @click="toggleFavorite(project)"
+                                           :title="project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
+                                    </td>
                                     <td>
                                         <span class="badge bg-label-info">{{ project.project_number || '-' }}</span>
                                     </td>
@@ -122,7 +143,7 @@ $view->heading('建物一覧');
                                     </td>
                                 </tr>
                                 <tr v-if="filteredParentProjects.length === 0">
-                                    <td colspan="11" class="text-center py-4">
+                                    <td colspan="12" class="text-center py-4">
                                         <div class="text-muted">
                                             <i class="fa fa-inbox fa-2x mb-2"></i>
                                             <p>建物が見つかりません</p>

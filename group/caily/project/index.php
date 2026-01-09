@@ -75,7 +75,7 @@ $view->heading('プロジェクト管理');
             <div class="col-md-2 col-12 d-flex align-items-end">
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="filterMyProjects" v-model="filterMyProjects" @change="loadProjects">
-                <label class="form-check-label" for="filterMyProjects" data-i18n="私のプロジェクト">私のプロジェクト</label>
+                <label class="form-check-label" for="filterMyProjects" data-i18n="私の案件">私の案件</label>
             </div>
             </div>
         </form>

@@ -432,8 +432,8 @@ if (!$project_id) {
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="taskReactionModalLabel">
-                        <span v-if="reactionModal.type === 'like'">いいねの理由</span>
-                        <span v-else-if="reactionModal.type === 'dislike'">よくないの理由</span>
+                        <span v-if="reactionModal.type === 'like'">良いの理由</span>
+                        <span v-else-if="reactionModal.type === 'dislike'">悪いの理由</span>
                         <span v-else>リアクション</span>
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
