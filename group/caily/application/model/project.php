@@ -866,6 +866,23 @@ class Project extends ApplicationModel {
             ];
         }
         
+        // Get project to check department
+        $project = $this->fetchOne("SELECT department_id FROM " . DB_PREFIX . "projects WHERE id = " . intval($project_id));
+        if (!$project) {
+            return [
+                'status' => 'error',
+                'message' => 'Project not found'
+            ];
+        }
+        
+        // Check if project has a department
+        if (!$project['department_id']) {
+            return [
+                'status' => 'error',
+                'message' => 'Project does not have a department assigned'
+            ];
+        }
+        
         // Get username from user_id
         $user = $this->fetchOne("SELECT userid FROM " . DB_PREFIX . "user WHERE id = " . intval($user_id));
         if (!$user || !$user['userid']) {
@@ -875,6 +892,24 @@ class Project extends ApplicationModel {
             ];
         }
         $username = $user['userid'];
+        
+        // Check if user to be added is in the same department as the project
+        $userToAddDepartmentCheck = $this->fetchOne(
+            "SELECT * FROM " . DB_PREFIX . "user_department ud " .
+            "WHERE ud.department_id = " . intval($project['department_id']) . " " .
+            "AND ud.userid = '" . $this->escape($username) . "' LIMIT 1"
+        );
+        
+        // Allow admin to add members regardless of department
+        $isAdmin = $_SESSION['authority'] == 'administrator';
+        
+        // Check if user to be added is in the same department (unless admin)
+        if (!$isAdmin && !$userToAddDepartmentCheck) {
+            return [
+                'status' => 'error',
+                'message' => '同じ部署のユーザーのみ参加できます'
+            ];
+        }
         
         // Check if member already exists
         $existing = $this->fetchOne(

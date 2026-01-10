@@ -181,8 +181,19 @@ const vueApp = createApp({
             return false;
         },
         canJoinProject() {
-            // User can join if they can view the project but are not yet a member
-            return !this.isProjectMember;
+            // User can join if:
+            // 1. They are not yet a member
+            // 2. They are in the same department as the project
+            if (this.isProjectMember) return false;
+
+            // check if administrator
+            if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
+            
+            // Check if user is in the same department as the project
+            if (!this.project || !this.project.department_id) return false;
+            
+            // User must be in the same department
+            return this.permission && this.permission.is_in_department === true;
         },
         canEditProject() {
             return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_edit == 1);

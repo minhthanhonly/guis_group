@@ -18,30 +18,21 @@ $view->heading('従業員統計');
             <div class="card">
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="form-label">期間タイプ</label>
-                            <select class="form-select" v-model="filters.period_type">
-                                <option value="week">週</option>
+                            <select class="form-select" v-model="filters.period_type" @change="onPeriodTypeChange">
                                 <option value="month">月</option>
-                                <option value="quarter">四半期</option>
                                 <option value="year">年</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="form-label">チーム</label>
                             <select class="form-select" v-model="filters.team_id" @change="onTeamChange">
+                                <option value="">すべてのチーム</option>
                                 <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label">開始日</label>
-                            <input type="date" class="form-control" v-model="filters.period_start">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">終了日</label>
-                            <input type="date" class="form-control" v-model="filters.period_end">
-                        </div>
-                        <div class="col-md-2 d-flex align-items-end">
+                        <div class="col-md-4 d-flex align-items-end">
                             <button class="btn btn-primary w-100" @click="calculateStatistics" :disabled="calculating">
                                 <i class="fa fa-calculator me-1"></i>
                                 <span v-if="calculating">計算中...</span>

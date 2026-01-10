@@ -28,54 +28,118 @@ class Employeestatistics extends ApplicationModel {
      */
     function calculateStatistics() {
         $period_type = isset($_GET['period_type']) ? $_GET['period_type'] : 'month';
-        $period_start = isset($_GET['period_start']) ? $_GET['period_start'] : date('Y-m-01');
-        $period_end = isset($_GET['period_end']) ? $_GET['period_end'] : date('Y-m-t');
+        $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
 
         // Lấy tất cả (user, team) mà user đang thuộc về
         $userTeams = $this->getUsersByTeam(null);
         
         $results = [];
         
-        foreach ($userTeams as $row) {
-            $user_internal_id = $row['id'];
-            $user_id         = $row['userid'];
-            $team_id         = isset($row['team_id']) ? intval($row['team_id']) : null;
-            
-            // Tính thống kê cho từng cặp (user, team)
-            $stats = $this->calculateUserStatistics(
-                $user_internal_id,
-                $user_id,
-                $period_type,
-                $period_start,
-                $period_end,
-                $team_id
-            );
-            
-            // Lưu hoặc update thống kê theo (user, team, period)
-            $existing = $this->getExistingStatistics(
-                $user_id,
-                $team_id,
-                $period_type,
-                $period_start,
-                $period_end
-            );
-            
-            if ($existing) {
-                // Update existing - handle NULL for team_id
-                $updateData = $stats;
-                $updateData['team_id'] = ($stats['team_id'] === null || $stats['team_id'] === '') ? null : intval($stats['team_id']);
-                $this->updateStatistics($existing['id'], $updateData);
-                $stats['id'] = $existing['id'];
-            } else {
-                // Insert new - handle NULL for team_id
-                $insertData = $stats;
-                $insertData['team_id'] = ($stats['team_id'] === null || $stats['team_id'] === '') ? null : intval($stats['team_id']);
-                $stats['id'] = $this->insertStatistics($insertData);
+        if ($period_type === 'year') {
+            // Calculate statistics for each year in the last N months (convert to years)
+            $years = ceil($months / 12);
+            $current_date = new DateTime();
+            for ($i = 0; $i < $years; $i++) {
+                $date = clone $current_date;
+                $date->modify("-$i years");
+                
+                $period_start = $date->format('Y-01-01');
+                $period_end = $date->format('Y-12-31');
+                
+                foreach ($userTeams as $row) {
+                    $user_internal_id = $row['id'];
+                    $user_id         = $row['userid'];
+                    $team_id         = isset($row['team_id']) ? intval($row['team_id']) : null;
+                    
+                    // Tính thống kê cho từng cặp (user, team) trong năm này
+                    $stats = $this->calculateUserStatistics(
+                        $user_internal_id,
+                        $user_id,
+                        $period_type,
+                        $period_start,
+                        $period_end,
+                        $team_id
+                    );
+                    
+                    // Lưu hoặc update thống kê theo (user, team, period)
+                    $existing = $this->getExistingStatistics(
+                        $user_id,
+                        $team_id,
+                        $period_type,
+                        $period_start,
+                        $period_end
+                    );
+                    
+                    if ($existing) {
+                        // Update existing - handle NULL for team_id
+                        $updateData = $stats;
+                        $updateData['team_id'] = ($stats['team_id'] === null || $stats['team_id'] === '') ? null : intval($stats['team_id']);
+                        $this->updateStatistics($existing['id'], $updateData);
+                        $stats['id'] = $existing['id'];
+                    } else {
+                        // Insert new - handle NULL for team_id
+                        $insertData = $stats;
+                        $insertData['team_id'] = ($stats['team_id'] === null || $stats['team_id'] === '') ? null : intval($stats['team_id']);
+                        $stats['id'] = $this->insertStatistics($insertData);
+                    }
+                    
+                    $stats['user_name'] = $row['realname'];
+                    $stats['team_name'] = $row['team_name'] ?? null;
+                    $results[] = $stats;
+                }
             }
-            
-            $stats['user_name'] = $row['realname'];
-            $stats['team_name'] = $row['team_name'] ?? null;
-            $results[] = $stats;
+        } else {
+            // Calculate statistics for each month in the last N months
+            $current_date = new DateTime();
+            for ($i = 0; $i < $months; $i++) {
+                $date = clone $current_date;
+                $date->modify("-$i months");
+                
+                $period_start = $date->format('Y-m-01');
+                $period_end = $date->format('Y-m-t');
+                
+                foreach ($userTeams as $row) {
+                    $user_internal_id = $row['id'];
+                    $user_id         = $row['userid'];
+                    $team_id         = isset($row['team_id']) ? intval($row['team_id']) : null;
+                    
+                    // Tính thống kê cho từng cặp (user, team) trong tháng này
+                    $stats = $this->calculateUserStatistics(
+                        $user_internal_id,
+                        $user_id,
+                        $period_type,
+                        $period_start,
+                        $period_end,
+                        $team_id
+                    );
+                    
+                    // Lưu hoặc update thống kê theo (user, team, period)
+                    $existing = $this->getExistingStatistics(
+                        $user_id,
+                        $team_id,
+                        $period_type,
+                        $period_start,
+                        $period_end
+                    );
+                    
+                    if ($existing) {
+                        // Update existing - handle NULL for team_id
+                        $updateData = $stats;
+                        $updateData['team_id'] = ($stats['team_id'] === null || $stats['team_id'] === '') ? null : intval($stats['team_id']);
+                        $this->updateStatistics($existing['id'], $updateData);
+                        $stats['id'] = $existing['id'];
+                    } else {
+                        // Insert new - handle NULL for team_id
+                        $insertData = $stats;
+                        $insertData['team_id'] = ($stats['team_id'] === null || $stats['team_id'] === '') ? null : intval($stats['team_id']);
+                        $stats['id'] = $this->insertStatistics($insertData);
+                    }
+                    
+                    $stats['user_name'] = $row['realname'];
+                    $stats['team_name'] = $row['team_name'] ?? null;
+                    $results[] = $stats;
+                }
+            }
         }
         
         return [
@@ -116,6 +180,7 @@ class Employeestatistics extends ApplicationModel {
 
     /**
      * Get task reactions (likes/dislikes) for user's tasks
+     * Based on task actual_end_date
      */
     private function getTaskReactions($id, $period_start, $period_end) {
         $query = sprintf(
@@ -125,9 +190,14 @@ class Employeestatistics extends ApplicationModel {
             FROM " . DB_PREFIX . "task_reactions tr
             INNER JOIN " . DB_PREFIX . "tasks t ON tr.task_id = t.id
             WHERE (FIND_IN_SET('%s', t.assigned_to) > 0 OR t.assigned_to = '%s')
-            AND DATE(tr.created_at) BETWEEN '%s' AND '%s'",
+            AND (
+                (t.actual_end_date IS NOT NULL AND DATE(t.actual_end_date) BETWEEN '%s' AND '%s')
+                OR (t.actual_end_date IS NULL AND t.due_date IS NOT NULL AND DATE(t.due_date) BETWEEN '%s' AND '%s')
+            )",
             $this->quote($id),
             $this->quote($id),
+            $this->quote($period_start),
+            $this->quote($period_end),
             $this->quote($period_start),
             $this->quote($period_end)
         );
@@ -166,15 +236,21 @@ class Employeestatistics extends ApplicationModel {
 
     /**
      * Get task count for user
+     * Based on task actual_end_date
      */
     private function getTaskCount($user_id, $period_start, $period_end) {
         $query = sprintf(
             "SELECT COUNT(*) as count
             FROM " . DB_PREFIX . "tasks
             WHERE (FIND_IN_SET('%s', assigned_to) > 0 OR assigned_to = '%s')
-            AND DATE(created_at) BETWEEN '%s' AND '%s'",
+            AND (
+                (actual_end_date IS NOT NULL AND DATE(actual_end_date) BETWEEN '%s' AND '%s')
+                OR (actual_end_date IS NULL AND due_date IS NOT NULL AND DATE(due_date) BETWEEN '%s' AND '%s')
+            )",
             $this->quote($user_id),
             $this->quote($user_id),
+            $this->quote($period_start),
+            $this->quote($period_end),
             $this->quote($period_start),
             $this->quote($period_end)
         );
@@ -241,22 +317,24 @@ class Employeestatistics extends ApplicationModel {
      * Get statistics list with user and team names
      */
     function list() {
-        $period_type = isset($_GET['period_type']) ? $_GET['period_type'] : null;
-        $period_start = isset($_GET['period_start']) ? $_GET['period_start'] : null;
-        $period_end = isset($_GET['period_end']) ? $_GET['period_end'] : null;
+        $period_type = isset($_GET['period_type']) ? $_GET['period_type'] : 'month';
+        $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
         $team_id = isset($_GET['team_id']) ? intval($_GET['team_id']) : null;
+        
+        // Calculate date range for last N months
+        $end_date = date('Y-m-t'); // Last day of current month
+        $start_date = date('Y-m-01', strtotime("-$months months")); // First day of N months ago
         
         $whereArr = [];
         
         if ($period_type) {
             $whereArr[] = sprintf("es.period_type = '%s'", $this->quote($period_type));
         }
-        if ($period_start) {
-            $whereArr[] = sprintf("es.period_start >= '%s'", $this->quote($period_start));
-        }
-        if ($period_end) {
-            $whereArr[] = sprintf("es.period_end <= '%s'", $this->quote($period_end));
-        }
+        
+        // Filter by date range (last N months)
+        $whereArr[] = sprintf("es.period_start >= '%s'", $this->quote($start_date));
+        $whereArr[] = sprintf("es.period_end <= '%s'", $this->quote($end_date));
+        
         if ($team_id) {
             $whereArr[] = sprintf("es.team_id = %d", intval($team_id));
         }
@@ -364,22 +442,24 @@ class Employeestatistics extends ApplicationModel {
      * Get statistics summary by team
      */
     function getSummaryByTeam() {
-        $period_type = isset($_GET['period_type']) ? $_GET['period_type'] : null;
-        $period_start = isset($_GET['period_start']) ? $_GET['period_start'] : null;
-        $period_end = isset($_GET['period_end']) ? $_GET['period_end'] : null;
+        $period_type = isset($_GET['period_type']) ? $_GET['period_type'] : 'month';
+        $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
         $team_id = isset($_GET['team_id']) ? intval($_GET['team_id']) : null;
+        
+        // Calculate date range for last N months
+        $end_date = date('Y-m-t'); // Last day of current month
+        $start_date = date('Y-m-01', strtotime("-$months months")); // First day of N months ago
         
         $whereArr = [];
         
         if ($period_type) {
             $whereArr[] = sprintf("es.period_type = '%s'", $this->quote($period_type));
         }
-        if ($period_start) {
-            $whereArr[] = sprintf("es.period_start >= '%s'", $this->quote($period_start));
-        }
-        if ($period_end) {
-            $whereArr[] = sprintf("es.period_end <= '%s'", $this->quote($period_end));
-        }
+        
+        // Filter by date range (last N months)
+        $whereArr[] = sprintf("es.period_start >= '%s'", $this->quote($start_date));
+        $whereArr[] = sprintf("es.period_end <= '%s'", $this->quote($end_date));
+        
         if ($team_id) {
             $whereArr[] = sprintf("es.team_id = %d", intval($team_id));
         }

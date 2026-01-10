@@ -12,15 +12,16 @@ createApp({
             activeTab: 'teams', // 'teams' or 'employees'
             filters: {
                 period_type: 'month',
-                team_id: null,
-                period_start: this.getDefaultStartDate('month'),
-                period_end: this.getDefaultEndDate('month')
+                team_id: null
             }
         }
     },
     
     mounted() {
         this.loadTeams();
+        // Auto load statistics for last 12 months
+        this.loadStatistics();
+        this.loadSummary();
     },
     
     methods: {
@@ -49,26 +50,28 @@ createApp({
             await this.loadStatistics();
         },
         
+        async onPeriodTypeChange() {
+            await this.loadStatistics();
+            await this.loadSummary();
+        },
+        
         switchTab(tab) {
             this.activeTab = tab;
         },
         
         async loadStatistics() {
-            if (!this.filters.team_id) {
-                this.statistics = [];
-                return;
-            }
-            
             this.loading = true;
             try {
                 const params = new URLSearchParams({
                     model: 'employeestatistics',
                     method: 'list',
                     period_type: this.filters.period_type,
-                    period_start: this.filters.period_start,
-                    period_end: this.filters.period_end,
-                    team_id: this.filters.team_id
+                    months: 12 // Load last 12 months
                 });
+                
+                if (this.filters.team_id) {
+                    params.append('team_id', this.filters.team_id);
+                }
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
                 this.statistics = response.data || [];
@@ -86,8 +89,7 @@ createApp({
                     model: 'employeestatistics',
                     method: 'getSummaryByTeam',
                     period_type: this.filters.period_type,
-                    period_start: this.filters.period_start,
-                    period_end: this.filters.period_end
+                    months: 12 // Load last 12 months
                 });
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
@@ -98,25 +100,14 @@ createApp({
         },
         
         async calculateStatistics() {
-            if (!this.filters.period_start || !this.filters.period_end) {
-                this.showError('開始日と終了日を選択してください');
-                return;
-            }
-            
-            if (new Date(this.filters.period_start) > new Date(this.filters.period_end)) {
-                this.showError('開始日は終了日より前である必要があります');
-                return;
-            }
-            
             this.calculating = true;
             try {
-                // Calculate statistics for all teams
+                // Calculate statistics for last 12 months based on task end dates
                 const params = new URLSearchParams({
                     model: 'employeestatistics',
                     method: 'calculateStatistics',
                     period_type: this.filters.period_type,
-                    period_start: this.filters.period_start,
-                    period_end: this.filters.period_end
+                    months: 12 // Calculate for last 12 months
                 });
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
@@ -136,49 +127,9 @@ createApp({
             }
         },
         
-        getDefaultStartDate(periodType) {
-            const now = new Date();
-            switch(periodType) {
-                case 'week':
-                    const dayOfWeek = now.getDay();
-                    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-                    return new Date(now.setDate(diff)).toISOString().split('T')[0];
-                case 'month':
-                    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-                case 'quarter':
-                    const quarter = Math.floor(now.getMonth() / 3);
-                    return new Date(now.getFullYear(), quarter * 3, 1).toISOString().split('T')[0];
-                case 'year':
-                    return new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
-                default:
-                    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-            }
-        },
-        
-        getDefaultEndDate(periodType) {
-            const now = new Date();
-            switch(periodType) {
-                case 'week':
-                    const dayOfWeek = now.getDay();
-                    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1) + 6;
-                    return new Date(now.setDate(diff)).toISOString().split('T')[0];
-                case 'month':
-                    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-                case 'quarter':
-                    const quarter = Math.floor(now.getMonth() / 3);
-                    return new Date(now.getFullYear(), (quarter + 1) * 3, 0).toISOString().split('T')[0];
-                case 'year':
-                    return new Date(now.getFullYear(), 11, 31).toISOString().split('T')[0];
-                default:
-                    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-            }
-        },
-        
         getPeriodTypeLabel(type) {
             const labels = {
-                'week': '週',
                 'month': '月',
-                'quarter': '四半期',
                 'year': '年'
             };
             return labels[type] || type;
@@ -229,11 +180,6 @@ createApp({
     },
     
     watch: {
-        'filters.period_type'(newVal) {
-            this.filters.period_start = this.getDefaultStartDate(newVal);
-            this.filters.period_end = this.getDefaultEndDate(newVal);
-        },
-        
         filters: {
             deep: true,
             handler() {

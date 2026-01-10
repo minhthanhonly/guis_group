@@ -113,7 +113,7 @@ $view->heading('プロジェクト管理');
                 </button>
 
             </div>
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2 mt-6">
                 <div class="form-check d-flex align-items-center">
                     <input class="form-check-input me-1" type="checkbox" id="filterFavoritesOnly" @change="onFavoritesFilterChange">
                     <label class="form-check-label mb-0" for="filterFavoritesOnly">

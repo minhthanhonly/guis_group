@@ -10,14 +10,16 @@ $view->heading('建物一覧');
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0"><span data-i18n="建物一覧">建物一覧</span></h5>
-                        <div>
-                            <a href="../price_list/index.php" class="btn btn-outline-info btn-sm me-2">
-                                <i class="fa fa-list me-1"></i> <span data-i18n="価格表管理">価格表管理</span>
-                            </a>
-                            <a href="create.php" class="btn btn-primary btn-sm">
-                                <i class="fa fa-plus me-1"></i> <span data-i18n="建物登録">建物登録</span>
-                            </a>
-                        </div>
+                        <?php if($_SESSION['isProjectManager']): ?>
+                            <div>
+                                <a href="../price_list/index.php" class="btn btn-outline-info btn-sm me-2">
+                                    <i class="fa fa-list me-1"></i> <span data-i18n="価格表管理">価格表管理</span>
+                                </a>
+                                <a href="create.php" class="btn btn-primary btn-sm">
+                                    <i class="fa fa-plus me-1"></i> <span data-i18n="建物登録">建物登録</span>
+                                </a>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="card-body">
