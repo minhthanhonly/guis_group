@@ -28,6 +28,8 @@ createApp({
             employeeChartData: [],
             employeeChartInstance: null,
             employeeChartLoading: false,
+            sortColumn: null, // Column to sort by
+            sortDirection: 'asc', // 'asc' or 'desc'
             filters: {
                 period_type: 'month',
                 team_id: null,
@@ -87,15 +89,77 @@ createApp({
         },
         
         filteredStatistics() {
-            if (!this.filters.selected_month || this.filters.selected_month === '') {
-                return this.statistics;
+            let stats = this.statistics;
+            
+            // Filter by selected month
+            if (this.filters.selected_month && this.filters.selected_month !== '') {
+                stats = stats.filter(stat => {
+                    const periodMonth = stat.period_start ? stat.period_start.substring(0, 7) : '';
+                    return periodMonth === this.filters.selected_month;
+                });
             }
             
-            return this.statistics.filter(stat => {
-                // Check if period_start matches the selected month (YYYY-MM)
-                const periodMonth = stat.period_start ? stat.period_start.substring(0, 7) : '';
-                return periodMonth === this.filters.selected_month;
-            });
+            // Sort statistics
+            if (this.sortColumn) {
+                stats = [...stats].sort((a, b) => {
+                    let aVal, bVal;
+                    
+                    switch (this.sortColumn) {
+                        case 'period_start':
+                            aVal = a.period_start || '';
+                            bVal = b.period_start || '';
+                            break;
+                        case 'team_name':
+                            aVal = (a.team_name || '').toLowerCase();
+                            bVal = (b.team_name || '').toLowerCase();
+                            break;
+                        case 'user_name':
+                            aVal = (a.user_name || '').toLowerCase();
+                            bVal = (b.user_name || '').toLowerCase();
+                            break;
+                        case 'revenue':
+                            aVal = parseFloat(a.revenue || 0);
+                            bVal = parseFloat(b.revenue || 0);
+                            break;
+                        case 'total_drawings_revenue':
+                            aVal = parseFloat(a.total_drawings_revenue || 0);
+                            bVal = parseFloat(b.total_drawings_revenue || 0);
+                            break;
+                        case 'drawing_count':
+                            aVal = parseInt(a.drawing_count || 0);
+                            bVal = parseInt(b.drawing_count || 0);
+                            break;
+                        case 'task_count':
+                            aVal = parseInt(a.task_count || 0);
+                            bVal = parseInt(b.task_count || 0);
+                            break;
+                        case 'task_likes':
+                            aVal = parseInt(a.task_likes || 0);
+                            bVal = parseInt(b.task_likes || 0);
+                            break;
+                        case 'task_dislikes':
+                            aVal = parseInt(a.task_dislikes || 0);
+                            bVal = parseInt(b.task_dislikes || 0);
+                            break;
+                        case 'updated_at':
+                            aVal = a.updated_at || '';
+                            bVal = b.updated_at || '';
+                            break;
+                        default:
+                            return 0;
+                    }
+                    
+                    if (aVal < bVal) {
+                        return this.sortDirection === 'asc' ? -1 : 1;
+                    }
+                    if (aVal > bVal) {
+                        return this.sortDirection === 'asc' ? 1 : -1;
+                    }
+                    return 0;
+                });
+            }
+            
+            return stats;
         }
     },
     
@@ -509,6 +573,24 @@ createApp({
             // Reload statistics when month filter changes
             await this.loadStatistics();
             await this.loadSummary();
+        },
+        
+        sortBy(column) {
+            if (this.sortColumn === column) {
+                // Toggle sort direction if clicking the same column
+                this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                // Set new column and default to ascending
+                this.sortColumn = column;
+                this.sortDirection = 'asc';
+            }
+        },
+        
+        getSortIcon(column) {
+            if (this.sortColumn !== column) {
+                return 'fa-sort';
+            }
+            return this.sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
         },
         
         calculateTeamStatisticsByMonth() {

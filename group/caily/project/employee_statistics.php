@@ -193,20 +193,46 @@ $view->heading('従業員統計');
                         <table class="table table-hover">
                             <thead class="table-light">
                                 <tr>
-                                    <th>期間</th>
-                                    <th>チーム</th>
-                                    <th>従業員名</th>
-                                    <th class="text-end">売上高</th>
-                                    <th class="text-end">図面売上</th>
-                                    <th class="text-center">図面数</th>
-                                    <th class="text-center">タスク数</th>
-                                    <th class="text-center">
+                                    <th style="cursor: pointer;" @click="sortBy('period_start')">
+                                        期間
+                                        <i class="fa ms-1" :class="getSortIcon('period_start')"></i>
+                                    </th>
+                                    <th style="cursor: pointer;" @click="sortBy('team_name')">
+                                        チーム
+                                        <i class="fa ms-1" :class="getSortIcon('team_name')"></i>
+                                    </th>
+                                    <th style="cursor: pointer;" @click="sortBy('user_name')">
+                                        従業員名
+                                        <i class="fa ms-1" :class="getSortIcon('user_name')"></i>
+                                    </th>
+                                    <th class="text-end" style="cursor: pointer;" @click="sortBy('revenue')">
+                                        売上高
+                                        <i class="fa ms-1" :class="getSortIcon('revenue')"></i>
+                                    </th>
+                                    <th class="text-end" style="cursor: pointer;" @click="sortBy('total_drawings_revenue')">
+                                        図面売上
+                                        <i class="fa ms-1" :class="getSortIcon('total_drawings_revenue')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('drawing_count')">
+                                        図面数
+                                        <i class="fa ms-1" :class="getSortIcon('drawing_count')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('task_count')">
+                                        タスク数
+                                        <i class="fa ms-1" :class="getSortIcon('task_count')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('task_likes')">
                                         <i class="fa fa-thumbs-up text-success"></i> 良い
+                                        <i class="fa ms-1" :class="getSortIcon('task_likes')"></i>
                                     </th>
-                                    <th class="text-center">
+                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('task_dislikes')">
                                         <i class="fa fa-thumbs-down text-danger"></i> 悪い
+                                        <i class="fa ms-1" :class="getSortIcon('task_dislikes')"></i>
                                     </th>
-                                    <th>更新日時</th>
+                                    <th style="cursor: pointer;" @click="sortBy('updated_at')">
+                                        更新日時
+                                        <i class="fa ms-1" :class="getSortIcon('updated_at')"></i>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
