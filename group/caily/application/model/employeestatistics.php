@@ -320,6 +320,7 @@ class Employeestatistics extends ApplicationModel {
         $period_type = isset($_GET['period_type']) ? $_GET['period_type'] : 'month';
         $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
         $team_id = isset($_GET['team_id']) ? intval($_GET['team_id']) : null;
+        $user_id = isset($_GET['user_id']) ? $this->quote($_GET['user_id']) : null;
         
         // Calculate date range for last N months
         $end_date = date('Y-m-t'); // Last day of current month
@@ -337,6 +338,10 @@ class Employeestatistics extends ApplicationModel {
         
         if ($team_id) {
             $whereArr[] = sprintf("es.team_id = %d", intval($team_id));
+        }
+        
+        if ($user_id) {
+            $whereArr[] = sprintf("es.user_id = '%s'", $user_id);
         }
         
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
