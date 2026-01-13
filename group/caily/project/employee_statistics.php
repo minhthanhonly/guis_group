@@ -32,11 +32,16 @@ $view->heading('従業員統計');
                                 <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
                             </select>
                         </div>
-                        <div class="col-md-4 d-flex align-items-end">
-                            <button class="btn btn-primary w-100" @click="calculateStatistics" :disabled="calculating">
+                        <div class="col-md-4 d-flex align-items-end gap-2">
+                            <button class="btn btn-primary flex-fill" @click="calculateStatistics" :disabled="calculating">
                                 <i class="fa fa-calculator me-1"></i>
                                 <span v-if="calculating">計算中...</span>
                                 <span v-else>統計計算</span>
+                            </button>
+                            <button class="btn btn-danger flex-fill" @click="deleteStatistics" :disabled="deleting">
+                                <i class="fa fa-trash me-1"></i>
+                                <span v-if="deleting">削除中...</span>
+                                <span v-else>12ヶ月削除</span>
                             </button>
                         </div>
                     </div>

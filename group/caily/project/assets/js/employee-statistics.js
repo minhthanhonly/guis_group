@@ -17,6 +17,7 @@ createApp({
             teamStatistics: [],
             loading: false,
             calculating: false,
+            deleting: false,
             chartLoading: false,
             activeTab: 'teams', // 'teams' or 'employees'
             selectedTeamId: null,
@@ -267,8 +268,13 @@ createApp({
             const likesData = sortedMonths.map(month => monthlyData[month].likes);
             const dislikesData = sortedMonths.map(month => monthlyData[month].dislikes);
             
-            // Use same colors and styles as index.php
-            const chartColors = ['#4e73df', '#f6c23e', '#e74a3b', '#36b9cc', '#1cc88a', '#7367f0', '#28c76f', '#ff9f43'];
+            // Use colors that match the meaning of each metric
+            // 図面売上: Green (#1cc88a) - positive/revenue
+            // 図面数: Orange (#ff9f43) - neutral/count
+            // タスク数: Purple (#7367f0) - neutral/count
+            // 良い: Blue (#3b82f6) - positive/good (different from green)
+            // 悪い: Red (#dc2626) - negative/bad
+            const chartColors = ['#1cc88a',  '#7367f0', '#3b82f6', '#dc2626', '#ff9f43'];
             const borderColor = 'rgba(224,224,224,0.2)';
             const labelColor = '#ccc';
             
@@ -280,21 +286,21 @@ createApp({
             // Create new chart with style similar to index.php
             const options = {
                 series: [
-                    {
-                        name: '売上高',
-                        type: 'column',
-                        data: revenueData
-                    },
+                    // {
+                    //     name: '売上高',
+                    //     type: 'column',
+                    //     data: revenueData
+                    // },
                     {
                         name: '図面売上',
                         type: 'column',
                         data: drawingRevenueData
                     },
-                    {
-                        name: '図面数',
-                        type: 'line',
-                        data: drawingCountData
-                    },
+                    // {
+                    //     name: '図面数',
+                    //     type: 'line',
+                    //     data: drawingCountData
+                    // },
                     {
                         name: 'タスク数',
                         type: 'line',
@@ -362,6 +368,13 @@ createApp({
                 },
                 yaxis: [
                     {
+                        title: {
+                            text: '金額 (¥)',
+                            style: {
+                                color: labelColor,
+                                fontSize: '12px'
+                            }
+                        },
                         labels: {
                             formatter: function(val) {
                                 return '¥' + Math.round(val).toLocaleString('ja-JP');
@@ -370,10 +383,20 @@ createApp({
                                 colors: labelColor,
                                 fontSize: '12px'
                             }
-                        }
+                        },
+                        // Scale only for revenue columns (series 0 and 1)
+                        min: 0,
+                        forceNiceScale: true
                     },
                     {
                         opposite: true,
+                        title: {
+                            text: '数量',
+                            style: {
+                                color: labelColor,
+                                fontSize: '12px'
+                            }
+                        },
                         labels: {
                             formatter: function(val) {
                                 return Math.round(val).toLocaleString('ja-JP');
@@ -382,7 +405,10 @@ createApp({
                                 colors: labelColor,
                                 fontSize: '12px'
                             }
-                        }
+                        },
+                        // Scale only for count metrics (series 2, 3, 4, 5)
+                        min: 0,
+                        forceNiceScale: true
                     }
                 ],
                 tooltip: {
@@ -654,8 +680,13 @@ createApp({
             const likesData = sortedMonths.map(month => monthlyData[month].likes);
             const dislikesData = sortedMonths.map(month => monthlyData[month].dislikes);
             
-            // Use same colors and styles as index.php
-            const chartColors = ['#4e73df', '#f6c23e', '#e74a3b', '#36b9cc', '#1cc88a', '#7367f0', '#28c76f', '#ff9f43'];
+            // Use colors that match the meaning of each metric
+            // 図面売上: Green (#1cc88a) - positive/revenue
+            // 図面数: Orange (#ff9f43) - neutral/count
+            // タスク数: Purple (#7367f0) - neutral/count
+            // 良い: Blue (#3b82f6) - positive/good (different from green)
+            // 悪い: Red (#dc2626) - negative/bad
+            const chartColors = ['#1cc88a', '#7367f0', '#3b82f6', '#dc2626', '#ff9f43'];
             const borderColor = 'rgba(224,224,224,0.2)';
             const labelColor = '#ccc';
             
@@ -667,21 +698,21 @@ createApp({
             // Create new chart with style similar to index.php
             const options = {
                 series: [
-                    {
-                        name: '売上高',
-                        type: 'column',
-                        data: revenueData
-                    },
+                    // {
+                    //     name: '売上高',
+                    //     type: 'column',
+                    //     data: revenueData
+                    // },
                     {
                         name: '図面売上',
                         type: 'column',
                         data: drawingRevenueData
                     },
-                    {
-                        name: '図面数',
-                        type: 'line',
-                        data: drawingCountData
-                    },
+                    // {
+                    //     name: '図面数',
+                    //     type: 'line',
+                    //     data: drawingCountData
+                    // },
                     {
                         name: 'タスク数',
                         type: 'line',
@@ -749,6 +780,13 @@ createApp({
                 },
                 yaxis: [
                     {
+                        title: {
+                            text: '金額 (¥)',
+                            style: {
+                                color: labelColor,
+                                fontSize: '12px'
+                            }
+                        },
                         labels: {
                             formatter: function(val) {
                                 return '¥' + Math.round(val).toLocaleString('ja-JP');
@@ -757,10 +795,20 @@ createApp({
                                 colors: labelColor,
                                 fontSize: '12px'
                             }
-                        }
+                        },
+                        // Scale only for revenue columns (series 0 and 1)
+                        min: 0,
+                        forceNiceScale: true
                     },
                     {
                         opposite: true,
+                        title: {
+                            text: '数量',
+                            style: {
+                                color: labelColor,
+                                fontSize: '12px'
+                            }
+                        },
                         labels: {
                             formatter: function(val) {
                                 return Math.round(val).toLocaleString('ja-JP');
@@ -769,7 +817,10 @@ createApp({
                                 colors: labelColor,
                                 fontSize: '12px'
                             }
-                        }
+                        },
+                        // Scale only for count metrics (series 2, 3, 4, 5)
+                        min: 0,
+                        forceNiceScale: true
                     }
                 ],
                 tooltip: {
@@ -931,6 +982,39 @@ createApp({
                 this.showError('統計の計算に失敗しました');
             } finally {
                 this.calculating = false;
+            }
+        },
+        
+        async deleteStatistics() {
+            // Confirm before deleting
+            if (!confirm('過去12ヶ月の統計データを削除しますか？この操作は取り消せません。')) {
+                return;
+            }
+            
+            this.deleting = true;
+            try {
+                const params = new URLSearchParams({
+                    model: 'employeestatistics',
+                    method: 'deleteStatistics',
+                    months: 12 // Delete last 12 months
+                });
+                
+                const response = await axios.get(`/api/index.php?${params.toString()}`);
+                if (response.data.status === 'success') {
+                    this.showSuccess(response.data.message || '統計データを削除しました');
+                    await this.loadStatistics();
+                    await this.loadSummary();
+                    // Clear selected team and employee charts
+                    this.clearTeamSelection();
+                    this.clearEmployeeSelection();
+                } else {
+                    this.showError(response.data.message || '統計データの削除に失敗しました');
+                }
+            } catch (error) {
+                console.error('Error deleting statistics:', error);
+                this.showError('統計データの削除に失敗しました');
+            } finally {
+                this.deleting = false;
             }
         },
         

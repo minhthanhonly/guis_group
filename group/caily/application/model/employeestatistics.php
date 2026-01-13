@@ -91,9 +91,15 @@ class Employeestatistics extends ApplicationModel {
         } else {
             // Calculate statistics for each month in the last N months
             $current_date = new DateTime();
+            // Set to first day of current month to avoid issues with modify()
+            $current_date->modify('first day of this month');
+            $current_date->setTime(0, 0, 0);
+            
             for ($i = 0; $i < $months; $i++) {
                 $date = clone $current_date;
-                $date->modify("-$i months");
+                if ($i > 0) {
+                    $date->modify("-$i months");
+                }
                 
                 $period_start = $date->format('Y-m-01');
                 $period_end = $date->format('Y-m-t');
@@ -491,6 +497,45 @@ class Employeestatistics extends ApplicationModel {
         );
         
         return $this->fetchAll($query);
+    }
+    
+    /**
+     * Delete statistics for last N months
+     */
+    function deleteStatistics() {
+        $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
+        
+        // Calculate date range for last N months
+        $end_date = date('Y-m-t'); // Last day of current month
+        $start_date = date('Y-m-01', strtotime("-$months months")); // First day of N months ago
+        
+        // Count records before deletion
+        $count_query = sprintf(
+            "SELECT COUNT(*) as count FROM {$this->table}
+            WHERE period_start >= '%s'
+            AND period_end <= '%s'",
+            $this->quote($start_date),
+            $this->quote($end_date)
+        );
+        $count_result = $this->fetchOne($count_query);
+        $deleted_count = intval($count_result['count'] ?? 0);
+        
+        // Delete statistics within the date range
+        $query = sprintf(
+            "DELETE FROM {$this->table}
+            WHERE period_start >= '%s'
+            AND period_end <= '%s'",
+            $this->quote($start_date),
+            $this->quote($end_date)
+        );
+        
+        $this->query($query);
+        
+        return [
+            'status' => 'success',
+            'message' => $deleted_count . '件の統計データを削除しました',
+            'deleted_count' => $deleted_count
+        ];
     }
 }
 
