@@ -15,7 +15,8 @@ createApp({
                 team_id: '',
                 user_id: '',
                 // Mặc định loại bỏ completed để giảm tải
-                excludeCompleted: true
+                excludeCompleted: true,
+                myTask: false
             },
             taskStatuses: [
                 { value: 'todo', label: '未開始', color: 'secondary' },
@@ -68,6 +69,16 @@ createApp({
             if (this.filters.excludeCompleted && (task.status === 'completed' || task.status === 'cancelled')) {
                 return false;
             }
+            
+            // My Task filter - check if current user is assigned
+            if (this.filters.myTask && typeof USER_AUTH_ID !== 'undefined' && USER_AUTH_ID) {
+                const currentUserId = parseInt(USER_AUTH_ID, 10);
+                const assignedIds = Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [];
+                if (!assignedIds.includes(currentUserId)) {
+                    return false;
+                }
+            }
+            
             // Lọc theoユーザー đã được xử lý ở phía API (listOverview), 
             // nên không cần kiểm tra lại ở đây để tránh sai khi task có nhiều assignee.
             // Nếu filter theo team: ít nhất 1 user được assign thuộc team đó
@@ -148,6 +159,21 @@ createApp({
             // Reset team and user filter when department changes
             this.filters.team_id = '';
             this.filters.user_id = '';
+            this.loadOverview();
+        },
+        onMyTaskChange() {
+            // When "My Task" is checked, clear user_id filter
+            // When unchecked, reload to show all tasks
+            if (this.filters.myTask) {
+                this.filters.user_id = '';
+            }
+            // No need to call loadOverview here as filteredTasks computed will handle it
+        },
+        onUserChange() {
+            // When user is manually selected, uncheck "My Task"
+            if (this.filters.user_id) {
+                this.filters.myTask = false;
+            }
             this.loadOverview();
         },
         getStatusLabel(status) {

@@ -30,7 +30,7 @@ $view->heading('タスク一覧');
         </div>
         <div class="col-md-3 mb-2">
             <label class="form-label">ユーザー</label>
-            <select class="form-select" v-model="filters.user_id" @change="loadOverview">
+            <select class="form-select" v-model="filters.user_id" @change="onUserChange">
                 <option value="">すべて</option>
                 <option v-for="user in filteredUsers" :key="user.id" :value="user.id">{{ user.realname }}</option>
             </select>
@@ -40,6 +40,11 @@ $view->heading('タスク一覧');
                 <input class="form-check-input" type="checkbox" id="excludeCompleted"
                        v-model="filters.excludeCompleted" @change="loadOverview">
                 <label class="form-check-label" for="excludeCompleted">完了タスクを除外</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="myTask"
+                       v-model="filters.myTask" @change="onMyTaskChange">
+                <label class="form-check-label" for="myTask">自分のタスク</label>
             </div>
         </div>
     </div>
@@ -54,12 +59,14 @@ $view->heading('タスク一覧');
                         <i class="fa fa-list me-1"></i>タスク一覧
                     </button>
                 </li>
+                <?php if($_SESSION['isProjectManager']): ?>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" :class="{ active: activeTab === 'unassigned' }"
-                            @click="activeTab = 'unassigned'" type="button">
-                        <i class="fa fa-user-times me-1"></i>タスク未割り当てユーザー
-                    </button>
-                </li>
+                                @click="activeTab = 'unassigned'" type="button">
+                                <i class="fa fa-user-times me-1"></i>タスク未割り当てユーザー
+                            </button>
+                        </li>
+                    <?php endif; ?>
             </ul>
         </div>
     </div>
@@ -107,6 +114,7 @@ $view->heading('タスク一覧');
                                     </td>
                                     <td>
                                         <a :href="`task.php?project_id=${task.project_id}`" class="text-decoration-none fw-bold">
+                                            <span class="badge bg-label-secondary me-1">#{{ task.id }}</span>
                                             {{ task.title }}
                                         </a>
                                     </td>
