@@ -43,7 +43,7 @@
                     <div data-i18n="建物一覧">建物一覧</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'project' && $page != 'project_gantt' && $page != 'custom_fields' && $page != 'task_overview' && $page != 'employee_statistics') echo 'active'; ?>">
+                <li class="menu-item <?php if($directory == 'project' && $page != 'project_gantt' && $page != 'custom_fields' && $page != 'task_overview' && $page != 'employee_statistics' && $page != 'team_revenue_targets') echo 'active'; ?>">
                   <a href="<?=$root?>project/" class="menu-link">
                     <div data-i18n="案件一覧">案件一覧</div>
                   </a>
@@ -77,6 +77,11 @@
                 <li class="menu-item <?php if($directory == 'project' && $page == 'employee_statistics') echo 'active'; ?>">
                   <a href="<?=$root?>project/employee_statistics.php" class="menu-link">
                     <div data-i18n="従業員統計">従業員統計</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php if($directory == 'project' && $page == 'team_revenue_targets') echo 'active'; ?>">
+                  <a href="<?=$root?>project/team_revenue_targets.php" class="menu-link">
+                    <div data-i18n="チーム売上目標設定">チーム売上目標設定</div>
                   </a>
                 </li>
                 <?php } ?>

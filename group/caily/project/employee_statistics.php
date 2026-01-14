@@ -112,7 +112,7 @@ if(!$_SESSION['isProjectManager']){
                                     </div>
                                     <div class="d-flex justify-content-between mb-2">
                                         <span class="text-muted">売上高:</span>
-                                        <strong>¥{{ formatNumber(stat.total_revenue) }}</strong>
+                                        <strong v-html="getRevenueWithTarget(stat.total_revenue, stat.team_id)"></strong>
                                     </div>
                                     <div class="d-flex justify-content-between mb-2">
                                         <span class="text-muted">良い:</span>

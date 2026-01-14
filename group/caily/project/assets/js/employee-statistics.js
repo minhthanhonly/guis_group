@@ -15,6 +15,7 @@ createApp({
             statistics: [],
             summary: [],
             teamStatistics: [],
+            revenueTargets: {}, // Map of team_id -> monthly_target for current year/month
             loading: false,
             calculating: false,
             deleting: false,
@@ -43,6 +44,7 @@ createApp({
         // Auto load statistics for last 12 months
         this.loadStatistics();
         this.loadSummary();
+        this.loadRevenueTargets();
         
         // Auto calculate statistics on first visit
         this.autoCalculateStatistics();
@@ -573,6 +575,55 @@ createApp({
             // Reload statistics when month filter changes
             await this.loadStatistics();
             await this.loadSummary();
+            await this.loadRevenueTargets();
+        },
+        
+        async loadRevenueTargets() {
+            try {
+                // Get year from selected_month (YYYY-MM format)
+                const year = this.filters.selected_month ? 
+                    parseInt(this.filters.selected_month.substring(0, 4)) : 
+                    new Date().getFullYear();
+                
+                const params = new URLSearchParams({
+                    model: 'teamrevenuetarget',
+                    method: 'list',
+                    year: year
+                });
+                const response = await axios.get(`/api/index.php?${params.toString()}`);
+                const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+                const targets = Array.isArray(data) ? data : [];
+                
+                // Create a map of team_id -> monthly_target
+                this.revenueTargets = {};
+                targets.forEach(target => {
+                    if (target.team_id) {
+                        this.revenueTargets[target.team_id] = parseFloat(target.monthly_target) || 0;
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading revenue targets:', error);
+                // Don't show error to user, just log it
+                this.revenueTargets = {};
+            }
+        },
+        
+        getRevenueWithTarget(revenue, teamId) {
+            const revenueValue = parseFloat(revenue) || 0;
+            const targetValue = this.revenueTargets[teamId] || 0;
+            
+            if (targetValue <= 0) {
+                // No target set, just show revenue
+                return this.formatCurrency(revenueValue);
+            }
+            
+            // Calculate percentage
+            const percentage = Math.round((revenueValue / targetValue) * 100);
+            
+            // Format: ¥9,000 (目標¥150,000, 8%)
+            // Use HTML to style percentage if needed
+            const percentageClass = percentage >= 100 ? 'text-success' : (percentage >= 80 ? 'text-warning' : 'text-danger');
+            return `${this.formatCurrency(revenueValue)} <span class="text-muted">(目標${this.formatCurrency(targetValue)}. <span class="${percentageClass}">${percentage}%</span>)</span>`;
         },
         
         sortBy(column) {
@@ -1047,6 +1098,9 @@ createApp({
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
                 this.teamStatistics = response.data || [];
+                
+                // Load revenue targets after loading summary
+                await this.loadRevenueTargets();
             } catch (error) {
                 console.error('Error loading summary:', error);
             }
@@ -1141,8 +1195,25 @@ createApp({
         },
         
         formatNumber(num) {
-            if (!num) return '0';
-            return parseFloat(num).toLocaleString('ja-JP');
+            if (!num && num !== 0) return '0';
+            const numValue = parseFloat(num);
+            if (isNaN(numValue)) return '0';
+            // Format with no decimal places for currency
+            return Math.round(numValue).toLocaleString('ja-JP', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            });
+        },
+        
+        formatCurrency(num) {
+            if (!num && num !== 0) return '¥0';
+            const numValue = parseFloat(num);
+            if (isNaN(numValue)) return '¥0';
+            // Format currency with no decimal places
+            return '¥' + Math.round(numValue).toLocaleString('ja-JP', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            });
         },
         
         formatDate(dateString) {
