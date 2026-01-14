@@ -170,8 +170,8 @@ createApp({
                 this.teams = response.data || [];
                 
                 // Default to "すべてのチーム" (all teams) - team_id is null
-                await this.loadStatistics();
-                await this.loadSummary();
+                    await this.loadStatistics();
+                    await this.loadSummary();
             } catch (error) {
                 console.error('Error loading teams:', error);
                 this.showError('チームの読み込みに失敗しました');
@@ -671,6 +671,19 @@ createApp({
             this.selectedUserId = userId;
             this.selectedUserName = userName;
             this.loadEmployeeMonthlyStatistics();
+            
+            // Scroll to chart after a short delay to ensure it's rendered
+            this.$nextTick(() => {
+                setTimeout(() => {
+                    const chartSection = document.getElementById('employee-chart-section');
+                    if (chartSection) {
+                        chartSection.scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'start' 
+                        });
+                    }
+                }, 300);
+            });
         },
         
         clearEmployeeSelection() {

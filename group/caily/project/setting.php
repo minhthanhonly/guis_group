@@ -1,7 +1,10 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('カテゴリー管理');
-
+if(!$_SESSION['isProjectManager']){
+    echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
+    exit;
+}
 ?>
     <div id="app">
         <nav class="navbar navbar-expand-lg bg-dark mb-12">

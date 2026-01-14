@@ -63,7 +63,7 @@
                     <div data-i18n="ガントチャート">ガントチャート</div>
                   </a>
                 </li>
-                <?php if($_SESSION['isProjectManager'] && $_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
+                <?php if($_SESSION['isProjectManager']){ ?>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
                   <a href="<?=$root?>project/custom_fields.php" class="menu-link">
                     <div data-i18n="設定">設定</div>

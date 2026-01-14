@@ -1,6 +1,10 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('従業員統計');
+if(!$_SESSION['isProjectManager']){
+    echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
+    exit;
+}
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
     <div class="row">
@@ -286,7 +290,7 @@ $view->heading('従業員統計');
         </div>
 
         <!-- Employee Monthly Chart Section -->
-        <div class="col-12 mb-4" v-show="selectedUserId && activeTab === 'employees'">
+        <div id="employee-chart-section" class="col-12 mb-4" v-show="selectedUserId && activeTab === 'employees'">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">
