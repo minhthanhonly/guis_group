@@ -16,6 +16,8 @@ createApp({
             summary: [],
             teamStatistics: [],
             revenueTargets: {}, // Map of team_id -> monthly_target for current year/month
+            annualSummary: [],
+            annualLoading: false,
             loading: false,
             calculating: false,
             deleting: false,
@@ -31,6 +33,8 @@ createApp({
             employeeChartLoading: false,
             sortColumn: null, // Column to sort by
             sortDirection: 'asc', // 'asc' or 'desc'
+            selectedYear: new Date().getFullYear(),
+            yearOptions: [],
             filters: {
                 period_type: 'month',
                 team_id: null,
@@ -40,11 +44,13 @@ createApp({
     },
     
     mounted() {
+        this.initYearOptions();
         this.loadTeams();
         // Auto load statistics for last 12 months
         this.loadStatistics();
         this.loadSummary();
         this.loadRevenueTargets();
+        this.loadAnnualSummary();
         
         // Auto calculate statistics on first visit
         this.autoCalculateStatistics();
@@ -178,6 +184,12 @@ createApp({
                 console.error('Error loading teams:', error);
                 this.showError('チームの読み込みに失敗しました');
             }
+        },
+
+        initYearOptions() {
+            const currentYear = new Date().getFullYear();
+            // Current year, previous, and next year for convenience
+            this.yearOptions = [currentYear, currentYear + 1, currentYear - 1].sort((a, b) => b - a);
         },
         
         async onTeamChange() {
@@ -577,6 +589,10 @@ createApp({
             await this.loadSummary();
             await this.loadRevenueTargets();
         },
+
+        onYearChange() {
+            this.loadAnnualSummary();
+        },
         
         async loadRevenueTargets() {
             try {
@@ -598,7 +614,10 @@ createApp({
                 this.revenueTargets = {};
                 targets.forEach(target => {
                     if (target.team_id) {
-                        this.revenueTargets[target.team_id] = parseFloat(target.monthly_target) || 0;
+                        const monthly = parseFloat(target.monthly_target) || 0;
+                        const yearly = parseFloat(target.yearly_target) || 0;
+                        const monthlyValue = monthly > 0 ? monthly : (yearly > 0 ? yearly / 12 : 0);
+                        this.revenueTargets[target.team_id] = monthlyValue;
                     }
                 });
             } catch (error) {
@@ -607,14 +626,37 @@ createApp({
                 this.revenueTargets = {};
             }
         },
+
+        async loadAnnualSummary() {
+            this.annualLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    model: 'employeestatistics',
+                    method: 'getAnnualSummary',
+                    year: this.selectedYear
+                });
+                const response = await axios.get(`/api/index.php?${params.toString()}`);
+                const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+                this.annualSummary = Array.isArray(data) ? data : [];
+            } catch (error) {
+                console.error('Error loading annual summary:', error);
+                this.annualSummary = [];
+            } finally {
+                this.annualLoading = false;
+            }
+        },
         
-        getRevenueWithTarget(revenue, teamId) {
+        // revenue: aggregated revenue for period
+        // teamId: team id
+        // months: number of months in the aggregated period (default 1)
+        getRevenueWithTarget(revenue, teamId, months = 1) {
             const revenueValue = parseFloat(revenue) || 0;
-            const targetValue = this.revenueTargets[teamId] || 0;
+            const monthlyTarget = this.revenueTargets[teamId] || 0;
+            const targetValue = monthlyTarget * Math.max(1, months);
             
-            if (targetValue <= 0) {
-                // No target set, just show revenue
-                return this.formatCurrency(revenueValue);
+            // If no data or target is zero, show "データなし"
+            if ((revenueValue <= 0 && targetValue <= 0) || targetValue <= 0) {
+                return '<span class="text-muted">データなし</span>';
             }
             
             // Calculate percentage
@@ -624,6 +666,18 @@ createApp({
             // Use HTML to style percentage if needed
             const percentageClass = percentage >= 100 ? 'text-success' : (percentage >= 80 ? 'text-warning' : 'text-danger');
             return `${this.formatCurrency(revenueValue)} <span class="text-muted">(目標${this.formatCurrency(targetValue)}. <span class="${percentageClass}">${percentage}%</span>)</span>`;
+        },
+
+        // For team tab: keep old behavior (no months multiplier, show revenue if no target)
+        getRevenueWithTargetTeam(revenue, teamId) {
+            const revenueValue = parseFloat(revenue) || 0;
+            const monthlyTarget = this.revenueTargets[teamId] || 0;
+            if (monthlyTarget <= 0) {
+                return this.formatCurrency(revenueValue);
+            }
+            const percentage = Math.round((revenueValue / monthlyTarget) * 100);
+            const percentageClass = percentage >= 100 ? 'text-success' : (percentage >= 80 ? 'text-warning' : 'text-danger');
+            return `${this.formatCurrency(revenueValue)} <span class="text-muted">(目標${this.formatCurrency(monthlyTarget)}. <span class="${percentageClass}">${percentage}%</span>)</span>`;
         },
         
         sortBy(column) {
@@ -715,6 +769,9 @@ createApp({
                     this.employeeChartInstance.destroy();
                     this.employeeChartInstance = null;
                 }
+            } else if (tab === 'annual') {
+                // Reload annual summary when switching to annual tab
+                this.loadAnnualSummary();
             }
         },
         

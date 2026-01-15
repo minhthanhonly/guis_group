@@ -1,5 +1,13 @@
 const { createApp } = Vue;
 
+function getCurrentFiscalYear() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1; // 1-12
+    // Fiscal year ends in June; if month >= 7, fiscal end year is next calendar year
+    return month >= 7 ? year + 1 : year;
+}
+
 createApp({
     data() {
         return {
@@ -7,7 +15,7 @@ createApp({
             targets: [],
             loading: false,
             saving: false,
-            selectedYear: new Date().getFullYear(),
+            selectedYear: getCurrentFiscalYear(),
             availableYears: []
         };
     },
@@ -47,34 +55,43 @@ createApp({
                 const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
                 const years = Array.isArray(data) ? data : [];
                 
-                // Generate years from current year to 5 years in the future
-                const currentYear = new Date().getFullYear();
+                // Generate fiscal years (value = fiscal end year; FY Y: Jul (Y-1) - Jun (Y))
+                const currentFY = getCurrentFiscalYear();
                 const yearSet = new Set();
                 
-                // Convert all years to numbers and add to set
                 years.forEach(year => {
-                    yearSet.add(parseInt(year, 10));
+                    const y = parseInt(year, 10);
+                    if (!isNaN(y)) yearSet.add(y);
                 });
                 
-                // Add current year and next 5 years if not already in the list
-                for (let i = 0; i <= 5; i++) {
-                    yearSet.add(currentYear + i);
+                // Add current FY and +/- 2 years
+                for (let i = -2; i <= 2; i++) {
+                    yearSet.add(currentFY + i);
                 }
                 
-                // Also add last 2 years
-                for (let i = 1; i <= 2; i++) {
-                    yearSet.add(currentYear - i);
-                }
-                
-                // Convert to array, remove any invalid years, and sort descending
-                this.availableYears = Array.from(yearSet)
-                    .filter(year => !isNaN(year) && year >= 2000 && year <= 2100)
+                const sorted = Array.from(yearSet)
+                    .filter(y => !isNaN(y) && y >= 2000 && y <= 2100)
                     .sort((a, b) => b - a);
+                
+                // Map to {value, label}
+                this.availableYears = sorted.map(y => ({
+                    value: y,
+                    label: `FY${y} (${y-1}年7月〜${y}年6月)`
+                }));
+                
+                // Ensure selectedYear is in options
+                if (!this.availableYears.some(opt => opt.value === this.selectedYear)) {
+                    this.selectedYear = currentFY;
+                }
             } catch (error) {
                 console.error('Error loading years:', error);
-                // Default to current year if API fails
-                const currentYear = new Date().getFullYear();
-                this.availableYears = [currentYear, currentYear + 1, currentYear - 1];
+                const fy = getCurrentFiscalYear();
+                this.availableYears = [
+                    { value: fy, label: `FY${fy} (${fy-1}年7月〜${fy}年6月)` },
+                    { value: fy + 1, label: `FY${fy+1} (${fy}年7月〜${fy+1}年6月)` },
+                    { value: fy - 1, label: `FY${fy-1} (${fy-2}年7月〜${fy-1}年6月)` },
+                ];
+                this.selectedYear = fy;
             }
         },
         

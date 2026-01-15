@@ -309,9 +309,9 @@ if(!$_SESSION['isProjectManager']){
                             <button class="btn btn-success me-3" @click="saveParentProject">
                                 <i class="fa fa-save me-1"></i><span data-i18n="保存">保存</span>
                             </button>
-                            <button class="btn btn-secondary" @click="cancelParentProject">
+                            <a href="index.php" class="btn btn-secondary" title="キャンセル">
                                 <i class="fa fa-times me-1"></i><span data-i18n="キャンセル">キャンセル</span>
-                            </button>
+                            </a>
                         </div>
                     </div>
                 </div>

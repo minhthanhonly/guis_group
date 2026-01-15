@@ -498,6 +498,243 @@ class Employeestatistics extends ApplicationModel {
         
         return $this->fetchAll($query);
     }
+
+    /**
+     * Annual summary per team with scoring and ranking
+     */
+    function getAnnualSummary($params = null) {
+        $year = isset($_GET['year']) ? intval($_GET['year']) : (isset($params['year']) ? intval($params['year']) : intval(date('Y')));
+        if ($year < 2000 || $year > 2100) {
+            $year = intval(date('Y'));
+        }
+        // Fiscal year: Jul (previous year) -> Jun (selected year)
+        $startFiscalYear = $year - 1;
+        $startDate = sprintf("%d-07-01", $startFiscalYear);
+        $endDate   = sprintf("%d-06-30", $year);
+
+        // 1) Load active teams
+        $teams = $this->fetchAll(
+            "SELECT t.id, t.name, t.department_id
+             FROM " . DB_PREFIX . "team t
+             WHERE t.is_active = 1
+             ORDER BY t.department_id ASC, t.name ASC"
+        );
+
+        // 2) Load revenue targets for both fiscal parts: previous year (Jul-Dec) and current year (Jan-Jun)
+        $targetRows = $this->fetchAll(
+            "SELECT team_id, year, yearly_target, monthly_target
+             FROM " . DB_PREFIX . "team_revenue_targets
+             WHERE year IN (" . intval($startFiscalYear) . ", " . intval($year) . ")"
+        );
+        $targetsByYear = [];
+        foreach ($targetRows as $row) {
+            $monthly = isset($row['monthly_target']) ? floatval($row['monthly_target']) : 0;
+            $yearly  = isset($row['yearly_target']) ? floatval($row['yearly_target']) : 0;
+            if ($monthly <= 0 && $yearly > 0) {
+                $monthly = $yearly / 12.0;
+            }
+            if ($yearly <= 0 && $monthly > 0) {
+                $yearly = $monthly * 12.0;
+            }
+            $targetsByYear[intval($row['year'])][intval($row['team_id'])] = [
+                'monthly' => $monthly,
+                'yearly'  => $yearly
+            ];
+        }
+
+        // Helper to get monthly target for a team in a specific calendar year
+        $getMonthlyTarget = function($teamId, $yearKey) use ($targetsByYear) {
+            if (isset($targetsByYear[$yearKey][$teamId])) {
+                $t = $targetsByYear[$yearKey][$teamId];
+                if ($t['monthly'] > 0) return $t['monthly'];
+                if ($t['yearly'] > 0) return $t['yearly'] / 12.0;
+            }
+            return 0;
+        };
+
+        // 3) Load monthly statistics within the fiscal window (period_type = month)
+        $monthlyRows = $this->fetchAll(
+            "SELECT 
+                team_id,
+                DATE_FORMAT(period_start, '%Y-%m') AS ym,
+                SUM(revenue) AS revenue,
+                SUM(task_likes) AS likes,
+                SUM(task_dislikes) AS dislikes,
+                SUM(total_drawings_revenue) AS drawings_revenue,
+                SUM(drawing_count) AS drawing_count,
+                SUM(task_count) AS task_count
+             FROM {$this->table}
+             WHERE period_type = 'month'
+               AND period_start >= '" . $this->quote($startDate) . "'
+               AND period_start <= '" . $this->quote($endDate) . "'
+             GROUP BY team_id, ym"
+        );
+
+        // 4) Aggregate yearly totals
+        $yearRows = $this->fetchAll(
+            "SELECT 
+                team_id,
+                SUM(revenue) AS revenue_year,
+                SUM(task_likes) AS total_likes,
+                SUM(task_dislikes) AS total_dislikes,
+                SUM(drawing_count) AS total_drawing_count,
+                SUM(task_count) AS total_task_count
+             FROM {$this->table}
+             WHERE period_type = 'month'
+               AND period_start >= '" . $this->quote($startDate) . "'
+               AND period_start <= '" . $this->quote($endDate) . "'
+             GROUP BY team_id"
+        );
+        $yearTotals = [];
+        foreach ($yearRows as $row) {
+            $tid = $row['team_id'] ? intval($row['team_id']) : 0;
+            $yearTotals[$tid] = $row;
+        }
+
+        // 5) Prepare monthly breakdown map per team
+        $monthlyMap = [];
+        foreach ($monthlyRows as $row) {
+            $tid = $row['team_id'] ? intval($row['team_id']) : 0;
+            if (!isset($monthlyMap[$tid])) {
+                $monthlyMap[$tid] = [];
+            }
+            $monthlyMap[$tid][$row['ym']] = $row;
+        }
+
+        $results = [];
+        foreach ($teams as $team) {
+            $tid = intval($team['id']);
+            // Compute target yearly across fiscal window (Jul-Dec prev year, Jan-Jun current year)
+            $targetMonthlyPrev = $getMonthlyTarget($tid, $startFiscalYear);
+            $targetMonthlyCurr = $getMonthlyTarget($tid, $year);
+
+            // If only one side has target, apply it for all 12 months (spread evenly)
+            if ($targetMonthlyPrev <= 0 && $targetMonthlyCurr > 0) {
+                $targetMonthlyPrev = $targetMonthlyCurr;
+            } elseif ($targetMonthlyCurr <= 0 && $targetMonthlyPrev > 0) {
+                $targetMonthlyCurr = $targetMonthlyPrev;
+            }
+
+            $targetYearly = $targetMonthlyPrev * 6 + $targetMonthlyCurr * 6;
+
+            // Build 12 months data
+            $months = [];
+            $monthsHit = 0;
+            $monthsMiss = 0;
+            $monthsWithTarget = 0;
+            $bestMonth = null;
+            $worstMonth = null;
+            // Iterate months from Jul (prev fiscal) to Jun (current)
+            for ($i = 0; $i < 12; $i++) {
+                $monthTs = strtotime($startDate . " +" . $i . " months");
+                $ym = date('Y-m', $monthTs);
+                $label = date('Y年n月', $monthTs);
+
+                $row = isset($monthlyMap[$tid][$ym]) ? $monthlyMap[$tid][$ym] : null;
+                $revenue = $row ? floatval($row['revenue']) : 0;
+
+                $monthNum = intval(date('n', $monthTs));
+                $yearOfMonth = intval(date('Y', $monthTs));
+                // Target: use previous fiscal year targets for Jul-Dec, current year targets for Jan-Jun
+                $target = ($monthNum >= 7)
+                    ? $getMonthlyTarget($tid, $yearOfMonth) // Jul-Dec uses that calendar year (startFiscalYear)
+                    : $getMonthlyTarget($tid, $year);       // Jan-Jun uses selected fiscal end year
+                // Fallback: if missing, try opposite year target; if still missing, keep 0
+                if ($target <= 0) {
+                    $target = ($monthNum >= 7)
+                        ? $getMonthlyTarget($tid, $year)    // fallback to current year
+                        : $getMonthlyTarget($tid, $startFiscalYear); // fallback to prev year
+                }
+
+                $pct = ($target > 0) ? ($revenue / $target * 100) : null;
+
+                // Count all 12 months; if no target, treat as miss to reflect absence
+                $monthsWithTarget++;
+                if ($target > 0 && $revenue >= $target) {
+                    $monthsHit++;
+                } else {
+                    $monthsMiss++;
+                }
+
+                if ($pct !== null) {
+                    if ($bestMonth === null || $pct > $bestMonth['pct']) {
+                        $bestMonth = ['label' => $label, 'revenue' => $revenue, 'target' => $target, 'pct' => $pct];
+                    }
+                    if ($worstMonth === null || $pct < $worstMonth['pct']) {
+                        $worstMonth = ['label' => $label, 'revenue' => $revenue, 'target' => $target, 'pct' => $pct];
+                    }
+                } else {
+                    // If no target, track by revenue for worst/best fallback
+                    if ($bestMonth === null || $revenue > $bestMonth['revenue']) {
+                        $bestMonth = ['label' => $label, 'revenue' => $revenue, 'target' => $target, 'pct' => null];
+                    }
+                    if ($worstMonth === null || $revenue < $worstMonth['revenue']) {
+                        $worstMonth = ['label' => $label, 'revenue' => $revenue, 'target' => $target, 'pct' => null];
+                    }
+                }
+
+                $months[] = [
+                    'label' => $label,
+                    'revenue' => $revenue,
+                    'target' => $target,
+                    'pct' => $pct
+                ];
+            }
+
+            $yearData = isset($yearTotals[$tid]) ? $yearTotals[$tid] : [
+                'revenue_year' => 0,
+                'total_likes' => 0,
+                'total_dislikes' => 0,
+                'total_drawing_count' => 0,
+                'total_task_count' => 0
+            ];
+            $revenueYear = floatval($yearData['revenue_year']);
+            $pctYear = ($targetYearly > 0) ? ($revenueYear / $targetYearly * 100) : 0;
+
+            // Scores
+            $revenueScore = ($targetYearly > 0) ? min(100, ($revenueYear / $targetYearly * 100)) : 0;
+            $stabilityScore = ($monthsWithTarget > 0) ? min(100, ($monthsHit / $monthsWithTarget) * 100) : 0;
+            $likes = intval($yearData['total_likes']);
+            $dislikes = intval($yearData['total_dislikes']);
+            $reactions = $likes + $dislikes;
+            $qualityScore = ($reactions > 0) ? ($likes / $reactions * 100) : 50;
+
+            // Scoring weights (without Productivity):
+            // Revenue 60%, Stability 20%, Quality 20%
+            $score = round(
+                $revenueScore * 0.6 +
+                $stabilityScore * 0.2 +
+                $qualityScore * 0.2,
+                1
+            );
+            $rank = '-';
+            if ($score >= 90) $rank = 'A';
+            else if ($score >= 75) $rank = 'B';
+            else if ($score >= 50) $rank = 'C';
+            else $rank = 'D';
+
+            $results[] = [
+                'team_id' => $tid,
+                'team_name' => $team['name'],
+                'revenue_year' => $revenueYear,
+                'target_year' => $targetYearly,
+                'pct_year' => $pctYear,
+                'months_hit' => $monthsHit,
+                'months_miss' => $monthsMiss,
+                'months' => $months,
+                'best_month' => $bestMonth,
+                'worst_month' => $worstMonth,
+                'total_likes' => $likes,
+                'total_dislikes' => $dislikes,
+                'total_drawing_count' => intval($yearData['total_drawing_count']),
+                'total_task_count' => intval($yearData['total_task_count']),
+                'score' => $score,
+                'rank' => $rank
+            ];
+        }
+
+        return $results;
+    }
     
     /**
      * Delete statistics for last N months

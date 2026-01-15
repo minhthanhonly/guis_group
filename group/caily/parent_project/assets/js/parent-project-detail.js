@@ -4,6 +4,7 @@ createApp({
     data() {
         return {
             isProjectManager: typeof IS_PROJECT_MANAGER !== 'undefined' ? IS_PROJECT_MANAGER : false,
+            permission: {},
             parentProject: null,
             childProjects: [],
             loading: true,
@@ -288,6 +289,31 @@ createApp({
         }
     },
     computed: {
+        canAddProject() {
+            let canAddProject = false;
+            if(this.permission && this.permission.length > 0) {
+                for (const rule of this.permission) {
+                    if (rule.project_add === "1" || rule.project_add === 1) {
+                        canAddProject = true;
+                        break;
+                    }
+                }
+            }
+
+            return this.isProjectManager || canAddProject;
+        },
+        canAddQuotation() {
+            let canAddQuotation = false;
+            if(this.permission && this.permission.length > 0) {
+                for (const rule of this.permission) {
+                    if (rule.project_director === "1" || rule.project_director === 1) {
+                        canAddQuotation = true;
+                        break;
+                    }
+                }
+            }
+            return this.isProjectManager || canAddQuotation;
+        },
         paginatedPriceListProducts() {
             const startIndex = (this.priceListPage - 1) * this.priceListPageSize;
             const endIndex = startIndex + this.priceListPageSize;
@@ -425,6 +451,41 @@ createApp({
         }
     },
     methods: {
+        canDeleteChildProject(project) {
+            let canDeleteChildProject = false;
+            if(this.permission && this.permission.length > 0) {
+                for (const rule of this.permission) {
+                    if (((rule.project_delete === "1" || rule.project_delete === 1) || (rule.project_manager === "1" || rule.project_manager === 1))
+                        && project.department_id == rule.department_id) {
+                        canDeleteChildProject = true;
+                        break;
+                    }
+                }
+            }
+            
+            return canDeleteChildProject;
+        },
+        canEditChildProject(project) {
+            let canEditChildProject = false;
+            if(this.permission && this.permission.length > 0) {
+                for (const rule of this.permission) {
+                    if (((rule.project_edit === "1" || rule.project_edit === 1) || (rule.project_manager === "1" || rule.project_manager === 1))
+                        && project.department_id == rule.department_id) {
+                        canEditChildProject = true;
+                        break;
+                    }
+                }
+            }
+            return canEditChildProject;
+        },
+        async loadPermission() {
+            try {
+                const response = await axios.get('/api/index.php?model=department&method=get_user_permissions&parent_project_id=' + this.PARENT_PROJECT_ID);
+                this.permission = response.data || [];
+            } catch (error) {
+                console.error('Error loading permission:', error);
+            }
+        },
         async loadParentProject() {
             try {
                 const response = await axios.get(`/api/index.php?model=parentproject&method=getById&id=${PARENT_PROJECT_ID}`);
@@ -6233,6 +6294,7 @@ createApp({
     },
     async mounted() {
         try {
+            await this.loadPermission();
             await this.loadParentProject();
             await this.loadChildProjects();
             await this.loadQuotations();

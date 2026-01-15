@@ -79,11 +79,13 @@
                     <div data-i18n="従業員統計">従業員統計</div>
                   </a>
                 </li>
+                <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7'){?>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'team_revenue_targets') echo 'active'; ?>">
                   <a href="<?=$root?>project/team_revenue_targets.php" class="menu-link">
                     <div data-i18n="チーム売上目標設定">チーム売上目標設定</div>
                   </a>
                 </li>
+                <?php } ?>
                 <?php } ?>
                 
               </ul>

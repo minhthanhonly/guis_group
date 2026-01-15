@@ -993,7 +993,7 @@ createApp({
 
 
 
-    mounted() {
+    async mounted() {
         // Initialize the form with default values
         this.parentProject = {
             company_name: '',
@@ -1016,6 +1016,9 @@ createApp({
             notes: '',
             status: 'draft'
         };
+        
+        // Auto-generate project number on page load
+        await this.generateProjectNumber();
         
         // Load customer data
         this.loadDepartments();

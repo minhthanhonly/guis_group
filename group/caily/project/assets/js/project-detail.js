@@ -193,10 +193,10 @@ const vueApp = createApp({
             if (!this.project || !this.project.department_id) return false;
             
             // User must be in the same department
-            return this.permission && this.permission.is_in_department === true;
+            return this.permission && this.permission.is_in_department == 1;
         },
         canEditProject() {
-            return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_edit == 1);
+            return this.permission.can_manage_project || (this.permission.is_member && this.permission.rule && this.permission.rule.project_edit == 1);
         },
         canAddProject() {
             return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_add == 1);

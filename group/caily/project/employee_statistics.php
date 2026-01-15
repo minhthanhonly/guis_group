@@ -66,6 +66,11 @@ if(!$_SESSION['isProjectManager']){
                         <i class="fa fa-user me-1"></i>従業員統計一覧
                     </button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" :class="{ active: activeTab === 'annual' }" @click="switchTab('annual')" type="button">
+                        <i class="fa fa-trophy me-1"></i>年間サマリー
+                    </button>
+                </li>
             </ul>
         </div>
 
@@ -112,7 +117,7 @@ if(!$_SESSION['isProjectManager']){
                                     </div>
                                     <div class="d-flex justify-content-between mb-2">
                                         <span class="text-muted">売上高:</span>
-                                        <strong v-html="getRevenueWithTarget(stat.total_revenue, stat.team_id)"></strong>
+                                        <strong v-html="getRevenueWithTargetTeam(stat.total_revenue, stat.team_id)"></strong>
                                     </div>
                                     <div class="d-flex justify-content-between mb-2">
                                         <span class="text-muted">良い:</span>
@@ -318,6 +323,124 @@ if(!$_SESSION['isProjectManager']){
                     <!-- Chart Container -->
                     <div v-else>
                         <div id="employee-monthly-chart" style="min-height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Annual Summary Tab -->
+        <div class="col-12" v-show="activeTab === 'annual'">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fa fa-trophy me-1"></i>年間サマリー
+                    </h5>
+                    <div class="d-flex gap-2 align-items-center">
+                        <label class="text-muted mb-0">年度</label>
+                        <select class="form-select" style="width: 160px;" v-model="selectedYear" @change="onYearChange">
+                            <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}年</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div v-if="annualLoading" class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">読み込み中...</span>
+                        </div>
+                        <p class="mt-2 text-muted">年間サマリーを読み込み中...</p>
+                    </div>
+                    <div v-else-if="annualSummary.length === 0" class="text-center py-5">
+                        <i class="fa fa-info-circle fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">データがありません</h5>
+                        <p class="text-muted">選択した年度に統計データまたは目標がありません</p>
+                    </div>
+                    <div v-else class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>チーム</th>
+                                    <th class="text-end">売上高 / 目標</th>
+                                    <th class="text-end">ベスト月</th>
+                                    <th class="text-end">ワースト月</th>
+                                    <th class="text-center">達成月</th>
+                                    <th class="text-center">良い / 悪い</th>
+                                    <th class="text-center">タスク</th>
+                                    <th class="text-center">図面</th>
+                                    <th class="text-end">スコア</th>
+                                    <th class="text-center">ランク</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="team in annualSummary" :key="team.team_id || 'no-team'">
+                                    <td>
+                                        <strong>{{ team.team_name || 'チーム未所属' }}</strong>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-flex flex-column align-items-end">
+                                            <span class="fw-bold text-primary">
+                                                {{ formatCurrency(team.revenue_year || 0) }}
+                                            </span>
+                                            <small class="text-muted">
+                                                目標 {{ formatCurrency(team.target_year || 0) }}
+                                                <span :class="team.pct_year >= 100 ? 'text-success' : (team.pct_year >= 80 ? 'text-warning' : 'text-danger')">
+                                                    ({{ Math.round(team.pct_year || 0) }}%)
+                                                </span>
+                                            </small>
+                                        </div>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-flex flex-column align-items-end" v-if="team.best_month && (team.best_month.revenue || 0) > 0">
+                                            <span>{{ team.best_month.label }}</span>
+                                            <small class="text-muted">
+                                                {{ formatCurrency(team.best_month.revenue || 0) }}
+                                                <span class="text-muted">
+                                                    / {{ formatCurrency(team.best_month.target || 0) }}
+                                                    ({{ Math.round(team.best_month.pct || 0) }}%)
+                                                </span>
+                                            </small>
+                                        </div>
+                                        <span v-else class="text-muted">データなし</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-flex flex-column align-items-end" v-if="team.worst_month && (team.worst_month.revenue || 0) > 0">
+                                            <span>{{ team.worst_month.label }}</span>
+                                            <small class="text-muted">
+                                                {{ formatCurrency(team.worst_month.revenue || 0) }}
+                                                <span class="text-muted">
+                                                    / {{ formatCurrency(team.worst_month.target || 0) }}
+                                                    ({{ Math.round(team.worst_month.pct || 0) }}%)
+                                                </span>
+                                            </small>
+                                        </div>
+                                        <span v-else class="text-muted">データなし</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-success me-1">達成 {{ team.months_hit }}</span>
+                                        <span class="badge bg-secondary">未達 {{ team.months_miss }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="text-success me-1">{{ team.total_likes }}</span>
+                                        /
+                                        <span class="text-danger ms-1">{{ team.total_dislikes }}</span>
+                                    </td>
+                                    <td class="text-center">{{ team.total_task_count }}</td>
+                                    <td class="text-center">{{ team.total_drawing_count }}</td>
+                                    <td class="text-end fw-bold">{{ team.score }}</td>
+                                    <td class="text-center">
+                                        <span class="badge"
+                                              :class="{
+                                                'bg-success': team.rank === 'A',
+                                                'bg-info': team.rank === 'B',
+                                                'bg-warning text-dark': team.rank === 'C',
+                                                'bg-danger': team.rank === 'D',
+                                                'bg-secondary': !team.rank
+                                              }">
+                                            {{ team.rank || '-' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

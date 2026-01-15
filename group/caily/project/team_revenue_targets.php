@@ -23,9 +23,11 @@ if(!$_SESSION['isProjectManager']){
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label">年度</label>
+                            <label class="form-label">年度 (7月〜翌年6月)</label>
                             <select class="form-select" v-model="selectedYear" @change="loadTargets">
-                                <option v-for="year in availableYears" :key="year" :value="year">{{ year }}年</option>
+                                <option v-for="opt in availableYears" :key="opt.value" :value="opt.value">
+                                    {{ opt.label }}
+                                </option>
                             </select>
                         </div>
                         <div class="col-md-8 d-flex align-items-end gap-2">
