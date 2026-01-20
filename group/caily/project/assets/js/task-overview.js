@@ -2,6 +2,11 @@ const { createApp } = Vue;
 
 createApp({
     data() {
+        // Set default filters based on user role
+        const isProjectManager = window.currentUser?.isProjectManager || false;
+        const userDepartmentId = window.currentUser?.department_id || '';
+        const defaultMyTask = !isProjectManager; // If not project manager, show only own tasks
+        
         return {
             loading: false,
             departments: [],
@@ -11,12 +16,12 @@ createApp({
             unassignedUsers: [],
             activeTab: 'tasks',
             filters: {
-                department_id: '',
+                department_id: isProjectManager ? userDepartmentId : '', // Default to user's department if project manager
                 team_id: '',
                 user_id: '',
                 // Mặc định loại bỏ completed để giảm tải
                 excludeCompleted: true,
-                myTask: false
+                myTask: defaultMyTask // Default to true if not project manager
             },
             taskStatuses: [
                 { value: 'todo', label: '未開始', color: 'secondary' },
@@ -162,10 +167,14 @@ createApp({
             this.loadOverview();
         },
         onMyTaskChange() {
-            // When "My Task" is checked, clear user_id filter
+            // When "My Task" is checked, clear user_id and department_id filters
             // When unchecked, reload to show all tasks
             if (this.filters.myTask) {
                 this.filters.user_id = '';
+                // If not project manager, also clear department_id when showing own tasks
+                if (!window.currentUser?.isProjectManager) {
+                    this.filters.department_id = '';
+                }
             }
             // No need to call loadOverview here as filteredTasks computed will handle it
         },
@@ -198,6 +207,11 @@ createApp({
         }
     },
     mounted() {
+        // If not project manager, ensure myTask is enabled and department_id is cleared
+        if (!window.currentUser?.isProjectManager) {
+            this.filters.myTask = true;
+            this.filters.department_id = '';
+        }
         this.loadOverview();
     }
 }).mount('#app');

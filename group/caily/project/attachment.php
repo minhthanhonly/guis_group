@@ -26,19 +26,19 @@ if (!$project_id) {
                 <div class="collapse navbar-collapse" id="projectNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
-                    <a class="nav-link" href="detail.php?id=<?php echo $project_id; ?>">概要</a>
+                    <a class="nav-link" href="detail.php?id=<?php echo $project_id; ?>"><span data-i18n="概要">概要</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>">タスク<span class="badge badge-sm ms-1 rounded-pill">{{ project?.task_count }}</span></a>
+                    <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>"><span data-i18n="タスク">タスク</span><span class="badge badge-sm ms-1 rounded-pill">{{ project?.task_count }}</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>">ガントチャート</a>
+                    <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>"><span data-i18n="ガントチャート">ガントチャート</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>">図面<span class="badge badge-sm bg-info ms-1 rounded-pill">{{ project?.drawing_count }}</span></a>
+                    <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>"><span data-i18n="図面">図面</span><span class="badge badge-sm bg-info ms-1 rounded-pill">{{ project?.drawing_count }}</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link active" aria-current="page" href="attachment.php?project_id=<?php echo $project_id; ?>">添付ファイル</a>
+                    <a class="nav-link active text-primary" aria-current="page" href="attachment.php?project_id=<?php echo $project_id; ?>"><span data-i18n="添付ファイル">添付ファイル</span></a>
                     </li>
                 </ul>
                 </div>
@@ -59,14 +59,14 @@ if (!$project_id) {
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">
                             <i class="fa fa-folder me-2"></i>
-                            添付ファイル管理
+                            <span data-i18n="添付ファイル管理">添付ファイル管理</span>
                         </h5>
                         <div>
                             <button class="btn btn-outline-primary btn-sm me-2" @click="showCreateFolderModal" v-if="canViewProject">
-                                <i class="fa fa-folder-plus me-1"></i>フォルダ作成
+                                <i class="fa fa-folder-plus me-1"></i><span data-i18n="フォルダ作成">フォルダ作成</span>
                             </button>
                             <button class="btn btn-primary btn-sm" @click="showUploadModal" v-if="canViewProject">
-                                <i class="fa fa-upload me-1"></i>ファイルアップロード
+                                <i class="fa fa-upload me-1"></i><span data-i18n="ファイルアップロード">ファイルアップロード</span>
                             </button>
                         </div>
                     </div>
@@ -77,7 +77,7 @@ if (!$project_id) {
                             <ol class="breadcrumb">
                                 <li class="breadcrumb-item">
                                     <a href="#" @click="navigateToFolder(null)" class="text-decoration-none">
-                                        <i class="fa fa-home me-1"></i>ルート
+                                        <i class="fa fa-home me-1"></i><span data-i18n="ルート">ルート</span>
                                     </a>
                                 </li>
                                 <li v-for="folder in breadcrumbs" :key="folder.id" class="breadcrumb-item">
@@ -109,7 +109,7 @@ if (!$project_id) {
                                        @change="toggleSelectAll"
                                        id="selectAllFiles">
                                 <label class="form-check-label" for="selectAllFiles">
-                                    すべて選択
+                                    <span data-i18n="すべて選択">すべて選択</span>
                                 </label>
                             </div>
                         </div>
@@ -125,8 +125,8 @@ if (!$project_id) {
                             <!-- Empty State -->
                             <div v-if="folders.length === 0 && files.length === 0" class="text-center py-5">
                                 <i class="fa fa-folder-open fa-3x text-muted mb-3"></i>
-                                <h5 class="text-muted">フォルダまたはファイルがありません</h5>
-                                <p class="text-muted">新しいフォルダを作成するか、ファイルをアップロードしてください。</p>
+                                <h5 class="text-muted"><span data-i18n="フォルダまたはファイルがありません">フォルダまたはファイルがありません</span></h5>
+                                <p class="text-muted"><span data-i18n="新しいフォルダを作成するか、ファイルをアップロードしてください">新しいフォルダを作成するか、ファイルをアップロードしてください。</span></p>
                             </div>
 
                             <!-- Folders and Files -->
@@ -138,35 +138,35 @@ if (!$project_id) {
                                             <th style="width: 40px;"></th>
                                             <th @click="sortBy('name')" style="cursor: pointer;">
                                                 <div class="d-flex align-items-center">
-                                                    <span>名前</span>
+                                                    <span><span data-i18n="名前">名前</span></span>
                                                     <i class="fa ms-1" :class="getSortIcon('name')"></i>
                                                 </div>
                                             </th>
                                             <th @click="sortBy('file_type')" style="cursor: pointer; width: 150px;">
                                                 <div class="d-flex align-items-center">
-                                                    <span>ファイルタイプ</span>
+                                                    <span><span data-i18n="ファイルタイプ">ファイルタイプ</span></span>
                                                     <i class="fa ms-1" :class="getSortIcon('file_type')"></i>
                                                 </div>
                                             </th>
                                             <th @click="sortBy('file_size')" style="cursor: pointer; width: 120px;">
                                                 <div class="d-flex align-items-center">
-                                                    <span>サイズ</span>
+                                                    <span><span data-i18n="サイズ">サイズ</span></span>
                                                     <i class="fa ms-1" :class="getSortIcon('file_size')"></i>
                                                 </div>
                                             </th>
                                             <th @click="sortBy('uploaded_at')" style="cursor: pointer; width: 150px;">
                                                 <div class="d-flex align-items-center">
-                                                    <span>更新日時</span>
+                                                    <span><span data-i18n="更新日時">更新日時</span></span>
                                                     <i class="fa ms-1" :class="getSortIcon('uploaded_at')"></i>
                                                 </div>
                                             </th>
                                             <th @click="sortBy('uploaded_by_name')" style="cursor: pointer; width: 120px;">
                                                 <div class="d-flex align-items-center">
-                                                    <span>作成者</span>
+                                                    <span><span data-i18n="作成者">作成者</span></span>
                                                     <i class="fa ms-1" :class="getSortIcon('uploaded_by_name')"></i>
                                                 </div>
                                             </th>
-                                            <th style="width: 100px;" v-if="canViewProject">操作</th>
+                                            <th style="width: 100px;" v-if="canViewProject"><span data-i18n="操作">操作</span></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -184,10 +184,10 @@ if (!$project_id) {
                                                         {{ folder.name }}
                                                     </a>
                                                 </strong>
-                                                <small class="text-muted d-block">{{ folder.file_count }} ファイル</small>
+                                                <small class="text-muted d-block">{{ folder.file_count }} <span data-i18n="ファイル">ファイル</span></small>
                                             </td>
                                             <td>
-                                                <span class="badge bg-label-secondary">フォルダ</span>
+                                                <span class="badge bg-label-secondary"><span data-i18n="フォルダ">フォルダ</span></span>
                                             </td>
                                             <td>-</td>
                                             <td>{{ formatDateTime(folder.updated_at) }}</td>
@@ -199,13 +199,13 @@ if (!$project_id) {
                                                     </button>
                                                     <ul class="dropdown-menu">
                                                         <li><a class="dropdown-item" href="#" @click="copyFolderUrl(folder)">
-                                                            <i class="fa fa-link me-2"></i>URLをコピー
+                                                            <i class="fa fa-link me-2"></i><span data-i18n="URLをコピー">URLをコピー</span>
                                                         </a></li>
                                                         <li><a class="dropdown-item" href="#" @click="editFolder(folder)">
-                                                            <i class="fa fa-edit me-2"></i>名前変更
+                                                            <i class="fa fa-edit me-2"></i><span data-i18n="名前変更">名前変更</span>
                                                         </a></li>
                                                         <li><a class="dropdown-item text-danger" href="#" @click="deleteFolder(folder)">
-                                                            <i class="fa fa-trash me-2"></i>削除
+                                                            <i class="fa fa-trash me-2"></i><span data-i18n="削除">削除</span>
                                                         </a></li>
                                                     </ul>
                                                 </div>
@@ -247,16 +247,16 @@ if (!$project_id) {
                                                     </button>
                                                     <ul class="dropdown-menu">
                                                         <li><a class="dropdown-item" href="#" @click="copyFileUrl(file)">
-                                                            <i class="fa fa-link me-2"></i>URLをコピー
+                                                            <i class="fa fa-link me-2"></i><span data-i18n="URLをコピー">URLをコピー</span>
                                                         </a></li>
                                                         <li><a class="dropdown-item" :href="getSecureViewUrl(file)" target="_blank">
-                                                            <i class="fa fa-eye me-2"></i>表示
+                                                            <i class="fa fa-eye me-2"></i><span data-i18n="表示">表示</span>
                                                         </a></li>
                                                         <li><a class="dropdown-item" :href="getSecureDownloadUrl(file)" download>
-                                                            <i class="fa fa-download me-2"></i>ダウンロード
+                                                            <i class="fa fa-download me-2"></i><span data-i18n="ダウンロード">ダウンロード</span>
                                                         </a></li>
                                                         <li><a class="dropdown-item text-danger" href="#" @click="deleteFile(file)">
-                                                            <i class="fa fa-trash me-2"></i>削除
+                                                            <i class="fa fa-trash me-2"></i><span data-i18n="削除">削除</span>
                                                         </a></li>
                                                     </ul>
                                                 </div>
@@ -273,7 +273,7 @@ if (!$project_id) {
                 <div class="text-center py-5">
                     <div class="text-muted">
                         <i class="fa fa-lock fa-3x mb-2"></i>
-                        <p>権限がありません</p>
+                        <p><span data-i18n="権限がありません">権限がありません</span></p>
                     </div>
                 </div>
             </div>
@@ -284,21 +284,21 @@ if (!$project_id) {
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">フォルダ作成</h5>
+                        <h5 class="modal-title"><span data-i18n="フォルダ作成">フォルダ作成</span></h5>
                         <button type="button" class="btn-close" @click="closeCreateFolderModal"></button>
                     </div>
                     <div class="modal-body">
                         <form @submit.prevent="createFolder">
                             <div class="mb-3">
-                                <label class="form-label">フォルダ名 <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="フォルダ名">フォルダ名</span> <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" v-model="newFolderName" required maxlength="255" placeholder="フォルダ名を入力してください">
                             </div>
                         </form>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" @click="closeCreateFolderModal">キャンセル</button>
+                        <button class="btn btn-secondary" @click="closeCreateFolderModal"><span data-i18n="キャンセル">キャンセル</span></button>
                         <button class="btn btn-primary" @click="createFolder" :disabled="!newFolderName.trim()">
-                            <i class="fa fa-folder-plus me-2"></i>作成
+                            <i class="fa fa-folder-plus me-2"></i><span data-i18n="作成">作成</span>
                         </button>
                     </div>
                 </div>
@@ -310,7 +310,7 @@ if (!$project_id) {
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">ファイルアップロード</h5>
+                        <h5 class="modal-title"><span data-i18n="ファイルアップロード">ファイルアップロード</span></h5>
                         <button type="button" class="btn-close" @click="closeUploadModal"></button>
                     </div>
                     <div class="modal-body">
@@ -322,12 +322,12 @@ if (!$project_id) {
                              @click="$refs.fileInput.click()">
                             <div class="drop-zone-content text-center py-5">
                                 <i class="fa fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
-                                <h5 class="text-muted">ファイルをここにドラッグ&ドロップ</h5>
-                                <p class="text-muted mb-3">または クリックしてファイルを選択</p>
+                                <h5 class="text-muted"><span data-i18n="ファイルをここにドラッグ&ドロップ">ファイルをここにドラッグ&ドロップ</span></h5>
+                                <p class="text-muted mb-3"><span data-i18n="または">または</span> <span data-i18n="クリックしてファイルを選択">クリックしてファイルを選択</span></p>
                                 <button type="button" class="btn btn-outline-primary">
-                                    <i class="fa fa-folder-open me-2"></i>ファイルを選択
+                                    <i class="fa fa-folder-open me-2"></i><span data-i18n="ファイルを選択">ファイルを選択</span>
                                 </button>
-                                <div class="form-text mt-2">複数のファイルを選択できます。最大ファイルサイズ: 100MB</div>
+                                <div class="form-text mt-2"><span data-i18n="複数のファイルを選択できます">複数のファイルを選択できます</span>。<span data-i18n="最大ファイルサイズ">最大ファイルサイズ</span>: 100MB</div>
                             </div>
                         </div>
                         
@@ -336,7 +336,7 @@ if (!$project_id) {
                         
                                 <!-- Selected Files List -->
         <div v-if="selectedFiles.length > 0" class="mb-3">
-            <h6>選択されたファイル:</h6>
+            <h6><span data-i18n="選択されたファイル">選択されたファイル</span>:</h6>
             <div class="list-group selected-files-list">
                 <div v-for="(file, index) in selectedFiles" :key="index" class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
@@ -352,11 +352,11 @@ if (!$project_id) {
         </div>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" @click="closeUploadModal">キャンセル</button>
+                        <button class="btn btn-secondary" @click="closeUploadModal"><span data-i18n="キャンセル">キャンセル</span></button>
                         <button class="btn btn-primary" @click="uploadFiles" :disabled="selectedFiles.length === 0 || uploading">
                             <i class="fa fa-upload me-2"></i>
-                            <span v-if="uploading">アップロード中...</span>
-                            <span v-else>アップロード</span>
+                            <span v-if="uploading"><span data-i18n="アップロード中">アップロード中</span>...</span>
+                            <span v-else><span data-i18n="アップロード">アップロード</span></span>
                         </button>
                     </div>
                 </div>
@@ -368,13 +368,13 @@ if (!$project_id) {
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">フォルダ名変更</h5>
+                        <h5 class="modal-title"><span data-i18n="フォルダ名変更">フォルダ名変更</span></h5>
                         <button type="button" class="btn-close" @click="closeEditFolderModal"></button>
                     </div>
                     <div class="modal-body">
                         <form @submit.prevent="updateFolder">
                             <div class="mb-3">
-                                <label class="form-label">フォルダ名 <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="フォルダ名">フォルダ名</span> <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" v-model="editingFolder.name" required maxlength="255">
                             </div>
                         </form>
@@ -382,7 +382,7 @@ if (!$project_id) {
                     <div class="modal-footer">
                         <button class="btn btn-secondary" @click="closeEditFolderModal">キャンセル</button>
                         <button class="btn btn-primary" @click="updateFolder" :disabled="!editingFolder.name.trim()">
-                            <i class="fa fa-save me-2"></i>保存
+                            <i class="fa fa-save me-2"></i><span data-i18n="保存">保存</span>
                         </button>
                     </div>
                 </div>
@@ -398,15 +398,15 @@ if (!$project_id) {
                 <div class="d-flex align-items-center gap-3">
                     <span class="fw-medium text-white">{{ selectedFileIds.length }}個のファイルが選択されています</span>
                     <button class="btn btn-light btn-sm" @click="clearSelection">
-                        <i class="fa fa-times me-1"></i>選択解除
+                        <i class="fa fa-times me-1"></i><span data-i18n="選択解除">選択解除</span>
                     </button>
                 </div>
                 <div class="d-flex gap-2">
                     <button class="btn btn-info" @click="copySelectedFileUrls">
-                        <i class="fa fa-copy me-1"></i>URLをコピー
+                        <i class="fa fa-copy me-1"></i><span data-i18n="URLをコピー">URLをコピー</span>
                     </button>
                     <button class="btn btn-danger" @click="deleteSelectedFiles">
-                        <i class="fa fa-trash me-1"></i>一括削除
+                        <i class="fa fa-trash me-1"></i><span data-i18n="一括削除">一括削除</span>
                     </button>
                 </div>
             </div>

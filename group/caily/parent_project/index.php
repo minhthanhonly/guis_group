@@ -27,7 +27,7 @@ $view->heading('建物一覧');
                     <div class="row mb-3">
                         <div class="col-md-4">
                             <div class="input-group">
-                                <input type="text" class="form-control" v-model="searchKeyword" placeholder="検索..." @input="onSearch">
+                                <input type="text" class="form-control" v-model="searchKeyword" :placeholder="translatePlaceholder('検索...')" @input="onSearch">
                                 <button class="btn btn-outline-secondary" type="button" @click="clearSearch">
                                     <i class="fa fa-times"></i>
                                 </button>
@@ -37,13 +37,13 @@ $view->heading('建物一覧');
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="favoritesOnly" v-model="favoritesOnly" @change="onFavoritesFilterChange">
                                 <label class="form-check-label" for="favoritesOnly">
-                                    <i class="fa fa-star text-warning me-1"></i>お気に入りのみ
+                                    <i class="fa fa-star text-warning me-1"></i><span data-i18n="お気に入りのみ">お気に入りのみ</span>
                                 </label>
                             </div>
                         </div>
                         <div class="col-md-2 d-flex align-items-center" v-if="favoritesOnly">
                             <button class="btn btn-outline-danger btn-sm" @click="clearAllFavorites" :disabled="loading">
-                                <i class="fa fa-trash me-1"></i>お気に入りをすべて削除
+                                <i class="fa fa-trash me-1"></i><span data-i18n="お気に入りをすべて削除">お気に入りをすべて削除</span>
                             </button>
                         </div>
                     </div>
@@ -55,46 +55,46 @@ $view->heading('建物一覧');
                             <div class="spinner-border" role="status">
                                 <span class="visually-hidden">Loading...</span>
                             </div>
-                            <p class="mt-2">読み込み中...</p>
+                            <p class="mt-2"><span data-i18n="読み込み中">読み込み中</span>...</p>
                         </div>
                         
                         <table v-else class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th class="text-center">お気に入り</th>
+                                    <th class="text-center"><span data-i18n="お気に入り">お気に入り</span></th>
                                     <th @click="sortBy('project_number')" style="cursor: pointer;" class="user-select-none">
-                                        番号
+                                        <span data-i18n="管理番号">管理番号</span>
                                         <i class="fa fa-fw" :class="getSortIcon('project_number')"></i>
                                     </th>
                                     <th @click="sortBy('project_name')" style="cursor: pointer;" class="user-select-none">
-                                        お施主様名
+                                        <span data-i18n="お施主様名">お施主様名</span>
                                         <i class="fa fa-fw" :class="getSortIcon('project_name')"></i>
                                     </th>
                                     <th @click="sortBy('construction_number')" style="cursor: pointer;" class="user-select-none">
-                                        工事番号
+                                        <span data-i18n="工事番号">工事番号</span>
                                         <i class="fa fa-fw" :class="getSortIcon('construction_number')"></i>
                                     </th>
                                     <th @click="sortBy('company_name')" style="cursor: pointer;" class="user-select-none">
-                                        会社名
+                                        <span data-i18n="会社名">会社名</span>
                                         <i class="fa fa-fw" :class="getSortIcon('company_name')"></i>
                                     </th>
                                     <th @click="sortBy('request_date')" style="cursor: pointer;" class="user-select-none">
-                                        依頼日
+                                        <span data-i18n="依頼日">依頼日</span>
                                         <i class="fa fa-fw" :class="getSortIcon('request_date')"></i>
                                     </th>
                                     <th @click="sortBy('child_project_count')" style="cursor: pointer;" class="user-select-none">
-                                        件数
+                                        <span data-i18n="件数">件数</span>
                                         <i class="fa fa-fw" :class="getSortIcon('child_project_count')"></i>
                                     </th>
                                     <th @click="sortBy('created_by_name')" style="cursor: pointer;" class="user-select-none">
-                                        作成者
+                                        <span data-i18n="作成者">作成者</span>
                                         <i class="fa fa-fw" :class="getSortIcon('created_by_name')"></i>
                                     </th>
                                     <th @click="sortBy('created_at')" style="cursor: pointer;" class="user-select-none">
-                                        作成日
+                                        <span data-i18n="作成日">作成日</span>
                                         <i class="fa fa-fw" :class="getSortIcon('created_at')"></i>
                                     </th>
-                                    <th>操作</th>
+                                    <th><span data-i18n="操作">操作</span></th>
                                 </tr>
                             </thead>
                             <tbody>

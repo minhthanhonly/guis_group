@@ -11,11 +11,11 @@ $view->heading('メンバー詳細');
 					<?php if ($hash['data']['userid'] == $_SESSION['userid'] ) { ?>
 					<li class="nav-item">
 						<a class="nav-link active waves-effect waves-light" href="view.php"><i
-								class="icon-base ti tabler-users icon-sm me-1_5"></i> アカウント</a>
+								class="icon-base fa fa-user icon-sm me-1_5"></i> <span data-i18n="アカウント">アカウント</span></a>
 					</li>
 					<li class="nav-item">
 						<a class="nav-link waves-effect waves-light" href="change_password.php"><i
-								class="icon-base ti tabler-lock icon-sm me-1_5"></i> セクシュアリティ</a>
+								class="icon-base fa fa-lock icon-sm me-1_5"></i> <span data-i18n="セクシュアリティ">セクシュアリティ</span></a>
 					</li>
 					<?php } ?>
 				</ul>
@@ -62,39 +62,39 @@ $view->heading('メンバー詳細');
 						  </div>
 						</div>
 					</div> -->
-					<h5 class="pb-4 border-bottom mb-4 mt-4">詳細</h5>
+					<h5 class="pb-4 border-bottom mb-4 mt-4"><span data-i18n="詳細">詳細</span></h5>
 					<div class="info-container">
 						<ul class="list-unstyled mb-6">
 						  <li class="mb-2">
-							<span class="h6">ユーザー名:</span>
+							<span class="h6"><span data-i18n="ユーザー名">ユーザー名</span>:</span>
 							<span><?=$hash['data']['userid']?></span>
 						  </li>
 						  <li class="mb-2">
-							<span class="h6">メールアドレス:</span>
+							<span class="h6"><span data-i18n="メールアドレス">メールアドレス</span>:</span>
 							<span><?=$hash['data']['user_email']?></span>
 						  </li>
 						  <li class="mb-2">
-							<span class="h6">状態:</span>
-							<span class="badge <?=$hash['data']['is_suspend'] != 1 ? 'bg-label-success' : 'bg-label-warning'?>"><?=$hash['data']['is_suspend'] == 1 ? '停止' : 'アクティブ'?></span>
+							<span class="h6"><span data-i18n="状態">状態</span>:</span>
+							<span class="badge <?=$hash['data']['is_suspend'] != 1 ? 'bg-label-success' : 'bg-label-warning'?>"><?=$hash['data']['is_suspend'] == 1 ? '<span data-i18n="停止">停止</span>' : '<span data-i18n="アクティブ">アクティブ</span>'?></span>
 						  </li>
 						  <li class="mb-2">
-							<span class="h6">グループ:</span>
+							<span class="h6"><span data-i18n="グループ">グループ</span>:</span>
 							<span><?=$hash['data']['user_groupname']?></span>
 						  </li>
 						  <li class="mb-2">
-							<span class="h6">電話番号:</span>
+							<span class="h6"><span data-i18n="電話番号">電話番号</span>:</span>
 							<span><?=$hash['data']['user_phone']?></span>
 						  </li>
 						  <li class="mb-2">
-							<span class="h6">携帯電話:</span>
+							<span class="h6"><span data-i18n="携帯電話">携帯電話</span>:</span>
 							<span><?=$hash['data']['user_mobile']?></span>
 						  </li>
 						  <li class="mb-2">
-							<span class="h6">住所:</span>
+							<span class="h6"><span data-i18n="住所">住所</span>:</span>
 							<span><?=$hash['data']['user_address']?></span>
 						  </li>
 						  <li class="mb-2">
-							<span class="h6">住所（かな）:</span>
+							<span class="h6"><span data-i18n="住所（かな）">住所（かな）</span>:</span>
 							<span><?=$hash['data']['user_addressruby']?></span>
 						  </li>
 						  <li class="mb-2">
@@ -105,7 +105,7 @@ $view->heading('メンバー詳細');
 						<?php if ($hash['data']['userid'] == $_SESSION['userid'] ) { ?>
 							<div class="mt-2">
 								<a href="edit.php?id=<?=$hash['data']['id']?>" type="submit"
-									class="btn btn-primary me-3 waves-effect waves-light">個人設定</a>
+									class="btn btn-primary me-3 waves-effect waves-light"><span data-i18n="個人設定">個人設定</span></a>
 							</div>
 						<?php } ?>
 					</div>

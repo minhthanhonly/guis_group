@@ -1,6 +1,6 @@
 <?php
 require_once('../application/loader.php');
-$view->heading('プロジェクト詳細');
+$view->heading('案件詳細');
 
 // Get project ID from URL
 $project_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
@@ -20,19 +20,19 @@ if (!$project_id) {
                 <div class="collapse navbar-collapse" id="projectNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
-                    <a class="nav-link active" aria-current="page" href="detail.php?id=<?php echo $project_id; ?>">概要</a>
+                    <a class="nav-link active text-primary" aria-current="page" href="detail.php?id=<?php echo $project_id; ?>"><span data-i18n="概要">概要</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>">タスク<span class="badge badge-sm ms-1 rounded-pill">{{ project?.task_count }}</span></a>
+                    <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>"><span data-i18n="タスク">タスク</span><span class="badge badge-sm ms-1 rounded-pill">{{ project?.task_count }}</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>">ガントチャート</a>
+                    <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>"><span data-i18n="ガントチャート">ガントチャート</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>">図面<span class="badge badge-sm bg-info ms-1 rounded-pill">{{ project?.drawing_count }}</span></a>
+                    <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>"><span data-i18n="図面">図面</span><span class="badge badge-sm bg-info ms-1 rounded-pill">{{ project?.drawing_count }}</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>">添付ファイル</a>
+                    <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>"><span data-i18n="添付ファイル">添付ファイル</span></a>
                     </li>
                 </ul>
                 </div>
@@ -535,7 +535,7 @@ if (!$project_id) {
                 <div class="card mt-4" v-if="canCommentProject">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
-                            <i class="fa fa-comment me-2"></i>コメント
+                            <i class="fa fa-comment me-2"></i><span data-i18n="コメント">コメント</span>
                         </h5>
                     </div>
                     <div class="card-body">
@@ -558,12 +558,12 @@ if (!$project_id) {
                 <!-- Project Status Block -->
                 <div class="card mb-4 project-status-block">
                     <div class="card-header d-flex justify-content-start align-items-center">
-                        <h5 class="card-title mb-0">業務書類</h5>
+                        <h5 class="card-title mb-0"><span data-i18n="業務書類">業務書類</span></h5>
                     </div>
                     <div class="card-body" v-if="project">
                         <div class="row g-3">
                             <div class="col-6 col-xl-3">
-                                <label class="form-label">見積書</label>
+                                <label class="form-label"><span data-i18n="見積書">見積書</span></label>
                                 <div>
                                     <div>
                                         <span class="badge" :class="getQuotationStatusBadgeClass(project.quotation_status)">{{ getQuotationStatusLabel(project.quotation_status) }}</span>
@@ -571,7 +571,7 @@ if (!$project_id) {
                                 </div>
                             </div>
                             <!--<div class="col-6 col-xl-3">
-                                <label class="form-label">請求書</label>
+                                <label class="form-label"><span data-i18n="請求書">請求書</span></label>
                                 <div>
                                     <div>
                                         <span class="badge" :class="getInvoiceStatusBadgeClass(project.invoice_status)">{{ getInvoiceStatusLabel(project.invoice_status) }}</span>
@@ -579,10 +579,9 @@ if (!$project_id) {
                                 </div>
                             </div>-->
                             <div class="col-12 col-xl-6">
-                                <label class="form-label">総額</label>
+                                <label class="form-label"><span data-i18n="総額">総額</span></label>
                                 <div class="input-group">
-                                    <input type="text" class="form-control bg-light" :value="formatCurrency(project.amount || 0)" readonly>
-                                    <span class="input-group-text">円</span>
+                                    <input type="text" class="form-control" :value="formatCurrency(project.amount || 0)" readonly>
                                 </div>
                             </div>
                         </div>
@@ -597,9 +596,9 @@ if (!$project_id) {
                 <!-- Quick Notes Section -->
                 <div class="card mb-4">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">メモ</h5>
+                        <h5 class="card-title mb-0"><span data-i18n="メモ">メモ</span></h5>
                         <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
-                            <i class="fa fa-plus"></i> <span data-i18n="メモを追加">メモを追加</span>
+                            <i class="fa fa-plus me-1"></i> <span data-i18n="メモを追加">メモを追加</span>
                         </button>
                     </div>
                     <div class="card-body">
@@ -625,9 +624,9 @@ if (!$project_id) {
                         </div>
                         <div v-else class="text-center text-muted py-3">
                             <i class="fa fa-sticky-note fa-2x mb-2"></i>
-                            <p>メモがありません</p>
+                            <p><span data-i18n="メモがありません">メモがありません</span></p>
                             <button v-if="canAddNote" class="btn btn-outline-primary btn-sm" @click="openNoteModal()">
-                                最初のメモを追加
+                                <span data-i18n="最初のメモを追加">最初のメモを追加</span>
                             </button>
                         </div>
                     </div>
@@ -636,7 +635,7 @@ if (!$project_id) {
                 <!-- Lịch sử hành động (履歴) -->
                 <div class="card mb-4">
                     <div class="card-header d-flex align-items-center">
-                        <h5 class="card-title mb-0">履歴</h5>
+                        <h5 class="card-title mb-0"><span data-i18n="履歴">履歴</span></h5>
                     </div>
                     <div class="card-body">
                         <ul class="list-group" style="max-height: 400px; overflow-y: auto;">
@@ -683,8 +682,8 @@ if (!$project_id) {
                                 <div class="mb-1">
                                     <i class="fa fa-list-alt fs-3"></i>
                                 </div>
-                                <h2 class="mb-1">{{ stats.totalTasks }}</h2>
-                                <small>タスク総数</small>
+                                <h2 class="mb-1 text-white">{{ stats.totalTasks }}</h2>
+                                <small><span data-i18n="タスク総数">タスク総数</span></small>
                             </div>
                         </div>
                     </div>
@@ -716,8 +715,8 @@ if (!$project_id) {
                                 <div class="mb-1">
                                     <i class="fa fa-calendar fs-3"></i>
                                 </div>
-                                <h2 class="mb-1">{{ stats.totalDays }}</h2>
-                                <small>日数</small>
+                                <h2 class="mb-1 text-white">{{ stats.totalDays }}</h2>
+                                <small><span data-i18n="日数">日数</span></small>
                             </div>
                         </div>
                     </div>

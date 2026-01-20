@@ -535,6 +535,34 @@ const vueApp = createApp({
             const now = moment.tz('Asia/Tokyo');
             const endDate = moment.tz(this.project.end_date, 'Asia/Tokyo');
             
+            // Kiểm tra ngôn ngữ hiện tại
+            const isVietnamese = typeof i18next !== 'undefined' && i18next.isInitialized && i18next.language === 'vi';
+            
+            // Lấy các nhãn đã dịch
+            const dayLabel = this.translateLabel('日');
+            const hourLabel = this.translateLabel('時間');
+            const minuteLabel = this.translateLabel('分');
+            const overdueLabel = this.translateLabel('超過');
+            const remainingLabel = this.translateLabel('残り');
+            
+            // Hàm helper để format số và đơn vị với khoảng cách cho tiếng Việt
+            const formatUnit = (value, label) => {
+                if (isVietnamese) {
+                    return `${value} ${label}`;
+                } else {
+                    return `${value}${label}`;
+                }
+            };
+            
+            // Hàm helper để format text với khoảng cách cho tiếng Việt
+            const formatTimeText = (parts) => {
+                if (isVietnamese) {
+                    return parts.filter(p => p).join(' ');
+                } else {
+                    return parts.filter(p => p).join('');
+                }
+            };
+            
             if (endDate.isBefore(now)) {
                 // Đã quá hạn
                 const diff = now.diff(endDate);
@@ -544,19 +572,19 @@ const vueApp = createApp({
                 
                 if (days > 0) {
                     return {
-                        text: `${days}日${hours}時間${minutes}分超過`,
+                        text: formatTimeText([formatUnit(days, dayLabel), formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel), overdueLabel]),
                         class: 'bg-danger',
                         isOverdue: true
                     };
                 } else if (hours > 0) {
                     return {
-                        text: `${hours}時間${minutes}分超過`,
+                        text: formatTimeText([formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel), overdueLabel]),
                         class: 'bg-danger',
                         isOverdue: true
                     };
                 } else {
                     return {
-                        text: `${minutes}分超過`,
+                        text: formatTimeText([formatUnit(minutes, minuteLabel), overdueLabel]),
                         class: 'bg-danger',
                         isOverdue: true
                     };
@@ -570,19 +598,19 @@ const vueApp = createApp({
                 
                 if (days > 0) {
                     return {
-                        text: `残り${days}日${hours}時間${minutes}分`,
+                        text: formatTimeText([remainingLabel, formatUnit(days, dayLabel), formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel)]),
                         class: 'bg-label-info',
                         isOverdue: false
                     };
                 } else if (hours > 0) {
                     return {
-                        text: `残り${hours}時間${minutes}分`,
+                        text: formatTimeText([remainingLabel, formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel)]),
                         class: hours <= 24 ? 'bg-label-warning' : 'bg-label-info',
                         isOverdue: false
                     };
                 } else {
                     return {
-                        text: `残り${minutes}分`,
+                        text: formatTimeText([remainingLabel, formatUnit(minutes, minuteLabel)]),
                         class: 'bg-label-warning',
                         isOverdue: false
                     };
@@ -933,7 +961,7 @@ const vueApp = createApp({
                             whitelist: whitelist,
                             enforceWhitelist: false,
                             dropdown: {
-                                maxItems: 20,
+                                maxItems: 1000,
                                 enabled: 0,
                                 closeOnSelect: true
                             },
@@ -1165,9 +1193,8 @@ const vueApp = createApp({
                 if (managerInput._tagify) managerInput._tagify.destroy();
                 const tagify = new Tagify(managerInput, {
                     whitelist: allMembers,
-                    maxTags: 10,
                     enforceWhitelist: false,
-                    dropdown: { maxItems: 20, enabled: 0, closeOnSelect: true }
+                    dropdown: { maxItems: 1000, enabled: 0, closeOnSelect: true }
                 });
                 tagify.addTags((this.managers || []).map(m => ({ id: m.user_id, value: m.user_name })));
                 tagify.on('change', e => {
@@ -1183,9 +1210,8 @@ const vueApp = createApp({
                 if (membersInput._tagify) membersInput._tagify.destroy();
                 const tagify = new Tagify(membersInput, {
                     whitelist: allMembers,
-                    maxTags: 20,
                     enforceWhitelist: false,
-                    dropdown: { maxItems: 20, enabled: 0, closeOnSelect: true }
+                    dropdown: { maxItems: 1000, enabled: 0, closeOnSelect: true }
                 });
                 tagify.addTags((this.members || []).map(m => ({ id: m.user_id, value: m.user_name })));
                 tagify.on('change', e => {

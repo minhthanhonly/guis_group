@@ -561,7 +561,7 @@ $view->heading('建物詳細');
                                 </tr>
                                 <tr v-if="childProjects.length === 0">
                                     <td colspan="11" class="text-center text-muted py-4">
-                                        子プロジェクトがありません
+                                        案件依頼がありません
                                     </td>
                                 </tr>
                             </tbody>
@@ -995,6 +995,18 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="総額">総額</span></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">¥</span>
+                                        <input type="number" class="form-control" 
+                                            v-model.number="newChildProject.amount" 
+                                            min="0" step="1" 
+                                            placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
                             <div class="col-12">
                                 <div class="mb-3">
                                     <label class="form-label">説明</label>
@@ -1126,6 +1138,18 @@ $view->heading('建物詳細');
                                                 </a>
                                             </li>
                                         </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="総額">総額</span></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">¥</span>
+                                        <input type="number" class="form-control" 
+                                            v-model.number="editingChildProject.amount" 
+                                            min="0" step="1" 
+                                            placeholder="0">
                                     </div>
                                 </div>
                             </div>

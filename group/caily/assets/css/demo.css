@@ -453,3 +453,82 @@ li.storageprevious {
 .max-w-100{
 	max-width: 100%;
 }
+.form-control, .form-select, .tagify{
+   border: 1px solid #d1d0d4;
+}
+.menu-toggle::after{
+	/*fa fa-chevron-down*/
+	content: "\f105";
+	font-weight: var(--fa-style, 900);
+	font-family: var(--fa-style-family, "Font Awesome 6 Free");
+	position: absolute;
+	color: var(--bs-primary);
+	background: none!important;
+	mask-image: none!important;
+	inset-inline-end: 0.4rem !important;
+	font-size: 1rem!important;
+
+}
+
+.aa-DetachedSearchButtonIcon::before, .aa-SubmitButton::before{
+	content: "\f002";
+	font-family: var(--fa-style-family, "Font Awesome 6 Free");
+	font-weight: var(--fa-style, 900);
+	color: var(--bs-primary);
+	mask-image: none!important;
+	background: none!important;
+	mask-image: none!important;
+	inset-inline-end: 0.4rem !important;
+}
+.bg-label-info{
+	background-color: var(--bs-info) !important;
+	color: #fff!important;
+}
+.bg-label-primary{
+	background-color: var(--bs-primary-bg-subtle) !important; /* Fallback for older browsers */
+	color: var(--bs-primary)!important;
+}
+.accordion-button::after{
+	mask-image: none!important;
+	background: none!important;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23444050' viewBox='0 0 24 24'%3E%3Cpath d='M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z'%3E%3C/path%3E%3C/svg%3E")!important;
+	mask-image: none!important;
+	inset-inline-end: 0.4rem !important;
+}
+
+.accordion .accordion-button:not(.collapsed)::after{
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23444050' viewBox='0 0 24 24'%3E%3Cpath d='M5 11h14v2H5z'%3E%3C/path%3E%3C/svg%3E")!important;
+}
+.btn-label-secondary{
+	background-color: #ebebed!important;
+}
+.btn-label-success{
+	background-color: #ddf6e8!important;
+}
+.btn-label-danger{
+	background-color: #fbeaea!important;
+}
+.btn-label-warning{
+	background-color: #fef4e8!important;
+}
+.btn-label-info{
+	background-color: #e8f6fe!important;
+}
+.btn-label-gray{
+	background-color: #f0f0f0!important;
+}
+.btn-label-primary{
+	background-color: #e9e7fd!important;
+}
+
+.modal .btn-close::before{
+	content: "\f00d";
+	font-family: var(--fa-style-family, "Font Awesome 6 Free");
+	font-weight: var(--fa-style, 900);
+	color: var(--bs-primary);
+	mask-image: none!important;
+	background: none!important;
+	mask-image: none!important;
+	top: -0.3rem;
+    position: relative;
+}

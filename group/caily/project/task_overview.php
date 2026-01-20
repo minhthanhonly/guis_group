@@ -192,6 +192,14 @@ $view->heading('タスク一覧');
 $view->footing();
 ?>
 
+<script>
+// Pass current user data to JavaScript
+window.currentUser = {
+    id: <?= json_encode($_SESSION['userid'] ?? '') ?>,
+    department_id: <?= json_encode($_SESSION['department_id'] ?? '') ?>,
+    isProjectManager: <?= json_encode($_SESSION['isProjectManager'] ?? false) ?>
+};
+</script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="assets/js/task-overview.js?v=<?=CACHE_VERSION?>"></script>
 

@@ -19,19 +19,19 @@ if (!$project_id) {
                 <div class="collapse navbar-collapse" id="projectNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
-                    <a class="nav-link" href="detail.php?id=<?php echo $project_id; ?>">概要</a>
+                    <a class="nav-link" href="detail.php?id=<?php echo $project_id; ?>"><span data-i18n="概要">概要</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>">タスク<span class="badge badge-sm ms-1 rounded-pill">{{ projectInfo?.task_count }}</span></a>
+                    <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>"><span data-i18n="タスク">タスク</span><span class="badge badge-sm ms-1 rounded-pill">{{ projectInfo?.task_count }}</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link active" aria-current="page" href="gantt.php?project_id=<?php echo $project_id; ?>">ガントチャート</a>
+                    <a class="nav-link active text-primary" aria-current="page" href="gantt.php?project_id=<?php echo $project_id; ?>"><span data-i18n="ガントチャート">ガントチャート</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>">図面<span class="badge badge-sm bg-info ms-1 rounded-pill">{{ projectInfo?.drawing_count }}</span></a>
+                    <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>"><span data-i18n="図面">図面</span><span class="badge badge-sm bg-info ms-1 rounded-pill">{{ projectInfo?.drawing_count }}</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>">添付ファイル</a>
+                    <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>"><span data-i18n="添付ファイル">添付ファイル</span></a>
                     </li>
                 </ul>
                 </div>

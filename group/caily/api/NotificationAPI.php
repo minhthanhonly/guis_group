@@ -120,12 +120,25 @@ class NotificationAPI {
     }
     
     private function getNotifications() {
+        // Ưu tiên user_id từ request, nếu không có thì dùng user đang đăng nhập
         $user_id = $_GET['user_id'] ?? $_POST['user_id'] ?? '';
+        if (empty($user_id) && !empty($_SESSION['userid'])) {
+            $user_id = $_SESSION['userid'];
+        }
+
         $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 50;
+
         if (empty($user_id)) {
             return ['error' => 'Missing user_id'];
         }
-        $sql = "SELECT n.*, nu.is_read, nu.read_at FROM notification_user nu JOIN notification n ON nu.notification_id = n.id WHERE nu.user_id = '" . $this->notificationModel->quote($user_id) . "' ORDER BY n.created_at DESC LIMIT $limit";
+
+        $sql = "SELECT n.*, nu.is_read, nu.read_at 
+                FROM notification_user nu 
+                JOIN notification n ON nu.notification_id = n.id 
+                WHERE nu.user_id = '" . $this->notificationModel->quote($user_id) . "' 
+                ORDER BY n.created_at DESC 
+                LIMIT $limit";
+
         $list = $this->notificationModel->fetchAll($sql);
         return ['notifications' => $list];
     }

@@ -20,19 +20,19 @@ if (!$project_id) {
             <div class="collapse navbar-collapse" id="projectNavbar">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 <li class="nav-item">
-                <a class="nav-link" href="detail.php?id=<?php echo $project_id; ?>">概要</a>
+                <a class="nav-link" href="detail.php?id=<?php echo $project_id; ?>"><span data-i18n="概要">概要</span></a>
                 </li>
                 <li class="nav-item">
-                <a class="nav-link active" aria-current="page" href="task.php?project_id=<?php echo $project_id; ?>">タスク<span class="badge badge-sm ms-1 rounded-pill">{{ projectInfo?.task_count }}</span></a>
+                <a class="nav-link active text-primary" aria-current="page" href="task.php?project_id=<?php echo $project_id; ?>"><span data-i18n="タスク">タスク</span><span class="badge badge-sm ms-1 rounded-pill">{{ projectInfo?.task_count }}</span></a>
                 </li>
                 <li class="nav-item">
-                <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>">ガントチャート</a>
+                <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>"><span data-i18n="ガントチャート">ガントチャート</span></a>
                 </li>
                 <li class="nav-item">
-                <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>">図面<span class="badge badge-sm bg-info ms-1 rounded-pill">{{ projectInfo?.drawing_count }}</span></a>
+                <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>"><span data-i18n="図面">図面</span><span class="badge badge-sm bg-info ms-1 rounded-pill">{{ projectInfo?.drawing_count }}</span></a>
                 </li>
                 <li class="nav-item">
-                <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>">添付ファイル</a>
+                <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>"><span data-i18n="添付ファイル">添付ファイル</span></a>
                 </li>
             </ul>
             </div>
@@ -69,7 +69,7 @@ if (!$project_id) {
                         <div class="row no-gutters align-items-center">
                             <div class="col me-2">
                                 <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                    タスク総数
+                                    <span data-i18n="タスク総数">タスク総数</span>
                                 </div>
                                 <div class="h5 mb-0 font-weight-bold text-gray-800">{{ taskStats.total }}</div>
                             </div>
@@ -86,7 +86,7 @@ if (!$project_id) {
                         <div class="row no-gutters align-items-center">
                             <div class="col me-2">
                                 <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                    完了済み
+                                    <span data-i18n="完了済み">完了済み</span>
                                 </div>
                                 <div class="h5 mb-0 font-weight-bold text-gray-800">{{ taskStats.completed }}</div>
                             </div>
@@ -103,7 +103,7 @@ if (!$project_id) {
                         <div class="row no-gutters align-items-center">
                             <div class="col me-2">
                                 <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                    期限切れ
+                                    <span data-i18n="期限切れ">期限切れ</span>
                                 </div>
                                 <div class="h5 mb-0 font-weight-bold text-gray-800">{{ taskStats.overdue }}</div>
                             </div>
@@ -152,26 +152,26 @@ if (!$project_id) {
             </select>
             </div>
             <button v-if="permission.can_manage_project || permission.is_member || (permission.rule && permission.rule.task_add == 1)" class="btn btn-primary ms-2" @click="openNewTaskModal">
-                <i class="bi bi-plus"></i> 新規タスク
+                <i class="fa fa-plus me-1"></i> <span data-i18n="新規タスク">新規タスク</span>
             </button>
         </div>
         
         <div class="d-flex align-items-center justify-content-between mb-2">
             <div class="row w-100 g-0 align-items-center fw-bold text-primary bg-light">
-                <div class="col-md-3 py-2 px-2">タスク</div>
-                <div class="col-md-1 py-2 pe-2">優先度</div>
-                <div class="col-md-2 py-2 pe-2">期間</div>
-                <div class="col-md-2 py-2 pe-2">担当者</div>
-                <div class="col-md-1 py-2 pe-2">ステータス</div>
-                <div class="col-md-1 py-2 pe-2">進捗</div>
-                <div class="col-md-2 py-2 text-center">操作</div>
+                <div class="col-md-3 py-2 px-2"><span data-i18n="タスク">タスク</span></div>
+                <div class="col-md-1 py-2 pe-2"><span data-i18n="優先度">優先度</span></div>
+                <div class="col-md-2 py-2 pe-2"><span data-i18n="期間">期間</span></div>
+                <div class="col-md-2 py-2 pe-2"><span data-i18n="担当者">担当者</span></div>
+                <div class="col-md-1 py-2 pe-2"><span data-i18n="ステータス">ステータス</span></div>
+                <div class="col-md-1 py-2 pe-2"><span data-i18n="進捗">進捗</span></div>
+                <div class="col-md-2 py-2 text-center"><span data-i18n="操作">操作</span></div>
             </div>
         </div>
         <!-- Danh sách task dạng div card/list -->
         <div class="task-list">
             <div v-if="displayTasks.length === 0" class="text-center text-muted py-4">
                 <i class="bi bi-inbox fs-1 mb-2"></i>
-                <div class="card mb-2 p-2">タスクがありません</div>
+                <div class="card mb-2 p-2"><span data-i18n="タスクがありません">タスクがありません</span></div>
             </div>
             <div v-for="task in displayTasks" :key="task.id || 'inline-' + task._inlineIndex" class="card mb-2" :data-id="task.id" :class="{'subtask': task.indent_level > 0}" :style="{marginLeft: (task.indent_level * 20) + 'px'}">
                 <!-- Inline Edit Mode -->
@@ -367,7 +367,7 @@ if (!$project_id) {
                             </button>
                             <!-- Comment button -->
                             <button v-if="permission.can_manage_project || (permission.rule && permission.rule.project_comment == 1)" class="btn btn-sm btn-outline-info position-relative" @click="openTaskComments(task)" title="詳細">
-                                    <i class="fas fa-comment"></i>
+                                    <i class="fas fa-eye"></i>
                                     <span v-if="getUnreadCommentCount(task.id) > 0" class="position-absolute top-0 start-100 translate-middle text-white badge rounded-pill bg-danger" style="font-size:10px;">{{ getUnreadCommentCount(task.id) }}</span>
                             </button>
                             <!-- Edit / indent / delete buttons -->
@@ -566,7 +566,7 @@ if (!$project_id) {
                                                                 <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
                                                             </span>
                                                             <span v-else>
-                                                                <span class="avatar-placeholder rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center" style="width:32px;height:32px;">
+                                                                <span class="avatar-initial rounded-circle bg-label-primary d-inline-flex align-items-center justify-content-center" style="width:32px;height:32px;">
                                                                     {{ getInitials(log.username || log.realname) }}
                                                                 </span>
                                                             </span>

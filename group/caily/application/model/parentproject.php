@@ -74,12 +74,14 @@ class ParentProject extends ApplicationModel {
 
         // Search functionality
         if (!empty($search)) {
-            $search = addslashes($search);
-            $whereArr[] = "(p.company_name LIKE '%$search%' 
-                OR p.branch_name LIKE '%$search%' 
-                OR p.contact_name LIKE '%$search%' 
-                OR p.construction_number LIKE '%$search%' 
-                OR p.project_name LIKE '%$search%')";
+            // Use quote() for safe escaping, then remove surrounding quotes for LIKE pattern
+            $searchEscaped = trim($this->quote($search), "'");
+            $whereArr[] = "(p.company_name LIKE '%$searchEscaped%' 
+                OR p.branch_name LIKE '%$searchEscaped%' 
+                OR p.contact_name LIKE '%$searchEscaped%' 
+                OR p.construction_number LIKE '%$searchEscaped%' 
+                OR p.project_name LIKE '%$searchEscaped%'
+                OR p.project_number LIKE '%$searchEscaped%')";
         }
 
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";

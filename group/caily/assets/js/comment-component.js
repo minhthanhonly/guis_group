@@ -212,7 +212,7 @@ window.CommentComponent = {
                             <div class="flex-shrink-0 me-3">
                                 <div class="avatar">
                                     <img v-if="!comment.avatarError" class="rounded-circle" :src="getAvatarSrc(comment)" :alt="comment.user_name" @error="handleAvatarError(comment)">
-                                    <span v-else class="avatar-initial rounded-circle">{{ getInitials(comment.user_name) }}</span>
+                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment.user_name) }}</span>
                                 </div>
                             </div>
                             <div class="flex-grow-1">

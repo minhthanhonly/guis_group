@@ -16,8 +16,8 @@
             </a>
 
             <a href="javascript:void(0);" class="layout-menu-toggle menu-link text-large ms-auto">
-              <i class="icon-base ti menu-toggle-icon d-none d-xl-block"></i>
-              <i class="icon-base ti tabler-x d-block d-xl-none"></i>
+              <i class="icon-base fa fa-bars d-none d-xl-block"></i>
+              <i class="icon-base fa fa-times d-block d-xl-none"></i>
             </a>
           </div>
 
@@ -34,7 +34,7 @@
             <!-- Layouts -->
             <li class="menu-item <?php if($directory == 'project' || $directory == 'parent_project' || $directory == 'price_list') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base ti tabler-briefcase"></i>
+                <i class="menu-icon icon-base fa fa-briefcase"></i>
                 <div><span data-i18n="プロジェクト">プロジェクト</span><span class="badge bg-label-primary ms-2"><?=$_SESSION['isProjectManager'] ? 'PM' : ''?></span></div>
               </a>
               <ul class="menu-sub">
@@ -74,12 +74,12 @@
                     <div data-i18n="価格表管理">価格表管理</div>
                   </a>
                 </li>
+                <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7'){?>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'employee_statistics') echo 'active'; ?>">
                   <a href="<?=$root?>project/employee_statistics.php" class="menu-link">
                     <div data-i18n="従業員統計">従業員統計</div>
                   </a>
                 </li>
-                <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7'){?>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'team_revenue_targets') echo 'active'; ?>">
                   <a href="<?=$root?>project/team_revenue_targets.php" class="menu-link">
                     <div data-i18n="チーム売上目標設定">チーム売上目標設定</div>
@@ -478,13 +478,13 @@
                        
                       </ul>
                     </li>
-                    <li class="border-top">
+                    <!-- <li class="border-top">
                       <div class="d-grid p-4">
                         <a class="btn btn-primary btn-sm d-flex" href="javascript:void(0);">
                           <small class="align-middle" data-i18n="すべての通知を表示">すべての通知を表示</small>
                         </a>
                       </div>
-                    </li>
+                    </li> -->
                   </ul>
                 </li>
                 <!--/ Notification -->

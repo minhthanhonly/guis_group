@@ -78,7 +78,30 @@ createApp({
                 showMessage('親プロジェクトの読み込みに失敗しました。', true);
             } finally {
                 this.loading = false;
+                // Re-translate i18n elements after Vue updates DOM
+                this.$nextTick(() => {
+                    this.translateI18n();
+                });
             }
+        },
+        translateI18n() {
+            // Call localize function if it exists (from main.js)
+            if (typeof localize === 'function') {
+                localize();
+            } else if (typeof i18next !== 'undefined' && i18next.isInitialized) {
+                // Fallback: manually translate all data-i18n elements
+                const i18nList = document.querySelectorAll('[data-i18n]');
+                i18nList.forEach(function (item) {
+                    item.innerHTML = i18next.t(item.dataset.i18n);
+                });
+            }
+        },
+        translatePlaceholder(key) {
+            // Translate placeholder text using i18next
+            if (typeof i18next !== 'undefined' && i18next.isInitialized) {
+                return i18next.t(key) || key;
+            }
+            return key;
         },
         sortBy(column) {
             // Map frontend column names to database column names
@@ -265,5 +288,11 @@ createApp({
     },
     mounted() {
         this.loadParentProjects();
+    },
+    updated() {
+        // Re-translate i18n elements after any DOM update
+        this.$nextTick(() => {
+            this.translateI18n();
+        });
     }
 }).mount('#app'); 

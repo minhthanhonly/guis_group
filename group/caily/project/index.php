@@ -1,7 +1,7 @@
 <?php
 
 require_once('../application/loader.php');
-$view->heading('プロジェクト管理');
+$view->heading('案件一覧');
 
 ?>
 

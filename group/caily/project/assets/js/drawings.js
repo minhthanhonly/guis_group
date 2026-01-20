@@ -126,6 +126,25 @@ createApp({
             return this.isShiftPressed;
         },
         
+        totalDrawingsPrice() {
+            return this.drawings.reduce((sum, drawing) => {
+                const price = drawing.price ? parseFloat(drawing.price) : 0;
+                return sum + price;
+            }, 0);
+        },
+        
+        projectAmount() {
+            return this.project && this.project.amount ? parseFloat(this.project.amount) : 0;
+        },
+        
+        isPriceExceedingAmount() {
+            return this.projectAmount > 0 && this.totalDrawingsPrice > this.projectAmount;
+        },
+        
+        priceDifference() {
+            return this.totalDrawingsPrice - this.projectAmount;
+        },
+        
         stats() {
             return [
                 {
@@ -252,6 +271,14 @@ createApp({
     },
     
     methods: {
+        // Phương thức để dịch label động
+        $t(label) {
+            if (typeof i18next !== 'undefined' && i18next.isInitialized) {
+                return i18next.t(label) || label;
+            }
+            return label;
+        },
+        
         async loadPermission() {
             const response = await axios.get('/api/index.php?model=task&method=getPermission&project_id=' + PROJECT_ID);
             this.permission = response.data;
@@ -1223,6 +1250,16 @@ createApp({
         
         showError(message) {
             showMessage(message, true);
+        },
+        
+        formatNumber(num) {
+            if (!num && num !== 0) return '0';
+            const numValue = parseFloat(num);
+            if (isNaN(numValue)) return '0';
+            return Math.round(numValue).toLocaleString('ja-JP', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            });
         },
         
         resetForm() {

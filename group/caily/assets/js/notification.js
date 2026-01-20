@@ -8,6 +8,9 @@ class NotificationManager {
         this.userId = USER_ID || '';
         this.userRole = USER_ROLE || '';
         this.notificationPermission = 'default';
+        this.originalTitle = document.title;
+        this.flashInterval = null;
+        this.isFlashing = false;
         this.init();
     }
     
@@ -46,9 +49,61 @@ class NotificationManager {
             // Thông báo đã sẵn sàng
             document.dispatchEvent(new Event('notificationManagerReady'));
             
+            // Setup page visibility listener để dừng flash khi user quay lại tab
+            this.setupPageVisibilityListener();
+            
         } catch (error) {
             console.error('Failed to initialize Firebase Notification Manager:', error);
         }
+    }
+    
+    setupPageVisibilityListener() {
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                // User quay lại tab, dừng flash và restore title
+                this.stopFlashingTitle();
+            }
+        });
+        
+        // Dừng flash khi window được focus
+        window.addEventListener('focus', () => {
+            this.stopFlashingTitle();
+        });
+    }
+    
+    /**
+     * Flash window title để thu hút sự chú ý khi có notification mới
+     */
+    startFlashingTitle(notificationTitle = '新しい通知') {
+        // Chỉ flash nếu tab không active
+        if (document.hidden || !document.hasFocus()) {
+            if (this.isFlashing) return; // Đã đang flash rồi
+            
+            this.isFlashing = true;
+            let isOriginal = true;
+            
+            this.flashInterval = setInterval(() => {
+                if (document.hidden || !document.hasFocus()) {
+                    document.title = isOriginal ? `🔔 ${notificationTitle} - ${this.originalTitle}` : this.originalTitle;
+                    isOriginal = !isOriginal;
+                } else {
+                    // Tab đã active, dừng flash
+                    this.stopFlashingTitle();
+                }
+            }, 1000); // Nhấp nháy mỗi 1 giây
+        }
+    }
+    
+    /**
+     * Dừng flash và restore title gốc
+     */
+    stopFlashingTitle() {
+        if (this.flashInterval) {
+            clearInterval(this.flashInterval);
+            this.flashInterval = null;
+        }
+        this.isFlashing = false;
+        document.title = this.originalTitle;
     }
     
     async loadFirebaseSDK() {
@@ -85,7 +140,8 @@ class NotificationManager {
     
     async getFirebaseConfig() {
         try {
-            const response = await fetch('/api/NotificationAPI.php?method=get_config');
+            const response = await fetch('/api/NotificationAPI.php?method=get_config', {
+            });
             const config = await response.json();
             
             if (config.error) {
@@ -138,7 +194,8 @@ class NotificationManager {
         if (!notification_id) return null;
         try {
             // API get_notifications trả về list, nên lấy 1 bản ghi
-            const response = await fetch(`/api/NotificationAPI.php?method=get_notifications&user_id=${encodeURIComponent(this.userId)}&limit=1`);
+            const response = await fetch(`/api/NotificationAPI.php?method=get_notifications&user_id=${encodeURIComponent(this.userId)}&limit=1`, {
+            });
             const result = await response.json();
             if (result.notifications && result.notifications.length > 0) {
                 // Tìm đúng notification_id
@@ -278,6 +335,12 @@ class NotificationManager {
         });
         this.updateNotificationDot();
         this.updateNotificationCount(count);
+        
+        // Dừng flash nếu không còn notification chưa đọc
+        const unreadCount = this.notifications.filter(n => n.is_read == 0).length;
+        if (unreadCount === 0) {
+            this.stopFlashingTitle();
+        }
     }
 
     async markAsRead(notification_id) {
@@ -310,7 +373,8 @@ class NotificationManager {
         if (!this.userId) return;
         // Lấy 20 notification mới nhất từ API khi load trang
         try {
-            const response = await fetch(`/api/NotificationAPI.php?method=get_notifications&user_id=${encodeURIComponent(this.userId)}&limit=20`);
+            const response = await fetch(`/api/NotificationAPI.php?method=get_notifications&user_id=${encodeURIComponent(this.userId)}&limit=20`, {
+            });
             const result = await response.json();
             if (result.notifications) {
                 this.notifications = result.notifications;
@@ -338,7 +402,8 @@ class NotificationManager {
                     this.renderNotificationList();
                     this.showWindowsNotification(notif);
                     this.showToastNotification(notif);
-                    console.log(notif);
+                    // Flash window title để thu hút sự chú ý
+                    this.startFlashingTitle(notif.title || '新しい通知');
                 }
             }
         });
@@ -368,6 +433,8 @@ class NotificationManager {
                 n.is_read = 1;
             }
             this.renderNotificationList();
+            // Dừng flash sau khi đánh dấu tất cả là đã đọc
+            this.stopFlashingTitle();
         });
     }
 
@@ -412,18 +479,18 @@ class NotificationManager {
      * Show Windows desktop notification
      */
     showWindowsNotification(notification) {
+
         if (!('Notification' in window) || this.notificationPermission !== 'granted') {
             return;
         }
-
         // Don't show notification if page is focused (user is actively using the app)
         if (document.hasFocus()) {
             return;
         }
+        
 
         try {
             const data = notification.data ? (typeof notification.data === 'string' ? JSON.parse(notification.data) : notification.data) : {};
-            
             const notificationOptions = {
                 body: notification.message || '新しい通知があります',
                 icon: data.avatar || '/assets/img/avatars/1.png',
@@ -438,6 +505,7 @@ class NotificationManager {
                     task_id: data.task_id || ''
                 }
             };
+            console.log(data);
 
             // Add actions if available
             if (data.url) {

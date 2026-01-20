@@ -3,6 +3,7 @@ const { createApp } = Vue;
 createApp({
     data() {
         return {
+            isAdmin: typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator',
             isProjectManager: typeof IS_PROJECT_MANAGER !== 'undefined' ? IS_PROJECT_MANAGER : false,
             permission: {},
             parentProject: null,
@@ -70,7 +71,8 @@ createApp({
                 project_order_type: '',
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
-                status: 'draft'
+                status: 'draft',
+                amount: 0
             },
             editingChildProject: {
                 id: null,
@@ -84,7 +86,8 @@ createApp({
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
                 status: 'draft',
-                previous_status: ''
+                previous_status: '',
+                amount: 0
             },
             childProjectValidationErrors: {
                 name: '',
@@ -452,6 +455,7 @@ createApp({
     },
     methods: {
         canDeleteChildProject(project) {
+            if(this.isAdmin) return true;
             let canDeleteChildProject = false;
             if(this.permission && this.permission.length > 0) {
                 for (const rule of this.permission) {
@@ -466,6 +470,7 @@ createApp({
             return canDeleteChildProject;
         },
         canEditChildProject(project) {
+            if(this.isAdmin) return true;
             let canEditChildProject = false;
             if(this.permission && this.permission.length > 0) {
                 for (const rule of this.permission) {
@@ -1582,7 +1587,8 @@ createApp({
                 project_order_type: '',
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
-                status: 'draft'
+                status: 'draft',
+                amount: 0
             };
             
             // Clear Quill content
@@ -1731,7 +1737,8 @@ createApp({
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
                 status: project.status || '',
-                previous_status: project.previous_status || ''
+                previous_status: project.previous_status || '',
+                amount: project.amount || project.total_amount || 0
             };
             
 
@@ -2292,6 +2299,7 @@ createApp({
                 formData.append('project_order_type', this.editingChildProject.project_order_type || '');
                 formData.append('parent_project_id', this.editingChildProject.parent_project_id);
                 formData.append('status', this.editingChildProject.status || 'draft');
+                formData.append('amount', this.editingChildProject.amount || 0);
 
                 formData.append('is_kadai', '0');
 
@@ -2322,7 +2330,8 @@ createApp({
                         parent_project_id: PARENT_PROJECT_ID,
                         is_kadai: true,
                         status: 'draft',
-                        previous_status: ''
+                        previous_status: '',
+                        amount: 0
                     };
                     
                     // Reset Quill content
@@ -2475,6 +2484,7 @@ createApp({
                 formData.append('end_date', this.newChildProject.end_date || '');
                 formData.append('project_order_type', this.newChildProject.project_order_type || '');
                 formData.append('parent_project_id', this.newChildProject.parent_project_id);
+                formData.append('amount', this.newChildProject.amount || 0);
 
                 formData.append('is_kadai', '0');
                 formData.append('status', this.newChildProject.status || 'draft');

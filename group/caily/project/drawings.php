@@ -20,19 +20,19 @@ if (!$project_id) {
                 <div class="collapse navbar-collapse" id="projectNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
-                    <a class="nav-link" href="detail.php?id=<?php echo $project_id; ?>">概要</a>
+                    <a class="nav-link" href="detail.php?id=<?php echo $project_id; ?>"><span data-i18n="概要">概要</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>">タスク<span class="badge badge-sm ms-1 rounded-pill">{{ project?.task_count }}</span></a>
+                    <a class="nav-link" href="task.php?project_id=<?php echo $project_id; ?>"><span data-i18n="タスク">タスク</span><span class="badge badge-sm ms-1 rounded-pill">{{ project?.task_count }}</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>">ガントチャート</a>
+                    <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>"><span data-i18n="ガントチャート">ガントチャート</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link active" aria-current="page" href="drawings.php?project_id=<?php echo $project_id; ?>">図面<span class="badge badge-sm bg-info ms-1 rounded-pill">{{ project?.drawing_count }}</span></a>
+                    <a class="nav-link active text-primary" aria-current="page" href="drawings.php?project_id=<?php echo $project_id; ?>"><span data-i18n="図面">図面</span><span class="badge badge-sm bg-info ms-1 rounded-pill">{{ project?.drawing_count }}</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>">添付ファイル</a>
+                    <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>"><span data-i18n="添付ファイル">添付ファイル</span></a>
                     </li>
                 </ul>
                 </div>
@@ -53,23 +53,32 @@ if (!$project_id) {
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">
                             <h5 class="card-title mb-0 me-3">
-                                <i class="fa fa-file-alt me-2"></i>図面ファイル管理
+                                <i class="fa fa-file-alt me-2"></i><span data-i18n="図面ファイル管理">図面ファイル管理</span>
                             </h5>
                         </div>
                         <div class="d-flex gap-2">
                             <div class="col-md-12">
                                 <div class="d-flex gap-2">
-                                    <button class="btn btn-primary text-nowrap" data-bs-toggle="modal" data-bs-target="#importModal">
-                                        <i class="fa fa-upload me-1"></i>インポート
+                                    <button class="btn btn-outline-info text-nowrap" data-bs-toggle="modal" data-bs-target="#importModal">
+                                        <i class="fa fa-upload me-1"></i><span data-i18n="インポート">インポート</span>
                                     </button>
-                                    <button class="btn btn-success text-nowrap" @click="openAddModal()">
-                                        <i class="fa fa-plus me-1"></i>追加
+                                    <button class="btn btn-primary text-nowrap" @click="openAddModal()">
+                                        <i class="fa fa-plus me-1"></i><span data-i18n="追加">追加</span>
                                     </button>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="card-body">
+                        <!-- Price Warning Alert -->
+                        <div v-if="isPriceExceedingAmount" class="alert alert-warning alert-dismissible fade show" role="alert">
+                            <i class="fa fa-exclamation-triangle me-2"></i>
+                            <strong><span data-i18n="警告">警告</span>:</strong> <span data-i18n="図面の合計金額">図面の合計金額</span>（¥{{ formatNumber(totalDrawingsPrice) }}）が<span data-i18n="プロジェクトの金額">プロジェクトの金額</span>（¥{{ formatNumber(projectAmount) }}）を超えています。
+                            <br>
+                            <small class="text-muted"><span data-i18n="超過額">超過額</span>: ¥{{ formatNumber(priceDifference) }}</small>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        
                         <!-- Drawing Statistics -->
                         <div class="row mb-4">
                             <div class="col-auto" v-for="stat in stats" :key="stat.label">
@@ -82,6 +91,22 @@ if (!$project_id) {
                                             <i :class="stat.icon"></i> {{ stat.value }}
                                         </div>
                                         <div class="fw-bold small">{{ stat.label }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Total Price Card -->
+                            <div class="col-auto" v-if="projectAmount > 0">
+                                <div class="card border text-center"
+                                     :class="{'border-danger': isPriceExceedingAmount, 'border-success': !isPriceExceedingAmount}"
+                                     style="min-width: 180px;">
+                                    <div class="card-body py-3 px-2">
+                                        <div :class="'fs-5 mb-1 ' + (isPriceExceedingAmount ? 'text-danger' : 'text-success')" style="font-size: 1.25rem;">
+                                            <i class="fa fa-yen-sign"></i> {{ formatNumber(totalDrawingsPrice) }}
+                                        </div>
+                                        <div class="fw-bold small"><span data-i18n="図面合計金額">図面合計金額</span></div>
+                                        <div class="small text-muted mt-1">
+                                            <span data-i18n="プロジェクト金額">プロジェクト金額</span>: ¥{{ formatNumber(projectAmount) }}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -108,7 +133,7 @@ if (!$project_id) {
                             </div>
                             <div class="col-md-2">
                                 <button class="btn btn-outline-secondary w-100" @click="clearFilters">
-                                    <i class="fa fa-times me-1"></i>クリア
+                                    <i class="fa fa-times me-1"></i><span data-i18n="クリア">クリア</span>
                                 </button>
                             </div>
                         </div>
@@ -116,23 +141,23 @@ if (!$project_id) {
                         <!-- Selection Mode Indicator -->
                         <div class="selection-mode-hint" role="alert" :class="{'show': isCtrlMode || isShiftMode, 'ctrl-mode': isCtrlMode, 'shift-mode': isShiftMode}">
                             <i class="fa fa-info-circle me-2"></i>
-                            <strong>選択モード:</strong> 
-                            <span class="ctrl-mode">Ctrlキーを押しながら行をクリックして複数のファイルを選択できます</span>
-                            <span class="shift-mode">Shiftキーを押しながら行をクリックして範囲選択できます</span>
+                            <strong><span data-i18n="選択モード">選択モード</span>:</strong> 
+                            <span class="ctrl-mode"><span data-i18n="Ctrlキーを押しながら行をクリックして複数のファイルを選択できます">Ctrlキーを押しながら行をクリックして複数のファイルを選択できます</span></span>
+                            <span class="shift-mode"><span data-i18n="Shiftキーを押しながら行をクリックして範囲選択できます">Shiftキーを押しながら行をクリックして範囲選択できます</span></span>
                         </div>
                         
                         <!-- Selection Count Indicator -->
                         <div v-if="selectedDrawings.length > 0" class="selection-count">
                             <i class="fa fa-check-circle me-1"></i>
-                            {{ selectedDrawings.length }}個選択中
+                            {{ selectedDrawings.length }}<span data-i18n="個選択中">個選択中</span>
                         </div>
 
                         <!-- Loading State -->
                         <div v-if="loading" class="text-center py-5">
                             <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">読み込み中...</span>
+                                <span class="visually-hidden"><span data-i18n="読み込み中">読み込み中</span>...</span>
                             </div>
-                            <p class="mt-2 text-muted">ファイルを読み込み中...</p>
+                            <p class="mt-2 text-muted"><span data-i18n="ファイルを読み込み中">ファイルを読み込み中</span>...</p>
                         </div>
 
                         <!-- Drawings Table -->
@@ -145,35 +170,35 @@ if (!$project_id) {
                                         </th>
                                         <th @click="sortBy('name')" style="cursor: pointer;">
                                             <div class="d-flex align-items-center">
-                                                <span>ファイル名</span>
+                                                <span><span data-i18n="ファイル名">ファイル名</span></span>
                                                 <i class="fa ms-1" :class="getSortIcon('name')"></i>
                                             </div>
                                         </th>
                                         <th @click="sortBy('file_type')" style="cursor: pointer;">
                                             <div class="d-flex align-items-center">
-                                                <span>ファイルタイプ</span>
+                                                <span><span data-i18n="ファイルタイプ">ファイルタイプ</span></span>
                                                 <i class="fa ms-1" :class="getSortIcon('file_type')"></i>
                                             </div>
                                         </th>
                                         <th @click="sortBy('created_by')" style="cursor: pointer;">
                                             <div class="d-flex align-items-center">
-                                                <span>作成者</span>
+                                                <span><span data-i18n="担当者">担当者</span></span>
                                                 <i class="fa ms-1" :class="getSortIcon('created_by')"></i>
                                             </div>
                                         </th>
                                         <th @click="sortBy('status')" style="cursor: pointer;">
                                             <div class="d-flex align-items-center">
-                                                <span>ステータス</span>
+                                                <span><span data-i18n="ステータス">ステータス</span></span>
                                                 <i class="fa ms-1" :class="getSortIcon('status')"></i>
                                             </div>
                                         </th>
                                         <!-- Price column -->
                                         <th style="min-width: 140px;">
                                             <div class="d-flex align-items-center">
-                                                <span>単価</span>
+                                                <span><span data-i18n="単価">単価</span></span>
                                             </div>
                                         </th>
-                                        <th width="150">操作</th>
+                                        <th width="150"><span data-i18n="操作">操作</span></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -274,14 +299,14 @@ if (!$project_id) {
                         <!-- Empty State -->
                         <div v-else class="text-center py-5">
                             <i class="fa fa-file-alt fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">図面がありません</h5>
-                            <p class="text-muted">最初の図面を追加してください</p>
+                            <h5 class="text-muted"><span data-i18n="図面がありません">図面がありません</span></h5>
+                            <p class="text-muted"><span data-i18n="最初の図面を追加してください">最初の図面を追加してください</span></p>
                             <div class="d-flex gap-2 justify-content-center">
                                 <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#importModal">
-                                    <i class="fa fa-upload me-1"></i>インポート
+                                    <i class="fa fa-upload me-1"></i><span data-i18n="インポート">インポート</span>
                                 </button>
                                 <button class="btn btn-primary" @click="openAddModal()">
-                                    <i class="fa fa-plus me-1"></i>図面追加
+                                    <i class="fa fa-plus me-1"></i><span data-i18n="図面追加">図面追加</span>
                                 </button>
                             </div>
                         </div>
@@ -305,17 +330,17 @@ if (!$project_id) {
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="drawingModalLabel">{{ editingDrawing.id ? 'ファイル編集' : 'ファイル追加' }}</h5>
+                        <h5 class="modal-title" id="drawingModalLabel">{{ editingDrawing.id ? $t('ファイル編集') : $t('ファイル追加') }}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <form @submit.prevent="saveDrawing">
                             <div class="mb-3">
-                                <label class="form-label">図面名 <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="図面名">図面名</span> <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" v-model="editingDrawing.name" required>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">ステータス</label>
+                                <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <select class="form-select" v-model="editingDrawing.status">
                                     <option value="draft">下書き</option>
                                     <option value="review">レビュー中</option>
@@ -328,9 +353,9 @@ if (!$project_id) {
                         </form>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
                         <button type="button" class="btn btn-primary" @click="saveDrawing">
-                            <i class="fa fa-save"></i> 保存
+                            <i class="fa fa-save me-1"></i> <span data-i18n="保存">保存</span>
                         </button>
                     </div>
                 </div>
@@ -342,7 +367,7 @@ if (!$project_id) {
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="importModalLabel">図面インポート</h5>
+                        <h5 class="modal-title" id="importModalLabel"><span data-i18n="図面インポート">図面インポート</span></h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -355,10 +380,10 @@ if (!$project_id) {
                                  style="border-style: dashed; min-height: 120px; display: flex; align-items: center; justify-content: center;">
                                 <div>
                                     <i class="fa fa-cloud-upload fa-3x text-primary mb-2"></i>
-                                    <p class="mb-1">図面をここにドラッグ＆ドロップ</p>
-                                    <p class="text-muted small">または</p>
+                                    <p class="mb-1"><span data-i18n="図面をここにドラッグ＆ドロップ">図面をここにドラッグ＆ドロップ</span></p>
+                                    <p class="text-muted small"><span data-i18n="または">または</span></p>
                                     <button class="btn btn-outline-primary btn-sm" @click="$refs.fileInput.click()">
-                                        ファイルを選択
+                                        <span data-i18n="ファイルを選択">ファイルを選択</span>
                                     </button>
                                     <input type="file" ref="fileInput" multiple style="display: none;" @change="onFileSelect">
                                 </div>
@@ -367,26 +392,26 @@ if (!$project_id) {
 
                         <!-- Clipboard Import -->
                         <div class="mb-4">
-                            <h6>クリップボードからインポート</h6>
+                            <h6><span data-i18n="クリップボードからインポート">クリップボードからインポート</span></h6>
                             <div class="input-group">
                                 <textarea class="form-control" v-model="clipboardText" 
-                                          placeholder="ファイルパスを1行ずつ入力してください&#10;例:&#10;C:\Documents\file1.pdf&#10;D:\Projects\drawing2.dwg" 
+                                          placeholder="ファイルパスを1行ずつ入力してください"
                                           rows="4"></textarea>
                                 <button class="btn btn-outline-secondary" @click="parseClipboardText">
-                                    <i class="fa fa-paste"></i> 解析
+                                    <i class="fa fa-paste me-1"></i> <span data-i18n="解析">解析</span>
                                 </button>
                             </div>
                         </div>
 
                         <!-- Import Files List -->
                         <div v-if="importFiles.length > 0">
-                            <h6>インポートするファイル ({{ importFiles.length }}件)</h6>
+                            <h6><span data-i18n="インポートするファイル">インポートするファイル</span> ({{ importFiles.length }}<span data-i18n="件">件</span>)</h6>
                             <div class="table-responsive">
                                 <table class="table table-sm">
                                     <thead>
                                         <tr>
-                                            <th>ファイル名</th>
-                                            <th>操作</th>
+                                            <th><span data-i18n="ファイル名">ファイル名</span></th>
+                                            <th><span data-i18n="操作">操作</span></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -404,9 +429,9 @@ if (!$project_id) {
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
                         <button type="button" class="btn btn-primary" @click="performImport" :disabled="importFiles.length === 0">
-                            <i class="fa fa-upload"></i> インポート ({{ importFiles.length }})
+                            <i class="fa fa-upload me-1"></i> <span data-i18n="インポート">インポート</span> ({{ importFiles.length }})
                         </button>
                     </div>
                 </div>

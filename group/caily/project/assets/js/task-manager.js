@@ -325,6 +325,14 @@ const TaskApp = createApp({
 
     
     methods: {
+        // Phương thức để dịch label động
+        $t(label) {
+            if (typeof i18next !== 'undefined' && i18next.isInitialized) {
+                return i18next.t(label) || label;
+            }
+            return label;
+        },
+        
         onCommentAdded(event) {
             this.showNotification('コメントが追加されました', 'success');
         },
@@ -642,7 +650,7 @@ const TaskApp = createApp({
         },
         
         async deleteTask(task) {
-            if (!confirm('本当にこのタスクを削除しますか？')) {
+            if (!confirm(this.$t('本当にこのタスクを削除しますか?'))) {
                 return;
             }
             
