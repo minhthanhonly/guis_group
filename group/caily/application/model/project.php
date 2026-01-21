@@ -2843,17 +2843,31 @@ class Project extends ApplicationModel {
         $fileSize = filesize($filePath);
         $mimeType = $file['mime_type'] ?: 'application/octet-stream';
         
+        // For text-based content, ensure UTF-8 charset so Japanese/Vietnamese display correctly
+        $contentType = $mimeType;
+        if (
+            strpos($mimeType, 'text/') === 0 ||
+            stripos($mimeType, 'html') !== false ||
+            in_array($mimeType, ['application/json', 'application/javascript', 'application/xml'])
+        ) {
+            $contentType .= '; charset=UTF-8';
+        }
+        
         // Set headers
-        header('Content-Type: ' . $mimeType);
+        header('Content-Type: ' . $contentType);
         header('Content-Length: ' . $fileSize);
         
-        if ($forceDownload) {
-            // Force download
-            header('Content-Disposition: attachment; filename="' . $fileName . '"');
-        } else {
-            // Inline view (for images, PDFs, etc.)
-            header('Content-Disposition: inline; filename="' . $fileName . '"');
-        }
+        // Encode filename safely for Japanese characters
+        $encodedFileName = rawurlencode($fileName);
+        $dispositionType = $forceDownload ? 'attachment' : 'inline';
+        header(
+            sprintf(
+                'Content-Disposition: %s; filename="%s"; filename*=UTF-8\'\'%s',
+                $dispositionType,
+                $encodedFileName,
+                $encodedFileName
+            )
+        );
         
         header('Cache-Control: no-cache, must-revalidate');
         header('Pragma: no-cache');

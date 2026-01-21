@@ -75,14 +75,8 @@ createApp({
                 return false;
             }
             
-            // My Task filter - check if current user is assigned
-            if (this.filters.myTask && typeof USER_AUTH_ID !== 'undefined' && USER_AUTH_ID) {
-                const currentUserId = parseInt(USER_AUTH_ID, 10);
-                const assignedIds = Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [];
-                if (!assignedIds.includes(currentUserId)) {
-                    return false;
-                }
-            }
+            // My Task filter đã được xử lý ở phía API khi gọi loadOverview(),
+            // nên không cần filter lại ở đây để tránh duplicate filtering
             
             // Lọc theoユーザー đã được xử lý ở phía API (listOverview), 
             // nên không cần kiểm tra lại ở đây để tránh sai khi task có nhiều assignee.
@@ -126,28 +120,22 @@ createApp({
                 if (this.filters.team_id) {
                     params.append('team_id', this.filters.team_id);
                 }
-                if (this.filters.user_id) {
+                // Nếu myTask được chọn, gửi user_id của user hiện tại
+                if (this.filters.myTask && window.currentUser?.user_id) {
+                    params.append('user_id', window.currentUser.user_id);
+                } else if (this.filters.user_id) {
                     params.append('user_id', this.filters.user_id);
                 }
                 if (this.filters.excludeCompleted) {
                     params.append('exclude_completed', 1);
                 }
                 const response = await axios.get('/api/index.php?' + params.toString());
-                console.log('API Response:', response);
                 const data = response.data || {};
-                console.log('Parsed data:', data);
                 this.departments = data.departments || [];
                 this.teams = data.teams || [];
                 this.users = data.users || [];
                 this.tasks = data.tasks || [];
                 this.unassignedUsers = data.unassigned_users || [];
-                console.log('Loaded:', {
-                    departments: this.departments.length,
-                    teams: this.teams.length,
-                    users: this.users.length,
-                    tasks: this.tasks.length,
-                    unassignedUsers: this.unassignedUsers.length
-                });
             } catch (e) {
                 console.error('Error loading task overview:', e);
                 console.error('Error details:', e.response?.data || e.message);
@@ -167,16 +155,21 @@ createApp({
             this.loadOverview();
         },
         onMyTaskChange() {
-            // When "My Task" is checked, clear user_id and department_id filters
-            // When unchecked, reload to show all tasks
+            // When "My Task" is checked, set user_id to current user and reload from API
+            // When unchecked, clear user_id and reload to show all tasks
             if (this.filters.myTask) {
+                // Clear manual user selection when showing own tasks
                 this.filters.user_id = '';
                 // If not project manager, also clear department_id when showing own tasks
                 if (!window.currentUser?.isProjectManager) {
                     this.filters.department_id = '';
                 }
+                // Reload data from API with current user filter
+                this.loadOverview();
+            } else {
+                // When unchecked, reload all tasks
+                this.loadOverview();
             }
-            // No need to call loadOverview here as filteredTasks computed will handle it
         },
         onUserChange() {
             // When user is manually selected, uncheck "My Task"

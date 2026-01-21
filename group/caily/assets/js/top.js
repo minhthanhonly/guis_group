@@ -307,71 +307,90 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // 勤怠統計
     let barChart = null;
+    let memberList = [];
     const memberListSelect = document.getElementById('timecard-statistic-select');
     const statistic = document.getElementById('timecard-statistic');
-    async function generateStatisticTimecard() {
-        
-        const memberList = await getMember();
-       
-        memberListSelect.innerHTML = '';
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = 'すべて';
-        memberListSelect.appendChild(option);
-        memberList.forEach(member => {
-            const option = document.createElement('option');
-            option.value = member.userid;
-            option.textContent = member.realname;
-            memberListSelect.appendChild(option);
-
-        });
-        if(statistic) {
-            changeStatistic();
-        }
-    }
-
-    memberListSelect.addEventListener('change', function() {
-        changeStatistic();
-    });
-
-    function changeStatistic() {
-        const type = 'timecard_all';
-        const scope = 'monthly';
-        const time = moment().format('YYYY-MM');
-        const userid = memberListSelect.value;
-        axios.get('/api/index.php?model=timecard&method=getStatistic&type=' + type + '&scope=' + scope + '&time=' + time + '&userid=' + userid)
-            .then(function (response) {
-                if(response.data.list) {
-                    const data = response.data.list;
-                    generateStatisticChart(data);
-                } else{
-                    generateStatisticChart([]);
-                }
-            })
-            .catch(function (error) {
-                handleErrors(error);
-            });
-    }
-
-    let memberList = [];
+    
     async function getMember() {
         memberList = [];
         const response = await axios.get(`/api/index.php?model=member&method=get_member`);
         // check if the response is successful
         if (response.status !== 200 || !response.data || !response.data.list) {
           handleErrors(response.data);
+          return [];
         }
         memberList = response.data.list;
         memberList = memberList.filter(member => member.group_name != '退職者');
         return memberList;
     }
+    
+    // Chỉ khởi tạo nếu elements tồn tại
+    if (memberListSelect && statistic) {
+        async function generateStatisticTimecard() {
+            try {
+                const memberList = await getMember();
+                
+                memberListSelect.innerHTML = '';
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'すべて';
+                memberListSelect.appendChild(option);
+                memberList.forEach(member => {
+                    const option = document.createElement('option');
+                    option.value = member.userid;
+                    option.textContent = member.realname;
+                    memberListSelect.appendChild(option);
+                });
+                changeStatistic();
+            } catch (error) {
+                console.error('Error generating statistic timecard:', error);
+            }
+        }
 
-    generateStatisticTimecard();
+        memberListSelect.addEventListener('change', function() {
+            changeStatistic();
+        });
+
+        function changeStatistic() {
+            if (!memberListSelect) return;
+            const type = 'timecard_all';
+            const scope = 'monthly';
+            const time = moment().format('YYYY-MM');
+            const userid = memberListSelect.value || '';
+            axios.get('/api/index.php?model=timecard&method=getStatistic&type=' + type + '&scope=' + scope + '&time=' + time + '&userid=' + userid)
+                .then(function (response) {
+                    if(response.data && response.data.list) {
+                        const data = response.data.list;
+                        generateStatisticChart(data);
+                    } else{
+                        generateStatisticChart([]);
+                    }
+                })
+                .catch(function (error) {
+                    console.error('Error loading statistic:', error);
+                    handleErrors(error);
+                    if (statistic) {
+                        statistic.innerHTML = '<p class="text-danger text-center py-4">データの読み込みに失敗しました</p>';
+                    }
+                });
+        }
+
+        generateStatisticTimecard();
+    }
+
     function generateStatisticChart(data) {
+        // Kiểm tra element tồn tại
+        if (!statistic) {
+            console.error('timecard-statistic element not found');
+            return;
+        }
+        
         if(data.length == 0) {
             if(barChart) {
                 barChart.updateSeries([]);
             }
+            // Hiển thị message khi không có data
+            statistic.innerHTML = '<p class="text-muted text-center py-4">データがありません</p>';
             return;
         }
         // create new chart
@@ -385,7 +404,9 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         // First, sort the list by time in ascending order
         const sortedList = data.sort((a, b) => new Date(a.time) - new Date(b.time));
-        updated.innerHTML = '更新時間: ' + moment(sortedList[0].updated).format('YYYY-MM-DD HH:mm');
+        if (updated && sortedList.length > 0 && sortedList[0].updated) {
+            updated.innerHTML = '更新時間: ' + moment(sortedList[0].updated).format('YYYY-MM-DD HH:mm');
+        }
 
         // // Get unique keys from value objects (timecard_time, timecard_timeover)
         const valueKeys = [...new Set(sortedList.map(item => 
@@ -407,18 +428,30 @@ document.addEventListener('DOMContentLoaded', async function () {
         const categories = sortedList.map(item => item.name);
 
         const series = uniqueValueKeys.map(key => {
-            const label = catLabel[key];
+            const label = catLabel[key] || key;
             return {
                 name: label,
                 data: sortedList.map(item => {
-                    const decodedValue = item.value.replace(/&quot;/g, '"');
-                    const value = JSON.parse(decodedValue)[key];
-                    // Convert time format (HH:mm) to decimal hours for chart
-                    const [hours, minutes] = value.split(':').map(Number);
-                    return parseFloat((hours + minutes / 60).toFixed(1));
+                    try {
+                        const decodedValue = item.value.replace(/&quot;/g, '"');
+                        const valueObj = JSON.parse(decodedValue);
+                        const value = valueObj[key];
+                        if (!value) return 0;
+                        // Convert time format (HH:mm) to decimal hours for chart
+                        if (typeof value === 'string' && value.includes(':')) {
+                            const [hours, minutes] = value.split(':').map(Number);
+                            return parseFloat((hours + minutes / 60).toFixed(1));
+                        } else if (typeof value === 'number') {
+                            return parseFloat(value.toFixed(1));
+                        }
+                        return 0;
+                    } catch (e) {
+                        console.error('Error parsing value for chart:', e, item);
+                        return 0;
+                    }
                 })
             };
-        });
+        }).filter(s => s.name); // Loại bỏ series không có label
      
         // Define explicit colors instead of using config references
         const chartColors = ['#4e73df', '#f6c23e', '#e74a3b', '#36b9cc', '#1cc88a'];
@@ -563,11 +596,28 @@ document.addEventListener('DOMContentLoaded', async function () {
                 }
             };
         
-        if (typeof barChartEl !== undefined && barChartEl !== null && barChart === null) {
-            barChart = new ApexCharts(barChartEl, barChartConfig);
-            barChart.render();
-        } else {
-            barChart.updateOptions(barChartConfig);
+        // Kiểm tra element và series có data không
+        if (!barChartEl) {
+            console.error('Chart element not found');
+            return;
+        }
+        
+        if (!series || series.length === 0) {
+            console.warn('No series data to display');
+            statistic.innerHTML = '<p class="text-muted text-center py-4">データがありません</p>';
+            return;
+        }
+        
+        try {
+            if (barChart === null) {
+                barChart = new ApexCharts(barChartEl, barChartConfig);
+                barChart.render();
+            } else {
+                barChart.updateOptions(barChartConfig);
+            }
+        } catch (error) {
+            console.error('Error rendering chart:', error);
+            statistic.innerHTML = '<p class="text-danger text-center py-4">グラフの表示に失敗しました</p>';
         }
     }
 

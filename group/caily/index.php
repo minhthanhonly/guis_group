@@ -145,7 +145,7 @@ if ($current_hour >= 6 && $current_hour < 12) {
 <?php } ?>
 
 <!-- Project Statistics Section -->
-<?php if($_SESSION['authority'] == 'administrator') { ?>
+<?php if(false) { ?>
 <div id="project-stats-section">
   <!-- Project Overview Cards -->
   <div class="row g-4 mt-1">

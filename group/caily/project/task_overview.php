@@ -7,7 +7,7 @@ $view->heading('タスク一覧');
     <div class="row mb-3">
         <div class="col-12 d-flex justify-content-between align-items-center">
             <h4 class="mb-0">
-                <i class="fa fa-tasks me-2"></i>全タスク一覧
+                <i class="fa fa-tasks me-2"></i><span data-i18n="全タスク一覧">全タスク一覧</span>
             </h4>
         </div>
     </div>
@@ -15,21 +15,21 @@ $view->heading('タスク一覧');
     <!-- Filters -->
     <div class="row mb-3">
         <div class="col-md-3 mb-2">
-            <label class="form-label">部署</label>
+            <label class="form-label"><span data-i18n="部署">部署</span></label>
             <select class="form-select" v-model="filters.department_id" @change="onDepartmentChange">
                 <option value="">すべて</option>
                 <option v-for="dep in departments" :key="dep.id" :value="dep.id">{{ dep.name }}</option>
             </select>
         </div>
         <div class="col-md-3 mb-2">
-            <label class="form-label">チーム</label>
+            <label class="form-label"><span data-i18n="チーム">チーム</span></label>
             <select class="form-select" v-model="filters.team_id" @change="loadOverview">
                 <option value="">すべて</option>
                 <option v-for="team in filteredTeams" :key="team.id" :value="team.id">{{ team.name }}</option>
             </select>
         </div>
         <div class="col-md-3 mb-2">
-            <label class="form-label">ユーザー</label>
+            <label class="form-label"><span data-i18n="ユーザー">ユーザー</span></label>
             <select class="form-select" v-model="filters.user_id" @change="onUserChange">
                 <option value="">すべて</option>
                 <option v-for="user in filteredUsers" :key="user.id" :value="user.id">{{ user.realname }}</option>
@@ -39,12 +39,12 @@ $view->heading('タスク一覧');
             <div class="form-check mb-1">
                 <input class="form-check-input" type="checkbox" id="excludeCompleted"
                        v-model="filters.excludeCompleted" @change="loadOverview">
-                <label class="form-check-label" for="excludeCompleted">完了タスクを除外</label>
+                <label class="form-check-label" for="excludeCompleted"><span data-i18n="完了タスクを除外">完了タスクを除外</span></label>
             </div>
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="myTask"
                        v-model="filters.myTask" @change="onMyTaskChange">
-                <label class="form-check-label" for="myTask">自分のタスク</label>
+                <label class="form-check-label" for="myTask"><span data-i18n="自分のタスク">自分のタスク</span></label>
             </div>
         </div>
     </div>
@@ -56,14 +56,14 @@ $view->heading('タスク一覧');
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" :class="{ active: activeTab === 'tasks' }"
                             @click="activeTab = 'tasks'" type="button">
-                        <i class="fa fa-list me-1"></i>タスク一覧
+                        <i class="fa fa-list me-1"></i><span data-i18n="タスク一覧">タスク一覧</span>
                     </button>
                 </li>
                 <?php if($_SESSION['isProjectManager']): ?>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" :class="{ active: activeTab === 'unassigned' }"
                                 @click="activeTab = 'unassigned'" type="button">
-                                <i class="fa fa-user-times me-1"></i>タスク未割り当てユーザー
+                                <i class="fa fa-user-times me-1"></i><span data-i18n="タスク未割り当てユーザー">タスク未割り当てユーザー</span>
                             </button>
                         </li>
                     <?php endif; ?>
@@ -76,9 +76,9 @@ $view->heading('タスク一覧');
         <div class="col-12">
             <div class="card mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">タスク一覧</h5>
+                    <h5 class="card-title mb-0"><span data-i18n="タスク一覧">タスク一覧</span></h5>
                     <button class="btn btn-sm btn-outline-secondary" @click="loadOverview" :disabled="loading">
-                        <i class="fa fa-refresh me-1"></i>更新
+                        <i class="fa fa-refresh me-1"></i><span data-i18n="更新">更新</span>
                     </button>
                 </div>
                 <div class="card-body">
@@ -89,19 +89,19 @@ $view->heading('タスク一覧');
                     </div>
                     <div v-else-if="filteredTasks.length === 0" class="text-center text-muted py-3">
                         <i class="fa fa-inbox fa-2x mb-2"></i>
-                        <p class="mb-0">タスクがありません</p>
+                        <p class="mb-0"><span data-i18n="タスクがありません">タスクがありません</span></p>
                     </div>
                     <div v-else class="table-responsive">
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th>案件</th>
-                                    <th>タスク</th>
-                                    <th>担当者</th>
-                                    <th>ステータス</th>
-                                    <th>優先度</th>
-                                    <th>進捗</th>
-                                    <th>期間</th>
+                                    <th><span data-i18n="案件">案件</span></th>
+                                    <th><span data-i18n="タスク">タスク</span></th>
+                                    <th><span data-i18n="担当者">担当者</span></th>
+                                    <th><span data-i18n="ステータス">ステータス</span></th>
+                                    <th><span data-i18n="優先度">優先度</span></th>
+                                    <th><span data-i18n="進捗">進捗</span></th>
+                                    <th><span data-i18n="期間">期間</span></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -157,17 +157,17 @@ $view->heading('タスク一覧');
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">タスク未割り当てユーザー</h5>
+                    <h5 class="card-title mb-0"><span data-i18n="タスク未割り当てユーザー">タスク未割り当てユーザー</span></h5>
                 </div>
                 <div class="card-body">
-                    <div v-if="unassignedUsers.length === 0" class="text-muted">すべてのユーザーにタスクが割り当てられています。</div>
+                    <div v-if="unassignedUsers.length === 0" class="text-muted"><span data-i18n="すべてのユーザーにタスクが割り当てられています"></span>すべてのユーザーにタスクが割り当てられています。</span></div>
                     <div v-else class="table-responsive">
                         <table class="table table-sm">
                             <thead class="table-light">
                                 <tr>
-                                    <th>部署</th>
-                                    <th>チーム</th>
-                                    <th>ユーザー</th>
+                                    <th><span data-i18n="部署">部署</span></th>
+                                    <th><span data-i18n="チーム">チーム</span></th>
+                                    <th><span data-i18n="ユーザー">ユーザー</span></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -195,6 +195,7 @@ $view->footing();
 <script>
 // Pass current user data to JavaScript
 window.currentUser = {
+    user_id: <?= json_encode($_SESSION['id'] ?? '') ?>,
     id: <?= json_encode($_SESSION['userid'] ?? '') ?>,
     department_id: <?= json_encode($_SESSION['department_id'] ?? '') ?>,
     isProjectManager: <?= json_encode($_SESSION['isProjectManager'] ?? false) ?>

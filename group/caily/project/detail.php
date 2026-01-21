@@ -13,7 +13,7 @@ if (!$project_id) {
     <div v-if="true">
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">
-                <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-label-info">#{{ project?.project_number }}</span></a>
+                <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-primary">#{{ project?.project_number }}</span></a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar" aria-controls="projectNavbar" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
                 </button>
@@ -762,10 +762,10 @@ if (!$project_id) {
                     <div class="modal-header">
                         <h5 class="modal-title">
                             <template v-if="editingNote.id">
-                                メモ詳細
+                                <span data-i18n="メモ詳細">メモ詳細</span>
                             </template>
                             <template v-else>
-                                新しいメモ
+                                <span data-i18n="新しいメモ">新しいメモ</span>
                             </template>
                         </h5>
                         <button type="button" class="btn-close" @click="closeNoteModal"></button>
@@ -774,15 +774,15 @@ if (!$project_id) {
                         <!-- View mode -->
                         <div v-if="editingNote.id && !isNoteEditMode">
                             <div class="mb-3">
-                                <label class="form-label">タイトル</label>
+                                <label class="form-label"><span data-i18n="タイトル">タイトル</span></label>
                                 <div class="form-control">{{ editingNote.title }}</div>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">内容</label>
+                                <label class="form-label"><span data-i18n="内容">内容</span></label>
                                 <div class="form-control" style="min-height:100px;white-space:pre-line;">{{ editingNote.content || '-' }}</div>
                             </div>
                             <div class="mb-3" v-if="editingNote.is_important">
-                                <label class="form-label">重要メモ</label>
+                                <label class="form-label"><span data-i18n="重要メモ">重要メモ</span></label>
                                 <div>
                                     <i class="fa fa-exclamation-circle text-danger"></i>
                                 </div>
@@ -792,18 +792,18 @@ if (!$project_id) {
                         <!-- Edit mode -->
                         <form v-else @submit.prevent="saveNote">
                             <div class="mb-3">
-                                <label class="form-label">タイトル <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="タイトル">タイトル</span> <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" v-model="editingNote.title" required maxlength="255">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">内容</label>
+                                <label class="form-label"><span data-i18n="内容">内容</span></label>
                                 <textarea class="form-control" v-model="editingNote.content" rows="6" placeholder="メモの詳細を入力してください..."></textarea>
                             </div>
                             <div class="mb-3">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant">
                                     <label class="form-check-label" for="isImportant">
-                                        <i class="fa fa-exclamation-circle text-danger me-2"></i> 重要メモ
+                                        <i class="fa fa-exclamation-circle text-danger me-2"></i> <span data-i18n="重要メモ">重要メモ</span>
                                     </label>
                                 </div>
                             </div>
@@ -811,14 +811,14 @@ if (!$project_id) {
                     </div>
                     <div class="modal-footer">
                         <template v-if="editingNote.id && !isNoteEditMode">
-                            <button class="btn btn-primary" @click="isNoteEditMode = true" v-if="canEditNote(editingNote)"><i class="fa fa-pencil-alt me-2"></i> 編集</button>
-                            <button class="btn btn-secondary" @click="closeNoteModal">閉じる</button>
+                            <button class="btn btn-primary" @click="isNoteEditMode = true" v-if="canEditNote(editingNote)"><i class="fa fa-pencil-alt me-2"></i> <span data-i18n="編集">編集</span></button>
+                            <button class="btn btn-secondary" @click="closeNoteModal"><span data-i18n="閉じる">閉じる</span></button>
                         </template>
                         <template v-else>
-                            <button class="btn btn-secondary" @click="isNoteEditMode = false" v-if="editingNote.id"><i class="fa fa-times me-2"></i> キャンセル</button>
-                            <button class="btn btn-secondary" @click="closeNoteModal" v-else>キャンセル</button>
+                            <button class="btn btn-secondary" @click="isNoteEditMode = false" v-if="editingNote.id"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
+                            <button class="btn btn-secondary" @click="closeNoteModal" v-else><span data-i18n="キャンセル">キャンセル</span></button>
                             <button class="btn btn-primary" @click="saveNote" :disabled="!editingNote.title.trim()">
-                                <i class="fa fa-save me-2"></i> 保存
+                                <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
                             </button>
                         </template>
                     </div>

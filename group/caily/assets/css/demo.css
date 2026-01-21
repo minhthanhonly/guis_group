@@ -480,6 +480,9 @@ li.storageprevious {
 	mask-image: none!important;
 	inset-inline-end: 0.4rem !important;
 }
+.menu-vertical .menu-item.open:not(.menu-item-closing) > .menu-link::after{
+	top: 1.6rem;
+}
 .bg-label-info{
 	background-color: var(--bs-info) !important;
 	color: #fff!important;
@@ -531,4 +534,11 @@ li.storageprevious {
 	mask-image: none!important;
 	top: -0.3rem;
     position: relative;
+}
+
+.layout-menu-toggle .fa-circle-dot{
+	font-weight: 300!important;
+}
+.layout-menu-collapsed .layout-menu-toggle .fa-circle-dot::before{
+	content: "\f111";
 }

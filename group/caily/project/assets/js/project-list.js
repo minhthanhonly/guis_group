@@ -227,7 +227,7 @@ var projectTable;
                     data: 'project_number',
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-center">
-                                    <span class="project-id">${data || '-'}</span>
+                                    <a href="detail.php?id=${row.id}" class="text-decoration-none"><span class="project-id badge bg-primary">${data || '-'}</span></a>
                                 </div>`;
                     },
                     title: '<span data-i18n="案件番号">案件番号</span>',
@@ -449,10 +449,14 @@ var projectTable;
                         
                         if (timeRemaining) {
                             const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
+                            // Lấy text title đã dịch
+                            const titleText = timeRemaining.isOverdue 
+                                ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('期限を超過しています') : '期限を超過しています')
+                                : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
                             return `<div class="d-flex flex-column">
                                         <span class="text-muted small text-nowrap">${dateStr}</span>
                                         <span class="badge ${timeRemaining.class} ${pulseClass} mt-1" 
-                                             title="${timeRemaining.isOverdue ? '期限を超過しています' : '残り時間'}"
+                                             title="${titleText}"
                                              style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
                                              ${timeRemaining.text}
                                         </span>
@@ -907,6 +911,14 @@ var projectTable;
         return txt.value;
     }
 
+    // Helper function để dịch text
+    function translateText(key) {
+        if (typeof i18next !== 'undefined' && i18next.isInitialized) {
+            return i18next.t(key) || key;
+        }
+        return key;
+    }
+
     function getTimeRemaining(endDate, status) {
         if (!endDate || status === 'completed' || status === 'deleted' || status === 'draft' || status === 'cancelled') {
             return null;
@@ -914,6 +926,24 @@ var projectTable;
         
         const now = moment.tz('Asia/Tokyo');
         const end = moment.tz(endDate, 'Asia/Tokyo');
+        
+        // Kiểm tra ngôn ngữ hiện tại
+        const isVietnamese = typeof i18next !== 'undefined' && i18next.isInitialized && i18next.language === 'vi';
+        
+        // Lấy các nhãn đã dịch
+        const dayLabel = translateText('日');
+        const hourLabel = translateText('時間');
+        const minuteLabel = translateText('分');
+        const overdueLabel = translateText('超過');
+        
+        // Hàm helper để format số và đơn vị với khoảng cách cho tiếng Việt
+        const formatUnit = (value, label, isOverdue = false) => {
+            if (isVietnamese) {
+                return `${value} ${label} ${isOverdue ? overdueLabel : ''}`;
+            } else {
+                return `${value}${label}${isOverdue ? overdueLabel : ''}`;
+            }
+        };
         
         if (end.isBefore(now)) {
             // Đã quá hạn
@@ -924,19 +954,19 @@ var projectTable;
             
             if (days > 0) {
                 return {
-                    text: `${days}日超過`,
+                    text: formatUnit(days, dayLabel, true),
                     class: 'bg-danger',
                     isOverdue: true
                 };
             } else if (hours > 0) {
                 return {
-                    text: `${hours}時間超過`,
+                    text: formatUnit(hours, hourLabel, true),
                     class: 'bg-danger',
                     isOverdue: true
                 };
             } else {
                 return {
-                    text: `${minutes}分超過`,
+                    text: formatUnit(minutes, minuteLabel, true),
                     class: 'bg-danger',
                     isOverdue: true
                 };
@@ -950,19 +980,19 @@ var projectTable;
             
             if (days > 0) {
                 return {
-                    text: `+${days}日`,
+                    text: `+${formatUnit(days, dayLabel)}`,
                     class: 'bg-label-info',
                     isOverdue: false
                 };
             } else if (hours > 0) {
                 return {
-                    text: `+${hours}時間`,
+                    text: `+${formatUnit(hours, hourLabel)}`,
                     class: hours <= 24 ? 'bg-label-warning' : 'bg-label-info',
                     isOverdue: false
                 };
             } else {
                 return {
-                    text: `+${minutes}分`,
+                    text: `+${formatUnit(minutes, minuteLabel)}`,
                     class: 'bg-label-warning',
                     isOverdue: false
                 };

@@ -41,14 +41,14 @@ $view->heading('ログイン', 'login');
 	<div class="d-flex col-12 col-xl-4 align-items-center authentication-bg p-sm-12 p-6">
 		<div class="w-px-400 mx-auto mt-12 pt-5">
 		<h4 class="mb-1"><?=APP_NAME?>へようこそ！ 👋</h4>
-		<p class="mb-6">アカウントにサインインして、冒険を始めてください。</p>
+		<p class="mb-6"><span data-i18n="アカウントにサインインして、冒険を始めてください">アカウントにサインインして、冒険を始めてください。</span></p>
 
 		<form id="formAuthentication" class="mb-6" action="login.php" name="login" method="POST">
 			<?php if($view->error($error) != '') { 
 				echo ''.$view->error($error).'';
 			} ?>
 			<div class="mb-6 form-control-validation">
-				<label for="userid" class="form-label">ユーザー名</label>
+				<label for="userid" class="form-label"><span data-i18n="ユーザー名">ユーザー名</span></label>
 				<input
 					type="text"
 					class="form-control"
@@ -59,7 +59,7 @@ $view->heading('ログイン', 'login');
 					autofocus />
 			</div>
 			<div class="mb-6 form-password-toggle form-control-validation">
-				<label class="form-label" for="password">パスワード</label>
+				<label class="form-label" for="password"><span data-i18n="パスワード">パスワード</span></label>
 				<div class="input-group input-group-merge">
 					<input
 					type="password"
@@ -84,7 +84,7 @@ $view->heading('ログイン', 'login');
 					</a> -->
 				</div>
 			</div>
-			<button class="btn btn-primary d-grid w-100">ログイン</button>
+			<button class="btn btn-primary d-grid w-100"><span data-i18n="ログイン">ログイン</span></button>
 		</form>
 		</div>
 	</div>

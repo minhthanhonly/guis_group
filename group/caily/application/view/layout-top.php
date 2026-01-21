@@ -15,8 +15,8 @@
               <span class="app-brand-text demo menu-text fw-bold ms-3" data-i18n="<?=APP_NAME?>"><?=APP_NAME?> </span>
             </a>
 
-            <a href="javascript:void(0);" class="layout-menu-toggle menu-link text-large ms-auto">
-              <i class="icon-base fa fa-bars d-none d-xl-block"></i>
+            <a href="javascript:void(0);" title="メニューを閉じる" class="layout-menu-toggle menu-link text-large ms-auto">
+              <i class="icon-base fas fa-circle-dot d-none d-xl-block"></i>
               <i class="icon-base fa fa-times d-block d-xl-none"></i>
             </a>
           </div>
@@ -64,11 +64,11 @@
                   </a>
                 </li>
                 <?php if($_SESSION['isProjectManager']){ ?>
-                <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
+                <!-- <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
                   <a href="<?=$root?>project/custom_fields.php" class="menu-link">
                     <div data-i18n="設定">設定</div>
                   </a>
-                </li>
+                </li> -->
                 <li class="menu-item <?php if($directory == 'price_list') echo 'active'; ?>">
                   <a href="<?=$root?>price_list" class="menu-link">
                     <div data-i18n="価格表管理">価格表管理</div>
