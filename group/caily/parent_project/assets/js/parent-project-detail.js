@@ -3151,9 +3151,9 @@ createApp({
                     modal.hide();
                     
                     // Update selected child projects status based on quotation status
-                    if (this.selectedChildProjectIds.length > 0) {
-                        await this.updateSelectedChildProjectsStatus();
-                    }
+                    // if (this.selectedChildProjectIds.length > 0) {
+                    //     await this.updateSelectedChildProjectsStatus();
+                    // }
                     
                     // Update child project amounts based on quotation status
                     if (this.newQuotation.status === 'キャンセル' || this.newQuotation.status === '却下') {

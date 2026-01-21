@@ -5,7 +5,6 @@ createApp({
         return {
             isProjectManager: typeof IS_PROJECT_MANAGER !== 'undefined' ? IS_PROJECT_MANAGER : false,
             parentProject: null,
-            canViewProject: true,
             loading: true,
             files: [],
             folders: [],
@@ -21,11 +20,20 @@ createApp({
             showCreateFolderModalFlag: false,
             showUploadModalFlag: false,
             showEditFolderModalFlag: false,
+            showAttachmentInfoModalFlag: false,
+            attachmentInfo: {
+                type: null,
+                data: null
+            },
+            loadingAttachmentInfo: false,
             sortField: 'name',
             sortDirection: 'asc'
         };
     },
     computed: {
+        canViewProject() {
+            return this.isProjectManager;
+        },
         sortedFolders() {
             return [...this.folders].sort((a, b) => {
                 const aVal = a[this.sortField] || '';
@@ -473,7 +481,8 @@ createApp({
         },
 
         getSecureViewUrl(file) {
-            return `/api/index.php?model=parentproject&method=viewFile&file_id=${file.id}&token=${this.generateSecureToken(file)}`;
+            // Use absolute path so copied URL is correct
+            return `/parent_project/file-view.php?file_id=${file.id}`;
         },
 
         getSecureDownloadUrl(file) {
@@ -557,6 +566,57 @@ createApp({
                 showMessage(message, true);
             } else {
                alert(message);
+            }
+        },
+        
+        async showAttachmentInfo(id, type) {
+            this.loadingAttachmentInfo = true;
+            this.showAttachmentInfoModalFlag = true;
+            
+            try {
+                const params = type === 'file' ? `file_id=${id}` : `folder_id=${id}`;
+                const response = await axios.get(`/api/index.php?model=parentproject&method=getAttachmentInfo&${params}`);
+                
+                if (response.data && response.data.success) {
+                    this.attachmentInfo = {
+                        type: response.data.type,
+                        data: response.data.data
+                    };
+                } else {
+                    this.showMessage(response.data?.message || '情報の取得に失敗しました', 'error');
+                    this.closeAttachmentInfoModal();
+                }
+            } catch (error) {
+                console.error('Error loading attachment info:', error);
+                this.showMessage('情報の取得に失敗しました', 'error');
+                this.closeAttachmentInfoModal();
+            } finally {
+                this.loadingAttachmentInfo = false;
+            }
+        },
+        
+        closeAttachmentInfoModal() {
+            this.showAttachmentInfoModalFlag = false;
+            this.attachmentInfo = {
+                type: null,
+                data: null
+            };
+        },
+        
+        downloadFolderZip(folderId) {
+            const url = `/api/index.php?model=parentproject&method=downloadFolderZip&folder_id=${folderId}&parent_project_id=${PARENT_PROJECT_ID}`;
+            window.open(url, '_blank');
+        },
+        
+        downloadCurrentFolderZip() {
+            // Download current folder (or root if no folder selected)
+            if (this.currentFolderId) {
+                const url = `/api/index.php?model=parentproject&method=downloadFolderZip&folder_id=${this.currentFolderId}&parent_project_id=${PARENT_PROJECT_ID}`;
+                window.open(url, '_blank');
+            } else {
+                // Download root (all files in parent project)
+                const url = `/api/index.php?model=parentproject&method=downloadFolderZip&parent_project_id=${PARENT_PROJECT_ID}`;
+                window.open(url, '_blank');
             }
         }
     }

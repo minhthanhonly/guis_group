@@ -58,6 +58,9 @@ if (!$parent_project_id) {
                             添付ファイル管理
                         </h5>
                         <div>
+                            <button class="btn btn-success btn-sm me-2" @click="downloadCurrentFolderZip" v-if="canViewProject">
+                                <i class="fa fa-download me-1"></i>ZIPでダウンロード
+                            </button>
                             <button class="btn btn-outline-primary btn-sm me-2" @click="showCreateFolderModal" v-if="canViewProject">
                                 <i class="fa fa-folder-plus me-1"></i>フォルダ作成
                             </button>
@@ -194,8 +197,14 @@ if (!$parent_project_id) {
                                                         <i class="fa fa-ellipsis-v"></i>
                                                     </button>
                                                     <ul class="dropdown-menu">
+                                                        <li><a class="dropdown-item" href="#" @click.prevent="showAttachmentInfo(folder.id, 'folder')">
+                                                            <i class="fa fa-info-circle me-2"></i>詳細
+                                                        </a></li>
                                                         <li><a class="dropdown-item" href="#" @click="copyFolderUrl(folder)">
                                                             <i class="fa fa-link me-2"></i>URLをコピー
+                                                        </a></li>
+                                                        <li><a class="dropdown-item" href="#" @click.prevent="downloadFolderZip(folder.id)">
+                                                            <i class="fa fa-download me-2"></i>ZIPでダウンロード
                                                         </a></li>
                                                         <li><a class="dropdown-item" href="#" @click="editFolder(folder)">
                                                             <i class="fa fa-edit me-2"></i>名前変更
@@ -223,7 +232,7 @@ if (!$parent_project_id) {
                                                 <i :class="getFileIcon(file.file_name)" class="fa-lg"></i>
                                             </td>
                                             <td>
-                                                <a :href="getSecureViewUrl(file)" target="_blank" class="text-decoration-none">
+                                                <a :href="getSecureViewUrl(file)" class="text-decoration-none">
                                                     {{ file.original_name }}
                                                 </a>
                                             </td>
@@ -242,10 +251,13 @@ if (!$parent_project_id) {
                                                         <i class="fa fa-ellipsis-v"></i>
                                                     </button>
                                                     <ul class="dropdown-menu">
+                                                        <li><a class="dropdown-item" href="#" @click.prevent="showAttachmentInfo(file.id, 'file')">
+                                                            <i class="fa fa-info-circle me-2"></i>詳細
+                                                        </a></li>
                                                         <li><a class="dropdown-item" href="#" @click="copyFileUrl(file)">
                                                             <i class="fa fa-link me-2"></i>URLをコピー
                                                         </a></li>
-                                                        <li><a class="dropdown-item" :href="getSecureViewUrl(file)" target="_blank">
+                                                        <li><a class="dropdown-item" :href="getSecureViewUrl(file)">
                                                             <i class="fa fa-eye me-2"></i>表示
                                                         </a></li>
                                                         <li><a class="dropdown-item" :href="getSecureDownloadUrl(file)" download>
@@ -382,6 +394,91 @@ if (!$parent_project_id) {
                 </div>
             </div>
         </div>
+
+        <!-- Attachment Info Modal -->
+        <div class="modal fade" tabindex="-1" :class="{show: showAttachmentInfoModalFlag}" style="display: block;" v-if="showAttachmentInfoModalFlag">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fa me-2" :class="attachmentInfo.type === 'file' ? 'fa-file' : 'fa-folder'"></i>
+                            詳細情報
+                        </h5>
+                        <button type="button" class="btn-close" @click="closeAttachmentInfoModal"></button>
+                    </div>
+                    <div class="modal-body" v-if="loadingAttachmentInfo">
+                        <div class="text-center py-4">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-body" v-else-if="attachmentInfo.data">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <strong>名前:</strong>
+                                <p class="mb-0">{{ attachmentInfo.data.original_name || attachmentInfo.data.name }}</p>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <strong>建物プロジェクト:</strong>
+                                <p class="mb-0">{{ attachmentInfo.data.parent_project_name }}</p>
+                            </div>
+                            <div class="col-md-6 mb-3" v-if="attachmentInfo.type === 'file'">
+                                <strong>ファイルサイズ:</strong>
+                                <p class="mb-0">{{ formatFileSize(attachmentInfo.data.file_size) }}</p>
+                            </div>
+                            <div class="col-md-6 mb-3" v-if="attachmentInfo.type === 'folder'">
+                                <strong>ファイル数:</strong>
+                                <p class="mb-0">{{ attachmentInfo.data.file_count || 0 }} ファイル</p>
+                            </div>
+                            <div class="col-md-6 mb-3" v-if="attachmentInfo.type === 'folder'">
+                                <strong>サブフォルダ数:</strong>
+                                <p class="mb-0">{{ attachmentInfo.data.subfolder_count || 0 }} フォルダ</p>
+                            </div>
+                            <div class="col-md-6 mb-3" v-if="attachmentInfo.type === 'folder'">
+                                <strong>合計サイズ:</strong>
+                                <p class="mb-0">{{ formatFileSize(attachmentInfo.data.total_size || 0) }}</p>
+                            </div>
+                            <div class="col-md-6 mb-3" v-if="attachmentInfo.type === 'file'">
+                                <strong>ファイルタイプ:</strong>
+                                <p class="mb-0">
+                                    <span class="badge bg-label-primary" v-if="attachmentInfo.data.original_name && attachmentInfo.data.original_name.includes('.')">
+                                        {{ attachmentInfo.data.original_name.split('.').pop().toUpperCase() }}
+                                    </span>
+                                    <span v-else class="text-muted">-</span>
+                                </p>
+                            </div>
+                            <div class="col-md-6 mb-3" v-if="attachmentInfo.type === 'file'">
+                                <strong>MIMEタイプ:</strong>
+                                <p class="mb-0">{{ attachmentInfo.data.mime_type || '-' }}</p>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <strong>作成日時:</strong>
+                                <p class="mb-0">{{ formatDateTime(attachmentInfo.data.created_at || attachmentInfo.data.uploaded_at) }}</p>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <strong>更新日時:</strong>
+                                <p class="mb-0">{{ formatDateTime(attachmentInfo.data.updated_at || attachmentInfo.data.uploaded_at) }}</p>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <strong>作成者:</strong>
+                                <p class="mb-0">{{ attachmentInfo.data.created_by_name || attachmentInfo.data.uploaded_by_name }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @click="closeAttachmentInfoModal">閉じる</button>
+                        <a v-if="attachmentInfo.type === 'file' && attachmentInfo.data" class="btn btn-primary" :href="getSecureDownloadUrl(attachmentInfo.data)" download>
+                            <i class="fa fa-download me-2"></i>ダウンロード
+                        </a>
+                        <button v-if="attachmentInfo.type === 'folder' && attachmentInfo.data" class="btn btn-primary" @click="downloadFolderZip(attachmentInfo.data.id)">
+                            <i class="fa fa-download me-2"></i>ZIPでダウンロード
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div v-if="showAttachmentInfoModalFlag" class="modal-backdrop fade show"></div>
     </div>
   
     <!-- Fixed Bulk Actions Bar -->

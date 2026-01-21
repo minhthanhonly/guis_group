@@ -2782,7 +2782,520 @@ class Project extends ApplicationModel {
     }
     
     function viewAttachment($params = null) {
-        $this->serveSecureFile(false); // false = inline view
+        // Check if info mode is requested
+        if (isset($_GET['info']) && $_GET['info'] == '1') {
+            return $this->getAttachmentInfo();
+        }
+        
+        // Check if direct download is requested (bypass detail page)
+        if (isset($_GET['download']) && $_GET['download'] == '1') {
+            $this->serveSecureFile(true); // force download
+            return;
+        }
+        
+        // Check if inline view is explicitly requested
+        if (isset($_GET['inline']) && $_GET['inline'] == '1') {
+            $this->serveSecureFile(false); // inline view
+            return;
+        }
+        
+        // Default: redirect to detail page
+        $file_id = isset($_GET['file_id']) ? intval($_GET['file_id']) : 0;
+        if ($file_id) {
+            header('Location: ' . ROOT . 'project/file-view.php?file_id=' . $file_id);
+            exit;
+        }
+        
+        // Fallback: serve file inline if no file_id
+        $this->serveSecureFile(false);
+    }
+    
+    function getAttachmentInfo($params = null) {
+        // Check if user is logged in
+        if (!isset($_SESSION['userid']) || !$_SESSION['userid']) {
+            return ['success' => false, 'message' => '認証が必要です。ログインしてください。'];
+        }
+        
+        $file_id = isset($_GET['file_id']) ? intval($_GET['file_id']) : 0;
+        $folder_id = isset($_GET['folder_id']) ? intval($_GET['folder_id']) : 0;
+        
+        if (!$file_id && !$folder_id) {
+            return ['success' => false, 'message' => 'ファイルIDまたはフォルダIDが指定されていません。'];
+        }
+        
+        if ($file_id) {
+            // Get file info
+            $fileQuery = sprintf(
+                "SELECT a.*, p.name as project_name, u.realname as uploaded_by_name
+                 FROM " . DB_PREFIX . "project_attachments a
+                 LEFT JOIN " . DB_PREFIX . "projects p ON a.project_id = p.id
+                 LEFT JOIN " . DB_PREFIX . "user u ON a.uploaded_by = u.userid
+                 WHERE a.id = %d",
+                $file_id
+            );
+            $file = $this->fetchOne($fileQuery);
+            
+            if (!$file) {
+                return ['success' => false, 'message' => 'ファイルが見つかりません。'];
+            }
+            
+            // Check if file exists
+            $realFilePath = '..' . $file['file_path'];
+            $file['exists'] = file_exists($realFilePath);
+            
+            return [
+                'success' => true,
+                'type' => 'file',
+                'data' => $file
+            ];
+        } else {
+            // Get folder info
+            $folderQuery = sprintf(
+                "SELECT f.*, p.name as project_name, u.realname as created_by_name,
+                        (SELECT COUNT(*) FROM " . DB_PREFIX . "project_attachments a WHERE a.folder_id = f.id) as file_count,
+                        (SELECT COUNT(*) FROM " . DB_PREFIX . "project_folders sf WHERE sf.parent_folder_id = f.id) as subfolder_count
+                 FROM " . DB_PREFIX . "project_folders f
+                 LEFT JOIN " . DB_PREFIX . "projects p ON f.project_id = p.id
+                 LEFT JOIN " . DB_PREFIX . "user u ON f.created_by = u.userid
+                 WHERE f.id = %d",
+                $folder_id
+            );
+            $folder = $this->fetchOne($folderQuery);
+            
+            if (!$folder) {
+                return ['success' => false, 'message' => 'フォルダが見つかりません。'];
+            }
+            
+            // Get total size of files in folder (including subfolders)
+            $totalSize = $this->getFolderTotalSize($folder_id);
+            $folder['total_size'] = $totalSize;
+            
+            return [
+                'success' => true,
+                'type' => 'folder',
+                'data' => $folder
+            ];
+        }
+    }
+    
+    private function getFolderTotalSize($folder_id) {
+        $totalSize = 0;
+        
+        // Get files in this folder
+        $fileQuery = sprintf(
+            "SELECT SUM(file_size) as total FROM " . DB_PREFIX . "project_attachments WHERE folder_id = %d",
+            $folder_id
+        );
+        $result = $this->fetchOne($fileQuery);
+        if ($result && $result['total']) {
+            $totalSize += $result['total'];
+        }
+        
+        // Get subfolders
+        $subfolderQuery = sprintf(
+            "SELECT id FROM " . DB_PREFIX . "project_folders WHERE parent_folder_id = %d",
+            $folder_id
+        );
+        $subfolders = $this->fetchAll($subfolderQuery);
+        
+        // Recursively calculate size of subfolders
+        foreach ($subfolders as $subfolder) {
+            $totalSize += $this->getFolderTotalSize($subfolder['id']);
+        }
+        
+        return $totalSize;
+    }
+    
+    function downloadFolderZip($params = null) {
+        // Check if user is logged in
+        if (!isset($_SESSION['userid']) || !$_SESSION['userid']) {
+            http_response_code(401);
+            die('認証が必要です。ログインしてください。');
+        }
+        
+        $folder_id = isset($_GET['folder_id']) && $_GET['folder_id'] !== '' ? intval($_GET['folder_id']) : null;
+        $project_id = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
+        
+        // If no folder_id, download all files in project (root)
+        if ($folder_id === null) {
+            if (!$project_id) {
+                http_response_code(400);
+                die('プロジェクトIDが指定されていません。');
+            }
+            return $this->downloadProjectZip($project_id);
+        }
+        
+        // Check if ZipArchive class is available
+        if (!class_exists('ZipArchive')) {
+            // Try to use shell command as fallback (if available)
+            if (function_exists('shell_exec') && !empty(shell_exec('which zip'))) {
+                return $this->downloadFolderZipShell($folder_id);
+            } else {
+                http_response_code(500);
+                die('ZIP機能を使用するにはPHPのzip拡張機能が必要です。サーバー管理者に連絡してください。');
+            }
+        }
+        
+        // Get folder info
+        $folderQuery = sprintf(
+            "SELECT f.*, p.name as project_name
+             FROM " . DB_PREFIX . "project_folders f
+             LEFT JOIN " . DB_PREFIX . "projects p ON f.project_id = p.id
+             WHERE f.id = %d",
+            $folder_id
+        );
+        $folder = $this->fetchOne($folderQuery);
+        
+        if (!$folder) {
+            http_response_code(404);
+            die('フォルダが見つかりません。');
+        }
+        
+        // Create zip file
+        $zipFileName = tempnam(sys_get_temp_dir(), 'folder_') . '.zip';
+        $zip = new ZipArchive();
+        
+        if ($zip->open($zipFileName, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
+            http_response_code(500);
+            die('ZIPファイルの作成に失敗しました。');
+        }
+        
+        // Add files to zip recursively
+        $this->addFolderToZip($zip, $folder_id, $folder['name']);
+        
+        $zip->close();
+        
+        // Check if zip file was created successfully
+        if (!file_exists($zipFileName) || filesize($zipFileName) === 0) {
+            http_response_code(500);
+            die('ZIPファイルの作成に失敗しました。');
+        }
+        
+        // Send zip file
+        $encodedFileName = rawurlencode($folder['name'] . '.zip');
+        header('Content-Type: application/zip');
+        header('Content-Length: ' . filesize($zipFileName));
+        header('Content-Disposition: attachment; filename="' . $encodedFileName . '"; filename*=UTF-8\'\'' . $encodedFileName);
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        // Clear output buffer
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Output zip file
+        readfile($zipFileName);
+        
+        // Delete temporary file
+        @unlink($zipFileName);
+        exit;
+    }
+    
+    // Download all attachments in a project as ZIP (root level)
+    private function downloadProjectZip($project_id) {
+        // Check if ZipArchive class is available
+        if (!class_exists('ZipArchive')) {
+            // Try to use shell command as fallback (if available)
+            if (function_exists('shell_exec') && !empty(shell_exec('which zip'))) {
+                return $this->downloadProjectZipShell($project_id);
+            } else {
+                http_response_code(500);
+                die('ZIP機能を使用するにはPHPのzip拡張機能が必要です。サーバー管理者に連絡してください。');
+            }
+        }
+        
+        // Get project info
+        $projectQuery = sprintf(
+            "SELECT * FROM " . DB_PREFIX . "projects WHERE id = %d",
+            $project_id
+        );
+        $project = $this->fetchOne($projectQuery);
+        
+        if (!$project) {
+            http_response_code(404);
+            die('プロジェクトが見つかりません。');
+        }
+        
+        // Create zip file
+        $zipFileName = tempnam(sys_get_temp_dir(), 'project_') . '.zip';
+        $zip = new ZipArchive();
+        
+        if ($zip->open($zipFileName, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
+            http_response_code(500);
+            die('ZIPファイルの作成に失敗しました。');
+        }
+        
+        // Add root files (files without folder_id)
+        $rootFilesQuery = sprintf(
+            "SELECT * FROM " . DB_PREFIX . "project_attachments WHERE project_id = %d AND folder_id IS NULL",
+            $project_id
+        );
+        $rootFiles = $this->fetchAll($rootFilesQuery);
+        
+        foreach ($rootFiles as $file) {
+            $filePath = '..' . $file['file_path'];
+            if (file_exists($filePath)) {
+                $zip->addFile($filePath, $file['original_name']);
+            }
+        }
+        
+        // Add all folders recursively
+        $rootFoldersQuery = sprintf(
+            "SELECT * FROM " . DB_PREFIX . "project_folders WHERE project_id = %d AND parent_folder_id IS NULL",
+            $project_id
+        );
+        $rootFolders = $this->fetchAll($rootFoldersQuery);
+        
+        foreach ($rootFolders as $folder) {
+            $this->addFolderToZip($zip, $folder['id'], $folder['name']);
+        }
+        
+        $zip->close();
+        
+        // Check if zip file was created successfully
+        if (!file_exists($zipFileName) || filesize($zipFileName) === 0) {
+            http_response_code(500);
+            die('ZIPファイルの作成に失敗しました。');
+        }
+        
+        // Send zip file
+        $encodedFileName = rawurlencode($project['name'] . '_attachments.zip');
+        header('Content-Type: application/zip');
+        header('Content-Length: ' . filesize($zipFileName));
+        header('Content-Disposition: attachment; filename="' . $encodedFileName . '"; filename*=UTF-8\'\'' . $encodedFileName);
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        // Clear output buffer
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Output zip file
+        readfile($zipFileName);
+        
+        // Delete temporary file
+        @unlink($zipFileName);
+        exit;
+    }
+    
+    // Fallback method for project zip using shell command
+    private function downloadProjectZipShell($project_id) {
+        // Get project info
+        $projectQuery = sprintf(
+            "SELECT * FROM " . DB_PREFIX . "projects WHERE id = %d",
+            $project_id
+        );
+        $project = $this->fetchOne($projectQuery);
+        
+        if (!$project) {
+            http_response_code(404);
+            die('プロジェクトが見つかりません。');
+        }
+        
+        // Create temporary directory
+        $tempDir = sys_get_temp_dir() . '/zip_' . uniqid();
+        mkdir($tempDir, 0755, true);
+        
+        // Copy root files
+        $rootFilesQuery = sprintf(
+            "SELECT * FROM " . DB_PREFIX . "project_attachments WHERE project_id = %d AND folder_id IS NULL",
+            $project_id
+        );
+        $rootFiles = $this->fetchAll($rootFilesQuery);
+        
+        foreach ($rootFiles as $file) {
+            $filePath = '..' . $file['file_path'];
+            if (file_exists($filePath)) {
+                copy($filePath, $tempDir . '/' . $file['original_name']);
+            }
+        }
+        
+        // Copy all folders recursively
+        $rootFoldersQuery = sprintf(
+            "SELECT * FROM " . DB_PREFIX . "project_folders WHERE project_id = %d AND parent_folder_id IS NULL",
+            $project_id
+        );
+        $rootFolders = $this->fetchAll($rootFoldersQuery);
+        
+        foreach ($rootFolders as $folder) {
+            $this->copyFolderToTemp($tempDir, $folder['id'], $folder['name']);
+        }
+        
+        // Create zip using shell command
+        $zipFileName = sys_get_temp_dir() . '/project_' . $project_id . '_' . time() . '.zip';
+        $command = "cd " . escapeshellarg($tempDir) . " && zip -r " . escapeshellarg($zipFileName) . " . 2>&1";
+        $output = shell_exec($command);
+        
+        // Clean up temp directory
+        $this->deleteDirectory($tempDir);
+        
+        if (!file_exists($zipFileName)) {
+            http_response_code(500);
+            die('ZIPファイルの作成に失敗しました。');
+        }
+        
+        // Send zip file
+        $encodedFileName = rawurlencode($project['name'] . '_attachments.zip');
+        header('Content-Type: application/zip');
+        header('Content-Length: ' . filesize($zipFileName));
+        header('Content-Disposition: attachment; filename="' . $encodedFileName . '"; filename*=UTF-8\'\'' . $encodedFileName);
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        // Clear output buffer
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Output zip file
+        readfile($zipFileName);
+        
+        // Delete temporary file
+        @unlink($zipFileName);
+        exit;
+    }
+    
+    private function addFolderToZip($zip, $folder_id, $basePath = '') {
+        // Get files in this folder
+        $fileQuery = sprintf(
+            "SELECT * FROM " . DB_PREFIX . "project_attachments WHERE folder_id = %d",
+            $folder_id
+        );
+        $files = $this->fetchAll($fileQuery);
+        
+        foreach ($files as $file) {
+            $filePath = '..' . $file['file_path'];
+            if (file_exists($filePath)) {
+                $zipPath = $basePath . '/' . $file['original_name'];
+                $zip->addFile($filePath, $zipPath);
+            }
+        }
+        
+        // Get subfolders
+        $subfolderQuery = sprintf(
+            "SELECT * FROM " . DB_PREFIX . "project_folders WHERE parent_folder_id = %d",
+            $folder_id
+        );
+        $subfolders = $this->fetchAll($subfolderQuery);
+        
+        foreach ($subfolders as $subfolder) {
+            $subfolderPath = $basePath . '/' . $subfolder['name'];
+            $this->addFolderToZip($zip, $subfolder['id'], $subfolderPath);
+        }
+    }
+    
+    // Fallback method using shell command if ZipArchive is not available
+    private function downloadFolderZipShell($folder_id) {
+        // Get folder info
+        $folderQuery = sprintf(
+            "SELECT f.*, p.name as project_name
+             FROM " . DB_PREFIX . "project_folders f
+             LEFT JOIN " . DB_PREFIX . "projects p ON f.project_id = p.id
+             WHERE f.id = %d",
+            $folder_id
+        );
+        $folder = $this->fetchOne($folderQuery);
+        
+        if (!$folder) {
+            http_response_code(404);
+            die('フォルダが見つかりません。');
+        }
+        
+        // Create temporary directory
+        $tempDir = sys_get_temp_dir() . '/zip_' . uniqid();
+        mkdir($tempDir, 0755, true);
+        
+        // Copy files to temp directory
+        $this->copyFolderToTemp($tempDir, $folder_id, $folder['name']);
+        
+        // Create zip using shell command
+        $zipFileName = sys_get_temp_dir() . '/folder_' . $folder_id . '_' . time() . '.zip';
+        $command = "cd " . escapeshellarg($tempDir) . " && zip -r " . escapeshellarg($zipFileName) . " . 2>&1";
+        $output = shell_exec($command);
+        
+        // Clean up temp directory
+        $this->deleteDirectory($tempDir);
+        
+        if (!file_exists($zipFileName)) {
+            http_response_code(500);
+            die('ZIPファイルの作成に失敗しました。');
+        }
+        
+        // Send zip file
+        $encodedFileName = rawurlencode($folder['name'] . '.zip');
+        header('Content-Type: application/zip');
+        header('Content-Length: ' . filesize($zipFileName));
+        header('Content-Disposition: attachment; filename="' . $encodedFileName . '"; filename*=UTF-8\'\'' . $encodedFileName);
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        // Clear output buffer
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Output zip file
+        readfile($zipFileName);
+        
+        // Delete temporary file
+        @unlink($zipFileName);
+        exit;
+    }
+    
+    private function copyFolderToTemp($tempDir, $folder_id, $basePath) {
+        $targetDir = $tempDir . '/' . $basePath;
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0755, true);
+        }
+        
+        // Get files in this folder
+        $fileQuery = sprintf(
+            "SELECT * FROM " . DB_PREFIX . "project_attachments WHERE folder_id = %d",
+            $folder_id
+        );
+        $files = $this->fetchAll($fileQuery);
+        
+        foreach ($files as $file) {
+            $filePath = '..' . $file['file_path'];
+            if (file_exists($filePath)) {
+                $targetPath = $targetDir . '/' . $file['original_name'];
+                copy($filePath, $targetPath);
+            }
+        }
+        
+        // Get subfolders
+        $subfolderQuery = sprintf(
+            "SELECT * FROM " . DB_PREFIX . "project_folders WHERE parent_folder_id = %d",
+            $folder_id
+        );
+        $subfolders = $this->fetchAll($subfolderQuery);
+        
+        foreach ($subfolders as $subfolder) {
+            $this->copyFolderToTemp($tempDir, $subfolder['id'], $basePath . '/' . $subfolder['name']);
+        }
+    }
+    
+    private function deleteDirectory($dir) {
+        if (!is_dir($dir)) {
+            return;
+        }
+        
+        $files = array_diff(scandir($dir), array('.', '..'));
+        foreach ($files as $file) {
+            $path = $dir . '/' . $file;
+            if (is_dir($path)) {
+                $this->deleteDirectory($path);
+            } else {
+                unlink($path);
+            }
+        }
+        rmdir($dir);
     }
     
     private function serveSecureFile($forceDownload = true) {

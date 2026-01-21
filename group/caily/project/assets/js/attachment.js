@@ -17,6 +17,12 @@ createApp({
             showCreateFolderModalFlag: false,
             showUploadModalFlag: false,
             showEditFolderModalFlag: false,
+            showAttachmentInfoModalFlag: false,
+            attachmentInfo: {
+                type: null,
+                data: null
+            },
+            loadingAttachmentInfo: false,
             
             // Form data
             newFolderName: '',
@@ -778,7 +784,8 @@ createApp({
         },
         
         getSecureViewUrl(file) {
-            return `${window.location.origin}/api/index.php?model=project&method=viewAttachment&file_id=${file.id}`;
+            // Return detail page URL instead of direct file view
+            return `${window.location.origin}/project/file-view.php?file_id=${file.id}`;
         },
         
         getSecureDownloadUrl(file) {
@@ -808,6 +815,57 @@ createApp({
                 showMessage(message, type === 'error');
             } else {
                 alert(message);
+            }
+        },
+        
+        async showAttachmentInfo(id, type) {
+            this.loadingAttachmentInfo = true;
+            this.showAttachmentInfoModalFlag = true;
+            
+            try {
+                const params = type === 'file' ? `file_id=${id}` : `folder_id=${id}`;
+                const response = await axios.get(`/api/index.php?model=project&method=getAttachmentInfo&${params}`);
+                
+                if (response.data && response.data.success) {
+                    this.attachmentInfo = {
+                        type: response.data.type,
+                        data: response.data.data
+                    };
+                } else {
+                    this.showNotification(response.data?.message || '情報の取得に失敗しました', 'error');
+                    this.closeAttachmentInfoModal();
+                }
+            } catch (error) {
+                console.error('Error loading attachment info:', error);
+                this.showNotification('情報の取得に失敗しました', 'error');
+                this.closeAttachmentInfoModal();
+            } finally {
+                this.loadingAttachmentInfo = false;
+            }
+        },
+        
+        closeAttachmentInfoModal() {
+            this.showAttachmentInfoModalFlag = false;
+            this.attachmentInfo = {
+                type: null,
+                data: null
+            };
+        },
+        
+        downloadFolderZip(folderId) {
+            const url = `/api/index.php?model=project&method=downloadFolderZip&folder_id=${folderId}`;
+            window.open(url, '_blank');
+        },
+        
+        downloadCurrentFolderZip() {
+            // Download current folder (or root if no folder selected)
+            if (this.currentFolderId) {
+                const url = `/api/index.php?model=project&method=downloadFolderZip&folder_id=${this.currentFolderId}`;
+                window.open(url, '_blank');
+            } else {
+                // Download root (all files in project)
+                const url = `/api/index.php?model=project&method=downloadFolderZip&project_id=${this.projectId}`;
+                window.open(url, '_blank');
             }
         }
     },

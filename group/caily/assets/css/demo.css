@@ -438,6 +438,37 @@ li.storageprevious {
     border: none;
     transition: all 0.3s ease;
 }
+.btn-secondary {
+	background: linear-gradient(135deg, var(--bs-secondary) 0%, #808390 100%);
+}
+
+.btn-info {
+	background: linear-gradient(135deg, var(--bs-info) 0%, #00a7bc 100%);
+}
+.btn-success {
+	background: linear-gradient(135deg, var(--bs-success) 0%, #28c76f 100%);
+}
+.btn-danger {
+	background: linear-gradient(135deg, var(--bs-danger) 0%, #ff4c51 100%);
+}
+.btn-warning {
+	background: linear-gradient(135deg, var(--bs-warning) 0%, #ff9f43 100%);
+}
+.btn-dark {
+	background: linear-gradient(135deg, var(--bs-dark) 0%, #333333 100%);
+}
+.btn-light {
+	background: linear-gradient(135deg, var(--bs-light) 0%, #f0f0f0 100%);
+}
+.btn-white {
+	background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+}
+.btn-black {
+	background: linear-gradient(135deg, #000000 0%, #333333 100%);
+}
+.btn-gray {
+	background: linear-gradient(135deg, #808080 0%, #b3b3b3 100%);
+}
 
 .btn-primary:hover:not(:disabled) {
     transform: translateY(-2px);
@@ -454,7 +485,7 @@ li.storageprevious {
 	max-width: 100%;
 }
 .form-control, .form-select, .tagify{
-   border: 1px solid #d1d0d4;
+   border: 1px solid #d1d0d4 !important;
 }
 .menu-toggle::after{
 	/*fa fa-chevron-down*/

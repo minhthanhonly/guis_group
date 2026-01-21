@@ -274,7 +274,7 @@ window.CommentComponent = {
                     <div class="flex-shrink-0 me-3">
                         <div class="avatar avatar-sm">
                             <img v-if="currentUser.user_image" :src="'/assets/upload/avatar/' + currentUser.user_image" :alt="currentUser.realname" class="rounded-circle">
-                            <span v-else class="avatar-initial rounded-circle">{{ getInitials(currentUser.realname || 'User') }}</span>
+                            <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(currentUser.realname || 'User') }}</span>
                         </div>
                     </div>
                     <div class="flex-grow-1">
@@ -349,7 +349,7 @@ window.CommentComponent = {
                                 <div class="flex-shrink-0 me-3">
                                     <div class="avatar">
                                         <img v-if="!comment.avatarError" class="rounded-circle" :src="getAvatarSrc(comment)" :alt="comment.user_name" @error="handleAvatarError(comment)">
-                                        <span v-else class="avatar-initial rounded-circle">{{ getInitials(comment.user_name) }}</span>
+                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment.user_name) }}</span>
                                     </div>
                                 </div>
                                 <div class="flex-grow-1">
@@ -409,7 +409,7 @@ window.CommentComponent = {
                         <div class="flex-shrink-0 me-3">
                             <div class="avatar avatar-sm">
                                 <img v-if="currentUser.user_image" :src="'/assets/upload/avatar/' + currentUser.user_image" :alt="currentUser.realname" class="rounded-circle">
-                                <span v-else class="avatar-initial rounded-circle">{{ getInitials(currentUser.realname || 'User') }}</span>
+                                <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(currentUser.realname || 'User') }}</span>
                             </div>
                         </div>
                         <div class="flex-grow-1">
@@ -535,6 +535,8 @@ window.CommentComponent = {
             lastCheckTime: null,
             pollingEnabled: true,
             pollingIntervalMs: 3000, // Check every 3 seconds
+            lastCommentUpdateTime: null, // Track last comment update time for detecting edits/deletes/likes
+            commentCheckCounter: 0, // Counter to periodically reload comments
         };
     },
     computed: {
@@ -563,13 +565,14 @@ window.CommentComponent = {
         }
     },
     methods: {
-        async loadComments(resetPagination = false) {
+        async loadComments(resetPagination = false, silent = false) {
             if (resetPagination) {
                 this.commentsPage = 1;
                 this.hasMoreComments = true;
             }
             
-            this.loadingComments = this.commentsPage === 1;
+            // Only show loading if not silent (silent mode for polling to avoid content flickering)
+            this.loadingComments = !silent && this.commentsPage === 1;
             
             try {
                 const params = new URLSearchParams({
@@ -589,15 +592,26 @@ window.CommentComponent = {
                 // Initialize like status for comments
                 const commentsWithLikes = this.initializeLikeStatus(newComments);
                 
+                // Update last comment update time from the latest comment's updated_at if available
+                if (commentsWithLikes.length > 0 && commentsWithLikes[0].updated_at) {
+                    const latestUpdateTime = new Date(commentsWithLikes[0].updated_at).getTime();
+                    if (!this.lastCommentUpdateTime || latestUpdateTime > this.lastCommentUpdateTime) {
+                        this.lastCommentUpdateTime = latestUpdateTime;
+                    }
+                }
+                
                 if (this.commentsPage === 1) {
-                    this.comments = commentsWithLikes;
+                    // Remove duplicates based on comment ID
+                    const uniqueComments = this.removeDuplicateComments(commentsWithLikes);
+                    this.comments = uniqueComments;
                     this.$nextTick(() => {
                         // this.scrollToBottom();
                         this.updateTooltips();
                     });
                 } else {
-                    // Prepend older comments to the beginning
-                    this.comments = [...commentsWithLikes, ...this.comments];
+                    // Prepend older comments to the beginning, then remove duplicates
+                    const mergedComments = [...commentsWithLikes, ...this.comments];
+                    this.comments = this.removeDuplicateComments(mergedComments);
                     this.$nextTick(() => {
                         this.updateTooltips();
                     });
@@ -689,6 +703,9 @@ window.CommentComponent = {
                         this.lastCheckTime = Date.now();
                     }
                     
+                    // Update last comment update time to trigger reload for other users
+                    this.lastCommentUpdateTime = Date.now();
+                    
                     await this.loadComments(true);
                     this.scrollToCommentBottom();
                     
@@ -750,7 +767,35 @@ window.CommentComponent = {
             // Check Quill content
             if (this.quillInstance) {
                 const text = this.quillInstance.getText().trim();
-                hasContent = text.length > 0;
+                const hasText = text.length > 0;
+                
+                // Check for images or other embeds in Quill editor
+                let hasImagesOrEmbeds = false;
+                try {
+                    // Check HTML content for images
+                    const html = this.quillInstance.root.innerHTML;
+                    // Remove empty paragraphs and line breaks
+                    const cleanHtml = html.replace(/<p><br><\/p>/g, '').replace(/<p>\s*<\/p>/g, '').trim();
+                    // Check if there are images or other content
+                    hasImagesOrEmbeds = cleanHtml.includes('<img') || 
+                                       cleanHtml.includes('<iframe') || 
+                                       cleanHtml.includes('<video') ||
+                                       (cleanHtml.length > 0 && cleanHtml !== '<p></p>');
+                } catch (error) {
+                    // Fallback: check delta for embeds
+                    try {
+                        const delta = this.quillInstance.getContents();
+                        hasImagesOrEmbeds = delta.ops && delta.ops.some(op => 
+                            op.insert && typeof op.insert === 'object' && 
+                            (op.insert.image || op.insert.video || op.insert.formula)
+                        );
+                    } catch (e) {
+                        // If all checks fail, just check text
+                        hasImagesOrEmbeds = false;
+                    }
+                }
+                
+                hasContent = hasText || hasImagesOrEmbeds;
             }
             
             // Check mention input content
@@ -763,7 +808,31 @@ window.CommentComponent = {
         updateEditorContent() {
             if (this.quillInstance) {
                 const text = this.quillInstance.getText().trim();
-                this.editorHasContent = text.length > 0;
+                const hasText = text.length > 0;
+                
+                // Check for images or other embeds
+                let hasImagesOrEmbeds = false;
+                try {
+                    const html = this.quillInstance.root.innerHTML;
+                    const cleanHtml = html.replace(/<p><br><\/p>/g, '').replace(/<p>\s*<\/p>/g, '').trim();
+                    hasImagesOrEmbeds = cleanHtml.includes('<img') || 
+                                       cleanHtml.includes('<iframe') || 
+                                       cleanHtml.includes('<video') ||
+                                       (cleanHtml.length > 0 && cleanHtml !== '<p></p>');
+                } catch (error) {
+                    // Fallback: check delta for embeds
+                    try {
+                        const delta = this.quillInstance.getContents();
+                        hasImagesOrEmbeds = delta.ops && delta.ops.some(op => 
+                            op.insert && typeof op.insert === 'object' && 
+                            (op.insert.image || op.insert.video || op.insert.formula)
+                        );
+                    } catch (e) {
+                        hasImagesOrEmbeds = false;
+                    }
+                }
+                
+                this.editorHasContent = hasText || hasImagesOrEmbeds;
             }
         },
         
@@ -836,7 +905,7 @@ window.CommentComponent = {
                 try {
                     this.quillInstance = new Quill(this.$refs.quillEditor, {
                         theme: 'snow',
-                        placeholder: 'コメントを入力してください...',
+                        placeholder: '',
                         modules: {
                             // syntax: true,
                             toolbar: {
@@ -853,6 +922,13 @@ window.CommentComponent = {
                     this.quillInstance.on('text-change', () => {
                         this.updateEditorContent();
                         this.addZoomToDescriptionImages();
+                    });
+                    
+                    // Add editor-change listener to catch image/embed insertions
+                    this.quillInstance.on('editor-change', (eventName, ...args) => {
+                        if (eventName === 'text-change' || eventName === 'selection-change') {
+                            this.updateEditorContent();
+                        }
                     });
                     
                     // Add blur/focus listeners
@@ -1077,6 +1153,13 @@ window.CommentComponent = {
                         comment.liked_by_names = response.data.liked_by_names;
                     }
                     
+                    // Update last comment update time to trigger reload for other users
+                    this.lastCommentUpdateTime = Date.now();
+                    
+                    // Reload comments to show updated like status to all users
+                    // Use silent mode to avoid loading spinner flickering
+                    await this.loadComments(false, true);
+                    
                     // Update tooltips after like status change
                     this.$nextTick(() => {
                         this.updateTooltips();
@@ -1103,6 +1186,20 @@ window.CommentComponent = {
                 isLiked: comment.liked_by && comment.liked_by.includes(this.currentUser.userid),
                 like_count: comment.like_count || 0
             }));
+        },
+        
+        // Remove duplicate comments based on ID, keeping the first occurrence
+        removeDuplicateComments(comments) {
+            const seen = new Set();
+            return comments.filter(comment => {
+                if (!comment || !comment.id) return false;
+                const id = comment.id;
+                if (seen.has(id)) {
+                    return false; // Skip duplicate
+                }
+                seen.add(id);
+                return true; // Keep first occurrence
+            });
         },
         
         getLikeTooltip(comment) {
@@ -1211,6 +1308,11 @@ window.CommentComponent = {
                                         if (this.quillInstance.scrollingContainer) {
                                             this.quillInstance.scrollingContainer.scrollTop = this.quillInstance.scrollingContainer.scrollHeight;
                                         }
+                                        
+                                        // Update button state after inserting image
+                                        this.$nextTick(() => {
+                                            this.updateEditorContent();
+                                        });
                                     }
                                 } catch (error) {
                                     console.error('Error inserting image:', error);
@@ -1218,6 +1320,11 @@ window.CommentComponent = {
                                     if (this.quillInstance && this.quillInstance.root) {
                                         const imageHtml = `<p><img src="${response.url}" alt="Uploaded image" style="max-width: 100%; height: auto;"></p>`;
                                         this.quillInstance.root.innerHTML += imageHtml;
+                                        
+                                        // Update button state after inserting image
+                                        this.$nextTick(() => {
+                                            this.updateEditorContent();
+                                        });
                                     }
                                 }
                             });
@@ -1571,6 +1678,10 @@ window.CommentComponent = {
                         if (this.quillInstance) this.quillInstance.setContents([]);
                     } catch (e) {}
                     this.editorHasContent = false;
+                    
+                    // Update last comment update time to trigger reload for other users
+                    this.lastCommentUpdateTime = Date.now();
+                    
                     await this.loadComments(true);
                     this.scrollToCommentBottom();
                 } else {
@@ -1604,6 +1715,10 @@ window.CommentComponent = {
                 const response = await axios.post(deleteUrl, formData);
                 if (response.data && response.data.success) {
                     this.$emit('message', { type: 'info', message: 'コメントの削除に成功しました。' });
+                    
+                    // Update last comment update time to trigger reload for other users
+                    this.lastCommentUpdateTime = Date.now();
+                    
                     await this.loadComments(true);
                     this.scrollToCommentBottom();
                 } else {
@@ -1966,7 +2081,22 @@ window.CommentComponent = {
         },
         
         async checkForNewComments() {
-            if (!this.enableThreads || this.entityType !== 'project') return;
+            // Increment counter for periodic full reload
+            this.commentCheckCounter++;
+            
+            // For non-threaded comments or tasks, check for updates periodically
+            if (!this.enableThreads || this.entityType !== 'project') {
+                // Reload comments every 5 checks (approximately every 15 seconds) to catch edits/deletes/likes
+                if (this.commentCheckCounter % 5 === 0) {
+                    try {
+                        // Use silent mode to avoid loading spinner flickering
+                        await this.loadComments(false, true);
+                    } catch (error) {
+                        console.error('Error reloading comments:', error);
+                    }
+                }
+                return;
+            }
             
             try {
                 const params = new URLSearchParams({
@@ -1983,6 +2113,7 @@ window.CommentComponent = {
                 const response = await axios.get(`/api/index.php?model=project&method=getLatestCommentInfo&${params}`);
                 const data = response.data || {};
                 
+                // Check for new comments
                 if (data.latest_comment_id && data.latest_comment_id !== this.lastCommentId) {
                     // New comment detected
                     const newThreadId = data.thread_id;
@@ -1997,7 +2128,8 @@ window.CommentComponent = {
                     // Reload comments if viewing the thread that received the comment
                     if (newThreadId && newThreadId == this.selectedThreadId) {
                         // New comment in the thread we're viewing
-                        await this.loadComments();
+                        // Use silent mode to avoid loading spinner flickering during polling
+                        await this.loadComments(false, true);
                         this.scrollToCommentBottom();
                         
                         // Check if user is viewing the page (tab is visible)
@@ -2015,12 +2147,23 @@ window.CommentComponent = {
                         }
                     } else if (!this.selectedThreadId) {
                         // No thread selected, just reload comments
-                        await this.loadComments();
+                        // Use silent mode to avoid loading spinner flickering during polling
+                        await this.loadComments(false, true);
                         this.scrollToCommentBottom();
                     }
-                } else if (data.latest_comment_id) {
-                    // Same comment, just update timestamp
-                    this.lastCheckTime = Date.now();
+                } else {
+                    // No new comment, but check for updates (edits/deletes/likes) periodically
+                    // Reload comments every 3 checks (approximately every 9 seconds) to catch edits/deletes/likes
+                    if (this.commentCheckCounter % 3 === 0 && this.selectedThreadId) {
+                        // Only reload if we're viewing a thread to avoid unnecessary requests
+                        // Use silent mode to avoid loading spinner flickering during polling
+                        await this.loadComments(false, true);
+                    }
+                    
+                    // Update timestamp
+                    if (data.latest_comment_id) {
+                        this.lastCheckTime = Date.now();
+                    }
                 }
             } catch (error) {
                 console.error('Error checking for new comments:', error);
@@ -2142,7 +2285,8 @@ window.CommentComponent = {
             if (this.entityType === 'project' && this.entityId && window.notificationManager && !inited && !this.enableThreads) {
                 inited = true;
                 window.notificationManager.listenProjectCommentRealtime(this.entityId, () => {
-                    this.loadComments();
+                    // Use silent mode to avoid loading spinner flickering during realtime updates
+                    this.loadComments(false, true);
                     this.scrollToCommentBottom();
                 });
             }
@@ -2150,7 +2294,8 @@ window.CommentComponent = {
             if (this.entityType === 'task' && this.entityId && window.notificationManager && !inited) {
                 inited = true;
                 window.notificationManager.listenTaskCommentRealtime(this.entityId, () => {
-                    this.loadComments();
+                    // Use silent mode to avoid loading spinner flickering during realtime updates
+                    this.loadComments(false, true);
                     this.scrollToCommentBottom();
                 });
             }
@@ -2159,14 +2304,16 @@ window.CommentComponent = {
                 if (this.entityType === 'project' && this.entityId && window.notificationManager && !inited && !this.enableThreads) {
                     inited = true;
                     window.notificationManager.listenProjectCommentRealtime(this.entityId, () => {
-                        this.loadComments();
+                        // Use silent mode to avoid loading spinner flickering during realtime updates
+                        this.loadComments(false, true);
                         this.scrollToCommentBottom();
                     });
                 }
                 if (this.entityType === 'task' && this.entityId && window.notificationManager && !inited) {
                     inited = true;
                     window.notificationManager.listenTaskCommentRealtime(this.entityId, () => {
-                        this.loadComments();
+                        // Use silent mode to avoid loading spinner flickering during realtime updates
+                        this.loadComments(false, true);
                         this.scrollToCommentBottom();
                     });
                 }
