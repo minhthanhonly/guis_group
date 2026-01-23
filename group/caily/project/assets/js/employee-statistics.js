@@ -21,6 +21,7 @@ createApp({
             loading: false,
             calculating: false,
             deleting: false,
+            generating: false,
             chartLoading: false,
             activeTab: 'teams', // 'teams' or 'employees'
             selectedTeamId: null,
@@ -31,8 +32,10 @@ createApp({
             employeeChartData: [],
             employeeChartInstance: null,
             employeeChartLoading: false,
-            sortColumn: null, // Column to sort by
+            sortColumn: null, // Column to sort employee stats by
             sortDirection: 'asc', // 'asc' or 'desc'
+            annualSortColumn: null, // Column to sort annual summary by
+            annualSortDirection: 'asc', // 'asc' or 'desc'
             selectedYear: new Date().getFullYear(),
             yearOptions: [],
             filters: {
@@ -168,6 +171,83 @@ createApp({
             }
             
             return stats;
+        },
+        
+        // Sorted data for 年間サマリー
+        sortedAnnualSummary() {
+            if (!this.annualSummary || this.annualSummary.length === 0) {
+                return [];
+            }
+            
+            let data = [...this.annualSummary];
+            const column = this.annualSortColumn;
+            const direction = this.annualSortDirection === 'desc' ? -1 : 1;
+            
+            if (!column) {
+                return data;
+            }
+            
+            data.sort((a, b) => {
+                let aVal, bVal;
+                
+                switch (column) {
+                    case 'team_name':
+                        aVal = (a.team_name || '').toLowerCase();
+                        bVal = (b.team_name || '').toLowerCase();
+                        break;
+                    case 'revenue_year':
+                        aVal = parseFloat(a.revenue_year || 0);
+                        bVal = parseFloat(b.revenue_year || 0);
+                        break;
+                    case 'pct_year':
+                        aVal = parseFloat(a.pct_year || 0);
+                        bVal = parseFloat(b.pct_year || 0);
+                        break;
+                    case 'best_month':
+                        // Sort by best month pct, fallback to revenue
+                        aVal = a.best_month ? (a.best_month.pct ?? a.best_month.revenue ?? 0) : -Infinity;
+                        bVal = b.best_month ? (b.best_month.pct ?? b.best_month.revenue ?? 0) : -Infinity;
+                        break;
+                    case 'worst_month':
+                        // Sort by worst month pct, fallback to revenue (0 means no data)
+                        aVal = a.worst_month ? (a.worst_month.pct ?? a.worst_month.revenue ?? 0) : Infinity;
+                        bVal = b.worst_month ? (b.worst_month.pct ?? b.worst_month.revenue ?? 0) : Infinity;
+                        break;
+                    case 'months_hit':
+                        aVal = parseInt(a.months_hit || 0);
+                        bVal = parseInt(b.months_hit || 0);
+                        break;
+                    case 'likes_dislikes':
+                        // Sort by (likes - dislikes)
+                        aVal = parseInt(a.total_likes || 0) - parseInt(a.total_dislikes || 0);
+                        bVal = parseInt(b.total_likes || 0) - parseInt(b.total_dislikes || 0);
+                        break;
+                    case 'task_count':
+                        aVal = parseInt(a.total_task_count || 0);
+                        bVal = parseInt(b.total_task_count || 0);
+                        break;
+                    case 'drawing_count':
+                        aVal = parseInt(a.total_drawing_count || 0);
+                        bVal = parseInt(b.total_drawing_count || 0);
+                        break;
+                    case 'score':
+                        aVal = parseFloat(a.score || 0);
+                        bVal = parseFloat(b.score || 0);
+                        break;
+                    case 'rank':
+                        aVal = (a.rank || '').toString();
+                        bVal = (b.rank || '').toString();
+                        break;
+                    default:
+                        return 0;
+                }
+                
+                if (aVal < bVal) return -1 * direction;
+                if (aVal > bVal) return 1 * direction;
+                return 0;
+            });
+            
+            return data;
         }
     },
     
@@ -495,9 +575,11 @@ createApp({
                     y: {
                         formatter: function(val, opts) {
                             const seriesIndex = opts.seriesIndex;
-                            if (seriesIndex === 0 || seriesIndex === 1) {
+                            // Only 図面売上 (seriesIndex 0) should have currency symbol
+                            if (seriesIndex === 0) {
                                 return '¥' + Math.round(val).toLocaleString('ja-JP');
                             }
+                            // All other series (タスク数, 良い, 悪い) are counts, no currency
                             return Math.round(val).toLocaleString('ja-JP');
                         }
                     }
@@ -696,6 +778,23 @@ createApp({
                 return 'fa-sort';
             }
             return this.sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+        },
+        
+        // Sorting for annual summary
+        sortAnnualBy(column) {
+            if (this.annualSortColumn === column) {
+                this.annualSortDirection = this.annualSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.annualSortColumn = column;
+                this.annualSortDirection = 'asc';
+            }
+        },
+        
+        getAnnualSortIcon(column) {
+            if (this.annualSortColumn !== column) {
+                return 'fa-sort';
+            }
+            return this.annualSortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
         },
         
         calculateTeamStatisticsByMonth() {
@@ -1032,9 +1131,11 @@ createApp({
                     y: {
                         formatter: function(val, opts) {
                             const seriesIndex = opts.seriesIndex;
-                            if (seriesIndex === 0 || seriesIndex === 1) {
+                            // Only 図面売上 (seriesIndex 0) should have currency symbol
+                            if (seriesIndex === 0) {
                                 return '¥' + Math.round(val).toLocaleString('ja-JP');
                             }
+                            // All other series (タスク数, 良い, 悪い) are counts, no currency
                             return Math.round(val).toLocaleString('ja-JP');
                         }
                     }
@@ -1224,21 +1325,82 @@ createApp({
             }
         },
         
+        async generateSampleStatistics() {
+            // Generate sample statistics data for last 12 months to simulate reports
+            this.generating = true;
+            try {
+                const params = new URLSearchParams({
+                    model: 'employeestatistics',
+                    method: 'generateSampleData',
+                    period_type: this.filters.period_type,
+                    months: 12
+                });
+                
+                const response = await axios.get(`/api/index.php?${params.toString()}`);
+                
+                if (response.data && response.data.status === 'success') {
+                    this.showSuccess(response.data.message || 'サンプル統計データを追加しました');
+                    await this.loadStatistics();
+                    await this.loadSummary();
+                    // Clear selection to reflect new data
+                    this.clearTeamSelection();
+                    this.clearEmployeeSelection();
+                } else {
+                    this.showError(response.data?.message || 'サンプル統計データの追加に失敗しました');
+                }
+            } catch (error) {
+                console.error('Error generating sample statistics:', error);
+                this.showError('サンプル統計データの追加に失敗しました');
+            } finally {
+                this.generating = false;
+            }
+        },
+        
         async autoCalculateStatistics() {
-            // Check if statistics have been auto-calculated before
-            const storageKey = 'employee_statistics_auto_calculated';
-            const hasCalculated = localStorage.getItem(storageKey);
-            
-            if (!hasCalculated) {
-                // First time visit, auto calculate statistics
-                console.log('First time visit, auto calculating statistics...');
-                try {
-                    await this.calculateStatistics();
-                    // Mark as calculated
-                    localStorage.setItem(storageKey, 'true');
-                } catch (error) {
-                    console.error('Error in auto calculate statistics:', error);
-                    // Don't show error to user, just log it
+            try {
+                // Check if auto-calculate is enabled from server config
+                const configResponse = await axios.get('/api/index.php', {
+                    params: {
+                        model: 'employeestatistics',
+                        method: 'getAutoCalculateConfig'
+                    }
+                });
+                
+                if (configResponse.data && (configResponse.data.enabled == "" || configResponse.data.enabled == "0")) {
+                    console.log('Auto-calculate statistics is disabled in configuration');
+                    return;
+                }
+                
+                // Check if statistics have been auto-calculated before
+                const storageKey = 'employee_statistics_auto_calculated';
+                const hasCalculated = localStorage.getItem(storageKey);
+                
+                if (!hasCalculated) {
+                    // First time visit, auto calculate statistics
+                    console.log('First time visit, auto calculating statistics...');
+                    try {
+                        await this.calculateStatistics();
+                        // Mark as calculated
+                        localStorage.setItem(storageKey, 'true');
+                    } catch (error) {
+                        console.error('Error in auto calculate statistics:', error);
+                        // Don't show error to user, just log it
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking auto-calculate config:', error);
+                // If config check fails, proceed with default behavior (enabled)
+                const storageKey = 'employee_statistics_auto_calculated';
+                const hasCalculated = localStorage.getItem(storageKey);
+                
+                if (!hasCalculated) {
+                    console.log('Config check failed, using default behavior (enabled)');
+                    try {
+                        await this.calculateStatistics();
+                        localStorage.setItem(storageKey, 'true');
+                    } catch (err) {
+                        console.error('Error in auto calculate statistics:', err);
+                    }
                 }
             }
         },

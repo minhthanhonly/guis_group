@@ -608,6 +608,7 @@ if (!$project_id) {
                                     <div class="d-flex align-items-center mb-1">
                                         <i v-if="note.is_important == 1" class="fa fa-exclamation-circle text-danger me-2"></i>
                                         <span class="fw-medium text-primary">{{ note.title }}</span>
+                                        <span v-if="note.needs_confirmation == 1" class="badge bg-warning ms-2">確認必要</span>
                                     </div>
                                     <div v-if="note.content" class="text-muted small note-content">
                                         {{ getNotePreview(note.content) }}
@@ -787,6 +788,12 @@ if (!$project_id) {
                                     <i class="fa fa-exclamation-circle text-danger"></i>
                                 </div>
                             </div>
+                            <div class="mb-3" v-if="editingNote.needs_confirmation">
+                                <label class="form-label"><span data-i18n="確認必要">確認必要</span></label>
+                                <div>
+                                    <span class="badge bg-warning">確認必要</span>
+                                </div>
+                            </div>
                            
                         </div>
                         <!-- Edit mode -->
@@ -804,6 +811,14 @@ if (!$project_id) {
                                     <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant">
                                     <label class="form-check-label" for="isImportant">
                                         <i class="fa fa-exclamation-circle text-danger me-2"></i> <span data-i18n="重要メモ">重要メモ</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" v-model="editingNote.needs_confirmation" id="needsConfirmation">
+                                    <label class="form-check-label" for="needsConfirmation">
+                                        <span data-i18n="確認必要">確認必要</span>
                                     </label>
                                 </div>
                             </div>

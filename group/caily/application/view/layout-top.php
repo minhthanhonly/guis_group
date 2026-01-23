@@ -63,12 +63,13 @@
                     <div data-i18n="ガントチャート">ガントチャート</div>
                   </a>
                 </li>
+                
                 <?php if($_SESSION['isProjectManager']){ ?>
-                <!-- <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
+                  <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
                   <a href="<?=$root?>project/custom_fields.php" class="menu-link">
-                    <div data-i18n="設定">設定</div>
+                    <div data-i18n="カスタムフィールド">カスタムフィールド</div>
                   </a>
-                </li> -->
+                </li>
                 <li class="menu-item <?php if($directory == 'price_list') echo 'active'; ?>">
                   <a href="<?=$root?>price_list" class="menu-link">
                     <div data-i18n="価格表管理">価格表管理</div>

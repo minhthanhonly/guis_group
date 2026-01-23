@@ -10,6 +10,7 @@ class ProjectNote extends ApplicationModel {
             'title' => array(),
             'content' => array(),
             'is_important' => array(),
+            'needs_confirmation' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search'))
         );
@@ -23,6 +24,7 @@ class ProjectNote extends ApplicationModel {
             'title' => isset($_POST['title']) ? $_POST['title'] : '',
             'content' => isset($_POST['content']) ? $_POST['content'] : '',
             'is_important' => isset($_POST['is_important']) ? intval($_POST['is_important']) : 0,
+            'needs_confirmation' => isset($_POST['needs_confirmation']) ? intval($_POST['needs_confirmation']) : 0,
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
@@ -79,6 +81,7 @@ class ProjectNote extends ApplicationModel {
             'title' => isset($_POST['title']) ? $_POST['title'] : '',
             'content' => isset($_POST['content']) ? $_POST['content'] : '',
             'is_important' => isset($_POST['is_important']) ? intval($_POST['is_important']) : 0,
+            'needs_confirmation' => isset($_POST['needs_confirmation']) ? intval($_POST['needs_confirmation']) : 0,
             'updated_at' => date('Y-m-d H:i:s')
         );
         

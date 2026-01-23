@@ -94,6 +94,7 @@ const vueApp = createApp({
                 title: '',
                 content: '',
                 is_important: false,
+                needs_confirmation: false,
                 user_id: null
             },
             // Project status update loading
@@ -1524,6 +1525,7 @@ const vueApp = createApp({
                     title: note.title,
                     content: note.content,
                     is_important: note.is_important == 1,
+                    needs_confirmation: note.needs_confirmation == 1,
                     user_id: note.user_id
                 };
             } else {
@@ -1533,6 +1535,7 @@ const vueApp = createApp({
                     title: '',
                     content: '',
                     is_important: false,
+                    needs_confirmation: false,
                     user_id: null
                 };
             }
@@ -1545,6 +1548,7 @@ const vueApp = createApp({
                 title: '',
                 content: '',
                 is_important: false,
+                needs_confirmation: false,
                 user_id: null
             };
         },
@@ -1560,6 +1564,7 @@ const vueApp = createApp({
                 formData.append('title', this.editingNote.title.trim());
                 formData.append('content', this.editingNote.content || '');
                 formData.append('is_important', this.editingNote.is_important ? 1 : 0);
+                formData.append('needs_confirmation', this.editingNote.needs_confirmation ? 1 : 0);
                 
                 let response;
                 if (this.editingNote.id) {

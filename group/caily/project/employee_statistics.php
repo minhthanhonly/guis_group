@@ -47,6 +47,11 @@ if(!$_SESSION['isProjectManager']){
                                 <span v-if="deleting">削除中...</span>
                                 <span v-else>12ヶ月削除</span>
                             </button>
+                            <button class="btn btn-warning flex-fill" @click="generateSampleStatistics" :disabled="generating">
+                                <i class="fa fa-magic me-1"></i>
+                                <span v-if="generating">生成中...</span>
+                                <span v-else>サンプルデータ追加</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -214,10 +219,6 @@ if(!$_SESSION['isProjectManager']){
                                         従業員名
                                         <i class="fa ms-1" :class="getSortIcon('user_name')"></i>
                                     </th>
-                                    <th class="text-end" style="cursor: pointer;" @click="sortBy('revenue')">
-                                        売上高
-                                        <i class="fa ms-1" :class="getSortIcon('revenue')"></i>
-                                    </th>
                                     <th class="text-end" style="cursor: pointer;" @click="sortBy('total_drawings_revenue')">
                                         図面売上
                                         <i class="fa ms-1" :class="getSortIcon('total_drawings_revenue')"></i>
@@ -260,9 +261,6 @@ if(!$_SESSION['isProjectManager']){
                                                 :title="'クリックして' + stat.user_name + 'の統計を表示'">
                                             {{ stat.user_name }}
                                         </strong>
-                                    </td>
-                                    <td class="text-end">
-                                        <strong class="text-primary">¥{{ formatNumber(stat.revenue) }}</strong>
                                     </td>
                                     <td class="text-end">
                                         <span class="text-info">¥{{ formatNumber(stat.total_drawings_revenue) }}</span>
@@ -358,20 +356,50 @@ if(!$_SESSION['isProjectManager']){
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th>チーム</th>
-                                    <th class="text-end">売上高 / 目標</th>
-                                    <th class="text-end">ベスト月</th>
-                                    <th class="text-end">ワースト月</th>
-                                    <th class="text-center">達成月</th>
-                                    <th class="text-center">良い / 悪い</th>
-                                    <th class="text-center">タスク</th>
-                                    <th class="text-center">図面</th>
-                                    <th class="text-end">スコア</th>
-                                    <th class="text-center">ランク</th>
+                                    <th style="cursor: pointer;" @click="sortAnnualBy('team_name')">
+                                        チーム
+                                        <i class="fa ms-1" :class="getAnnualSortIcon('team_name')"></i>
+                                    </th>
+                                    <th class="text-end" style="cursor: pointer;" @click="sortAnnualBy('revenue_year')">
+                                        売上高 / 目標
+                                        <i class="fa ms-1" :class="getAnnualSortIcon('revenue_year')"></i>
+                                    </th>
+                                    <th class="text-end" style="cursor: pointer;" @click="sortAnnualBy('best_month')">
+                                        ベスト月
+                                        <i class="fa ms-1" :class="getAnnualSortIcon('best_month')"></i>
+                                    </th>
+                                    <th class="text-end" style="cursor: pointer;" @click="sortAnnualBy('worst_month')">
+                                        ワースト月
+                                        <i class="fa ms-1" :class="getAnnualSortIcon('worst_month')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortAnnualBy('months_hit')">
+                                        達成月
+                                        <i class="fa ms-1" :class="getAnnualSortIcon('months_hit')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortAnnualBy('likes_dislikes')">
+                                        良い / 悪い
+                                        <i class="fa ms-1" :class="getAnnualSortIcon('likes_dislikes')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortAnnualBy('task_count')">
+                                        タスク
+                                        <i class="fa ms-1" :class="getAnnualSortIcon('task_count')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortAnnualBy('drawing_count')">
+                                        図面
+                                        <i class="fa ms-1" :class="getAnnualSortIcon('drawing_count')"></i>
+                                    </th>
+                                    <th class="text-end" style="cursor: pointer;" @click="sortAnnualBy('score')">
+                                        スコア
+                                        <i class="fa ms-1" :class="getAnnualSortIcon('score')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortAnnualBy('rank')">
+                                        ランク
+                                        <i class="fa ms-1" :class="getAnnualSortIcon('rank')"></i>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="team in annualSummary" :key="team.team_id || 'no-team'">
+                                <tr v-for="team in sortedAnnualSummary" :key="team.team_id || 'no-team'">
                                     <td>
                                         <strong>{{ team.team_name || 'チーム未所属' }}</strong>
                                     </td>

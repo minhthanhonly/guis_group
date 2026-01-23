@@ -1,6 +1,10 @@
 <?php
 class Employeestatistics extends ApplicationModel {
     
+    // Configuration: Enable/disable automatic statistics calculation on page load
+    // Set to true to enable auto-calculation, false to disable
+    const AUTO_CALCULATE_STATISTICS = false;
+    
     function __construct() {
         $this->table = DB_PREFIX . 'employee_statistics';
         $this->schema = array(
@@ -21,6 +25,16 @@ class Employeestatistics extends ApplicationModel {
         );
         
         $this->connect();
+    }
+    
+    /**
+     * Get auto-calculate statistics configuration
+     * Returns whether automatic statistics calculation is enabled
+     */
+    function getAutoCalculateConfig() {
+        return [
+            'enabled' => self::AUTO_CALCULATE_STATISTICS
+        ];
     }
 
     /**
@@ -152,6 +166,99 @@ class Employeestatistics extends ApplicationModel {
             'status' => 'success',
             'message' => count($results) . '件の統計を計算しました',
             'data' => $results
+        ];
+    }
+
+    /**
+     * Generate sample statistics data for simulation (dummy data)
+     * This does NOT use real task/drawing data, but random values instead.
+     */
+    function generateSampleData() {
+        $period_type = isset($_GET['period_type']) ? $_GET['period_type'] : 'month';
+        $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
+
+        // Get all (user, team) pairs
+        $userTeams = $this->getUsersByTeam(null);
+        
+        if (empty($userTeams)) {
+            return [
+                'status' => 'error',
+                'message' => '従業員が見つかりません。'
+            ];
+        }
+
+        $results = [];
+
+        // For simplicity, generate sample data per month for the last N months
+        $current_date = new DateTime();
+        $current_date->modify('first day of this month');
+        $current_date->setTime(0, 0, 0);
+
+        for ($i = 0; $i < $months; $i++) {
+            $date = clone $current_date;
+            if ($i > 0) {
+                $date->modify("-$i months");
+            }
+
+            $period_start = $date->format('Y-m-01');
+            $period_end   = $date->format('Y-m-t');
+
+            foreach ($userTeams as $row) {
+                $user_internal_id = $row['id'];
+                $user_id         = $row['userid'];
+                $team_id         = isset($row['team_id']) ? intval($row['team_id']) : null;
+
+                // Generate random sample stats
+                $likes      = rand(0, 50);
+                $dislikes   = rand(0, 10);
+                $drawCount  = rand(0, 30);
+                $taskCount  = rand(0, 100);
+                $revenue    = $drawCount > 0 ? rand(50000, 200000) : 0;
+
+                $stats = [
+                    'user_id'                => $user_id,
+                    'team_id'                => ($team_id && $team_id > 0) ? intval($team_id) : null,
+                    'period_type'            => 'month',
+                    'period_start'           => $period_start,
+                    'period_end'             => $period_end,
+                    'revenue'                => $revenue,
+                    'task_likes'             => $likes,
+                    'task_dislikes'          => $dislikes,
+                    'total_drawings_revenue' => $revenue,
+                    'drawing_count'          => $drawCount,
+                    'task_count'             => $taskCount,
+                ];
+
+                // Upsert based on (user_id, team_id, period)
+                $existing = $this->getExistingStatistics(
+                    $user_id,
+                    $team_id,
+                    'month',
+                    $period_start,
+                    $period_end
+                );
+
+                if ($existing) {
+                    $updateData = $stats;
+                    $updateData['team_id'] = ($stats['team_id'] === null || $stats['team_id'] === '') ? null : intval($stats['team_id']);
+                    $this->updateStatistics($existing['id'], $updateData);
+                    $stats['id'] = $existing['id'];
+                } else {
+                    $insertData = $stats;
+                    $insertData['team_id'] = ($stats['team_id'] === null || $stats['team_id'] === '') ? null : intval($stats['team_id']);
+                    $stats['id'] = $this->insertStatistics($insertData);
+                }
+
+                $stats['user_name'] = $row['realname'];
+                $stats['team_name'] = $row['team_name'] ?? null;
+                $results[] = $stats;
+            }
+        }
+
+        return [
+            'status'  => 'success',
+            'message' => count($results) . '件のサンプル統計データを追加・更新しました',
+            'data'    => $results,
         ];
     }
 
@@ -657,10 +764,12 @@ class Employeestatistics extends ApplicationModel {
                 }
 
                 if ($pct !== null) {
+                    // Best month: allow 0 as usual (for completeness)
                     if ($bestMonth === null || $pct > $bestMonth['pct']) {
                         $bestMonth = ['label' => $label, 'revenue' => $revenue, 'target' => $target, 'pct' => $pct];
                     }
-                    if ($worstMonth === null || $pct < $worstMonth['pct']) {
+                    // Worst month: ignore months with 0 revenue
+                    if ($revenue > 0 && ($worstMonth === null || $pct < $worstMonth['pct'])) {
                         $worstMonth = ['label' => $label, 'revenue' => $revenue, 'target' => $target, 'pct' => $pct];
                     }
                 } else {
@@ -668,7 +777,8 @@ class Employeestatistics extends ApplicationModel {
                     if ($bestMonth === null || $revenue > $bestMonth['revenue']) {
                         $bestMonth = ['label' => $label, 'revenue' => $revenue, 'target' => $target, 'pct' => null];
                     }
-                    if ($worstMonth === null || $revenue < $worstMonth['revenue']) {
+                    // Worst month: ignore months with 0 revenue
+                    if ($revenue > 0 && ($worstMonth === null || $revenue < $worstMonth['revenue'])) {
                         $worstMonth = ['label' => $label, 'revenue' => $revenue, 'target' => $target, 'pct' => null];
                     }
                 }
