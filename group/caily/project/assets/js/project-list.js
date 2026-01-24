@@ -38,6 +38,55 @@ var projectTable;
     // --- LocalStorage filter state ---
     const FILTER_STORAGE_KEY = 'projectListFilters';
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment';
+    const COLUMN_VISIBILITY_KEY = 'projectListColumnVisibility';
+    
+    // Column definitions with mapping to DataTable column indices
+    const COLUMN_DEFINITIONS = [
+        { key: 'is_favorite', label: 'お気に入り', index: 0, defaultVisible: true },
+        { key: 'project_number', label: '案件番号', index: 1, defaultVisible: true },
+        // 確認必要メモ: cột thứ 3, mặc định ẩn
+        { key: 'confirmation_notes', label: '確認必要メモ', index: 2, defaultVisible: false },
+        { key: 'name', label: 'お施主様名', index: 3, defaultVisible: true },
+        { key: 'customer_info', label: '顧客情報', index: 4, defaultVisible: true },
+        { key: 'parent_construction_number', label: '工事番号', index: 5, defaultVisible: true },
+        { key: 'parent_scale', label: '規模', index: 6, defaultVisible: false },
+        { key: 'parent_type1', label: '種類1', index: 7, defaultVisible: false },
+        { key: 'parent_type2', label: '種類2', index: 8, defaultVisible: false },
+        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 9, defaultVisible: false },
+        { key: 'project_order_type', label: '受注形態', index: 10, defaultVisible: true },
+        { key: 'manager', label: '管理', index: 11, defaultVisible: true },
+        { key: 'members', label: 'メンバー', index: 12, defaultVisible: true },
+        { key: 'priority', label: '優先度', index: 13, defaultVisible: true },
+        { key: 'status', label: '案件状況', index: 14, defaultVisible: true },
+        { key: 'progress', label: '進捗率', index: 15, defaultVisible: true },
+        { key: 'start_date', label: '開始日', index: 16, defaultVisible: true },
+        { key: 'end_date', label: '終了日', index: 17, defaultVisible: true }
+    ];
+    
+    function saveColumnVisibilityToLocalStorage(visibility) {
+        localStorage.setItem(COLUMN_VISIBILITY_KEY, JSON.stringify(visibility));
+    }
+    
+    function loadColumnVisibilityFromLocalStorage() {
+        const saved = JSON.parse(localStorage.getItem(COLUMN_VISIBILITY_KEY) || '{}');
+        const visibility = {};
+        COLUMN_DEFINITIONS.forEach(col => {
+            visibility[col.key] = saved[col.key] !== undefined ? saved[col.key] : col.defaultVisible;
+        });
+        return visibility;
+    }
+    
+    function applyColumnVisibility(table, visibility) {
+        if (!table || !$.fn.DataTable.isDataTable('#projectTable')) {
+            return;
+        }
+        
+        COLUMN_DEFINITIONS.forEach(col => {
+            const isVisible = visibility[col.key] !== false;
+            table.column(col.index).visible(isVisible, false);
+        });
+        table.columns.adjust().draw(false);
+    }
 
     function saveFiltersToLocalStorage() {
         const filters = {
@@ -234,6 +283,33 @@ var projectTable;
                 },
                 
                 { 
+                    data: 'confirmation_notes',
+                    width: '300px',
+                    className: 'confirmation-notes-column',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        // Hiển thị toàn bộ nội dung (có thể nhiều ghi chú), giữ nguyên xuống dòng
+                        const notes = data.split(' | ').filter(note => note.trim() !== '');
+                        if (notes.length === 0) {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        const html = notes.map(note => {
+                            const text = note.trim();
+                            return `<div class="mb-1" style="white-space: pre-wrap;">${text}</div>`;
+                        }).join('');
+                        // Click vào vùng cột sẽ mở chi tiết project
+                        return `<div 
+                                    style="cursor:pointer; max-width: 300px; max-height: 200px; overflow-y: auto;" 
+                                    onclick="window.location.href='detail.php?id=${row.id}'">
+                                    ${html}
+                                </div>`;
+                    },
+                    title: '<span data-i18n="確認必要メモ">確認必要メモ</span>',
+                    orderable: false
+                },
+                { 
                     data: 'name',
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-start justify-content-start flex-column">
@@ -254,7 +330,70 @@ var projectTable;
                     },
                     title: '<span data-i18n="顧客情報">顧客情報</span>'
                 },
-
+                { 
+                    data: 'parent_construction_number',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        return `<span class="text-nowrap">${data}</span>`;
+                    },
+                    title: '<span data-i18n="工事番号">工事番号</span>'
+                },
+                { 
+                    data: 'parent_scale',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        return `<span class="text-nowrap">${data}</span>`;
+                    },
+                    title: '<span data-i18n="規模">規模</span>',
+                    visible: false
+                },
+                { 
+                    data: 'parent_type1',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        // Handle comma-separated values
+                        if (typeof data === 'string' && data.includes(',')) {
+                            const items = data.split(',').map(item => item.trim()).filter(item => item);
+                            return items.map(item => `<span class="badge bg-info me-1">${item}</span>`).join('');
+                        }
+                        return `<span class="badge bg-info">${data}</span>`;
+                    },
+                    title: '<span data-i18n="種類1">種類1</span>',
+                    visible: false
+                },
+                { 
+                    data: 'parent_type2',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        // Handle comma-separated values
+                        if (typeof data === 'string' && data.includes(',')) {
+                            const items = data.split(',').map(item => item.trim()).filter(item => item);
+                            return items.map(item => `<span class="badge bg-info me-1">${item}</span>`).join('');
+                        }
+                        return `<span class="badge bg-info">${data}</span>`;
+                    },
+                    title: '<span data-i18n="種類2">種類2</span>',
+                    visible: false
+                },
+                { 
+                    data: 'parent_guis_receiver',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        return `<span class="text-nowrap">${data}</span>`;
+                    },
+                    title: '<span data-i18n="GUIS 受付者">GUIS 受付者</span>',
+                    visible: false
+                },
                 { 
                     data: 'project_order_type',
                     render: function(data, type, row) {
@@ -478,7 +617,7 @@ var projectTable;
                 //     title: '<span data-i18n="操作">操作</span>'
                 // }
             ],
-            order: [[11, 'desc']],
+            order: [[17, 'desc']],
            
             pageLength: 50,
             ordering: true,
@@ -505,6 +644,10 @@ var projectTable;
             }
             
         });
+        
+        // Apply column visibility after table initialization
+        const columnVisibility = loadColumnVisibilityFromLocalStorage();
+        applyColumnVisibility(projectTable, columnVisibility);
         
         // Reset flag after initialization
         isInitializingTable = false;
@@ -1056,7 +1199,13 @@ var projectTable;
                 formValidator: null,
                 // Kadai queue properties
                 kadaiProjects: [],
-                isKadaiQueueExpanded: false
+                isKadaiQueueExpanded: false,
+                // Column visibility
+                availableColumns: COLUMN_DEFINITIONS.map(col => ({
+                    key: col.key,
+                    label: col.label,
+                    visible: true
+                }))
             }
         },
         computed: {
@@ -1073,6 +1222,14 @@ var projectTable;
             if (filters.myProjects !== undefined) {
                 this.filterMyProjects = filters.myProjects == 1;
             }
+            
+            // Load column visibility
+            const columnVisibility = loadColumnVisibilityFromLocalStorage();
+            this.availableColumns = COLUMN_DEFINITIONS.map(col => ({
+                key: col.key,
+                label: col.label,
+                visible: columnVisibility[col.key] !== false
+            }));
             
             this.loadDepartments();
             // Không load dự án ngay lập tức, chỉ load khi có department được chọn
@@ -2061,6 +2218,30 @@ var projectTable;
                 } catch (error) {
                     console.error('Error moving project:', error);
                     showMessage('プロジェクトの移動に失敗しました。', true);
+                }
+            },
+            
+            toggleColumnVisibility(columnKey, event) {
+                const isVisible = event.target.checked;
+                const column = this.availableColumns.find(col => col.key === columnKey);
+                if (column) {
+                    column.visible = isVisible;
+                }
+                
+                // Save to localStorage
+                const visibility = {};
+                this.availableColumns.forEach(col => {
+                    visibility[col.key] = col.visible;
+                });
+                saveColumnVisibilityToLocalStorage(visibility);
+                
+                // Apply to DataTable if it exists
+                if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+                    const colDef = COLUMN_DEFINITIONS.find(col => col.key === columnKey);
+                    if (colDef) {
+                        projectTable.column(colDef.index).visible(isVisible, false);
+                        projectTable.columns.adjust().draw(false);
+                    }
                 }
             },
             

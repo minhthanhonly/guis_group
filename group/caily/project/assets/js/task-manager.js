@@ -97,13 +97,18 @@ const TaskApp = createApp({
                 note: ''
             },
             // Sortable instance
-            sortableInstance: null
+            sortableInstance: null,
+            // Progress options (0% to 100% with 5% steps)
+            progressOptions: Array.from({ length: 21 }, (_, i) => i * 5)
         }
     },
     
     computed: {
         canViewTaskList() {
             return this.permission.can_manage_project || this.permission.is_member;
+        },
+        canLikeTask() {
+            return this.permission.can_manage_project;
         },
         sortedTaskLogs() {
             if (!this.taskLogs) return [];
@@ -217,14 +222,6 @@ const TaskApp = createApp({
         }
         (async()=>{
             await this.loadPermission();
-            console.log(this.permission);
-            // if(!this.permission.is_member || (this.permission.rule && this.permission.rule.task_view != 1)){
-            //     this.showMessage('権限がありません。', true);
-            //     setTimeout(() => {
-            //         window.location.href = 'index.php';
-            //     }, 1000);
-            //     return;
-            // }
             await this.loadProjectInfo();
             await this.loadTasks();
             await this.loadProjectMembers();
@@ -743,6 +740,39 @@ const TaskApp = createApp({
             } catch (error) {
                 this.showMessage(error.message || '進捗の更新に失敗しました', true);
             }
+        },
+        
+        setTaskProgress(task, percent) {
+            if (!task) return;
+            task.progress = percent;
+            this.updateTaskProgress(task);
+            // Close dropdown
+            this.$nextTick(() => {
+                const dropdownElement = document.querySelector('#progressDropdown' + task.id);
+                if (dropdownElement) {
+                    const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                    if (dropdown) {
+                        dropdown.hide();
+                    }
+                }
+            });
+        },
+        
+        setInlineTaskProgress(inlineIndex, percent) {
+            if (this.inlineTasks[inlineIndex]) {
+                this.inlineTasks[inlineIndex].progress = percent;
+                this.updateTaskField(inlineIndex, 'progress', percent);
+            }
+            // Close dropdown
+            this.$nextTick(() => {
+                const dropdownElement = document.querySelector('#progressDropdownInline' + inlineIndex);
+                if (dropdownElement) {
+                    const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                    if (dropdown) {
+                        dropdown.hide();
+                    }
+                }
+            });
         },
         
         async updateTaskPriority(task, newPriority = null) {

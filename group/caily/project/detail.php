@@ -62,6 +62,7 @@ if (!$project_id) {
                                    @click="toggleFavorite"
                                    :title="project && project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
                                 <span data-i18n="案件詳細">案件詳細</span>
+                                <span v-if="project && project.department_name" class="badge border border-info bg-transparent text-info ms-2">{{ project.department_name }}</span>
                             </h5>
                             <div>
                                 <!-- Join Project Button -->
@@ -780,7 +781,7 @@ if (!$project_id) {
                             </div>
                             <div class="mb-3">
                                 <label class="form-label"><span data-i18n="内容">内容</span></label>
-                                <div class="form-control" style="min-height:100px;white-space:pre-line;">{{ editingNote.content || '-' }}</div>
+                                <div class="form-control" style="min-height:100px;white-space:pre-line;max-height:300px;overflow-y:auto;">{{ editingNote.content || '-' }}</div>
                             </div>
                             <div class="mb-3" v-if="editingNote.is_important">
                                 <label class="form-label"><span data-i18n="重要メモ">重要メモ</span></label>

@@ -111,6 +111,26 @@ $view->heading('案件一覧');
                 <button class="btn btn-sm btn-outline-primary" id="filterReset" type="button">
                     <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
                 </button>
+                <div class="dropdown" v-if="availableColumns && availableColumns.length > 0">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="columnVisibilityDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fa fa-columns me-1"></i><span data-i18n="列の表示">列の表示</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="columnVisibilityDropdown" id="columnVisibilityMenu" style="max-height: 400px; overflow-y: auto; min-width: 200px;">
+                        <li v-for="column in availableColumns" :key="column.key" class="dropdown-item-text px-3 py-2">
+                            <div class="form-check">
+                                <input class="form-check-input column-visibility-checkbox" 
+                                       type="checkbox" 
+                                       :value="column.key" 
+                                       :id="'col-' + column.key"
+                                       :checked="column.visible"
+                                       @change="toggleColumnVisibility(column.key, $event)">
+                                <label class="form-check-label" :for="'col-' + column.key" style="cursor: pointer;">
+                                    {{ column.label }}
+                                </label>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
 
             </div>
             <div class="d-flex align-items-center gap-2 mt-6">
@@ -388,6 +408,21 @@ $view->footing();
 
 #projectTable .badge:last-child {
     margin-right: 0;
+}
+
+/* Confirmation notes column fixed width */
+#projectTable td.confirmation-notes-column {
+    width: 200px;
+    max-width: 200px;
+}
+
+/* Style for each confirmation note item */
+#projectTable td.confirmation-notes-column .mb-1 {
+    background-color: #fff9e6;
+    padding: 6px 8px;
+    margin-bottom: 6px !important;
+    border-radius: 4px;
+    border-left: 3px solid #ffd700;
 }
 
 /* Row background colors based on status (70% lighter = 30% opacity) */

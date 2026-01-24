@@ -251,8 +251,21 @@ if (!$project_id) {
                     </div>
                     <div class="col-md-1">
                         <div class="py-2 pe-2 d-flex align-items-center justify-content-end">
-                            <input class="form-range" type="range" min="0" max="100" step="1" :value="task.progress" @input="updateTaskField(task._inlineIndex, 'progress', parseInt($event.target.value))">
-                            <span class="ms-2">{{ task.progress || 0 }}%</span>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                        data-bs-toggle="dropdown" 
+                                        aria-expanded="false"
+                                        :id="'progressDropdownInline' + task._inlineIndex">
+                                    {{ task.progress || 0 }}%
+                                </button>
+                                <ul class="dropdown-menu progress-dropdown" :aria-labelledby="'progressDropdownInline' + task._inlineIndex">
+                                    <li v-for="percent in progressOptions" :key="percent">
+                                        <a class="dropdown-item" href="#" @click.prevent="setInlineTaskProgress(task._inlineIndex, percent)">
+                                            {{ percent }}%
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-2">
@@ -333,8 +346,22 @@ if (!$project_id) {
                     </div>
                     <div class="col-md-1">
                         <div class="py-2 pe-2 d-flex align-items-center" :class="{'prevent-click': !(permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))}">
-                            <input class="form-range" type="range" min="0" max="100" step="1" v-model.number="task.progress" @change="updateTaskProgress(task)">
-                            <span class="ms-2">{{ task.progress || 0 }}%</span>
+                            <div class="btn-group" v-if="permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task))">
+                                <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                        data-bs-toggle="dropdown" 
+                                        aria-expanded="false"
+                                        :id="'progressDropdown' + task.id">
+                                    {{ task.progress || 0 }}%
+                                </button>
+                                <ul class="dropdown-menu progress-dropdown" :aria-labelledby="'progressDropdown' + task.id">
+                                    <li v-for="percent in progressOptions" :key="percent">
+                                        <a class="dropdown-item" href="#" @click.prevent="setTaskProgress(task, percent)">
+                                            {{ percent }}%
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                            <span v-else>{{ task.progress || 0 }}%</span>
                         </div>
                     </div>
                     <div class="col-md-2">
@@ -659,6 +686,12 @@ if (!$project_id) {
 }
 .subtask .avatar-initial{
     background: #fff!important;
+}
+
+/* Progress dropdown scroll */
+.dropdown-menu.progress-dropdown {
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 </style>

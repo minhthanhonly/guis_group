@@ -66,27 +66,29 @@
                 
                 <?php if($_SESSION['isProjectManager']){ ?>
                   <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
-                  <a href="<?=$root?>project/custom_fields.php" class="menu-link">
-                    <div data-i18n="カスタムフィールド">カスタムフィールド</div>
-                  </a>
-                </li>
-                <li class="menu-item <?php if($directory == 'price_list') echo 'active'; ?>">
-                  <a href="<?=$root?>price_list" class="menu-link">
-                    <div data-i18n="価格表管理">価格表管理</div>
-                  </a>
-                </li>
-                <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7'){?>
-                <li class="menu-item <?php if($directory == 'project' && $page == 'employee_statistics') echo 'active'; ?>">
-                  <a href="<?=$root?>project/employee_statistics.php" class="menu-link">
-                    <div data-i18n="従業員統計">従業員統計</div>
-                  </a>
-                </li>
-                <li class="menu-item <?php if($directory == 'project' && $page == 'team_revenue_targets') echo 'active'; ?>">
-                  <a href="<?=$root?>project/team_revenue_targets.php" class="menu-link">
-                    <div data-i18n="チーム売上目標設定">チーム売上目標設定</div>
-                  </a>
-                </li>
+                    <a href="<?=$root?>project/custom_fields.php" class="menu-link">
+                      <div data-i18n="カスタムフィールド">カスタムフィールド</div>
+                    </a>
+                  </li>
+                  <li class="menu-item <?php if($directory == 'price_list') echo 'active'; ?>">
+                    <a href="<?=$root?>price_list" class="menu-link">
+                      <div data-i18n="価格表管理">価格表管理</div>
+                    </a>
+                  </li>
+                 
                 <?php } ?>
+
+                <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7'  && $_SESSION['group'] != '6'){?>
+                  <li class="menu-item <?php if($directory == 'project' && $page == 'employee_statistics') echo 'active'; ?>">
+                    <a href="<?=$root?>project/employee_statistics.php" class="menu-link">
+                      <div data-i18n="従業員統計">従業員統計</div>
+                    </a>
+                  </li>
+                  <li class="menu-item <?php if($directory == 'project' && $page == 'team_revenue_targets') echo 'active'; ?>">
+                    <a href="<?=$root?>project/team_revenue_targets.php" class="menu-link">
+                      <div data-i18n="チーム売上目標設定">チーム売上目標設定</div>
+                    </a>
+                  </li>
                 <?php } ?>
                 
               </ul>
@@ -363,7 +365,7 @@
                           <span class="dropdown-shortcuts-icon rounded-circle mb-3">
                             <i class="icon-base ti tabler-server icon-26px text-heading"></i>
                           </span>
-                          <a href="http://caily.ddns.net:9000/" target="_blank" class="stretched-link" data-i18n="CAILY NAS">CAILY NAS</a>
+                          <a href="https://caily.ddns.net/" target="_blank" class="stretched-link" data-i18n="CAILY Cloud">CAILY Cloud</a>
                         </div>
                       </div>
                     </div>
@@ -432,7 +434,7 @@
                     aria-expanded="false">
                     <span class="position-relative">
                       <i class="icon-base ti tabler-bell icon-22px text-heading"></i>
-                      <span class="badge rounded-pill bg-danger badge-dot badge-notifications border" id="notification_dot"></span>
+                      <span class="badge rounded-pill bg-danger badge-dot badge-notifications border" id="notification_dot" style="display: none;"></span>
                     </span>
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end p-0" id="notification_list">

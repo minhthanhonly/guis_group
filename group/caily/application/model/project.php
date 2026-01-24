@@ -220,7 +220,8 @@ class Project extends ApplicationModel {
             "SELECT p.*, d.name as department_name,
             c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
             CONCAT(c.name, ' ', c.title) as customer_name,
-            pp.company_name as parent_company_name, pp.contact_name as parent_contact_name,
+            pp.company_name as parent_company_name, pp.contact_name as parent_contact_name, pp.construction_number as parent_construction_number,
+            pp.scale as parent_scale, pp.type1 as parent_type1, pp.type2 as parent_type2, pp.guis_receiver as parent_guis_receiver,
             CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite,
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
              FROM " . DB_PREFIX . "project_members pm 
@@ -229,7 +230,11 @@ class Project extends ApplicationModel {
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
-             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id
+             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
+            (SELECT GROUP_CONCAT(n.content SEPARATOR ' | ') 
+             FROM " . DB_PREFIX . "project_notes n 
+             WHERE n.project_id = p.id AND n.needs_confirmation = 1 
+             ORDER BY n.is_important DESC, n.created_at DESC) as confirmation_notes
            
             FROM {$this->table} p
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
@@ -707,7 +712,8 @@ class Project extends ApplicationModel {
             $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id));
             // Thêm members mới
             foreach ($members as $user_id) {
-                $this->addMember($id, $user_id, $new_users[$user_id]['userid']);
+                $should_log = in_array($user_id, $new_members);
+                $this->addMember($id, $user_id, $new_users[$user_id]['userid'] ?? '', 'member', $should_log);
             }
 
             if (!empty($members)) {
@@ -741,7 +747,8 @@ class Project extends ApplicationModel {
                 return in_array($user['id'], $removed_managers);
             });
             foreach ($managers as $user_id) {
-                $this->addMember($id, $user_id, $new_users[$user_id]['userid'], 'manager');
+                $should_log = in_array($user_id, $new_managers);
+                $this->addMember($id, $user_id, $new_users[$user_id]['userid'] ?? '', 'manager', $should_log);
             }
             if (!empty($new_managers)) {
                 $this->notifyMemberAdded($data['project_number'], $id, $data['name'], array_column($new_users, 'userid'), 'manager');
@@ -805,7 +812,7 @@ class Project extends ApplicationModel {
         return $this->fetchAll($query);
     }
 
-    function addMember($project_id, $user_id, $username, $role = 'member') {
+    function addMember($project_id, $user_id, $username, $role = 'member', $log = true) {
         
         if(!$user_id) return false;
         
@@ -839,7 +846,7 @@ class Project extends ApplicationModel {
         $result = $this->query_insert($data);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
         
-        if ($result) {
+        if ($result && $log) {
             // Log the action
             $this->logProjectAction($project_id, 'member_added', 'メンバー追加', '', '');
         }
