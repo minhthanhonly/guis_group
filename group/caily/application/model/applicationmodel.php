@@ -35,14 +35,18 @@ class ApplicationModel extends Model {
 
 	function checkSuspend() {
 		$this->connect();
-		$query = sprintf("SELECT is_suspend FROM %suser WHERE id = '%s'", DB_PREFIX, $_SESSION['id']);
+		$query = sprintf("SELECT is_suspend, show_project FROM %suser WHERE id = '%s'", DB_PREFIX, $_SESSION['id']);
 		$data = $this->fetchOne($query);
-		if($data['is_suspend'] == 1) {
+		if($data['is_suspend'] == 1 || $_SESSION['show_project'] != $data['show_project']) {
 			$authority = new Authority;
 			$authority->sessionDestroy();
 			//clear cookie
 			setcookie('remember_me', '', time() - 3600, '/');
-			$this->died('アカウントが無効化されています。');
+			if($data['is_suspend'] == 1){
+				$this->died('アカウントが無効化されています。');
+			} else {
+				$this->died('ユーザーの設定が変更されたため、ログインし直してください。');
+			}
 		}
 	}
 
