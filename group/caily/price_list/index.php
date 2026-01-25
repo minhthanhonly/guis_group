@@ -4,6 +4,11 @@ $view->heading('価格表管理');
 
 // Get current user name for JavaScript
 $current_user_name = $_SESSION['realname'] ?? $_SESSION['userid'] ?? 'ユーザー';
+
+if(!$_SESSION['isProjectManager']){
+    echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
+    exit;
+}
 ?>
 
 <div id="app" class="container-fluid mt-4" v-cloak>

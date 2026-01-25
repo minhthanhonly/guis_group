@@ -403,6 +403,11 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             { data: 'status',
               title: 'ステータス'
             },
+            ...(user_role == 'administrator' ? [{
+              data: 'show_project',
+              title: '案件表示',
+              className: 'show-project-column'
+            }] : []),
             { data: 'action',
               title: '操作'
             }
@@ -517,6 +522,19 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                   }
               }
             },
+            ...(user_role == 'administrator' ? [{
+              // Show Project column (only for administrator)
+              targets: 8,
+              className: 'show-project-column',
+              render: function (data, type, full, meta) {
+                  const showProject = full['show_project'];
+                  if(showProject == 1 || showProject === '1'){
+                      return '<span class="badge bg-label-success">表示</span>';
+                  }else{
+                      return '<span class="badge bg-label-secondary">非表示</span>';
+                  }
+              }
+            }] : []),
             {
               targets: -1,
               title: '操作',
@@ -673,6 +691,13 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             permitData.edit_user = response.data.user;
             
             generatePermit('edit', null, '', document.getElementById('edit-user-permit'), 2, permitData);
+            
+            // Set show_project checkbox
+            const showProjectCheckbox = document.getElementById('edit-user-show-project');
+            if (showProjectCheckbox) {
+              showProjectCheckbox.checked = userinfo.show_project == 1 || userinfo.show_project === '1';
+            }
+            
             const editModal = new bootstrap.Modal(document.getElementById('modalEditUser'));
             editModal.show();
           }else{
@@ -901,6 +926,17 @@ document.addEventListener('DOMContentLoaded', async function (e) {
     bindEvent();
     await loadBranches();
     await loadDepartments();
+    
+    // Show/hide show_project column header based on user role
+    const showProjectHeader = document.querySelector('.show-project-column');
+    if (showProjectHeader) {
+      if (user_role == 'administrator') {
+        showProjectHeader.style.display = '';
+      } else {
+        showProjectHeader.style.display = 'none';
+      }
+    }
+    
     await changeData();
     generateGroupList();
   }
@@ -1017,9 +1053,6 @@ document.addEventListener('DOMContentLoaded', async function (e) {
       },
       user_email: {
         validators: {
-          notEmpty: {
-            message: 'メールアドレスを入力してください'
-          },
           emailAddress: {
             message: 'メールアドレスが不正です'
           }
@@ -1027,9 +1060,6 @@ document.addEventListener('DOMContentLoaded', async function (e) {
       },
       user_phone: {
         validators: {
-          notEmpty: {
-            message: '電話番号を入力してください'
-          }
         }
       },
       position: {
@@ -1037,24 +1067,15 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           stringLength: {
             min: 2,
             message: '2文字以上入力してください'
-          },
-          notEmpty: {
-            message: '役職を入力してください'
           }
         }
       },
       branch_id: {
         validators: {
-          notEmpty: {
-            message: '支社を選択してください'
-          }
         }
       },
       'department_id[]': {
         validators: {
-          notEmpty: {
-            message: '部署を選択してください'
-          }
         }
       },
       user_group: {
@@ -1164,9 +1185,6 @@ document.addEventListener('DOMContentLoaded', async function (e) {
       },
       user_email: {
         validators: {
-          notEmpty: {
-            message: 'メールアドレスを入力してください'
-          },
           emailAddress: {
             message: 'メールアドレスが不正です'
           }
@@ -1174,9 +1192,6 @@ document.addEventListener('DOMContentLoaded', async function (e) {
       },
       user_phone: {
         validators: {
-          notEmpty: {
-            message: '電話番号を入力してください'
-          }
         }
       },
       position: {
@@ -1185,23 +1200,14 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             min: 2,
             message: '2文字以上入力してください'
           },
-          notEmpty: {
-            message: '役職を入力してください'
-          }
         }
       },
       branch_id: {
         validators: {
-          notEmpty: {
-            message: '支社を選択してください'
-          }
         }
       },
       'department_id[]': {
         validators: {
-          notEmpty: {
-            message: '部署を選択してください'
-          }
         }
       },
       user_group: {

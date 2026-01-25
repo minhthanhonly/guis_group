@@ -11,7 +11,7 @@ class Model extends Connection {
 	var $response;
 	var $validation;
 
-	var $donotquote = array('add_level', 'edit_level', 'public_level', 'user_order', 'user_group', 'addressbook_parent', 'addressbook_type', 'folder_id', 'bookmark_order', 'folder_order', 'forum_node', 'forum_parent','group_order', 'schedule_level', 'storage_folder');
+	var $donotquote = array('show_project',  'branch_id', 'add_level', 'edit_level', 'public_level', 'user_order', 'user_group', 'addressbook_parent', 'addressbook_type', 'folder_id', 'bookmark_order', 'folder_order', 'forum_node', 'forum_parent','group_order', 'schedule_level', 'storage_folder');
 	
 	function connect() {
 		if (!$this->handler) {

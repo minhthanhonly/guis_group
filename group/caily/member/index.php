@@ -43,6 +43,7 @@ $view->heading('メンバー一覧');
 						<th>グループ</th>
 						<th>従業員の種類</th>
 						<th>ステータス</th>
+						<th class="show-project-column" style="display: none;">案件表示</th>
 						<th>アクション</th>
 					</tr>
 				</thead>
@@ -230,6 +231,14 @@ $view->heading('メンバー一覧');
           <div class="mb-4 form-control-validation">
             <label class="form-label" for="edit-user-type">編集設定</label>
             <div id="edit-user-permit"></div>
+          </div>
+          <div class="mb-4 form-control-validation">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="edit-user-show-project" name="show_project" value="1">
+              <label class="form-check-label" for="edit-user-show-project">
+                <span data-i18n="案件関連を表示">案件関連を表示</span>
+              </label>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary me-3 data-submit">編集</button>
           <button type="reset" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>

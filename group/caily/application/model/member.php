@@ -31,6 +31,7 @@ class Member extends ApplicationModel {
 		'is_suspend'=>array('ステータス', 'numeric', 'length:1','except'=>array('search', 'update')),
 		'position'=>array('役職', 'length:100'),
 		'branch_id'=>array('支店', 'numeric', 'length:10'),
+		'show_project'=>array('案件関連を表示', 'numeric', 'length:1'),
 		);
 		
 	}
@@ -140,7 +141,7 @@ class Member extends ApplicationModel {
 
 	function get_member() {
 		$config = new Config($this->handler);
-		$query = "SELECT groupware_user.id as `id`, `userid`, `realname`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend`, branch_id , groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
+		$query = "SELECT groupware_user.id as `id`, `userid`, `realname`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend`, branch_id, `show_project`, groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
 		$hash['list'] = $this->fetchAll($query);
 		$hash['group'] = $this->findGroup();
 
@@ -212,6 +213,18 @@ class Member extends ApplicationModel {
 			unset($this->post['user_mobile']);
 			unset($this->post['user_image']);
 			unset($this->post['user_skype']);
+			
+			// Handle branch_id: convert empty string to NULL
+			if (isset($this->post['branch_id']) && $this->post['branch_id'] === '') {
+				$this->post['branch_id'] = NULL;
+			}
+			
+			// Handle show_project checkbox: if not set in POST, set to 0
+			if (!isset($_POST['show_project']) || $_POST['show_project'] != '1') {
+				$this->post['show_project'] = 0;
+			} else {
+				$this->post['show_project'] = 1;
+			}
 
 			$this->updatePost();
 

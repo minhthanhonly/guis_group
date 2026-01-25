@@ -32,6 +32,7 @@
             </li>
 
             <!-- Layouts -->
+            <?php if($_SESSION['show_project'] == 1){ ?>
             <li class="menu-item <?php if($directory == 'project' || $directory == 'parent_project' || $directory == 'price_list') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base fa fa-briefcase"></i>
@@ -93,6 +94,7 @@
                 
               </ul>
             </li>
+            <?php } ?>
 
            
               <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
@@ -101,7 +103,7 @@
                   <div data-i18n="カレンダー">カレンダー</div>
                 </a>
               </li>
-            <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
+            <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6' && $_SESSION['show_project'] == 1){ ?>
               <li class="menu-item <?php if($directory == 'timecard' && ($page == 'index' || $page == 'group')) echo 'active'; ?>">
                 <a href="<?=$root?>timecard/" class="menu-link">
                   <i class="menu-icon icon-base ti tabler-clock"></i>
@@ -161,7 +163,7 @@
               </ul>
             </li> -->
 
-            <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7'){
+            <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7' && $_SESSION['group'] != '6'){
               $active = '';
               if($directory == 'setting') {
                 $active = 'active open';

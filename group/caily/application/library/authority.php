@@ -31,6 +31,12 @@ class Authority
 	{
 		$authorized = false;
 		if (isset($_SESSION['authorized'])) {
+			// Check session version - if changed, force logout all users
+			if (!isset($_SESSION['session_version']) || $_SESSION['session_version'] != SESSION_VERSION) {
+				$_SESSION = array();
+				$_SESSION['status'] = 'expire';
+				return false;
+			}
 			if ($_SESSION['authorized'] === md5(__FILE__ . $_SESSION['logintime'])) {
 				if (APP_EXPIRE > 0 && (time() - $_SESSION['logintime']) > APP_EXPIRE) {
 					$_SESSION = array();
@@ -68,7 +74,7 @@ class Authority
 				}
 				if ($postuserid != '' && count($error) <= 0) {
 					$connection = new Connection;
-					$query = sprintf("SELECT id,userid,password,firstname,lastname,realname,user_group,authority,user_image FROM %suser WHERE userid = '%s'", DB_PREFIX, $connection->quote($postuserid));
+					$query = sprintf("SELECT id,userid,password,firstname,lastname,realname,user_group,authority,user_image,show_project FROM %suser WHERE userid = '%s'", DB_PREFIX, $connection->quote($postuserid));
 					$data = $connection->fetchOne($query);
 					$connection->close();
 					if (count($data) > 0 && $data['userid'] === $postuserid && $data['password'] === $password) {
@@ -110,6 +116,7 @@ class Authority
 			$_SESSION['logintime'] = time();
 			$_SESSION['accesstime'] = $_SESSION['logintime'];
 			$_SESSION['authorized'] = md5(__FILE__ . $_SESSION['logintime']);
+			$_SESSION['session_version'] = SESSION_VERSION;
 			$_SESSION['userid'] = $data['userid'];
 			$_SESSION['id'] = $data['id'];
 			$_SESSION['lastname'] = $data['lastname'];
@@ -119,6 +126,7 @@ class Authority
 			$_SESSION['authority'] = $data['authority'];
 			$_SESSION['user_image'] = $data['user_image'];
 			$_SESSION['user_groupname'] = $data['user_groupname'];
+			$_SESSION['show_project'] = $data['show_project'];
 			
 			if (isset($_SESSION['referer'])) {
 				header('Location: ' . $_SESSION['referer']);
@@ -135,6 +143,12 @@ class Authority
 
 	function checkRememberMe()
 	{
+		// Check session version - if changed, force logout all users
+		if (!isset($_SESSION['session_version']) || $_SESSION['session_version'] != SESSION_VERSION) {
+			$_SESSION = array();
+			$_SESSION['status'] = 'expire';
+			return false;
+		}
 		if (isset($_COOKIE['remember_me'])) {
 			$token = $_COOKIE['remember_me'];
 			$connection = new Connection;
@@ -151,6 +165,7 @@ class Authority
 				$_SESSION['logintime'] = time();
 				$_SESSION['accesstime'] = $_SESSION['logintime'];
 				$_SESSION['authorized'] = md5(__FILE__ . $_SESSION['logintime']);
+				$_SESSION['session_version'] = SESSION_VERSION;
 				$_SESSION['userid'] = $data['userid'];
 				$_SESSION['id'] = $data['id'];
 				$_SESSION['lastname'] = $data['lastname'];
@@ -160,6 +175,7 @@ class Authority
 				$_SESSION['authority'] = $data['authority'];
 				$_SESSION['user_image'] = $data['user_image'];
 				$_SESSION['user_groupname'] = $data['user_groupname'];
+				$_SESSION['show_project'] = $data['show_project'];
 
 				return true;
 			}
