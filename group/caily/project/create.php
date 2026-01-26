@@ -6,6 +6,10 @@ $view->heading('プロジェクト作成');
 $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
 // Get parent project ID from URL parameter
 $parent_project_id = isset($_GET['parent_project_id']) ? intval($_GET['parent_project_id']) : 0;
+if($_SESSION['show_project'] == 0){
+    echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
+    exit;
+}
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
 

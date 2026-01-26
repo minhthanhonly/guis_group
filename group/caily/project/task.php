@@ -8,6 +8,10 @@ if (!$project_id) {
     header('Location: index.php');
     exit;
 }
+if($_SESSION['show_project'] == 0){
+    echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
+    exit;
+}
 ?>
 
 <div id="app" class="container-fluid mt-4" v-cloak>
@@ -367,7 +371,7 @@ if (!$project_id) {
                     <div class="col-md-2">
                         <div class="d-flex align-items-center justify-content-end gap-1 pe-2">
                             <!-- Like button -->
-                            <button v-if="permission.can_manage_project"
+                            <button v-if="canLikeTask"
                                 class="position-relative"
                                 :class="getTaskReactionButtonClass(task, 'like')"
                                 @click="openReactionModal(task, 'like')"
@@ -380,7 +384,7 @@ if (!$project_id) {
                                 </span>
                             </button>
                             <!-- Dislike button -->
-                            <button v-if="permission.can_manage_project"
+                            <button v-if="canLikeTask"
                                 class="position-relative"
                                 :class="getTaskReactionButtonClass(task, 'dislike')"
                                 @click="openReactionModal(task, 'dislike')"
@@ -393,7 +397,7 @@ if (!$project_id) {
                                 </span>
                             </button>
                             <!-- Comment button -->
-                            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.project_comment == 1)" class="btn btn-sm btn-outline-info position-relative" @click="openTaskComments(task)" title="詳細">
+                            <button v-if="canViewTaskList" class="btn btn-sm btn-outline-info position-relative" @click="openTaskComments(task)" title="詳細">
                                     <i class="fas fa-eye"></i>
                                     <span v-if="getUnreadCommentCount(task.id) > 0" class="position-absolute top-0 start-100 translate-middle text-white badge rounded-pill bg-danger" style="font-size:10px;">{{ getUnreadCommentCount(task.id) }}</span>
                             </button>

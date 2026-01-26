@@ -223,7 +223,7 @@ var projectTable;
                     const filterTimeLeft = $('#filterTimeLeft').val();
                     const filterKeyword = $('#filterKeyword').val();
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
-                    const myProjects = app.filterMyProjects ? 1 : 0;
+                    const myProjects = $('#filterMyProjects').is(':checked') ? 1 : 0;
                     const favoritesOnly = $('#filterFavoritesOnly').is(':checked') ? 1 : 0;
                     return {
                         model: 'project',
@@ -1010,6 +1010,7 @@ var projectTable;
             $('#showInactiveSwitch').prop('checked', true); // hoặc giá trị mặc định
             // Reset favorites filter
             $('#filterFavoritesOnly').prop('checked', false);
+            $('#filterMyProjects').prop('checked', false);
             if (app) {
                 app.showClearAllFavoritesBtn = false;
             }

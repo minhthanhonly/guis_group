@@ -45,20 +45,23 @@ define('DIR_UPLOAD', DIR_PATH.'upload/');
 define('DB_STORAGE', 'mysql');
 
 //データベースのホスト名
-define('DB_HOSTNAME', 'mysql80.guis2.sakura.ne.jp');
+//define('DB_HOSTNAME', 'mysql653.db.sakura.ne.jp');
+define('DB_HOSTNAME', 'localhost');
 //データベース名
-define('DB_DATABASE', 'guis2_group_2025');
+define('DB_DATABASE', 'cail9460_group');
 //データベースユーザー名
-define('DB_USERNAME', 'guis2');
+define('DB_USERNAME', 'root');
+// define('DB_USERNAME', 'guis2');
 //データベースパスワード
-define('DB_PASSWORD', 'URtMzWthwqB5');
+// define('DB_PASSWORD', 'URtMzWthwqB5');
+define('DB_PASSWORD', 'mysql');
 //テーブル接頭辞
 define('DB_PREFIX', 'groupware_');
 //データベースポート番号
 define('DB_PORT', '5432');
 // define('DB_PORT', '3306');
 //データベース文字コード設定
-define('DB_CHARSET', 'utf8');
+define('DB_CHARSET', 'utf8mb4');
 //データベースファイル
 define('DB_FILE', DIR_PATH.'database/group.sqlite2');
 //郵便番号データファイル
@@ -67,6 +70,8 @@ define('DB_POSTCODE', DIR_PATH.'database/KEN_ALL.CSV');
 define('ROOT_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
 
 define('ROOT', '/');
+
+define('DIR_ROOT', $_SERVER['DOCUMENT_ROOT']);
 
 define('APP_NAME', 'GUISシステム');
 
@@ -85,6 +90,5 @@ define('RETIRE_GROUP', '5');
 define('RETIRE_GROUP_NAME', '退職者');
 
 require_once 'version.php';
-
 error_reporting(E_ERROR | E_PARSE);
 ?>

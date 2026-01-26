@@ -108,7 +108,7 @@ const TaskApp = createApp({
             return this.permission.can_manage_project || this.permission.is_member;
         },
         canLikeTask() {
-            return this.permission.can_manage_project;
+            return this.permission.can_manage_project || this.permission.is_team_leader;
         },
         sortedTaskLogs() {
             if (!this.taskLogs) return [];

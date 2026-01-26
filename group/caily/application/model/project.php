@@ -100,6 +100,12 @@ class Project extends ApplicationModel {
             OR c.company_name LIKE '%$kw%'
             OR c.company_name_kana LIKE '%$kw%'
             OR c.name_kana LIKE '%$kw%'
+            OR pp.company_name LIKE '%$kw%'
+            OR pp.contact_name LIKE '%$kw%'
+            OR pp.construction_number LIKE '%$kw%'
+            OR pp.scale LIKE '%$kw%'
+            OR pp.type1 LIKE '%$kw%'
+            OR pp.type2 LIKE '%$kw%'
             OR c.name LIKE '%$kw%')";
         } else {
             // --- Advanced Filters ---

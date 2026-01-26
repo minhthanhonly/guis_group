@@ -146,7 +146,6 @@ class Authority
 		// Check session version - if changed, force logout all users
 		if (!isset($_SESSION['session_version']) || $_SESSION['session_version'] != SESSION_VERSION) {
 			$_SESSION = array();
-			$_SESSION['status'] = 'expire';
 			return false;
 		}
 		if (isset($_COOKIE['remember_me'])) {

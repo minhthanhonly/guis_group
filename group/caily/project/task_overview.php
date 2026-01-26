@@ -1,6 +1,10 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('タスク一覧');
+if($_SESSION['show_project'] == 0){
+    echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
+    exit;
+}
 ?>
 
 <div id="app" class="container-fluid mt-4" v-cloak>

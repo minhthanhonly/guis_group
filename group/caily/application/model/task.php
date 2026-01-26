@@ -744,6 +744,16 @@ class Task extends ApplicationModel {
 
             $isDepartmentManager = ($departmentCheck && $departmentCheck['project_manager'] == 1);
         }
+
+        $isTeamLeader = false;
+        if (!$isAdmin) {
+            $teamLeaderCheck = $this->fetchOne(
+                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "team_members " .
+                "WHERE user_id = '" . $currentUserIdNumber . "' " .
+                "AND leader = 1"
+            );
+            $isTeamLeader = ($teamLeaderCheck && $teamLeaderCheck['count'] > 0);
+        }
         
         // Check if user is project creator
         $isCreator = false;
@@ -762,8 +772,10 @@ class Task extends ApplicationModel {
         if ($departmentCheck && isset($departmentCheck['project_director'])) {
             $isProjectDirector = ($departmentCheck['project_director'] == 1);
         }
-        
+
+       
         return [
+            'is_team_leader' => $isTeamLeader,
             'is_member' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector || $isMember || $isCreator,
             'is_director' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector,
             'can_manage_project' => $isAdmin || $isProjectManager || $isDepartmentManager,

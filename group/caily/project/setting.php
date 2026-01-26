@@ -5,6 +5,10 @@ if(!$_SESSION['isProjectManager']){
     echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
     exit;
 }
+if($_SESSION['show_project'] == 0){
+    echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
+    exit;
+}
 ?>
     <div id="app">
         <nav class="navbar navbar-expand-lg bg-dark mb-12">
