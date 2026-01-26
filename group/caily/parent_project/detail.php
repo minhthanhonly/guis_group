@@ -488,6 +488,7 @@ $view->heading('建物詳細');
                                     <th><span data-i18n="受注形態">受注形態</span></th>
                                     <th><span data-i18n="案件名">案件名</span></th>
                                     <th><span data-i18n="部署">部署</span></th>
+                                    <th><span data-i18n="管理">管理</span></th>
                                     <th><span data-i18n="開始日">開始日</span></th>
                                     <th><span data-i18n="期限日">期限日</span></th>
                                     <th><span data-i18n="ステータス">ステータス</span></th>
@@ -522,6 +523,35 @@ $view->heading('建物詳細');
                                         </a>
                                     </td>
                                     <td>{{ project.department_name || '-' }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center" v-if="project.manager_id && project.manager_id.split('|').filter(m => m.trim() !== '').length > 0">
+                                            <template v-for="(manager, index) in project.manager_id.split('|').filter(m => m.trim() !== '')" :key="manager">
+                                                <div v-if="index < 1" 
+                                                    class="avatar me-1"
+                                                    data-bs-toggle="tooltip"
+                                                    :title="getManagerName(manager)">
+                                                    <img v-if="getManagerImage(manager)" 
+                                                        :src="'/assets/upload/avatar/' + getManagerImage(manager)" 
+                                                        alt="avatar" 
+                                                        class="rounded-circle pull-up" 
+                                                        width="32" 
+                                                        height="32"
+                                                        @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='inline-flex';">
+                                                    <span class="avatar-initial rounded-circle bg-label-primary pull-up">
+                                                        {{ getManagerInitials(manager) }}
+                                                    </span>
+                                                </div>
+                                            </template>
+                                            <span v-if="project.manager_id.split('|').filter(m => m.trim() !== '').length > 1" 
+                                                class="avatar-initial rounded-circle bg-label-primary pull-up" 
+                                                data-bs-toggle="tooltip" 
+                                                :title="getRemainingManagers(project.manager_id)"
+                                                style="display:inline-flex;">
+                                                +{{ project.manager_id.split('|').filter(m => m.trim() !== '').length - 1 }}
+                                            </span>
+                                        </div>
+                                        <span v-else class="text-muted">-</span>
+                                    </td>
                                     <td>{{ formatDateTime(project.start_date) || '-' }}</td>
                                     <td>{{ formatDateTime(project.end_date) || '-' }}</td>
                                     <td>
@@ -560,7 +590,7 @@ $view->heading('建物詳細');
                                     </td>
                                 </tr>
                                 <tr v-if="childProjects.length === 0">
-                                    <td colspan="11" class="text-center text-muted py-4">
+                                    <td colspan="12" class="text-center text-muted py-4">
                                         案件依頼がありません
                                     </td>
                                 </tr>
@@ -1008,6 +1038,18 @@ $view->heading('建物詳細');
                                 </div>
                             </div>
                             <div class="col-12">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="管理">管理</span></label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input class="form-control" type="text" id="create_child_project_manager_tags" name="create_child_project_manager_tags">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectManagerTags(false)" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        <span data-i18n="部署を選択すると、その部署のユーザーが表示されます">部署を選択すると、その部署のユーザーが表示されます</span>
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-12">
                                 <div class="mb-3">
                                     <label class="form-label">説明</label>
                                     <div class="custom_editor">
@@ -1151,6 +1193,18 @@ $view->heading('建物詳細');
                                             min="0" step="1" 
                                             placeholder="0">
                                     </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="管理">管理</span></label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input class="form-control" type="text" id="edit_child_project_manager_tags" name="edit_child_project_manager_tags">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectManagerTags(true)" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        <span data-i18n="部署を選択すると、その部署のユーザーが表示されます">部署を選択すると、その部署のユーザーが表示されます</span>
+                                    </small>
                                 </div>
                             </div>
                             <div class="col-12">

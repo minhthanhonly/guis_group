@@ -16,6 +16,7 @@ createApp({
             contacts: [],
             users: [],
             departments: [],
+            departmentUsers: [], // Users in the selected department
             guisReceiverDisplayName: '', // Add this to store the display name
             // Customer modal data
             categories: [],
@@ -29,6 +30,9 @@ createApp({
             type1Tagify: null,
             type2Tagify: null,
             constructionBranchTagify: null,
+            childProjectOrderTypeTagify: null,
+            createChildProjectManagerTagify: null,
+            editChildProjectManagerTagify: null,
             request_design: false,
             request_equipment: false,
             request_energy_saving: false,
@@ -72,7 +76,8 @@ createApp({
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
                 status: 'draft',
-                amount: 0
+                amount: 0,
+                managers: []
             },
             editingChildProject: {
                 id: null,
@@ -87,7 +92,8 @@ createApp({
                 is_kadai: true,
                 status: 'draft',
                 previous_status: '',
-                amount: 0
+                amount: 0,
+                managers: []
             },
             childProjectValidationErrors: {
                 name: '',
@@ -288,6 +294,60 @@ createApp({
             handler(newIds, oldIds) {
                 // Clear unlinked order items when child projects are deselected
                 this.clearUnlinkedOrderItemsForEdit();
+            }
+        },
+        'newChildProject.department_id': {
+            handler(newDeptId, oldDeptId) {
+                if (newDeptId && newDeptId !== oldDeptId) {
+                    // Load department users and update manager Tagify
+                    this.loadDepartmentUsers(newDeptId, false).then(() => {
+                        this.$nextTick(() => {
+                            const managerInput = document.getElementById('create_child_project_manager_tags');
+                            if (managerInput) {
+                                // Re-initialize Tagify to ensure whitelist is updated
+                                if (this.createChildProjectManagerTagify) {
+                                    this.createChildProjectManagerTagify.destroy();
+                                }
+                                this.initializeCreateChildProjectManagerTagify();
+                            }
+                        });
+                    });
+                } else if (!newDeptId) {
+                    // Clear managers when department is cleared
+                    if (this.createChildProjectManagerTagify) {
+                        this.createChildProjectManagerTagify.removeAllTags();
+                        this.newChildProject.managers = [];
+                        this.createChildProjectManagerTagify.settings.whitelist = [];
+                        this.createChildProjectManagerTagify.whitelist = [];
+                    }
+                }
+            }
+        },
+        'editingChildProject.department_id': {
+            handler(newDeptId, oldDeptId) {
+                if (newDeptId && newDeptId !== oldDeptId) {
+                    // Load department users and update manager Tagify
+                    this.loadDepartmentUsers(newDeptId, true).then(() => {
+                        this.$nextTick(() => {
+                            const managerInput = document.getElementById('edit_child_project_manager_tags');
+                            if (managerInput) {
+                                // Re-initialize Tagify to ensure whitelist is updated
+                                if (this.editChildProjectManagerTagify) {
+                                    this.editChildProjectManagerTagify.destroy();
+                                }
+                                this.initializeEditChildProjectManagerTagify();
+                            }
+                        });
+                    });
+                } else if (!newDeptId) {
+                    // Clear managers when department is cleared
+                    if (this.editChildProjectManagerTagify) {
+                        this.editChildProjectManagerTagify.removeAllTags();
+                        this.editingChildProject.managers = [];
+                        this.editChildProjectManagerTagify.settings.whitelist = [];
+                        this.editChildProjectManagerTagify.whitelist = [];
+                    }
+                }
             }
         }
     },
@@ -1588,7 +1648,8 @@ createApp({
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
                 status: 'draft',
-                amount: 0
+                amount: 0,
+                managers: []
             };
             
             // Clear Quill content
@@ -1631,6 +1692,57 @@ createApp({
             } catch (error) {
                 console.error('Error loading departments:', error);
                 this.departments = [];
+            }
+        },
+        
+        async loadDepartmentUsers(departmentId, isEdit = false) {
+            if (!departmentId) {
+                this.departmentUsers = [];
+                // Clear manager Tagify when no department is selected
+                if (isEdit && this.editChildProjectManagerTagify) {
+                    this.editChildProjectManagerTagify.settings.whitelist = [];
+                    this.editChildProjectManagerTagify.whitelist = [];
+                    this.editChildProjectManagerTagify.removeAllTags();
+                } else if (!isEdit && this.createChildProjectManagerTagify) {
+                    this.createChildProjectManagerTagify.settings.whitelist = [];
+                    this.createChildProjectManagerTagify.whitelist = [];
+                    this.createChildProjectManagerTagify.removeAllTags();
+                }
+                return;
+            }
+            
+            try {
+                const response = await axios.get(`/api/index.php?model=department&method=get_users&department_id=${departmentId}`);
+                if (response.data) {
+                    this.departmentUsers = Array.isArray(response.data) ? response.data : [];
+                    // Update Tagify whitelist - map users correctly
+                    const users = this.departmentUsers.map(u => ({
+                        id: String(u.id || u.user_id),
+                        value: u.user_name || u.realname || u.name,
+                        name: u.user_name || u.realname || u.name
+                    }));
+                    
+                    console.log('Loaded department users:', users); // Debug log
+                    
+                    if (isEdit && this.editChildProjectManagerTagify) {
+                        // Update whitelist properly - need to update both settings and whitelist
+                        this.editChildProjectManagerTagify.settings.whitelist = users;
+                        this.editChildProjectManagerTagify.whitelist = users;
+                        // Trigger dropdown refresh
+                        this.editChildProjectManagerTagify.dropdown.hide();
+                    } else if (!isEdit && this.createChildProjectManagerTagify) {
+                        // Update whitelist properly - need to update both settings and whitelist
+                        this.createChildProjectManagerTagify.settings.whitelist = users;
+                        this.createChildProjectManagerTagify.whitelist = users;
+                        // Trigger dropdown refresh
+                        this.createChildProjectManagerTagify.dropdown.hide();
+                    }
+                } else {
+                    this.departmentUsers = [];
+                }
+            } catch (error) {
+                console.error('Error loading department users:', error);
+                this.departmentUsers = [];
             }
         },
         
@@ -1678,7 +1790,7 @@ createApp({
             }
         },
         
-        initializeChildProjectTagify() {
+        async initializeChildProjectTagify() {
             // Initialize Tagify for child project order type
             const orderTypeInput = document.querySelector('#child_project_order_type');
             if (orderTypeInput) {
@@ -1708,6 +1820,62 @@ createApp({
                 this.childProjectOrderTypeTagify.on('add', updateOrderType);
                 this.childProjectOrderTypeTagify.on('remove', updateOrderType);
             }
+            
+            // Initialize Tagify for manager
+            await this.initializeCreateChildProjectManagerTagify();
+        },
+        
+        async initializeCreateChildProjectManagerTagify() {
+            const managerInput = document.getElementById('create_child_project_manager_tags');
+            if (managerInput && window.Tagify) {
+                // Destroy existing instance if it exists
+                if (managerInput._tagify) {
+                    managerInput._tagify.destroy();
+                }
+                
+                // Load department users if department is selected
+                if (this.newChildProject.department_id) {
+                    await this.loadDepartmentUsers(this.newChildProject.department_id, false);
+                }
+                
+                const users = (this.departmentUsers || []).map(u => ({
+                    id: u.id || u.user_id,
+                    value: u.user_name || u.realname || u.name,
+                    name: u.user_name || u.realname || u.name
+                }));
+                
+                console.log('Initializing manager Tagify with users:', users); // Debug log
+                
+                this.createChildProjectManagerTagify = new Tagify(managerInput, {
+                    whitelist: users,
+                    maxTags: 10,
+                    enforceWhitelist: false,
+                    dropdown: {
+                        maxItems: 20,
+                        enabled: 0, // Auto-show on input
+                        closeOnSelect: true,
+                        classname: 'tagify__dropdown',
+                        searchKeys: ['value', 'name']
+                    }
+                });
+                
+                // Update the model when tags change
+                this.createChildProjectManagerTagify.on('change', (e) => {
+                    const selected = this.createChildProjectManagerTagify.value.map(t => t.id);
+                    this.newChildProject.managers = selected;
+                });
+                
+                // Set initial value if exists
+                if (this.newChildProject.managers && this.newChildProject.managers.length > 0) {
+                    const managerTags = this.newChildProject.managers.map(id => {
+                        const user = this.departmentUsers.find(u => (u.id || u.user_id) == id);
+                        return user ? { id: user.id || user.user_id, value: user.user_name || user.realname || user.name } : null;
+                    }).filter(t => t !== null);
+                    if (managerTags.length > 0) {
+                        this.createChildProjectManagerTagify.addTags(managerTags);
+                    }
+                }
+            }
         },
         
         clearChildProjectTagifyTags(fieldName) {
@@ -1722,9 +1890,19 @@ createApp({
                 this.childProjectOrderTypeTagify.destroy();
                 this.childProjectOrderTypeTagify = null;
             }
+            if (this.createChildProjectManagerTagify) {
+                this.createChildProjectManagerTagify.destroy();
+                this.createChildProjectManagerTagify = null;
+            }
         },
         
         async showEditChildProjectModal(project) {
+            // Destroy existing Tagify instances first
+            if (this.editChildProjectManagerTagify) {
+                this.editChildProjectManagerTagify.destroy();
+                this.editChildProjectManagerTagify = null;
+            }
+            
             this.editingChildProject = {
                 id: project.id,
                 name: project.name || '',
@@ -1738,7 +1916,8 @@ createApp({
                 is_kadai: true,
                 status: project.status || '',
                 previous_status: project.previous_status || '',
-                amount: project.amount || project.total_amount || 0
+                amount: project.amount || project.total_amount || 0,
+                managers: [] // Initialize as empty, will be loaded later
             };
             
 
@@ -1793,7 +1972,7 @@ createApp({
             }
         },
         
-        initializeEditChildProjectTagify() {
+        async initializeEditChildProjectTagify() {
             const orderTypeInput = document.querySelector('#edit_child_project_order_type');
             if (orderTypeInput) {
                 // Destroy existing instance if it exists
@@ -1821,6 +2000,92 @@ createApp({
                 this.editChildProjectOrderTypeTagify.on('add', updateOrderType);
                 this.editChildProjectOrderTypeTagify.on('remove', updateOrderType);
             }
+            
+            // Initialize Tagify for manager
+            await this.initializeEditChildProjectManagerTagify();
+        },
+        
+        async initializeEditChildProjectManagerTagify() {
+            const managerInput = document.getElementById('edit_child_project_manager_tags');
+            if (managerInput && window.Tagify) {
+                // Destroy existing instance if it exists
+                if (managerInput._tagify) {
+                    managerInput._tagify.destroy();
+                }
+                if (this.editChildProjectManagerTagify) {
+                    this.editChildProjectManagerTagify.destroy();
+                    this.editChildProjectManagerTagify = null;
+                }
+                
+                // Clear input value to ensure clean state
+                managerInput.value = '';
+                
+                // Reset managers array to ensure clean state
+                this.editingChildProject.managers = [];
+                
+                // Load department users if department is selected
+                if (this.editingChildProject.department_id) {
+                    await this.loadDepartmentUsers(this.editingChildProject.department_id, true);
+                }
+                
+                const users = (this.departmentUsers || []).map(u => ({
+                    id: String(u.id || u.user_id),
+                    value: u.user_name || u.realname || u.name,
+                    name: u.user_name || u.realname || u.name
+                }));
+                
+                console.log('Initializing edit manager Tagify with users:', users); // Debug log
+                
+                this.editChildProjectManagerTagify = new Tagify(managerInput, {
+                    whitelist: users,
+                    maxTags: 10,
+                    enforceWhitelist: false,
+                    dropdown: {
+                        maxItems: 20,
+                        enabled: 0, // Auto-show on input
+                        closeOnSelect: true,
+                        classname: 'tagify__dropdown',
+                        searchKeys: ['value', 'name']
+                    }
+                });
+                
+                // Update the model when tags change
+                this.editChildProjectManagerTagify.on('change', (e) => {
+                    const selected = this.editChildProjectManagerTagify.value.map(t => t.id);
+                    this.editingChildProject.managers = selected;
+                });
+                
+                // Load existing managers for the project
+                if (this.editingChildProject.id) {
+                    try {
+                        const response = await axios.get(`/api/index.php?model=project&method=getMembers&project_id=${this.editingChildProject.id}&role=manager`);
+                        if (response.data) {
+                            const managers = Array.isArray(response.data) ? response.data : (response.data.data || []);
+                            this.editingChildProject.managers = managers.map(m => String(m.user_id || m.id));
+                            // Wait for department users to be loaded before adding tags
+                            if (this.departmentUsers && this.departmentUsers.length > 0) {
+                                const managerTags = managers.map(m => {
+                                    const userId = String(m.user_id || m.id);
+                                    const user = this.departmentUsers.find(u => String(u.id || u.user_id) === userId);
+                                    return user ? { 
+                                        id: String(user.id || user.user_id), 
+                                        value: user.user_name || user.realname || user.name 
+                                    } : null;
+                                }).filter(t => t !== null);
+                                if (managerTags.length > 0) {
+                                    this.$nextTick(() => {
+                                        if (this.editChildProjectManagerTagify) {
+                                            this.editChildProjectManagerTagify.addTags(managerTags);
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error loading project managers:', error);
+                    }
+                }
+            }
         },
         
         clearEditChildProjectTagifyTags(fieldName) {
@@ -1830,10 +2095,24 @@ createApp({
             }
         },
         
+        clearChildProjectManagerTags(isEdit = false) {
+            if (isEdit && this.editChildProjectManagerTagify) {
+                this.editChildProjectManagerTagify.removeAllTags();
+                this.editingChildProject.managers = [];
+            } else if (!isEdit && this.createChildProjectManagerTagify) {
+                this.createChildProjectManagerTagify.removeAllTags();
+                this.newChildProject.managers = [];
+            }
+        },
+        
         destroyEditChildProjectTagify() {
             if (this.editChildProjectOrderTypeTagify) {
                 this.editChildProjectOrderTypeTagify.destroy();
                 this.editChildProjectOrderTypeTagify = null;
+            }
+            if (this.editChildProjectManagerTagify) {
+                this.editChildProjectManagerTagify.destroy();
+                this.editChildProjectManagerTagify = null;
             }
         },
 
@@ -2297,6 +2576,9 @@ createApp({
                 formData.append('start_date', this.editingChildProject.start_date);
                 formData.append('end_date', this.editingChildProject.end_date);
                 formData.append('project_order_type', this.editingChildProject.project_order_type || '');
+                if (this.editingChildProject.managers && this.editingChildProject.managers.length > 0) {
+                    formData.append('managers', this.editingChildProject.managers.join(','));
+                }
                 formData.append('parent_project_id', this.editingChildProject.parent_project_id);
                 formData.append('status', this.editingChildProject.status || 'draft');
                 formData.append('amount', this.editingChildProject.amount || 0);
@@ -2331,7 +2613,8 @@ createApp({
                         is_kadai: true,
                         status: 'draft',
                         previous_status: '',
-                        amount: 0
+                        amount: 0,
+                        managers: []
                     };
                     
                     // Reset Quill content
@@ -2483,6 +2766,9 @@ createApp({
                 formData.append('start_date', this.newChildProject.start_date || '');
                 formData.append('end_date', this.newChildProject.end_date || '');
                 formData.append('project_order_type', this.newChildProject.project_order_type || '');
+                if (this.newChildProject.managers && this.newChildProject.managers.length > 0) {
+                    formData.append('managers', this.newChildProject.managers.join(','));
+                }
                 formData.append('parent_project_id', this.newChildProject.parent_project_id);
                 formData.append('amount', this.newChildProject.amount || 0);
 
@@ -6153,18 +6439,50 @@ createApp({
             }
         },
 
+        getManagerName(managerString) {
+            if (!managerString) return '';
+            const parts = managerString.split(':');
+            return parts[1] || parts[0] || '';
+        },
+        getManagerImage(managerString) {
+            if (!managerString) return '';
+            const parts = managerString.split(':');
+            return parts[2] || '';
+        },
+        getManagerInitials(managerString) {
+            if (!managerString) return '?';
+            const parts = managerString.split(':');
+            const name = parts[1] || parts[0] || '';
+            return this.getInitials(name);
+        },
+        getRemainingManagers(managerIdString) {
+            if (!managerIdString) return '';
+            const managers = managerIdString.split('|').filter(m => m.trim() !== '');
+            if (managers.length <= 1) return '';
+            const remaining = managers.slice(1).map(manager => {
+                const parts = manager.split(':');
+                return parts[1] || parts[0] || '';
+            }).filter(name => name).join(', ');
+            return remaining;
+        },
         getInitials(name) {
             if (!name) return '?';
-            
+            // Use the same logic as getAvatarName from main.js
+            if (typeof getAvatarName === 'function') {
+                return getAvatarName(name);
+            }
+            // Fallback if getAvatarName is not available
             try {
-                // Split by spaces and take first character of each part
-                const parts = name.trim().split(/\s+/);
-                if (parts.length === 1) {
-                    // Single word - take first character
-                    return name.charAt(0).toUpperCase();
+                // Check if name contains Japanese characters
+                const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
+                if (hasJapanese) {
+                    // For Japanese names, take first 2 characters
+                    return name.substring(0, 2);
                 } else {
-                    // Multiple words - take first character of first and last
-                    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+                    // For English names, take the last word
+                    const words = name.trim().split(' ');
+                    const lastWord = words[words.length - 1];
+                    return lastWord;
                 }
             } catch (error) {
                 return name.charAt(0).toUpperCase();

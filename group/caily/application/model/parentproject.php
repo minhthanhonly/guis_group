@@ -385,7 +385,11 @@ class ParentProject extends ApplicationModel {
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
             c.name as contact_name, c.company_name, c.department as branch_name,
-            CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite
+            CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite,
+            (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
+             FROM " . DB_PREFIX . "project_members pm 
+             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
+             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id
             FROM " . DB_PREFIX . "projects p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
