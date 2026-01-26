@@ -10,7 +10,7 @@ if (!$file_id) {
 }
 ?>
 <div id="app" class="container-fluid mt-4" v-cloak>
-    <div v-if="canViewProject">
+    <div>
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">
                 <a class="navbar-brand fw-bold" href="#" v-if="parentProject">

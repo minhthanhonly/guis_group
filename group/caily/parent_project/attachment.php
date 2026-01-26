@@ -480,7 +480,14 @@ if (!$parent_project_id) {
         </div>
         <div v-if="showAttachmentInfoModalFlag" class="modal-backdrop fade show"></div>
     </div>
-  
+    <div v-else>
+        <div class="text-center py-5">
+            <div class="text-muted">
+                <i class="fa fa-lock fa-3x mb-2"></i>
+                <p><span data-i18n="権限がありません">権限がありません</span></p>
+            </div>
+        </div>
+    </div>
     <!-- Fixed Bulk Actions Bar -->
     <div v-if="selectedFileIds.length > 0" class="bulk-actions-bar">
         <div class="container-fluid">

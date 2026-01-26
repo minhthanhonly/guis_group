@@ -33,10 +33,10 @@ $view->heading('建物詳細');
                     <div class="collapse navbar-collapse" id="parentProjectNavbar">
                         <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                             <li class="nav-item">
-                                <a class="nav-link active" aria-current="page" href="detail.php?id=<?php echo $parent_project_id; ?>">建物詳細</a>
+                                <a class="nav-link active" aria-current="page" href="detail.php?id=<?php echo $parent_project_id; ?>"><span data-i18n="建物詳細">建物詳細</span></a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="attachment.php?id=<?php echo $parent_project_id; ?>">添付ファイル</a>
+                                <a class="nav-link" href="attachment.php?id=<?php echo $parent_project_id; ?>"><span data-i18n="添付ファイル">添付ファイル</span></a>
                             </li>
                         </ul>
                     </div>
@@ -914,24 +914,24 @@ $view->heading('建物詳細');
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="createChildProjectModalLabel">案件依頼を作成</h5>
+                    <h5 class="modal-title" id="createChildProjectModalLabel"><span data-i18n="案件依頼を作成">案件依頼を作成</span></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <form @submit.prevent="createChildProject">
                         <div class="row g-3">
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">案件名 <span class="text-danger">*</span></label>
+                                    <label class="form-label"><span data-i18n="案件名">案件名</span> <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.name" required>
                                     <div v-if="childProjectValidationErrors.name" class="invalid-feedback d-block">
                                         {{ childProjectValidationErrors.name }}
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">部署 <span class="text-danger">*</span></label>
+                                    <label class="form-label"><span data-i18n="部署">部署</span> <span class="text-danger">*</span></label>
                                     <select class="form-select" v-model="newChildProject.department_id" required>
                                         <option value="">選択してください</option>
                                         <option v-for="dept in departments" :key="dept.id" :value="dept.id">
@@ -944,9 +944,9 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">案件番号 <span class="text-danger">*</span></label>
+                                    <label class="form-label"><span data-i18n="案件番号">案件番号</span> <span class="text-danger">*</span></label>
                                     <div class="input-group">
                                         <input type="text" class="form-control" v-model="newChildProject.project_number"
                                             readonly required>
@@ -960,13 +960,13 @@ $view->heading('建物詳細');
                                         {{ childProjectValidationErrors.project_number }}
                                     </div>
                                     <small class="form-text text-muted">
-                                        建物番号 + "-" + 連番
+                                        <span>建物番号 + "-" + 連番</span>
                                     </small>
                                 </div>
                             </div>
                             <div class="col-md-4 col-xl-3">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">開始日 <span class="text-danger">*</span></label>
+                                    <label class="form-label"><span data-i18n="開始日">開始日</span> <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.start_date"
                                         id="start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
                                         required>
@@ -978,7 +978,7 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-4 col-xl-3">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">期限日 <span class="text-danger">*</span></label>
+                                    <label class="form-label"><span data-i18n="期限日">期限日</span> <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.end_date"
                                         id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off" required>
                                     <div v-if="childProjectValidationErrors.end_date" class="invalid-feedback d-block">
@@ -1025,6 +1025,19 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="管理">管理</span></label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input class="form-control" type="text" id="create_child_project_manager_tags" name="create_child_project_manager_tags">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectManagerTags(false)" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        <span data-i18n="部署を選択すると、その部署のユーザーが表示されます">部署を選択すると、その部署のユーザーが表示されます</span>
+                                    </small>
+                                </div>
+                            </div>
                             <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="総額">総額</span></label>
@@ -1038,20 +1051,8 @@ $view->heading('建物詳細');
                                 </div>
                             </div>
                             <div class="col-12">
-                                <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="管理">管理</span></label>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input class="form-control" type="text" id="create_child_project_manager_tags" name="create_child_project_manager_tags">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectManagerTags(false)" title="すべて削除"><i class="fa fa-times"></i></button>
-                                    </div>
-                                    <small class="form-text text-muted">
-                                        <span data-i18n="部署を選択すると、その部署のユーザーが表示されます">部署を選択すると、その部署のユーザーが表示されます</span>
-                                    </small>
-                                </div>
-                            </div>
-                            <div class="col-12">
                                 <div class="mb-3">
-                                    <label class="form-label">説明</label>
+                                    <label class="form-label"><span data-i18n="説明">説明</span></label>
                                     <div class="custom_editor">
                                         <div class="custom_editor_content" id="create_child_project_quill_description"></div>
                                         <textarea class="custom_editor_textarea d-none" v-model="newChildProject.description" id="create_child_project_quill_description_textarea"></textarea>
@@ -1062,11 +1063,11 @@ $view->heading('建物詳細');
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
                     <button type="button" class="btn btn-primary" @click="createChildProject"
                         :disabled="creatingChildProject">
                         <span v-if="creatingChildProject" class="spinner-border spinner-border-sm me-1"></span>
-                        作成
+                        <span data-i18n="作成">作成</span>
                     </button>
                 </div>
             </div>
@@ -1085,7 +1086,7 @@ $view->heading('建物詳細');
                 <div class="modal-body">
                     <form @submit.prevent="updateChildProject">
                         <div class="row g-3">
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="案件名">案件名</span> <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.name" required>
@@ -1094,7 +1095,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="部署">部署</span> <span class="text-danger">*</span></label>
                                     <select class="form-select" v-model="editingChildProject.department_id" required>
@@ -1109,7 +1110,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="案件番号">案件番号</span> <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.project_number"
@@ -1185,18 +1186,6 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="総額">総額</span></label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">¥</span>
-                                        <input type="number" class="form-control" 
-                                            v-model.number="editingChildProject.amount" 
-                                            min="0" step="1" 
-                                            placeholder="0">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="管理">管理</span></label>
                                     <div class="d-flex align-items-center gap-2">
                                         <input class="form-control" type="text" id="edit_child_project_manager_tags" name="edit_child_project_manager_tags">
@@ -1205,6 +1194,18 @@ $view->heading('建物詳細');
                                     <small class="form-text text-muted">
                                         <span data-i18n="部署を選択すると、その部署のユーザーが表示されます">部署を選択すると、その部署のユーザーが表示されます</span>
                                     </small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="総額">総額</span></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">¥</span>
+                                        <input type="number" class="form-control" 
+                                            v-model.number="editingChildProject.amount" 
+                                            min="0" step="1" 
+                                            placeholder="0">
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-12">

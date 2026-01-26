@@ -358,5 +358,8 @@
     "ユーザー": "Người dùng",
     "更新": "Cập nhật",
     "期限を超過しています": "Đã quá hạn",
-    "アクティビティログ": "Lịch sử"
+    "アクティビティログ": "Lịch sử",
+    "建物一覧へ戻る": "Quay lại trang danh sách công trình",
+    "部署を選択すると、その部署のユーザーが表示されます": "Khi chọn phòng ban, nhân sự trong phòng ban sẽ được hiển thị",
+    "建物番号 + \"-\" + 連番": "Mã công trình + - + số thứ tự"
   } 
