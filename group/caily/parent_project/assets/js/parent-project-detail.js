@@ -1471,7 +1471,7 @@ createApp({
                     // Show success message with SweetAlert2
                     Swal.fire({
                         title: '成功',
-                        text: '親プロジェクトを更新しました。',
+                        text: '建物情報を更新しました。',
                         icon: 'success',
                         confirmButtonText: 'OK',
                         confirmButtonColor: '#3085d6'

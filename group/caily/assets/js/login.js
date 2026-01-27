@@ -15,10 +15,6 @@ document.addEventListener('DOMContentLoaded', function () {
             validators: {
               notEmpty: {
                 message: 'ユーザー名を入力してください。'
-              },
-              stringLength: {
-                min: 4,
-                message: 'ユーザー名は4文字以上で入力してください。'
               }
             }
           },
@@ -36,10 +32,6 @@ document.addEventListener('DOMContentLoaded', function () {
             validators: {
               notEmpty: {
                 message: 'ユーザー名を入力してください。'
-              },
-              stringLength: {
-                min: 4,
-                message: 'ユーザー名は4文字以上で入力してください。'
               }
             }
           },
@@ -47,10 +39,6 @@ document.addEventListener('DOMContentLoaded', function () {
             validators: {
               notEmpty: {
                 message: 'パスワードを入力してください。'
-              },
-              stringLength: {
-                min: 6,
-                message: 'パスワードは6文字以上で入力してください。'
               }
             }
           },
@@ -62,10 +50,6 @@ document.addEventListener('DOMContentLoaded', function () {
               identical: {
                 compare: () => formAuthentication.querySelector('[name="password"]').value,
                 message: 'パスワードと確認用パスワードが一致しません。'
-              },
-              stringLength: {
-                min: 6,
-                message: 'パスワードは6文字以上で入力してください。'
               }
             }
           },

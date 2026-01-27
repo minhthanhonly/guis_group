@@ -484,6 +484,7 @@ li.storageprevious {
 .max-w-100{
 	max-width: 100%;
 }
+.select2-container--default .select2-selection,
 .form-control, .form-select, .tagify{
    border: 1px solid #d1d0d4 !important;
 }
@@ -572,4 +573,16 @@ li.storageprevious {
 }
 .layout-menu-collapsed .layout-menu-toggle .fa-circle-dot::before{
 	content: "\f111";
+}
+
+.tagify__tag__removeBtn::after{
+	content: "\f00d"!important;
+	font-family: var(--fa-style-family, "Font Awesome 6 Free");
+	font-weight: var(--fa-style, 900);
+	color: var(--bs-primary);
+	mask-image: none!important;
+	background: none!important;
+	mask-image: none!important;
+	color: #fff;
+    font-size: 0.6rem;
 }

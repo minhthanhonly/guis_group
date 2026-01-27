@@ -147,7 +147,7 @@ if(!$_SESSION['isProjectManager']){
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
-                                <input type="text" class="form-control" v-model="parentProject.scale">
+                                <input type="text" class="form-control tagify" v-model="parentProject.scale" id="scale_tags" name="scale_tags">
                             </div>
                         </div>
                         <div class="col-md-6">

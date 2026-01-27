@@ -67,10 +67,11 @@ class Authority
 				} else {
 					$error[] = 'ユーザー名は半角英数字で入力してください。';
 				}
-				if (preg_match('/^[a-zA-Z0-9]*$/', $_POST['password'])) {
+				// Allow all printable characters including special characters
+				if (preg_match('/^[\x20-\x7E]*$/', $_POST['password'])) {
 					$password = md5(trim($_POST['password']));
 				} else {
-					$error[] = 'パスワードは半角英数字で入力してください。';
+					$error[] = 'パスワードに無効な文字が含まれています。';
 				}
 				if ($postuserid != '' && count($error) <= 0) {
 					$connection = new Connection;

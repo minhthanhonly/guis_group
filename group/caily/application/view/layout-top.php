@@ -103,7 +103,7 @@
                   <div data-i18n="カレンダー">カレンダー</div>
                 </a>
               </li>
-            <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6' && $_SESSION['show_project'] == 1){ ?>
+            <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
               <li class="menu-item <?php if($directory == 'timecard' && ($page == 'index' || $page == 'group')) echo 'active'; ?>">
                 <a href="<?=$root?>timecard/" class="menu-link">
                   <i class="menu-icon icon-base ti tabler-clock"></i>
@@ -117,13 +117,14 @@
                 <div data-i18n="アドレス帳">アドレス帳</div>
               </a>
             </li> -->
-
+            <?php if($_SESSION['show_project'] == 1){ ?>
             <li class="menu-item <?php if($directory == 'customer') echo 'active open'; ?>">
               <a href="<?=$root?>customer/" class="menu-link">
                 <i class="menu-icon icon-base fa fa-users"></i>
                 <div data-i18n="顧客情報">顧客情報</div>
               </a>
             </li>
+            <?php } ?>
             <?php } ?>
 
             <li class="menu-item <?php if($directory == 'member') echo 'active'; ?>">

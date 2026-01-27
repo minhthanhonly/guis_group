@@ -52,6 +52,7 @@ createApp({
             type1Tagify: null,
             type2Tagify: null,
             constructionBranchTagify: null,
+            scaleTagify: null,
             // Customer modal data
             categories: [],
             departments: [],
@@ -659,6 +660,33 @@ createApp({
                     };
                     this.constructionBranchTagify.on('add', updateConstructionBranch);
                     this.constructionBranchTagify.on('remove', updateConstructionBranch);
+                }
+                
+                // --- Tagify for Scale (建物規模) ---
+                const scaleInput = document.querySelector('#scale_tags');
+                if (scaleInput && window.Tagify && !scaleInput._tagify) {
+                    if (this.scaleTagify) {
+                        try {
+                            this.scaleTagify.destroy();
+                        } catch (e) {
+                            console.log('Error destroying existing scaleTagify:', e);
+                        }
+                    }
+                    this.scaleTagify = new Tagify(scaleInput, {
+                        whitelist: ['W2F3J', 'W2F4J', 'W2F5J', 'W2F6J', 'W3F3J', 'W3F4J', 'W3F5J', 'W3F6J', 'RC3F3J', 'RC3F4J', 'RC3F5J', 'RC3F6J', 'RC3F7J', 'RC3F8J'],
+                        maxTags: 5,
+                        dropdown: {
+                            maxItems: 20,
+                            classname: "tags-look-scale",
+                            enabled: 0,
+                            closeOnSelect: true
+                        },
+                    });
+                    const updateScale = () => {
+                        this.parentProject.scale = this.scaleTagify.value.map(tag => tag.value).join(',');
+                    };
+                    this.scaleTagify.on('add', updateScale);
+                    this.scaleTagify.on('remove', updateScale);
                 }
             });
         },
