@@ -112,10 +112,6 @@ $view->heading('建物一覧');
                                         <span data-i18n="種類2">種類2</span>
                                         <i class="fa fa-fw" :class="getSortIcon('type2')"></i>
                                     </th>
-                                    <th v-if="isColumnVisible('request_date')" @click="sortBy('request_date')" style="cursor: pointer;" class="user-select-none">
-                                        <span data-i18n="依頼日">依頼日</span>
-                                        <i class="fa fa-fw" :class="getSortIcon('request_date')"></i>
-                                    </th>
                                     <th v-if="isColumnVisible('child_project_count')" @click="sortBy('child_project_count')" style="cursor: pointer;" class="user-select-none">
                                         <span data-i18n="件数">件数</span>
                                         <i class="fa fa-fw" :class="getSortIcon('child_project_count')"></i>
@@ -130,6 +126,10 @@ $view->heading('建物一覧');
                                     <th v-if="isColumnVisible('created_at')" @click="sortBy('created_at')" style="cursor: pointer;" class="user-select-none">
                                         <span data-i18n="作成日">作成日</span>
                                         <i class="fa fa-fw" :class="getSortIcon('created_at')"></i>
+                                    </th>
+                                    <th v-if="isColumnVisible('request_date')" @click="sortBy('request_date')" style="cursor: pointer;" class="user-select-none">
+                                        <span data-i18n="依頼日">依頼日</span>
+                                        <i class="fa fa-fw" :class="getSortIcon('request_date')"></i>
                                     </th>
                                     <th><span data-i18n="操作">操作</span></th>
                                 </tr>
@@ -175,7 +175,6 @@ $view->heading('建物一覧');
                                             </span>
                                             <span v-else>-</span>
                                         </td>
-                                        <td v-if="isColumnVisible('request_date')">{{ formatDate(project.request_date) }}</td>
                                         <td v-if="isColumnVisible('child_project_count')" style="white-space: nowrap;">
                                             <span v-if="project.child_project_count > 0">
                                                 <span class="badge bg-info me-2"
@@ -210,6 +209,7 @@ $view->heading('建物一覧');
                                             </div>
                                         </td>
                                         <td v-if="isColumnVisible('created_at')">{{ formatDate(project.created_at) }}</td>
+                                        <td v-if="isColumnVisible('request_date')">{{ formatDate(project.request_date) }}</td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
                                                 <a :href="'detail.php?id=' + project.id" class="btn btn-outline-primary" 

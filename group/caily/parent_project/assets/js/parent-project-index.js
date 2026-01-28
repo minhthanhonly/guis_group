@@ -26,10 +26,10 @@ createApp({
                 { key: 'scale', label: '規模', visible: false },
                 { key: 'type1', label: '種類1', visible: false },
                 { key: 'type2', label: '種類2', visible: false },
-                { key: 'request_date', label: '依頼日', visible: true },
                 { key: 'child_project_count', label: '件数', visible: true },
                 { key: 'created_by_name', label: '作成者', visible: true },
                 { key: 'notes', label: 'メモ', visible: true },
+                { key: 'request_date', label: '依頼日', visible: false },
                 { key: 'created_at', label: '作成日', visible: false },
             ],
             // Notes for parent projects (メモ)
