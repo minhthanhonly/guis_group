@@ -483,12 +483,15 @@ $view->heading('建物詳細');
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th class="text-center"><span data-i18n="お気に入り">お気に入り</span></th>
+                                    <th class="text-center"><i class="fa fa-star text-muted" title="お気に入り"></i></th>
                                     <th><span data-i18n="案件番号">案件番号</span></th>
                                     <th><span data-i18n="受注形態">受注形態</span></th>
-                                    <th><span data-i18n="案件名">案件名</span></th>
-                                    <th><span data-i18n="部署">部署</span></th>
+                                    <th style="min-width: 150px;"><span data-i18n="案件名">案件名</span></th>
+                                    <th style="min-width: 100px;"><span data-i18n="部署">部署</span></th>
                                     <th><span data-i18n="管理">管理</span></th>
+                                    <th><span>担当</span></th>
+                                    <th><span>CAILY納期</span></th>
+                                    <th><span>GUIS納期</span></th>
                                     <th><span data-i18n="開始日">開始日</span></th>
                                     <th><span data-i18n="期限日">期限日</span></th>
                                     <th><span data-i18n="ステータス">ステータス</span></th>
@@ -516,13 +519,13 @@ $view->heading('建物詳細');
                                         </span>
                                         <span v-else>-</span>
                                     </td>
-                                    <td>
+                                    <td style="min-width: 150px;">
                                         <a :href="'../project/detail.php?id=' + project.id"
                                             class="text-decoration-none">
                                             {{ project.name }}
                                         </a>
                                     </td>
-                                    <td>{{ project.department_name || '-' }}</td>
+                                    <td style="min-width: 100px;">{{ project.department_name || '-' }}</td>
                                     <td>
                                         <div class="d-flex align-items-center" v-if="project.manager_id && project.manager_id.split('|').filter(m => m.trim() !== '').length > 0">
                                             <template v-for="(manager, index) in project.manager_id.split('|').filter(m => m.trim() !== '')" :key="manager">
@@ -552,6 +555,9 @@ $view->heading('建物詳細');
                                         </div>
                                         <span v-else class="text-muted">-</span>
                                     </td>
+                                    <td>{{ project.tantou || '-' }}</td>
+                                    <td>{{ project.caily_nouki ? formatDateTime(project.caily_nouki) : '-' }}</td>
+                                    <td>{{ project.guis_nouki ? formatDateTime(project.guis_nouki) : '-' }}</td>
                                     <td>{{ formatDateTime(project.start_date) || '-' }}</td>
                                     <td>{{ formatDateTime(project.end_date) || '-' }}</td>
                                     <td>
@@ -567,30 +573,38 @@ $view->heading('建物詳細');
                                             {{ formatPrice(project.amount || project.total_amount || 0) }}
                                         </span>
                                     </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm">
-                                            <a :href="'../project/detail.php?id=' + project.id"
-                                                class="btn btn-outline-primary" title="詳細">
-                                                <i class="fa fa-eye"></i>
-                                            </a>
-                                            <button v-if="canEditChildProject(project)" class="btn btn-outline-secondary" title="編集"
-                                                @click="showEditChildProjectModal(project)">
-                                                <i class="fa fa-edit"></i>
+                                    <td class="text-center">
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                <i class="fa fa-ellipsis-v"></i>
                                             </button>
-                                            <button class="btn btn-outline-info" title="ログ"
-                                                @click="showChildProjectLogs(project)">
-                                                <i class="fa fa-history"></i>
-                                            </button>
-                                            <button class="btn btn-outline-danger" title="削除"
-                                                @click="cancelChildProject(project)"
-                                                v-if="canDeleteChildProject(project) && project.status !== 'cancelled'">
-                                                <i class="fa fa-trash"></i>
-                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li>
+                                                    <a class="dropdown-item" :href="'../project/detail.php?id=' + project.id">
+                                                        <i class="fa fa-eye me-1"></i> 詳細
+                                                    </a>
+                                                </li>
+                                                <li v-if="canEditChildProject(project)">
+                                                    <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showEditChildProjectModal(project)">
+                                                        <i class="fa fa-edit me-1"></i> 編集
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showChildProjectLogs(project)">
+                                                        <i class="fa fa-history me-1"></i> ログ
+                                                    </a>
+                                                </li>
+                                                <li v-if="canDeleteChildProject(project) && project.status !== 'cancelled'">
+                                                    <a class="dropdown-item text-danger" href="javascript:void(0);" @click.prevent="cancelChildProject(project)">
+                                                        <i class="fa fa-trash me-1"></i> 削除
+                                                    </a>
+                                                </li>
+                                            </ul>
                                         </div>
                                     </td>
                                 </tr>
                                 <tr v-if="childProjects.length === 0">
-                                    <td colspan="12" class="text-center text-muted py-4">
+                                    <td colspan="15" class="text-center text-muted py-4">
                                         案件依頼がありません
                                     </td>
                                 </tr>
@@ -797,7 +811,7 @@ $view->heading('建物詳細');
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">子プロジェクト履歴 - {{ selectedChildProject?.name }}</h5>
+                    <h5 class="modal-title">案件履歴 - {{ selectedChildProject?.name }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
