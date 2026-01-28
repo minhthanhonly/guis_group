@@ -308,6 +308,7 @@ createApp({
         },
 
         // File upload methods
+        // All file types are allowed - no file type restrictions
         handleFileSelect(event) {
             const files = Array.from(event.target.files);
             this.selectedFiles = [...this.selectedFiles, ...files];

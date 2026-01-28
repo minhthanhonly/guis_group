@@ -665,27 +665,67 @@ class Project extends ApplicationModel {
         if (array_key_exists('tantou', $_POST)) {
             $data['tantou'] = (isset($_POST['tantou']) && in_array($_POST['tantou'], ['CAILY', 'GUIS'], true)) ? $_POST['tantou'] : null;
         }
+        // Handle datetime fields - set to null if empty, otherwise format
+        $nullDatetimeFields = [];
         if (array_key_exists('caily_nouki', $_POST)) {
-            $data['caily_nouki'] = (isset($_POST['caily_nouki']) && $_POST['caily_nouki'] !== '') ? date('Y-m-d H:i', strtotime($_POST['caily_nouki'])) : null;
+            $val = isset($_POST['caily_nouki']) ? trim($_POST['caily_nouki']) : '';
+            if ($val !== '') {
+                $timestamp = strtotime($val);
+                if ($timestamp !== false) {
+                    $data['caily_nouki'] = date('Y-m-d H:i', $timestamp);
+                } else {
+                    $nullDatetimeFields[] = 'caily_nouki';
+                }
+            } else {
+                $nullDatetimeFields[] = 'caily_nouki';
+            }
         }
         if (array_key_exists('guis_nouki', $_POST)) {
-            $data['guis_nouki'] = (isset($_POST['guis_nouki']) && $_POST['guis_nouki'] !== '') ? date('Y-m-d H:i', strtotime($_POST['guis_nouki'])) : null;
+            $val = isset($_POST['guis_nouki']) ? trim($_POST['guis_nouki']) : '';
+            if ($val !== '') {
+                $timestamp = strtotime($val);
+                if ($timestamp !== false) {
+                    $data['guis_nouki'] = date('Y-m-d H:i', $timestamp);
+                } else {
+                    $nullDatetimeFields[] = 'guis_nouki';
+                }
+            } else {
+                $nullDatetimeFields[] = 'guis_nouki';
+            }
+        }
+        if (array_key_exists('actual_end_date', $_POST)) {
+            $val = isset($_POST['actual_end_date']) ? trim($_POST['actual_end_date']) : '';
+            if ($val !== '') {
+                $timestamp = strtotime($val);
+                if ($timestamp !== false) {
+                    $data['actual_end_date'] = date('Y-m-d H:i', $timestamp);
+                } else {
+                    $nullDatetimeFields[] = 'actual_end_date';
+                }
+            } else {
+                $nullDatetimeFields[] = 'actual_end_date';
+            }
         }
         
-        // Auto-set actual_end_date if status is completed
+        // Auto-set progress to 100 if status is completed
         if ($data['status'] == 'completed') {
-            $data['actual_end_date'] = date('Y-m-d H:i:s');
             $data['progress'] = 100;
         }
         
         try {
         $result = $this->query_update($data, ['id' => $id]);
         
-        // Handle actual_end_date NULL case separately (only if status is not completed)
-        if ($result && $data['status'] != 'completed') {
-            $query = sprintf("UPDATE %s SET actual_end_date = NULL WHERE id = %d", $this->table, $id);
-            $this->query($query);
+        // Handle NULL datetime fields separately
+        if ($result && !empty($nullDatetimeFields)) {
+            $setParts = [];
+            foreach ($nullDatetimeFields as $field) {
+                $setParts[] = sprintf("`%s` = NULL", $this->escape($field));
             }
+            if (!empty($setParts)) {
+                $query = sprintf("UPDATE %s SET %s WHERE id = %d", $this->table, implode(', ', $setParts), $id);
+                $this->query($query);
+            }
+        }
         } catch (Exception $e) {
             error_log('Project update error: ' . $e->getMessage());
             return ['status' => 'error', 'error' => 'Database error: ' . $e->getMessage()];
@@ -1143,9 +1183,8 @@ class Project extends ApplicationModel {
             }
         }
         
-        // Cập nhật actual_end_date nếu chuyển sang completed
+        // Auto-set progress to 100 if status is completed
         if ($status == 'completed') {
-            $data['actual_end_date'] = date('Y-m-d H:i:s');
             $data['progress'] = 100;
         }
         
@@ -1157,12 +1196,6 @@ class Project extends ApplicationModel {
                 $this->logProjectAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
             }
            
-        }
-        
-        // Clear actual_end_date if status is not completed
-        if ($result && $status != 'completed') {
-            $query = sprintf("UPDATE %s SET actual_end_date = NULL WHERE id = %d", $this->table, $id);
-            $this->query($query);
         }
         
         if ($result) {

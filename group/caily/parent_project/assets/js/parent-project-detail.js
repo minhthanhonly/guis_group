@@ -77,7 +77,10 @@ createApp({
                 is_kadai: true,
                 status: 'draft',
                 amount: 0,
-                managers: []
+                managers: [],
+                tantou: '',
+                caily_nouki: '',
+                guis_nouki: ''
             },
             editingChildProject: {
                 id: null,
@@ -93,7 +96,10 @@ createApp({
                 status: 'draft',
                 previous_status: '',
                 amount: 0,
-                managers: []
+                managers: [],
+                tantou: '',
+                caily_nouki: '',
+                guis_nouki: ''
             },
             childProjectValidationErrors: {
                 name: '',
@@ -1649,7 +1655,10 @@ createApp({
                 is_kadai: true,
                 status: 'draft',
                 amount: 0,
-                managers: []
+                managers: [],
+                tantou: '',
+                caily_nouki: '',
+                guis_nouki: ''
             };
             
             // Clear Quill content
@@ -1669,12 +1678,20 @@ createApp({
             // Destroy existing flatpickr instances if they exist
             const startPicker = document.getElementById('start_date_picker');
             const endPicker = document.getElementById('end_date_picker');
+            const cailyNoukiPicker = document.getElementById('create_caily_nouki_picker');
+            const guisNoukiPicker = document.getElementById('create_guis_nouki_picker');
             
             if (startPicker && startPicker._flatpickr) {
                 startPicker._flatpickr.destroy();
             }
             if (endPicker && endPicker._flatpickr) {
                 endPicker._flatpickr.destroy();
+            }
+            if (cailyNoukiPicker && cailyNoukiPicker._flatpickr) {
+                cailyNoukiPicker._flatpickr.destroy();
+            }
+            if (guisNoukiPicker && guisNoukiPicker._flatpickr) {
+                guisNoukiPicker._flatpickr.destroy();
             }
             
             // Destroy Tagify instance
@@ -1787,6 +1804,50 @@ createApp({
                     endDateOptions.defaultDate = this.newChildProject.end_date;
                 }
                 flatpickr(endDatePicker, endDateOptions);
+            }
+            
+            // Initialize CAILY納期 date picker
+            const cailyNoukiPicker = document.getElementById('create_caily_nouki_picker');
+            if (cailyNoukiPicker) {
+                const cailyNoukiOptions = {
+                    enableTime: true,
+                    dateFormat: "Y/m/d H:i",
+                    time_24hr: true,
+                    locale: "ja",
+                    allowInput: true,
+                    clickOpens: true,
+                    defaultHour: 18,
+                    defaultMinute: 0,
+                    onChange: (selectedDates, dateStr) => {
+                        this.newChildProject.caily_nouki = dateStr;
+                    }
+                };
+                if (this.newChildProject.caily_nouki) {
+                    cailyNoukiOptions.defaultDate = this.newChildProject.caily_nouki;
+                }
+                flatpickr(cailyNoukiPicker, cailyNoukiOptions);
+            }
+            
+            // Initialize GUIS納期 date picker
+            const guisNoukiPicker = document.getElementById('create_guis_nouki_picker');
+            if (guisNoukiPicker) {
+                const guisNoukiOptions = {
+                    enableTime: true,
+                    dateFormat: "Y/m/d H:i",
+                    time_24hr: true,
+                    locale: "ja",
+                    allowInput: true,
+                    clickOpens: true,
+                    defaultHour: 18,
+                    defaultMinute: 0,
+                    onChange: (selectedDates, dateStr) => {
+                        this.newChildProject.guis_nouki = dateStr;
+                    }
+                };
+                if (this.newChildProject.guis_nouki) {
+                    guisNoukiOptions.defaultDate = this.newChildProject.guis_nouki;
+                }
+                flatpickr(guisNoukiPicker, guisNoukiOptions);
             }
         },
         
@@ -1917,7 +1978,10 @@ createApp({
                 status: project.status || '',
                 previous_status: project.previous_status || '',
                 amount: project.amount || project.total_amount || 0,
-                managers: [] // Initialize as empty, will be loaded later
+                managers: [], // Initialize as empty, will be loaded later
+                tantou: project.tantou || '',
+                caily_nouki: this.formatDateTimeForInput(project.caily_nouki) || '',
+                guis_nouki: this.formatDateTimeForInput(project.guis_nouki) || ''
             };
             
 
@@ -1968,6 +2032,38 @@ createApp({
                     dateFormat: 'Y/m/d H:i',
                     locale: 'ja',
                     time_24hr: true
+                });
+            }
+            
+            // Initialize CAILY納期 date picker
+            const cailyNoukiPicker = document.getElementById('edit_caily_nouki_picker');
+            if (cailyNoukiPicker) {
+                if (cailyNoukiPicker._flatpickr) {
+                    cailyNoukiPicker._flatpickr.destroy();
+                }
+                cailyNoukiPicker._flatpickr = flatpickr(cailyNoukiPicker, {
+                    enableTime: true,
+                    dateFormat: 'Y/m/d H:i',
+                    locale: 'ja',
+                    time_24hr: true,
+                    defaultHour: 18,
+                    defaultMinute: 0
+                });
+            }
+            
+            // Initialize GUIS納期 date picker
+            const guisNoukiPicker = document.getElementById('edit_guis_nouki_picker');
+            if (guisNoukiPicker) {
+                if (guisNoukiPicker._flatpickr) {
+                    guisNoukiPicker._flatpickr.destroy();
+                }
+                guisNoukiPicker._flatpickr = flatpickr(guisNoukiPicker, {
+                    enableTime: true,
+                    dateFormat: 'Y/m/d H:i',
+                    locale: 'ja',
+                    time_24hr: true,
+                    defaultHour: 18,
+                    defaultMinute: 0
                 });
             }
         },
@@ -2582,6 +2678,9 @@ createApp({
                 formData.append('parent_project_id', this.editingChildProject.parent_project_id);
                 formData.append('status', this.editingChildProject.status || 'draft');
                 formData.append('amount', this.editingChildProject.amount || 0);
+                formData.append('tantou', this.editingChildProject.tantou || '');
+                formData.append('caily_nouki', this.editingChildProject.caily_nouki || '');
+                formData.append('guis_nouki', this.editingChildProject.guis_nouki || '');
 
                 formData.append('is_kadai', '0');
 
@@ -2614,7 +2713,10 @@ createApp({
                         status: 'draft',
                         previous_status: '',
                         amount: 0,
-                        managers: []
+                        managers: [],
+                        tantou: '',
+                        caily_nouki: '',
+                        guis_nouki: ''
                     };
                     
                     // Reset Quill content
@@ -2771,6 +2873,9 @@ createApp({
                 }
                 formData.append('parent_project_id', this.newChildProject.parent_project_id);
                 formData.append('amount', this.newChildProject.amount || 0);
+                formData.append('tantou', this.newChildProject.tantou || '');
+                formData.append('caily_nouki', this.newChildProject.caily_nouki || '');
+                formData.append('guis_nouki', this.newChildProject.guis_nouki || '');
 
                 formData.append('is_kadai', '0');
                 formData.append('status', this.newChildProject.status || 'draft');

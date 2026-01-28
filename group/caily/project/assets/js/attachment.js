@@ -346,6 +346,7 @@ createApp({
         },
         
         // File operations
+        // All file types are allowed - no file type restrictions, only size limit (100MB)
         handleFileSelect(event) {
             const files = Array.from(event.target.files);
             this.selectedFiles = files.filter(file => {
@@ -392,6 +393,7 @@ createApp({
             if (files.length === 0) return;
             
             // Filter files by size and add to selected files
+            // All file types are allowed - no file type restrictions, only size limit (100MB)
             const validFiles = files.filter(file => {
                 if (file.size > 100 * 1024 * 1024) { // 100MB limit
                     this.showNotification(`ファイル「${file.name}」は100MBを超えています`, 'error');

@@ -219,11 +219,11 @@ class Department extends ApplicationModel {
         $json = file_get_contents('php://input');
         $data = json_decode($json, true);
         // Lưu vào 1 bảng riêng: department_custom_fields (id, department_id, fields)
-        $department_id = intval($data['department_id']);
+        $department_id = isset($data['department_id']) ? intval($data['department_id']) : 0;
         $id = intval($data['id']);
         $name = $data['name'];
         $fields = json_encode($data['fields'], JSON_UNESCAPED_UNICODE);
-        $this->query_update(['fields' => $fields, 'name' => $name], ['id' => $id], 'department_custom_fields');
+        $this->query_update(['department_id' => $department_id, 'fields' => $fields, 'name' => $name], ['id' => $id], 'department_custom_fields');
         return ['success' => true];
     }
 

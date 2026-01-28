@@ -457,40 +457,17 @@ if($_SESSION['show_project'] == 0){
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.guis_nouki)" readonly>
                             </div>
                             
-                            <div class="col-md-4" v-if="project.actual_end_date">
+                            <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="実終了日">実終了日</span></label>
-                                <input type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
-                            </div>
-                            <div class="col-md-12">
-                                <label class="form-label"><span data-i18n="タグ">タグ</span><i class="fa fa-question-circle text-muted ms-2" 
-                                data-bs-toggle="tooltip" 
-                                data-bs-placement="top" 
-                                title="タグは案件の探す時に使用します。"></i></label>
-                                <div class="d-flex align-items-center gap-2">
-                                    <input type="text" class="form-control tagify" v-model="project.tags" id="project_tags" name="project_tags" @input="updateTags">
+                                <div v-if="isEditMode" class="input-group">
+                                    <input type="text" class="form-control" v-model="project.actual_end_date" id="actual_end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                    <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                 </div>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label"><span data-i18n="説明">説明</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="custom_editor">
-                                        <div class="custom_editor_content" id="quill_description"></div>
-                                        <textarea class="custom_editor_textarea d-none" v-model="project.description" id="quill_description_textarea"></textarea>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div class="form-control ql-editor" style="min-height:100px;" v-html="decodeHtmlEntities(project.description)"></div>
-                                </template>
+                                <input v-else type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
                             </div>
                             
-
                             <div class="col-12 mt-3">
                                 <template v-if="isEditMode">
-                                    <label class="form-label"><span data-i18n="カスタム項目セット">カスタム項目セット</span></label>
-                                    <select class="form-select" v-model="project.department_custom_fields_set_id">
-                                        <option value="">選択してください</option>
-                                        <option v-for="set in departmentCustomFieldSets" :value="set.id">{{ set.name }}</option>
-                                    </select>
                                     <div v-if="customFields && customFields.length > 0" class="mt-3">
                                         <div class="row">
                                             <template v-for="(field, idx) in customFields" :key="idx">
@@ -516,6 +493,16 @@ if($_SESSION['show_project'] == 0){
                                                         <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
                                                             <input class="form-check-input" type="checkbox" :name="'custom_checkbox_' + idx" :value="opt.trim()" v-model="field.valueArr">
                                                             <label class="form-check-label">{{ opt.trim() }}</label>
+                                                        </div>
+                                                    </template>
+                                                    <template v-else-if="field.type === 'datetime'">
+                                                        <div class="input-group">
+                                                            <input type="text" class="form-control custom-field-datetime" 
+                                                                   :id="'custom_datetime_' + idx" 
+                                                                   v-model="field.value" 
+                                                                   placeholder="YYYY/MM/DD HH:mm" 
+                                                                   autocomplete="off">
+                                                            <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                                         </div>
                                                     </template>
                                                     <template v-else>
@@ -544,6 +531,9 @@ if($_SESSION['show_project'] == 0){
                                                             <span v-else>-</span>
                                                         </div>
                                                     </template>
+                                                    <template v-else-if="field.type === 'datetime'">
+                                                        <div class="form-control">{{ formatDateTime(field.value) }}</div>
+                                                    </template>
                                                     <template v-else>
                                                         <div class="form-control">{{ field.value || '-' }}</div>
                                                     </template>
@@ -556,6 +546,29 @@ if($_SESSION['show_project'] == 0){
                                     </template>
                                 </template>
                             </div>
+                            <div class="col-md-12">
+                                <label class="form-label"><span data-i18n="タグ">タグ</span><i class="fa fa-question-circle text-muted ms-2" 
+                                data-bs-toggle="tooltip" 
+                                data-bs-placement="top" 
+                                title="タグは案件の探す時に使用します。"></i></label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control tagify" v-model="project.tags" id="project_tags" name="project_tags" @input="updateTags">
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label"><span data-i18n="説明">説明</span></label>
+                                <template v-if="isEditMode">
+                                    <div class="custom_editor">
+                                        <div class="custom_editor_content" id="quill_description"></div>
+                                        <textarea class="custom_editor_textarea d-none" v-model="project.description" id="quill_description_textarea"></textarea>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <div class="form-control ql-editor" style="min-height:100px;" v-html="decodeHtmlEntities(project.description)"></div>
+                                </template>
+                            </div>
+                            
+
                         </div>
                         <div v-else class="text-center py-5">
                             <div class="spinner-border" role="status">

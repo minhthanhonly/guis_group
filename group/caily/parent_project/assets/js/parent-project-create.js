@@ -58,7 +58,7 @@ createApp({
             departments: [],
             customers: [],
             newCustomer: {
-                company_name: '',
+                company_name: '大東建託株式会社',
                 company_name_kana: '',
                 name: '',
                 name_kana: '',
@@ -246,14 +246,21 @@ createApp({
                             };
                         },
                         processResults: function(data) {
-                            return {
-                                results: data.data.map(function(item) {
-                                    return {
-                                        id: item.company_name,
-                                        text: item.company_name
-                                    };
-                                })
-                            };
+                            const results = data.data.map(function(item) {
+                                return {
+                                    id: item.company_name,
+                                    text: item.company_name
+                                };
+                            });
+                            // 大東を含むオプションを先頭に
+                            results.sort((a, b) => {
+                                const aHas = (a.text || '').includes('大東');
+                                const bHas = (b.text || '').includes('大東');
+                                if (aHas && !bHas) return -1;
+                                if (!aHas && bHas) return 1;
+                                return 0;
+                            });
+                            return { results };
                         }
                     }
                 }).on('select2:select', (e) => {
@@ -292,7 +299,15 @@ createApp({
                         id: item.company_name,
                         text: item.company_name
                     }));
-                    
+                    // 大東を含むオプションを先頭に
+                    companies.sort((a, b) => {
+                        const aHas = (a.text || '').includes('大東');
+                        const bHas = (b.text || '').includes('大東');
+                        if (aHas && !bHas) return -1;
+                        if (!aHas && bHas) return 1;
+                        return 0;
+                    });
+
                     // Add options to company select2
                     const $company = $('#company_name');
                     if ($company.length && $company.data('select2')) {
@@ -757,7 +772,7 @@ createApp({
 
         resetCustomerData() {
             this.newCustomer = {
-                company_name: '',
+                company_name: '大東建託株式会社',
                 company_name_kana: '',
                 name: '',
                 name_kana: '',

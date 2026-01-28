@@ -88,6 +88,7 @@ if($_SESSION['show_project'] == 0){
                                         <select class="form-select" v-model="field.type">
                                             <option value="text">テキスト</option>
                                             <option value="textarea">テキストエリア</option>
+                                            <option value="datetime">日時</option>
                                             <option value="select">セレクト</option>
                                             <option value="radio">ラジオ</option>
                                             <option value="checkbox">チェックボックス</option>

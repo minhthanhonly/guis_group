@@ -978,7 +978,7 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-4 col-xl-3">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="期限日">期限日</span> <span class="text-danger">*</span></label>
+                                    <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span> <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.end_date"
                                         id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off" required>
                                     <div v-if="childProjectValidationErrors.end_date" class="invalid-feedback d-block">
@@ -1048,6 +1048,35 @@ $view->heading('建物詳細');
                                             min="0" step="1" 
                                             placeholder="0">
                                     </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label">担当</label>
+                                    <div class="d-flex gap-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" v-model="newChildProject.tantou" value="CAILY" id="create_tantou_caily">
+                                            <label class="form-check-label" for="create_tantou_caily">CAILY</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" v-model="newChildProject.tantou" value="GUIS" id="create_tantou_guis">
+                                            <label class="form-check-label" for="create_tantou_guis">GUIS</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label">CAILY納期</label>
+                                    <input type="text" class="form-control" v-model="newChildProject.caily_nouki" 
+                                        id="create_caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label">GUIS納期</label>
+                                    <input type="text" class="form-control" v-model="newChildProject.guis_nouki" 
+                                        id="create_guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                 </div>
                             </div>
                             <div class="col-12">
@@ -1206,6 +1235,35 @@ $view->heading('建物詳細');
                                             min="0" step="1" 
                                             placeholder="0">
                                     </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label">担当</label>
+                                    <div class="d-flex gap-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" v-model="editingChildProject.tantou" value="CAILY" id="edit_tantou_caily">
+                                            <label class="form-check-label" for="edit_tantou_caily">CAILY</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" v-model="editingChildProject.tantou" value="GUIS" id="edit_tantou_guis">
+                                            <label class="form-check-label" for="edit_tantou_guis">GUIS</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label">CAILY納期</label>
+                                    <input type="text" class="form-control" v-model="editingChildProject.caily_nouki" 
+                                        id="edit_caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label">GUIS納期</label>
+                                    <input type="text" class="form-control" v-model="editingChildProject.guis_nouki" 
+                                        id="edit_guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                 </div>
                             </div>
                             <div class="col-12">
