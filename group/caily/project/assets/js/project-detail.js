@@ -1178,6 +1178,26 @@ const vueApp = createApp({
                 if (elEnd._flatpickr) elEnd._flatpickr.destroy();
                 flatpickr(elEnd, optionsEnd);
             }
+            const optionsDatetime = {
+                enableTime: true,
+                dateFormat: "Y/m/d H:i",
+                time_24hr: true,
+                allowInput: true,
+                locale: "ja",
+                defaultHour: 9,
+                defaultMinute: 0
+            };
+            ['caily_nouki_picker', 'guis_nouki_picker'].forEach((id, i) => {
+                const key = id.replace('_picker', '');
+                const el = document.getElementById(id);
+                if (el) {
+                    if (el._flatpickr) el._flatpickr.destroy();
+                    flatpickr(el, {
+                        ...optionsDatetime,
+                        onChange: (selectedDates, dateStr) => { this.project[key] = dateStr; }
+                    });
+                }
+            });
         },
         async initManagerMembersTagify() {
             // Lấy toàn bộ user trong department
@@ -1241,6 +1261,9 @@ const vueApp = createApp({
             } else {
                 this.project.end_date = '';
             }
+            ['caily_nouki', 'guis_nouki'].forEach(k => {
+                this.project[k] = this.project[k] ? this.formatDateTime(this.project[k]) : '';
+            });
             // if (this.project.actual_end_date) {
             //     this.project.actual_end_date = this.formatDateTime(this.project.actual_end_date);
             // } else {
@@ -1309,6 +1332,9 @@ const vueApp = createApp({
                 formData.append('managers', this.newProject.managers || '');
                 formData.append('start_date', this.toAPIDate(this.project.start_date));
                 formData.append('end_date', this.toAPIDate(this.project.end_date));
+                formData.append('tantou', this.project.tantou || '');
+                formData.append('caily_nouki', this.toAPIDate(this.project.caily_nouki) || '');
+                formData.append('guis_nouki', this.toAPIDate(this.project.guis_nouki) || '');
                 formData.append('project_order_type', this.project.project_order_type);
                 formData.append('customer_id', this.project.customer_id);
                 // formData.append('amount', this.project.amount);
@@ -1553,16 +1579,22 @@ const vueApp = createApp({
             };
         },
         async saveNote() {
-            if (!this.editingNote.title.trim()) {
-                this.showNotification('タイトルを入力してください', 'error');
+            const rawContent = (this.editingNote.content || '').trim();
+            if (!rawContent) {
+                this.showNotification('内容を入力してください', 'error');
                 return;
+            }
+            // Auto-generate title from content (first line, max 50 chars)
+            let title = (this.editingNote.title || '').trim();
+            if (!title) {
+                title = rawContent.split(/\r?\n/)[0].slice(0, 50) || 'メモ';
             }
             
             try {
                 const formData = new FormData();
                 formData.append('project_id', this.projectId);
-                formData.append('title', this.editingNote.title.trim());
-                formData.append('content', this.editingNote.content || '');
+                formData.append('title', title);
+                formData.append('content', rawContent);
                 formData.append('is_important', this.editingNote.is_important ? 1 : 0);
                 formData.append('needs_confirmation', this.editingNote.needs_confirmation ? 1 : 0);
                 

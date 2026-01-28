@@ -397,7 +397,7 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">
-                                    <span data-i18n="期限日">期限日</span>
+                                    <span data-i18n="期限日(実納期)">期限日(実納期)</span>
                                     <span v-if="getTimeRemaining()" :class="'badge ms-2 ' + getTimeRemaining().class" 
                                           :title="getTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
                                         {{ getTimeRemaining().text }}
@@ -409,8 +409,6 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" readonly>
                             </div>
-                            
-                            
                             <div class="col-4">
                                 <label class="form-label"><span data-i18n="進捗率">進捗率</span></label>
                                 <div class="position-relative">
@@ -428,6 +426,37 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
+                            <div class="col-md-4">
+                                <label class="form-label">担当</label>
+                                <div v-if="isEditMode" class="d-flex gap-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" v-model="project.tantou" value="CAILY" id="tantou_caily">
+                                        <label class="form-check-label" for="tantou_caily">CAILY</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" v-model="project.tantou" value="GUIS" id="tantou_guis">
+                                        <label class="form-check-label" for="tantou_guis">GUIS</label>
+                                    </div>
+                                </div>
+                                <input v-else type="text" class="form-control" :value="project.tantou || '-'" readonly>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">CAILY納期</label>
+                                <div v-if="isEditMode" class="input-group">
+                                    <input type="text" class="form-control" v-model="project.caily_nouki" id="caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                    <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                                </div>
+                                <input v-else type="text" class="form-control" :value="formatDateTime(project.caily_nouki)" readonly>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">GUIS納期</label>
+                                <div v-if="isEditMode" class="input-group">
+                                    <input type="text" class="form-control" v-model="project.guis_nouki" id="guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                    <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                                </div>
+                                <input v-else type="text" class="form-control" :value="formatDateTime(project.guis_nouki)" readonly>
+                            </div>
+                            
                             <div class="col-md-4" v-if="project.actual_end_date">
                                 <label class="form-label"><span data-i18n="実終了日">実終了日</span></label>
                                 <input type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
@@ -610,15 +639,18 @@ if($_SESSION['show_project'] == 0){
                         <div v-if="notes.length > 0" class="list-group">
                             <div v-for="note in notes" :key="note.id" class="list-group-item d-flex justify-content-between align-items-start">
                                 <div class="flex-grow-1" style="cursor: pointer;" @click="openNoteModal(note)">
-                                    <div class="d-flex align-items-center mb-1">
-                                        <i v-if="note.is_important == 1" class="fa fa-exclamation-circle text-danger me-2"></i>
-                                        <span class="fw-medium text-primary">{{ note.title }}</span>
-                                        <span v-if="note.needs_confirmation == 1" class="badge bg-warning ms-2">確認必要</span>
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <small class="text-secondary">
+                                            {{ formatShortDateTime(note.created_at) }} - {{ note.realname || 'Unknown' }}
+                                        </small>
+                                        <div class="ms-2">
+                                            <i v-if="note.is_important == 1" class="fa fa-exclamation-circle text-danger me-2"></i>
+                                            <span v-if="note.needs_confirmation == 1" class="badge bg-warning">確認必要</span>
+                                        </div>
                                     </div>
-                                    <div v-if="note.content" class="text-muted small note-content">
-                                        {{ getNotePreview(note.content) }}
+                                    <div v-if="note.content" class="text-muted small" style="white-space: pre-line; word-break: break-word;">
+                                        {{ note.content }}
                                     </div>
-                                    <small class="text-secondary">{{ formatShortDateTime(note.created_at) }} - {{ note.realname || 'Unknown' }}</small>
                                 </div>
                                 <button class="btn btn-outline-danger btn-sm ms-2" 
                                         @click="deleteNote(note.id)" 
@@ -766,23 +798,12 @@ if($_SESSION['show_project'] == 0){
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">
-                            <template v-if="editingNote.id">
-                                <span data-i18n="メモ詳細">メモ詳細</span>
-                            </template>
-                            <template v-else>
-                                <span data-i18n="新しいメモ">新しいメモ</span>
-                            </template>
-                        </h5>
+                        <h5 class="modal-title"></h5>
                         <button type="button" class="btn-close" @click="closeNoteModal"></button>
                     </div>
                     <div class="modal-body">
                         <!-- View mode -->
                         <div v-if="editingNote.id && !isNoteEditMode">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="タイトル">タイトル</span></label>
-                                <div class="form-control">{{ editingNote.title }}</div>
-                            </div>
                             <div class="mb-3">
                                 <label class="form-label"><span data-i18n="内容">内容</span></label>
                                 <div class="form-control" style="min-height:100px;white-space:pre-line;max-height:300px;overflow-y:auto;">{{ editingNote.content || '-' }}</div>
@@ -803,10 +824,6 @@ if($_SESSION['show_project'] == 0){
                         </div>
                         <!-- Edit mode -->
                         <form v-else @submit.prevent="saveNote">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="タイトル">タイトル</span> <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" v-model="editingNote.title" required maxlength="255">
-                            </div>
                             <div class="mb-3">
                                 <label class="form-label"><span data-i18n="内容">内容</span></label>
                                 <textarea class="form-control" v-model="editingNote.content" rows="6" placeholder="メモの詳細を入力してください..."></textarea>
@@ -837,7 +854,7 @@ if($_SESSION['show_project'] == 0){
                         <template v-else>
                             <button class="btn btn-secondary" @click="isNoteEditMode = false" v-if="editingNote.id"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
                             <button class="btn btn-secondary" @click="closeNoteModal" v-else><span data-i18n="キャンセル">キャンセル</span></button>
-                            <button class="btn btn-primary" @click="saveNote" :disabled="!editingNote.title.trim()">
+                            <button class="btn btn-primary" @click="saveNote" :disabled="!(editingNote.content && editingNote.content.trim())">
                                 <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
                             </button>
                         </template>
@@ -870,19 +887,7 @@ $view->footing();
 }
 
 
-/* Note content styling */
-.note-content {
-    line-height: 1.4;
-    max-height: 2.8em; /* 2 lines */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    word-break: break-word;
-    margin-bottom: 0.25rem;
-    font-size: 0.875rem;
-}
+/* Note content styling (now show full content in list) */
 
 /* Project tags styling */
 .project-tags .badge {

@@ -291,20 +291,40 @@ var projectTable;
                             return '<span class="text-muted">-</span>';
                         }
                         // Hiển thị toàn bộ nội dung (có thể nhiều ghi chú), giữ nguyên xuống dòng
+                        // Định dạng data: "noteId::content | noteId::content | ..."
                         const notes = data.split(' | ').filter(note => note.trim() !== '');
                         if (notes.length === 0) {
                             return '<span class="text-muted">-</span>';
                         }
                         const html = notes.map(note => {
-                            const text = note.trim();
-                            return `<div class="mb-1" style="white-space: pre-wrap;">${text}</div>`;
+                            const raw = note.trim();
+                            const delimiterIndex = raw.indexOf('::');
+                            let id = null;
+                            let text = raw;
+                            if (delimiterIndex !== -1) {
+                                id = raw.substring(0, delimiterIndex);
+                                text = raw.substring(delimiterIndex + 2);
+                            }
+                            return `
+                                <div class="confirmation-note-item mb-1" ${id ? `data-note-id="${id}"` : ''}>
+                                    <span class="note-text" style="white-space: pre-wrap;">${text}</span>
+                                    <span class="note-actions d-none ms-1">
+                                        <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
+                                            <i class="fa fa-pencil-alt"></i>
+                                        </span>
+                                        <span class="note-delete-icon text-danger" title="メモを削除" style="cursor: pointer;">
+                                            <i class="fa fa-trash"></i>
+                                        </span>
+                                    </span>
+                                </div>
+                            `;
                         }).join('');
-                        // Click vào vùng cột sẽ mở chi tiết project
-                        return `<div 
-                                    style="cursor:pointer; max-width: 300px; max-height: 200px; overflow-y: auto;" 
-                                    onclick="window.location.href='detail.php?id=${row.id}'">
-                                    ${html}
-                                </div>`;
+                        return `
+                            <div class="confirmation-notes-wrapper" 
+                                 style="max-width: 300px; max-height: 200px; overflow-y: auto;">
+                                ${html}
+                            </div>
+                        `;
                     },
                     title: '<span data-i18n="確認必要メモ">確認必要メモ</span>',
                     orderable: false
@@ -711,6 +731,95 @@ var projectTable;
         $(document).on('click', '.item-delete', function() {
             const id = $(this).data('id');
             app.deleteProject(id);
+        });
+
+        // ----- 確認必要メモ: hover pencil & context menu -----
+        // Custom context menu for adding confirmation notes
+        const $noteContextMenu = $('<div id="confirmationNoteContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
+        $noteContextMenu.append('<button class="dropdown-item" type="button" id="addConfirmationNoteBtn"><i class="fa fa-plus me-1"></i>メモを追加</button>');
+        $('body').append($noteContextMenu);
+
+        let contextMenuProjectId = null;
+
+        $('#projectTable tbody').on('contextmenu', 'td.confirmation-notes-column', function(e) {
+            e.preventDefault();
+            if (!projectTable) return;
+            const rowData = projectTable.row($(this).closest('tr')).data();
+            if (!rowData) return;
+            contextMenuProjectId = rowData.id;
+            $noteContextMenu
+                .css({ top: e.pageY + 'px', left: e.pageX + 'px' })
+                .show();
+        });
+
+        // Hide context menu on click elsewhere
+        $(document).on('click', function() {
+            $noteContextMenu.hide();
+        });
+
+        // Handle "メモを追加" click
+        $noteContextMenu.on('click', '#addConfirmationNoteBtn', function(e) {
+            e.stopPropagation();
+            $noteContextMenu.hide();
+            if (contextMenuProjectId && window.app && app.openNoteModalFromList) {
+                app.openNoteModalFromList(contextMenuProjectId, null);
+            }
+        });
+
+        // Hover to show/hide note action icons (edit/delete)
+        $('#projectTable tbody').on('mouseenter', 'td.confirmation-notes-column .confirmation-note-item', function() {
+            $(this).find('.note-actions').removeClass('d-none');
+        }).on('mouseleave', 'td.confirmation-notes-column .confirmation-note-item', function() {
+            $(this).find('.note-actions').addClass('d-none');
+        });
+
+        // Click pencil to edit the corresponding note
+        $('#projectTable tbody').on('click', '.confirmation-note-item .note-edit-icon', function(e) {
+            e.stopPropagation();
+            const $item = $(this).closest('.confirmation-note-item');
+            if (!projectTable) return;
+            const rowData = projectTable.row($item.closest('tr')).data();
+            if (!rowData) return;
+            const projectId = rowData.id;
+            const noteId = $item.data('note-id');
+            const noteText = $item.find('.note-text').text();
+            if (window.app) {
+                if (noteId && app.openNoteModalFromListById) {
+                    app.openNoteModalFromListById(projectId, noteId);
+                } else if (app.openNoteModalFromList) {
+                    // Fallback cho dữ liệu cũ nếu không có note-id
+                    app.openNoteModalFromList(projectId, noteText);
+                }
+            }
+        });
+
+        // Click trash icon to delete the corresponding note
+        $('#projectTable tbody').on('click', '.confirmation-note-item .note-delete-icon', async function(e) {
+            e.stopPropagation();
+            const $item = $(this).closest('.confirmation-note-item');
+            const noteId = $item.data('note-id');
+            if (!noteId) return;
+
+            if (!confirm('このメモを削除しますか？')) {
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('id', noteId);
+                const response = await axios.post('/api/index.php?model=project&method=deleteNote', formData);
+                if (response.data && response.data.status === 'success') {
+                    showMessage('メモが削除されました');
+                    if (projectTable) {
+                        projectTable.ajax.reload(null, false);
+                    }
+                } else {
+                    showMessage('メモの削除に失敗しました', true);
+                }
+            } catch (error) {
+                console.error('Error deleting note:', error);
+                showMessage('メモの削除に失敗しました', true);
+            }
         });
 
         $('#start_date').flatpickr({    
@@ -1198,6 +1307,19 @@ var projectTable;
                 managerTagifyInstance: null,
                 customerTagifyInstance: null,
                 formValidator: null,
+                // Notes (確認必要メモ)
+                notes: [],
+                showNoteModal: false,
+                isNoteEditMode: false,
+                editingNote: {
+                    id: null,
+                    title: '',
+                    content: '',
+                    is_important: false,
+                    needs_confirmation: false,
+                    user_id: null
+                },
+                currentNoteProjectId: null,
                 // Kadai queue properties
                 kadaiProjects: [],
                 isKadaiQueueExpanded: false,
@@ -1640,6 +1762,133 @@ var projectTable;
             },
             canCommentProject() {
                 return this.hasPermission('project_comment');
+            },
+            // ----- Notes (確認必要メモ) methods -----
+            async loadNotesForProject(projectId) {
+                try {
+                    const response = await axios.get(`/api/index.php?model=project&method=getNotes&project_id=${projectId}`);
+                    if (response.data && response.data.status === 'success') {
+                        this.notes = response.data.data || [];
+                    } else {
+                        this.notes = [];
+                    }
+                } catch (error) {
+                    console.error('Error loading notes:', error);
+                    this.notes = [];
+                }
+            },
+            openNoteModalFromListById(projectId, noteId) {
+                this.currentNoteProjectId = projectId;
+                this.showNoteModal = true;
+                this.isNoteEditMode = true;
+                // Reset editing note
+                this.editingNote = {
+                    id: null,
+                    title: '',
+                    content: '',
+                    is_important: false,
+                    needs_confirmation: true,
+                    user_id: null
+                };
+                this.loadNotesForProject(projectId).then(() => {
+                    const match = this.notes.find(n => String(n.id) === String(noteId));
+                    if (match) {
+                        this.editingNote = {
+                            id: match.id,
+                            title: match.title,
+                            content: match.content,
+                            is_important: match.is_important == 1,
+                            needs_confirmation: match.needs_confirmation == 1,
+                            user_id: match.user_id
+                        };
+                    }
+                });
+            },
+            openNoteModalFromList(projectId, noteContent = null) {
+                this.currentNoteProjectId = projectId;
+                this.showNoteModal = true;
+                this.isNoteEditMode = true;
+                // Reset editing note
+                this.editingNote = {
+                    id: null,
+                    title: '',
+                    content: '',
+                    is_important: false,
+                    needs_confirmation: true,
+                    user_id: null
+                };
+                this.loadNotesForProject(projectId).then(() => {
+                    if (noteContent) {
+                        const trimmed = noteContent.trim();
+                        const match = this.notes.find(n => (n.content || '').trim() === trimmed && n.needs_confirmation == 1);
+                        if (match) {
+                            this.editingNote = {
+                                id: match.id,
+                                title: match.title,
+                                content: match.content,
+                                is_important: match.is_important == 1,
+                                needs_confirmation: match.needs_confirmation == 1,
+                                user_id: match.user_id
+                            };
+                        } else {
+                            this.editingNote.content = noteContent;
+                        }
+                    }
+                });
+            },
+            closeNoteModal() {
+                this.showNoteModal = false;
+                this.isNoteEditMode = false;
+                this.editingNote = {
+                    id: null,
+                    title: '',
+                    content: '',
+                    is_important: false,
+                    needs_confirmation: false,
+                    user_id: null
+                };
+            },
+            async saveNote() {
+                // Tự động sinh title từ nội dung (ẩn field title khỏi UI)
+                const rawContent = (this.editingNote.content || '').trim();
+                let title = (this.editingNote.title || '').trim();
+                if (!title) {
+                    // Lấy dòng đầu tiên của nội dung, giới hạn độ dài
+                    title = rawContent.split(/\r?\n/)[0].slice(0, 50) || 'メモ';
+                }
+                try {
+                    const formData = new FormData();
+                    formData.append('project_id', this.currentNoteProjectId);
+                    formData.append('title', title);
+                    formData.append('content', rawContent);
+                    formData.append('is_important', this.editingNote.is_important ? 1 : 0);
+                    formData.append('needs_confirmation', this.editingNote.needs_confirmation ? 1 : 0);
+                    
+                    let response;
+                    if (this.editingNote.id) {
+                        formData.append('id', this.editingNote.id);
+                        response = await axios.post('/api/index.php?model=project&method=updateNote', formData);
+                    } else {
+                        response = await axios.post('/api/index.php?model=project&method=addNote', formData);
+                    }
+                    
+                    if (response.data && response.data.status === 'success') {
+                        showMessage('メモが保存されました');
+                        this.closeNoteModal();
+                        if (projectTable) {
+                            projectTable.ajax.reload(null, false);
+                        }
+                    } else {
+                        showMessage('メモの保存に失敗しました', true);
+                    }
+                } catch (error) {
+                    console.error('Error saving note:', error);
+                    showMessage('メモの保存に失敗しました', true);
+                }
+            },
+            canEditNote(note) {
+                // 案件一覧ではひとまず全ユーザーに編集を許可
+                return true;
             },
             async loadUsers() {
                 try {

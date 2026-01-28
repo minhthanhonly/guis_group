@@ -20,6 +20,9 @@ class Project extends ApplicationModel {
             'end_date' => array(), //timestamp
             'actual_start_date' => array(), //timestamp
             'actual_end_date' => array(), //timestamp
+            'tantou' => array(), //CAILY or GUIS
+            'caily_nouki' => array(), //CAILY納期
+            'guis_nouki' => array(), //GUIS納期
             'created_by' => array(), //userid
             'updated_by' => array(), //userid
             'created_at' => array('except' => array('search')), //timestamp
@@ -237,7 +240,7 @@ class Project extends ApplicationModel {
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
              WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
-            (SELECT GROUP_CONCAT(n.content SEPARATOR ' | ') 
+           (SELECT GROUP_CONCAT(CONCAT(n.id, '::', n.content) SEPARATOR ' | ') 
              FROM " . DB_PREFIX . "project_notes n 
              WHERE n.project_id = p.id AND n.needs_confirmation = 1 
              ORDER BY n.is_important DESC, n.created_at DESC) as confirmation_notes
@@ -658,6 +661,15 @@ class Project extends ApplicationModel {
         }
         if(isset($_POST['end_date']) && $_POST['end_date'] != ''){
             $data['end_date'] = date('Y-m-d H:i', strtotime($_POST['end_date']));
+        }
+        if (array_key_exists('tantou', $_POST)) {
+            $data['tantou'] = (isset($_POST['tantou']) && in_array($_POST['tantou'], ['CAILY', 'GUIS'], true)) ? $_POST['tantou'] : null;
+        }
+        if (array_key_exists('caily_nouki', $_POST)) {
+            $data['caily_nouki'] = (isset($_POST['caily_nouki']) && $_POST['caily_nouki'] !== '') ? date('Y-m-d H:i', strtotime($_POST['caily_nouki'])) : null;
+        }
+        if (array_key_exists('guis_nouki', $_POST)) {
+            $data['guis_nouki'] = (isset($_POST['guis_nouki']) && $_POST['guis_nouki'] !== '') ? date('Y-m-d H:i', strtotime($_POST['guis_nouki'])) : null;
         }
         
         // Auto-set actual_end_date if status is completed

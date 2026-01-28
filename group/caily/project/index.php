@@ -176,6 +176,75 @@ if($_SESSION['show_project'] == 0){
         </div>
     </div>
 
+    <!-- Note Modal (for 確認必要メモ) -->
+    <div class="modal fade" tabindex="-1" :class="{show: showNoteModal}" style="display: block;" v-if="showNoteModal">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"></h5>
+                    <button type="button" class="btn-close" @click="closeNoteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- View mode -->
+                    <div v-if="editingNote.id && !isNoteEditMode">
+                        <div class="mb-3">
+                            <label class="form-label"><span data-i18n="内容">内容</span></label>
+                            <div class="form-control" style="min-height:100px;white-space:pre-line;max-height:300px;overflow-y:auto;">{{ editingNote.content || '-' }}</div>
+                        </div>
+                        <div class="mb-3" v-if="editingNote.is_important">
+                            <label class="form-label"><span data-i18n="重要メモ">重要メモ</span></label>
+                            <div>
+                                <i class="fa fa-exclamation-circle text-danger"></i>
+                            </div>
+                        </div>
+                        <div class="mb-3" v-if="editingNote.needs_confirmation">
+                            <label class="form-label"><span data-i18n="確認必要">確認必要</span></label>
+                            <div>
+                                <span class="badge bg-warning">確認必要</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Edit mode -->
+                    <form v-else @submit.prevent="saveNote">
+                        <div class="mb-3">
+                            <label class="form-label"><span data-i18n="内容">内容</span></label>
+                            <textarea class="form-control" v-model="editingNote.content" rows="6" placeholder="メモの詳細を入力してください..."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant">
+                                <label class="form-check-label" for="isImportant">
+                                    <i class="fa fa-exclamation-circle text-danger me-2"></i> <span data-i18n="重要メモ">重要メモ</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" v-model="editingNote.needs_confirmation" id="needsConfirmation">
+                                <label class="form-check-label" for="needsConfirmation">
+                                    <span data-i18n="確認必要">確認必要</span>
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <template v-if="editingNote.id && !isNoteEditMode">
+                        <button class="btn btn-primary" @click="isNoteEditMode = true"><i class="fa fa-pencil-alt me-2"></i> <span data-i18n="編集">編集</span></button>
+                        <button class="btn btn-secondary" @click="closeNoteModal"><span data-i18n="閉じる">閉じる</span></button>
+                    </template>
+                    <template v-else>
+                        <button class="btn btn-secondary" @click="isNoteEditMode = false" v-if="editingNote.id"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
+                        <button class="btn btn-secondary" @click="closeNoteModal" v-else><span data-i18n="キャンセル">キャンセル</span></button>
+                        <button class="btn btn-primary" @click="saveNote" :disabled="!(editingNote.content && editingNote.content.trim())">
+                            <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Kadai Projects Queue - Fixed Bottom -->
     <div id="kadaiQueue" class="kadai-queue-container" v-show="kadaiProjects.length > 0">
         <div class="kadai-queue-header" @click="toggleKadaiQueue">
@@ -426,6 +495,27 @@ $view->footing();
     margin-bottom: 6px !important;
     border-radius: 4px;
     border-left: 3px solid #ffd700;
+}
+
+/* Layout for confirmation note content & action icons */
+#projectTable td.confirmation-notes-column .confirmation-note-item {
+    position: relative;
+    display: block;
+}
+
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-text {
+    display: block;
+    padding-right: 40px; /* space for action icons on the right */
+}
+
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-actions {
+    position: absolute;
+    right: 6px;
+    top: 4px;
+    transform: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
 }
 
 /* Row background colors based on status (70% lighter = 30% opacity) */
