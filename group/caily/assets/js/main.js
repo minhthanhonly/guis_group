@@ -973,3 +973,366 @@ $(function() {
   });
 
 });
+
+
+
+// =============================================================================
+// Global Web Speech helper: Ctrl + Shift + H to show voice input bar
+// Works for any focused textarea / input / contenteditable
+// =============================================================================
+if (typeof window !== 'undefined') {
+  ;(function () {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      window.initGlobalSpeechHelper = function () {
+        console.warn('SpeechRecognition is not supported in this browser.')
+      }
+      return
+    }
+
+    let recognition = null
+    let currentTarget = null
+    let currentLang = null
+    let lastFocused = null
+    let barEl = null
+    let fabEl = null
+
+    function clearTargetHighlight() {
+      if (!currentTarget) return
+      if (currentTarget._speechPrevBorderColor !== undefined) {
+        currentTarget.style.borderColor = currentTarget._speechPrevBorderColor
+        delete currentTarget._speechPrevBorderColor
+      }
+      if (currentTarget._speechPrevBoxShadow !== undefined) {
+        currentTarget.style.boxShadow = currentTarget._speechPrevBoxShadow
+        delete currentTarget._speechPrevBoxShadow
+      }
+      currentTarget.classList.remove('speech-recording')
+    }
+
+    function ensureRecognition() {
+      if (recognition) return recognition
+      recognition = new SpeechRecognition()
+      recognition.continuous = false
+      recognition.interimResults = false
+
+      recognition.onresult = event => {
+        if (!currentTarget) return
+        const transcript = Array.from(event.results)
+          .map(r => r[0].transcript)
+          .join('')
+        if (!transcript) return
+
+        if (currentTarget.tagName === 'TEXTAREA' || (currentTarget.tagName === 'INPUT' && currentTarget.type === 'text')) {
+          const prev = currentTarget.value || ''
+          currentTarget.value = prev ? prev.replace(/\s*$/, '') + '\n' + transcript.trim() : transcript.trim()
+          const inputEvent = new Event('input', { bubbles: true })
+          currentTarget.dispatchEvent(inputEvent)
+        } else if (currentTarget.isContentEditable) {
+          const prev = currentTarget.innerText || ''
+          currentTarget.innerText = prev ? prev.replace(/\s*$/, '') + '\n' + transcript.trim() : transcript.trim()
+          const inputEvent = new Event('input', { bubbles: true })
+          currentTarget.dispatchEvent(inputEvent)
+        }
+      }
+
+      recognition.onend = () => {
+        currentLang = null
+        clearTargetHighlight()
+        updateBarState(null)
+      }
+
+      recognition.onerror = e => {
+        console.error('Speech recognition error:', e)
+        currentLang = null
+        clearTargetHighlight()
+        updateBarState(null)
+      }
+
+      return recognition
+    }
+
+    function createBar() {
+      if (barEl) return barEl
+      barEl = document.createElement('div')
+      barEl.id = 'global-speech-bar'
+      barEl.innerHTML = `
+        <div style="
+          display:flex;
+          align-items:center;
+          gap:8px;
+          white-space:nowrap;
+        ">
+          <button type="button"
+                  class="btn btn-sm btn-link p-0 m-0 text-white js-global-speech-help"
+                  title="音声入力の使い方"
+                  style="text-decoration:none;">
+            <i class="fa fa-question-circle"></i>
+          </button>
+          <strong style="font-size:12px; white-space:nowrap;">音声入力</strong>
+          <div class="btn-group btn-group-sm" role="group" style="white-space:nowrap;">
+            <button type="button" class="btn btn-outline-light text-nowrap js-global-speech-ja">
+              <i class="fa fa-microphone"></i><span class="ms-1">日本語</span>
+            </button>
+            <button type="button" class="btn btn-outline-light text-nowrap js-global-speech-vi">
+              <i class="fa fa-microphone"></i><span class="ms-1">ベトナム語</span>
+            </button>
+          </div>
+        </div>
+      `
+
+      const jaBtn = barEl.querySelector('.js-global-speech-ja')
+      const viBtn = barEl.querySelector('.js-global-speech-vi')
+      const helpBtn = barEl.querySelector('.js-global-speech-help')
+
+      if (jaBtn) {
+        jaBtn.addEventListener('click', e => {
+          e.preventDefault()
+          e.stopPropagation()
+          toggleSpeech('ja-JP')
+        })
+      }
+      if (viBtn) {
+        viBtn.addEventListener('click', e => {
+          e.preventDefault()
+          e.stopPropagation()
+          toggleSpeech('vi-VN')
+        })
+      }
+      if (helpBtn) {
+        helpBtn.addEventListener('click', e => {
+          e.preventDefault()
+          e.stopPropagation()
+          const msg =
+            '音声入力の使い方:\n\n' +
+            '1. まず、テキストを入力したいテキストエリアや入力欄をクリックしてフォーカスを当てます。\n' +
+            '2. 画面右下のマイクボタンを押して「音声入力」バーを開きます（または Ctrl + Shift + H で開閉できます）。\n' +
+            '3. 「日本語」または「ベトナム語」のボタンを押して話し始めます。\n' +
+            '4. 認識されたテキストは、フォーカスされている入力欄の末尾に自動的に追記されます。\n' +
+            '5. 同じボタンをもう一度押すと録音が停止します。'
+          if (window.Swal && typeof window.Swal.fire === 'function') {
+            const html = msg.replace(/\n/g, '<br>')
+            window.Swal.fire({
+              title: '音声入力の使い方',
+              html,
+              icon: 'info',
+              confirmButtonText: 'OK',
+              didOpen: el => {
+                const htmlEl = el.querySelector('.swal2-html-container')
+                if (htmlEl) {
+                  htmlEl.style.textAlign = 'left'
+                }
+              }
+            })
+          } else {
+            alert(msg)
+          }
+        })
+      }
+
+      return barEl
+    }
+
+    function showBar() {
+      // Đảm bảo FAB tồn tại
+      const fab = createSpeechFab()
+      fab.classList.add('is-open')
+      fab.style.width = '310px'
+      fab.style.borderRadius = '999px'
+
+      const bar = createBar()
+      // Gắn bar vào trong FAB
+      fab.innerHTML = ''
+      fab.appendChild(bar)
+
+      updateBarState(null)
+    }
+
+    function hideBar() {
+      if (recognition && currentLang) {
+        try {
+          recognition.stop()
+        } catch (e) {
+          console.error(e)
+        }
+      }
+      currentLang = null
+      updateBarState(null)
+      if (fabEl) {
+        fabEl.classList.remove('is-open')
+        fabEl.style.width = '50px'
+        fabEl.style.borderRadius = '50%'
+        fabEl.innerHTML = '<i class="fa fa-microphone"></i>'
+      }
+    }
+
+    function updateBarState(lang) {
+      if (!barEl) return
+      const jaBtn = barEl.querySelector('.js-global-speech-ja')
+      const viBtn = barEl.querySelector('.js-global-speech-vi')
+
+      jaBtn.classList.remove('btn-danger')
+      jaBtn.classList.add('btn-outline-secondary')
+      viBtn.classList.remove('btn-danger')
+      viBtn.classList.add('btn-outline-secondary')
+
+      if (!lang) return
+
+      if (lang === 'ja-JP') {
+        jaBtn.classList.remove('btn-outline-secondary')
+        jaBtn.classList.add('btn-danger')
+      } else if (lang === 'vi-VN') {
+        viBtn.classList.remove('btn-outline-secondary')
+        viBtn.classList.add('btn-danger')
+      }
+    }
+
+    function isVisible(el) {
+      if (!el) return false
+      const style = window.getComputedStyle(el)
+      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false
+      const rect = el.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) return false
+      return true
+    }
+
+    function toggleSpeech(lang) {
+      const rec = ensureRecognition()
+      if (!lastFocused || !isEditable(lastFocused) || !isVisible(lastFocused)) {
+        alert('音声入力するテキストエリアまたは入力欄を先に選択して、画面上に表示されていることを確認してください。')
+        return
+      }
+
+      currentTarget = lastFocused
+
+      // Nếu đang ghi cùng ngôn ngữ → dừng
+      if (currentLang === lang) {
+        try {
+          rec.stop()
+        } catch (e) {
+          console.error(e)
+        }
+        currentLang = null
+        clearTargetHighlight()
+        updateBarState(null)
+        return
+      }
+
+      // Nếu đang ghi ngôn ngữ khác → dừng, bấm lại để đổi
+      if (currentLang && currentLang !== lang) {
+        try {
+          rec.stop()
+        } catch (e) {
+          console.error(e)
+        }
+        currentLang = null
+        clearTargetHighlight()
+        updateBarState(null)
+        return
+      }
+
+      // Bắt đầu ghi
+      currentLang = lang
+      updateBarState(lang)
+      try {
+        rec.lang = lang
+        rec.start()
+        // Highlight ô đang ghi âm
+        if (currentTarget) {
+          if (currentTarget._speechPrevBorderColor === undefined) {
+            currentTarget._speechPrevBorderColor = currentTarget.style.borderColor
+          }
+          if (currentTarget._speechPrevBoxShadow === undefined) {
+            currentTarget._speechPrevBoxShadow = currentTarget.style.boxShadow
+          }
+          currentTarget.style.borderColor = '#dc3545' // bootstrap danger
+          currentTarget.style.boxShadow = '0 0 0 0.2rem rgba(220,53,69,.25)'
+          currentTarget.classList.add('speech-recording')
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+
+    function isEditable(el) {
+      if (!el) return false
+      if (el.tagName === 'TEXTAREA') return true
+      if (el.tagName === 'INPUT' && el.type === 'text') return true
+      if (el.isContentEditable) return true
+      return false
+    }
+
+    // Theo dõi phần tử có focus gần nhất
+    document.addEventListener(
+      'focusin',
+      e => {
+        if (isEditable(e.target)) {
+          lastFocused = e.target
+        }
+      },
+      true
+    )
+
+    // Phím tắt Ctrl + Shift + H để toggle thanh nhập liệu
+    document.addEventListener('keydown', e => {
+      const key = e.key || e.code
+      if (e.ctrlKey && e.shiftKey && (key === 'H' || key === 'h')) {
+        e.preventDefault()
+        if (!SpeechRecognition) {
+          alert('ブラウザが音声入力に対応していません。\n\nWindows 10+の場合は、テキストエリアを選択してから「Win + H」で音声入力が使えます。')
+          return
+        }
+        if (fabEl && fabEl.classList.contains('is-open')) {
+          hideBar()
+        } else {
+          showBar()
+        }
+      }
+    })
+
+    window.initGlobalSpeechHelper = function () {
+      // hiện tại đã tự khởi tạo trong IIFE, hàm này để sau này dùng lại nếu cần
+      return true
+    }
+
+    // Floating speech button (fixed at bottom-right, chứa luôn nội dung thanh speech)
+    function createSpeechFab() {
+      if (fabEl) return fabEl
+      fabEl = document.createElement('button')
+      fabEl.id = 'global-speech-fab'
+      fabEl.type = 'button'
+      fabEl.className = 'btn btn-primary d-flex align-items-center justify-content-center'
+      fabEl.innerHTML = '<i class="fa fa-microphone"></i>'
+      Object.assign(fabEl.style, {
+        position: 'fixed',
+        bottom: '20px',
+        right: '80px',
+        zIndex: '9998',
+        borderRadius: '50%',
+        width: '50px',
+        height: '50px',
+        padding: '0',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        transition: 'all 0.2s ease'
+      })
+      document.body.appendChild(fabEl)
+
+      fabEl.addEventListener('click', () => {
+        const isOpen = fabEl.classList.contains('is-open')
+        if (isOpen) hideBar()
+        else showBar()
+      })
+
+      return fabEl
+    }
+
+    // Khởi tạo FAB sau khi DOM sẵn sàng
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        createSpeechFab()
+      })
+    } else {
+      createSpeechFab()
+    }
+  })()
+}
