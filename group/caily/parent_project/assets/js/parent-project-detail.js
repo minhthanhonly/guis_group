@@ -117,6 +117,17 @@ createApp({
             },
             creatingChildProject: false,
             updatingChildProject: false,
+            // Notes (メモ) data
+            notes: [],
+            showNoteModal: false,
+            isNoteEditMode: false,
+            editingNote: {
+                id: null,
+                title: '',
+                content: '',
+                is_important: false,
+                user_id: null
+            },
             // Activity logs data
             logs: [],
             loadingLogs: false,
@@ -382,6 +393,9 @@ createApp({
                 }
             }
             return this.isProjectManager || canAddQuotation;
+        },
+        canAddNote() {
+            return this.isAdmin || (this.permission && this.permission.length > 0);
         },
         paginatedPriceListProducts() {
             const startIndex = (this.priceListPage - 1) * this.priceListPageSize;
@@ -6594,6 +6608,139 @@ createApp({
             }
         },
 
+        // Notes (メモ) methods
+        async loadNotes() {
+            try {
+                const response = await axios.get(`/api/index.php?model=parentproject&method=getNotes&parent_project_id=${PARENT_PROJECT_ID}`);
+                if (response.data && response.data.status === 'success') {
+                    this.notes = response.data.data || [];
+                } else {
+                    this.notes = [];
+                }
+            } catch (error) {
+                console.error('Error loading notes:', error);
+                this.notes = [];
+            }
+        },
+        openNoteModal(note = null) {
+            this.showNoteModal = true;
+            this.isNoteEditMode = false;
+            if (note) {
+                this.editingNote = {
+                    id: note.id,
+                    title: note.title,
+                    content: note.content,
+                    is_important: note.is_important == 1,
+                    user_id: note.user_id
+                };
+            } else {
+                this.editingNote = {
+                    id: null,
+                    title: '',
+                    content: '',
+                    is_important: false,
+                    user_id: null
+                };
+            }
+        },
+        closeNoteModal() {
+            this.showNoteModal = false;
+            this.isNoteEditMode = false;
+            this.editingNote = {
+                id: null,
+                title: '',
+                content: '',
+                is_important: false,
+                user_id: null
+            };
+        },
+        async saveNote() {
+            const rawContent = (this.editingNote.content || '').trim();
+            if (!rawContent) {
+                if (typeof showMessage === 'function') {
+                    showMessage('内容を入力してください', true);
+                } else {
+                    alert('内容を入力してください');
+                }
+                return;
+            }
+            let title = (this.editingNote.title || '').trim();
+            if (!title) {
+                title = rawContent.split(/\r?\n/)[0].slice(0, 50) || 'メモ';
+            }
+            try {
+                const formData = new FormData();
+                formData.append('parent_project_id', PARENT_PROJECT_ID);
+                formData.append('title', title);
+                formData.append('content', rawContent);
+                formData.append('is_important', this.editingNote.is_important ? 1 : 0);
+                let response;
+                if (this.editingNote.id) {
+                    formData.append('id', this.editingNote.id);
+                    response = await axios.post('/api/index.php?model=parentproject&method=updateNote', formData);
+                } else {
+                    response = await axios.post('/api/index.php?model=parentproject&method=addNote', formData);
+                }
+                if (response.data && response.data.status === 'success') {
+                    if (typeof showMessage === 'function') {
+                        showMessage('メモが保存されました', false);
+                    } else {
+                        alert('メモが保存されました');
+                    }
+                    this.closeNoteModal();
+                    await this.loadNotes();
+                } else {
+                    if (typeof showMessage === 'function') {
+                        showMessage(response.data?.error || 'メモの保存に失敗しました', true);
+                    } else {
+                        alert(response.data?.error || 'メモの保存に失敗しました');
+                    }
+                }
+            } catch (error) {
+                console.error('Error saving note:', error);
+                if (typeof showMessage === 'function') {
+                    showMessage('メモの保存に失敗しました', true);
+                } else {
+                    alert('メモの保存に失敗しました');
+                }
+            }
+        },
+        async deleteNote(noteId) {
+            if (!confirm('このメモを削除しますか？')) return;
+            try {
+                const formData = new FormData();
+                formData.append('id', noteId);
+                const response = await axios.post('/api/index.php?model=parentproject&method=deleteNote', formData);
+                if (response.data && response.data.status === 'success') {
+                    if (typeof showMessage === 'function') {
+                        showMessage('メモが削除されました', false);
+                    } else {
+                        alert('メモが削除されました');
+                    }
+                    await this.loadNotes();
+                } else {
+                    if (typeof showMessage === 'function') {
+                        showMessage(response.data?.error || 'メモの削除に失敗しました', true);
+                    } else {
+                        alert(response.data?.error || 'メモの削除に失敗しました');
+                    }
+                }
+            } catch (error) {
+                console.error('Error deleting note:', error);
+                if (typeof showMessage === 'function') {
+                    showMessage('メモの削除に失敗しました', true);
+                } else {
+                    alert('メモの削除に失敗しました');
+                }
+            }
+        },
+        canDeleteNote(note) {
+            return this.isAdmin || (note.user_id && typeof USER_ID !== 'undefined' && String(note.user_id) === String(USER_ID));
+        },
+        canEditNote(note) {
+            return this.isAdmin || (note.user_id && typeof USER_ID !== 'undefined' && String(note.user_id) === String(USER_ID));
+        },
+
         // Activity logs methods
         async showLogs() {
             try {
@@ -6731,6 +6878,7 @@ createApp({
             await this.loadParentProject();
             await this.loadChildProjects();
             await this.loadQuotations();
+            await this.loadNotes();
             
             // Initialize price list modal
             this.priceListModal = new bootstrap.Modal(document.getElementById('priceListModal'));

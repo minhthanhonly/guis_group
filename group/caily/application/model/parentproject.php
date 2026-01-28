@@ -44,7 +44,7 @@ class ParentProject extends ApplicationModel {
         // Validate and sanitize order_column to prevent SQL injection
         $allowed_columns = [
             'id', 'project_number', 'project_name', 'construction_number', 
-            'company_name', 'request_date', 'created_at', 'updated_at',
+            'company_name', 'scale', 'type1', 'type2', 'request_date', 'created_at', 'updated_at',
             'status', 'child_project_count', 'created_by_name'
         ];
         $order_column = isset($_GET['order_column']) ? $_GET['order_column'] : 'created_at';
@@ -124,6 +124,9 @@ class ParentProject extends ApplicationModel {
             "SELECT p.*, 
                     (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE parent_project_id = p.id) as child_project_count,
                     u.realname as created_by_name,
+                    (SELECT GROUP_CONCAT(CONCAT(n.id, '::', n.content) ORDER BY n.is_important DESC, n.created_at DESC SEPARATOR ' | ') 
+                     FROM " . DB_PREFIX . "parent_project_notes n 
+                     WHERE n.parent_project_id = p.id) as notes_display,
                     CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "parent_project_favorites f WHERE f.parent_project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite
              FROM %s p 
              LEFT JOIN " . DB_PREFIX . "user u ON p.created_by = u.userid
@@ -1603,6 +1606,31 @@ class ParentProject extends ApplicationModel {
             'status' => 'success',
             'message' => 'すべてのお気に入りを削除しました'
         );
+    }
+
+    // Note methods (メモ for parent project)
+    function addNote($params = null) {
+        require_once('parentprojectnote.php');
+        $noteModel = new ParentProjectNote();
+        return $noteModel->create($params);
+    }
+
+    function updateNote($params = null) {
+        require_once('parentprojectnote.php');
+        $noteModel = new ParentProjectNote();
+        return $noteModel->update($params);
+    }
+
+    function deleteNote($params = null) {
+        require_once('parentprojectnote.php');
+        $noteModel = new ParentProjectNote();
+        return $noteModel->delete($params);
+    }
+
+    function getNotes($params = null) {
+        require_once('parentprojectnote.php');
+        $noteModel = new ParentProjectNote();
+        return $noteModel->list($params);
     }
 
     /**

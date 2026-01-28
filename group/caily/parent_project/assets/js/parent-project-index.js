@@ -14,6 +14,41 @@ createApp({
             isProjectManager: typeof IS_PROJECT_MANAGER !== 'undefined' ? IS_PROJECT_MANAGER : false,
             sortColumn: 'created_at',
             sortDirection: 'DESC', // 'ASC' or 'DESC'
+            selectedParentProject: null,
+            childProjectsForModal: [],
+            loadingChildProjects: false,
+            // Column visibility
+            availableColumns: [
+                { key: 'project_number', label: '管理番号', visible: true },
+                { key: 'project_name', label: 'お施主様名', visible: true },
+                { key: 'construction_number', label: '工事番号', visible: true },
+                { key: 'company_name', label: '会社名', visible: true },
+                { key: 'scale', label: '規模', visible: false },
+                { key: 'type1', label: '種類1', visible: false },
+                { key: 'type2', label: '種類2', visible: false },
+                { key: 'request_date', label: '依頼日', visible: true },
+                { key: 'child_project_count', label: '件数', visible: true },
+                { key: 'created_by_name', label: '作成者', visible: true },
+                { key: 'notes', label: 'メモ', visible: true },
+                { key: 'created_at', label: '作成日', visible: false },
+            ],
+            // Notes for parent projects (メモ)
+            notes: [],
+            showNoteModal: false,
+            isNoteEditMode: false,
+            editingNote: {
+                id: null,
+                title: '',
+                content: '',
+                is_important: false,
+                user_id: null
+            },
+            currentNoteParentProjectId: null,
+            noteContextMenuVisible: false,
+            noteContextMenuX: 0,
+            noteContextMenuY: 0,
+            contextMenuParentProjectId: null,
+            columnVisibilityStorageKey: 'parent_project_column_visibility',
             statuses: [
                 { value: 'draft', label: '下書き', color: 'secondary' },
                 { value: 'under_contract', label: '契約中', color: 'info' },
@@ -84,6 +119,184 @@ createApp({
                 });
             }
         },
+        // Column visibility helpers
+        isColumnVisible(key) {
+            const col = this.availableColumns.find(c => c.key === key);
+            // Nếu không tìm thấy, mặc định hiển thị
+            return !col || col.visible;
+        },
+        loadColumnVisibilityFromStorage() {
+            try {
+                const raw = localStorage.getItem(this.columnVisibilityStorageKey);
+                if (!raw) return;
+                const stored = JSON.parse(raw);
+                this.availableColumns = this.availableColumns.map(col => {
+                    if (Object.prototype.hasOwnProperty.call(stored, col.key)) {
+                        return { ...col, visible: !!stored[col.key] };
+                    }
+                    return col;
+                });
+            } catch (e) {
+                console.error('Error loading column visibility:', e);
+            }
+        },
+        saveColumnVisibilityToStorage() {
+            try {
+                const map = {};
+                this.availableColumns.forEach(col => {
+                    map[col.key] = !!col.visible;
+                });
+                localStorage.setItem(this.columnVisibilityStorageKey, JSON.stringify(map));
+            } catch (e) {
+                console.error('Error saving column visibility:', e);
+            }
+        },
+        onColumnVisibilityChange() {
+            this.saveColumnVisibilityToStorage();
+        },
+        // ----- Notes (メモ) helpers & actions -----
+        parseNotesDisplay(notesDisplay) {
+            if (!notesDisplay || typeof notesDisplay !== 'string') return [];
+            return notesDisplay
+                .split(' | ')
+                .map(raw => raw.trim())
+                .filter(raw => raw !== '')
+                .map(raw => {
+                    const idx = raw.indexOf('::');
+                    if (idx === -1) return { id: null, content: raw };
+                    const id = raw.substring(0, idx);
+                    const content = raw.substring(idx + 2);
+                    return { id, content };
+                });
+        },
+        onNotesContextMenu(event, project) {
+            this.contextMenuParentProjectId = project.id;
+            this.noteContextMenuX = event.pageX;
+            this.noteContextMenuY = event.pageY;
+            this.noteContextMenuVisible = true;
+        },
+        addNoteFromContextMenu() {
+            if (!this.contextMenuParentProjectId) return;
+            this.openNoteModalFromList(this.contextMenuParentProjectId, null);
+            this.noteContextMenuVisible = false;
+        },
+        async loadNotesForParentProject(parentProjectId) {
+            try {
+                const response = await axios.get(`/api/index.php?model=parentproject&method=getNotes&parent_project_id=${parentProjectId}`);
+                if (response.data && response.data.status === 'success') {
+                    this.notes = response.data.data || [];
+                } else {
+                    this.notes = [];
+                }
+            } catch (error) {
+                console.error('Error loading parent project notes:', error);
+                this.notes = [];
+            }
+        },
+        openNoteModalFromList(parentProjectId, noteContent = null) {
+            this.currentNoteParentProjectId = parentProjectId;
+            this.showNoteModal = true;
+            this.isNoteEditMode = true;
+            this.editingNote = {
+                id: null,
+                title: '',
+                content: '',
+                is_important: false,
+                user_id: null
+            };
+            this.loadNotesForParentProject(parentProjectId).then(() => {
+                if (noteContent) {
+                    const trimmed = noteContent.trim();
+                    const match = this.notes.find(n => (n.content || '').trim() === trimmed);
+                    if (match) {
+                        this.editingNote = {
+                            id: match.id,
+                            title: match.title,
+                            content: match.content,
+                            is_important: match.is_important == 1,
+                            user_id: match.user_id
+                        };
+                    } else {
+                        this.editingNote.content = noteContent;
+                    }
+                }
+            });
+        },
+        openNoteEdit(project, note) {
+            this.currentNoteParentProjectId = project.id;
+            this.showNoteModal = true;
+            this.isNoteEditMode = true;
+            this.editingNote = {
+                id: note.id,
+                title: '',
+                content: note.content,
+                is_important: false,
+                user_id: note.user_id
+            };
+        },
+        closeNoteModal() {
+            this.showNoteModal = false;
+            this.isNoteEditMode = false;
+            this.editingNote = {
+                id: null,
+                title: '',
+                content: '',
+                is_important: false,
+                user_id: null
+            };
+        },
+        async saveNote() {
+            const rawContent = (this.editingNote.content || '').trim();
+            if (!rawContent) {
+                showMessage('内容を入力してください', true);
+                return;
+            }
+            let title = (this.editingNote.title || '').trim();
+            if (!title) {
+                title = rawContent.split(/\r?\n/)[0].slice(0, 50) || 'メモ';
+            }
+            try {
+                const formData = new FormData();
+                formData.append('parent_project_id', this.currentNoteParentProjectId);
+                formData.append('title', title);
+                formData.append('content', rawContent);
+                formData.append('is_important', this.editingNote.is_important ? 1 : 0);
+                let response;
+                if (this.editingNote.id) {
+                    formData.append('id', this.editingNote.id);
+                    response = await axios.post('/api/index.php?model=parentproject&method=updateNote', formData);
+                } else {
+                    response = await axios.post('/api/index.php?model=parentproject&method=addNote', formData);
+                }
+                if (response.data && response.data.status === 'success') {
+                    showMessage('メモが保存されました');
+                    this.closeNoteModal();
+                    this.loadParentProjects();
+                } else {
+                    showMessage(response.data?.error || 'メモの保存に失敗しました', true);
+                }
+            } catch (error) {
+                console.error('Error saving parent project note:', error);
+                showMessage('メモの保存に失敗しました', true);
+            }
+        },
+        async deleteNoteFromList(project, noteId) {
+            if (!confirm('このメモを削除しますか？')) return;
+            try {
+                const formData = new FormData();
+                formData.append('id', noteId);
+                const response = await axios.post('/api/index.php?model=parentproject&method=deleteNote', formData);
+                if (response.data && response.data.status === 'success') {
+                    showMessage('メモが削除されました');
+                    this.loadParentProjects();
+                } else {
+                    showMessage(response.data?.error || 'メモの削除に失敗しました', true);
+                }
+            } catch (error) {
+                console.error('Error deleting parent project note:', error);
+                showMessage('メモの削除に失敗しました', true);
+            }
+        },
         translateI18n() {
             // Call localize function if it exists (from main.js)
             if (typeof localize === 'function') {
@@ -110,6 +323,9 @@ createApp({
                 'project_name': 'project_name',
                 'construction_number': 'construction_number',
                 'company_name': 'company_name',
+                'scale': 'scale',
+                'type1': 'type1',
+                'type2': 'type2',
                 'request_date': 'request_date',
                 'child_project_count': 'child_project_count',
                 'created_by_name': 'created_by_name',
@@ -138,6 +354,9 @@ createApp({
                 'project_name': 'project_name',
                 'construction_number': 'construction_number',
                 'company_name': 'company_name',
+                'scale': 'scale',
+                'type1': 'type1',
+                'type2': 'type2',
                 'request_date': 'request_date',
                 'child_project_count': 'child_project_count',
                 'created_by_name': 'created_by_name',
@@ -166,6 +385,27 @@ createApp({
         onFavoritesFilterChange() {
             this.currentPage = 1;
             this.loadParentProjects();
+        },
+        async openChildProjectsWindow(project) {
+            this.selectedParentProject = project;
+            this.childProjectsForModal = [];
+            this.loadingChildProjects = true;
+            try {
+                const response = await axios.get(`/api/index.php?model=parentproject&method=getChildProjects&parent_project_id=${project.id}`);
+                if (response.data) {
+                    this.childProjectsForModal = response.data;
+                }
+            } catch (error) {
+                console.error('Error loading child projects for parent project:', project.id, error);
+                showMessage('子プロジェクトの読み込みに失敗しました。', true);
+            } finally {
+                this.loadingChildProjects = false;
+                const modalEl = document.getElementById('childProjectsModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.show();
+                }
+            }
         },
         async toggleFavorite(project) {
             try {
@@ -229,6 +469,61 @@ createApp({
             const s = this.statuses.find(s => s.value === status);
             return `bg-${s?.color || 'secondary'}`;
         },
+        getOrderTypeBadgeClass(orderType) {
+            const type = (orderType || '').trim().toLowerCase();
+            switch (type) {
+                case '修正':
+                    return 'bg-warning';
+                case '新規':
+                    return 'bg-primary';
+                default:
+                    return 'bg-info';
+            }
+        },
+        getManagerName(managerString) {
+            if (!managerString) return '';
+            const parts = managerString.split(':');
+            return parts[1] || parts[0] || '';
+        },
+        getManagerImage(managerString) {
+            if (!managerString) return '';
+            const parts = managerString.split(':');
+            return parts[2] || '';
+        },
+        getManagerInitials(managerString) {
+            if (!managerString) return '?';
+            const parts = managerString.split(':');
+            const name = parts[1] || parts[0] || '';
+            return this.getInitials(name);
+        },
+        getRemainingManagers(managerIdString) {
+            if (!managerIdString) return '';
+            const managers = managerIdString.split('|').filter(m => m.trim() !== '');
+            if (managers.length <= 1) return '';
+            const remaining = managers.slice(1).map(manager => {
+                const parts = manager.split(':');
+                return parts[1] || parts[0] || '';
+            }).filter(name => name).join(', ');
+            return remaining;
+        },
+        getInitials(name) {
+            if (!name) return '?';
+            if (typeof getAvatarName === 'function') {
+                return getAvatarName(name);
+            }
+            try {
+                const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
+                if (hasJapanese) {
+                    return name.substring(0, 2);
+                } else {
+                    const words = name.trim().split(' ');
+                    const lastWord = words[words.length - 1];
+                    return lastWord;
+                }
+            } catch (error) {
+                return name.charAt(0).toUpperCase();
+            }
+        },
         formatDate(date) {
             if (!date) return '-';
             return moment(date).format('Y年M月D日 HH:mm');
@@ -236,6 +531,31 @@ createApp({
         formatDate2(date) {
             if (!date) return '-';
             return moment(date).format('Y年M月D日');
+        },
+        formatDateTime(date) {
+            if (!date) return '-';
+            return moment(date).format('YYYY/MM/DD HH:mm');
+        },
+        formatPrice(amount) {
+            const n = Number(amount) || 0;
+            return '¥' + n.toLocaleString('ja-JP');
+        },
+        async toggleChildFavorite(child) {
+            try {
+                const formData = new FormData();
+                formData.append('project_id', child.id);
+                
+                const response = await axios.post('/api/index.php?model=project&method=toggleFavorite', formData);
+                
+                if (response.data && response.data.status === 'success') {
+                    child.is_favorite = response.data.is_favorite ? 1 : 0;
+                } else {
+                    showMessage(response.data?.message || '操作に失敗しました。', true);
+                }
+            } catch (error) {
+                console.error('Error toggling child project favorite:', error);
+                showMessage('操作に失敗しました。', true);
+            }
         },
         async deleteParentProject(id) {
             try {
@@ -287,7 +607,12 @@ createApp({
         }
     },
     mounted() {
+        // Khôi phục trạng thái ẩn/hiện cột
+        this.loadColumnVisibilityFromStorage();
         this.loadParentProjects();
+        document.addEventListener('click', () => {
+            this.noteContextMenuVisible = false;
+        });
     },
     updated() {
         // Re-translate i18n elements after any DOM update

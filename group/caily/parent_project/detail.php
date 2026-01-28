@@ -466,6 +466,48 @@ $view->heading('建物詳細');
                 </div>
             </div>
 
+            <!-- メモ (Notes) - below 備考 -->
+            <div class="card mb-4 mt-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0"><span data-i18n="メモ">メモ</span></h5>
+                    <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
+                        <i class="fa fa-plus me-1"></i> <span data-i18n="メモを追加">メモを追加</span>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div v-if="notes.length > 0" class="list-group">
+                        <div v-for="note in notes" :key="note.id" class="list-group-item d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1" style="cursor: pointer;" @click="openNoteModal(note)">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <small class="text-secondary">
+                                        {{ formatShortDateTime(note.created_at) }} - {{ note.realname || 'Unknown' }}
+                                    </small>
+                                    <div class="ms-2">
+                                        <i v-if="note.is_important == 1" class="fa fa-exclamation-circle text-danger me-2"></i>
+                                    </div>
+                                </div>
+                                <div v-if="note.content" class="text-muted" style="white-space: pre-line; word-break: break-word;">
+                                    {{ note.content }}
+                                </div>
+                            </div>
+                            <button class="btn btn-outline-danger btn-sm ms-2"
+                                    @click="deleteNote(note.id)"
+                                    title="削除"
+                                    v-if="canDeleteNote(note)">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div v-else class="text-center text-muted py-3">
+                        <i class="fa fa-sticky-note fa-2x mb-2"></i>
+                        <p><span data-i18n="メモがありません">メモがありません</span></p>
+                        <button v-if="canAddNote" class="btn btn-outline-primary btn-sm" @click="openNoteModal()">
+                            <span data-i18n="最初のメモを追加">最初のメモを追加</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Child Projects -->
             <div class="card mt-4">
                 <div class="card-header">
@@ -801,6 +843,61 @@ $view->heading('建物詳細');
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Note (メモ) -->
+    <div class="modal fade" tabindex="-1" :class="{show: showNoteModal}" style="display: block;" v-if="showNoteModal">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"></h5>
+                    <button type="button" class="btn-close" @click="closeNoteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- View mode -->
+                    <div v-if="editingNote.id && !isNoteEditMode">
+                        <div class="mb-3">
+                            <label class="form-label"><span data-i18n="内容">内容</span></label>
+                            <div class="form-control" style="min-height:100px;white-space:pre-line;max-height:300px;overflow-y:auto;">{{ editingNote.content || '-' }}</div>
+                        </div>
+                        <div class="mb-3" v-if="editingNote.is_important">
+                            <label class="form-label"><span data-i18n="重要メモ">重要メモ</span></label>
+                            <div>
+                                <i class="fa fa-exclamation-circle text-danger"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Edit mode -->
+                    <form v-else @submit.prevent="saveNote">
+                        <div class="mb-3">
+                            <label class="form-label"><span data-i18n="内容">内容</span></label>
+                            <textarea class="form-control" v-model="editingNote.content" rows="6" placeholder="メモの詳細を入力してください..."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="noteIsImportant">
+                                <label class="form-check-label" for="noteIsImportant">
+                                    <i class="fa fa-exclamation-circle text-danger me-2"></i> <span data-i18n="重要メモ">重要メモ</span>
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <template v-if="editingNote.id && !isNoteEditMode">
+                        <button class="btn btn-primary" @click="isNoteEditMode = true" v-if="canEditNote(editingNote)"><i class="fa fa-pencil-alt me-2"></i> <span data-i18n="編集">編集</span></button>
+                        <button class="btn btn-secondary" @click="closeNoteModal"><span data-i18n="閉じる">閉じる</span></button>
+                    </template>
+                    <template v-else>
+                        <button class="btn btn-secondary" @click="isNoteEditMode = false" v-if="editingNote.id"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
+                        <button class="btn btn-secondary" @click="closeNoteModal" v-else><span data-i18n="キャンセル">キャンセル</span></button>
+                        <button class="btn btn-primary" @click="saveNote" :disabled="!(editingNote.content && editingNote.content.trim())">
+                            <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
+                        </button>
+                    </template>
                 </div>
             </div>
         </div>
