@@ -360,14 +360,14 @@ class Project extends ApplicationModel {
         }
         if (isset($_GET['status'])) {
             if ($_GET['status'] == 'all') {
-                $whereArr[] = "p.status NOT IN ('deleted', 'draft')";
+                $whereArr[] = "p.status != 'deleted'";
             } else if ($_GET['status'] == 'active') {
                 $whereArr[] = "p.status NOT IN ('deleted', 'draft', 'completed', 'cancelled')";
             } else {
                 $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
             }
         } else {
-            $whereArr[] = "p.status NOT IN ('deleted', 'draft')";
+            $whereArr[] = "p.status != 'deleted'";
         }
         // --- Advanced Filters ---
         $hasKeyword = isset($_GET['filterKeyword']) && $_GET['filterKeyword'] !== '';

@@ -31,12 +31,12 @@ class Authority
 	{
 		$authorized = false;
 		if (isset($_SESSION['authorized'])) {
-			// Check session version - if changed, force logout all users
-			if (!isset($_SESSION['session_version']) || $_SESSION['session_version'] != SESSION_VERSION) {
-				$_SESSION = array();
-				$_SESSION['status'] = 'expire';
-				return false;
-			}
+			// // Check session version - if changed, force logout all users
+			// if (!isset($_SESSION['session_version']) || $_SESSION['session_version'] != SESSION_VERSION) {
+			// 	$_SESSION = array();
+			// 	$_SESSION['status'] = 'expire';
+			// 	return false;
+			// }
 			if ($_SESSION['authorized'] === md5(__FILE__ . $_SESSION['logintime'])) {
 				if (APP_EXPIRE > 0 && (time() - $_SESSION['logintime']) > APP_EXPIRE) {
 					$_SESSION = array();
@@ -145,10 +145,10 @@ class Authority
 	function checkRememberMe()
 	{
 		// Check session version - if changed, force logout all users
-		if (!isset($_SESSION['session_version']) || $_SESSION['session_version'] != SESSION_VERSION) {
-			$_SESSION = array();
-			return false;
-		}
+		// if (!isset($_SESSION['session_version']) || $_SESSION['session_version'] != SESSION_VERSION) {
+		// 	$_SESSION = array();
+		// 	return false;
+		// }
 		if (isset($_COOKIE['remember_me'])) {
 			$token = $_COOKIE['remember_me'];
 			$connection = new Connection;

@@ -6,7 +6,7 @@ class Controller {
 	function dispatch() {
 		$this->requiring();
 		$authority = new Authority;
-		if(!isset($_SESSION['authorized']) || !isset($_SESSION['session_version']) || $_SESSION['session_version'] != SESSION_VERSION){
+		if(!isset($_SESSION['authorized'])){
 			$authority->check();
 		}
 		

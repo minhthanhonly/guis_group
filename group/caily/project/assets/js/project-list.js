@@ -53,14 +53,18 @@ var projectTable;
         { key: 'parent_type1', label: '種類1', index: 7, defaultVisible: false },
         { key: 'parent_type2', label: '種類2', index: 8, defaultVisible: false },
         { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 9, defaultVisible: false },
-        { key: 'project_order_type', label: '受注形態', index: 10, defaultVisible: true },
-        { key: 'manager', label: '管理', index: 11, defaultVisible: true },
-        { key: 'members', label: 'メンバー', index: 12, defaultVisible: true },
-        { key: 'priority', label: '優先度', index: 13, defaultVisible: true },
-        { key: 'status', label: '案件状況', index: 14, defaultVisible: true },
-        { key: 'progress', label: '進捗率', index: 15, defaultVisible: true },
-        { key: 'start_date', label: '開始日', index: 16, defaultVisible: true },
-        { key: 'end_date', label: '終了日', index: 17, defaultVisible: true }
+        // 担当・納期系
+        { key: 'tantou', label: '担当', index: 10, defaultVisible: false },
+        { key: 'caily_nouki', label: 'CAILY納期', index: 11, defaultVisible: false },
+        { key: 'guis_nouki', label: 'GUIS納期', index: 12, defaultVisible: false },
+        { key: 'project_order_type', label: '受注形態', index: 13, defaultVisible: true },
+        { key: 'manager', label: '管理', index: 14, defaultVisible: true },
+        { key: 'members', label: 'メンバー', index: 15, defaultVisible: true },
+        { key: 'priority', label: '優先度', index: 16, defaultVisible: true },
+        { key: 'status', label: '案件状況', index: 17, defaultVisible: true },
+        { key: 'progress', label: '進捗率', index: 18, defaultVisible: true },
+        { key: 'start_date', label: '開始日', index: 19, defaultVisible: true },
+        { key: 'end_date', label: '終了日', index: 20, defaultVisible: true }
     ];
     
     function saveColumnVisibilityToLocalStorage(visibility) {
@@ -415,6 +419,40 @@ var projectTable;
                     visible: false
                 },
                 { 
+                    data: 'tantou',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        // 期待値: 'CAILY' または 'GUIS'
+                        return `<span class="badge bg-secondary">${data}</span>`;
+                    },
+                    title: '<span data-i18n="担当">担当</span>',
+                    visible: false
+                },
+                {
+                    data: 'caily_nouki',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        return `<span class="text-nowrap">${data}</span>`;
+                    },
+                    title: '<span data-i18n="CAILY納期">CAILY納期</span>',
+                    visible: false
+                },
+                {
+                    data: 'guis_nouki',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        return `<span class="text-nowrap">${data}</span>`;
+                    },
+                    title: '<span data-i18n="GUIS納期">GUIS納期</span>',
+                    visible: false
+                },
+                { 
                     data: 'project_order_type',
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -637,7 +675,7 @@ var projectTable;
                 //     title: '<span data-i18n="操作">操作</span>'
                 // }
             ],
-            order: [[17, 'desc']],
+            order: [[20, 'desc']],
            
             pageLength: 50,
             ordering: true,

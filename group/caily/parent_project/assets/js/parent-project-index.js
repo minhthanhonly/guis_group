@@ -49,6 +49,9 @@ createApp({
             noteContextMenuY: 0,
             contextMenuParentProjectId: null,
             columnVisibilityStorageKey: 'parent_project_column_visibility',
+            // Auto refresh
+            autoRefreshTimer: null,
+            autoRefreshInterval: 60000, // 60s
             statuses: [
                 { value: 'draft', label: '下書き', color: 'secondary' },
                 { value: 'under_contract', label: '契約中', color: 'info' },
@@ -613,6 +616,14 @@ createApp({
         document.addEventListener('click', () => {
             this.noteContextMenuVisible = false;
         });
+        // Auto refresh danh sách parent project (giống project/index.php)
+        if (!this.autoRefreshTimer) {
+            this.autoRefreshTimer = setInterval(() => {
+                if (!this.loading) {
+                    this.loadParentProjects();
+                }
+            }, this.autoRefreshInterval);
+        }
     },
     updated() {
         // Re-translate i18n elements after any DOM update

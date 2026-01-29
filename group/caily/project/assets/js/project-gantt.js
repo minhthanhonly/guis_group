@@ -7,14 +7,29 @@ var statuses = [
         color: 'secondary'
     },
     {
+        key: 'draft',
+        name: '受付',
+        color: 'secondary'
+    },
+    {
         key: 'open',
-        name: 'オープン',
+        name: '納期検討',
         color: 'info'
     },
     {
         key: 'confirming',
-        name: '確認中',
-        color: 'warning'
+        name: '仮受',
+        color: 'info'
+    },
+    {
+        key: 'quotation',
+        name: '見積',
+        color: 'info'
+    },
+    {
+        key: 'contract',
+        name: '請負',
+        color: 'info'
     },
     {
         key: 'in_progress',
@@ -22,18 +37,18 @@ var statuses = [
         color: 'primary'
     },
     {
+        key: 'completed',
+        name: '納品',
+        color: 'success'
+    },
+    {
         key: 'paused',
         name: '一時停止',
         color: 'warning'
     },
     {
-        key: 'completed',
-        name: '完了',
-        color: 'success'
-    },
-    {
         key: 'cancelled',
-        name: 'キャンセル',
+        name: '中止',
         color: 'danger'
     }
 ];
@@ -93,6 +108,7 @@ $(document).ready(function() {
 
     // LocalStorage filter state
     const FILTER_STORAGE_KEY = 'projectGanttFilters';
+    const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment'; // Dùng chung với project-list.js
     function saveFiltersToLocalStorage() {
         const filters = {
             filterStartMonth: $('#filterStartMonth').val(),
@@ -186,6 +202,29 @@ $(document).ready(function() {
                 }
             },
 
+            // Department localStorage methods
+            saveSelectedDepartmentToLocalStorage(department) {
+                if (department && department.id) {
+                    localStorage.setItem(SELECTED_DEPARTMENT_KEY, JSON.stringify({
+                        id: department.id,
+                        name: department.name,
+                        can_project: department.can_project
+                    }));
+                }
+            },
+            
+            loadSelectedDepartmentFromLocalStorage() {
+                try {
+                    const savedDepartment = localStorage.getItem(SELECTED_DEPARTMENT_KEY);
+                    if (savedDepartment) {
+                        return JSON.parse(savedDepartment);
+                    }
+                } catch (error) {
+                    console.error('Error loading selected department from localStorage:', error);
+                }
+                return null;
+            },
+            
             async loadDepartments() {
                 try {
                     const response = await $.ajax({
@@ -199,8 +238,19 @@ $(document).ready(function() {
                     
                     if (Array.isArray(response) && response.length > 0) {
                         this.departments = response || [];
-                        // Auto-select first department if available
-                        if (this.departments.length > 0) {
+                        // Try to restore saved department from localStorage
+                        if (!this.selectedDepartment && this.departments.length > 0) {
+                            const savedDepartment = this.loadSelectedDepartmentFromLocalStorage();
+                            if (savedDepartment) {
+                                // Check if saved department still exists and user has access
+                                const department = this.departments.find(d => d && d.id == savedDepartment.id && d.can_project == 1);
+                                if (department) {
+                                    this.viewProjects(department);
+                                    return;
+                                }
+                            }
+                            
+                            // If no saved department or it's no longer accessible, use first available
                             const firstDept = this.departments.find(dept => dept.can_project == 1);
                             if (firstDept) {
                                 this.viewProjects(firstDept);
@@ -261,6 +311,10 @@ $(document).ready(function() {
             viewProjects(department) {
                 this.selectedDepartment = department;
                 this.selectedStatus = null;
+                
+                // Save selected department to localStorage
+                this.saveSelectedDepartmentToLocalStorage(department);
+                
                 this.loadProjects();
             },
             
@@ -285,7 +339,7 @@ $(document).ready(function() {
                         model: 'project',
                         method: 'listForGantt',
                         department_id: this.selectedDepartment.id,
-                        status: this.selectedStatus?.key || 'active',
+                        status: this.selectedStatus?.key || 'all',
                         filterStartMonth,
                         filterEndMonth,
                         filterPriority,
