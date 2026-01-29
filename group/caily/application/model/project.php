@@ -417,8 +417,10 @@ class Project extends ApplicationModel {
         // Get data for Gantt chart (all projects, no pagination)
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.name as company_name, c.category_id as category_id, c.department as branch_name,
+            c.name as contact_name, c.company_name as company_name, c.category_id as category_id, c.department as branch_name,
             CONCAT(c.name, ' ', c.title) as customer_name,
+            CONCAT_WS(' ', NULLIF(pp.type1, ''), NULLIF(pp.type2, '')) as building_type,
+            pp.scale as building_size,
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 

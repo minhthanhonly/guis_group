@@ -102,6 +102,7 @@ if($_SESSION['show_project'] == 0){
                                     <th><span data-i18n="案件">案件</span></th>
                                     <th><span data-i18n="タスク">タスク</span></th>
                                     <th><span data-i18n="担当者">担当者</span></th>
+                                    <th><span data-i18n="作成者">作成者</span></th>
                                     <th><span data-i18n="ステータス">ステータス</span></th>
                                     <th><span data-i18n="優先度">優先度</span></th>
                                     <th><span data-i18n="進捗">進捗</span></th>
@@ -123,7 +124,32 @@ if($_SESSION['show_project'] == 0){
                                         </a>
                                     </td>
                                     <td>
-                                        {{ getAssigneeNames(task) }}
+                                        <div class="d-flex align-items-center flex-wrap gap-1">
+                                            <template v-if="task.assigned_to_ids && task.assigned_to_ids.length">
+                                                <template v-for="userId in task.assigned_to_ids.slice(0, 4)" :key="userId">
+                                                    <div class="avatar position-relative" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, userId)">
+                                                        <img v-if="getAssigneeUser(userId) && !getAssigneeUser(userId).avatarError && getAvatarSrc(getAssigneeUser(userId))" class="rounded-circle" :src="getAvatarSrc(getAssigneeUser(userId))" :alt="getAssigneeUser(userId).realname" @error="handleAvatarError(getAssigneeUser(userId))" width="28" height="28">
+                                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(getAssigneeUser(userId) ? getAssigneeUser(userId).realname : '') }}</span>
+                                                        <span v-if="isAcknowledged(task, userId)" class="badge bg-success position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;"><i class="fa fa-check"></i></span>
+                                                        <span v-else class="badge bg-secondary position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;"><i class="fa fa-clock"></i></span>
+                                                    </div>
+                                                </template>
+                                                <span v-if="task.assigned_to_ids.length > 4" class="small text-muted">+{{ task.assigned_to_ids.length - 4 }}</span>
+                                            </template>
+                                            <span v-else class="text-muted small">未選択</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <template v-if="getCreatorMember(task)">
+                                            <div class="d-flex align-items-center">
+                                                <!-- <div class="avatar me-1" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMember(task))">
+                                                    <img v-if="shouldShowCreatorAvatar(getCreatorMember(task))" class="rounded-circle" :src="getAvatarSrc(getCreatorMember(task))" :alt="getCreatorTooltip(getCreatorMember(task))" @error="handleAvatarError(getCreatorMember(task))" width="28" height="28">
+                                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(getCreatorMember(task).user_name) }}</span>
+                                                </div> -->
+                                                <span class="small">{{ getCreatorMember(task).user_name || '—' }}</span>
+                                            </div>
+                                        </template>
+                                        <span v-else class="text-muted small">—</span>
                                     </td>
                                     <td>
                                         <span class="badge" :class="'bg-' + getStatusColor(task.status)">{{ getStatusLabel(task.status) || '-' }}</span>
@@ -143,9 +169,13 @@ if($_SESSION['show_project'] == 0){
                                         </div>
                                     </td>
                                     <td>
-                                        <small class="text-muted">
-                                            {{ formatDate(task.start_date) }} ～ {{ formatDate(task.due_date) }}
-                                        </small>
+                                        <div class="d-flex align-items-center gap-1 flex-wrap small">
+                                            <span class="text-nowrap">{{ formatDate(task.start_date) }} ～ </span>
+                                            <span class="text-nowrap" :class="{ 'text-danger fw-bold': isTaskDueExceedsProjectDue(task) }">{{ formatDate(task.due_date) }}</span>
+                                            <i v-if="hasPeriodWarning(task)" class="fas fa-exclamation-triangle text-warning ms-1"
+                                               data-bs-toggle="tooltip" data-bs-placement="top"
+                                               :title="getPeriodWarningTooltip(task)"></i>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>

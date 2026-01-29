@@ -107,6 +107,55 @@ createApp({
             }).filter(Boolean);
             return names.length ? names.join(', ') : '未選択';
         },
+        getAssigneeUser(userId) {
+            if (!userId) return null;
+            return this.users.find(u => String(u.id) === String(userId)) || null;
+        },
+        getAvatarSrc(user) {
+            if (!user || !user.user_image) return '';
+            return '/assets/upload/avatar/' + (user.user_image || '');
+        },
+        handleAvatarError(user) {
+            if (user) user.avatarError = true;
+        },
+        getInitials(name) {
+            if (typeof getAvatarName === 'function') return getAvatarName(name || '');
+            if (!name || !String(name).trim()) return '?';
+            return String(name).trim().split(/\s+/).map(s => s[0]).join('').toUpperCase().slice(0, 2);
+        },
+        isAcknowledged(task, userId) {
+            if (!task || !task.acknowledgements || userId == null || userId === '') return false;
+            const key = String(userId);
+            const ack = task.acknowledgements[key] ?? task.acknowledgements[Number(userId)];
+            return ack && (ack.acknowledged == 1 || ack.acknowledged === '1');
+        },
+        getAssigneeTooltip(task, userId) {
+            const user = this.getAssigneeUser(userId);
+            const name = user ? user.realname : userId;
+            const ack = this.isAcknowledged(task, userId);
+            return ack ? (name + ' - 受領済み') : (name + ' - 未受領');
+        },
+        getCreatorMember(task) {
+            if (!task) return null;
+            if (task.created_by_name != null || task.created_by_user_image != null) {
+                return {
+                    user_id: task.created_by,
+                    user_name: task.created_by_name || '',
+                    user_image: task.created_by_user_image || ''
+                };
+            }
+            const user = task.created_by != null ? this.getAssigneeUser(task.created_by) : null;
+            if (user) {
+                return { user_id: user.id, user_name: user.realname || '', user_image: user.user_image || '' };
+            }
+            return null;
+        },
+        shouldShowCreatorAvatar(member) {
+            return member && (member.user_image && String(member.user_image).trim() !== '') && !member.avatarError;
+        },
+        getCreatorTooltip(member) {
+            return member ? (member.user_name || '') : '';
+        },
         async loadOverview() {
             this.loading = true;
             try {
@@ -136,6 +185,7 @@ createApp({
                 this.users = data.users || [];
                 this.tasks = data.tasks || [];
                 this.unassignedUsers = data.unassigned_users || [];
+                this.$nextTick(() => this.initTooltips());
             } catch (e) {
                 console.error('Error loading task overview:', e);
                 console.error('Error details:', e.response?.data || e.message);
@@ -197,6 +247,54 @@ createApp({
         formatDate(dateString) {
             if (!dateString) return '-';
             return moment(dateString).format('M月D日 H:mm');
+        },
+        isTaskOverdue(task) {
+            if (!task || !task.due_date) return false;
+            if (task.status === 'completed' || task.status === 'cancelled') return false;
+            const due = moment.tz(task.due_date, 'Asia/Tokyo');
+            return moment().tz('Asia/Tokyo').isAfter(due, 'minute');
+        },
+        getOverdueTooltip(task) {
+            if (!this.isTaskOverdue(task)) return '';
+            const due = moment.tz(task.due_date, 'Asia/Tokyo');
+            const now = moment().tz('Asia/Tokyo');
+            const duration = moment.duration(now.diff(due));
+            const hours = Math.floor(duration.asHours());
+            const minutes = Math.floor(duration.asMinutes()) % 60;
+            if (hours > 0) {
+                return `期限切れ: ${hours}時間${minutes}分`;
+            }
+            return `期限切れ: ${minutes}分`;
+        },
+        isTaskDueExceedsProjectDue(task) {
+            if (!task || !task.due_date) return false;
+            const projectEnd = task.project_end_date;
+            if (!projectEnd) return false;
+            const taskDue = moment.tz(task.due_date, 'Asia/Tokyo');
+            const projEnd = moment.tz(projectEnd, 'Asia/Tokyo');
+            return taskDue.isAfter(projEnd, 'minute');
+        },
+        getTaskExceedsProjectDueTooltip(task) {
+            if (!this.isTaskDueExceedsProjectDue(task)) return '';
+            return 'タスクの期限がプロジェクトの期限を超えています';
+        },
+        hasPeriodWarning(task) {
+            return this.isTaskOverdue(task) || this.isTaskDueExceedsProjectDue(task);
+        },
+        getPeriodWarningTooltip(task) {
+            const parts = [];
+            if (this.isTaskOverdue(task)) parts.push(this.getOverdueTooltip(task));
+            if (this.isTaskDueExceedsProjectDue(task)) parts.push(this.getTaskExceedsProjectDueTooltip(task));
+            return parts.join('\n');
+        },
+        initTooltips() {
+            if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+                    if (!bootstrap.Tooltip.getInstance(el)) {
+                        new bootstrap.Tooltip(el);
+                    }
+                });
+            }
         }
     },
     mounted() {

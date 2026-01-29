@@ -94,8 +94,30 @@ const TaskApp = createApp({
                 show: false,
                 taskId: null,
                 type: null, // 'like' or 'dislike'
-                note: ''
+                note: '',
+                selectedReasons: [], // Array of selected reason IDs
+                customNote: '' // Custom input text
             },
+            // Predefined reasons for like/dislike
+            likeReasons: [
+                { id: 'good_communication', label: 'コミュニケーションが良好', i18nKey: 'コミュニケーションが良好' },
+                { id: 'complete_early', label: '早く完了した', i18nKey: '早く完了した' },
+                { id: 'quality_work', label: '品質が良い', i18nKey: '品質が良い' },
+                { id: 'well_organized', label: '整理されている', i18nKey: '整理されている' },
+                { id: 'beautiful_design', label: '設計が美しい・創造的', i18nKey: '設計が美しい・創造的' },
+                { id: 'excellent_design_solution', label: '設計ソリューションが優れている', i18nKey: '設計ソリューションが優れている' },
+                { id: 'cost_efficient', label: 'コスト効率が良い', i18nKey: 'コスト効率が良い' }
+            ],
+            dislikeReasons: [
+                { id: 'error_alot', label: '多くのエラーが発生した', i18nKey: '多くのエラーが発生した' },
+                { id: 'repeat_error', label: '同じエラーが繰り返し発生した', i18nKey: '同じエラーが繰り返し発生した' },
+                { id: 'not_follow_instructions', label: '指示に従わなかった', i18nKey: '指示に従わなかった' },
+                { id: 'not_complete', label: '完了しなかった', i18nKey: '完了しなかった' },
+                { id: 'poor_communication', label: 'コミュニケーション不足', i18nKey: 'コミュニケーション不足' },
+                { id: 'delayed', label: '遅延し、期限を守らなかった', i18nKey: '遅延し、期限を守らなかった' },
+                { id: 'quality_issues', label: '品質に問題がある', i18nKey: '品質に問題がある' },
+                { id: 'disorganized', label: '整理されていない', i18nKey: '整理されていない' }
+            ],
             // Sortable instance
             sortableInstance: null,
             // Progress options (0% to 100% with 5% steps)
@@ -108,6 +130,7 @@ const TaskApp = createApp({
             return this.permission.can_manage_project || this.permission.is_member;
         },
         canLikeTask() {
+            // Quyền chung: chỉ manager hoặc team_leader mới được like/dislike
             return this.permission.can_manage_project || this.permission.is_team_leader;
         },
         sortedTaskLogs() {
@@ -584,13 +607,19 @@ const TaskApp = createApp({
         //     }
         // },
         
+        getDefaultStartDateTime() {
+            return moment().format('YYYY/MM/DD') + ' 09:00';
+        },
+        getDefaultDueDateTime() {
+            return moment().format('YYYY/MM/DD') + ' 18:00';
+        },
         openNewTaskModal() {
             const newTask = {
                 title: '',
                 priority: 'medium',
                 status: 'todo',
-                start_date: '',
-                due_date: '',
+                start_date: this.getDefaultStartDateTime(),
+                due_date: this.getDefaultDueDateTime(),
                 progress: 0,
                 assignees: [],
                 position: null // Will be calculated when saving
@@ -888,7 +917,10 @@ const TaskApp = createApp({
                 due_date: task.due_date || '',
                 assignees: task.assigned_to ? task.assigned_to.split(',').filter(id => id.trim()) : [],
                 status: task.status || 'todo',
-                progress: task.progress || 0
+                progress: task.progress || 0,
+                created_by: task.created_by != null ? task.created_by : undefined,
+                created_by_name: task.created_by_name,
+                created_by_user_image: task.created_by_user_image
             };
             this.editingInlineId = task.id;
             this.inlineTasks.push(inlineTask);
@@ -1048,6 +1080,65 @@ const TaskApp = createApp({
             return moment(date).format('YYYY/MM/DD HH:mm');
         },
         
+        getAssigneeTooltip(task, userId) {
+            const member = this.projectMembers.find(m => m.user_id == userId);
+            const name = member?.user_name || userId;
+            const isAck = this.isAcknowledged(task, userId);
+            if (isAck) {
+                const ackAt = this.getAcknowledgedAt(task, userId);
+                return `${name} - 受領済み: ${this.formatDateTime(ackAt)}`;
+            }
+            return `${name} - 未受領`;
+        },
+        getCreatorName(task) {
+            if (!task || task.created_by == null || task.created_by === undefined) return '';
+            return this.getCreatorNameByUserId(task.created_by);
+        },
+        getCreatorNameByUserId(userId) {
+            if (userId == null || userId === undefined || userId === '') return '';
+            const member = this.projectMembers.find(m => String(m.user_id) === String(userId));
+            return member?.user_name || '';
+        },
+        /** Return creator info for avatar display (from task API or projectMembers) */
+        getCreatorMember(task) {
+            if (!task || task.created_by == null || task.created_by === undefined) return null;
+            // Prefer API data so creator avatar shows even when not a project member
+            if (task.created_by_name != null || task.created_by_user_image != null) {
+                return {
+                    userid: task.created_by_userid,
+                    user_id: task.created_by,
+                    user_name: task.created_by_name || '',
+                    user_image: task.created_by_user_image || ''
+                };
+            }
+            return this.projectMembers.find(m => String(m.user_id) === String(task.created_by)) || null;
+        },
+        getCreatorMemberByUserId(userId) {
+            if (userId == null || userId === undefined || userId === '') return null;
+            return this.projectMembers.find(m => String(m.user_id) === String(userId)) || null;
+        },
+        /** For inline task: prefer task's created_by_name/created_by_user_image if present */
+        getCreatorMemberForInlineTask(task) {
+            if (!task || task.created_by == null || task.created_by === undefined) return null;
+            if (task.created_by_name != null || task.created_by_user_image != null) {
+                return {
+                    userid: task.created_by_userid,
+                    user_id: task.created_by,
+                    user_name: task.created_by_name || '',
+                    user_image: task.created_by_user_image || ''
+                };
+            }
+            return this.getCreatorMemberByUserId(task.created_by);
+        },
+        /** True if creator member has a valid avatar to show (has image and no load error). Else fallback to text/initials. */
+        shouldShowCreatorAvatar(member) {
+            return member && (member.user_image && String(member.user_image).trim() !== '') && !member.avatarError;
+        },
+        /** Tooltip text for creator (user name). */
+        getCreatorTooltip(member) {
+            return member ? (member.user_name || '') : '';
+        },
+        
         openMemberModal() {
             this.showMemberModal = true;
         },
@@ -1121,6 +1212,21 @@ const TaskApp = createApp({
                 const m = this.projectMembers.find(u => u.user_id == userId);
                 return m ? m.user_name : '';
             }).join(', ');
+        },
+
+        // Tooltip cho nhóm avatar bị ẩn (>4): hiển thị tên + trạng thái nhận việc
+        getOverflowAssigneesTooltip(task) {
+            if (!task || !task.assigned_to) return '';
+            const allIds = task.assigned_to
+                .split(',')
+                .map(id => id.trim())
+                .filter(id => id);
+            const overflowIds = allIds.slice(4); // các user thứ 5 trở đi
+            if (!overflowIds.length) return '';
+
+            return overflowIds
+                .map(userId => this.getAssigneeTooltip(task, userId))
+                .join('\n');
         },
         
         initFlatpickr() {
@@ -1515,6 +1621,30 @@ const TaskApp = createApp({
             } else {
                 return `期限切れ: ${minutes}分`;
             }
+        },
+        /** True if task due date is after project end date */
+        isTaskDueExceedsProjectDue(task) {
+            if (!task || !task.due_date) return false;
+            const projectEnd = this.projectInfo && this.projectInfo.end_date;
+            if (!projectEnd) return false;
+            const taskDue = moment.tz(task.due_date, 'Asia/Tokyo');
+            const projEnd = moment.tz(projectEnd, 'Asia/Tokyo');
+            return taskDue.isAfter(projEnd, 'minute');
+        },
+        /** Tooltip when task due exceeds project due */
+        getTaskExceedsProjectDueTooltip(task) {
+            if (!this.isTaskDueExceedsProjectDue(task)) return '';
+            return this.$t ? this.$t('タスクの期限がプロジェクトの期限を超えています') : 'タスクの期限がプロジェクトの期限を超えています';
+        },
+        /** Combined period warning: overdue and/or exceeds project due */
+        hasPeriodWarning(task) {
+            return this.isTaskOverdue(task) || this.isTaskDueExceedsProjectDue(task);
+        },
+        getPeriodWarningTooltip(task) {
+            const parts = [];
+            if (this.isTaskOverdue(task)) parts.push(this.getOverdueTooltip(task));
+            if (this.isTaskDueExceedsProjectDue(task)) parts.push(this.getTaskExceedsProjectDueTooltip(task));
+            return parts.join('\n');
         },
         
         getInlineOverdueTooltip(inlineTask) {
@@ -1967,21 +2097,44 @@ const TaskApp = createApp({
             this.reactionModal.taskId = task.id;
             this.reactionModal.type = type;
             
-            // If user already reacted with this type, load existing note
+            // Reset form
+            this.reactionModal.selectedReasons = [];
+            this.reactionModal.customNote = '';
+            
+            // If user already reacted with this type, load existing data
             if (task.current_user_reaction === type) {
                 try {
                     const response = await axios.get(`/api/index.php?model=task&method=getTaskReaction&task_id=${task.id}`);
                     if (response.data && response.data.success) {
-                        this.reactionModal.note = response.data.note || '';
+                        // Load selected reasons (if stored as comma-separated string or array)
+                        if (response.data.selected_reasons) {
+                            if (Array.isArray(response.data.selected_reasons)) {
+                                this.reactionModal.selectedReasons = response.data.selected_reasons;
+                            } else if (typeof response.data.selected_reasons === 'string') {
+                                this.reactionModal.selectedReasons = response.data.selected_reasons.split(',').filter(r => r.trim());
+                            }
+                        }
+                        // Load custom note - only use custom_note, not the combined note
+                        // If selected_reasons exists (even if empty array), it means we're using new format
+                        if (response.data.hasOwnProperty('selected_reasons')) {
+                            // New format: only use custom_note, ignore combined note
+                            this.reactionModal.customNote = response.data.custom_note || '';
+                        } else {
+                            // Old format: use note as custom_note (backward compatibility)
+                            this.reactionModal.customNote = response.data.custom_note || response.data.note || '';
+                        }
                     } else {
-                        this.reactionModal.note = '';
+                        this.reactionModal.selectedReasons = [];
+                        this.reactionModal.customNote = '';
                     }
                 } catch (error) {
                     console.error('Error loading reaction:', error);
-                    this.reactionModal.note = '';
+                    this.reactionModal.selectedReasons = [];
+                    this.reactionModal.customNote = '';
                 }
             } else {
-                this.reactionModal.note = '';
+                this.reactionModal.selectedReasons = [];
+                this.reactionModal.customNote = '';
             }
             
             this.reactionModal.show = true;
@@ -1992,6 +2145,15 @@ const TaskApp = createApp({
                 if (modalEl) {
                     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
                     modal.show();
+                    // Translate i18n elements in modal
+                    if (typeof localize === 'function') {
+                        localize();
+                    } else if (typeof i18next !== 'undefined' && i18next.isInitialized) {
+                        const i18nList = modalEl.querySelectorAll('[data-i18n]');
+                        i18nList.forEach(function (item) {
+                            item.innerHTML = i18next.t(item.dataset.i18n);
+                        });
+                    }
                 }
             });
         },
@@ -2002,7 +2164,21 @@ const TaskApp = createApp({
                 const formData = new FormData();
                 formData.append('task_id', this.reactionModal.taskId);
                 formData.append('type', this.reactionModal.type);
-                formData.append('note', this.reactionModal.note || '');
+                // Send selected reasons as comma-separated string
+                formData.append('selected_reasons', this.reactionModal.selectedReasons.join(','));
+                // Send custom note
+                formData.append('custom_note', this.reactionModal.customNote || '');
+                // Keep backward compatibility: combine reasons and custom note into note field
+                const reasonLabels = this.reactionModal.selectedReasons.map(reasonId => {
+                    const reasons = this.reactionModal.type === 'like' ? this.likeReasons : this.dislikeReasons;
+                    const reason = reasons.find(r => r.id === reasonId);
+                    // Use i18n translation if available, otherwise use label
+                    return reason ? (this.$t(reason.i18nKey || reason.label)) : reasonId;
+                });
+                const combinedNote = reasonLabels.length > 0 
+                    ? reasonLabels.join(', ') + (this.reactionModal.customNote ? '\n' + this.reactionModal.customNote : '')
+                    : this.reactionModal.customNote;
+                formData.append('note', combinedNote || '');
 
                 const response = await axios.post('/api/index.php?model=task&method=toggleTaskReaction', formData);
                 const data = response.data || {};
@@ -2029,7 +2205,8 @@ const TaskApp = createApp({
                 this.reactionModal.show = false;
                 this.reactionModal.taskId = null;
                 this.reactionModal.type = null;
-                this.reactionModal.note = '';
+                this.reactionModal.selectedReasons = [];
+                this.reactionModal.customNote = '';
 
                 this.showMessage('リアクションを保存しました', false);
             } catch (error) {
@@ -2071,7 +2248,8 @@ const TaskApp = createApp({
                 this.reactionModal.show = false;
                 this.reactionModal.taskId = null;
                 this.reactionModal.type = null;
-                this.reactionModal.note = '';
+                this.reactionModal.selectedReasons = [];
+                this.reactionModal.customNote = '';
 
                 this.showMessage('リアクションを削除しました', false);
             } catch (error) {
@@ -2103,7 +2281,87 @@ const TaskApp = createApp({
         },
 
         checkAssignee(task) {
+            if (!task.assigned_to) return false;
             return task.assigned_to.split(',').includes(this.currentUserId) || task.created_by == this.currentUserId;
+        },
+        /** True if the current user created this task */
+        isTaskCreatedByMe(task) {
+            if (!task || task.created_by == null || task.created_by === undefined) return false;
+            return String(task.created_by) === String(this.currentUserId);
+        },
+        
+        isAssignedToMe(task) {
+            if (!task.assigned_to) return false;
+            const assignedIds = task.assigned_to.split(',').map(id => id.trim());
+            return assignedIds.includes(this.currentUserId.toString());
+        },
+
+        /**
+         * Kiểm tra có được like/dislike task này hay không theo rule:
+         * - Nếu số người được giao > 1 => luôn cho phép (nếu có quyền canLikeTask)
+         * - Nếu số người được giao <= 1 và current user là người được giao => KHÔNG cho phép
+         * - Các trường hợp khác => cho phép (nếu có quyền canLikeTask)
+         */
+        canReactToTask(task) {
+            if (!this.canLikeTask) return false;
+            if (!task || !task.assigned_to) return true;
+
+            const assignedIds = task.assigned_to
+                .split(',')
+                .map(id => id.trim())
+                .filter(id => id);
+
+            if (assignedIds.length <= 1 &&
+                assignedIds.includes(this.currentUserId.toString())) {
+                return false;
+            }
+
+            return true;
+        },
+        
+        isAcknowledged(task, userId) {
+            if (!task.acknowledgements || !userId) return false;
+            const ack = task.acknowledgements[userId.toString()];
+            return ack && ack.acknowledged == 1;
+        },
+        
+        getAcknowledgedAt(task, userId) {
+            if (!task.acknowledgements || !userId) return null;
+            const ack = task.acknowledgements[userId.toString()];
+            return ack && ack.acknowledged_at ? ack.acknowledged_at : null;
+        },
+        
+        async acknowledgeTask(task) {
+            try {
+                const formData = new FormData();
+                formData.append('task_id', task.id);
+                
+                const response = await axios.post(
+                    '/api/index.php?model=task&method=acknowledgeTask',
+                    formData
+                );
+                
+                if (response.data && response.data.status === 'success') {
+                    // Update local task data
+                    if (!task.acknowledgements) {
+                        task.acknowledgements = {};
+                    }
+                    const currentUserIdStr = this.currentUserId.toString();
+                    task.acknowledgements[currentUserIdStr] = {
+                        acknowledged: 1,
+                        acknowledged_at: new Date().toISOString().slice(0, 19).replace('T', ' ')
+                    };
+                    
+                    showMessage('タスクを受領しました。', false);
+                    // Reload tasks to get updated data
+                    await this.loadTasks();
+                } else {
+                    showMessage(response.data?.message || 'エラーが発生しました。', true);
+                }
+            } catch (error) {
+                console.error('Error acknowledging task:', error);
+                showMessage('エラーが発生しました。', true);
+            }
         },
         
         async removeAssignee(task, userId) {

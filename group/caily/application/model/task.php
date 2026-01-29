@@ -58,8 +58,12 @@ class Task extends ApplicationModel {
         // Current user for reaction info
         $current_user_id = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
         
+        $current_user_id_number = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
+        
         $query = sprintf(
             "SELECT t.*, p.name as project_name, u.realname as assigned_to_name,
+            u_creator.realname as created_by_name, u_creator.user_image as created_by_user_image,
+            u_creator.userid as created_by_userid,
             (SELECT COUNT(*) FROM {$this->table} WHERE parent_id = t.id) as subtask_count,
             -- Task like/dislike counts
             (SELECT COUNT(*) FROM " . DB_PREFIX . "task_reactions tr WHERE tr.task_id = t.id AND tr.type = 'like') as like_count,
@@ -81,6 +85,7 @@ class Task extends ApplicationModel {
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id 
             LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
+            LEFT JOIN " . DB_PREFIX . "user u_creator ON t.created_by = u_creator.id
             %s
             ORDER BY t.position, t.created_at DESC",
             $this->quote($current_user_id),
@@ -89,8 +94,30 @@ class Task extends ApplicationModel {
         );
         
         $tasks = $this->fetchAll($query);
-
         
+        // Load acknowledgements for all tasks
+        $taskIds = array_map(function($task) { return $task['id']; }, $tasks);
+        $acknowledgementsMap = [];
+        if (!empty($taskIds)) {
+            $ackQuery = sprintf(
+                "SELECT task_id, user_id, acknowledged, acknowledged_at 
+                FROM " . DB_PREFIX . "task_assignees 
+                WHERE task_id IN (%s)",
+                implode(',', array_map('intval', $taskIds))
+            );
+            $ackRows = $this->fetchAll($ackQuery);
+            foreach ($ackRows as $ack) {
+                $taskId = (int)$ack['task_id'];
+                $uid = (int)$ack['user_id'];
+                if (!isset($acknowledgementsMap[$taskId])) {
+                    $acknowledgementsMap[$taskId] = [];
+                }
+                $acknowledgementsMap[$taskId][(string)$uid] = [
+                    'acknowledged' => intval($ack['acknowledged']),
+                    'acknowledged_at' => $ack['acknowledged_at']
+                ];
+            }
+        }
         
         if ($include_subtasks) {
             foreach ($tasks as &$task) {
@@ -102,12 +129,16 @@ class Task extends ApplicationModel {
                 // Parse reaction user names
                 $task['liked_by_names'] = $task['liked_by_names'] ? explode(',', $task['liked_by_names']) : [];
                 $task['disliked_by_names'] = $task['disliked_by_names'] ? explode(',', $task['disliked_by_names']) : [];
+                // Add acknowledgements
+                $task['acknowledgements'] = $acknowledgementsMap[$task['id']] ?? [];
             }
         } else {
             // Parse reaction user names even if not including subtasks
             foreach ($tasks as &$task) {
                 $task['liked_by_names'] = $task['liked_by_names'] ? explode(',', $task['liked_by_names']) : [];
                 $task['disliked_by_names'] = $task['disliked_by_names'] ? explode(',', $task['disliked_by_names']) : [];
+                // Add acknowledgements
+                $task['acknowledgements'] = $acknowledgementsMap[$task['id']] ?? [];
             }
         }
         
@@ -153,6 +184,11 @@ class Task extends ApplicationModel {
         // }
         if($task_id){
             $this->logTaskAction($task_id, 'created', 'タスク作成', '', '');
+            
+            // Sync task_assignees table when task is created
+            if (!empty($data['assigned_to'])) {
+                $this->syncTaskAssignees($task_id, $data['assigned_to']);
+            }
             
             // Send notification to assigned users if task is assigned
             if (!empty($data['assigned_to']) && $data['project_id']) {
@@ -297,6 +333,33 @@ class Task extends ApplicationModel {
             ];
         }
         $old = $this->getById($id);
+        if (!$old || !isset($old['project_id'])) {
+            return [
+                'status' => 'error',
+                'message' => 'タスクが見つかりません'
+            ];
+        }
+        $projectId = (int) $old['project_id'];
+        $savedGetProjectId = isset($_GET['project_id']) ? $_GET['project_id'] : null;
+        $_GET['project_id'] = $projectId;
+        $permission = $this->getPermission();
+        if ($savedGetProjectId !== null) {
+            $_GET['project_id'] = $savedGetProjectId;
+        } else {
+            unset($_GET['project_id']);
+        }
+        $canDelete = !empty($permission['can_manage_project']);
+        if (!$canDelete && !empty($permission['rule']['task_delete'])) {
+            $currentUserId = isset($_SESSION['id']) ? (int) $_SESSION['id'] : 0;
+            $createdBy = isset($old['created_by']) ? (int) $old['created_by'] : 0;
+            $canDelete = ($createdBy > 0 && $createdBy === $currentUserId);
+        }
+        if (!$canDelete) {
+            return [
+                'status' => 'error',
+                'message' => 'このタスクを削除する権限がありません。作成者のみ削除できます。'
+            ];
+        }
         $query = sprintf(
             "SELECT COUNT(*) as count FROM {$this->table} WHERE parent_id = %d",
             intval($id)
@@ -413,11 +476,124 @@ class Task extends ApplicationModel {
         $result = $this->query_update($data, ['id' => $id]);
         
         if ($result) {
+            // Sync task_assignees table
+            $this->syncTaskAssignees($id, $assigned_to);
            // $this->logTaskAction($id, 'progress_updated', '進捗変更', $old['progress'], $progress);
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'message' => 'Update failed'];
         }
+    }
+    
+    /**
+     * Sync task_assignees table when assigned_to changes
+     */
+    function syncTaskAssignees($task_id, $assigned_to_csv) {
+        // Get current assignees from task_assignees table
+        $currentAssignees = $this->fetchAll(
+            "SELECT user_id FROM " . DB_PREFIX . "task_assignees WHERE task_id = " . intval($task_id)
+        );
+        $currentUserIds = array_map(function($row) { return intval($row['user_id']); }, $currentAssignees);
+        
+        // Parse new assigned_to CSV
+        $newUserIds = [];
+        if (!empty($assigned_to_csv)) {
+            $parts = explode(',', $assigned_to_csv);
+            foreach ($parts as $part) {
+                $userId = intval(trim($part));
+                if ($userId > 0) {
+                    $newUserIds[] = $userId;
+                }
+            }
+        }
+        
+        // Remove assignees that are no longer assigned
+        $toRemove = array_diff($currentUserIds, $newUserIds);
+        if (!empty($toRemove)) {
+            $this->query(
+                "DELETE FROM " . DB_PREFIX . "task_assignees 
+                WHERE task_id = " . intval($task_id) . " 
+                AND user_id IN (" . implode(',', $toRemove) . ")"
+            );
+        }
+        
+        // Add new assignees (if not exists)
+        $toAdd = array_diff($newUserIds, $currentUserIds);
+        foreach ($toAdd as $userId) {
+            $this->query(
+                "INSERT INTO " . DB_PREFIX . "task_assignees (task_id, user_id, acknowledged, acknowledged_at) 
+                VALUES (" . intval($task_id) . ", " . intval($userId) . ", 0, NULL)
+                ON DUPLICATE KEY UPDATE task_id = task_id"
+            );
+        }
+    }
+    
+    /**
+     * Acknowledge task assignment
+     */
+    function acknowledgeTask() {
+        $task_id = isset($_POST['task_id']) ? intval($_POST['task_id']) : 0;
+        $user_id = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
+        
+        if (!$task_id || !$user_id) {
+            return ['status' => 'error', 'message' => 'Missing required parameters'];
+        }
+        
+        // Verify user is assigned to this task
+        $task = $this->getById($task_id);
+        if (!$task) {
+            return ['status' => 'error', 'message' => 'Task not found'];
+        }
+        
+        // Check if user is in assigned_to
+        $assignedToArray = !empty($task['assigned_to']) ? explode(',', $task['assigned_to']) : [];
+        $isAssigned = false;
+        foreach ($assignedToArray as $assignedId) {
+            if (intval(trim($assignedId)) == $user_id) {
+                $isAssigned = true;
+                break;
+            }
+        }
+        
+        if (!$isAssigned) {
+            return ['status' => 'error', 'message' => 'Bạn không được giao việc này'];
+        }
+        
+        // Update or insert acknowledgement
+        $query = sprintf(
+            "INSERT INTO " . DB_PREFIX . "task_assignees (task_id, user_id, acknowledged, acknowledged_at) 
+            VALUES (%d, %d, 1, NOW())
+            ON DUPLICATE KEY UPDATE 
+                acknowledged = 1, 
+                acknowledged_at = NOW(),
+                updated_at = NOW()",
+            intval($task_id),
+            intval($user_id)
+        );
+        
+        $result = $this->query($query);
+        
+        if ($result) {
+            $this->logTaskAction($task_id, 'acknowledged', 'Đã nhận việc', null, $user_id);
+            return ['status' => 'success', 'message' => 'Đã đánh dấu nhận việc thành công'];
+        } else {
+            return ['status' => 'error', 'message' => 'Failed to acknowledge task'];
+        }
+    }
+    
+    /**
+     * Get task acknowledgements for a specific task
+     */
+    function getTaskAcknowledgements($task_id) {
+        $query = sprintf(
+            "SELECT ta.*, u.realname as user_name, u.userid
+            FROM " . DB_PREFIX . "task_assignees ta
+            LEFT JOIN " . DB_PREFIX . "user u ON ta.user_id = u.id
+            WHERE ta.task_id = %d
+            ORDER BY ta.acknowledged DESC, ta.acknowledged_at DESC",
+            intval($task_id)
+        );
+        return $this->fetchAll($query);
     }
 
 
@@ -1198,6 +1374,8 @@ class Task extends ApplicationModel {
         $task_id = isset($_POST['task_id']) ? intval($_POST['task_id']) : 0;
         $type = isset($_POST['type']) ? $_POST['type'] : '';
         $note = isset($_POST['note']) ? trim($_POST['note']) : '';
+        $selected_reasons = isset($_POST['selected_reasons']) ? trim($_POST['selected_reasons']) : '';
+        $custom_note = isset($_POST['custom_note']) ? trim($_POST['custom_note']) : '';
         $user_id = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
         
         if (!$task_id || !$user_id || !in_array($type, ['like', 'dislike'])) {
@@ -1217,6 +1395,18 @@ class Task extends ApplicationModel {
         $now = date('Y-m-d H:i:s');
         $is_delete = isset($_POST['delete']) && $_POST['delete'] == '1';
         
+        // Prepare note data: store structured data as JSON if selected_reasons or custom_note provided
+        $noteData = $note; // Default to combined note for backward compatibility
+        if ($selected_reasons || $custom_note) {
+            $selectedReasonsArray = $selected_reasons ? explode(',', $selected_reasons) : [];
+            $selectedReasonsArray = array_filter(array_map('trim', $selectedReasonsArray));
+            $noteData = json_encode([
+                'selected_reasons' => $selectedReasonsArray,
+                'custom_note' => $custom_note,
+                'combined' => $note // Keep combined text for display
+            ], JSON_UNESCAPED_UNICODE);
+        }
+        
         if ($is_delete && $existing) {
             // Delete reaction
             $this->query(sprintf(
@@ -1228,7 +1418,7 @@ class Task extends ApplicationModel {
             // Update type & note
             $data = [
                 'type' => $type,
-                'note' => $note,
+                'note' => $noteData,
                 'updated_at' => $now
             ];
             $this->query_update($data, ['id' => $existing['id']]);
@@ -1238,7 +1428,7 @@ class Task extends ApplicationModel {
                 'task_id' => $task_id,
                 'user_id' => $user_id,
                 'type' => $type,
-                'note' => $note,
+                'note' => $noteData,
                 'created_at' => $now,
                 'updated_at' => $now
             ];
@@ -1297,10 +1487,29 @@ class Task extends ApplicationModel {
         $this->table = DB_PREFIX . 'tasks'; // Reset table
         
         if ($reaction) {
+            // Use null coalescing instead of logical OR to avoid boolean casting
+            $note = isset($reaction['note']) ? $reaction['note'] : '';
+            $selected_reasons = [];
+            $custom_note = '';
+            
+            // Try to parse as JSON (new format)
+            $decoded = json_decode($note, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $selected_reasons = isset($decoded['selected_reasons']) ? $decoded['selected_reasons'] : [];
+                $custom_note = isset($decoded['custom_note']) ? $decoded['custom_note'] : '';
+                // Use combined text if available, otherwise use custom_note
+                $note = isset($decoded['combined']) ? $decoded['combined'] : $custom_note;
+            } else {
+                // Old format: plain text note
+                $custom_note = $note;
+            }
+            
             return [
                 'success' => true,
                 'type' => $reaction['type'],
-                'note' => $reaction['note'] || ''
+                'note' => $note,
+                'selected_reasons' => $selected_reasons,
+                'custom_note' => $custom_note
             ];
         }
         
@@ -1858,6 +2067,7 @@ class Task extends ApplicationModel {
                 u.id,
                 u.userid,
                 u.realname,
+                u.user_image,
                 ud.department_id,
                 d.name AS department_name,
                 tm.team_id,
@@ -1880,6 +2090,7 @@ class Task extends ApplicationModel {
                     'id' => $uid,
                     'userid' => $row['userid'],
                     'realname' => $row['realname'],
+                    'user_image' => isset($row['user_image']) ? $row['user_image'] : '',
                     'department_id' => $row['department_id'],
                     'department_name' => $row['department_name'],
                     'teams' => []
@@ -1926,19 +2137,45 @@ class Task extends ApplicationModel {
                 t.status,
                 t.priority,
                 t.assigned_to,
+                t.created_by,
                 t.due_date,
                 t.start_date,
                 t.progress,
                 p.project_number,
                 p.name AS project_name,
                 p.department_id,
-                d.name AS department_name
+                p.end_date AS project_end_date,
+                d.name AS department_name,
+                u_creator.realname AS created_by_name,
+                u_creator.user_image AS created_by_user_image
              FROM " . DB_PREFIX . "tasks t
              LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
              LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+             LEFT JOIN " . DB_PREFIX . "user u_creator ON t.created_by = u_creator.id
              $taskWhere
              ORDER BY p.department_id ASC, t.project_id ASC, t.position ASC, t.created_at DESC"
         );
+
+        $taskIds = array_map(function($r) { return $r['id']; }, $taskRows);
+        $acknowledgementsMap = [];
+        if (!empty($taskIds)) {
+            $ackQuery = sprintf(
+                "SELECT task_id, user_id, acknowledged, acknowledged_at FROM " . DB_PREFIX . "task_assignees WHERE task_id IN (%s)",
+                implode(',', array_map('intval', $taskIds))
+            );
+            $ackRows = $this->fetchAll($ackQuery);
+            foreach ($ackRows as $ack) {
+                $tid = (int)$ack['task_id'];
+                $uid = (int)$ack['user_id'];
+                if (!isset($acknowledgementsMap[$tid])) {
+                    $acknowledgementsMap[$tid] = [];
+                }
+                $acknowledgementsMap[$tid][(string)$uid] = [
+                    'acknowledged' => (int)$ack['acknowledged'],
+                    'acknowledged_at' => $ack['acknowledged_at']
+                ];
+            }
+        }
 
         $tasks = [];
         $assignedUserIdSet = [];
@@ -1969,7 +2206,12 @@ class Task extends ApplicationModel {
                 'progress' => $row['progress'],
                 'department_id' => $row['department_id'],
                 'department_name' => $row['department_name'],
-                'assigned_to_ids' => $assignedIds
+                'project_end_date' => isset($row['project_end_date']) ? $row['project_end_date'] : null,
+                'assigned_to_ids' => $assignedIds,
+                'created_by' => isset($row['created_by']) ? $row['created_by'] : null,
+                'created_by_name' => isset($row['created_by_name']) ? $row['created_by_name'] : null,
+                'created_by_user_image' => isset($row['created_by_user_image']) ? $row['created_by_user_image'] : null,
+                'acknowledgements' => $acknowledgementsMap[$row['id']] ?? []
             ];
         }
 
@@ -2004,6 +2246,41 @@ class Task extends ApplicationModel {
             $uid = $u['id'];
             if (!isset($activeAssignedUserIdSet[$uid])) {
                 $unassigned_users[] = $u;
+            }
+        }
+
+        // 6. Ensure users list includes all assignees and creators from tasks (for avatar/name display)
+        $displayUserIds = $assignedUserIdSet;
+        foreach ($taskRows as $row) {
+            if (!empty($row['created_by'])) {
+                $displayUserIds[(int)$row['created_by']] = true;
+            }
+        }
+        $missingUserIds = array_diff(array_keys($displayUserIds), array_keys($users));
+        if (!empty($missingUserIds)) {
+            $placeholders = implode(',', array_map('intval', $missingUserIds));
+            $extraRows = $this->fetchAll(
+                "SELECT u.id, u.userid, u.realname, u.user_image,
+                        (SELECT ud.department_id FROM " . DB_PREFIX . "user_department ud WHERE ud.userid = u.userid LIMIT 1) AS department_id,
+                        (SELECT d.name FROM " . DB_PREFIX . "user_department ud2
+                         LEFT JOIN " . DB_PREFIX . "departments d ON d.id = ud2.department_id
+                         WHERE ud2.userid = u.userid LIMIT 1) AS department_name
+                 FROM " . DB_PREFIX . "user u
+                 WHERE u.id IN ($placeholders)"
+            );
+            foreach ($extraRows as $row) {
+                $uid = (int)$row['id'];
+                if (!isset($users[$uid])) {
+                    $users[$uid] = [
+                        'id' => $uid,
+                        'userid' => $row['userid'],
+                        'realname' => $row['realname'],
+                        'user_image' => isset($row['user_image']) ? $row['user_image'] : '',
+                        'department_id' => $row['department_id'],
+                        'department_name' => $row['department_name'],
+                        'teams' => []
+                    ];
+                }
             }
         }
 

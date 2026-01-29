@@ -61,7 +61,7 @@
                 </li>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'project_gantt') echo 'active'; ?>">
                   <a href="<?=$root?>project/project_gantt.php" class="menu-link">
-                    <div data-i18n="ガントチャート">ガントチャート</div>
+                    <div data-i18n="案件ガントチャート">案件ガントチャート</div>
                   </a>
                 </li>
                 

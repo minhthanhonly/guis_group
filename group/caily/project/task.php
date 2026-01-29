@@ -161,14 +161,16 @@ if($_SESSION['show_project'] == 0){
         </div>
         
         <div class="d-flex align-items-center justify-content-between mb-2">
-            <div class="row w-100 g-0 align-items-center fw-bold text-primary bg-light">
-                <div class="col-md-3 py-2 px-2"><span data-i18n="タスク">タスク</span></div>
-                <div class="col-md-1 py-2 pe-2"><span data-i18n="優先度">優先度</span></div>
-                <div class="col-md-2 py-2 pe-2"><span data-i18n="期間">期間</span></div>
-                <div class="col-md-2 py-2 pe-2"><span data-i18n="担当者">担当者</span></div>
-                <div class="col-md-1 py-2 pe-2"><span data-i18n="ステータス">ステータス</span></div>
-                <div class="col-md-1 py-2 pe-2"><span data-i18n="進捗">進捗</span></div>
-                <div class="col-md-2 py-2 text-center"><span data-i18n="操作">操作</span></div>
+            <div class="task-table-header w-100 g-0 align-items-center fw-bold text-primary bg-light">
+                <div class="task-col-title py-2 px-2"><span data-i18n="タスク">タスク</span></div>
+                <div class="task-col-priority py-2 pe-2"><span data-i18n="優先度">優先度</span></div>
+                <div class="task-col-period py-2 pe-2"><span data-i18n="期間">期間</span></div>
+                <div class="task-col-assignee py-2 pe-2"><span data-i18n="担当者">担当者</span></div>
+                <div class="task-col-ack py-2 pe-2"></div>
+                <div class="task-col-creator py-2 pe-2"><span data-i18n="作成者">作成者</span></div>
+                <div class="task-col-status py-2 pe-2"><span data-i18n="ステータス">ステータス</span></div>
+                <div class="task-col-progress py-2 pe-2"><span data-i18n="進捗">進捗</span></div>
+                <div class="task-col-actions py-2"><span data-i18n="操作">操作</span></div>
             </div>
         </div>
         <!-- Danh sách task dạng div card/list -->
@@ -180,12 +182,12 @@ if($_SESSION['show_project'] == 0){
             <div v-for="task in displayTasks" :key="task.id || 'inline-' + task._inlineIndex" class="card mb-2" :data-id="task.id" :class="{'subtask': task.indent_level > 0}" :style="{marginLeft: (task.indent_level * 20) + 'px'}">
                 <!-- Inline Edit Mode -->
                 <div v-if="task._isInlineEdit" class="row g-0 align-items-center">
-                    <div class="col-md-3">
+                    <div class="task-col-title">
                         <div class="p-2">
                             <input type="text" class="form-control inline-task-input" :value="task.title" placeholder="タスク名" required @input="updateTaskField(task._inlineIndex, 'title', $event.target.value)">
                         </div>
                     </div>
-                    <div class="col-md-1">
+                    <div class="task-col-priority">
                         <div class="py-2 pe-2">
                             <div class="btn-group w-100">
                                 <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light w-100"
@@ -203,13 +205,13 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="task-col-period">
                         <div class="pe-2 d-flex align-items-center gap-2">
                             <input type="text" class="form-control px-1 py-0 datetimepicker" :value="task.start_date" placeholder="開始日" @input="updateTaskField(task._inlineIndex, 'start_date', $event.target.value)">
                             <input type="text" class="form-control px-1 py-0 datetimepicker" :value="task.due_date" placeholder="期限日" @input="updateTaskField(task._inlineIndex, 'due_date', $event.target.value)">
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="task-col-assignee">
                         <div class="d-flex align-items-center flex-wrap" @click="openAssigneeModal(task._inlineIndex)">
                             <template v-if="task.assignees && task.assignees.length">
                                 <template v-for="(userId, i) in task.assignees.slice(0, 5)">
@@ -236,8 +238,19 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="col-md-1">
+                    <div class="task-col-ack"></div>
+                    <div class="task-col-creator">
+                        <div class="d-flex align-items-center flex-wrap py-2 pe-2">
+                            <template v-if="getCreatorMemberForInlineTask(task)">
+                                <div class="avatar me-1" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMemberForInlineTask(task))">
+                                    <img v-if="shouldShowCreatorAvatar(getCreatorMemberForInlineTask(task))" class="rounded-circle" :src="getAvatarSrc(getCreatorMemberForInlineTask(task))" :alt="getCreatorTooltip(getCreatorMemberForInlineTask(task))" @error="handleAvatarError(getCreatorMemberForInlineTask(task))" width="28" height="28">
+                                    <span v-else class="avatar-initial rounded-circle bg-label-primary" :title="getCreatorTooltip(getCreatorMemberForInlineTask(task))">{{ getInitials(getCreatorMemberForInlineTask(task).user_name) }}</span>
+                                </div>
+                            </template>
+                            <span v-else class="text-muted small">—</span>
+                        </div>
+                    </div>
+                    <div class="task-col-status">
                         <div class="py-2 pe-2">
                             <div class="btn-group w-100">
                                 <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light w-100"
@@ -253,8 +266,8 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-1">
-                        <div class="py-2 pe-2 d-flex align-items-center justify-content-end">
+                    <div class="task-col-progress">
+                        <div class="py-2 pe-2 d-flex align-items-center">
                             <div class="btn-group">
                                 <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" 
                                         data-bs-toggle="dropdown" 
@@ -272,7 +285,7 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="task-col-actions">
                         <div class="d-flex align-items-center justify-content-end gap-1 pe-2">
                             <button class="btn btn-sm btn-success me-1" @click="saveTaskInline(task._inlineIndex)"><i class="fas fa-check"></i></button>
                             <button class="btn btn-sm btn-secondary" @click="cancelTaskInline(task._inlineIndex)"><i class="fas fa-times"></i></button>
@@ -281,8 +294,8 @@ if($_SESSION['show_project'] == 0){
                 </div>
                 
                 <!-- Normal Display Mode -->
-                <div v-else class="row g-0 align-items-center">
-                    <div class="col-md-3 d-flex align-items-center">
+                <div v-else class="row g-0 align-items-center task-row position-relative">
+                    <div class="task-col-title d-flex align-items-center">
                         <span class="drag-handle ps-2 pe-2 fs-16" style="cursor: move;" :class="{'prevent-click': !(permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))}">≡</span>
                         <span class="badge badge-sm bg-label-primary me-2">#{{ task.id }}</span>
                         <div class="d-flex align-items-center justify-content-between gap-2 flex-grow-1 task-title">
@@ -290,7 +303,7 @@ if($_SESSION['show_project'] == 0){
                             <i class="fa fa-expand-alt" style="cursor: pointer;" @click="openTaskDetails(task)"></i>
                         </div>
                     </div>
-                    <div class="col-md-1">
+                    <div class="task-col-priority">
                         <div class="py-2 pe-2">
                             <div class="btn-group w-100">
                                 <button type="button" class="btn btn-sm waves-effect waves-light w-100"
@@ -300,39 +313,72 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="task-col-period">
                         <div class="d-flex align-items-center gap-1 flex-wrap small">
                             <span class="text-nowrap">{{ formatDate(task.start_date) }}</span> ~
-                            <span class="text-nowrap">{{ formatDate(task.due_date) }}
-                            <i v-if="isTaskOverdue(task)" class="fas fa-exclamation-triangle text-warning ms-1" 
-                           data-bs-toggle="tooltip" data-bs-placement="top" 
-                           :title="getOverdueTooltip(task)"></i>
-                            </span>
-                           
+                            <span class="text-nowrap" :class="{ 'text-danger fw-bold': isTaskDueExceedsProjectDue(task) }">{{ formatDate(task.due_date) }}</span>
+                            <i v-if="hasPeriodWarning(task)" class="fas fa-exclamation-triangle text-warning ms-1" 
+                               data-bs-toggle="tooltip" data-bs-placement="top" 
+                               :title="getPeriodWarningTooltip(task)"></i>
                         </div>
                         
                     </div>
-                    <div class="col-md-2">
+                    <div class="task-col-assignee">
                         <div class="d-flex align-items-center flex-wrap">
                             <template v-if="task.assigned_to">
-                                <template v-for="(userId, i) in task.assigned_to.split(',').slice(0, 5)">
-                                    <div :key="userId" class="avatar me-1" :data-userid="projectMembers.find(m => m.user_id == userId)?.userid" data-bs-toggle="tooltip" :title="projectMembers.find(m => m.user_id == userId)?.user_name">
+                                <template v-for="(userId, i) in task.assigned_to.split(',').slice(0, 4)">
+                                    <div :key="userId" class="avatar me-1 position-relative" :data-userid="projectMembers.find(m => m.user_id == userId)?.userid" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, userId)">
                                         <img v-if="!projectMembers.find(m => m.user_id == userId)?.avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == userId))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == userId))" :alt="projectMembers.find(m => m.user_id == userId)?.user_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == userId))" width="28" height="28">
                                         <span v-else class="avatar-initial rounded-circle bg-label-primary" @click="removeAssignee(task, userId)">{{ getInitials(projectMembers.find(m => m.user_id == userId)?.user_name) }}</span>
+                                        <!-- Badge trạng thái xác nhận -->
+                                        <span v-if="isAcknowledged(task, userId)" class="badge bg-success position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;">
+                                            <i class="fa fa-check"></i>
+                                        </span>
+                                        <span v-else class="badge bg-secondary position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;">
+                                            <i class="fa fa-clock"></i>
+                                        </span>
                                     </div>
                                 </template>
-                                <div v-if="task.assigned_to.split(',').length > 5" class="avatar">
-                                    <span class="avatar-initial rounded-circle pull-up" data-bs-toggle="tooltip" data-bs-placement="bottom" :data-bs-original-title="assigneeNames(task.assigned_to.split(',').slice(5))">
-                                        +{{ task.assigned_to.split(',').length - 5 }}
+                                <div v-if="task.assigned_to.split(',').length > 4" class="avatar">
+                                    <span 
+                                        class="avatar-initial rounded-circle pull-up" 
+                                        data-bs-toggle="tooltip" 
+                                        data-bs-placement="bottom" 
+                                        :data-bs-original-title="getOverflowAssigneesTooltip(task)">
+                                        +{{ task.assigned_to.split(',').length - 4 }}
                                     </span>
                                 </div>
-                                
                             </template>
                             <span v-else class="text-muted">未選択</span>
                         </div>
                     </div>
-                   
-                    <div class="col-md-1">
+                    <!-- Cột riêng cho nút 受領 -->
+                    <div class="task-col-ack">
+                        <div class="d-flex align-items-center">
+                            <button 
+                                v-if="task.assigned_to && isAssignedToMe(task) && !isAcknowledged(task, currentUserId)" 
+                                class="btn btn-sm btn-success" 
+                                @click="acknowledgeTask(task)"
+                                title="このタスクを受領済みにする">
+                                <i class="fa fa-check me-1"></i> 受領
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Cột người tạo (avatar hoặc fallback text/initials + tooltip tên) -->
+                    <div class="task-col-creator">
+                        <div class="d-flex align-items-center flex-wrap py-2 pe-2">
+                            <template v-if="getCreatorMember(task)">
+                                <div class="avatar me-1" :data-userid="getCreatorMember(task).userid" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMember(task))">
+                                    <img v-if="shouldShowCreatorAvatar(getCreatorMember(task))" class="rounded-circle" :src="getAvatarSrc(getCreatorMember(task))" :alt="getCreatorTooltip(getCreatorMember(task))" @error="handleAvatarError(getCreatorMember(task))" width="28" height="28">
+                                    <span v-else class="avatar-initial rounded-circle bg-label-primary" :title="getCreatorTooltip(getCreatorMember(task))">{{ getInitials(getCreatorMember(task).user_name) }}</span>
+                                </div>
+                            </template>
+                            <span v-else class="text-muted small">—</span>
+                        </div>
+                    </div>
+
+                    <!-- Cột hiển thị ステータス (giữ thông tin như cũ) -->
+                    <div class="task-col-status">
                         <div class="py-2 pe-2">
                             <div class="btn-group w-100" :class="{'prevent-click': !(permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))}">
                                 <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light w-100"
@@ -348,7 +394,9 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-1">
+
+                    <!-- Cột hiển thị 進捗 (giữ thông tin như cũ) -->
+                    <div class="task-col-progress">
                         <div class="py-2 pe-2 d-flex align-items-center" :class="{'prevent-click': !(permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))}">
                             <div class="btn-group" v-if="permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task))">
                                 <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" 
@@ -368,40 +416,38 @@ if($_SESSION['show_project'] == 0){
                             <span v-else>{{ task.progress || 0 }}%</span>
                         </div>
                     </div>
-                    <div class="col-md-2">
-                        <div class="d-flex align-items-center justify-content-end gap-1 pe-2">
-                            <!-- Like button -->
-                            <button v-if="canLikeTask"
-                                class="position-relative"
+
+                    <div class="task-col-actions">
+                        <div class="d-flex align-items-center gap-1 pe-2">
+                            <!-- Like / Dislike -->
+                            <button v-if="canReactToTask(task)"
+                                class="position-relative btn btn-sm btn-outline-secondary px-2"
                                 :class="getTaskReactionButtonClass(task, 'like')"
                                 @click="openReactionModal(task, 'like')"
-                                :title="getTaskReactionTooltip(task, 'like')"
-                                data-bs-toggle="tooltip"
-                                data-bs-placement="top">
+                                :title="getTaskReactionTooltip(task, 'like')">
                                 <i class="fas fa-thumbs-up"></i>
-                                <span v-if="getTaskReactionCount(task, 'like') > 0" class="ms-1">
+                                <span v-if="getTaskReactionCount(task, 'like') > 0" class="ms-1 small" style="line-height: 0;">
                                     {{ getTaskReactionCount(task, 'like') }}
                                 </span>
                             </button>
-                            <!-- Dislike button -->
-                            <button v-if="canLikeTask"
-                                class="position-relative"
+                            <button v-if="canReactToTask(task)"
+                                class="position-relative btn btn-sm btn-outline-secondary px-2"
                                 :class="getTaskReactionButtonClass(task, 'dislike')"
                                 @click="openReactionModal(task, 'dislike')"
-                                :title="getTaskReactionTooltip(task, 'dislike')"
-                                data-bs-toggle="tooltip"
-                                data-bs-placement="top">
+                                :title="getTaskReactionTooltip(task, 'dislike')">
                                 <i class="fas fa-thumbs-down"></i>
-                                <span v-if="getTaskReactionCount(task, 'dislike') > 0" class="ms-1">
+                                <span v-if="getTaskReactionCount(task, 'dislike') > 0" class="ms-1 small" style="line-height: 0;">
                                     {{ getTaskReactionCount(task, 'dislike') }}
                                 </span>
                             </button>
-                            <!-- Comment button -->
-                            <button v-if="canViewTaskList" class="btn btn-sm btn-outline-info position-relative" @click="openTaskComments(task)" title="詳細">
-                                    <i class="fas fa-eye"></i>
-                                    <span v-if="getUnreadCommentCount(task.id) > 0" class="position-absolute top-0 start-100 translate-middle text-white badge rounded-pill bg-danger" style="font-size:10px;">{{ getUnreadCommentCount(task.id) }}</span>
+
+                            <!-- Xem chi tiết / comment -->
+                            <button v-if="canViewTaskList" class="btn btn-sm btn-outline-info position-relative px-2" @click="openTaskComments(task)" title="詳細">
+                                <i class="fas fa-eye"></i>
+                                <span v-if="getUnreadCommentCount(task.id) > 0" class="position-absolute top-0 start-100 translate-middle text-white badge rounded-pill bg-danger" style="font-size:10px;">{{ getUnreadCommentCount(task.id) }}</span>
                             </button>
-                            <!-- Edit / indent / delete buttons -->
+
+                            <!-- Sửa / indent / xóa -->
                             <button v-if="permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task))" class="btn btn-sm btn-outline-primary" @click="editTaskInline(task)"><i class="fas fa-edit"></i></button>
                             
                             <button v-if="task.indent_level > 0 && (permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))" class="btn btn-sm btn-outline-secondary" @click="decreaseIndent(task)" title="サブタスクを解除">
@@ -410,14 +456,14 @@ if($_SESSION['show_project'] == 0){
                             <button v-if="canIncreaseIndent(task) && (permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))" class="btn btn-sm btn-outline-secondary" @click="increaseIndent(task)" title="サブタスクにする">
                                 <i class="fas fa-arrow-right"></i>
                             </button>
-                           
-                            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.task_delete == 1 && checkAssignee(task))" class="btn btn-sm btn-outline-danger" @click="deleteTask(task)"><i class="fas fa-trash"></i></button>
+                            
+                            <button v-if="permission.can_manage_project || (permission.rule && permission.rule.task_delete == 1 && isTaskCreatedByMe(task))" class="btn btn-sm btn-outline-danger" @click="deleteTask(task)"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
+                    
                 </div>
             </div>
         </div>
-        
     </div>
     <div class="col-12" v-else>
         <div class="text-center py-5">
@@ -463,27 +509,50 @@ if($_SESSION['show_project'] == 0){
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="taskReactionModalLabel">
-                        <span v-if="reactionModal.type === 'like'">良いの理由</span>
-                        <span v-else-if="reactionModal.type === 'dislike'">悪いの理由</span>
-                        <span v-else>リアクション</span>
+                        <span v-if="reactionModal.type === 'like'" data-i18n="良いの理由">良いの理由</span>
+                        <span v-else-if="reactionModal.type === 'dislike'" data-i18n="悪いの理由">悪いの理由</span>
+                        <span v-else data-i18n="リアクション">リアクション</span>
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    <!-- Predefined reasons checkboxes -->
                     <div class="mb-3">
-                        <label class="form-label">メモ / 理由（任意）</label>
-                        <textarea class="form-control" rows="3" v-model="reactionModal.note"
-                                  placeholder="リアクションの理由を入力してください..."></textarea>
+                        <label class="form-label fw-bold" data-i18n="理由を選択（複数選択可）">理由を選択（複数選択可）</label>
+                        <div class="row">
+                            <div v-for="reason in (reactionModal.type === 'like' ? likeReasons : dislikeReasons)" 
+                                 :key="reason.id" 
+                                 class="col-md-6 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           :value="reason.id"
+                                           :id="'reason-' + reason.id"
+                                           v-model="reactionModal.selectedReasons">
+                                    <label class="form-check-label" :for="'reason-' + reason.id">
+                                        {{ $t(reason.i18nKey || reason.label) }}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Custom note input -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" data-i18n="その他の理由・メモ（任意）">その他の理由・メモ（任意）</label>
+                        <textarea class="form-control" 
+                                  rows="3" 
+                                  v-model="reactionModal.customNote"
+                                  :placeholder="$t('追加の理由やメモを入力してください...')"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button v-if="reactionModal.taskId && tasks.find(t => t.id == reactionModal.taskId)?.current_user_reaction === reactionModal.type" 
                             type="button" class="btn btn-danger" @click="removeReaction">
-                        <i class="fas fa-trash me-1"></i>解除
+                        <i class="fas fa-trash me-1"></i><span data-i18n="解除">解除</span>
                     </button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
                     <button type="button" class="btn btn-primary" @click="submitReaction">
-                        <i class="fas fa-save me-1"></i>保存
+                        <i class="fas fa-save me-1"></i><span data-i18n="保存">保存</span>
                     </button>
                 </div>
             </div>
@@ -643,6 +712,48 @@ if($_SESSION['show_project'] == 0){
     border-left: 1px solid #ccc;
 }
 
+/* Task table columns: custom classes + % width (no col-md-xx) */
+.task-table-header,
+.task-list .task-row,
+.task-list .row.g-0.align-items-center {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+}
+.task-table-header > div,
+.task-list .task-row > div,
+.task-list .row.g-0.align-items-center > div {
+    flex: 0 0 auto;
+    box-sizing: border-box;
+}
+.task-col-title { width: 21%; min-width: 0; }
+.task-col-priority { width: 6%; min-width: 4rem; }
+.task-col-period { width: 14%; min-width: 0; }
+.task-col-assignee { width: 14%; min-width: 0; }
+.task-col-ack { width: 5%; min-width: 3rem; }
+.task-col-creator { width: 5%; min-width: 0; }
+.task-col-status { width: 9%; min-width: 4rem; }
+.task-col-progress { width: 8%; min-width: 3.5rem; }
+.task-col-actions { width: 14%; min-width: 0; }
+
+/* Task row & hover actions */
+.task-row {
+    position: relative;
+}
+.task-row-actions {
+    position: absolute;
+    right: 0.5rem;
+    bottom: 0.25rem;
+    opacity: 0;
+    z-index: 10;
+    pointer-events: none; /* disabled by default */
+    transition: opacity 0.15s ease-in-out;
+}
+.task-row:hover .task-row-actions {
+    opacity: 1;
+    pointer-events: auto; /* enable interactions on hover */
+}
+
 /* Indent styling */
 .subtask {
     border-left: 3px solid var(--bs-primary);
@@ -723,6 +834,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Đảm bảo tooltip Bootstrap được ẩn khi mouseout để tránh bị kẹt
+    document.addEventListener('mouseleave', function (e) {
+        const target = e.target;
+        if (!target || typeof target.matches !== 'function' || !target.matches('[data-bs-toggle="tooltip"]')) return;
+        if (window.bootstrap && bootstrap.Tooltip) {
+            const instance = bootstrap.Tooltip.getInstance(target);
+            if (instance) {
+                instance.hide();
+            }
+        }
+    }, true);
 });
 </script>
 

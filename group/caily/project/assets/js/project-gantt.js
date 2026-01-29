@@ -501,17 +501,20 @@ $(document).ready(function() {
                         parent: 0,
                         priority: project.priority || 'medium',
                         status: project.status || 'draft',
-                        manager: manager_names.join(', ') || 'N/A',
-                        customer: project.customer_name || 'N/A',
-                        company: project.company_name.replace(/株式会社/gi, '').replace(/有限会社/gi, '') || 'N/A',
-                        building_type: project.building_type || 'N/A',
-                        building_size: project.building_size || 'N/A',
-                        project_order_type: project.project_order_type || 'N/A',
+                        manager: manager_names.join(', ') || '-',
+                        customer: project.customer_name || '-',
+                        company: project.company_name.replace(/株式会社/gi, '').replace(/有限会社/gi, '') || '-',
+                        building_type: (project.building_type && project.building_type.trim()) ? project.building_type.trim() : '-',
+                        building_size: (project.building_size && project.building_size.trim()) ? project.building_size.trim() : '-',
+                        project_order_type: project.project_order_type || '-',
                         description: project.description || '',
                         statusColor: statusColor,
                         priorityColor: priorityColor,
                         isManager: manager_ids.includes(USER_AUTH_ID) || this.canManageProject(),
-                        manager_ids: manager_ids
+                        manager_ids: manager_ids,
+                        tantou: project.tantou || '-',
+                        caily_nouki: project.caily_nouki || '-',
+                        guis_nouki: project.guis_nouki || '-'
                     };
                     
                     tasks.push(task);
@@ -592,10 +595,9 @@ $(document).ready(function() {
             setDefaultScale() {
                 if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'week';
-                gantt.config.scale_unit = "week";
-                gantt.config.date_scale = "%m月";
-                gantt.config.subscales = [
-                    { unit: "day", step: 1, date: "%d日" }
+                gantt.config.scales = [
+                    { unit: "week", step: 1, format: "%m月" },
+                    { unit: "day", step: 1, format: "%d日" }
                 ];
                 gantt.render();
             },
@@ -603,10 +605,9 @@ $(document).ready(function() {
             setMonthScale() {
                 if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'month';
-                gantt.config.scale_unit = "month";
-                gantt.config.date_scale = "%m月";
-                gantt.config.subscales = [
-                    { unit: "week", step: 1, date: "%d日" }
+                gantt.config.scales = [
+                    { unit: "month", step: 1, format: "%m月" },
+                    { unit: "week", step: 1, format: "%d日" }
                 ];
                 gantt.render();
             },
@@ -614,21 +615,19 @@ $(document).ready(function() {
             setWeekScale() {
                 if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'week';
-                gantt.config.scale_unit = "week";
-                gantt.config.date_scale = "%m月";
-                gantt.config.subscales = [
-                    { unit: "day", step: 1, date: "%d日" }
+                gantt.config.scales = [
+                    { unit: "week", step: 1, format: "%m月" },
+                    { unit: "day", step: 1, format: "%d日" }
                 ];
                 gantt.render();
             },
             
             setDayScale() {
                 if (!gantt || !this.ganttInitialized) return;
-                this.currentScale = 'hour';
-                gantt.config.scale_unit = "hour";
-                gantt.config.date_scale = "%m月%d日";
-                gantt.config.subscales = [
-                    { unit: "minute", step: 30, date: "%H:%i" }
+                this.currentScale = 'day';
+                gantt.config.scales = [
+                    { unit: "day", step: 1, format: "%m月%d日" },
+                    { unit: "hour", step: 1, format: "%H:%i" }
                 ];
                 gantt.render();
             },
@@ -788,10 +787,9 @@ $(document).ready(function() {
                 
                 // // Configure Gantt
                 gantt.config.date_format = "%m月%d日";
-                gantt.config.scale_unit = "week";
-                gantt.config.date_scale = "%m月";
-                gantt.config.subscales = [
-                    { unit: "day", step: 1, date: "%d日" }
+                gantt.config.scales = [
+                    { unit: "week", step: 1, format: "%m月" },
+                    { unit: "day", step: 1, format: "%d日" }
                 ];
                 gantt.plugins({
                     tooltip: true,
@@ -956,6 +954,58 @@ $(document).ready(function() {
                 //     return task.text;
                 // };
                 
+                // Helper function to format date string (for caily_nouki, guis_nouki)
+                const formatDateStringWithVN = function(dateString) {
+                    if (!dateString || dateString === '-' || dateString === '') {
+                        return '-';
+                    }
+                    
+                    // Try to parse the date string
+                    let date = null;
+                    if (typeof dateString === 'string') {
+                        // Handle MySQL datetime format: "2024-01-15 10:30:00"
+                        if (dateString.includes(' ')) {
+                            const mysqlDate = dateString.replace(' ', 'T');
+                            date = new Date(mysqlDate);
+                        } else if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                            // Handle date only format: "2024-01-15"
+                            date = new Date(dateString + 'T00:00:00');
+                        } else {
+                            date = new Date(dateString);
+                        }
+                    } else if (dateString instanceof Date) {
+                        date = dateString;
+                    }
+                    
+                    // Check if date is valid
+                    if (!date || isNaN(date.getTime())) {
+                        return dateString; // Return original if can't parse
+                    }
+                    
+                    // Format Japan time (default): MM/DD HH:ii
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const jpHours = date.getHours();
+                    const jpMinutes = date.getMinutes();
+                    const jpHoursStr = String(jpHours).padStart(2, '0');
+                    const jpMinutesStr = String(jpMinutes).padStart(2, '0');
+                    const japanTime = `${month}/${day} ${jpHoursStr}:${jpMinutesStr}`;
+                    
+                    // Calculate Vietnam time: subtract 2 hours from Japan time
+                    let vnHours = jpHours - 2;
+                    
+                    // Handle day overflow if subtracting hours goes to previous day
+                    if (vnHours < 0) {
+                        vnHours += 24;
+                    }
+                    
+                    const vnHoursStr = String(vnHours).padStart(2, '0');
+                    const vnMinutesStr = String(jpMinutes).padStart(2, '0');
+                    const vnTime = `${vnHoursStr}:${vnMinutesStr}`;
+                    
+                    return `${japanTime} (VN: ${vnTime})`;
+                };
+                
                 // // Customize tooltip
                 gantt.templates.tooltip_text = function(start, end, task) {
                     // Safely find status and priority with fallback
@@ -965,23 +1015,49 @@ $(document).ready(function() {
                     return `
                         <div class="gantt-tooltip">
                             <h6>${task.text || 'N/A'}</h6>
-                            <p class="m-0"><strong>顧客:</strong> ${task.customer || 'N/A'}</p>
-                            <p class="m-0"><strong>会社:</strong> ${task.company || 'N/A'}</p>
-                            <p class="m-0"><strong>建物種類:</strong> ${task.building_type || 'N/A'}</p>
-                            <p class="m-0"><strong>建物規模:</strong> ${task.building_size || 'N/A'}</p>
-                            <p class="m-0"><strong>受注形態:</strong> ${task.project_order_type || 'N/A'}</p>
-                            <p class="m-0"><strong>管理:</strong> ${task.manager || 'N/A'}</p>
+                            <p class="m-0"><strong>顧客:</strong> ${task.customer || '-'}</p>
+                            <p class="m-0"><strong>会社:</strong> ${task.company || '-'}</p>
+                            <p class="m-0"><strong>建物種類:</strong> ${(task.building_type && task.building_type !== '-') ? task.building_type : '-'}</p>
+                            <p class="m-0"><strong>建物規模:</strong> ${(task.building_size && task.building_size !== '-') ? task.building_size : '-'}</p>
+                            <p class="m-0"><strong>受注形態:</strong> ${task.project_order_type || '-'}</p>
+                            <p class="m-0"><strong>管理:</strong> ${task.manager || '-'}</p>
                             <p class="m-0"><strong>進捗:</strong> ${Math.round((task.progress || 0) * 100)}%</p>
-                            <p class="m-0"><strong>状況:</strong> ${status ? status.name : (task.status || 'N/A')}</p>
-                            <p class="m-0"><strong>優先度:</strong> ${priority ? priority.name : (task.priority || 'N/A')}</p>
+                            <p class="m-0"><strong>状況:</strong> ${status ? status.name : (task.status || '-')}</p>
+                            <p class="m-0"><strong>優先度:</strong> ${priority ? priority.name : (task.priority || '-')}</p>
                             <p class="m-0"><strong>開始日:</strong> ${gantt.templates.tooltip_date_format(start)}</p>
-                            <p class="m-0"><strong>終了日:</strong> ${gantt.templates.tooltip_date_format(end)}</p>
+                            <p class="m-0"><strong>期限日:</strong> ${gantt.templates.tooltip_date_format(end)}</p>
+                            <p class="m-0"><strong>担当:</strong> ${task.tantou || '-'}</p>
+                            <p class="m-0"><strong>CAILY納期:</strong> ${formatDateStringWithVN(task.caily_nouki)}</p>
+                            <p class="m-0"><strong>GUIS納期:</strong> ${formatDateStringWithVN(task.guis_nouki)}</p>
                         </div>
                     `;
                 };
                 
                 gantt.templates.tooltip_date_format = function(date) {
-                    return gantt.date.date_to_str("%Y年%m月%d日 %H:%i")(date);
+                    // Format Japan time (default): MM/DD HH:ii
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const jpHours = date.getHours();
+                    const jpMinutes = date.getMinutes();
+                    const jpHoursStr = String(jpHours).padStart(2, '0');
+                    const jpMinutesStr = String(jpMinutes).padStart(2, '0');
+                    const japanTime = `${month}/${day} ${jpHoursStr}:${jpMinutesStr}`;
+                    
+                    // Calculate Vietnam time: subtract 2 hours from Japan time
+                    let vnHours = jpHours - 2;
+                    let vnDate = new Date(date);
+                    
+                    // Handle day overflow if subtracting hours goes to previous day
+                    if (vnHours < 0) {
+                        vnHours += 24;
+                        vnDate = new Date(vnDate.getTime() - 24 * 60 * 60 * 1000);
+                    }
+                    
+                    const vnHoursStr = String(vnHours).padStart(2, '0');
+                    const vnMinutesStr = String(jpMinutes).padStart(2, '0');
+                    const vnTime = `${vnHoursStr}:${vnMinutesStr}`;
+                    
+                    return `${japanTime} (VN: ${vnTime})`;
                 };
                 
                 // // Add click event to open project detail
