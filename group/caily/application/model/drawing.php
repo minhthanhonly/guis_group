@@ -13,6 +13,7 @@ class Drawing extends ApplicationModel {
             'created_by' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search')),
+            'updated_by' => array(),
             'check_date' => array('except' => array('search')),
             'checked_by' => array(),
             'revise_by' => array(),
@@ -38,12 +39,13 @@ class Drawing extends ApplicationModel {
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
         
         $query = sprintf(
-            "SELECT d.*, c.realname as checked_by_name, r.realname as revise_by_name
+            "SELECT d.*, c.realname as checked_by_name, r.realname as revise_by_name, u_updated.realname as updated_by_name
             FROM {$this->table} d 
             LEFT JOIN " . DB_PREFIX . "user c ON d.checked_by = c.userid
             LEFT JOIN " . DB_PREFIX . "user r ON d.revise_by = r.userid
+            LEFT JOIN " . DB_PREFIX . "user u_updated ON d.updated_by = u_updated.userid
             %s
-            ORDER BY d.name ASC",
+            ORDER BY d.created_at ASC",
             $where
         );
         
@@ -148,7 +150,8 @@ class Drawing extends ApplicationModel {
         $data = array(
             'name' => $_POST['name'],
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
-            'updated_at' => date('Y-m-d H:i:s')
+            'updated_at' => date('Y-m-d H:i:s'),
+            'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : ''
         );
         
         $result = $this->query_update($data, ['id' => $id]);
@@ -175,7 +178,7 @@ class Drawing extends ApplicationModel {
             ];
         }
 
-        // Get drawing to verify creator/assignee
+        // Get drawing to verify it exists
         $drawing = $this->getById(['id' => $id]);
         if (!$drawing) {
             return [
@@ -184,8 +187,9 @@ class Drawing extends ApplicationModel {
             ];
         }
 
-        // Check if created_by (作成者) is set
-        if (empty($drawing['created_by'])) {
+        // Check created_by only when NOT auto-calc (tính tự động không cần kiểm tra đã gán user)
+        $isAutoCalc = isset($_POST['auto_calc']) && ($_POST['auto_calc'] === '1' || $_POST['auto_calc'] === 'true');
+        if (!$isAutoCalc && empty($drawing['created_by'])) {
             return [
                 'status' => 'error',
                 'message' => '作成者が割り当てられていません。単価を変更する前に作成者を割り当ててください。'
@@ -203,18 +207,26 @@ class Drawing extends ApplicationModel {
             ];
         }
 
-        $data = array(
-            'updated_at' => date('Y-m-d H:i:s')
-        );
-
+        $updated_at = date('Y-m-d H:i:s');
+        $updated_by_sql = isset($_SESSION['userid']) ? "'" . $this->quote($_SESSION['userid']) . "'" : "NULL";
         if ($price === null) {
-            // Set price to NULL
-            $data['price'] = null;
+            // Set price to NULL via raw SQL (query_update converts null to '' which fails for INT column)
+            $query = sprintf(
+                "UPDATE %s SET price = NULL, updated_at = '%s', updated_by = %s WHERE id = %d",
+                $this->table,
+                $this->quote($updated_at),
+                $updated_by_sql,
+                (int) $id
+            );
+            $result = $this->query($query);
         } else {
-            $data['price'] = $price;
+            $data = array(
+                'price' => $price,
+                'updated_at' => $updated_at,
+                'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : ''
+            );
+            $result = $this->query_update($data, ['id' => $id]);
         }
-
-        $result = $this->query_update($data, ['id' => $id]);
 
         if ($result) {
             return [
@@ -256,6 +268,7 @@ class Drawing extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s')
         );
         
+        $data['updated_by'] = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
         // If status is approved or rejected, set check date and checker
         if ($status === 'approved' || $status === 'rejected') {
             $data['check_date'] = date('Y-m-d H:i:s');
@@ -292,30 +305,34 @@ class Drawing extends ApplicationModel {
         
         $ids_str = implode(',', array_map('intval', $ids));
         
+        $updated_by = isset($_SESSION['userid']) ? $this->quote($_SESSION['userid']) : '';
         // If status is approved or rejected, set check date and checker
         if ($status === 'approved' || $status === 'rejected') {
             $query = sprintf(
-                "UPDATE {$this->table} SET status = '%s', updated_at = '%s', check_date = '%s', checked_by = '%s' WHERE id IN (%s)",
+                "UPDATE {$this->table} SET status = '%s', updated_at = '%s', updated_by = '%s', check_date = '%s', checked_by = '%s' WHERE id IN (%s)",
                 $status,
                 date('Y-m-d H:i:s'),
+                $updated_by,
                 date('Y-m-d H:i:s'),
                 $_SESSION['userid'],
                 $ids_str
             );
         } else if ($status === 'revision' || $status === 'revised') {
             $query = sprintf(
-                "UPDATE {$this->table} SET status = '%s', updated_at = '%s', revise_date = '%s', revise_by = '%s' WHERE id IN (%s)",
+                "UPDATE {$this->table} SET status = '%s', updated_at = '%s', updated_by = '%s', revise_date = '%s', revise_by = '%s' WHERE id IN (%s)",
                 $status,
                 date('Y-m-d H:i:s'),
+                $updated_by,
                 date('Y-m-d H:i:s'),
                 $_SESSION['userid'],
                 $ids_str
             );
         } else {
             $query = sprintf(
-                "UPDATE {$this->table} SET status = '%s', updated_at = '%s' WHERE id IN (%s)",
+                "UPDATE {$this->table} SET status = '%s', updated_at = '%s', updated_by = '%s' WHERE id IN (%s)",
                 $status,
                 date('Y-m-d H:i:s'),
+                $updated_by,
                 $ids_str
             );
         }
@@ -464,7 +481,8 @@ class Drawing extends ApplicationModel {
         $new_created_by = $assigned_userid;
         $data = array(
             'created_by' => $new_created_by,
-            'updated_at' => date('Y-m-d H:i:s')
+            'updated_at' => date('Y-m-d H:i:s'),
+            'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : ''
         );
         
         $result = $this->query_update($data, ['id' => $drawing_id]);
@@ -552,7 +570,8 @@ class Drawing extends ApplicationModel {
         $new_created_by = !empty($new_user_ids) ? implode(',', $new_user_ids) : '';
         $data = array(
             'created_by' => $new_created_by,
-            'updated_at' => date('Y-m-d H:i:s')
+            'updated_at' => date('Y-m-d H:i:s'),
+            'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : ''
         );
         
         $result = $this->query_update($data, ['id' => $drawing_id]);
@@ -621,7 +640,8 @@ class Drawing extends ApplicationModel {
             $new_created_by = $assigned_userid;
             $data = array(
                 'created_by' => $new_created_by,
-                'updated_at' => date('Y-m-d H:i:s')
+                'updated_at' => date('Y-m-d H:i:s'),
+                'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : ''
             );
             
             $result = $this->query_update($data, ['id' => intval($drawing_id)]);
@@ -710,7 +730,8 @@ class Drawing extends ApplicationModel {
             $new_created_by = !empty($new_user_ids) ? implode(',', $new_user_ids) : '';
             $data = array(
                 'created_by' => $new_created_by,
-                'updated_at' => date('Y-m-d H:i:s')
+                'updated_at' => date('Y-m-d H:i:s'),
+                'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : ''
             );
             
             $result = $this->query_update($data, ['id' => intval($drawing_id)]);

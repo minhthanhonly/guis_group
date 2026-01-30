@@ -1054,6 +1054,11 @@ if (typeof window !== 'undefined') {
 
     function createBar() {
       if (barEl) return barEl
+      const t = (typeof i18next !== 'undefined' && i18next.t) ? i18next.t.bind(i18next) : (k) => k
+      const titleHelp = t('音声入力の使い方')
+      const labelSpeech = t('音声入力')
+      const labelJa = t('日本語')
+      const labelVi = t('ベトナム語')
       barEl = document.createElement('div')
       barEl.id = 'global-speech-bar'
       barEl.innerHTML = `
@@ -1065,17 +1070,17 @@ if (typeof window !== 'undefined') {
         ">
           <button type="button"
                   class="btn btn-sm btn-link p-0 m-0 text-white js-global-speech-help"
-                  title="音声入力の使い方"
+                  title="${titleHelp}"
                   style="text-decoration:none;">
             <i class="fa fa-question-circle"></i>
           </button>
-          <strong style="font-size:12px; white-space:nowrap;">音声入力</strong>
+          <strong style="font-size:12px; white-space:nowrap;">${labelSpeech}</strong>
           <div class="btn-group btn-group-sm" role="group" style="white-space:nowrap;">
             <button type="button" class="btn btn-outline-light text-nowrap js-global-speech-ja">
-              <i class="fa fa-microphone"></i><span class="ms-1">日本語</span>
+              <i class="fa fa-microphone"></i><span class="ms-1">${labelJa}</span>
             </button>
             <button type="button" class="btn btn-outline-light text-nowrap js-global-speech-vi">
-              <i class="fa fa-microphone"></i><span class="ms-1">ベトナム語</span>
+              <i class="fa fa-microphone"></i><span class="ms-1">${labelVi}</span>
             </button>
           </div>
         </div>
@@ -1103,20 +1108,25 @@ if (typeof window !== 'undefined') {
         helpBtn.addEventListener('click', e => {
           e.preventDefault()
           e.stopPropagation()
-          const msg =
-            '音声入力の使い方:\n\n' +
+          const defaultTitle = '音声入力の使い方'
+          const defaultMsg =
             '1. まず、テキストを入力したいテキストエリアや入力欄をクリックしてフォーカスを当てます。\n' +
             '2. 画面右下のマイクボタンを押して「音声入力」バーを開きます（または Ctrl + Shift + H で開閉できます）。\n' +
             '3. 「日本語」または「ベトナム語」のボタンを押して話し始めます。\n' +
             '4. 認識されたテキストは、フォーカスされている入力欄の末尾に自動的に追記されます。\n' +
             '5. 同じボタンをもう一度押すと録音が停止します。'
+          const t = (typeof i18next !== 'undefined' && i18next.t) ? i18next.t.bind(i18next) : null
+          const lang = (typeof i18next !== 'undefined' && i18next.language) ? i18next.language : ''
+          const title = t ? (t('音声入力の使い方') || defaultTitle) : defaultTitle
+          const msg = (t && lang === 'vi') ? (t('speech_help_body') || defaultMsg) : defaultMsg
+          const confirmText = t ? (t('OK') || 'OK') : 'OK'
           if (window.Swal && typeof window.Swal.fire === 'function') {
             const html = msg.replace(/\n/g, '<br>')
             window.Swal.fire({
-              title: '音声入力の使い方',
+              title,
               html,
               icon: 'info',
-              confirmButtonText: 'OK',
+              confirmButtonText: confirmText,
               didOpen: el => {
                 const htmlEl = el.querySelector('.swal2-html-container')
                 if (htmlEl) {
@@ -1137,7 +1147,7 @@ if (typeof window !== 'undefined') {
       // Đảm bảo FAB tồn tại
       const fab = createSpeechFab()
       fab.classList.add('is-open')
-      fab.style.width = '310px'
+      fab.style.width = '400px'
       fab.style.borderRadius = '999px'
 
       const bar = createBar()

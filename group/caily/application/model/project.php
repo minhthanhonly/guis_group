@@ -589,6 +589,28 @@ class Project extends ApplicationModel {
         $this->notifyProjectCreated($project_id, $data['name'], array_column($listAllUsers, 'userid'));
         $this->logProjectAction($project_id, 'created', '案件作成', '', '');
 
+        // Khi tạo dự án con: tạo thêm 2 drawing mặc định với giá theo % tổng tiền dự án
+        if (!empty($data['parent_project_id']) && (int)$data['parent_project_id'] > 0) {
+            $amount = isset($data['amount']) ? floatval($data['amount']) : 0;
+            require_once __DIR__ . '/drawing.php';
+            $drawingModel = new Drawing();
+            $defaultDrawings = [
+                ['name' => 'お客様との連絡・調整・納品対応', 'pct' => 0.15],
+                ['name' => '全図面のチェック・確認作業', 'pct' => 0.20],
+            ];
+            foreach ($defaultDrawings as $d) {
+                $price = round($amount * $d['pct'], 2);
+                $drawingModel->query_insert([
+                    'project_id' => (int)$project_id,
+                    'name' => $d['name'],
+                    'status' => 'draft',
+                    'price' => $price,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+            }
+        }
+
         return [
             'status' => 'success',
             'project_id' => $project_id,
@@ -731,6 +753,30 @@ class Project extends ApplicationModel {
         } catch (Exception $e) {
             error_log('Project update error: ' . $e->getMessage());
             return ['status' => 'error', 'error' => 'Database error: ' . $e->getMessage()];
+        }
+
+        // Khi tổng tiền dự án thay đổi: tự động sửa giá 2 bản vẽ mặc định (chỉ dự án con)
+        if ($result && isset($data['amount'])) {
+            $oldAmount = isset($old['amount']) ? floatval($old['amount']) : 0;
+            $newAmount = floatval($data['amount']);
+            $isChild = !empty($old['parent_project_id']) && (int)$old['parent_project_id'] > 0;
+            if ($isChild && (abs($oldAmount - $newAmount) > 0.0001)) {
+                require_once __DIR__ . '/drawing.php';
+                $drawingModel = new Drawing();
+                $defaultDrawings = [
+                    ['name' => 'お客様との連絡・調整・納品対応', 'pct' => 0.15],
+                    ['name' => '全図面のチェック・確認作業', 'pct' => 0.20],
+                ];
+                foreach ($defaultDrawings as $d) {
+                    $rows = $drawingModel->getByNameAndProject($d['name'], $id);
+                    if (!empty($rows)) {
+                        $price = round($newAmount * $d['pct'], 2);
+                        foreach ($rows as $row) {
+                            $drawingModel->query_update(['price' => $price, 'updated_at' => date('Y-m-d H:i:s')], ['id' => $row['id']]);
+                        }
+                    }
+                }
+            }
         }
 
       

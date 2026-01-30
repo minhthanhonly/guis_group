@@ -149,6 +149,9 @@ if($_SESSION['show_project'] == 0){
             </div>
             <!-- Active Filters Display -->
             <div id="activeFilters" class="mb-2"></div>
+            <p class="small text-muted mb-2" id="projectTableScrollHint">
+                <i class="fa fa-info-circle me-1"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
+            </p>
             <table id="projectTable" class="table table-striped">
                 
             </table>

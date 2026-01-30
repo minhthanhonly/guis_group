@@ -63,6 +63,9 @@ if($_SESSION['show_project'] == 0){
                         <div class="d-flex gap-2">
                             <div class="col-md-12">
                                 <div class="d-flex gap-2">
+                                    <button class="btn btn-outline-success text-nowrap" :disabled="!canAutoCalculateRemaining" @click="autoCalculateRemainingPrices()" title="残り図面の単価を自動計算">
+                                        <i class="fa fa-calculator me-1"></i><span data-i18n="残り図面の単価を自動計算">残り図面の単価を自動計算</span>
+                                    </button>
                                     <button class="btn btn-outline-info text-nowrap" data-bs-toggle="modal" data-bs-target="#importModal">
                                         <i class="fa fa-upload me-1"></i><span data-i18n="インポート">インポート</span>
                                     </button>
@@ -202,6 +205,7 @@ if($_SESSION['show_project'] == 0){
                                                 <span><span data-i18n="単価">単価</span></span>
                                             </div>
                                         </th>
+                                        <th style="min-width: 120px;"><span data-i18n="最終更新者">最終更新者</span></th>
                                         <th width="150"><span data-i18n="操作">操作</span></th>
                                     </tr>
                                 </thead>
@@ -275,6 +279,9 @@ if($_SESSION['show_project'] == 0){
                                                        @click.stop
                                                        @change="updatePrice(drawing)">
                                             </div>
+                                        </td>
+                                        <td>
+                                            <span class="text-muted small">{{ formatLastEditor(drawing) }}</span>
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
@@ -510,26 +517,29 @@ if($_SESSION['show_project'] == 0){
         <div class="container-fluid">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-3">
-                    <span class="fw-medium text-white">{{ selectedDrawings.length }}個のファイルが選択されています</span>
+                    <span class="fw-medium text-white">{{ selectedDrawings.length }}<span data-i18n="個のファイルが選択されています">個のファイルが選択されています</span></span>
                     <button class="btn btn-light btn-sm" @click="clearSelection">
-                        <i class="fa fa-times me-1"></i>選択解除
+                        <i class="fa fa-times me-1"></i><span data-i18n="選択解除">選択解除</span>
                     </button>
                 </div>
                 <div class="d-flex gap-2">
                     <button class="btn btn-info" @click="bulkCopyNames">
-                        <i class="fa fa-copy me-1"></i>名前をコピー
+                        <i class="fa fa-copy me-1"></i><span data-i18n="名前をコピー">名前をコピー</span>
                     </button>
                     <button class="btn btn-success" @click="bulkAssign">
-                        <i class="fa fa-user-plus me-1"></i>一括割り当て
+                        <i class="fa fa-user-plus me-1"></i><span data-i18n="一括割り当て">一括割り当て</span>
                     </button>
                     <button class="btn btn-warning" @click="bulkUnassign">
-                        <i class="fa fa-user-minus me-1"></i>一括解除
+                        <i class="fa fa-user-minus me-1"></i><span data-i18n="一括解除">一括解除</span>
                     </button>
                     <button class="btn btn-warning" @click="bulkChangeStatus">
-                        <i class="fa fa-edit me-1"></i>ステータス変更
+                        <i class="fa fa-edit me-1"></i><span data-i18n="ステータス変更">ステータス変更</span>
+                    </button>
+                    <button class="btn btn-outline-light" @click="bulkClearPrice" :title="$t('選択した図面の単価をクリア') || '選択した図面の単価をクリア'">
+                        <i class="fa fa-yen-sign me-1"></i><span data-i18n="単価をクリア">単価をクリア</span>
                     </button>
                     <button class="btn btn-danger" @click="bulkDelete">
-                        <i class="fa fa-trash me-1"></i>一括削除
+                        <i class="fa fa-trash me-1"></i><span data-i18n="一括削除">一括削除</span>
                     </button>
                 </div>
             </div>

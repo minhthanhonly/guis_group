@@ -733,6 +733,60 @@ var projectTable;
             }
         });
 
+        // Giữ Space + kéo chuột để scroll ngang bảng
+        (function() {
+            var spaceHeld = false;
+            var dragging = false;
+            var startX = 0;
+            var startScrollLeft = 0;
+            function getScrollContainer() {
+                var el = document.getElementById('projectTable');
+                if (!el) return null;
+                var wrapper = el.closest('.dataTables_scrollBody');
+                if (wrapper) return wrapper;
+                var parent = el.parentElement;
+                while (parent && parent !== document.body) {
+                    if (parent.scrollWidth > parent.clientWidth && getComputedStyle(parent).overflowX !== 'visible') {
+                        return parent;
+                    }
+                    parent = parent.parentElement;
+                }
+                return el.parentElement;
+            }
+            $(document).on('keydown', function(e) {
+                if (e.key === ' ' || e.which === 32) {
+                    var tag = (e.target || e.srcElement).tagName.toLowerCase();
+                    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+                    e.preventDefault();
+                    spaceHeld = true;
+                }
+            });
+            $(document).on('keyup', function(e) {
+                if (e.key === ' ' || e.which === 32) {
+                    spaceHeld = false;
+                    dragging = false;
+                }
+            });
+            $('#projectTable').closest('.card-body').on('mousedown', function(e) {
+                if (!spaceHeld || e.which !== 1) return;
+                var container = getScrollContainer();
+                if (!container) return;
+                e.preventDefault();
+                dragging = true;
+                startX = e.clientX;
+                startScrollLeft = container.scrollLeft;
+            });
+            $(document).on('mousemove', function(e) {
+                if (!dragging) return;
+                var container = getScrollContainer();
+                if (!container) return;
+                container.scrollLeft = startScrollLeft + (startX - e.clientX);
+            });
+            $(document).on('mouseup', function() {
+                dragging = false;
+            });
+        })();
+
         // Khôi phục filter từ localStorage khi load trang
         // Khi thay đổi filter thì lưu lại
         let timer2= null;

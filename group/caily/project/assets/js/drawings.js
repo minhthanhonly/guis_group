@@ -10,7 +10,7 @@ createApp({
             statusFilter: '',
             
             // Sorting
-            sortField: 'name',
+            sortField: 'id',
             sortDirection: 'asc',
             
             // Form data
@@ -145,6 +145,44 @@ createApp({
             return this.totalDrawingsPrice - this.projectAmount;
         },
         
+        // Tổng giá tiền của các bản vẽ đã có đơn giá
+        totalPriceOfDrawingsWithPrice() {
+            return this.drawings
+                .filter(d => this.hasPrice(d))
+                .reduce((sum, d) => sum + (parseFloat(d.price) || 0), 0);
+        },
+        // Các bản vẽ còn lại (chưa có đơn giá)
+        remainingDrawingsList() {
+            return this.drawings.filter(d => !this.hasPrice(d));
+        },
+        remainingDrawingsCount() {
+            return this.remainingDrawingsList.length;
+        },
+        // (tổng tiền dự án - tổng giá bản vẽ đã có đơn giá) / số bản vẽ còn lại
+        // Giá cơ bản làm tròn xuống 2 chữ số; bản vẽ cuối nhận phần dư để tổng = rest chính xác
+        autoPricePerRemaining() {
+            if (this.projectAmount <= 0 || this.remainingDrawingsCount <= 0) return null;
+            const rest = this.projectAmount - this.totalPriceOfDrawingsWithPrice;
+            if (rest < 0) return null;
+            return Math.floor((rest / this.remainingDrawingsCount) * 100) / 100;
+        },
+        // Mảng giá gán cho từng bản vẽ còn lại: dùng số nguyên để tránh DB làm tròn vượt tổng
+        // (n-1) bản đầu = floor(rest/n), bản cuối = rest - floor*(n-1) → tổng = rest chính xác
+        autoPriceListForRemaining() {
+            if (this.projectAmount <= 0 || this.remainingDrawingsCount <= 0) return [];
+            const rest = this.projectAmount - this.totalPriceOfDrawingsWithPrice;
+            if (rest < 0) return [];
+            const count = this.remainingDrawingsCount;
+            const basePrice = Math.floor(rest / count);
+            const lastPrice = rest - basePrice * (count - 1);
+            const list = Array(count - 1).fill(basePrice);
+            list.push(lastPrice);
+            return list;
+        },
+        canAutoCalculateRemaining() {
+            return this.autoPricePerRemaining != null && this.remainingDrawingsCount > 0;
+        },
+        
         stats() {
             return [
                 {
@@ -277,6 +315,10 @@ createApp({
                 return i18next.t(label) || label;
             }
             return label;
+        },
+        // Bản vẽ đã có đơn giá: price không rỗng (null/undefined/'')
+        hasPrice(d) {
+            return d.price != null && d.price !== '' && d.price !== 0;
         },
         
         async loadPermission() {
@@ -755,24 +797,68 @@ createApp({
         },
         
         
+        // Update price for a single drawing (by id + value); used by inline edit and auto-calc
+        // isAutoCalc: khi true thì backend không kiểm tra đã gán user cho bản vẽ
+        async updatePriceById(drawingId, price, isAutoCalc = false) {
+            const formData = new FormData();
+            formData.append('id', drawingId);
+            formData.append('price', price != null && price !== '' ? price : '');
+            if (isAutoCalc) formData.append('auto_calc', '1');
+            const response = await axios.post('/api/index.php?model=drawing&method=updatePrice', formData);
+            return response;
+        },
         // Update price for a single drawing when input changes
         async updatePrice(drawing) {
             try {
-                const formData = new FormData();
-                formData.append('id', drawing.id);
-                // If price is empty or null, send empty to allow backend to handle (e.g., set NULL)
-                formData.append('price', drawing.price != null && drawing.price !== '' ? drawing.price : '');
-
-                const response = await axios.post('/api/index.php?model=drawing&method=updatePrice', formData);
-
+                const response = await this.updatePriceById(
+                    drawing.id,
+                    drawing.price != null && drawing.price !== '' ? drawing.price : ''
+                );
                 if (!(response.data && response.data.status === 'success')) {
                     this.showError(response.data?.message || '単価の更新に失敗しました');
-                    // Reload drawings to revert on error
                     this.loadDrawings();
                 }
             } catch (error) {
                 console.error('Error updating price:', error);
                 this.showError('単価の更新に失敗しました');
+                this.loadDrawings();
+            }
+        },
+        // Tự động tính giá các bản vẽ còn lại: (n-1) bản đầu = floor(rest/n), bản cuối = phần dư → tổng không vượt
+        async autoCalculateRemainingPrices() {
+            if (!this.canAutoCalculateRemaining) {
+                this.showError(this.$t('残り図面がありません') || '残り図面がありません');
+                return;
+            }
+            const priceList = this.autoPriceListForRemaining;
+            const count = this.remainingDrawingsCount;
+            const basePrice = priceList[0] ?? 0;
+            const msg = (this.$t('残り図面の単価を自動計算') || '残り図面の単価を自動計算') + ` (${count}件、¥${this.formatNumber(basePrice)}/件、最終1件で端数調整)`;
+            const result = await Swal.fire({
+                title: this.$t('残り図面の単価を自動計算') || '残り図面の単価を自動計算',
+                html: msg + '<br><br>' + (this.$t('実行しますか？') || '実行しますか？'),
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: this.$t('実行') || '実行',
+                cancelButtonText: this.$t('キャンセル') || 'キャンセル'
+            });
+            if (!result.isConfirmed) return;
+            try {
+                for (let i = 0; i < this.remainingDrawingsList.length; i++) {
+                    const d = this.remainingDrawingsList[i];
+                    const price = priceList[i];
+                    const res = await this.updatePriceById(d.id, price, true);
+                    if (!(res.data && res.data.status === 'success')) {
+                        this.showError(res.data?.message || '単価の更新に失敗しました');
+                        this.loadDrawings();
+                        return;
+                    }
+                }
+                this.showSuccess(this.$t('残り図面の単価を更新しました') || '残り図面の単価を更新しました');
+                this.loadDrawings();
+            } catch (error) {
+                console.error('Error auto-calculating prices:', error);
+                this.showError('単価の一括更新に失敗しました');
                 this.loadDrawings();
             }
         },
@@ -847,6 +933,42 @@ createApp({
             } catch (error) {
                 console.error('Error bulk deleting:', error);
                 this.showError('一括削除に失敗しました');
+            }
+        },
+
+        // Xóa nhanh đơn giá cho các bản vẽ đã chọn (bulk)
+        async bulkClearPrice() {
+            if (this.selectedDrawings.length === 0) {
+                this.showError('ファイルを選択してください');
+                return;
+            }
+            const count = this.selectedDrawings.length;
+            const msg = (this.$t('単価をクリア') || '単価をクリア') + ` (${count}件)`;
+            const result = await Swal.fire({
+                title: this.$t('単価をクリア') || '単価をクリア',
+                html: msg + '<br><br>' + (this.$t('実行しますか？') || '実行しますか？'),
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: this.$t('実行') || '実行',
+                cancelButtonText: this.$t('キャンセル') || 'キャンセル'
+            });
+            if (!result.isConfirmed) return;
+            try {
+                for (const id of this.selectedDrawings) {
+                    const res = await this.updatePriceById(id, '', true);
+                    if (!(res.data && res.data.status === 'success')) {
+                        this.showError(res.data?.message || '単価のクリアに失敗しました');
+                        this.loadDrawings();
+                        return;
+                    }
+                }
+                this.showSuccess(this.$t('単価をクリアしました') || '単価をクリアしました');
+                this.clearSelection();
+                this.loadDrawings();
+            } catch (error) {
+                console.error('Error bulk clear price:', error);
+                this.showError('単価の一括クリアに失敗しました');
+                this.loadDrawings();
             }
         },
 
@@ -1169,6 +1291,15 @@ createApp({
         formatDateTime(dateString) {
             if (!dateString) return '-';
             return moment(dateString).format('MM月DD日 HH:mm');
+        },
+        // Người chỉnh sửa cuối: updated_by_name (m月d日 hh:ii)
+        formatLastEditor(drawing) {
+            if (!drawing) return '-';
+            const name = drawing.updated_by_name || '';
+            const dateStr = drawing.updated_at ? moment(drawing.updated_at).format('M月D日 HH:mm') : '';
+            if (!name && !dateStr) return '-';
+            if (!dateStr) return name;
+            return name ? name + ' (' + dateStr + ')' : '(' + dateStr + ')';
         },
         
         downloadDrawing(drawing) {
