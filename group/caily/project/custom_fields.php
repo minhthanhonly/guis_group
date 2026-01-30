@@ -86,12 +86,12 @@ if($_SESSION['show_project'] == 0){
                                     <td><input class="form-control" v-model="field.label" placeholder="ラベル"></td>
                                     <td>
                                         <select class="form-select" v-model="field.type">
-                                            <option value="text">テキスト</option>
-                                            <option value="textarea">テキストエリア</option>
-                                            <option value="datetime">日時</option>
-                                            <option value="select">セレクト</option>
-                                            <option value="radio">ラジオ</option>
-                                            <option value="checkbox">チェックボックス</option>
+                                            <option value="text" data-i18n="テキスト">テキスト</option>
+                                            <option value="textarea" data-i18n="テキストエリア">テキストエリア</option>
+                                            <option value="datetime" data-i18n="日時">日時</option>
+                                            <option value="select" data-i18n="セレクト">セレクト</option>
+                                            <option value="radio" data-i18n="ラジオ">ラジオ</option>
+                                            <option value="checkbox" data-i18n="チェックボックス">チェックボックス</option>
                                         </select>
                                     </td>
                                     <td>

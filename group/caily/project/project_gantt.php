@@ -56,7 +56,7 @@ if($_SESSION['show_project'] == 0){
             <div class="col-md-3 col-6">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="進捗率">進捗率</label>
               <select class="form-select form-select-sm" id="filterProgress">
-                <option value="">すべて</option>
+                <option value="" data-i18n="すべて">すべて</option>
                 <option value="0-50">0-50%</option>
                 <option value="51-99">51-99%</option>
                 <option value="100">100%</option>
@@ -65,10 +65,10 @@ if($_SESSION['show_project'] == 0){
             <div class="col-md-3 col-6">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="残り時間">残り時間</label>
               <select class="form-select form-select-sm" id="filterTimeLeft">
-                <option value="">すべて</option>
-                <option value="7">7日以内</option>
-                <option value="30">30日以内</option>
-                <option value="overdue">期限切れ</option>
+                <option value="" data-i18n="すべて">すべて</option>
+                <option value="7" data-i18n="7日以内">7日以内</option>
+                <option value="30" data-i18n="30日以内">30日以内</option>
+                <option value="overdue" data-i18n="期限切れ">期限切れ</option>
               </select>
             </div>
             <div class="col-md-4 col-12">

@@ -140,19 +140,19 @@ if($_SESSION['show_project'] == 0){
         <div class="d-flex align-items-center justify-content-between mb-2">
             <div class="d-flex align-items-center gap-2">
             <select class="form-select" v-model="filterStatus">
-                <option value="">全てのステータス</option>
-                <option value="todo">未開始</option>
-                <option value="in-progress">進行中</option>
-                <option value="confirming">確認中</option>
-                <option value="paused">一時停止</option>
-                <option value="completed">完了</option>
-                <option value="cancelled">キャンセル</option>
+                <option value="" data-i18n="全てのステータス">全てのステータス</option>
+                <option value="todo" data-i18n="未開始">未開始</option>
+                <option value="in-progress" data-i18n="進行中">進行中</option>
+                <option value="confirming" data-i18n="確認中">確認中</option>
+                <option value="paused" data-i18n="一時停止">一時停止</option>
+                <option value="completed" data-i18n="完了">完了</option>
+                <option value="cancelled" data-i18n="キャンセル">キャンセル</option>
             </select>
             <select class="form-select" v-model="filterPriority">
-                <option value="">全ての優先度</option>
-                <option value="high">高</option>
-                <option value="medium">中</option>
-                <option value="low">低</option>
+                <option value="" data-i18n="全ての優先度">全ての優先度</option>
+                <option value="high" data-i18n="高">高</option>
+                <option value="medium" data-i18n="中">中</option>
+                <option value="low" data-i18n="低">低</option>
             </select>
             </div>
             <button v-if="permission.can_manage_project || permission.is_member || (permission.rule && permission.rule.task_add == 1)" class="btn btn-primary ms-2" @click="openNewTaskModal">

@@ -288,7 +288,7 @@ var projectTable;
                 
                 { 
                     data: 'confirmation_notes',
-                    width: '300px',
+                    width: '240px',
                     className: 'confirmation-notes-column',
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -311,7 +311,7 @@ var projectTable;
                             }
                             return `
                                 <div class="confirmation-note-item mb-1" ${id ? `data-note-id="${id}"` : ''}>
-                                    <span class="note-text" style="white-space: pre-wrap;">${text}</span>
+                                    <span class="note-text small" style="white-space: pre-wrap;">${text}</span>
                                     <span class="note-actions d-none ms-1">
                                         <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
                                             <i class="fa fa-pencil-alt"></i>
@@ -325,7 +325,7 @@ var projectTable;
                         }).join('');
                         return `
                             <div class="confirmation-notes-wrapper" 
-                                 style="max-width: 300px; max-height: 200px; overflow-y: auto;">
+                                 style="max-width: 250px; max-height: 200px; overflow-y: auto;">
                                 ${html}
                             </div>
                         `;
@@ -335,6 +335,7 @@ var projectTable;
                 },
                 { 
                     data: 'name',
+                    width: '150px',
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-start justify-content-start flex-column">
                                     <a href="detail.php?id=${row.id}" class="text-decoration-none small">${data}</a>
@@ -344,6 +345,7 @@ var projectTable;
                 },
                 { 
                     data: 'name',
+                    width: '150px',
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-start justify-content-start flex-column">
                                     <div class="mt-1">
@@ -355,6 +357,7 @@ var projectTable;
                     title: '<span data-i18n="顧客情報">顧客情報</span>'
                 },
                 { 
+                    width: '60px',
                     data: 'parent_construction_number',
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -425,7 +428,13 @@ var projectTable;
                             return '<span class="text-muted">-</span>';
                         }
                         // 期待値: 'CAILY' または 'GUIS'
-                        return `<span class="badge bg-secondary">${data}</span>`;
+                        if(data === 'CAILY') {
+                            return `<span class="badge bg-primary">${data}</span>`;
+                        } else if(data === 'GUIS') {
+                            return `<span class="badge bg-secondary">${data}</span>`;
+                        } else {
+                            return `<span class="badge bg-secondary">${data}</span>`;
+                        }
                     },
                     title: '<span data-i18n="担当">担当</span>',
                     visible: false
@@ -436,7 +445,7 @@ var projectTable;
                         if (!data || data === '') {
                             return '<span class="text-muted">-</span>';
                         }
-                        return `<span class="text-nowrap">${data}</span>`;
+                        return `<span class="text-nowrap small">${moment(data).format('M月D日 H:mm')}</span>`;
                     },
                     title: '<span data-i18n="CAILY納期">CAILY納期</span>',
                     visible: false
@@ -447,7 +456,7 @@ var projectTable;
                         if (!data || data === '') {
                             return '<span class="text-muted">-</span>';
                         }
-                        return `<span class="text-nowrap">${data}</span>`;
+                        return `<span class="text-nowrap small">${moment(data).format('M月D日 H:mm')}</span>`;
                     },
                     title: '<span data-i18n="GUIS納期">GUIS納期</span>',
                     visible: false
@@ -1123,12 +1132,14 @@ var projectTable;
             });
         }
         
-        // Render option cho filterPriority dựa trên priorities
+        // Render option cho filterPriority dựa trên priorities (có i18n)
         var $priority = $('#filterPriority');
         $priority.empty();
-        $priority.append('<option value="">すべて</option>');
+        var allLabel = translateText('すべて');
+        $priority.append('<option value="" data-i18n="すべて">' + allLabel + '</option>');
         priorities.forEach(function(p) {
-            $priority.append('<option value="' + p.key + '">' + p.name + '</option>');
+            var label = translateText(p.name);
+            $priority.append('<option value="' + p.key + '" data-i18n="' + p.name + '">' + label + '</option>');
         });
         
         // Gọi khi filter thay đổi hoặc khi load trang

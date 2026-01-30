@@ -29,14 +29,14 @@ if($_SESSION['show_project'] == 0){
                         <div class="col-md-4">
                             <label class="form-label">期間</label>
                             <select class="form-select" v-model="filters.selected_month" @change="onMonthChange">
-                                <option value="">すべての期間</option>
+                                <option value="" data-i18n="すべての期間">すべての期間</option>
                                 <option v-for="month in availableMonths" :key="month.value" :value="month.value">{{ month.label }}</option>
                             </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">チーム</label>
                             <select class="form-select" v-model="filters.team_id" @change="onTeamChange">
-                                <option value="">すべてのチーム</option>
+                                <option value="" data-i18n="すべてのチーム">すべてのチーム</option>
                                 <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
                             </select>
                         </div>

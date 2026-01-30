@@ -517,12 +517,16 @@ class Task extends ApplicationModel {
             );
         }
         
-        // Add new assignees (if not exists)
+        // Add new assignees (if not exists). If assignee is current user (self-assigned), default acknowledged = 1
+        $current_user_id = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
         $toAdd = array_diff($newUserIds, $currentUserIds);
         foreach ($toAdd as $userId) {
+            $is_self = ($current_user_id > 0 && intval($userId) === $current_user_id);
+            $ack = $is_self ? 1 : 0;
+            $ackAt = $is_self ? "NOW()" : "NULL";
             $this->query(
                 "INSERT INTO " . DB_PREFIX . "task_assignees (task_id, user_id, acknowledged, acknowledged_at) 
-                VALUES (" . intval($task_id) . ", " . intval($userId) . ", 0, NULL)
+                VALUES (" . intval($task_id) . ", " . intval($userId) . ", " . $ack . ", " . $ackAt . ")
                 ON DUPLICATE KEY UPDATE task_id = task_id"
             );
         }
@@ -2241,11 +2245,15 @@ class Task extends ApplicationModel {
             }
         }
 
+        // Unassigned users: no active task assigned, and must belong to at least one team
         $unassigned_users = [];
         foreach ($users as $u) {
             $uid = $u['id'];
             if (!isset($activeAssignedUserIdSet[$uid])) {
-                $unassigned_users[] = $u;
+                $hasTeam = !empty($u['teams']) && is_array($u['teams']);
+                if ($hasTeam) {
+                    $unassigned_users[] = $u;
+                }
             }
         }
 

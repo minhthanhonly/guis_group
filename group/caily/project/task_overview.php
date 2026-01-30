@@ -21,21 +21,21 @@ if($_SESSION['show_project'] == 0){
         <div class="col-md-3 mb-2">
             <label class="form-label"><span data-i18n="部署">部署</span></label>
             <select class="form-select" v-model="filters.department_id" @change="onDepartmentChange">
-                <option value="">すべて</option>
+                <option value="" data-i18n="すべて">すべて</option>
                 <option v-for="dep in departments" :key="dep.id" :value="dep.id">{{ dep.name }}</option>
             </select>
         </div>
         <div class="col-md-3 mb-2">
             <label class="form-label"><span data-i18n="チーム">チーム</span></label>
             <select class="form-select" v-model="filters.team_id" @change="loadOverview">
-                <option value="">すべて</option>
+                <option value="" data-i18n="すべて">すべて</option>
                 <option v-for="team in filteredTeams" :key="team.id" :value="team.id">{{ team.name }}</option>
             </select>
         </div>
         <div class="col-md-3 mb-2">
             <label class="form-label"><span data-i18n="ユーザー">ユーザー</span></label>
             <select class="form-select" v-model="filters.user_id" @change="onUserChange">
-                <option value="">すべて</option>
+                <option value="" data-i18n="すべて">すべて</option>
                 <option v-for="user in filteredUsers" :key="user.id" :value="user.id">{{ user.realname }}</option>
             </select>
         </div>

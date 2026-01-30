@@ -126,13 +126,13 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <div class="col-md-4">
                                 <select class="form-select" v-model="statusFilter">
-                                    <option value="">すべてのステータス</option>
-                                    <option value="draft">下書き</option>
-                                    <option value="review">レビュー中</option>
-                                    <option value="revision">修正中</option>
-                                    <option value="revised">修正済</option>
-                                    <option value="approved">承認済み</option>
-                                    <option value="rejected">却下</option>
+                                    <option value="" data-i18n="すべてのステータス">すべてのステータス</option>
+                                    <option value="draft" data-i18n="下書き">下書き</option>
+                                    <option value="review" data-i18n="レビュー中">レビュー中</option>
+                                    <option value="revision" data-i18n="修正中">修正中</option>
+                                    <option value="revised" data-i18n="修正済">修正済</option>
+                                    <option value="approved" data-i18n="承認済み">承認済み</option>
+                                    <option value="rejected" data-i18n="却下">却下</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -346,12 +346,12 @@ if($_SESSION['show_project'] == 0){
                             <div class="mb-3">
                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <select class="form-select" v-model="editingDrawing.status">
-                                    <option value="draft">下書き</option>
-                                    <option value="review">レビュー中</option>
-                                    <option value="revision">修正中</option>
-                                    <option value="revised">修正済</option>
-                                    <option value="approved">承認済み</option>
-                                    <option value="rejected">却下</option>
+                                    <option value="draft" data-i18n="下書き">下書き</option>
+                                    <option value="review" data-i18n="レビュー中">レビュー中</option>
+                                    <option value="revision" data-i18n="修正中">修正中</option>
+                                    <option value="revised" data-i18n="修正済">修正済</option>
+                                    <option value="approved" data-i18n="承認済み">承認済み</option>
+                                    <option value="rejected" data-i18n="却下">却下</option>
                                 </select>
                             </div>
                         </form>
@@ -455,12 +455,12 @@ if($_SESSION['show_project'] == 0){
                                                 <div class="mb-3">
                             <label class="form-label">新しいステータス</label>
                             <select class="form-select" v-model="bulkStatus">
-                                <option value="draft">下書き</option>
-                                <option value="review">レビュー中</option>
-                                <option value="revision">修正中</option>
-                                <option value="revised">修正済</option>
-                                <option value="approved">承認済み</option>
-                                <option value="rejected">却下</option>
+                                <option value="draft" data-i18n="下書き">下書き</option>
+                                <option value="review" data-i18n="レビュー中">レビュー中</option>
+                                <option value="revision" data-i18n="修正中">修正中</option>
+                                <option value="revised" data-i18n="修正済">修正済</option>
+                                <option value="approved" data-i18n="承認済み">承認済み</option>
+                                <option value="rejected" data-i18n="却下">却下</option>
                             </select>
                         </div>
                     </div>

@@ -269,7 +269,7 @@ if($_SESSION['show_project'] == 0){
                                             </template>
                                             <template v-else-if="field.type === 'select'">
                                                 <select class="form-select" v-if="customFields[idx]" v-model="customFields[idx].value">
-                                                    <option value="">選択してください</option>
+                                                    <option value="" data-i18n="選択してください">選択してください</option>
                                                     <option v-for="opt in field.options.split(',')" :key="opt.trim()" :value="opt.trim()">{{ opt.trim() }}</option>
                                                 </select>
                                             </template>
