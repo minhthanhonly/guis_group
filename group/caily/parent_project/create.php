@@ -292,12 +292,12 @@ if(!$_SESSION['isProjectManager']){
                                 </div>
                             </div>
                         </div>
-                        <div class="col-12">
+                        <!-- <div class="col-12">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="備考">備考</span></label>
                                 <textarea class="form-control" v-model="parentProject.notes" rows="3" placeholder="備考を入力してください"></textarea>
                             </div>
-                        </div>
+                        </div> -->
                     </div>
                     <div v-else class="text-center py-5">
                         <div class="spinner-border" role="status">
@@ -448,10 +448,10 @@ if(!$_SESSION['isProjectManager']){
                                 <div v-if="customerErrors.guis_department" class="text-danger small mt-1">{{ customerErrors.guis_department }}</div>
                             </div>
                         
-                            <div class="col-md-12 mb-3">
+                            <!-- <div class="col-md-12 mb-3">
                                 <label class="form-label">メモ</label>
                                 <textarea class="form-control" v-model="newCustomer.memo" required></textarea>
-                            </div>
+                            </div> -->
                         </div>
                     </form>
                 </div>

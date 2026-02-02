@@ -1,5 +1,18 @@
 var projectTable;
     var projectData = [];
+    var teamIdToName = {};
+    // Tooltip giờ VN (dùng chung với main.js); fallback khi main.js chưa load
+    if (typeof window.formatVietnamTimeTooltip !== 'function') {
+        window.formatVietnamTimeTooltip = function (jpDateTimeStr) {
+            if (!jpDateTimeStr || typeof jpDateTimeStr !== 'string') return '';
+            var s = String(jpDateTimeStr).trim().replace(/\//g, '-');
+            if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return '';
+            if (typeof moment === 'undefined' || !moment.parseZone) return '';
+            var m = moment.parseZone(s + '+09:00');
+            if (!m.isValid()) return '';
+            return 'VN ' + m.clone().subtract(2, 'hours').format('HH:mm');
+        };
+    }
     var isInitializingTable = false;
     var autoRefreshTimer = null;
     var statuses = [
@@ -54,19 +67,33 @@ var projectTable;
         { key: 'parent_type2', label: '種類2', index: 8, defaultVisible: false },
         { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 9, defaultVisible: false },
         // 担当・納期系
-        { key: 'tantou', label: '担当', index: 10, defaultVisible: false },
-        { key: 'caily_nouki', label: 'CAILY納期', index: 11, defaultVisible: false },
+        { key: 'tantou', label: '担当', index: 10, defaultVisible: true },
+        { key: 'caily_nouki', label: 'CAILY納期', index: 11, defaultVisible: true },
         { key: 'guis_nouki', label: 'GUIS納期', index: 12, defaultVisible: false },
         { key: 'project_order_type', label: '受注形態', index: 13, defaultVisible: true },
-        { key: 'manager', label: '管理', index: 14, defaultVisible: true },
-        { key: 'members', label: 'メンバー', index: 15, defaultVisible: true },
-        { key: 'priority', label: '優先度', index: 16, defaultVisible: true },
-        { key: 'status', label: '案件状況', index: 17, defaultVisible: true },
-        { key: 'progress', label: '進捗率', index: 18, defaultVisible: true },
-        { key: 'start_date', label: '開始日', index: 19, defaultVisible: true },
-        { key: 'end_date', label: '終了日', index: 20, defaultVisible: true }
+        { key: 'manager', label: '管理', index: 14, defaultVisible: false },
+        { key: 'teams', label: 'チーム', index: 15, defaultVisible: true },
+        { key: 'members', label: 'メンバー', index: 16, defaultVisible: false },
+        { key: 'priority', label: '優先度', index: 17, defaultVisible: true },
+        { key: 'status', label: '案件状況', index: 18, defaultVisible: true },
+        { key: 'progress', label: '進捗率', index: 19, defaultVisible: true },
+        { key: 'start_date', label: '開始日', index: 20, defaultVisible: true },
+        { key: 'end_date', label: '終了日', index: 21, defaultVisible: true },
+        { key: 'amount', label: '総額', index: 22, defaultVisible: false }
     ];
     
+    function escapeHtmlForNote(s) {
+        if (s == null || s === '') return '';
+        const t = String(s);
+        return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function decodeHtmlForNote(s) {
+        if (s == null || s === '') return '';
+        const t = String(s);
+        return t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+    }
+
     function saveColumnVisibilityToLocalStorage(visibility) {
         localStorage.setItem(COLUMN_VISIBILITY_KEY, JSON.stringify(visibility));
     }
@@ -186,8 +213,25 @@ var projectTable;
         }
     }
 
+    // Load team id->name map for display in table
+    async function loadTeamMap() {
+        try {
+            const response = await axios.get('/api/index.php?model=team&method=list');
+            const list = response.data || [];
+            teamIdToName = {};
+            list.forEach(function(team) {
+                if (team.id != null) teamIdToName[String(team.id)] = team.name || '';
+            });
+            return teamIdToName;
+        } catch (e) {
+            console.error('Error loading team list:', e);
+            teamIdToName = {};
+            return teamIdToName;
+        }
+    }
+
     // Function to initialize DataTable
-    function initializeProjectTable() {
+    async function initializeProjectTable() {
         // Check if DataTable is already initialized
         if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
             return; // Already initialized
@@ -207,6 +251,8 @@ var projectTable;
         
         // Set flag to prevent multiple initializations
         isInitializingTable = true;
+        
+        await loadTeamMap();
         
         // Khôi phục filter từ localStorage trước khi load projectTable
         loadFiltersFromLocalStorage();
@@ -267,10 +313,18 @@ var projectTable;
                             return data || 0;
                         }
                         const isFavorite = row.is_favorite == 1;
-                        return `<i class="fa fa-star ${isFavorite ? 'text-warning' : 'text-muted'}" 
+                        const starHtml = `<div class="d-flex flex-column align-items-center gap-1"><i class="fa fa-star ${isFavorite ? 'text-warning' : 'text-muted'}" 
                                    style="cursor: pointer; font-size: 1.2em;"
                                    onclick="window.toggleProjectFavorite(${row.id}, this)"
-                                   title="${isFavorite ? 'お気に入りから削除' : 'お気に入りに追加'}"></i>`;
+                                   title="${isFavorite ? 'お気に入りから削除' : 'お気に入りに追加'}"></i></div>`;
+                        const startLabel = getStartDateLabel(row.start_date);
+                        if (startLabel) {
+                            return '<div class="d-flex flex-column align-items-center gap-1">' +
+                                starHtml +
+                                '<span class="badge ' + startLabel.class + ' mt-1" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + startLabel.text + '</span>' +
+                                '</div>';
+                        }
+                        return starHtml;
                     },
                     title: '<span data-i18n="お気に入り">お気に入り</span>',
                     orderable: false,
@@ -311,7 +365,7 @@ var projectTable;
                             }
                             return `
                                 <div class="confirmation-note-item mb-1" ${id ? `data-note-id="${id}"` : ''}>
-                                    <span class="note-text small" style="white-space: pre-wrap;">${text}</span>
+                                    <span class="note-text small" style="white-space: pre-wrap;">${escapeHtmlForNote(text)}</span>
                                     <span class="note-actions d-none ms-1">
                                         <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
                                             <i class="fa fa-pencil-alt"></i>
@@ -363,7 +417,7 @@ var projectTable;
                         if (!data || data === '') {
                             return '<span class="text-muted">-</span>';
                         }
-                        return `<span class="text-nowrap">${data}</span>`;
+                        return `<span class="text-nowrap small">${data}</span>`;
                     },
                     title: '<span data-i18n="工事番号">工事番号</span>'
                 },
@@ -373,7 +427,7 @@ var projectTable;
                         if (!data || data === '') {
                             return '<span class="text-muted">-</span>';
                         }
-                        return `<span class="text-nowrap">${data}</span>`;
+                        return `<span class="text-nowrap small">${data}</span>`;
                     },
                     title: '<span data-i18n="規模">規模</span>',
                     visible: false
@@ -389,7 +443,7 @@ var projectTable;
                             const items = data.split(',').map(item => item.trim()).filter(item => item);
                             return items.map(item => `<span class="badge bg-info me-1">${item}</span>`).join('');
                         }
-                        return `<span class="badge bg-info">${data}</span>`;
+                        return `<span class="badge bg-info small">${data}</span>`;
                     },
                     title: '<span data-i18n="種類1">種類1</span>',
                     visible: false
@@ -403,9 +457,9 @@ var projectTable;
                         // Handle comma-separated values
                         if (typeof data === 'string' && data.includes(',')) {
                             const items = data.split(',').map(item => item.trim()).filter(item => item);
-                            return items.map(item => `<span class="badge bg-info me-1">${item}</span>`).join('');
+                            return items.map(item => `<span class="badge bg-info small me-1">${item}</span>`).join('');
                         }
-                        return `<span class="badge bg-info">${data}</span>`;
+                        return `<span class="badge bg-info small">${data}</span>`;
                     },
                     title: '<span data-i18n="種類2">種類2</span>',
                     visible: false
@@ -416,7 +470,7 @@ var projectTable;
                         if (!data || data === '') {
                             return '<span class="text-muted">-</span>';
                         }
-                        return `<span class="text-nowrap">${data}</span>`;
+                        return `<span class="text-nowrap small">${data}</span>`;
                     },
                     title: '<span data-i18n="GUIS 受付者">GUIS 受付者</span>',
                     visible: false
@@ -429,11 +483,11 @@ var projectTable;
                         }
                         // 期待値: 'CAILY' または 'GUIS'
                         if(data === 'CAILY') {
-                            return `<span class="badge bg-primary">${data}</span>`;
+                            return `<span class="badge bg-primary small">${data}</span>`;
                         } else if(data === 'GUIS') {
-                            return `<span class="badge bg-secondary">${data}</span>`;
+                            return `<span class="badge bg-secondary small">${data}</span>`;
                         } else {
-                            return `<span class="badge bg-secondary">${data}</span>`;
+                            return `<span class="badge bg-secondary small">${data}</span>`;
                         }
                     },
                     title: '<span data-i18n="担当">担当</span>',
@@ -445,7 +499,28 @@ var projectTable;
                         if (!data || data === '') {
                             return '<span class="text-muted">-</span>';
                         }
-                        return `<span class="text-nowrap small">${moment(data).format('M月D日 H:mm')}</span>`;
+                        var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
+                        var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                        var attrs = ' data-time="' + rawEsc + '"';
+                        if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
+                        const timeRemaining = getTimeRemaining(data, row.status);
+                        const dateStr = moment(data).format('M月D日 H:mm');
+                        if (timeRemaining) {
+                            const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
+                            const titleText = timeRemaining.isOverdue
+                                ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('期限を超過しています') : '期限を超過しています')
+                                : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
+                            return '<div class="d-flex flex-column">' +
+                                        '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
+                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1" ' +
+                                             'title="' + titleText.replace(/"/g, '&quot;') + '" ' +
+                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
+                                             timeRemaining.text +
+                                        '</span>' +
+                                    '</div>';
+                        } else {
+                            return '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>';
+                        }
                     },
                     title: '<span data-i18n="CAILY納期">CAILY納期</span>',
                     visible: false
@@ -456,7 +531,28 @@ var projectTable;
                         if (!data || data === '') {
                             return '<span class="text-muted">-</span>';
                         }
-                        return `<span class="text-nowrap small">${moment(data).format('M月D日 H:mm')}</span>`;
+                        var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
+                        var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                        var attrs = ' data-time="' + rawEsc + '"';
+                        if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
+                        const timeRemaining = getTimeRemaining(data, row.status);
+                        const dateStr = moment(data).format('M月D日 H:mm');
+                        if (timeRemaining) {
+                            const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
+                            const titleText = timeRemaining.isOverdue
+                                ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('期限を超過しています') : '期限を超過しています')
+                                : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
+                            return '<div class="d-flex flex-column">' +
+                                        '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
+                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1" ' +
+                                             'title="' + titleText.replace(/"/g, '&quot;') + '" ' +
+                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
+                                             timeRemaining.text +
+                                        '</span>' +
+                                    '</div>';
+                        } else {
+                            return '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>';
+                        }
                     },
                     title: '<span data-i18n="GUIS納期">GUIS納期</span>',
                     visible: false
@@ -487,7 +583,7 @@ var projectTable;
                             if (items.length > 0) {
                                 return items.map(item => {
                                     const badgeClass = getOrderTypeBadgeClass(item);
-                                    return `<span class="badge ${badgeClass} me-1">${item}</span>`;
+                                    return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
                                 }).join('');
                             }
                         }
@@ -496,7 +592,7 @@ var projectTable;
                         if (Array.isArray(data)) {
                             return data.map(item => {
                                 const badgeClass = getOrderTypeBadgeClass(item);
-                                return `<span class="badge ${badgeClass} me-1">${item}</span>`;
+                                return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
                             }).join('');
                         }
                         
@@ -507,7 +603,7 @@ var projectTable;
                             if (Array.isArray(arr)) {
                                 return arr.map(item => {
                                     const badgeClass = getOrderTypeBadgeClass(item);
-                                    return `<span class="badge ${badgeClass} me-1">${item}</span>`;
+                                    return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
                                 }).join('');
                             }
                         } catch (e) {
@@ -559,6 +655,20 @@ var projectTable;
                         return html;
                     },
                     title: '<span data-i18n="管理">管理</span>'
+                },
+                {
+                    data: 'teams',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        const ids = typeof data === 'string' ? data.split(',').map(item => item.trim()).filter(item => item) : [String(data)];
+                        if (ids.length === 0) return '<span class="text-muted">-</span>';
+                        const labels = ids.map(function(id) { return teamIdToName[id] || id; });
+                        return labels.map(function(label) { return '<span class="badge bg-label-secondary me-1">' + label + '</span>'; }).join('');
+                    },
+                    title: '<span data-i18n="チーム">チーム</span>'
                 },
                 {
                     data: 'assignment_id',
@@ -643,48 +753,58 @@ var projectTable;
                 },
                 { data: 'start_date', title: '<span data-i18n="開始日">開始日</span>', render: function(data) {
                     if(data) {
-                        return `<span class="text-muted small text-nowrap">${moment(data).format('YYYY年M月D日 H:mm')}</span>`;
+                        var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
+                        var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                        var attrs = ' data-time="' + rawEsc + '"';
+                        if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
+                        return '<span class="text-muted small text-nowrap"' + attrs + '>' + moment(data).format('YYYY年M月D日 H:mm') + '</span>';
                     } else {
                         return '-';
                     }
                 }},
                 { data: 'end_date', title: '<span data-i18n="終了日">終了日</span>', render: function(data, type, row) {
                     if(data) {
+                        var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
+                        var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                        var attrs = ' data-time="' + rawEsc + '"';
+                        if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
                         const timeRemaining = getTimeRemaining(data, row.status);
                         const dateStr = moment(data).format('YYYY年M月D日 H:mm');
                         
                         if (timeRemaining) {
                             const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
-                            // Lấy text title đã dịch
                             const titleText = timeRemaining.isOverdue 
                                 ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('期限を超過しています') : '期限を超過しています')
                                 : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
-                            return `<div class="d-flex flex-column">
-                                        <span class="text-muted small text-nowrap">${dateStr}</span>
-                                        <span class="badge ${timeRemaining.class} ${pulseClass} mt-1" 
-                                             title="${titleText}"
-                                             style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
-                                             ${timeRemaining.text}
-                                        </span>
-                                    </div>`;
+                            return '<div class="d-flex flex-column">' +
+                                        '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
+                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1" ' +
+                                             'title="' + titleText.replace(/"/g, '&quot;') + '" ' +
+                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
+                                             timeRemaining.text +
+                                        '</span>' +
+                                    '</div>';
                         } else {
-                            return `<span class="text-nowrap text-muted small">${dateStr}</span>`;
+                            return '<span class="text-nowrap text-muted small"' + attrs + '>' + dateStr + '</span>';
                         }
                     } else {
                         return '-';
                     }
                 }},
-                // {
-                //     data: null,
-                //     render: function(data, type, row) {
-                //         return `<div class="d-flex align-items-center gap-1">
-                //                     <a href="detail.php?id=${row.id}" class="btn btn-sm bg-label-primary"><i class="fa fa-eye"></i></a>
-                //                 </div>`;
-                //     },
-                //     title: '<span data-i18n="操作">操作</span>'
-                // }
+                {
+                    data: 'amount',
+                    render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            return parseFloat(data) || 0;
+                        }
+                        const val = parseFloat(data);
+                        if (isNaN(val) || val === 0) return '<span class="text-muted">-</span>';
+                        return '<span class="text-nowrap">¥' + parseInt(val).toLocaleString() + '</span>';
+                    },
+                    title: '<span data-i18n="総額">総額</span>'
+                }
             ],
-            order: [[20, 'desc']],
+            order: [[21, 'desc']],
            
             pageLength: 50,
             ordering: true,
@@ -719,18 +839,16 @@ var projectTable;
         // Reset flag after initialization
         isInitializingTable = false;
 
-        // Khởi tạo lại tooltip mỗi khi DataTable vẽ lại
+        // Khởi tạo Bootstrap tooltip cho ô giờ (data-time) mỗi khi DataTable vẽ lại
         $('#projectTable').on('draw.dt', function() {
-            if (window.bootstrap && bootstrap.Tooltip) {
-                // Bootstrap 5
-                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-                tooltipTriggerList.map(function (tooltipTriggerEl) {
-                    return new bootstrap.Tooltip(tooltipTriggerEl);
-                });
-            } else if ($.fn.tooltip) {
-                // Bootstrap 4 hoặc jQuery
-                $('[data-bs-toggle="tooltip"]').tooltip();
-            }
+            var table = document.getElementById('projectTable');
+            if (!table || !window.bootstrap || !bootstrap.Tooltip) return;
+            var triggers = table.querySelectorAll('[data-bs-toggle="tooltip"][data-time]');
+            triggers.forEach(function(el) {
+                var t = bootstrap.Tooltip.getInstance(el);
+                if (t) t.dispose();
+                new bootstrap.Tooltip(el);
+            });
         });
 
         // Giữ Space + kéo chuột để scroll ngang bảng
@@ -1352,8 +1470,35 @@ var projectTable;
                     class: 'bg-label-warning',
                     isOverdue: false
                 };
-            }
+                }
         }
+    }
+
+    function getStartDateLabel(startDate) {
+        if (!startDate) return null;
+        const now = moment.tz('Asia/Tokyo');
+        const start = moment.tz(startDate, 'Asia/Tokyo');
+        const nowStart = now.clone().startOf('day');
+        const startStart = start.clone().startOf('day');
+        const daysDiff = startStart.diff(nowStart, 'days');
+        if (daysDiff < 0) return null;
+        if (daysDiff === 0) {
+            const t = translateText('start_today');
+            return { text: (t && t !== 'start_today') ? t : '開始今日', class: 'bg-label-info' };
+        }
+        if (daysDiff === 1) {
+            const t = translateText('start_tomorrow');
+            return { text: (t && t !== 'start_tomorrow') ? t : '開始明日', class: 'bg-label-info' };
+        }
+        if (daysDiff >= 2) {
+            let template = translateText('start_in_n_days') || '';
+            if (!template || template === 'start_in_n_days' || template.indexOf('{{n}}') === -1) {
+                template = '開始{{n}}日後';
+            }
+            const text = template.replace(/\{\{n\}\}/g, daysDiff);
+            return { text: text, class: 'bg-label-info' };
+        }
+        return null;
     }
 
     const { createApp } = Vue;
@@ -1899,7 +2044,7 @@ var projectTable;
                         this.editingNote = {
                             id: match.id,
                             title: match.title,
-                            content: match.content,
+                            content: decodeHtmlForNote(match.content),
                             is_important: match.is_important == 1,
                             needs_confirmation: match.needs_confirmation == 1,
                             user_id: match.user_id
@@ -1928,13 +2073,13 @@ var projectTable;
                             this.editingNote = {
                                 id: match.id,
                                 title: match.title,
-                                content: match.content,
+                                content: decodeHtmlForNote(match.content),
                                 is_important: match.is_important == 1,
                                 needs_confirmation: match.needs_confirmation == 1,
                                 user_id: match.user_id
                             };
                         } else {
-                            this.editingNote.content = noteContent;
+                            this.editingNote.content = decodeHtmlForNote(noteContent);
                         }
                     }
                 });

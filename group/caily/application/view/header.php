@@ -9,6 +9,7 @@
   data-template="vertical-menu-template"
   data-bs-theme="dark"
   data-timecard-start="<?=TIMECARD_START_DATE?>"
+  data-cache-version="<?=CACHE_VERSION?>"
   >
   <head>
     <meta charset="utf-8" />

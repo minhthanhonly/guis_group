@@ -192,7 +192,7 @@ if($_SESSION['show_project'] == 0){
                     <div v-if="editingNote.id && !isNoteEditMode">
                         <div class="mb-3">
                             <label class="form-label"><span data-i18n="内容">内容</span></label>
-                            <div class="form-control" style="min-height:100px;white-space:pre-line;max-height:300px;overflow-y:auto;">{{ editingNote.content || '-' }}</div>
+                            <div class="form-control" style="min-height:100px;white-space:pre-line;max-height:600px;overflow-y:auto;">{{ editingNote.content || '-' }}</div>
                         </div>
                         <div class="mb-3" v-if="editingNote.is_important">
                             <label class="form-label"><span data-i18n="重要メモ">重要メモ</span></label>
@@ -211,7 +211,7 @@ if($_SESSION['show_project'] == 0){
                     <form v-else @submit.prevent="saveNote">
                         <div class="mb-3">
                             <label class="form-label"><span data-i18n="内容">内容</span></label>
-                            <textarea class="form-control" v-model="editingNote.content" rows="6" placeholder="メモの詳細を入力してください..."></textarea>
+                            <textarea class="form-control" style="height:600px;overflow-y:auto;" v-model="editingNote.content" rows="6" placeholder="メモの詳細を入力してください..."></textarea>
                         </div>
                         <div class="mb-3">
                             <div class="form-check">

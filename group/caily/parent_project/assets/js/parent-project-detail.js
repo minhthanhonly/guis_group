@@ -1,5 +1,18 @@
 const { createApp } = Vue;
 
+// Tooltip giờ VN (dùng chung với main.js); fallback khi main.js chưa load
+if (typeof window.formatVietnamTimeTooltip !== 'function') {
+    window.formatVietnamTimeTooltip = function (jpDateTimeStr) {
+        if (!jpDateTimeStr || typeof jpDateTimeStr !== 'string') return '';
+        var s = String(jpDateTimeStr).trim().replace(/\//g, '-');
+        if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return '';
+        if (typeof moment === 'undefined' || !moment.parseZone) return '';
+        var m = moment.parseZone(s + '+09:00');
+        if (!m.isValid()) return '';
+        return 'VN ' + m.clone().subtract(2, 'hours').format('HH:mm');
+    };
+}
+
 createApp({
     data() {
         return {
@@ -18,9 +31,16 @@ createApp({
             departments: [],
             departmentUsers: [], // Users in the selected department
             guisReceiverDisplayName: '', // Add this to store the display name
+            // Display info from customer table (company / branch / contact)
+            customerDisplay: {
+                company_name: '',
+                branch_name: '',
+                contact_name: ''
+            },
             // Customer modal data
             categories: [],
             selectedCustomer: null,
+            customerForDisplay: null,
             customerErrors: {
                 company_name: '',
                 name: '',
@@ -581,6 +601,9 @@ createApp({
                     if (this.parentProject.guis_receiver) {
                         await this.loadGuisReceiverDisplayName();
                     }
+
+                    // Load display info (会社名・支店名・担当様) from customer table if possible
+                    await this.loadCustomerDisplayInfo();
                 } else {
                     showMessage('親プロジェクトが見つかりません。', true);
                     window.location.href = 'index.php';
@@ -596,6 +619,7 @@ createApp({
                 const response = await axios.get(`/api/index.php?model=parentproject&method=getChildProjects&parent_project_id=${PARENT_PROJECT_ID}`);
                 if (response.data) {
                     this.childProjects = response.data;
+                    this.initVietnamTimeTooltips();
                 }
             } catch (error) {
                 console.error('Error loading child projects:', error);
@@ -745,6 +769,27 @@ createApp({
                 day: '2-digit',
                 hour: '2-digit',
                 minute: '2-digit'
+            });
+        },
+        /** Tooltip giờ VN khi hover lên giờ Nhật: "VN hh:ii" (dùng chung với main.js) */
+        getVietnamTimeTooltip(jpDateTimeStr) {
+            return typeof window.formatVietnamTimeTooltip === 'function' ? window.formatVietnamTimeTooltip(jpDateTimeStr) : '';
+        },
+        /** Khởi tạo Bootstrap tooltip cho ô có data-time (giờ JST → tooltip VN) */
+        initVietnamTimeTooltips() {
+            this.$nextTick(() => {
+                const app = document.getElementById('app');
+                if (!app || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+                app.querySelectorAll('[data-bs-toggle="tooltip"][data-time]').forEach(el => {
+                    if (!document.contains(el)) return;
+                    try {
+                        const t = bootstrap.Tooltip.getInstance(el);
+                        if (t) t.dispose();
+                    } catch (e) { /* element may be detached */ }
+                    if (el.getAttribute('data-bs-title')) {
+                        try { new bootstrap.Tooltip(el); } catch (e) { /* skip */ }
+                    }
+                });
             });
         },
         hasMaterial(materialsString, materialName) {
@@ -2886,7 +2931,10 @@ createApp({
                     formData.append('managers', this.newChildProject.managers.join(','));
                 }
                 formData.append('parent_project_id', this.newChildProject.parent_project_id);
-                formData.append('amount', this.newChildProject.amount || 0);
+                // 総額: 必ず数値として送信（NaN/空の場合は 0）
+                const amountVal = this.newChildProject.amount;
+                const amountNum = (typeof amountVal === 'number' && !Number.isNaN(amountVal)) ? amountVal : (parseFloat(amountVal) || 0);
+                formData.append('amount', String(amountNum));
                 formData.append('tantou', this.newChildProject.tantou || '');
                 formData.append('caily_nouki', this.newChildProject.caily_nouki || '');
                 formData.append('guis_nouki', this.newChildProject.guis_nouki || '');
@@ -6373,6 +6421,20 @@ createApp({
         },
 
         async loadCustomerDataByProject() {
+            // 優先的にcustomer_idで顧客情報を取得する
+            if (this.parentProject.customer_id) {
+                try {
+                    const response = await axios.get(`/api/index.php?model=customer&method=get&id=${this.parentProject.customer_id}`);
+                    if (response.data && response.data.status === 'success' && response.data.data) {
+                        return response.data.data;
+                    }
+                } catch (error) {
+                    console.error('Error loading customer by id:', error);
+                    // フォールバックとして従来の検索ロジックを使用する
+                }
+            }
+
+            // customer_idが無い場合、従来どおり会社名＋支店名＋担当者名で検索
             if (!this.parentProject.contact_name || !this.parentProject.company_name) {
                 return null;
             }
@@ -6401,6 +6463,30 @@ createApp({
             } catch (error) {
                 console.error('Error loading customer data:', error);
                 return null;
+            }
+        },
+
+        async loadCustomerDisplayInfo() {
+            // Reset current display
+            this.customerDisplay = {
+                company_name: '',
+                branch_name: '',
+                contact_name: ''
+            };
+
+            if (!this.parentProject) {
+                return;
+            }
+
+            try {
+                const customer = await this.loadCustomerDataByProject();
+                if (customer) {
+                    this.customerDisplay.company_name = customer.company_name || '';
+                    this.customerDisplay.branch_name = customer.branch || '';
+                    this.customerDisplay.contact_name = customer.name || '';
+                }
+            } catch (error) {
+                console.error('Error loading customer display info:', error);
             }
         },
 

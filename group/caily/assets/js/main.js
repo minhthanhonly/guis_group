@@ -4,6 +4,21 @@
 
 'use strict';
 
+/**
+ * Tooltip giờ Việt Nam khi hover lên giờ Nhật. Định dạng: "VN hh:ii"
+ * @param {string} jpDateTimeStr - Ngày giờ JST (VD: "2025-01-30 14:00:00" hoặc "2025/01/30 14:00")
+ * @returns {string} "VN HH:mm" hoặc "" nếu không parse được
+ */
+window.formatVietnamTimeTooltip = function (jpDateTimeStr) {
+  if (!jpDateTimeStr || typeof jpDateTimeStr !== 'string') return '';
+  var s = String(jpDateTimeStr).trim().replace(/\//g, '-');
+  if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return '';
+  var m = window.moment && window.moment.parseZone ? window.moment.parseZone(s + '+09:00') : null;
+  if (!m || !m.isValid()) return '';
+  var vn = m.clone().subtract(2, 'hours');
+  return 'VN ' + vn.format('HH:mm');
+};
+
 window.isRtl = window.Helpers.isRtl();
 window.isDarkStyle = window.Helpers.isDarkStyle();
 let menu,
@@ -215,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function () {
         debug: false,
         fallbackLng: 'en',
         backend: {
-          loadPath: assetsPath + 'json/locales/{{lng}}.json'
+          loadPath: assetsPath + 'json/locales/{{lng}}.json?v=' + (window.cacheVersion || '')
         },
         returnObjects: true
       })

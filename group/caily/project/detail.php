@@ -393,7 +393,7 @@ if($_SESSION['show_project'] == 0){
                                     <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                 </div>
-                                <input v-else type="text" class="form-control" :value="formatDateTime(project.start_date)" readonly>
+                                <input v-else type="text" class="form-control" :value="formatDateTime(project.start_date)" :data-time="project.start_date || ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.start_date)" readonly>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">
@@ -407,7 +407,7 @@ if($_SESSION['show_project'] == 0){
                                     <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                 </div>
-                                <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" readonly>
+                                <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" :data-time="project.end_date || ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)" readonly>
                             </div>
                             <div class="col-4">
                                 <label class="form-label"><span data-i18n="進捗率">進捗率</span></label>
@@ -446,7 +446,7 @@ if($_SESSION['show_project'] == 0){
                                     <input type="text" class="form-control" v-model="project.caily_nouki" id="caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                 </div>
-                                <input v-else type="text" class="form-control" :value="formatDateTime(project.caily_nouki)" readonly>
+                                <input v-else type="text" class="form-control" :value="formatDateTime(project.caily_nouki)" :data-time="project.caily_nouki || ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.caily_nouki)" readonly>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">GUIS納期</label>
@@ -454,7 +454,7 @@ if($_SESSION['show_project'] == 0){
                                     <input type="text" class="form-control" v-model="project.guis_nouki" id="guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                 </div>
-                                <input v-else type="text" class="form-control" :value="formatDateTime(project.guis_nouki)" readonly>
+                                <input v-else type="text" class="form-control" :value="formatDateTime(project.guis_nouki)" :data-time="project.guis_nouki || ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)" readonly>
                             </div>
                             
                             <div class="col-md-4">

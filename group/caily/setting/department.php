@@ -43,6 +43,7 @@ $view->heading('部署設定');
                         <table class="table table-hover">
                             <thead>
                                 <tr>
+                                    <th>ID</th>
                                     <th>部署名</th>
                                     <th>従業員数</th>
                                     <th>案件数</th>
@@ -52,6 +53,7 @@ $view->heading('部署設定');
                             </thead>
                             <tbody>
                                 <tr v-for="department in departments" :key="department.id">
+                                    <td>{{ department.id }}</td>
                                     <td>{{ department.name }}</td>
                                     <td>{{ department.num_employees }}</td>
                                     <td>{{ department.project_count }}</td>

@@ -734,13 +734,19 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   const dt_timecard_table = document.querySelector('.datatables-timecard');
   const monthInput = document.getElementById('timecard-month-input');
-  var startDate = $('html').attr('data-timecard-start');
+  var startDate = parseInt($('html').attr('data-timecard-start') || '1', 10);
   const today = new Date();
-  if (today.getDate() >= startDate && startDate != '1') {
-    today.setMonth(today.getMonth() + 1);
+  let displayYear = today.getFullYear();
+  let displayMonth = today.getMonth() + 1; // 1-12
+  // Từ ngày 21 tháng trước đến 20 tháng sau: hiển thị tháng sau (vd: 21/1-20/2 → tháng 2)
+  if (today.getDate() >= startDate && startDate !== 1) {
+    displayMonth += 1;
+    if (displayMonth > 12) {
+      displayMonth = 1;
+      displayYear += 1;
+    }
   }
-  // Format the current month as YYYY-MM
-  const currentMonth = today.toISOString().slice(0, 7);
+  const currentMonth = displayYear + '-' + String(displayMonth).padStart(2, '0');
   // Set the default value to the current month
   monthInput.value = currentMonth;
 

@@ -43,6 +43,7 @@ $view->heading('顧客情報');
                                     <table class="table table-hover">
                                         <thead>
                                             <tr>
+                                                <th>ID</th>
                                                 <th>カテゴリー名</th>
                                                 <th>カテゴリー名(ふりがな)</th>
                                                 <th>顧客数</th>
@@ -52,6 +53,7 @@ $view->heading('顧客情報');
                                         </thead>
                                         <tbody>
                                             <tr v-for="category in categories" :key="category.id">
+                                                <td>{{ category.id }}</td>
                                                 <td>{{ category.name }}</td>
                                                 <td>{{ category.name_kana }}</td>
                                                 <td>{{ category.num_customers }}</td>
@@ -118,9 +120,14 @@ $view->heading('顧客情報');
                     <div class="col-md-12">
                         <div class="d-flex justify-content-between align-items-center mb-4">
                             <h2>{{ selectedCategory.name }} - 顧客情報</h2>
-                            <button class="btn btn-primary" @click.prevent="openNewCustomerModal">
-                                <i class="bi bi-plus"></i> 新規顧客
-                            </button>
+                            <div class="d-flex gap-2">
+                                <a href="<?=ROOT?>customer/import.php" class="btn btn-outline-primary">
+                                    <i class="icon-base ti tabler-file-spreadsheet me-1"></i> Excel一括登録
+                                </a>
+                                <button class="btn btn-primary" @click.prevent="openNewCustomerModal">
+                                    <i class="bi bi-plus"></i> 新規顧客
+                                </button>
+                            </div>
                         </div>
                         <div class="table-responsive">
                             <table class="table table-hover">

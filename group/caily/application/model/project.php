@@ -5,7 +5,7 @@ class Project extends ApplicationModel {
         $this->table = DB_PREFIX . 'projects';
         // Add integer fields that should not be quoted
         $this->donotquote = array_merge($this->donotquote, array(
-            'parent_folder_id', 'folder_id', 'project_id', 'file_size'
+            'parent_folder_id', 'folder_id', 'project_id', 'file_size', 'amount'
         ));
         $this->schema = array(
             'id' => array('except' => array('search')),
@@ -202,11 +202,17 @@ class Project extends ApplicationModel {
             $orderBy .= ", (CASE WHEN p.status IN ('completed','cancelled','deleted') THEN 1 ELSE 0 END) ASC, p.end_date ASC";
         }
 
+        // Join customer via subquery so at most one row per (company_name, name) - avoids duplicate projects when multiple customers match
+        $customerJoin = "LEFT JOIN " . DB_PREFIX . "customer c ON c.id = (
+            SELECT MIN(c2.id) FROM " . DB_PREFIX . "customer c2
+            WHERE c2.company_name = pp.company_name AND TRIM(COALESCE(c2.name,'')) = TRIM(COALESCE(pp.contact_name,''))
+        )";
+
         // Get total records count
         $totalQuery = "SELECT COUNT(*) as count FROM {$this->table} p
         JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
         LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
-        LEFT JOIN " . DB_PREFIX . "customer c ON c.company_name = pp.company_name AND c.name = pp.contact_name
+        " . $customerJoin . "
         " . $where;
         $totalRecords = $this->fetchOne($totalQuery)['count'];
 
@@ -218,7 +224,7 @@ class Project extends ApplicationModel {
             $totalQuery = "SELECT COUNT(*) as count FROM {$this->table} p
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
-            LEFT JOIN " . DB_PREFIX . "customer c ON c.company_name = pp.company_name AND c.name = pp.contact_name
+            " . $customerJoin . "
             " . $where;
             $totalRecords = $this->fetchOne($totalQuery)['count'];
             $filteredRecords = $totalRecords;
@@ -248,7 +254,7 @@ class Project extends ApplicationModel {
             FROM {$this->table} p
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
-            LEFT JOIN " . DB_PREFIX . "customer c ON c.company_name = pp.company_name AND c.name = pp.contact_name
+            " . $customerJoin . "
             %s
             %s
             LIMIT %d, %d",
@@ -520,6 +526,33 @@ class Project extends ApplicationModel {
         if(isset($_POST['end_date']) && $_POST['end_date'] != ''){
             $data['end_date'] = date('Y-m-d H:i', strtotime($_POST['end_date']));
         }
+
+        // 担当, CAILY納期, GUIS納期 (child project)
+        if (array_key_exists('tantou', $_POST)) {
+            $data['tantou'] = (isset($_POST['tantou']) && in_array($_POST['tantou'], ['CAILY', 'GUIS'], true)) ? $_POST['tantou'] : null;
+        }
+        if (array_key_exists('caily_nouki', $_POST)) {
+            $val = isset($_POST['caily_nouki']) ? trim($_POST['caily_nouki']) : '';
+            if ($val !== '') {
+                $timestamp = strtotime($val);
+                if ($timestamp !== false) {
+                    $data['caily_nouki'] = date('Y-m-d H:i', $timestamp);
+                }
+            }
+        }
+        if (array_key_exists('guis_nouki', $_POST)) {
+            $val = isset($_POST['guis_nouki']) ? trim($_POST['guis_nouki']) : '';
+            if ($val !== '') {
+                $timestamp = strtotime($val);
+                if ($timestamp !== false) {
+                    $data['guis_nouki'] = date('Y-m-d H:i', $timestamp);
+                }
+            }
+        }
+        // 総額 (amount) - 必ずリクエストから取得して数値で保存
+        $data['amount'] = (array_key_exists('amount', $_POST) && $_POST['amount'] !== '' && $_POST['amount'] !== null)
+            ? floatval($_POST['amount'])
+            : 0;
        
 
         // Validate required fields
@@ -649,18 +682,27 @@ class Project extends ApplicationModel {
             'building_type' => isset($_POST['building_type']) ? $_POST['building_type'] : '',
             'building_number' => isset($_POST['building_number']) ? $_POST['building_number'] : '',
             'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
-            'progress' => isset($_POST['progress']) ? $_POST['progress'] : 0,
+            // progress はリクエストに含まれる場合のみ更新（parent_project/detail.php の編集では送らない → 上書きしない）
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
-            'teams' => isset($_POST['teams']) ? $_POST['teams'] : '',
+            // teams はリクエストに含まれる場合のみ更新（parent_project/detail.php の編集では送らない → 上書きしない）
             'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
-            'amount' => isset($_POST['amount']) ? floatval($_POST['amount']) : 0,
+            // amount はリクエストに含まれる場合のみ更新（project/detail.php の保存では送らない → 上書きしない / parent_project/detail.php では送る → 更新する）
             'estimate_status' => isset($_POST['estimate_status']) ? $_POST['estimate_status'] : '未発行',
             'invoice_status' => isset($_POST['invoice_status']) ? $_POST['invoice_status'] : '未発行',
             'tags' => isset($_POST['tags']) ? $_POST['tags'] : '',
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => $_SESSION['userid']
         );
+        if (array_key_exists('amount', $_POST)) {
+            $data['amount'] = floatval($_POST['amount']);
+        }
+        if (array_key_exists('teams', $_POST)) {
+            $data['teams'] = $_POST['teams'];
+        }
+        if (array_key_exists('progress', $_POST)) {
+            $data['progress'] = intval($_POST['progress']);
+        }
         
         // Add department_id and parent_project_id support for child projects
         if (isset($_POST['department_id'])) {

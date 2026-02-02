@@ -280,6 +280,7 @@ const vueApp = createApp({
                 this.$nextTick(() => { 
                     //this.initTagify(); 
                     this.setConnectedUsers();
+                    this.initVietnamTimeTooltips();
                 });
                 
             } catch (error) {
@@ -631,6 +632,27 @@ const vueApp = createApp({
             if (!datetime) return '-';
             return moment(datetime).format('YYYY/MM/DD HH:mm');
         },
+        /** Tooltip giờ VN khi hover lên giờ Nhật: "VN hh:ii" (dùng chung với main.js) */
+        getVietnamTimeTooltip(jpDateTimeStr) {
+            return typeof window.formatVietnamTimeTooltip === 'function' ? window.formatVietnamTimeTooltip(jpDateTimeStr) : '';
+        },
+        /** Khởi tạo Bootstrap tooltip cho ô có data-time (giờ JST → tooltip VN) */
+        initVietnamTimeTooltips() {
+            this.$nextTick(() => {
+                const app = document.getElementById('app');
+                if (!app || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+                app.querySelectorAll('[data-bs-toggle="tooltip"][data-time]').forEach(el => {
+                    if (!document.contains(el)) return;
+                    try {
+                        const t = bootstrap.Tooltip.getInstance(el);
+                        if (t) t.dispose();
+                    } catch (e) { /* element may be detached */ }
+                    if (el.getAttribute('data-bs-title')) {
+                        try { new bootstrap.Tooltip(el); } catch (e) { /* skip */ }
+                    }
+                });
+            });
+        },
         formatShortDateTime(datetime) {
             if (!datetime) return '-';
             return moment(datetime).format('M月D日 HH:mm');
@@ -760,13 +782,17 @@ const vueApp = createApp({
             return getAvatarName(name);
         },
         initTooltips() {
-            // Dispose previous tooltips to avoid duplicates
+            if (typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
             const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             tooltipTriggerList.forEach(el => {
-                if (el._tooltipInstance) {
-                    el._tooltipInstance.dispose();
-                }
-                el._tooltipInstance = new bootstrap.Tooltip(el);
+                if (!document.contains(el)) return;
+                try {
+                    const t = bootstrap.Tooltip.getInstance(el);
+                    if (t) t.dispose();
+                } catch (e) { /* element may be detached */ }
+                try {
+                    new bootstrap.Tooltip(el);
+                } catch (e) { /* skip invalid elements */ }
             });
         },
         async loadCategories() {
@@ -1434,6 +1460,7 @@ const vueApp = createApp({
             this.isEditMode = false;
             this.project = { ...this.originalProject };
             this.loadMembers(); // Restore managers and members from backend for correct avatars
+            this.initVietnamTimeTooltips();
         },
         async confirmKadaiProject() {
             try {
@@ -1612,11 +1639,11 @@ const vueApp = createApp({
             this.isNoteEditMode = false;
             
             if (note) {
-                // Edit existing note
+                // Edit existing note (decode HTML entities so &lt; shows as < in textarea)
                 this.editingNote = {
                     id: note.id,
                     title: note.title,
-                    content: note.content,
+                    content: note.content ? this.decodeHtmlEntities(note.content) : '',
                     is_important: note.is_important == 1,
                     needs_confirmation: note.needs_confirmation == 1,
                     user_id: note.user_id

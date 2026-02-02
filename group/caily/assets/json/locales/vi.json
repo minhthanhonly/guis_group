@@ -417,6 +417,7 @@
     "高": "Cao",
     "中": "Trung bình",
     "低": "Thấp",
+    "緊急": "Khẩn cấp",
     "7日以内": "Trong 7 ngày",
     "30日以内": "Trong 30 ngày",
     "すべてのステータス": "Tất cả trạng thái",
@@ -443,5 +444,8 @@
     "音声入力": "Nhập giọng nói",
     "日本語": "Tiếng Nhật",
     "ベトナム語": "Tiếng Việt",
-    "期限日(実納期)": "Kì hạn cuối"
+    "期限日(実納期)": "Kì hạn cuối",
+    "start_today": "BĐ Hôm nay",
+    "start_tomorrow": "BĐ Ngày mai",
+    "start_in_n_days": "BĐ +{{n}} ngày"
   }

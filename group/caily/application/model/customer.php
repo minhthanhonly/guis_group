@@ -134,6 +134,159 @@ class Customer extends ApplicationModel {
         return $hash;
     }
 
+    /**
+     * Page handler for customer/import.php (returns view hash).
+     */
+    function import() {
+        return array();
+    }
+
+    /**
+     * Get existing customer by company_name + branch + name (trùng = company_name, branch, name).
+     * Returns row with id or null.
+     */
+    function get_customer_by_company_branch_name($company_name, $branch, $name) {
+        $company_name = trim($company_name);
+        $branch = trim($branch ?? '');
+        $name = trim($name);
+        if ($company_name === '' || $name === '') {
+            return null;
+        }
+        $query = sprintf(
+            "SELECT id FROM %s WHERE TRIM(company_name) = '%s' AND TRIM(COALESCE(branch,'')) = '%s' AND TRIM(name) = '%s' LIMIT 1",
+            $this->table,
+            $this->quote( $company_name ),
+            $this->quote( $branch ),
+            $this->quote( $name )
+        );
+        return $this->fetchOne($query);
+    }
+
+    /**
+     * Import customers from JSON rows. Trùng (company_name + branch + name) thì update, chưa có thì insert.
+     */
+    function import_customers() {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => 'error',
+            'inserted' => 0,
+            'updated' => 0,
+            'errors' => array(),
+        );
+        $raw = file_get_contents('php://input');
+        $input = json_decode($raw, true);
+        if (!is_array($input) || !isset($input['rows'])) {
+            $hash['message_code'] = 'Invalid input. Expected JSON with "rows" array.';
+            return $hash;
+        }
+        $rows = $input['rows'];
+        if (empty($rows)) {
+            $hash['status'] = 'success';
+            $hash['message_code'] = 'No rows to import.';
+            return $hash;
+        }
+        $inserted = 0;
+        $updated = 0;
+        $errors = array();
+        foreach ($rows as $index => $row) {
+            $rowNum = $index + 2; // 1-based + header row
+            $category_id = isset($row['category_id']) ? intval($row['category_id']) : 0;
+            $company_name = isset($row['company_name']) ? trim($row['company_name']) : '';
+            $branch = isset($row['branch']) ? trim($row['branch']) : '';
+            $name = isset($row['name']) ? trim($row['name']) : '';
+            if ($company_name === '' || $name === '') {
+                $errors[] = "Dòng $rowNum: Thiếu công ty hoặc tên liên hệ.";
+                continue;
+            }
+            if ($category_id <= 0) {
+                $errors[] = "Dòng $rowNum: category_id không hợp lệ.";
+                continue;
+            }
+            $guis_department = '';
+            if (isset($row['guis_department'])) {
+                if (is_array($row['guis_department'])) {
+                    $guis_department = implode(',', array_map('intval', $row['guis_department']));
+                } else {
+                    $guis_department = preg_replace('/[^0-9,]/', '', $row['guis_department']);
+                }
+            }
+            $existing = $this->get_customer_by_company_branch_name($company_name, $branch, $name);
+            if ($existing && !empty($existing['id'])) {
+                $data = array(
+                    'name' => $name,
+                    'name_kana' => isset($row['name_kana']) ? $row['name_kana'] : '',
+                    'department' => isset($row['department']) ? $row['department'] : '',
+                    'branch' => $branch,
+                    'position' => isset($row['position']) ? $row['position'] : '',
+                    'tel' => isset($row['tel']) ? $row['tel'] : '',
+                    'fax' => isset($row['fax']) ? $row['fax'] : '',
+                    'email' => isset($row['email']) ? $row['email'] : '',
+                    'zip' => isset($row['zip']) ? $row['zip'] : '',
+                    'address1' => isset($row['address1']) ? $row['address1'] : '',
+                    'address2' => isset($row['address2']) ? $row['address2'] : '',
+                    'title' => isset($row['title']) ? $row['title'] : '様',
+                    'company_name' => $company_name,
+                    'company_name_kana' => isset($row['company_name_kana']) ? $row['company_name_kana'] : '',
+                    'category_id' => $category_id,
+                    'guis_department' => $guis_department,
+                    'status' => isset($row['status']) ? intval($row['status']) : 1,
+                    'updated_at' => date('Y-m-d H:i:s'),
+                    'updated_by' => $_SESSION['userid'],
+                    'memo' => isset($row['memo']) ? $row['memo'] : '',
+                );
+                try {
+                    $result = $this->query_update($data, array('id' => $existing['id']));
+                    if ($result) {
+                        $updated++;
+                    } else {
+                        $errors[] = "Dòng $rowNum: Lỗi cập nhật DB.";
+                    }
+                } catch (Exception $e) {
+                    $errors[] = "Dòng $rowNum: " . $e->getMessage();
+                }
+            } else {
+                $data = array(
+                    'name' => $name,
+                    'name_kana' => isset($row['name_kana']) ? $row['name_kana'] : '',
+                    'department' => isset($row['department']) ? $row['department'] : '',
+                    'branch' => $branch,
+                    'position' => isset($row['position']) ? $row['position'] : '',
+                    'tel' => isset($row['tel']) ? $row['tel'] : '',
+                    'fax' => isset($row['fax']) ? $row['fax'] : '',
+                    'email' => isset($row['email']) ? $row['email'] : '',
+                    'zip' => isset($row['zip']) ? $row['zip'] : '',
+                    'address1' => isset($row['address1']) ? $row['address1'] : '',
+                    'address2' => isset($row['address2']) ? $row['address2'] : '',
+                    'title' => isset($row['title']) ? $row['title'] : '様',
+                    'company_name' => $company_name,
+                    'company_name_kana' => isset($row['company_name_kana']) ? $row['company_name_kana'] : '',
+                    'category_id' => $category_id,
+                    'guis_department' => $guis_department,
+                    'status' => isset($row['status']) ? intval($row['status']) : 1,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'created_by' => $_SESSION['userid'],
+                    'memo' => isset($row['memo']) ? $row['memo'] : '',
+                );
+                try {
+                    $result = $this->query_insert($data);
+                    if ($result) {
+                        $inserted++;
+                    } else {
+                        $errors[] = "Dòng $rowNum: Lỗi ghi DB.";
+                    }
+                } catch (Exception $e) {
+                    $errors[] = "Dòng $rowNum: " . $e->getMessage();
+                }
+            }
+        }
+        $hash['status'] = 'success';
+        $hash['message_code'] = 'success';
+        $hash['inserted'] = $inserted;
+        $hash['updated'] = $updated;
+        $hash['errors'] = $errors;
+        return $hash;
+    }
+
     function add_customer() {
         $hash = array(
             'status' => 'error',
@@ -265,7 +418,7 @@ class Customer extends ApplicationModel {
         try {
             $id = $_GET['id'];
             $query = sprintf(
-                "SELECT c.*, 
+                "SELECT c.*
                 FROM {$this->table} c
                 WHERE c.id = %d",
                 intval($id)

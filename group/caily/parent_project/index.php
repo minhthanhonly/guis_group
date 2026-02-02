@@ -194,7 +194,7 @@ $view->heading('建物一覧');
                                             <div class="confirmation-notes-wrapper" style="max-width: 300px; max-height: 200px; overflow-y: auto;">
                                                 <template v-if="parseNotesDisplay(project.notes_display || '').length > 0">
                                                     <div v-for="note in parseNotesDisplay(project.notes_display)" :key="note.id" class="confirmation-note-item mb-1" :data-note-id="note.id">
-                                                        <span class="note-text" style="white-space: pre-wrap;">{{ note.content }}</span>
+                                                        <span class="note-text small" style="white-space: pre-wrap;">{{ note.content }}</span>
                                                         <span class="note-actions d-none ms-1">
                                                             <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;" @click.prevent="openNoteEdit(project, note)">
                                                                 <i class="fa fa-pencil-alt"></i>

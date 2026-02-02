@@ -444,7 +444,7 @@ $view->heading('建物詳細');
                                 </template>
                             </div>
                         </div>
-                        <div class="col-12">
+                        <!-- <div class="col-12">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="備考">備考</span></label>
                                 <template v-if="isEditMode">
@@ -456,7 +456,7 @@ $view->heading('建物詳細');
                                         parentProject.notes || '-' }}</div>
                                 </template>
                             </div>
-                        </div>
+                        </div> -->
                     </div>
                     <div v-else class="text-center py-5">
                         <div class="spinner-border" role="status">
@@ -598,10 +598,22 @@ $view->heading('建物詳細');
                                         <span v-else class="text-muted">-</span>
                                     </td>
                                     <td>{{ project.tantou || '-' }}</td>
-                                    <td>{{ project.caily_nouki ? formatDateTime(project.caily_nouki) : '-' }}</td>
-                                    <td>{{ project.guis_nouki ? formatDateTime(project.guis_nouki) : '-' }}</td>
-                                    <td>{{ formatDateTime(project.start_date) || '-' }}</td>
-                                    <td>{{ formatDateTime(project.end_date) || '-' }}</td>
+                                    <td>
+                                        <span v-if="project.caily_nouki" :data-time="project.caily_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.caily_nouki)">{{ formatDateTime(project.caily_nouki) }}</span>
+                                        <span v-else class="text-muted">-</span>
+                                    </td>
+                                    <td>
+                                        <span v-if="project.guis_nouki" :data-time="project.guis_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)">{{ formatDateTime(project.guis_nouki) }}</span>
+                                        <span v-else class="text-muted">-</span>
+                                    </td>
+                                    <td>
+                                        <span v-if="project.start_date" :data-time="project.start_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.start_date)">{{ formatDateTime(project.start_date) }}</span>
+                                        <span v-else class="text-muted">-</span>
+                                    </td>
+                                    <td>
+                                        <span v-if="project.end_date" :data-time="project.end_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)">{{ formatDateTime(project.end_date) }}</span>
+                                        <span v-else class="text-muted">-</span>
+                                    </td>
                                     <td>
                                         <span class="badge" :class="getProjectStatusBadgeClass(project.status)">
                                             {{ getProjectStatusLabel(project.status) }}

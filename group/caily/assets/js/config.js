@@ -45,6 +45,7 @@ window.config = {
 
 window.assetsPath = document.documentElement.getAttribute('data-assets-path');
 window.templateName = document.documentElement.getAttribute('data-template');
+window.cacheVersion = document.documentElement.getAttribute('data-cache-version') || '';
 
 /**
  * TemplateCustomizer
