@@ -217,8 +217,12 @@ $view->heading('顧客情報');
                                 </div>
                             
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">支店名</label>
-                                    <input type="text" class="form-control" v-model="newCustomer.branch" required>
+                                    <label class="form-label">支店名 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" v-model="newCustomer.branch" 
+                                           :class="{ 'is-invalid': customerErrors.branch }" required>
+                                    <div v-if="customerErrors.branch" class="invalid-feedback">
+                                        {{ customerErrors.branch }}
+                                    </div>
                                 </div>
                             
                                 <div class="col-md-4 mb-3">
@@ -354,6 +358,7 @@ $view->footing();
                     customerErrors: {
                         company_name: '',
                         name: '',
+                        branch: '',
                         guis_department: ''
                     }
                 }
@@ -488,7 +493,7 @@ $view->footing();
                 },
                 async saveCustomer() {
                     // Reset errors
-                    this.customerErrors = { company_name: '', name: '', guis_department: '' };
+                    this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
                     let hasError = false;
                     if (!this.newCustomer.company_name) {
                         this.customerErrors.company_name = '会社名は必須です。';
@@ -496,6 +501,10 @@ $view->footing();
                     }
                     if (!this.newCustomer.name) {
                         this.customerErrors.name = '担当者名は必須です。';
+                        hasError = true;
+                    }
+                    if (!this.newCustomer.branch || this.newCustomer.branch.trim() === '') {
+                        this.customerErrors.branch = '支店名は必須です。';
                         hasError = true;
                     }
                     if (!this.newCustomer.guis_department || this.newCustomer.guis_department.length === 0) {
@@ -522,6 +531,41 @@ $view->footing();
                         }
                         if ($reponse.data.status == 'success') {
                             showMessage('担当者を保存しました。');
+                            
+                            // If editing customer, update all parent projects with the same customer_id
+                            if (this.editingCustomer) {
+                                try {
+                                    const formData = new URLSearchParams();
+                                    formData.append('customer_id', this.editingCustomer.id);
+                                    formData.append('company_name', this.newCustomer.company_name);
+                                    formData.append('branch_name', this.newCustomer.branch);
+                                    formData.append('contact_name', this.newCustomer.name);
+                                    
+                                    console.log('Updating parent projects for customer:', {
+                                        customer_id: this.editingCustomer.id,
+                                        company_name: this.newCustomer.company_name,
+                                        branch_name: this.newCustomer.branch,
+                                        contact_name: this.newCustomer.name
+                                    });
+                                    
+                                    const updateResponse = await axios.post(`/api/index.php?model=parentproject&method=updateCustomerInfoForAllProjects`, formData, {
+                                        headers: {
+                                            'Content-Type': 'application/x-www-form-urlencoded'
+                                        }
+                                    });
+                                    
+                                    console.log('Parent projects update response:', updateResponse.data);
+                                    
+                                    if (updateResponse.data.status === 'success') {
+                                        console.log(`Updated ${updateResponse.data.affected_rows} parent project(s)`);
+                                    } else {
+                                        console.error('Failed to update parent projects:', updateResponse.data.message);
+                                    }
+                                } catch (error) {
+                                    console.error('Error updating parent projects:', error);
+                                }
+                            }
+                            
                             this.loadCustomers();
                             this.loadCategories();
                             for (const category of this.categories) {

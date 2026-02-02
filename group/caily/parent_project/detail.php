@@ -100,7 +100,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </template>
                                 <template v-else>
-                                    <input type="text" class="form-control" :value="parentProject.company_name"
+                                    <input type="text" class="form-control" :value="customerDisplay.company_name || parentProject.company_name"
                                         readonly>
                                 </template>
                             </div>
@@ -118,7 +118,7 @@ $view->heading('建物詳細');
                                     </select>
                                 </template>
                                 <template v-else>
-                                    <input type="text" class="form-control" :value="parentProject.branch_name || '-'"
+                                    <input type="text" class="form-control" :value="customerDisplay.branch_name || parentProject.branch_name || '-'"
                                         readonly>
                                 </template>
                             </div>
@@ -141,7 +141,7 @@ $view->heading('建物詳細');
                                     </select>
                                 </template>
                                 <template v-else>
-                                    <input type="text" class="form-control" :value="parentProject.contact_name || '-'"
+                                    <input type="text" class="form-control" :value="customerDisplay.contact_name || parentProject.contact_name || '-'"
                                         readonly>
                                 </template>
                             </div>
@@ -2922,6 +2922,7 @@ $view->heading('建物詳細');
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label"><span data-i18n="カテゴリー">カテゴリー</span></label>
                                     <select class="form-select" v-model="selectedCustomer.category_id" required>
+                                        <option value="">選択してください</option>
                                         <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
                                     </select>
                                 </div>
@@ -2946,8 +2947,12 @@ $view->heading('建物詳細');
                                 </div>
                             
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label"><span data-i18n="支店名">支店名</span></label>
-                                    <input type="text" class="form-control" v-model="selectedCustomer.branch" required>
+                                    <label class="form-label"><span data-i18n="支店名">支店名</span> <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" v-model="selectedCustomer.branch" 
+                                           :class="{ 'is-invalid': customerErrors.branch }" required>
+                                    <div v-if="customerErrors.branch" class="invalid-feedback">
+                                        {{ customerErrors.branch }}
+                                    </div>
                                 </div>
                             
                                 <div class="col-md-4 mb-3">

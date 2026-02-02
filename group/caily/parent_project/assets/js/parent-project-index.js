@@ -23,6 +23,8 @@ createApp({
                 { key: 'project_name', label: 'お施主様名', visible: true },
                 { key: 'construction_number', label: '工事番号', visible: true },
                 { key: 'company_name', label: '会社名', visible: true },
+                { key: 'branch_name', label: '支店名', visible: true },
+                { key: 'contact_name', label: '担当様', visible: true },
                 { key: 'scale', label: '規模', visible: false },
                 { key: 'type1', label: '種類1', visible: false },
                 { key: 'type2', label: '種類2', visible: false },

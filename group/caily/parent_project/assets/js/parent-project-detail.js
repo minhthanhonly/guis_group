@@ -44,6 +44,7 @@ createApp({
             customerErrors: {
                 company_name: '',
                 name: '',
+                branch: '',
                 guis_department: ''
             },
             updatingCustomer: false,
@@ -6500,6 +6501,9 @@ createApp({
                 // Load departments first
                 await this.loadDepartments();
                 
+                // Load categories first
+                await this.loadCategories();
+                
                 // Load customer data
                 const customer = await this.loadCustomerDataByProject();
 
@@ -6512,7 +6516,6 @@ createApp({
                     }
                     
                     this.selectedCustomer = { ...customer };
-                    
                     // Show modal
                     $('#customerInfoModal').modal('show');
                     
@@ -6553,7 +6556,7 @@ createApp({
 
         async updateCustomer() {
             // Reset errors
-            this.customerErrors = { company_name: '', name: '', guis_department: '' };
+            this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
             let hasError = false;
             
             if (!this.selectedCustomer.company_name) {
@@ -6564,16 +6567,15 @@ createApp({
                 this.customerErrors.name = '担当者名は必須です。';
                 hasError = true;
             }
+            if (!this.selectedCustomer.branch || this.selectedCustomer.branch.trim() === '') {
+                this.customerErrors.branch = '支店名は必須です。';
+                hasError = true;
+            }
             if (!this.selectedCustomer.guis_department || this.selectedCustomer.guis_department.length === 0) {
                 this.customerErrors.guis_department = '自社担当部署名は必須です。';
                 hasError = true;
             }
             if (hasError) return;
-
-            // Set default branch to "本社" if empty
-            if (!this.selectedCustomer.branch || this.selectedCustomer.branch.trim() === '') {
-                this.selectedCustomer.branch = '本社';
-            }
 
             this.updatingCustomer = true;
 
@@ -6593,18 +6595,57 @@ createApp({
                 if (response.data.status === 'success') {
                     showMessage('顧客情報を更新しました。');
                     
-                    // Update parent project if customer name or company changed
+                    // Always update customerDisplay with the latest customer info
+                    this.customerDisplay.company_name = this.selectedCustomer.company_name || '';
+                    this.customerDisplay.branch_name = this.selectedCustomer.branch || '';
+                    this.customerDisplay.contact_name = this.selectedCustomer.name || '';
+                    
+                    // Update all parent projects with the same customer_id if customer info changed
                     if (this.selectedCustomer.name !== this.parentProject.contact_name ||
                         this.selectedCustomer.company_name !== this.parentProject.company_name ||
                         this.selectedCustomer.branch !== this.parentProject.branch_name) {
                         
-                        // Update parent project data
-                        this.parentProject.contact_name = this.selectedCustomer.name;
-                        this.parentProject.company_name = this.selectedCustomer.company_name;
-                        this.parentProject.branch_name = this.selectedCustomer.branch;
-                        
-                        // Save parent project changes
-                        await this.saveParentProject();
+                        try {
+                            // Update all parent projects with the same customer_id
+                            const formData = new URLSearchParams();
+                            formData.append('customer_id', this.selectedCustomer.id);
+                            formData.append('company_name', this.selectedCustomer.company_name);
+                            formData.append('branch_name', this.selectedCustomer.branch);
+                            formData.append('contact_name', this.selectedCustomer.name);
+                            
+                            console.log('Sending update request:', {
+                                customer_id: this.selectedCustomer.id,
+                                company_name: this.selectedCustomer.company_name,
+                                branch_name: this.selectedCustomer.branch,
+                                contact_name: this.selectedCustomer.name
+                            });
+                            
+                            const updateAllResponse = await axios.post(`/api/index.php?model=parentproject&method=updateCustomerInfoForAllProjects`, formData, {
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded'
+                                }
+                            });
+                            
+                            console.log('Update response:', updateAllResponse.data);
+                            
+                            if (updateAllResponse.data.status === 'success') {
+                                console.log(`Updated ${updateAllResponse.data.affected_rows} parent project(s)`);
+                                
+                                // Update current parent project data in memory
+                                this.parentProject.contact_name = this.selectedCustomer.name;
+                                this.parentProject.company_name = this.selectedCustomer.company_name;
+                                this.parentProject.branch_name = this.selectedCustomer.branch;
+                                
+                                // Update customer display info directly from selectedCustomer
+                                this.customerDisplay.company_name = this.selectedCustomer.company_name || '';
+                                this.customerDisplay.branch_name = this.selectedCustomer.branch || '';
+                                this.customerDisplay.contact_name = this.selectedCustomer.name || '';
+                            } else {
+                                console.error('Failed to update all parent projects:', updateAllResponse.data.message);
+                            }
+                        } catch (error) {
+                            console.error('Error updating all parent projects:', error);
+                        }
                     }
                     
                     // Close modal
@@ -7015,7 +7056,7 @@ createApp({
                     }
                     // Reset customer data
                     this.selectedCustomer = null;
-                    this.customerErrors = { company_name: '', name: '', guis_department: '' };
+                    this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
                 });
             }
 

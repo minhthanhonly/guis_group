@@ -100,6 +100,14 @@ $view->heading('建物一覧');
                                         <span data-i18n="会社名">会社名</span>
                                         <i class="fa fa-fw" :class="getSortIcon('company_name')"></i>
                                     </th>
+                                    <th v-if="isColumnVisible('branch_name')" @click="sortBy('branch_name')" style="cursor: pointer;" class="user-select-none">
+                                        <span data-i18n="支店名">支店名</span>
+                                        <i class="fa fa-fw" :class="getSortIcon('branch_name')"></i>
+                                    </th>
+                                    <th v-if="isColumnVisible('contact_name')" @click="sortBy('contact_name')" style="cursor: pointer;" class="user-select-none">
+                                        <span data-i18n="担当様">担当様</span>
+                                        <i class="fa fa-fw" :class="getSortIcon('contact_name')"></i>
+                                    </th>
                                     <th v-if="isColumnVisible('scale')" @click="sortBy('scale')" style="cursor: pointer;" class="user-select-none">
                                         <span data-i18n="規模">規模</span>
                                         <i class="fa fa-fw" :class="getSortIcon('scale')"></i>
@@ -147,13 +155,17 @@ $view->heading('建物一覧');
                                             <span class="badge bg-label-info">{{ project.project_number || '-' }}</span>
                                         </td>
                                         <td v-if="isColumnVisible('project_name')">
-                                            <a :href="'detail.php?id=' + project.id" class="text-decoration-none" 
-                                               :title="'詳細を表示: ' + project.project_name">
-                                                {{ project.project_name }}
-                                            </a>
+                                            <div style="max-width: 200px;">
+                                                <a :href="'detail.php?id=' + project.id" class="text-decoration-none" 
+                                                :title="'詳細を表示: ' + project.project_name">
+                                                    {{ project.project_name }}
+                                                </a>
+                                            </div>            
                                         </td>
                                         <td v-if="isColumnVisible('construction_number')">{{ project.construction_number || '-' }}</td>
                                         <td v-if="isColumnVisible('company_name')">{{ project.company_name }}</td>
+                                        <td v-if="isColumnVisible('branch_name')">{{ project.branch_name || '-' }}</td>
+                                        <td v-if="isColumnVisible('contact_name')">{{ project.contact_name || '-' }}</td>
                                         <td v-if="isColumnVisible('scale')">{{ project.scale || '-' }}</td>
                                         <td v-if="isColumnVisible('type1')">
                                             <span v-if="project.type1">
@@ -228,7 +240,7 @@ $view->heading('建物一覧');
                                         </td>
                                 </tr>
                                 <tr v-if="filteredParentProjects.length === 0">
-                                    <td colspan="12" class="text-center py-4">
+                                    <td colspan="14" class="text-center py-4">
                                         <div class="text-muted">
                                             <i class="fa fa-inbox fa-2x mb-2"></i>
                                             <p>建物が見つかりません</p>

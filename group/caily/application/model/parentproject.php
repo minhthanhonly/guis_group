@@ -1653,5 +1653,61 @@ class ParentProject extends ApplicationModel {
         $this->query_insert($data);
         $this->table = DB_PREFIX . 'parent_projects'; // reset table
     }
+
+    /**
+     * Update customer info for all parent projects with the same customer_id
+     */
+    function updateCustomerInfoForAllProjects($params = null) {
+        $customer_id = isset($_POST['customer_id']) ? intval($_POST['customer_id']) : 0;
+        $company_name = isset($_POST['company_name']) ? $this->validateUTF8MB4($_POST['company_name']) : '';
+        $branch_name = isset($_POST['branch_name']) ? $this->validateUTF8MB4($_POST['branch_name']) : '';
+        $contact_name = isset($_POST['contact_name']) ? $this->validateUTF8MB4($_POST['contact_name']) : '';
+        
+        if (!$customer_id) {
+            return ['status' => 'error', 'message' => 'Customer ID is required'];
+        }
+        
+        $data = [
+            'company_name' => $company_name,
+            'branch_name' => $branch_name,
+            'contact_name' => $contact_name,
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+        
+        try {
+            // Use custom SQL for WHERE customer_id since query_update doesn't support this condition
+            $sql = sprintf(
+                "UPDATE %s SET 
+                    company_name = '%s',
+                    branch_name = '%s', 
+                    contact_name = '%s',
+                    updated_at = '%s'
+                WHERE customer_id = %d",
+                $this->table,
+                $this->quote($company_name),
+                $this->quote($branch_name),
+                $this->quote($contact_name),
+                date('Y-m-d H:i:s'),
+                $customer_id
+            );
+            
+            $result = $this->query($sql);
+            
+            if ($result) {
+                $affected_rows = mysqli_affected_rows($this->handler);
+                
+                return [
+                    'status' => 'success', 
+                    'message' => "Updated {$affected_rows} parent project(s)",
+                    'affected_rows' => $affected_rows
+                ];
+            } else {
+                return ['status' => 'error', 'message' => 'Failed to update parent projects'];
+            }
+        } catch (Exception $e) {
+            error_log("Exception in updateCustomerInfoForAllProjects: " . $e->getMessage());
+            return ['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()];
+        }
+    }
 }
 ?> 
