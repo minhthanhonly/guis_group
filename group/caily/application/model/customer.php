@@ -142,6 +142,93 @@ class Customer extends ApplicationModel {
     }
 
     /**
+     * Find customer by name (LIKE) and branch, for given company (or default 大東建託株式会社).
+     * Returns row with id or null.
+     */
+    function get_customer_by_name_contains_and_branch($name, $branch, $company_name = '') {
+        $name = trim($name ?? '');
+        $branch = trim($branch ?? '');
+        if ($name === '') {
+            return null;
+        }
+        $company = trim($company_name ?? '') !== '' ? trim($company_name) : '大東建託株式会社';
+        $query = sprintf(
+            "SELECT id FROM %s WHERE TRIM(COALESCE(company_name,'')) = '%s' AND name LIKE '%%%s%%' AND TRIM(COALESCE(branch,'')) = '%s' LIMIT 1",
+            $this->table,
+            $this->quote($company),
+            $this->quote($name),
+            $this->quote($branch)
+        );
+        return $this->fetchOne($query);
+    }
+
+    /**
+     * Add customer via public API (no login).
+     * If a customer exists with name containing $name and same branch_name (and company_name), return that id.
+     * Otherwise insert with company_name (or default 大東建託株式会社) and return new id.
+     * Params: name, branch_name (mapped to branch), company_name (optional, default 大東建託株式会社), category_id (optional, default 2).
+     */
+    function add_customer_public($params) {
+        $hash = array(
+            'status' => 'error',
+            'message_code' => '',
+            'id' => null,
+        );
+        $name = isset($params['name']) ? trim($params['name']) : '';
+        $branch_name = isset($params['branch_name']) ? trim($params['branch_name'] ?? '') : trim($params['branch'] ?? '');
+        $company_name = isset($params['company_name']) ? trim($params['company_name']) : '';
+        $category_id = isset($params['category_id']) && $params['category_id'] !== '' && $params['category_id'] !== null
+            ? intval($params['category_id']) : 2;
+        if ($name === '') {
+            $hash['message_code'] = 'name is required';
+            return $hash;
+        }
+        if ($branch_name === '') {
+            $hash['message_code'] = 'branch_name is required';
+            return $hash;
+        }
+        $company = $company_name !== '' ? $company_name : '大東建託株式会社';
+        $existing = $this->get_customer_by_name_contains_and_branch($name, $branch_name, $company);
+        if ($existing && !empty($existing['id'])) {
+            $hash['status'] = 'success';
+            $hash['message_code'] = 'existing';
+            $hash['id'] = (int) $existing['id'];
+            return $hash;
+        }
+        $data = array(
+            'name' => $name,
+            'branch' => $branch_name,
+            'company_name' => $company,
+            'name_kana' => '',
+            'department' => '',
+            'position' => '',
+            'tel' => '',
+            'fax' => '',
+            'email' => '',
+            'zip' => '',
+            'address1' => '',
+            'address2' => '',
+            'title' => '様',
+            'company_name_kana' => '',
+            'category_id' => $category_id,
+            'guis_department' => '',
+            'status' => 1,
+            'created_at' => date('Y-m-d H:i:s'),
+            'created_by' => 0,
+            'memo' => '',
+        );
+        $new_id = $this->query_insert($data);
+        if ($new_id) {
+            $hash['status'] = 'success';
+            $hash['message_code'] = 'created';
+            $hash['id'] = (int) $new_id;
+        } else {
+            $hash['message_code'] = 'insert failed';
+        }
+        return $hash;
+    }
+
+    /**
      * Get existing customer by company_name + branch + name (trùng = company_name, branch, name).
      * Returns row with id or null.
      */
@@ -158,6 +245,22 @@ class Customer extends ApplicationModel {
             $this->quote( $company_name ),
             $this->quote( $branch ),
             $this->quote( $name )
+        );
+        return $this->fetchOne($query);
+    }
+
+    /**
+     * Get customer by id. Returns row with company_name, branch, name (or null).
+     */
+    function get_customer_by_id($id) {
+        $id = intval($id);
+        if ($id <= 0) {
+            return null;
+        }
+        $query = sprintf(
+            "SELECT id, company_name, branch, name FROM %s WHERE id = %d LIMIT 1",
+            $this->table,
+            $id
         );
         return $this->fetchOne($query);
     }

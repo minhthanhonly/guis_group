@@ -17,7 +17,7 @@ if($_SESSION['show_project'] == 0){
     <div v-if="true">
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">
-                <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-primary">#{{ project?.project_number }}</span></a>
+                <a class="navbar-brand fw-bold" href="#"><span class="badge badge-sm bg-primary">#{{ project?.id }}</span></a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#projectNavbar" aria-controls="projectNavbar" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
                 </button>
@@ -211,16 +211,8 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         
                             <div class="col-md-4  mt-4">
-                                <label class="form-label"><span data-i18n="案件番号">案件番号</span>  <span class="text-danger">*</span></label>
-                                <template v-if="isEditMode">
-                                    <input type="text" class="form-control" v-model="project.project_number" readonly>
-                                    <div v-if="validationErrors.project_number" class="invalid-feedback d-block">
-                                        {{ validationErrors.project_number }}
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control" :value="project.project_number || '-'" readonly>
-                                </template>
+                                <label class="form-label"><span data-i18n="ID">ID</span></label>
+                                <input type="text" class="form-control" :value="project?.id || '-'" readonly>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="案件名">案件名</span>  <span class="text-danger">*</span></label>

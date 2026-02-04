@@ -9,7 +9,8 @@ if (typeof window.formatVietnamTimeTooltip !== 'function') {
         if (typeof moment === 'undefined' || !moment.parseZone) return '';
         var m = moment.parseZone(s + '+09:00');
         if (!m.isValid()) return '';
-        return 'VN ' + m.clone().subtract(2, 'hours').format('HH:mm');
+        var vn = m.clone().subtract(2, 'hours');
+        return 'VN ' + vn.format('DD/MM/YYYY HH:mm');
     };
 }
 

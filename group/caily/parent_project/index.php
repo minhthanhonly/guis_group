@@ -298,7 +298,7 @@ $view->heading('建物一覧');
                                 <thead>
                                     <tr>
                                         <th class="text-center"><i class="fa fa-star text-muted" title="お気に入り"></i></th>
-                                        <th><span data-i18n="案件番号">案件番号</span></th>
+                                        <th><span data-i18n="ID">ID</span></th>
                                         <th><span data-i18n="受注形態">受注形態</span></th>
                                         <th style="min-width: 150px;"><span data-i18n="案件名">案件名</span></th>
                                         <th style="min-width: 100px;"><span data-i18n="部署">部署</span></th>
@@ -323,7 +323,7 @@ $view->heading('建物一覧');
                                                @click="toggleChildFavorite(child)"
                                                :title="child.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
                                         </td>
-                                        <td><span class="badge bg-primary border me-1">{{ child.project_number || '-' }}</span></td>
+                                        <td><span class="badge bg-primary border me-1">{{ child.id || '-' }}</span></td>
                                         <td>
                                             <span v-if="child.project_order_type && child.project_order_type.split(',').length > 0">
                                                 <span v-for="item in child.project_order_type.split(',')" 

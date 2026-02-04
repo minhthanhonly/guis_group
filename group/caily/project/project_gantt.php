@@ -32,7 +32,7 @@ if($_SESSION['show_project'] == 0){
             </div>
         </div>
     </nav>
-    <!-- <div class="mb-2">
+    <div class="mb-2">
       <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#projectFilterBox" aria-expanded="false">
         <i class="fa fa-filter me-1"></i> <span data-i18n="高度なフィルター">高度なフィルター</span>
       </button>
@@ -41,14 +41,6 @@ if($_SESSION['show_project'] == 0){
       <div class="card mb-3">
         <div class="card-body pb-4 pt-3">
           <form class="row g-3" id="projectFilterForm" autocomplete="off">
-            <div class="col-md-3 col-6">
-              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="開始月">開始月</label>
-              <input type="text" class="form-control form-control-sm" id="filterStartMonth" autocomplete="off">
-            </div>
-            <div class="col-md-3 col-6">
-              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="期限月">期限月</label>
-              <input type="text" class="form-control form-control-sm" id="filterEndMonth" autocomplete="off">
-            </div>
             <div class="col-md-3 col-6">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="優先度">優先度</label>
               <select class="form-select form-select-sm" id="filterPriority"></select>
@@ -71,9 +63,49 @@ if($_SESSION['show_project'] == 0){
                 <option value="overdue" data-i18n="期限切れ">期限切れ</option>
               </select>
             </div>
+            <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap">受注形態</label>
+              <select class="form-select form-select-sm" id="filterProjectOrderType">
+                <option value="">すべて</option>
+                <option value="contract">契約図</option>
+                <option value="new">新規</option>
+                <option value="edit">修正</option>
+                <option value="other">その他</option>
+              </select>
+            </div>
+            <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="チーム">チーム</label>
+              <select class="form-select form-select-sm" id="filterTeam">
+                <option value="">すべて</option>
+              </select>
+            </div>
+            <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="担当">担当</label>
+              <select class="form-select form-select-sm" id="filterTantou">
+                <option value="">すべて</option>
+                <option value="CAILY">CAILY</option>
+                <option value="GUIS">GUIS</option>
+              </select>
+            </div>
             <div class="col-md-4 col-12">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="キーワード">キーワード</label>
               <input type="text" class="form-control form-control-sm" id="filterKeyword" placeholder="検索...">
+            </div>
+            <div class="col-md-4 col-12 d-flex align-items-end">
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" id="filterMyProjects">
+                  <label class="form-check-label" for="filterMyProjects" data-i18n="私の案件">私の案件</label>
+                </div>
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" id="filterNoDates">
+                  <label class="form-check-label" for="filterNoDates">開始日・終了日未設定</label>
+                </div>
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" id="showInactiveSwitch">
+                  <label class="form-check-label small" for="showInactiveSwitch" data-i18n="完了・中止案件等も表示">完了・中止案件等も表示</label>
+                </div>
+              </div>
             </div>
             <div class="col-md-2 col-12 d-flex align-items-end">
               <button class="btn btn-sm btn-outline-primary w-100" id="filterReset" type="button">
@@ -84,7 +116,6 @@ if($_SESSION['show_project'] == 0){
         </div>
       </div>
     </div>
-     -->
     <div class="card">
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center">
@@ -108,8 +139,12 @@ if($_SESSION['show_project'] == 0){
                             {{ status.name }}
                         </button>
                     </div>
+                    
+                    <!-- Team Filter -->
+                    
                 </div>
             </div>
+            <div id="activeFilters" class="mb-2"></div>
             <div class="d-flex gap-2 align-items-center">
                 <!-- Date Range Controls -->
                 <div class="d-flex align-items-center gap-2 me-3">
@@ -150,6 +185,18 @@ if($_SESSION['show_project'] == 0){
                     <i class="fa fa-expand" v-if="!isFullscreen"></i>
                     <i class="fa fa-compress" v-if="isFullscreen"></i>
                 </button>
+                <div class="form-check ms-2">
+                    <input class="form-check-input" type="checkbox" id="toggleTaskText" checked>
+                    <label class="form-check-label small" for="toggleTaskText">案件名を表示</label>
+                </div>
+                <div class="form-check ms-2">
+                    <input class="form-check-input" type="checkbox" id="useCailyEndDate">
+                    <label class="form-check-label small" for="useCailyEndDate">終了日をCAILY納期で表示</label>
+                </div>
+                <div class="form-check ms-2">
+                    <input class="form-check-input" type="checkbox" id="useGuisEndDate">
+                    <label class="form-check-label small" for="useGuisEndDate">終了日をGUIS納期で表示</label>
+                </div>
             </div>
         </div>
         <div class="card-body p-0">

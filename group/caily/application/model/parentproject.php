@@ -285,6 +285,202 @@ class ParentProject extends ApplicationModel {
         }
     }
 
+    /**
+     * Parse request_date to datetime Y-m-d H:i:s (GMT+9 / Asia/Tokyo). Empty/invalid returns null.
+     * Supports: "Mon Jun 30 22:00:00 GMT+07:00 2025" (JS Date string → convert to JST),
+     * "2025/07/09" (Y/m/d), "7/9" (m/d), "07/09/2025" (m/d/Y).
+     */
+        private function parse_request_date_to_datetime($input) {
+            $input = trim($input ?? '');
+        if ($input === '') {
+            return null;
+        }
+        if (stripos($input, 'GMT') !== false) {
+            try {
+                $dt = new \DateTime($input);
+                $dt->setTimezone(new \DateTimeZone('Asia/Tokyo'));
+                return $dt->format('Y-m-d H:i:s');
+            } catch (\Exception $e) {
+                // fall through to slash parsing
+            }
+        }
+        $parts = preg_split('#\s*/\s*#', $input, -1, PREG_SPLIT_NO_EMPTY);
+        if (count($parts) === 3) {
+            $p0 = (int) $parts[0];
+            $p1 = (int) $parts[1];
+            $p2 = (int) $parts[2];
+            if (strlen(trim($parts[0])) === 4) {
+                $y = $p0;
+                $m = $p1;
+                $d = $p2;
+            } elseif (strlen(trim($parts[2])) === 4) {
+                $m = $p0;
+                $d = $p1;
+                $y = $p2;
+            } else {
+                $y = $p0;
+                $m = $p1;
+                $d = $p2;
+                if ($y < 100) {
+                    $y += 2000;
+                }
+            }
+            if ($y < 100) {
+                $y += 2000;
+            }
+            if ($m >= 1 && $m <= 12 && $d >= 1 && $d <= 31 && checkdate($m, $d, $y)) {
+                return sprintf('%04d-%02d-%02d 00:00:00', $y, $m, $d);
+            }
+        }
+        if (count($parts) === 2) {
+            $m = (int) $parts[0];
+            $d = (int) $parts[1];
+            $y = (int) date('Y');
+            if ($m >= 1 && $m <= 12 && $d >= 1 && $d <= 31 && checkdate($m, $d, $y)) {
+                return sprintf('%04d-%02d-%02d 00:00:00', $y, $m, $d);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Find parent_project by construction_number and customer_id. Returns row with id or null.
+     */
+    function get_by_construction_number_and_customer_id($construction_number, $customer_id) {
+        $construction_number = trim($construction_number ?? '');
+        $customer_id = intval($customer_id);
+        if ($construction_number === '' || $customer_id <= 0) {
+            return null;
+        }
+        $query = sprintf(
+            "SELECT id FROM %s WHERE TRIM(COALESCE(construction_number,'')) = '%s' AND customer_id = %d LIMIT 1",
+            $this->table,
+            $this->quote($construction_number),
+            $customer_id
+        );
+        return $this->fetchOne($query);
+    }
+
+    /**
+     * Public API (no login): insert or update parent_project.
+     * Params: customer_id, request_date, construction_number, project_name, scale, type1, request_type, status (default completed).
+     * Loads customer to get company_name, branch_name (branch), contact_name (name). If construction_number + customer_id exists then update, else insert.
+     */
+    function upsert_parent_project_public($params) {
+
+        
+        $hash = array(
+            'status' => 'error',
+            'message_code' => '',
+            'id' => null,
+        );
+        $customer_id = isset($params['customer_id']) ? intval($params['customer_id']) : 0;
+        $construction_number = isset($params['construction_number']) ? trim($params['construction_number']) : '';
+        if ($customer_id <= 0) {
+            $hash['message_code'] = 'customer_id is required';
+            return $hash;
+        }
+        if ($construction_number === '') {
+            $hash['message_code'] = 'construction_number is required';
+            return $hash;
+        }
+        require_once dirname(__FILE__) . '/customer.php';
+        $customerModel = new Customer();
+        $customerModel->connect();
+        
+        $customer = $customerModel->get_customer_by_id($customer_id);
+        $customerModel->close();
+        if (!$customer || empty($customer['company_name'])) {
+            $hash['message_code'] = 'customer not found';
+            return $hash;
+        }
+      
+        $company_name = isset($customer['company_name']) ? trim($customer['company_name']) : '';
+        $branch_name = isset($customer['branch']) ? trim($customer['branch']) : '';
+        $contact_name = isset($customer['name']) ? trim($customer['name']) : '';
+        $request_date = $this->parse_request_date_to_datetime(isset($params['request_date']) ? $params['request_date'] : '');
+        $project_name = isset($params['project_name']) ? trim($params['project_name']) : '';
+        $scale = isset($params['scale']) ? trim($params['scale']) : '';
+        $type1 = isset($params['type1']) ? trim($params['type1']) : '';
+        $request_type = isset($params['request_type']) ? trim($params['request_type']) : '';
+        $status = isset($params['status']) && trim($params['status'] ?? '') !== '' ? trim($params['status']) : 'completed';
+        $department_id = isset($params['department_id']) && $params['department_id'] !== '' && $params['department_id'] !== null
+            ? intval($params['department_id']) : 5;
+        $existing = $this->get_by_construction_number_and_customer_id($construction_number, $customer_id);
+       
+        if ($existing && !empty($existing['id'])) {
+            $data = array(
+                'guis_receiver' =>  'admin',
+                'company_name' => $company_name,
+                'branch_name' => $branch_name,
+                'contact_name' => $contact_name,
+                'customer_id' => $customer_id,
+                'construction_number' => $construction_number,
+                'project_name' => $project_name,
+                'scale' => $scale,
+                'type1' => $type1,
+                'request_type' => $request_type,
+                //'status' => $status,
+                //'department_id' => $department_id,
+                'updated_by' => 'admin',
+                'updated_at' => date('Y-m-d H:i:s'),
+            );
+            if ($request_date !== null) {
+                $data['request_date'] = $request_date;
+            }
+            $result = $this->query_update($data, array('id' => $existing['id']));
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'updated';
+                $hash['id'] = (int) $existing['id'];
+            } else {
+                $hash['message_code'] = 'update failed';
+            }
+            return $hash;
+        }
+        $gen = $this->generateProjectNumber();
+        $project_number = isset($gen['project_number']) ? $gen['project_number'] : '';
+        $data = array(
+            'guis_receiver' =>  'admin',
+            'company_name' => $company_name,
+            'branch_name' => $branch_name,
+            'contact_name' => $contact_name,
+            'customer_id' => $customer_id,
+            'construction_number' => $construction_number,
+            'project_name' => $project_name,
+            'scale' => $scale,
+            'type1' => $type1,
+            'request_type' => $request_type,
+            //'status' => $status,
+            'project_number' => $project_number,
+            'construction_branch' => '',
+            'type2' => '',
+            'type3' => '',
+            'requests' => '',
+            'materials' => '',
+            'structural_office' => '',
+            'notes' => '',
+            //'department_id' => $department_id,
+            'created_by' => 'admin',
+            'created_at' => date('Y-m-d H:i:s'),
+        );
+        if ($request_date !== null) {
+            $data['request_date'] = $request_date;
+        }
+       
+        $new_id = $this->query_insert($data);
+        if ($new_id) {
+            $hash['status'] = 'success';
+            $hash['message_code'] = 'created';
+            $hash['id'] = (int) $new_id;
+            $hash['request_date'] = $request_date;
+            $hash['request_date_original'] = isset($params['request_date']) ? $params['request_date'] : '';
+        } else {
+            $hash['message_code'] = 'insert failed';
+        }
+        return $hash;
+    }
+
     function updateStatus($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => '建物IDが指定されていません'];

@@ -71,14 +71,44 @@ if($_SESSION['show_project'] == 0){
                 <option value="overdue" data-i18n="期限切れ">期限切れ</option>
             </select>
             </div>
+            <div class="col-md-3 col-6">
+            <label class="form-label form-label-sm mb-0 text-nowrap">受注形態</label>
+            <select class="form-select form-select-sm" id="filterProjectOrderType">
+                <option value="">すべて</option>
+                <option value="contract">契約図</option>
+                <option value="new">新規</option>
+                <option value="edit">修正</option>
+                <option value="other">その他</option>
+            </select>
+            </div>
+            <div class="col-md-3 col-6">
+            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="チーム">チーム</label>
+            <select class="form-select form-select-sm" id="filterTeam">
+                <option value="">すべて</option>
+            </select>
+            </div>
+            <div class="col-md-3 col-6">
+            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="担当">担当</label>
+            <select class="form-select form-select-sm" id="filterTantou">
+                <option value="">すべて</option>
+                <option value="CAILY">CAILY</option>
+                <option value="GUIS">GUIS</option>
+            </select>
+            </div>
             <div class="col-md-4 col-12">
             <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="キーワード">キーワード</label>
             <input type="text" class="form-control form-control-sm" id="filterKeyword" placeholder="検索...">
             </div>
-            <div class="col-md-2 col-12 d-flex align-items-end">
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="filterMyProjects" v-model="filterMyProjects" @change="loadProjects">
-                <label class="form-check-label" for="filterMyProjects" data-i18n="私の案件">私の案件</label>
+            <div class="col-md-4 col-12 d-flex align-items-end">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="filterMyProjects" v-model="filterMyProjects" @change="loadProjects">
+                    <label class="form-check-label" for="filterMyProjects" data-i18n="私の案件">私の案件</label>
+                </div>
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="filterNoDates">
+                    <label class="form-check-label" for="filterNoDates">開始日・終了日未設定</label>
+                </div>
             </div>
             </div>
         </form>
@@ -150,7 +180,7 @@ if($_SESSION['show_project'] == 0){
             <!-- Active Filters Display -->
             <div id="activeFilters" class="mb-2"></div>
             <p class="small text-muted mb-2" id="projectTableScrollHint">
-                <i class="fa fa-info-circle me-1"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
+                <i class="fa fa-info-circle me-1"></i><span data-i18n="Spaceを押したままドラッグで表を横・縦スクロール">Spaceを押したままドラッグで表を横・縦スクロール</span>
             </p>
             <table id="projectTable" class="table table-striped">
                 
@@ -237,8 +267,7 @@ if($_SESSION['show_project'] == 0){
                         <button class="btn btn-secondary" @click="closeNoteModal"><span data-i18n="閉じる">閉じる</span></button>
                     </template>
                     <template v-else>
-                        <button class="btn btn-secondary" @click="isNoteEditMode = false" v-if="editingNote.id"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
-                        <button class="btn btn-secondary" @click="closeNoteModal" v-else><span data-i18n="キャンセル">キャンセル</span></button>
+                        <button class="btn btn-secondary" @click="closeNoteModal"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
                         <button class="btn btn-primary" @click="saveNote" :disabled="!(editingNote.content && editingNote.content.trim())">
                             <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
                         </button>
@@ -361,7 +390,15 @@ $view->footing();
     padding: 0.5rem 0.4rem!important;
 }
 
+/* Cột CAILY納期: nền xanh lá nhạt */
+#projectTable td.caily-nouki-column {
+    background-color: rgba(25, 135, 84, 0.15);
+}
 
+/* Cột 終了日: nền đen nhạt (xám nhạt) */
+#projectTable td.end-date-column {
+    background-color: rgba(0, 0, 0, 0.06);
+}
 
 /* Kadai Queue Container */
 .kadai-queue-container {
@@ -521,6 +558,35 @@ $view->footing();
     gap: 2px;
 }
 
+/* Highlight note being edited */
+#projectTable td.confirmation-notes-column .confirmation-note-item.editing-note {
+    border: 2px solid #007bff !important;
+    border-radius: 4px;
+    background-color: rgba(0, 123, 255, 0.1) !important;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+/* Empty notes cell styling */
+#projectTable td.confirmation-notes-column .empty-notes-cell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+#projectTable td.confirmation-notes-column .empty-notes-cell:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+    cursor: pointer;
+}
+
+#projectTable td.confirmation-notes-column .empty-notes-cell .add-note-icon {
+    font-size: 14px;
+}
+
 /* Row background colors based on status (70% lighter = 30% opacity) */
 #projectTable tbody tr.table-row-status-secondary {
     background-color: rgba(108, 117, 125, 0) !important;
@@ -612,6 +678,9 @@ $view->footing();
 .status-filter-btn.btn-danger.active::after,
 .status-filter-btn.btn-label-danger.active::after {
     background-color: #dc3545 !important;
+}
+.pagination{
+    justify-content: flex-end;
 }
 </style>
 

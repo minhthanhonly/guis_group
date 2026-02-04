@@ -10,7 +10,8 @@ var projectTable;
             if (typeof moment === 'undefined' || !moment.parseZone) return '';
             var m = moment.parseZone(s + '+09:00');
             if (!m.isValid()) return '';
-            return 'VN ' + m.clone().subtract(2, 'hours').format('HH:mm');
+            var vn = m.clone().subtract(2, 'hours');
+            return 'VN ' + vn.format('DD/MM/YYYY HH:mm');
         };
     }
     var isInitializingTable = false;
@@ -56,30 +57,29 @@ var projectTable;
     // Column definitions with mapping to DataTable column indices
     const COLUMN_DEFINITIONS = [
         { key: 'is_favorite', label: 'お気に入り', index: 0, defaultVisible: true },
-        { key: 'project_number', label: '案件番号', index: 1, defaultVisible: true },
-        // 確認必要メモ: cột thứ 3, mặc định ẩn
+        { key: 'id', label: 'ID', index: 1, defaultVisible: true },
         { key: 'confirmation_notes', label: '確認必要メモ', index: 2, defaultVisible: false },
-        { key: 'name', label: 'お施主様名', index: 3, defaultVisible: true },
-        { key: 'customer_info', label: '顧客情報', index: 4, defaultVisible: true },
-        { key: 'parent_construction_number', label: '工事番号', index: 5, defaultVisible: true },
-        { key: 'parent_scale', label: '規模', index: 6, defaultVisible: false },
-        { key: 'parent_type1', label: '種類1', index: 7, defaultVisible: false },
-        { key: 'parent_type2', label: '種類2', index: 8, defaultVisible: false },
-        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 9, defaultVisible: false },
-        // 担当・納期系
-        { key: 'tantou', label: '担当', index: 10, defaultVisible: true },
-        { key: 'caily_nouki', label: 'CAILY納期', index: 11, defaultVisible: true },
-        { key: 'guis_nouki', label: 'GUIS納期', index: 12, defaultVisible: false },
-        { key: 'project_order_type', label: '受注形態', index: 13, defaultVisible: true },
-        { key: 'manager', label: '管理', index: 14, defaultVisible: false },
-        { key: 'teams', label: 'チーム', index: 15, defaultVisible: true },
-        { key: 'members', label: 'メンバー', index: 16, defaultVisible: false },
-        { key: 'priority', label: '優先度', index: 17, defaultVisible: true },
-        { key: 'status', label: '案件状況', index: 18, defaultVisible: true },
-        { key: 'progress', label: '進捗率', index: 19, defaultVisible: true },
-        { key: 'start_date', label: '開始日', index: 20, defaultVisible: true },
-        { key: 'end_date', label: '終了日', index: 21, defaultVisible: true },
-        { key: 'amount', label: '総額', index: 22, defaultVisible: false }
+        { key: 'status', label: '案件状況', index: 3, defaultVisible: true },
+        { key: 'progress', label: '進捗率', index: 4, defaultVisible: true },
+        { key: 'tantou', label: '担当', index: 5, defaultVisible: false },
+        { key: 'manager', label: '管理', index: 6, defaultVisible: false },
+        { key: 'teams', label: 'チーム', index: 7, defaultVisible: true },
+        { key: 'members', label: 'メンバー', index: 8, defaultVisible: false },
+        { key: 'parent_construction_number', label: '工事番号', index: 9, defaultVisible: true },
+        { key: 'parent_branch_name', label: '支店名', index: 10, defaultVisible: true },
+        { key: 'name', label: 'お施主様名', index: 11, defaultVisible: true },
+        { key: 'parent_scale', label: '規模', index: 12, defaultVisible: false },
+        { key: 'parent_type1', label: '種類1', index: 13, defaultVisible: false },
+        { key: 'parent_type2', label: '種類2', index: 14, defaultVisible: false },
+        { key: 'start_date', label: '開始日', index: 15, defaultVisible: true },
+        { key: 'caily_nouki', label: 'CAILY納期', index: 16, defaultVisible: true },
+        { key: 'guis_nouki', label: 'GUIS納期', index: 17, defaultVisible: false },
+        { key: 'end_date', label: '終了日', index: 18, defaultVisible: true },
+        { key: 'project_order_type', label: '受注形態', index: 19, defaultVisible: true },
+        { key: 'priority', label: '優先度', index: 20, defaultVisible: true },
+        { key: 'amount', label: '総額', index: 21, defaultVisible: false },
+        { key: 'customer_info', label: '顧客情報', index: 22, defaultVisible: true },
+        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 23, defaultVisible: false }
     ];
     
     function escapeHtmlForNote(s) {
@@ -126,35 +126,132 @@ var projectTable;
             filterPriority: $('#filterPriority').val(),
             filterProgress: $('#filterProgress').val(),
             filterTimeLeft: $('#filterTimeLeft').val(),
+            filterProjectOrderType: $('#filterProjectOrderType').val(),
+            filterTeam: $('#filterTeam').val(),
+            filterTantou: $('#filterTantou').val(),
+            filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
             filterKeyword: $('#filterKeyword').val(),
             showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
-            myProjects: app.filterMyProjects ? 1 : 0
+            myProjects: app && app.filterMyProjects ? 1 : 0
         };
+        // Lưu thêm department hiện tại và status hiện tại để đồng bộ với URL
+        try {
+            if (app && app.selectedDepartment && app.selectedDepartment.id) {
+                filters.department_id = app.selectedDepartment.id;
+            }
+        } catch (e) {
+            console.warn('Failed to read selectedDepartment when saving list filters', e);
+        }
+        try {
+            if (app && app.selectedStatus && app.selectedStatus.key) {
+                filters.statusKey = app.selectedStatus.key;
+            } else {
+                filters.statusKey = '';
+            }
+        } catch (e) {
+            console.warn('Failed to read selectedStatus when saving list filters', e);
+        }
         localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+        updateUrlFromFilters(filters);
+    }
+
+    // Đọc filter từ URL (nếu có) và merge vào localStorage để share link
+    function applyFiltersFromUrlIfAny() {
+        if (typeof window === 'undefined') return;
+        const search = window.location.search || '';
+        if (!search || search.length <= 1) return;
+        const params = new URLSearchParams(search);
+        if (Array.from(params.keys()).length === 0) return;
+
+        let stored = {};
+        try {
+            stored = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        } catch (e) {
+            stored = {};
+        }
+        const merged = Object.assign({}, stored);
+
+        function getBool(name) {
+            return params.get(name) === '1' ? 1 : 0;
+        }
+
+        if (params.has('filterStartMonth')) merged.filterStartMonth = params.get('filterStartMonth') || '';
+        if (params.has('filterEndMonth')) merged.filterEndMonth = params.get('filterEndMonth') || '';
+        if (params.has('filterPriority')) merged.filterPriority = params.get('filterPriority') || '';
+        if (params.has('filterProgress')) merged.filterProgress = params.get('filterProgress') || '';
+        if (params.has('filterTimeLeft')) merged.filterTimeLeft = params.get('filterTimeLeft') || '';
+        if (params.has('filterProjectOrderType')) merged.filterProjectOrderType = params.get('filterProjectOrderType') || '';
+        if (params.has('filterTeam')) merged.filterTeam = params.get('filterTeam') || '';
+        if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
+        if (params.has('filterNoDates')) merged.filterNoDates = getBool('filterNoDates');
+        if (params.has('filterKeyword')) merged.filterKeyword = params.get('filterKeyword') || '';
+        if (params.has('showInactive')) merged.showInactive = getBool('showInactive');
+        if (params.has('my_projects')) merged.myProjects = getBool('my_projects');
+        if (params.has('status')) merged.statusKey = params.get('status') || '';
+
+        // Department id để auto chọn đúng 部署 khi mở link
+        if (params.has('department_id')) {
+            const depId = parseInt(params.get('department_id'), 10);
+            if (!isNaN(depId) && depId > 0) {
+                merged.department_id = depId;
+                try {
+                    localStorage.setItem(SELECTED_DEPARTMENT_KEY, JSON.stringify({ id: depId }));
+                } catch (e) {
+                    console.warn('Failed to save department from URL into localStorage (list)', e);
+                }
+            }
+        }
+
+        localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(merged));
     }
 
     function loadFiltersFromLocalStorage() {
-        const filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        let filters = {};
+        try {
+            filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        } catch (e) {
+            console.warn('Failed to parse project list filters, clearing', e);
+            localStorage.removeItem(FILTER_STORAGE_KEY);
+            filters = {};
+        }
         if (filters.filterStartMonth !== undefined) $('#filterStartMonth').val(filters.filterStartMonth);
         if (filters.filterEndMonth !== undefined) $('#filterEndMonth').val(filters.filterEndMonth);
         if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
         if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
         if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
+        if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
+        if (filters.filterTeam !== undefined) $('#filterTeam').val(filters.filterTeam);
+        if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
+        if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
         if (filters.filterKeyword !== undefined) $('#filterKeyword').val(filters.filterKeyword);
         if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
         if (filters.myProjects !== undefined && app) app.filterMyProjects = filters.myProjects == 1;
     }
 
     function getFiltersFromLocalStorage() {
-        const filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        let filters = {};
+        try {
+            filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        } catch (e) {
+            console.warn('Failed to parse project list filters, clearing', e);
+            localStorage.removeItem(FILTER_STORAGE_KEY);
+            filters = {};
+        }
         return {
             startMonth: filters.filterStartMonth || '',
             endMonth: filters.filterEndMonth || '',
             priority: filters.filterPriority || '',
             progress: filters.filterProgress || '',
             timeLeft: filters.filterTimeLeft || '',
+            projectOrderType: filters.filterProjectOrderType || '',
+            team: filters.filterTeam || '',
+            tantou: filters.filterTantou || '',
+            noDates: filters.filterNoDates == 1,
             keyword: filters.filterKeyword || '',
-            showInactive: filters.showInactive == 1
+            showInactive: filters.showInactive == 1,
+            myProjects: filters.myProjects == 1,
+            statusKey: filters.statusKey || '',
+            department_id: filters.department_id || null
         };
     }
 
@@ -168,6 +265,12 @@ var projectTable;
             (!filters.priority || filters.priority.trim() === '') &&
             (!filters.progress || filters.progress.trim() === '') &&
             (!filters.timeLeft || filters.timeLeft.trim() === '') &&
+            (!filters.projectOrderType || filters.projectOrderType.trim() === '') &&
+            (!filters.team || filters.team.trim() === '') &&
+            (!filters.tantou || filters.tantou.trim() === '') &&
+            !filters.noDates &&
+            !filters.myProjects &&
+            !filters.showInactive &&
             (!filters.keyword || filters.keyword.trim() === '')
         ) {
             $('#activeFilters').html('');
@@ -176,6 +279,10 @@ var projectTable;
         if (filters.keyword && filters.keyword.trim() !== '') {
             badges.push(`<span class="badge bg-label-info me-1" >キーワード: ${filters.keyword}</span>`);
         } else {
+            // Nếu có status hiện tại (từ Vue), hiển thị đầu tiên
+            if (app && app.selectedStatus && app.selectedStatus.name) {
+                badges.push(`<span class="badge bg-label-info me-1">案件状況: ${app.selectedStatus.name}</span>`);
+            }
             if (filters.startMonth && filters.startMonth.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1" >開始月: ${filters.startMonth}</span>`);
             }
@@ -185,6 +292,43 @@ var projectTable;
             if (filters.priority && filters.priority.trim() !== '') {
                 const label = (window.priorities||[]).find(p=>p.key===filters.priority)?.name || filters.priority;
                 badges.push(`<span class="badge bg-label-info me-1" >優先度: ${label}</span>`);
+            }
+            if (filters.projectOrderType && filters.projectOrderType.trim() !== '') {
+                let label = '';
+                switch (filters.projectOrderType) {
+                    case 'contract':
+                        label = '契約図';
+                        break;
+                    case 'new':
+                        label = '新規';
+                        break;
+                    case 'edit':
+                        label = '修正';
+                        break;
+                    case 'other':
+                        label = 'その他';
+                        break;
+                    default:
+                        label = filters.projectOrderType;
+                }
+                badges.push(`<span class="badge bg-label-info me-1" >受注形態: ${label}</span>`);
+            }
+            if (filters.team && filters.team.trim() !== '') {
+                const teamName = teamIdToName[filters.team] || filters.team;
+                badges.push(`<span class="badge bg-label-info me-1" >チーム: ${teamName}</span>`);
+            }
+            if (filters.tantou && filters.tantou.trim() !== '') {
+                let label = filters.tantou;
+                badges.push(`<span class="badge bg-label-info me-1" >担当: ${label}</span>`);
+            }
+            if (filters.noDates) {
+                badges.push(`<span class="badge bg-label-info me-1" >開始日・終了日未設定</span>`);
+            }
+            if (filters.myProjects) {
+                badges.push(`<span class="badge bg-label-info me-1">私の案件</span>`);
+            }
+            if (filters.showInactive) {
+                badges.push(`<span class="badge bg-label-info me-1">完了・中止案件等も表示</span>`);
             }
             if (filters.progress && filters.progress.trim() !== '') {
                 let label = '';
@@ -211,6 +355,40 @@ var projectTable;
         } else {
            // $('#activeFilters').html(`<span class="text-muted small" >すべて表示中</span>`);
         }
+    }
+
+    // Đồng bộ filters -> query string cho project list
+    function updateUrlFromFilters(filters) {
+        if (typeof window === 'undefined' || !window.history || !window.history.replaceState) {
+            return;
+        }
+        const params = new URLSearchParams(window.location.search || '');
+        function setOrDelete(key, val) {
+            if (val === undefined || val === null || val === '' || val === 0) {
+                params.delete(key);
+            } else {
+                params.set(key, String(val));
+            }
+        }
+        setOrDelete('filterStartMonth', filters.filterStartMonth);
+        setOrDelete('filterEndMonth', filters.filterEndMonth);
+        setOrDelete('filterPriority', filters.filterPriority);
+        setOrDelete('filterProgress', filters.filterProgress);
+        setOrDelete('filterTimeLeft', filters.filterTimeLeft);
+        setOrDelete('filterProjectOrderType', filters.filterProjectOrderType);
+        setOrDelete('filterTeam', filters.filterTeam);
+        setOrDelete('filterTantou', filters.filterTantou);
+        setOrDelete('filterNoDates', filters.filterNoDates ? 1 : '');
+        setOrDelete('filterKeyword', filters.filterKeyword);
+        setOrDelete('showInactive', filters.showInactive ? 1 : '');
+        setOrDelete('my_projects', filters.myProjects ? 1 : '');
+        setOrDelete('status', filters.statusKey);
+        setOrDelete('department_id', filters.department_id);
+
+        const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+        const query = params.toString();
+        const newUrl = query ? `${baseUrl}?${query}` : baseUrl;
+        window.history.replaceState(null, '', newUrl);
     }
 
     // Load team id->name map for display in table
@@ -252,6 +430,7 @@ var projectTable;
         // Set flag to prevent multiple initializations
         isInitializingTable = true;
         
+        // Load team map (id -> name) for display in table (badge, tooltip, ...)
         await loadTeamMap();
         
         // Khôi phục filter từ localStorage trước khi load projectTable
@@ -271,6 +450,10 @@ var projectTable;
                     const filterPriority = $('#filterPriority').val();
                     const filterProgress = $('#filterProgress').val();
                     const filterTimeLeft = $('#filterTimeLeft').val();
+                    const filterProjectOrderType = $('#filterProjectOrderType').val();
+                    const filterTeam = $('#filterTeam').val();
+                    const filterTantou = $('#filterTantou').val();
+                    const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
                     const filterKeyword = $('#filterKeyword').val();
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
                     const myProjects = $('#filterMyProjects').is(':checked') ? 1 : 0;
@@ -291,6 +474,10 @@ var projectTable;
                         filterPriority,
                         filterProgress,
                         filterTimeLeft,
+                        filterProjectOrderType,
+                        filterTeam,
+                        filterTantou,
+                        filterNoDates,
                         my_projects: myProjects,
                         filterKeyword,
                         showInactive,
@@ -304,7 +491,9 @@ var projectTable;
             paging: true,
             info: true,
             searching: false,
+            dom: '<"row"<"col"l><"col text-end"p>>rti',
             scrollX: true,
+            scrollY: Math.round(window.innerHeight * 0.8) + 'px',
             columns: [
                 { 
                     data: 'is_favorite',
@@ -331,28 +520,38 @@ var projectTable;
                     width: '70px'
                 },
                 { 
-                    data: 'project_number',
+                    data: 'id',
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-center">
                                     <a href="detail.php?id=${row.id}" class="text-decoration-none"><span class="project-id badge bg-primary">${data || '-'}</span></a>
                                 </div>`;
                     },
-                    title: '<span data-i18n="案件番号">案件番号</span>',
+                    title: '<span data-i18n="ID">ID</span>',
+                    width: '40px'
                 },
-                
                 { 
                     data: 'confirmation_notes',
                     width: '240px',
                     className: 'confirmation-notes-column',
                     render: function(data, type, row) {
                         if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
+                            return `<div class="empty-notes-cell" data-project-id="${row.id}">
+                                        <span class="text-muted empty-notes-text">-</span>
+                                        <span class="add-note-icon d-none" title="メモを追加" style="cursor: pointer;">
+                                            <i class="fa fa-pencil-alt text-primary"></i>
+                                        </span>
+                                    </div>`;
                         }
                         // Hiển thị toàn bộ nội dung (có thể nhiều ghi chú), giữ nguyên xuống dòng
                         // Định dạng data: "noteId::content | noteId::content | ..."
                         const notes = data.split(' | ').filter(note => note.trim() !== '');
                         if (notes.length === 0) {
-                            return '<span class="text-muted">-</span>';
+                            return `<div class="empty-notes-cell" data-project-id="${row.id}">
+                                        <span class="text-muted empty-notes-text">-</span>
+                                        <span class="add-note-icon d-none" title="メモを追加" style="cursor: pointer;">
+                                            <i class="fa fa-pencil-alt text-primary"></i>
+                                        </span>
+                                    </div>`;
                         }
                         const html = notes.map(note => {
                             const raw = note.trim();
@@ -363,8 +562,9 @@ var projectTable;
                                 id = raw.substring(0, delimiterIndex);
                                 text = raw.substring(delimiterIndex + 2);
                             }
+                            const isEditing = window.app && window.app.currentEditingNoteId === id;
                             return `
-                                <div class="confirmation-note-item mb-1" ${id ? `data-note-id="${id}"` : ''}>
+                                <div class="confirmation-note-item mb-1 ${isEditing ? 'editing-note' : ''}" ${id ? `data-note-id="${id}"` : ''}>
                                     <span class="note-text small" style="white-space: pre-wrap;">${escapeHtmlForNote(text)}</span>
                                     <span class="note-actions d-none ms-1">
                                         <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
@@ -387,93 +587,33 @@ var projectTable;
                     title: '<span data-i18n="確認必要メモ">確認必要メモ</span>',
                     orderable: false
                 },
-                { 
-                    data: 'name',
-                    width: '150px',
+                {
+                    data: 'status',
                     render: function(data, type, row) {
-                        return `<div class="d-flex align-items-start justify-content-start flex-column">
-                                    <a href="detail.php?id=${row.id}" class="text-decoration-none small">${data}</a>
-                                </div>`;
+                        // Return original data value for sorting
+                        if (type === 'sort' || type === 'type') {
+                            return data || '';
+                        }
+                        // Return HTML for display
+                        const status = statuses.find(status => status.key === data);
+                        return `<span class="badge bg-${status?.color || 'secondary'}">${status?.name || data}</span>`;
                     },
-                    title: '<span data-i18n="お施主様名">お施主様名</span>'
+                    title: '<span data-i18n="案件状況">案件状況</span>',
+                    orderable: false,
                 },
-                { 
-                    data: 'name',
-                    width: '150px',
-                    render: function(data, type, row) {
-                        return `<div class="d-flex align-items-start justify-content-start flex-column">
-                                    <div class="mt-1">
-                                        <small class="text-muted d-block">${row.company_name.replace('株式会社', '').replace('有限会社', '') || '-'}</small>
-                                        <small class="text-muted d-block">${row.customer_name || '-'}</small>
+                {
+                    data: 'progress',
+                    render: function(data) {
+                        const color = data === 100 ? 'success' : 'primary';
+                        return `<div class="progress" style="width: 100px;">
+                                    <div class="progress-bar bg-${color}" role="progressbar" 
+                                            style="width: ${data}%" aria-valuenow="${data}" 
+                                            aria-valuemin="0" aria-valuemax="100">
                                     </div>
-                                </div>`;
+                                </div>
+                                <small class="text-muted">${data}%</small>`;
                     },
-                    title: '<span data-i18n="顧客情報">顧客情報</span>'
-                },
-                { 
-                    width: '60px',
-                    data: 'parent_construction_number',
-                    render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
-                        }
-                        return `<span class="text-nowrap small">${data}</span>`;
-                    },
-                    title: '<span data-i18n="工事番号">工事番号</span>'
-                },
-                { 
-                    data: 'parent_scale',
-                    render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
-                        }
-                        return `<span class="text-nowrap small">${data}</span>`;
-                    },
-                    title: '<span data-i18n="規模">規模</span>',
-                    visible: false
-                },
-                { 
-                    data: 'parent_type1',
-                    render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
-                        }
-                        // Handle comma-separated values
-                        if (typeof data === 'string' && data.includes(',')) {
-                            const items = data.split(',').map(item => item.trim()).filter(item => item);
-                            return items.map(item => `<span class="badge bg-info me-1">${item}</span>`).join('');
-                        }
-                        return `<span class="badge bg-info small">${data}</span>`;
-                    },
-                    title: '<span data-i18n="種類1">種類1</span>',
-                    visible: false
-                },
-                { 
-                    data: 'parent_type2',
-                    render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
-                        }
-                        // Handle comma-separated values
-                        if (typeof data === 'string' && data.includes(',')) {
-                            const items = data.split(',').map(item => item.trim()).filter(item => item);
-                            return items.map(item => `<span class="badge bg-info small me-1">${item}</span>`).join('');
-                        }
-                        return `<span class="badge bg-info small">${data}</span>`;
-                    },
-                    title: '<span data-i18n="種類2">種類2</span>',
-                    visible: false
-                },
-                { 
-                    data: 'parent_guis_receiver',
-                    render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
-                        }
-                        return `<span class="text-nowrap small">${data}</span>`;
-                    },
-                    title: '<span data-i18n="GUIS 受付者">GUIS 受付者</span>',
-                    visible: false
+                    title: '<span data-i18n="進捗率">進捗率</span>'
                 },
                 { 
                     data: 'tantou',
@@ -492,129 +632,6 @@ var projectTable;
                     },
                     title: '<span data-i18n="担当">担当</span>',
                     visible: false
-                },
-                {
-                    data: 'caily_nouki',
-                    render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
-                        }
-                        var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
-                        var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-                        var attrs = ' data-time="' + rawEsc + '"';
-                        if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
-                        const timeRemaining = getTimeRemaining(data, row.status);
-                        const dateStr = moment(data).format('M月D日 H:mm');
-                        if (timeRemaining) {
-                            const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
-                            const titleText = timeRemaining.isOverdue
-                                ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('期限を超過しています') : '期限を超過しています')
-                                : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
-                            return '<div class="d-flex flex-column">' +
-                                        '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
-                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1" ' +
-                                             'title="' + titleText.replace(/"/g, '&quot;') + '" ' +
-                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
-                                             timeRemaining.text +
-                                        '</span>' +
-                                    '</div>';
-                        } else {
-                            return '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>';
-                        }
-                    },
-                    title: '<span data-i18n="CAILY納期">CAILY納期</span>',
-                    visible: false
-                },
-                {
-                    data: 'guis_nouki',
-                    render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
-                        }
-                        var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
-                        var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-                        var attrs = ' data-time="' + rawEsc + '"';
-                        if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
-                        const timeRemaining = getTimeRemaining(data, row.status);
-                        const dateStr = moment(data).format('M月D日 H:mm');
-                        if (timeRemaining) {
-                            const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
-                            const titleText = timeRemaining.isOverdue
-                                ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('期限を超過しています') : '期限を超過しています')
-                                : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
-                            return '<div class="d-flex flex-column">' +
-                                        '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
-                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1" ' +
-                                             'title="' + titleText.replace(/"/g, '&quot;') + '" ' +
-                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
-                                             timeRemaining.text +
-                                        '</span>' +
-                                    '</div>';
-                        } else {
-                            return '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>';
-                        }
-                    },
-                    title: '<span data-i18n="GUIS納期">GUIS納期</span>',
-                    visible: false
-                },
-                { 
-                    data: 'project_order_type',
-                    render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
-                        }
-                        
-                        // Helper function to get badge class
-                        const getOrderTypeBadgeClass = function(orderType) {
-                            const type = orderType.trim().toLowerCase();
-                            switch (type) {
-                                case '修正':
-                                    return 'bg-warning'; // Yellow for edit
-                                case '新規':
-                                    return 'bg-primary'; // Blue for new
-                                default:
-                                    return 'bg-info'; // Gray for unknown types
-                            }
-                        };
-                        
-                        // Handle comma-separated string
-                        if (typeof data === 'string') {
-                            const items = data.split(',').map(item => item.trim()).filter(item => item);
-                            if (items.length > 0) {
-                                return items.map(item => {
-                                    const badgeClass = getOrderTypeBadgeClass(item);
-                                    return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
-                                }).join('');
-                            }
-                        }
-                        
-                        // Handle array format
-                        if (Array.isArray(data)) {
-                            return data.map(item => {
-                                const badgeClass = getOrderTypeBadgeClass(item);
-                                return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
-                            }).join('');
-                        }
-                        
-                        // Try to parse JSON if it's a string
-                        try {
-                            const decoded = decodeHtmlEntities(data);
-                            const arr = JSON.parse(decoded);
-                            if (Array.isArray(arr)) {
-                                return arr.map(item => {
-                                    const badgeClass = getOrderTypeBadgeClass(item);
-                                    return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
-                                }).join('');
-                            }
-                        } catch (e) {
-                            // If parsing fails, treat as single item
-                            const badgeClass = getOrderTypeBadgeClass(data);
-                            return `<span class="badge ${badgeClass}">${data}</span>`;
-                        }
-                        
-                        return '<span class="text-muted">-</span>';
-                    },
-                    title: '<span data-i18n="受注形態">受注形態</span>'
                 },
                 {
                     data: 'manager_id',
@@ -710,46 +727,80 @@ var projectTable;
                     },
                     title: '<span data-i18n="メンバー">メンバー</span>'
                 },
-                {
-                    data: 'priority',
+                { 
+                    width: '60px',
+                    data: 'parent_construction_number',
                     render: function(data, type, row) {
-                        // Return original data value for sorting
-                        if (type === 'sort' || type === 'type') {
-                            return data || '';
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
                         }
-                        // Return HTML for display
-                        const priority = priorities.find(priority => priority.key === data);
-                        return `<span class="badge bg-${priority?.color || 'secondary'}">${priority?.name || data}</span>`;
+                        return `<span class="text-nowrap small">${data}</span>`;
                     },
-                    title: '<span data-i18n="優先度">優先度</span>'
+                    title: '<span data-i18n="工事番号">工事番号</span>'
                 },
-                {
-                    data: 'status',
+                { 
+                    width: '40px',
+                    data: 'parent_branch_name',
                     render: function(data, type, row) {
-                        // Return original data value for sorting
-                        if (type === 'sort' || type === 'type') {
-                            return data || '';
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
                         }
-                        // Return HTML for display
-                        const status = statuses.find(status => status.key === data);
-                        return `<span class="badge bg-${status?.color || 'secondary'}">${status?.name || data}</span>`;
+                        return `<span class="text-nowrap small">${data}</span>`;
                     },
-                    title: '<span data-i18n="案件状況">案件状況</span>',
-                    orderable: false,
+                    title: '<span data-i18n="支店名">支店名</span>'
                 },
-                {
-                    data: 'progress',
-                    render: function(data) {
-                        const color = data === 100 ? 'success' : 'primary';
-                        return `<div class="progress" style="width: 100px;">
-                                    <div class="progress-bar bg-${color}" role="progressbar" 
-                                            style="width: ${data}%" aria-valuenow="${data}" 
-                                            aria-valuemin="0" aria-valuemax="100">
-                                    </div>
-                                </div>
-                                <small class="text-muted">${data}%</small>`;
+                { 
+                    data: 'name',
+                    width: '150px',
+                    render: function(data, type, row) {
+                        return `<div class="d-flex align-items-start justify-content-start flex-column">
+                                    <a href="detail.php?id=${row.id}" class="text-decoration-none small">${data}</a>
+                                </div>`;
                     },
-                    title: '<span data-i18n="進捗率">進捗率</span>'
+                    title: '<span data-i18n="お施主様名">お施主様名</span>'
+                },
+                { 
+                    data: 'parent_scale',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        return `<span class="text-nowrap small">${data}</span>`;
+                    },
+                    title: '<span data-i18n="規模">規模</span>',
+                    visible: false
+                },
+                { 
+                    data: 'parent_type1',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        // Handle comma-separated values
+                        if (typeof data === 'string' && data.includes(',')) {
+                            const items = data.split(',').map(item => item.trim()).filter(item => item);
+                            return items.map(item => `<span class="badge bg-info me-1">${item}</span>`).join('');
+                        }
+                        return `<span class="badge bg-info small">${data}</span>`;
+                    },
+                    title: '<span data-i18n="種類1">種類1</span>',
+                    visible: false
+                },
+                { 
+                    data: 'parent_type2',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        // Handle comma-separated values
+                        if (typeof data === 'string' && data.includes(',')) {
+                            const items = data.split(',').map(item => item.trim()).filter(item => item);
+                            return items.map(item => `<span class="badge bg-info small me-1">${item}</span>`).join('');
+                        }
+                        return `<span class="badge bg-info small">${data}</span>`;
+                    },
+                    title: '<span data-i18n="種類2">種類2</span>',
+                    visible: false
                 },
                 { data: 'start_date', title: '<span data-i18n="開始日">開始日</span>', render: function(data) {
                     if(data) {
@@ -757,11 +808,76 @@ var projectTable;
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
                         var attrs = ' data-time="' + rawEsc + '"';
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
-                        return '<span class="text-muted small text-nowrap"' + attrs + '>' + moment(data).format('YYYY年M月D日 H:mm') + '</span>';
+                        return '<span class="text-muted small text-nowrap"' + attrs + '>' + moment(data).format('M月D日 H:mm') + '</span>';
                     } else {
                         return '-';
                     }
                 }},
+                {
+                    data: 'caily_nouki',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
+                        var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                        var attrs = ' data-time="' + rawEsc + '"';
+                        if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
+                        const timeRemaining = getTimeRemaining(data, row.status);
+                        const dateStr = moment(data).format('M月D日 H:mm');
+                        if (timeRemaining) {
+                            const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
+                            const titleText = timeRemaining.isOverdue
+                                ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('期限を超過しています') : '期限を超過しています')
+                                : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
+                            return '<div class="d-flex flex-column">' +
+                                        '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
+                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1" ' +
+                                             'title="' + titleText.replace(/"/g, '&quot;') + '" ' +
+                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
+                                             timeRemaining.text +
+                                        '</span>' +
+                                    '</div>';
+                        } else {
+                            return '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>';
+                        }
+                    },
+                    title: '<span data-i18n="CAILY納期">CAILY納期</span>',
+                    className: 'caily-nouki-column',
+                    visible: false
+                },
+                {
+                    data: 'guis_nouki',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
+                        var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                        var attrs = ' data-time="' + rawEsc + '"';
+                        if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
+                        const timeRemaining = getTimeRemaining(data, row.status);
+                        const dateStr = moment(data).format('M月D日 H:mm');
+                        if (timeRemaining) {
+                            const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
+                            const titleText = timeRemaining.isOverdue
+                                ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('期限を超過しています') : '期限を超過しています')
+                                : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
+                            return '<div class="d-flex flex-column">' +
+                                        '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
+                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1" ' +
+                                             'title="' + titleText.replace(/"/g, '&quot;') + '" ' +
+                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
+                                             timeRemaining.text +
+                                        '</span>' +
+                                    '</div>';
+                        } else {
+                            return '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>';
+                        }
+                    },
+                    title: '<span data-i18n="GUIS納期">GUIS納期</span>',
+                    visible: false
+                },
                 { data: 'end_date', title: '<span data-i18n="終了日">終了日</span>', render: function(data, type, row) {
                     if(data) {
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
@@ -769,7 +885,7 @@ var projectTable;
                         var attrs = ' data-time="' + rawEsc + '"';
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
                         const timeRemaining = getTimeRemaining(data, row.status);
-                        const dateStr = moment(data).format('YYYY年M月D日 H:mm');
+                        const dateStr = moment(data).format('M月D日 H:mm');
                         
                         if (timeRemaining) {
                             const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
@@ -790,7 +906,79 @@ var projectTable;
                     } else {
                         return '-';
                     }
-                }},
+                }, className: 'end-date-column'},
+                { 
+                    data: 'project_order_type',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        
+                        // Helper function to get badge class
+                        const getOrderTypeBadgeClass = function(orderType) {
+                            const type = orderType.trim().toLowerCase();
+                            switch (type) {
+                                case '修正':
+                                    return 'bg-warning'; // Yellow for edit
+                                case '新規':
+                                    return 'bg-primary'; // Blue for new
+                                default:
+                                    return 'bg-info'; // Gray for unknown types
+                            }
+                        };
+                        
+                        // Handle comma-separated string
+                        if (typeof data === 'string') {
+                            const items = data.split(',').map(item => item.trim()).filter(item => item);
+                            if (items.length > 0) {
+                                return items.map(item => {
+                                    const badgeClass = getOrderTypeBadgeClass(item);
+                                    return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
+                                }).join('');
+                            }
+                        }
+                        
+                        // Handle array format
+                        if (Array.isArray(data)) {
+                            return data.map(item => {
+                                const badgeClass = getOrderTypeBadgeClass(item);
+                                return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
+                            }).join('');
+                        }
+                        
+                        // Try to parse JSON if it's a string
+                        try {
+                            const decoded = decodeHtmlEntities(data);
+                            const arr = JSON.parse(decoded);
+                            if (Array.isArray(arr)) {
+                                return arr.map(item => {
+                                    const badgeClass = getOrderTypeBadgeClass(item);
+                                    return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
+                                }).join('');
+                            }
+                        } catch (e) {
+                            // If parsing fails, treat as single item
+                            const badgeClass = getOrderTypeBadgeClass(data);
+                            return `<span class="badge ${badgeClass}">${data}</span>`;
+                        }
+                        
+                        return '<span class="text-muted">-</span>';
+                    },
+                    title: '<span data-i18n="受注形態">受注形態</span>'
+                },
+                {
+                    data: 'priority',
+                    render: function(data, type, row) {
+                        // Return original data value for sorting
+                        if (type === 'sort' || type === 'type') {
+                            return data || '';
+                        }
+                        // Return HTML for display
+                        const priority = priorities.find(priority => priority.key === data);
+                        return `<span class="badge bg-${priority?.color || 'secondary'}">${priority?.name || data}</span>`;
+                    },
+                    title: '<span data-i18n="優先度">優先度</span>'
+                },
                 {
                     data: 'amount',
                     render: function(data, type, row) {
@@ -802,9 +990,33 @@ var projectTable;
                         return '<span class="text-nowrap">¥' + parseInt(val).toLocaleString() + '</span>';
                     },
                     title: '<span data-i18n="総額">総額</span>'
+                },
+                { 
+                    data: 'name',
+                    width: '150px',
+                    render: function(data, type, row) {
+                        return `<div class="d-flex align-items-start justify-content-start flex-column">
+                                    <div class="mt-1">
+                                        <small class="text-muted d-block">${row.company_name.replace('株式会社', '').replace('有限会社', '') || '-'}</small>
+                                        <small class="text-muted d-block">${row.customer_name || '-'}</small>
+                                    </div>
+                                </div>`;
+                    },
+                    title: '<span data-i18n="顧客情報">顧客情報</span>'
+                },
+                { 
+                    data: 'parent_guis_receiver',
+                    render: function(data, type, row) {
+                        if (!data || data === '') {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        return `<span class="text-nowrap small">${data}</span>`;
+                    },
+                    title: '<span data-i18n="GUIS 受付者">GUIS 受付者</span>',
+                    visible: false
                 }
             ],
-            order: [[21, 'desc']],
+            order: [[COLUMN_DEFINITIONS.find(col => col.key === 'end_date').index, 'asc']],
            
             pageLength: 50,
             ordering: true,
@@ -851,22 +1063,25 @@ var projectTable;
             });
         });
 
-        // Giữ Space + kéo chuột để scroll ngang bảng
+        // Giữ Space + kéo chuột để scroll ngang và dọc bảng
         (function() {
             var spaceHeld = false;
             var dragging = false;
             var startX = 0;
+            var startY = 0;
             var startScrollLeft = 0;
+            var startScrollTop = 0;
             function getScrollContainer() {
                 var el = document.getElementById('projectTable');
                 if (!el) return null;
-                var wrapper = el.closest('.dataTables_scrollBody');
+                var wrapper = el.closest('.dataTables_scrollBody') || el.closest('.dt-scroll-body');
                 if (wrapper) return wrapper;
                 var parent = el.parentElement;
                 while (parent && parent !== document.body) {
-                    if (parent.scrollWidth > parent.clientWidth && getComputedStyle(parent).overflowX !== 'visible') {
-                        return parent;
-                    }
+                    var style = getComputedStyle(parent);
+                    var scrollsX = parent.scrollWidth > parent.clientWidth && style.overflowX !== 'visible';
+                    var scrollsY = parent.scrollHeight > parent.clientHeight && style.overflowY !== 'visible';
+                    if (scrollsX || scrollsY) return parent;
                     parent = parent.parentElement;
                 }
                 return el.parentElement;
@@ -892,13 +1107,16 @@ var projectTable;
                 e.preventDefault();
                 dragging = true;
                 startX = e.clientX;
+                startY = e.clientY;
                 startScrollLeft = container.scrollLeft;
+                startScrollTop = container.scrollTop;
             });
             $(document).on('mousemove', function(e) {
                 if (!dragging) return;
                 var container = getScrollContainer();
                 if (!container) return;
                 container.scrollLeft = startScrollLeft + (startX - e.clientX);
+                container.scrollTop = startScrollTop + (startY - e.clientY);
             });
             $(document).on('mouseup', function() {
                 dragging = false;
@@ -990,6 +1208,49 @@ var projectTable;
             $(this).find('.note-actions').removeClass('d-none');
         }).on('mouseleave', 'td.confirmation-notes-column .confirmation-note-item', function() {
             $(this).find('.note-actions').addClass('d-none');
+        });
+
+        // Hover to show/hide add note icon for empty cells
+        $('#projectTable tbody').on('mouseenter', 'td.confirmation-notes-column .empty-notes-cell', function() {
+            $(this).find('.add-note-icon').removeClass('d-none');
+            $(this).find('.empty-notes-text').addClass('d-none');
+        }).on('mouseleave', 'td.confirmation-notes-column .empty-notes-cell', function() {
+            $(this).find('.add-note-icon').addClass('d-none');
+            $(this).find('.empty-notes-text').removeClass('d-none');
+        });
+
+        // Click add note icon to create new note
+        $('#projectTable tbody').on('click', '.empty-notes-cell .add-note-icon', function(e) {
+            e.stopPropagation();
+            const projectId = $(this).closest('.empty-notes-cell').data('project-id');
+            if (projectId && window.app && app.openNoteModalFromList) {
+                app.openNoteModalFromList(projectId, null);
+            }
+        });
+
+        // Click note item to edit the corresponding note
+        $('#projectTable tbody').on('click', '.confirmation-note-item', function(e) {
+            // Don't trigger if clicking on action buttons
+            if ($(e.target).closest('.note-actions').length > 0) {
+                return;
+            }
+            
+            e.stopPropagation();
+            const $item = $(this);
+            if (!projectTable) return;
+            const rowData = projectTable.row($item.closest('tr')).data();
+            if (!rowData) return;
+            const projectId = rowData.id;
+            const noteId = $item.data('note-id');
+            const noteText = $item.find('.note-text').text();
+            if (window.app) {
+                if (noteId && app.openNoteModalFromListById) {
+                    app.openNoteModalFromListById(projectId, noteId);
+                } else if (app.openNoteModalFromList) {
+                    // Fallback cho dữ liệu cũ nếu không có note-id
+                    app.openNoteModalFromList(projectId, noteText);
+                }
+            }
         });
 
         // Click pencil to edit the corresponding note
@@ -1317,7 +1578,7 @@ var projectTable;
         // Gọi khi filter thay đổi hoặc khi load trang
         renderActiveFilters();
         // Gọi lại renderActiveFilters mỗi khi filter thay đổi
-        $('#filterStartMonth, #filterEndMonth, #filterPriority, #filterProgress, #filterTimeLeft, #filterKeyword, #showInactiveSwitch').on('change input', function() {
+        $('#filterStartMonth, #filterEndMonth, #filterPriority, #filterProgress, #filterTimeLeft, #filterProjectOrderType, #filterTeam, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
            renderActiveFilters();
         });
         let timer = null;
@@ -1336,6 +1597,10 @@ var projectTable;
             $('#filterPriority').val('');
             $('#filterProgress').val('');
             $('#filterTimeLeft').val('');
+            $('#filterProjectOrderType').val('');
+            $('#filterTeam').val('');
+            $('#filterTantou').val('');
+            $('#filterNoDates').prop('checked', false);
             $('#filterKeyword').val('');
             $('#showInactiveSwitch').prop('checked', true); // hoặc giá trị mặc định
             // Reset favorites filter
@@ -1426,25 +1691,41 @@ var projectTable;
             const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             
+            let text = '';
+            
             if (days > 0) {
-                return {
-                    text: formatUnit(days, dayLabel, true),
-                    class: 'bg-danger',
-                    isOverdue: true
-                };
+                if (isVietnamese) {
+                    text = `${days} ${dayLabel}`;
+                    if (hours > 0) {
+                        text += ` ${hours} ${hourLabel}`;
+                    }
+                    text += ` ${overdueLabel}`;
+                } else {
+                    text = `${days}${dayLabel}`;
+                    if (hours > 0) {
+                        text += `${hours}時`;
+                    }
+                    text += `${overdueLabel}`;
+                }
             } else if (hours > 0) {
-                return {
-                    text: formatUnit(hours, hourLabel, true),
-                    class: 'bg-danger',
-                    isOverdue: true
-                };
+                if (isVietnamese) {
+                    text = `${hours} ${hourLabel} ${overdueLabel}`;
+                } else {
+                    text = `${hours}時${overdueLabel}`;
+                }
             } else {
-                return {
-                    text: formatUnit(minutes, minuteLabel, true),
-                    class: 'bg-danger',
-                    isOverdue: true
-                };
+                if (isVietnamese) {
+                    text = `${minutes} ${minuteLabel} ${overdueLabel}`;
+                } else {
+                    text = `${minutes}分${overdueLabel}`;
+                }
             }
+            
+            return {
+                text: text,
+                class: 'bg-danger',
+                isOverdue: true
+            };
         } else {
             // Còn thời gian
             const diff = end.diff(now);
@@ -1452,25 +1733,43 @@ var projectTable;
             const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             
+            let text = '+';
+            let class_name = 'bg-label-info';
+            
             if (days > 0) {
-                return {
-                    text: `+${formatUnit(days, dayLabel)}`,
-                    class: 'bg-label-info',
-                    isOverdue: false
-                };
-            } else if (hours > 0) {
-                return {
-                    text: `+${formatUnit(hours, hourLabel)}`,
-                    class: hours <= 24 ? 'bg-label-warning' : 'bg-label-info',
-                    isOverdue: false
-                };
-            } else {
-                return {
-                    text: `+${formatUnit(minutes, minuteLabel)}`,
-                    class: 'bg-label-warning',
-                    isOverdue: false
-                };
+                if (isVietnamese) {
+                    text += `${days} ${dayLabel}`;
+                    if (hours > 0) {
+                        text += ` ${hours} ${hourLabel}`;
+                    }
+                } else {
+                    text += `${days}${dayLabel}`;
+                    if (hours > 0) {
+                        text += `${hours}時`;
+                    }
                 }
+                class_name = 'bg-label-info';
+            } else if (hours > 0) {
+                if (isVietnamese) {
+                    text += `${hours} ${hourLabel}`;
+                } else {
+                    text += `${hours}時`;
+                }
+                class_name = hours <= 24 ? 'bg-label-warning' : 'bg-label-info';
+            } else {
+                if (isVietnamese) {
+                    text += `${minutes} ${minuteLabel}`;
+                } else {
+                    text += `${minutes}分`;
+                }
+                class_name = 'bg-label-warning';
+            }
+            
+            return {
+                text: text,
+                class: class_name,
+                isOverdue: false
+            };
         }
     }
 
@@ -1484,7 +1783,7 @@ var projectTable;
         if (daysDiff < 0) return null;
         if (daysDiff === 0) {
             const t = translateText('start_today');
-            return { text: (t && t !== 'start_today') ? t : '開始今日', class: 'bg-label-info' };
+            return { text: (t && t !== 'start_today') ? t : '開始今日', class: 'bg-label-danger' };
         }
         if (daysDiff === 1) {
             const t = translateText('start_tomorrow');
@@ -1559,6 +1858,7 @@ var projectTable;
                 notes: [],
                 showNoteModal: false,
                 isNoteEditMode: false,
+                currentEditingNoteId: null, // Track which note is being edited
                 editingNote: {
                     id: null,
                     title: '',
@@ -1589,9 +1889,21 @@ var projectTable;
         },
         mounted() {
             // Load filter state from localStorage
-            const filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+            let filters = {};
+            try {
+                filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+            } catch (e) {
+                filters = {};
+            }
             if (filters.myProjects !== undefined) {
                 this.filterMyProjects = filters.myProjects == 1;
+            }
+            // Khôi phục status đã lưu (nếu có) để hiển thị trong 適用中のフィルター
+            if (filters.statusKey) {
+                const st = statuses.find(s => s.key === filters.statusKey);
+                if (st) {
+                    this.selectedStatus = st;
+                }
             }
             
             // Load column visibility
@@ -2029,6 +2341,13 @@ var projectTable;
                 this.currentNoteProjectId = projectId;
                 this.showNoteModal = true;
                 this.isNoteEditMode = true;
+                this.currentEditingNoteId = noteId; // Track which note is being edited
+                
+                // Refresh table to show highlight
+                if (projectTable) {
+                    projectTable.draw(false);
+                }
+                
                 // Reset editing note
                 this.editingNote = {
                     id: null,
@@ -2056,6 +2375,7 @@ var projectTable;
                 this.currentNoteProjectId = projectId;
                 this.showNoteModal = true;
                 this.isNoteEditMode = true;
+                this.currentEditingNoteId = null; // No specific note ID for fallback mode
                 // Reset editing note
                 this.editingNote = {
                     id: null,
@@ -2087,6 +2407,13 @@ var projectTable;
             closeNoteModal() {
                 this.showNoteModal = false;
                 this.isNoteEditMode = false;
+                this.currentEditingNoteId = null; // Clear editing note tracking
+                
+                // Refresh table to remove highlight
+                if (projectTable) {
+                    projectTable.draw(false);
+                }
+                
                 this.editingNote = {
                     id: null,
                     title: '',
@@ -2207,6 +2534,25 @@ var projectTable;
                             name: team.name
                         }));
                     }
+                    // Populate team filter options based on this.teams (only current department)
+                    const $teamFilter = $('#filterTeam');
+                    if ($teamFilter && $teamFilter.length) {
+                        const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+                        const savedTeam = saved.filterTeam || '';
+                        $teamFilter.empty();
+                        $teamFilter.append('<option value="">すべて</option>');
+                        // Option: 未割り当て (chưa phân công team)
+                        const noneSelected = savedTeam && savedTeam === 'none' ? ' selected' : '';
+                        $teamFilter.append('<option value="none"' + noneSelected + '>未割り当て</option>');
+                        (this.teams || []).forEach(team => {
+                            if (team.id != null) {
+                                const id = String(team.id);
+                                const name = team.name || id;
+                                const selected = savedTeam && String(savedTeam) === id ? ' selected' : '';
+                                $teamFilter.append('<option value="' + id + '"' + selected + '>' + name + '</option>');
+                            }
+                        });
+                    }
                 });
                 this.loadUsers().then(() => {
                     if (this.membersTagifyInstance) {
@@ -2231,6 +2577,11 @@ var projectTable;
             filterProjectByStatus(status) {
                 this.selectedStatus = status;
                 this.loadProjects();
+                // Lưu trạng thái status + các filter khác vào localStorage và cập nhật URL / badge
+                if (typeof saveFiltersToLocalStorage === 'function') {
+                    saveFiltersToLocalStorage();
+                }
+                renderActiveFilters();
             },
             onFavoritesFilterChange() {
                 const isChecked = $('#filterFavoritesOnly').is(':checked');

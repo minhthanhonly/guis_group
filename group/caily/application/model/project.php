@@ -97,7 +97,7 @@ class Project extends ApplicationModel {
         if ($hasKeyword) {
             $kw = $this->escape($_GET['filterKeyword']);
             $whereArr[] = "(p.name LIKE '%$kw%' 
-            OR p.project_number LIKE '%$kw%' 
+            OR p.id LIKE '%$kw%' 
             OR p.description LIKE '%$kw%' 
             OR p.tags LIKE '%$kw%'
             OR c.company_name LIKE '%$kw%'
@@ -150,6 +150,45 @@ class Project extends ApplicationModel {
                 } else if (is_numeric($val)) {
                     $whereArr[] = "p.end_date >= NOW() AND p.end_date <= DATE_ADD(NOW(), INTERVAL ".$this->quote($val)." DAY) AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
                 }
+            }
+            // Filter by project_order_type (契約図 / 新規 / 修正 / その他)
+            if (isset($_GET['filterProjectOrderType']) && $_GET['filterProjectOrderType'] !== '') {
+                $type = $_GET['filterProjectOrderType'];
+                if ($type === 'contract') {
+                    $whereArr[] = "p.project_order_type LIKE '%契約図%'";
+                } elseif ($type === 'new') {
+                    // 新規: chứa 実施図 hoặc 新規, nhưng KHÔNG chứa 修正 (loại các case như '新規修正')
+                    $whereArr[] = "((p.project_order_type LIKE '%実施図%' OR p.project_order_type LIKE '%新規%') 
+                        AND p.project_order_type NOT LIKE '%修正%')";
+                } elseif ($type === 'edit') {
+                    $whereArr[] = "p.project_order_type LIKE '%修正%'";
+                } elseif ($type === 'other') {
+                    $whereArr[] = "(p.project_order_type IS NOT NULL AND p.project_order_type != '' 
+                        AND p.project_order_type NOT LIKE '%契約図%' 
+                        AND p.project_order_type NOT LIKE '%実施図%' 
+                        AND p.project_order_type NOT LIKE '%新規%' 
+                        AND p.project_order_type NOT LIKE '%修正%')";
+                }
+            }
+            // Filter by team (teams column chứa id team, dạng comma-separated)
+            if (isset($_GET['filterTeam']) && $_GET['filterTeam'] !== '') {
+                $filterTeam = $_GET['filterTeam'];
+                if ($filterTeam === 'none') {
+                    // Projects without any team assigned
+                    $whereArr[] = "(p.teams IS NULL OR p.teams = '' )";
+                } else {
+                    $teamId = $this->quote($filterTeam);
+                    $whereArr[] = "FIND_IN_SET('".$teamId."', p.teams)";
+                }
+            }
+            // Filter by tantou (担当: CAILY / GUIS)
+            if (isset($_GET['filterTantou']) && $_GET['filterTantou'] !== '') {
+                $tantou = $this->escape($_GET['filterTantou']);
+                $whereArr[] = "p.tantou = '".$tantou."'";
+            }
+            // Filter projects without start_date or end_date
+            if (isset($_GET['filterNoDates']) && $_GET['filterNoDates'] === '1') {
+                $whereArr[] = "(p.start_date IS NULL OR p.end_date IS NULL)";
             }
             // Điều kiện mặc định: nếu không có status và không bật showInactive thì chỉ hiển thị active
             if (!$hasStatus && !$showInactive) {
@@ -235,7 +274,7 @@ class Project extends ApplicationModel {
             "SELECT p.*, d.name as department_name,
             c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
             CONCAT(c.name, ' ', c.title) as customer_name,
-            pp.company_name as parent_company_name, pp.contact_name as parent_contact_name, pp.construction_number as parent_construction_number,
+            pp.company_name as parent_company_name, pp.contact_name as parent_contact_name, pp.construction_number as parent_construction_number, pp.branch_name as parent_branch_name,
             pp.scale as parent_scale, pp.type1 as parent_type1, pp.type2 as parent_type2, pp.guis_receiver as parent_guis_receiver,
             CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite,
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
@@ -340,8 +379,9 @@ class Project extends ApplicationModel {
 
     function listForGantt() {
         $whereArr = [];
-        // Add permission check
+        // Add permission check + "my projects" filter
         $user_id = $_SESSION['id'];
+        $myProjects = isset($_GET['my_projects']) && $_GET['my_projects'] == '1';
         $is_department_manager = false;
         if (isset($_GET['department_id'])) {
             $department_id = $_GET['department_id'];
@@ -351,7 +391,18 @@ class Project extends ApplicationModel {
                 $department_id);
             $is_department_manager = $this->fetchOne($query)['count'] > 0;
         }
-        if ($_SESSION['authority'] != 'administrator' && !$is_department_manager) {
+        // Nếu bật "私の案件" thì luôn chỉ lấy dự án do mình tạo hoặc là member
+        // Nếu không bật, thì chỉ non-admin, non-manager mới bị giới hạn như cũ
+        if ($myProjects) {
+            $whereArr[] = sprintf(
+                "(p.created_by = %d OR EXISTS (
+                    SELECT 1 FROM " . DB_PREFIX . "project_members pm 
+                    WHERE pm.project_id = p.id AND pm.user_id = %d
+                ))",
+                $user_id,
+                $user_id
+            );
+        } elseif ($_SESSION['authority'] != 'administrator' && !$is_department_manager) {
             $whereArr[] = sprintf(
                 "(p.created_by = %d OR EXISTS (
                     SELECT 1 FROM " . DB_PREFIX . "project_members pm 
@@ -364,9 +415,21 @@ class Project extends ApplicationModel {
         if (isset($_GET['department_id'])) {
             $whereArr[] = sprintf("p.department_id = %d", intval($_GET['department_id']));
         }
+        // Filter by team_id if provided
+        if (isset($_GET['team_id']) && $_GET['team_id'] !== '') {
+            $team_id = intval($_GET['team_id']);
+            $whereArr[] = sprintf("FIND_IN_SET(%d, p.teams) > 0", $team_id);
+        }
+        // Status filter + "完了・中止案件等も表示" (showInactive)
+        $showInactive = isset($_GET['showInactive']) && $_GET['showInactive'] === '1';
         if (isset($_GET['status'])) {
             if ($_GET['status'] == 'all') {
-                $whereArr[] = "p.status != 'deleted'";
+                if ($showInactive) {
+                    $whereArr[] = "p.status != 'deleted'";
+                } else {
+                    // Ẩn completed / cancelled khi không bật showInactive
+                    $whereArr[] = "p.status NOT IN ('deleted','completed','cancelled')";
+                }
             } else if ($_GET['status'] == 'active') {
                 $whereArr[] = "p.status NOT IN ('deleted', 'draft', 'completed', 'cancelled')";
             } else {
@@ -375,24 +438,22 @@ class Project extends ApplicationModel {
         } else {
             $whereArr[] = "p.status != 'deleted'";
         }
-        // --- Advanced Filters ---
+        // --- Advanced Filters (same semantics as project list, without start/end month) ---
         $hasKeyword = isset($_GET['filterKeyword']) && $_GET['filterKeyword'] !== '';
         if ($hasKeyword) {
             $kw = $this->escape($_GET['filterKeyword']);
             $whereArr[] = "(p.name LIKE '%$kw%' 
-                OR p.project_number LIKE '%$kw%' 
                 OR p.description LIKE '%$kw%' 
+                OR p.id LIKE '%$kw%' 
                 OR p.tags LIKE '%$kw%'
+                OR c.company_name_kana LIKE '%$kw%'
+                OR c.name_kana LIKE '%$kw%'
+                OR pp.construction_number LIKE '%$kw%'
+                OR pp.scale LIKE '%$kw%'
+                OR pp.type1 LIKE '%$kw%'
+                OR pp.type2 LIKE '%$kw%'
                 OR c.name LIKE '%$kw%')";
         } else {
-            if (isset($_GET['filterStartMonth']) && $_GET['filterStartMonth'] !== '') {
-                $month = $this->escape($_GET['filterStartMonth']);
-                $whereArr[] = "DATE_FORMAT(p.start_date, '%Y-%m') = '$month'";
-            }
-            if (isset($_GET['filterEndMonth']) && $_GET['filterEndMonth'] !== '') {
-                $month = $this->escape($_GET['filterEndMonth']);
-                $whereArr[] = "DATE_FORMAT(p.end_date, '%Y-%m') = '$month'";
-            }
             if (isset($_GET['filterPriority']) && $_GET['filterPriority'] !== '') {
                 $priority = $this->escape($_GET['filterPriority']);
                 $whereArr[] = "p.priority = '$priority'";
@@ -415,6 +476,43 @@ class Project extends ApplicationModel {
                     $whereArr[] = "p.end_date >= NOW() AND p.end_date <= DATE_ADD(NOW(), INTERVAL ".$this->quote($val)." DAY) AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
                 }
             }
+            // Filter by project_order_type (契約図 / 新規 / 修正 / その他)
+            if (isset($_GET['filterProjectOrderType']) && $_GET['filterProjectOrderType'] !== '') {
+                $type = $_GET['filterProjectOrderType'];
+                if ($type === 'contract') {
+                    $whereArr[] = "p.project_order_type LIKE '%契約図%'";
+                } elseif ($type === 'new') {
+                    $whereArr[] = "((p.project_order_type LIKE '%実施図%' OR p.project_order_type LIKE '%新規%') 
+                        AND p.project_order_type NOT LIKE '%修正%')";
+                } elseif ($type === 'edit') {
+                    $whereArr[] = "p.project_order_type LIKE '%修正%'";
+                } elseif ($type === 'other') {
+                    $whereArr[] = "(p.project_order_type IS NOT NULL AND p.project_order_type != '' 
+                        AND p.project_order_type NOT LIKE '%契約図%' 
+                        AND p.project_order_type NOT LIKE '%実施図%' 
+                        AND p.project_order_type NOT LIKE '%新規%' 
+                        AND p.project_order_type NOT LIKE '%修正%')";
+                }
+            }
+            // Filter by team (teams column chứa id team, dạng comma-separated) - advanced filter
+            if (isset($_GET['filterTeam']) && $_GET['filterTeam'] !== '') {
+                $filterTeam = $_GET['filterTeam'];
+                if ($filterTeam === 'none') {
+                    $whereArr[] = "(p.teams IS NULL OR p.teams = '' )";
+                } else {
+                    $teamId = $this->quote($filterTeam);
+                    $whereArr[] = "FIND_IN_SET('".$teamId."', p.teams)";
+                }
+            }
+            // Filter by tantou (担当: CAILY / GUIS)
+            if (isset($_GET['filterTantou']) && $_GET['filterTantou'] !== '') {
+                $tantou = $this->escape($_GET['filterTantou']);
+                $whereArr[] = "p.tantou = '".$tantou."'";
+            }
+            // Filter projects without start_date or end_date
+            if (isset($_GET['filterNoDates']) && $_GET['filterNoDates'] === '1') {
+                $whereArr[] = "(p.start_date IS NULL OR p.end_date IS NULL)";
+            }
         }
         $where = implode(" AND ", $whereArr);
         if (!empty($where)) {
@@ -423,10 +521,12 @@ class Project extends ApplicationModel {
         // Get data for Gantt chart (all projects, no pagination)
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name as company_name, c.category_id as category_id, c.department as branch_name,
+            c.branch as branch_name,
+            c.name as contact_name, c.company_name as company_name, c.category_id as category_id,
             CONCAT(c.name, ' ', c.title) as customer_name,
             CONCAT_WS(' ', NULLIF(pp.type1, ''), NULLIF(pp.type2, '')) as building_type,
             pp.scale as building_size,
+            pp.construction_number as construction_number,
             (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
@@ -3648,6 +3748,264 @@ class Project extends ApplicationModel {
         // Format lại số, ví dụ: PRJ-001 hoặc chỉ 001 nếu không có prefix
         $project_number = $prefix . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
         return $project_number;
+    }
+
+    /**
+     * Generate project_number for a child project based on parent_project.
+     * Format: [parent_project.project_number]-01, -02, ...
+     * @param int $parent_project_id
+     * @return string
+     */
+    function generateProjectNumberForParent($parent_project_id) {
+        $parent_project_id = intval($parent_project_id);
+        if ($parent_project_id <= 0) {
+            return 'P-01';
+        }
+        $parent = $this->fetchOne(sprintf(
+            "SELECT project_number FROM " . DB_PREFIX . "parent_projects WHERE id = %d LIMIT 1",
+            $parent_project_id
+        ));
+        $parent_number = isset($parent['project_number']) ? trim($parent['project_number']) : '';
+        if ($parent_number === '') {
+            return 'P-01';
+        }
+        $like_pattern = str_replace(array('%', '_'), array('\\%', '\\_'), $parent_number) . '-%';
+        $this->table = DB_PREFIX . 'projects';
+        $query = sprintf(
+            "SELECT project_number FROM " . DB_PREFIX . "projects WHERE parent_project_id = %d AND project_number LIKE '%s'",
+            $parent_project_id,
+            $this->quote($like_pattern)
+        );
+        $result = $this->fetchAll($query);
+        $maxNumber = 0;
+        foreach ($result as $row) {
+            if (!empty($row['project_number'])) {
+                $suffix = substr($row['project_number'], strlen($parent_number) + 1);
+                if (preg_match('/^(\d+)$/', trim($suffix), $matches)) {
+                    $num = intval($matches[1]);
+                    if ($num > $maxNumber) {
+                        $maxNumber = $num;
+                    }
+                }
+            }
+        }
+        $nextNumber = $maxNumber + 1;
+        return $parent_number . '-' . str_pad($nextNumber, 2, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Parse date input to datetime Y-m-d H:i:s (GMT+9 / Asia/Tokyo). Same logic as ParentProject::parse_request_date_to_datetime.
+     * Supports: "Mon Jun 30 22:00:00 GMT+07:00 2025" (JS Date → JST), "2025/07/09" (Y/m/d), "7/9" (m/d), "07/09/2025" (m/d/Y).
+     */
+    private function parse_date_to_datetime($input, $year) {
+        $input = trim($input ?? '');
+        if ($input === '') {
+            return null;
+        }
+        if (stripos($input, 'GMT') !== false) {
+            try {
+                $dt = new \DateTime($input);
+                $dt->setTimezone(new \DateTimeZone('Asia/Tokyo'));
+                return $dt->format('Y-m-d H:i:s');
+            } catch (\Exception $e) {
+                // fall through to slash parsing
+            }
+        }
+        $parts = preg_split('#\s*/\s*#', $input, -1, PREG_SPLIT_NO_EMPTY);
+        if (count($parts) === 3) {
+            $p0 = (int) $parts[0];
+            $p1 = (int) $parts[1];
+            $p2 = (int) $parts[2];
+            if (strlen(trim($parts[0])) === 4) {
+                $y = $p0;
+                $m = $p1;
+                $d = $p2;
+            } elseif (strlen(trim($parts[2])) === 4) {
+                $m = $p0;
+                $d = $p1;
+                $y = $p2;
+            } else {
+                $y = $p0;
+                $m = $p1;
+                $d = $p2;
+                if ($y < 100) {
+                    $y += 2000;
+                }
+            }
+            if ($y < 100) {
+                $y += 2000;
+            }
+            if ($m >= 1 && $m <= 12 && $d >= 1 && $d <= 31 && checkdate($m, $d, $y)) {
+                return sprintf('%04d-%02d-%02d 00:00:00', $y, $m, $d);
+            }
+        }
+        if (count($parts) === 2) {
+            $m = (int) $parts[0];
+            $d = (int) $parts[1];
+            $y = (int) $year;
+            if ($m >= 1 && $m <= 12 && $d >= 1 && $d <= 31 && checkdate($m, $d, $y)) {
+                return sprintf('%04d-%02d-%02d 00:00:00', $y, $m, $d);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Find project by name, customer_id, project_order_type. Returns row with id or null.
+     */
+    function get_by_name_customer_order_type($name, $customer_id, $project_order_type, $end_date) {
+        $name = trim($name ?? '');
+        $customer_id = intval($customer_id);
+        $project_order_type = trim($project_order_type ?? '');
+        if ($name === '') {
+            return null;
+        }
+        $query = sprintf(
+            "SELECT id FROM %s WHERE TRIM(name) = '%s' AND customer_id = %d AND TRIM(COALESCE(project_order_type,'')) = '%s'",
+            $this->table,
+            $this->quote($name),
+            $customer_id,
+            $this->quote($project_order_type)
+        );
+        if ($end_date !== null) {
+            $query .= sprintf(
+                " AND end_date = '%s'",
+                $this->quote($end_date)
+            );
+        }
+        $query .= " LIMIT 1";
+        return $this->fetchOne($query);
+    }
+
+    /**
+     * Public API (no login): insert or update child project.
+     * Params: parent_project_id, name, status (default completed), start_date, end_date, tantou (CAILY), caily_nouki, guis_nouki, created_by (admin), progress, project_order_type, department_id (default 5), customer_id.
+     * If name + customer_id + project_order_type exists then update, else insert. On insert generate project_number via generateProjectNumberForParent(parent_project_id).
+     */
+    function upsert_project_public($params) {
+        $hash = array('status' => 'error', 'message_code' => '', 'id' => null);
+        $name = isset($params['name']) ? trim($params['name']) : '';
+        $customer_id = isset($params['customer_id']) ? intval($params['customer_id']) : 0;
+        $project_order_type = isset($params['project_order_type']) ? trim($params['project_order_type']) : '';
+        if ($name === '') {
+            $hash['message_code'] = 'name is required';
+            return $hash;
+        }
+        $parent_project_id = isset($params['parent_project_id']) ? intval($params['parent_project_id']) : 0;
+        if ($parent_project_id <= 0) {
+            $hash['message_code'] = 'parent_project_id is required';
+            return $hash;
+        }
+       
+        $status = isset($params['status']) && trim($params['status'] ?? '') !== '' ? trim($params['status']) : 'completed';
+        $department_id = isset($params['department_id']) && $params['department_id'] !== '' && $params['department_id'] !== null
+            ? intval($params['department_id']) : 5;
+        $progress = isset($params['progress']) && $params['progress'] !== '' && $params['progress'] !== null
+            ? intval($params['progress']) : 0;
+        $tantou = (isset($params['tantou']) && in_array(trim($params['tantou']), ['CAILY', 'GUIS'], true)) ? trim($params['tantou']) : 'CAILY';
+        $created_by = 'admin';
+        $amount = (isset($params['amount']) && $params['amount'] !== '' && $params['amount'] !== null)
+            ? floatval($params['amount']) : 0;
+        $description = isset($params['description']) ? trim($params['description']) : '';
+        $year = date('Y');
+
+       
+        $start_date = $this->parse_date_to_datetime(isset($params['start_date']) ? $params['start_date'] : '', $year);
+        
+        $end_date = $this->parse_date_to_datetime(isset($params['end_date']) ? $params['end_date'] : '', $year);
+        $caily_nouki = $this->parse_date_to_datetime(isset($params['caily_nouki']) ? $params['caily_nouki'] : '', $year);
+        $guis_nouki = $this->parse_date_to_datetime(isset($params['guis_nouki']) ? $params['guis_nouki'] : '', $year);
+       
+       
+        $existing = $this->get_by_name_customer_order_type($name, $customer_id, $project_order_type, $end_date);
+        
+        
+        if ($existing && !empty($existing['id'])) {
+            $data = array(
+                'name' => $name,
+                'description' => $description,
+                'status' => $status,
+                'tantou' => $tantou,
+                'progress' => $progress,
+                'project_order_type' => $project_order_type,
+                'department_id' => $department_id,
+                'amount' => $amount,
+                'updated_by' => $created_by,
+                'updated_at' => date('Y-m-d H:i:s'),
+            );
+            if ($parent_project_id > 0) {
+                $data['parent_project_id'] = $parent_project_id;
+            }
+            if ($customer_id > 0) {
+                $data['customer_id'] = $customer_id;
+            }
+            if ($start_date !== null) {
+                $data['start_date'] = $start_date;
+            }
+            if ($end_date !== null) {
+                $data['end_date'] = $end_date;
+            }
+            if ($caily_nouki !== null) {
+                $data['caily_nouki'] = $caily_nouki;
+            }
+            if ($guis_nouki !== null) {
+                $data['guis_nouki'] = $guis_nouki;
+            }
+            $result = $this->query_update($data, array('id' => $existing['id']));
+            if ($result) {
+                $hash['status'] = 'success';
+                $hash['message_code'] = 'updated';
+                $hash['id'] = (int) $existing['id'];
+            } else {
+                $hash['message_code'] = 'update failed';
+            }
+            return $hash;
+        }
+        $project_number = $this->generateProjectNumberForParent($parent_project_id);
+        $data = array(
+            'project_number' => $project_number,
+            'name' => $name,
+            'description' => $description,
+            'status' => $status,
+            'priority' => 'medium',
+            'department_id' => $department_id,
+            'progress' => $progress,
+            'project_order_type' => $project_order_type,
+            'tantou' => $tantou,
+            'created_by' => $created_by,
+            'created_at' => date('Y-m-d H:i:s'),
+            'is_kadai' => 0,
+            'amount' => $amount,
+            'estimate_status' => '未発行',
+            'invoice_status' => '未発行',
+        );
+        if ($parent_project_id > 0) {
+            $data['parent_project_id'] = $parent_project_id;
+        }
+        if ($customer_id > 0) {
+            $data['customer_id'] = $customer_id;
+        }
+        if ($start_date !== null) {
+            $data['start_date'] = $start_date;
+        }
+        if ($end_date !== null) {
+            $data['end_date'] = $end_date;
+        }
+        if ($caily_nouki !== null) {
+            $data['caily_nouki'] = $caily_nouki;
+        }
+        if ($guis_nouki !== null) {
+            $data['guis_nouki'] = $guis_nouki;
+        }
+        $new_id = $this->query_insert($data);
+        if ($new_id) {
+            $hash['status'] = 'success';
+            $hash['message_code'] = 'created';
+            $hash['id'] = (int) $new_id;
+        } else {
+            $hash['message_code'] = 'insert failed';
+        }
+        return $hash;
     }
 
     /**

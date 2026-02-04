@@ -86,58 +86,360 @@ $(document).ready(function() {
         $priority.append('<option value="' + p.key + '">' + p.name + '</option>');
     });
 
-    // Khởi tạo flatpickr dạng tháng (month picker) cho filterStartMonth và filterEndMonth
-    if (window.flatpickr && window.monthSelectPlugin) {
-        $('#filterStartMonth').flatpickr({
-            locale: 'ja',
-            plugins: [new monthSelectPlugin({
-                shorthand: true,
-                dateFormat: 'Y-m',
-                altFormat: 'Y年m月',
-            })]
-        });
-        $('#filterEndMonth').flatpickr({
-            locale: 'ja',
-            plugins: [new monthSelectPlugin({
-                shorthand: true,
-                dateFormat: 'Y-m',
-                altFormat: 'Y年m月',
-            })]
-        });
-    }
-
     // LocalStorage filter state
     const FILTER_STORAGE_KEY = 'projectGanttFilters';
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment'; // Dùng chung với project-list.js
     function saveFiltersToLocalStorage() {
         const filters = {
-            filterStartMonth: $('#filterStartMonth').val(),
-            filterEndMonth: $('#filterEndMonth').val(),
             filterPriority: $('#filterPriority').val(),
             filterProgress: $('#filterProgress').val(),
             filterTimeLeft: $('#filterTimeLeft').val(),
+            filterProjectOrderType: $('#filterProjectOrderType').val(),
+            filterTeam: $('#filterTeam').val(),
+            filterTantou: $('#filterTantou').val(),
+            filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
+            showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
+            myProjects: $('#filterMyProjects').is(':checked') ? 1 : 0,
+            showTaskText: $('#toggleTaskText').is(':checked') ? 1 : 0,
+            useCailyEndDate: $('#useCailyEndDate').is(':checked') ? 1 : 0,
+            useGuisEndDate: $('#useGuisEndDate').is(':checked') ? 1 : 0,
             filterKeyword: $('#filterKeyword').val(),
         };
+        // Lưu thêm trạng thái status đang chọn (header buttons)
+        try {
+            if (window.ganttApp && window.ganttApp.selectedStatus && window.ganttApp.selectedStatus.key) {
+                filters.statusKey = window.ganttApp.selectedStatus.key;
+            } else {
+                // 'all' hoặc chưa chọn gì -> lưu rỗng
+                filters.statusKey = '';
+            }
+        } catch (e) {
+            console.warn('Failed to read selectedStatus when saving filters', e);
+        }
+        // Lưu thêm department hiện tại để chia sẻ qua URL
+        try {
+            if (window.ganttApp && window.ganttApp.selectedDepartment && window.ganttApp.selectedDepartment.id) {
+                filters.department_id = window.ganttApp.selectedDepartment.id;
+            }
+        } catch (e) {
+            console.warn('Failed to read selectedDepartment when saving filters', e);
+        }
         localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+        // Cập nhật query string trên URL để có thể share link
+        updateUrlFromFilters(filters);
     }
     function loadFiltersFromLocalStorage() {
-        const filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
-        if (filters.filterStartMonth !== undefined) $('#filterStartMonth').val(filters.filterStartMonth);
-        if (filters.filterEndMonth !== undefined) $('#filterEndMonth').val(filters.filterEndMonth);
+        let filters = {};
+        try {
+            filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        } catch (e) {
+            console.warn('Failed to parse Gantt filter state, clearing it.', e);
+            localStorage.removeItem(FILTER_STORAGE_KEY);
+            filters = {};
+        }
         if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
         if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
         if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
+        if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
+        if (filters.filterTeam !== undefined) $('#filterTeam').val(filters.filterTeam);
+        if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
+        if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
+        if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
+        if (filters.myProjects !== undefined) $('#filterMyProjects').prop('checked', filters.myProjects == 1);
+        if (filters.showTaskText !== undefined) $('#toggleTaskText').prop('checked', filters.showTaskText == 1);
+        if (filters.useCailyEndDate !== undefined) $('#useCailyEndDate').prop('checked', filters.useCailyEndDate == 1);
+        if (filters.useGuisEndDate !== undefined) $('#useGuisEndDate').prop('checked', filters.useGuisEndDate == 1);
         if (filters.filterKeyword !== undefined) $('#filterKeyword').val(filters.filterKeyword);
     }
+
+    function getFiltersFromLocalStorage() {
+        let filters = {};
+        try {
+            filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        } catch (e) {
+            console.warn('Failed to parse Gantt filter state, clearing it.', e);
+            localStorage.removeItem(FILTER_STORAGE_KEY);
+            filters = {};
+        }
+        return {
+            priority: filters.filterPriority || '',
+            progress: filters.filterProgress || '',
+            timeLeft: filters.filterTimeLeft || '',
+            projectOrderType: filters.filterProjectOrderType || '',
+            team: filters.filterTeam || '',
+            tantou: filters.filterTantou || '',
+            noDates: filters.filterNoDates == 1,
+            keyword: filters.filterKeyword || '',
+            showInactive: filters.showInactive == 1,
+            myProjects: filters.myProjects == 1,
+            showTaskText: filters.showTaskText == 1,
+            statusKey: filters.statusKey || '',
+            department_id: filters.department_id || null
+        };
+    }
+
+    // Đồng bộ filters -> query string trên URL
+    function updateUrlFromFilters(filters) {
+        if (typeof window === 'undefined' || !window.history || !window.history.replaceState) {
+            return;
+        }
+        const params = new URLSearchParams(window.location.search || '');
+        function setOrDelete(key, val) {
+            if (val === undefined || val === null || val === '' || val === 0) {
+                params.delete(key);
+            } else {
+                params.set(key, String(val));
+            }
+        }
+        setOrDelete('filterPriority', filters.filterPriority);
+        setOrDelete('filterProgress', filters.filterProgress);
+        setOrDelete('filterTimeLeft', filters.filterTimeLeft);
+        setOrDelete('filterProjectOrderType', filters.filterProjectOrderType);
+        setOrDelete('filterTeam', filters.filterTeam);
+        setOrDelete('filterTantou', filters.filterTantou);
+        setOrDelete('filterNoDates', filters.filterNoDates ? 1 : '');
+        setOrDelete('showInactive', filters.showInactive ? 1 : '');
+        setOrDelete('my_projects', filters.myProjects ? 1 : '');
+        setOrDelete('filterKeyword', filters.filterKeyword);
+        setOrDelete('status', filters.statusKey);
+        setOrDelete('showTaskText', filters.showTaskText ? 1 : '');
+        setOrDelete('useCailyEndDate', filters.useCailyEndDate ? 1 : '');
+        setOrDelete('useGuisEndDate', filters.useGuisEndDate ? 1 : '');
+        setOrDelete('department_id', filters.department_id);
+
+        const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+        const query = params.toString();
+        const newUrl = query ? `${baseUrl}?${query}` : baseUrl;
+        window.history.replaceState(null, '', newUrl);
+    }
+
+    function renderActiveFilters() {
+        const filters = getFiltersFromLocalStorage();
+        const badges = [];
+        // Lấy status hiện tại từ Vue (ganttApp)
+        let statusLabel = '';
+        if (window.ganttApp && window.ganttApp.selectedStatus) {
+            statusLabel = window.ganttApp.selectedStatus.name || '';
+        }
+        // Nếu tất cả filter đều rỗng, không hiển thị gì
+        if (
+            (!statusLabel || statusLabel.trim() === '') &&
+            (!filters.priority || filters.priority.trim() === '') &&
+            (!filters.progress || filters.progress.trim() === '') &&
+            (!filters.timeLeft || filters.timeLeft.trim() === '') &&
+            (!filters.projectOrderType || filters.projectOrderType.trim() === '') &&
+            (!filters.team || filters.team.trim() === '') &&
+            (!filters.tantou || filters.tantou.trim() === '') &&
+            !filters.noDates &&
+            !filters.showInactive &&
+            !filters.myProjects &&
+            (!filters.keyword || filters.keyword.trim() === '')
+        ) {
+            $('#activeFilters').html('');
+            return;
+        }
+
+        if (filters.keyword && filters.keyword.trim() !== '') {
+            badges.push(`<span class="badge bg-label-info me-1">キーワード: ${filters.keyword}</span>`);
+        } else {
+            if (statusLabel && statusLabel.trim() !== '') {
+                badges.push(`<span class="badge bg-label-info me-1">案件状況: ${statusLabel}</span>`);
+            }
+            if (filters.priority && filters.priority.trim() !== '') {
+                const label = (window.priorities || []).find(p => p.key === filters.priority)?.name || filters.priority;
+                badges.push(`<span class="badge bg-label-info me-1">優先度: ${label}</span>`);
+            }
+            if (filters.projectOrderType && filters.projectOrderType.trim() !== '') {
+                let label = '';
+                switch (filters.projectOrderType) {
+                    case 'contract': label = '契約図'; break;
+                    case 'new':      label = '新規';   break;
+                    case 'edit':     label = '修正';   break;
+                    case 'other':    label = 'その他'; break;
+                    default:         label = filters.projectOrderType;
+                }
+                badges.push(`<span class="badge bg-label-info me-1">受注形態: ${label}</span>`);
+            }
+            if (filters.team && filters.team.trim() !== '') {
+                // teamIdToName không được dùng trực tiếp trong Gantt; fallback hiển thị id
+                const teamName = filters.team;
+                badges.push(`<span class="badge bg-label-info me-1">チーム: ${teamName}</span>`);
+            }
+            if (filters.tantou && filters.tantou.trim() !== '') {
+                badges.push(`<span class="badge bg-label-info me-1">担当: ${filters.tantou}</span>`);
+            }
+            if (filters.progress && filters.progress.trim() !== '') {
+                let label = '';
+                if (filters.progress === '0-50') label = '0-50%';
+                else if (filters.progress === '51-99') label = '51-99%';
+                else if (filters.progress === '100') label = '100%';
+                else label = filters.progress;
+                badges.push(`<span class="badge bg-label-info me-1">進捗率: ${label}</span>`);
+            }
+            if (filters.timeLeft && filters.timeLeft.trim() !== '') {
+                let label = '';
+                if (filters.timeLeft === '7') label = '7日以内';
+                else if (filters.timeLeft === '30') label = '30日以内';
+                else if (filters.timeLeft === 'overdue') label = '期限切れ';
+                else label = filters.timeLeft;
+                badges.push(`<span class="badge bg-label-info me-1">残り時間: ${label}</span>`);
+            }
+            if (filters.noDates) {
+                badges.push(`<span class="badge bg-label-info me-1">開始日・終了日未設定</span>`);
+            }
+            if (filters.myProjects) {
+                badges.push(`<span class="badge bg-label-info me-1">私の案件</span>`);
+            }
+            if (filters.showInactive) {
+                badges.push(`<span class="badge bg-label-info me-1">完了・中止案件等も表示</span>`);
+            }
+        }
+
+        $('#activeFilters').html(`<span class="me-2 text-muted small">適用中のフィルター:</span>` + badges.join(''));
+    }
+
+    // Nếu URL có query param filter thì ưu tiên áp dụng nó và ghi vào localStorage,
+    // giúp có thể share link cho user khác và vẫn giữ nguyên trạng thái filter.
+    function applyFiltersFromUrlIfAny() {
+        if (typeof window === 'undefined') return;
+        const search = window.location.search || '';
+        if (!search || search.length <= 1) return;
+        const params = new URLSearchParams(search);
+        if (Array.from(params.keys()).length === 0) return;
+
+        let stored = {};
+        try {
+            stored = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        } catch (e) {
+            stored = {};
+        }
+        const merged = Object.assign({}, stored);
+
+        function getBool(name) {
+            return params.get(name) === '1' ? 1 : 0;
+        }
+
+        if (params.has('filterPriority')) merged.filterPriority = params.get('filterPriority') || '';
+        if (params.has('filterProgress')) merged.filterProgress = params.get('filterProgress') || '';
+        if (params.has('filterTimeLeft')) merged.filterTimeLeft = params.get('filterTimeLeft') || '';
+        if (params.has('filterProjectOrderType')) merged.filterProjectOrderType = params.get('filterProjectOrderType') || '';
+        if (params.has('filterTeam')) merged.filterTeam = params.get('filterTeam') || '';
+        if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
+        if (params.has('filterNoDates')) merged.filterNoDates = getBool('filterNoDates');
+        if (params.has('showInactive')) merged.showInactive = getBool('showInactive');
+        if (params.has('my_projects')) merged.myProjects = getBool('my_projects');
+        if (params.has('filterKeyword')) merged.filterKeyword = params.get('filterKeyword') || '';
+        if (params.has('status')) merged.statusKey = params.get('status') || '';
+        if (params.has('showTaskText')) merged.showTaskText = getBool('showTaskText');
+        if (params.has('useCailyEndDate')) merged.useCailyEndDate = getBool('useCailyEndDate');
+        if (params.has('useGuisEndDate')) merged.useGuisEndDate = getBool('useGuisEndDate');
+
+        // Department id cho Gantt – giúp auto chọn đúng 部署 khi mở link
+        if (params.has('department_id')) {
+            const depId = parseInt(params.get('department_id'), 10);
+            if (!isNaN(depId) && depId > 0) {
+                merged.department_id = depId;
+                // Đồng bộ với key dùng chung với project-list
+                try {
+                    localStorage.setItem(SELECTED_DEPARTMENT_KEY, JSON.stringify({ id: depId }));
+                } catch (e) {
+                    console.warn('Failed to save department from URL into localStorage', e);
+                }
+            }
+        }
+
+        localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(merged));
+    }
+
+    // Ưu tiên áp dụng filter từ URL (nếu có) trước khi load từ localStorage
+    applyFiltersFromUrlIfAny();
     loadFiltersFromLocalStorage();
-    $('#projectFilterForm select, #projectFilterForm input').on('change keyup', function() {
+
+    // Trạng thái hiển thị task text trên bar (task.text)
+    window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
+
+    // Chế độ tính end_date cho task: default / caily / guis
+    (function initEndDateMode() {
+        let cChecked = $('#useCailyEndDate').is(':checked');
+        let gChecked = $('#useGuisEndDate').is(':checked');
+        // Đảm bảo chỉ một checkbox được chọn cùng lúc
+        if (cChecked && gChecked) {
+            // Ưu tiên CAILY, tắt GUIS
+            $('#useGuisEndDate').prop('checked', false);
+            gChecked = false;
+        }
+        if (cChecked) {
+            window.ganttEndDateMode = 'caily';
+        } else if (gChecked) {
+            window.ganttEndDateMode = 'guis';
+        } else {
+            window.ganttEndDateMode = 'default';
+        }
+    })();
+
+    renderActiveFilters();
+    // Dùng event delegation để đảm bảo binding kể cả khi DOM thay đổi
+    $(document).on('change keyup', '#projectFilterForm select, #projectFilterForm input', function() {
+        console.log('filter changed');
         saveFiltersToLocalStorage();
-        if (window.ganttApp && window.ganttApp.loadProjects) window.ganttApp.loadProjects();
+        renderActiveFilters();
+        if (window.ganttApp && typeof window.ganttApp.loadProjects === 'function') {
+            window.ganttApp.loadProjects();
+        }
     });
-    $('#filterReset').on('click', function() {
+    // Riêng checkbox タスク名を表示 nằm ngoài form, bind trực tiếp
+    $(document).on('change', '#toggleTaskText', function() {
+        console.log('toggleTaskText changed');
+        saveFiltersToLocalStorage();
+        window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
+        if (gantt) gantt.render();
+        renderActiveFilters();
+    });
+    // Checkbox hiển thị end_date theo CAILY/GUIS納期 (chỉ 1 trong 2 được chọn)
+    $(document).on('change', '#useCailyEndDate, #useGuisEndDate', function() {
+        console.log('endDateMode checkbox changed', this.id);
+        // Mutual exclusive
+        if (this.id === 'useCailyEndDate' && $('#useCailyEndDate').is(':checked')) {
+            $('#useGuisEndDate').prop('checked', false);
+        } else if (this.id === 'useGuisEndDate' && $('#useGuisEndDate').is(':checked')) {
+            $('#useCailyEndDate').prop('checked', false);
+        }
+        const cChecked = $('#useCailyEndDate').is(':checked');
+        const gChecked = $('#useGuisEndDate').is(':checked');
+        if (cChecked) {
+            window.ganttEndDateMode = 'caily';
+        } else if (gChecked) {
+            window.ganttEndDateMode = 'guis';
+        } else {
+            window.ganttEndDateMode = 'default';
+        }
+        saveFiltersToLocalStorage();
+        // Cần load lại projects để tính lại end_date cho task
+        if (window.ganttApp && typeof window.ganttApp.loadProjects === 'function') {
+            window.ganttApp.loadProjects();
+        } else if (gantt) {
+            gantt.render();
+        }
+    });
+    $(document).on('click', '#filterReset', function() {
+        console.log('filterReset');
         localStorage.removeItem(FILTER_STORAGE_KEY);
-        $('#projectFilterForm')[0].reset();
-        if (window.ganttApp && window.ganttApp.loadProjects) window.ganttApp.loadProjects();
+        const form = document.getElementById('projectFilterForm');
+        if (form) form.reset();
+        // Đảm bảo Team filter về giá trị mặc định: rỗng (= すべて)
+        $('#filterTeam').val('');
+        // Reset trạng thái status filter về "all"
+        if (window.ganttApp) {
+            window.ganttApp.selectedStatus = null;
+        }
+        // Lưu lại trạng thái trống mới và cập nhật badge
+        if (typeof saveFiltersToLocalStorage === 'function') {
+            saveFiltersToLocalStorage();
+        }
+        renderActiveFilters();
+        if (window.ganttApp && typeof window.ganttApp.loadProjects === 'function') {
+            window.ganttApp.loadProjects();
+        }
     });
 
     // Initialize Vue app first
@@ -147,6 +449,8 @@ $(document).ready(function() {
                 departments: [],
                 selectedDepartment: null,
                 selectedStatus: null,
+                teams: [],
+                selectedTeam: null,
                 statuses: statuses,
                 priorities: priorities,
                 userPermissions: {},
@@ -280,6 +584,51 @@ $(document).ready(function() {
                     console.error('Error loading user permissions:', error);
                 }
             },
+
+            async loadTeams() {
+                if (!this.selectedDepartment) {
+                    this.teams = [];
+                    return;
+                }
+                
+                try {
+                    const response = await $.ajax({
+                        url: '/api/index.php',
+                        type: 'GET',
+                        data: {
+                            model: 'team',
+                            method: 'listbydepartment',
+                            department_id: this.selectedDepartment.id
+                        }
+                    });
+                    this.teams = response || [];
+                    this.selectedTeam = null; // Reset team selection when department changes
+                    console.log('Loaded teams for department', this.selectedDepartment.id, ':', this.teams);
+
+                    // Populate team filter options (#filterTeam) giống project-list (chỉ team của department hiện tại)
+                    const $teamFilter = $('#filterTeam');
+                    if ($teamFilter && $teamFilter.length) {
+                        const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+                        const savedTeam = saved.filterTeam || '';
+                        $teamFilter.empty();
+                        $teamFilter.append('<option value=\"\">すべて</option>');
+                        // Option: 未割り当て (chưa phân công team)
+                        const noneSelected = savedTeam && savedTeam === 'none' ? ' selected' : '';
+                        $teamFilter.append('<option value=\"none\"' + noneSelected + '>未割り当て</option>');
+                        (this.teams || []).forEach(team => {
+                            if (team.id != null) {
+                                const id = String(team.id);
+                                const name = team.name || id;
+                                const selected = savedTeam && String(savedTeam) === id ? ' selected' : '';
+                                $teamFilter.append('<option value=\"' + id + '\"' + selected + '>' + name + '</option>');
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error loading teams:', error);
+                    this.teams = [];
+                }
+            },
             
             hasPermission(permission) {
                 return this.userPermissions[permission] == 1 || false;
@@ -308,18 +657,31 @@ $(document).ready(function() {
                 return this.hasPermission('project_comment');
             },
             
-            viewProjects(department) {
+            async viewProjects(department) {
                 this.selectedDepartment = department;
                 this.selectedStatus = null;
                 
                 // Save selected department to localStorage
                 this.saveSelectedDepartmentToLocalStorage(department);
                 
+                // Load teams for the selected department
+                await this.loadTeams();
+                
                 this.loadProjects();
             },
             
             filterProjectByStatus(status) {
                 this.selectedStatus = status.key === 'all' ? null : status;
+                this.loadProjects();
+                // Lưu lại vào localStorage & cập nhật badge 適用中のフィルター khi đổi status
+                if (typeof saveFiltersToLocalStorage === 'function') {
+                    saveFiltersToLocalStorage();
+                }
+                renderActiveFilters();
+            },
+
+            filterProjectByTeam(team) {
+                this.selectedTeam = team;
                 this.loadProjects();
             },
             
@@ -328,23 +690,32 @@ $(document).ready(function() {
                 await this.loadUserPermissions();
                 this.loading = true;
                 try {
-                    // Lấy filter từ form
-                    const filterStartMonth = $('#filterStartMonth').val();
-                    const filterEndMonth = $('#filterEndMonth').val();
+                    // Lấy filter từ form (高度なフィルター)
                     const filterPriority = $('#filterPriority').val();
                     const filterProgress = $('#filterProgress').val();
                     const filterTimeLeft = $('#filterTimeLeft').val();
+                    const filterProjectOrderType = $('#filterProjectOrderType').val();
+                    const filterTeam = $('#filterTeam').val();
+                    const filterTantou = $('#filterTantou').val();
+                    const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
+                    const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
+                    const myProjects = $('#filterMyProjects').is(':checked') ? 1 : 0;
                     const filterKeyword = $('#filterKeyword').val();
                     const params = {
                         model: 'project',
                         method: 'listForGantt',
                         department_id: this.selectedDepartment.id,
                         status: this.selectedStatus?.key || 'all',
-                        filterStartMonth,
-                        filterEndMonth,
+                        team_id: this.selectedTeam?.id || '',
                         filterPriority,
                         filterProgress,
                         filterTimeLeft,
+                        filterProjectOrderType,
+                        filterTeam,
+                        filterTantou,
+                        filterNoDates,
+                        showInactive,
+                        my_projects: myProjects,
                         filterKeyword
                     };
                     const response = await $.ajax({
@@ -469,6 +840,41 @@ $(document).ready(function() {
                     } else {
                         endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
                     }
+
+                    // Ghi nhớ endDate gốc đề phòng không có CAILY/GUIS納期 hợp lệ
+                    let finalEndDate = endDate;
+                    const mode = window.ganttEndDateMode || 'default';
+                    try {
+                        if (mode === 'caily' && project.caily_nouki) {
+                            let rawC = project.caily_nouki;
+                            let cDate = null;
+                            if (typeof rawC === 'string' && rawC.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                                // Nếu chỉ có ngày, mặc định giờ là 19:00
+                                cDate = this.parseDate(rawC + ' 19:00:00');
+                            } else {
+                                cDate = this.parseDate(rawC);
+                            }
+                            if (!isNaN(cDate.getTime())) {
+                                finalEndDate = cDate;
+                            }
+                        } else if (mode === 'guis' && project.guis_nouki) {
+                            let rawG = project.guis_nouki;
+                            let gDate = null;
+                            if (typeof rawG === 'string' && rawG.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                                // Nếu chỉ có ngày, mặc định giờ là 19:00
+                                gDate = this.parseDate(rawG + ' 19:00:00');
+                            } else {
+                                gDate = this.parseDate(rawG);
+                            }
+                            if (!isNaN(gDate.getTime())) {
+                                finalEndDate = gDate;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Error applying end date mode for project', project.id, e);
+                    }
+
+                    endDate = finalEndDate;
                     
                     // Ensure end date is after start date
                     if (endDate <= startDate) {
@@ -492,9 +898,22 @@ $(document).ready(function() {
                         manager_names.push(name || 'N/A');
                     });
                     
+                    // Build team name from first team id in project.teams (if any)
+                    let teamName = '';
+                    if (project.teams && typeof project.teams === 'string') {
+                        const teamIds = project.teams.split(',').map(t => t.trim()).filter(t => t);
+                        if (teamIds.length > 0 && Array.isArray(this.teams) && this.teams.length > 0) {
+                            const firstId = teamIds[0];
+                            const foundTeam = this.teams.find(t => String(t.id) === String(firstId));
+                            if (foundTeam && foundTeam.name) {
+                                teamName = foundTeam.name;
+                            }
+                        }
+                    }
+
                     const task = {
                         id: project.id,
-                        text: `${project.project_number || 'N/A'} - ${project.name}`,
+                        text: project.name || '',
                         start_date: startDate,
                         end_date: endDate,
                         progress: project.progress / 100,
@@ -502,11 +921,19 @@ $(document).ready(function() {
                         priority: project.priority || 'medium',
                         status: project.status || 'draft',
                         manager: manager_names.join(', ') || '-',
+                        company: project.company_name || '-',
                         customer: project.customer_name || '-',
-                        company: project.company_name.replace(/株式会社/gi, '').replace(/有限会社/gi, '') || '-',
+                        branch_name: project.branch_name || '-',
+                        construction_number: project.construction_number || '-',
                         building_type: (project.building_type && project.building_type.trim()) ? project.building_type.trim() : '-',
                         building_size: (project.building_size && project.building_size.trim()) ? project.building_size.trim() : '-',
-                        project_order_type: project.project_order_type || '-',
+                        // Fields for task bar text
+                        team_name: teamName,
+                        project_order_type: project.project_order_type || '',
+                        project_number: project.project_number || '',
+                        project_name: project.name || '',
+                        // Lưu end_date gốc từ project để hiển thị trong tooltip
+                        project_end_date: project.end_date || '',
                         description: project.description || '',
                         statusColor: statusColor,
                         priorityColor: priorityColor,
@@ -902,8 +1329,11 @@ $(document).ready(function() {
                 
                 // // Customize columns
                 gantt.config.columns = [
-                    { name: "text", label: "プロジェクト名", width: 200, tree: true, min_width: 150 },
-                    { name: "company", label: "会社", width: 120, min_width: 100 },
+                    { name: "index", label: "ID", width: 50, align: "center", min_width: 40, template: function (obj) {
+                        return obj.id || '';
+                    }},
+                    { name: "text", label: "件名", width: 200, tree: true, min_width: 150 },
+                    { name: "construction_number", label: "工事番号", width: 100, min_width: 80 },
                     { name: "start_date", label: "開始日", width: 100, align: "left", min_width: 80, template: function(obj) {
                         if (!obj.start_date) return 'N/A';
                         const date = new Date(obj.start_date);
@@ -949,10 +1379,36 @@ $(document).ready(function() {
                     return classes.join(' ');
                 };
                 
-                // // Customize task text
-                // gantt.templates.task_text = function(start, end, task) {
-                //     return task.text;
-                // };
+                // Badge class for 受注形態 (order type) in task bar
+                const getOrderTypeBadgeClass = function(orderType) {
+                    const t = String(orderType).trim().toLowerCase();
+                    if (t === '修正') return 'bg-warning small';
+                    if (t === '新規') return 'bg-primary small';
+                    return 'bg-info small';
+                };
+                // Customize task text: orderType as badge, then team name & project name
+                gantt.templates.task_text = function(start, end, task) {
+                    const parts = [];
+                    const teamName = task.team_name || '';
+                    const orderTypeRaw = task.project_order_type || '';
+                    const projectName = task.project_name || '';
+                    if (orderTypeRaw) {
+                        const types = orderTypeRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+                        const badges = types.map(function(t) {
+                            const cls = getOrderTypeBadgeClass(t);
+                            return '<span class="badge ' + cls + ' small me-1">' + (t.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</span>';
+                        });
+                        parts.push(badges.join(''));
+                    }
+                    if (teamName) {
+                        const escaped = teamName.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        parts.push('<span class="badge bg-label-secondary small me-1">' + escaped + '</span>');
+                    }
+                    if (window.ganttShowTaskText && projectName) {
+                        parts.push(projectName.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                    }
+                    return parts.join('');
+                };
                 
                 // Helper function to format date string (for caily_nouki, guis_nouki)
                 const formatDateStringWithVN = function(dateString) {
@@ -968,8 +1424,8 @@ $(document).ready(function() {
                             const mysqlDate = dateString.replace(' ', 'T');
                             date = new Date(mysqlDate);
                         } else if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                            // Handle date only format: "2024-01-15"
-                            date = new Date(dateString + 'T00:00:00');
+                            // Handle date only format: "2024-01-15" -> mặc định 19:00
+                            date = new Date(dateString + 'T19:00:00');
                         } else {
                             date = new Date(dateString);
                         }
@@ -1011,12 +1467,36 @@ $(document).ready(function() {
                     // Safely find status and priority with fallback
                     const status = statuses.find(s => s.key === task.status);
                     const priority = priorities.find(p => p.key === task.priority);
+
+                    // 期限日: luôn dựa trên project.end_date gốc, không phụ thuộc chế độ CAILY/GUIS
+                    let originalDeadline = '-';
+                    if (task.project_end_date && task.project_end_date !== '-') {
+                        let raw = task.project_end_date;
+                        let d = null;
+                        if (typeof raw === 'string') {
+                            if (raw.includes(' ')) {
+                                // MySQL datetime "YYYY-MM-DD HH:ii:ss"
+                                d = new Date(raw.replace(' ', 'T'));
+                            } else {
+                                d = new Date(raw);
+                            }
+                        } else if (raw instanceof Date) {
+                            d = raw;
+                        }
+                        if (d && !isNaN(d.getTime())) {
+                            originalDeadline = gantt.templates.tooltip_date_format(d);
+                        } else {
+                            // Nếu parse không được thì hiển thị raw string
+                            originalDeadline = String(task.project_end_date);
+                        }
+                    }
                     
                     return `
                         <div class="gantt-tooltip">
                             <h6>${task.text || 'N/A'}</h6>
                             <p class="m-0"><strong>顧客:</strong> ${task.customer || '-'}</p>
                             <p class="m-0"><strong>会社:</strong> ${task.company || '-'}</p>
+                            <p class="m-0"><strong>支店:</strong> ${task.branch_name || '-'}</p>
                             <p class="m-0"><strong>建物種類:</strong> ${(task.building_type && task.building_type !== '-') ? task.building_type : '-'}</p>
                             <p class="m-0"><strong>建物規模:</strong> ${(task.building_size && task.building_size !== '-') ? task.building_size : '-'}</p>
                             <p class="m-0"><strong>受注形態:</strong> ${task.project_order_type || '-'}</p>
@@ -1025,8 +1505,9 @@ $(document).ready(function() {
                             <p class="m-0"><strong>状況:</strong> ${status ? status.name : (task.status || '-')}</p>
                             <p class="m-0"><strong>優先度:</strong> ${priority ? priority.name : (task.priority || '-')}</p>
                             <p class="m-0"><strong>開始日:</strong> ${gantt.templates.tooltip_date_format(start)}</p>
-                            <p class="m-0"><strong>期限日:</strong> ${gantt.templates.tooltip_date_format(end)}</p>
+                            <p class="m-0"><strong>期限日:</strong> ${originalDeadline}</p>
                             <p class="m-0"><strong>担当:</strong> ${task.tantou || '-'}</p>
+                            <p class="m-0"><strong>チーム:</strong> ${task.team_name || '-'}</p>
                             <p class="m-0"><strong>CAILY納期:</strong> ${formatDateStringWithVN(task.caily_nouki)}</p>
                             <p class="m-0"><strong>GUIS納期:</strong> ${formatDateStringWithVN(task.guis_nouki)}</p>
                         </div>
@@ -1122,7 +1603,7 @@ $(document).ready(function() {
                         opacity: 0.8;
                         z-index: 10;
                     }
-                    /* Overdue projects */
+                    /* Overdue projects 
                     .gantt-overdue .gantt_task_line { 
                         border-color: var(--bs-danger); 
                         border-width: 3px; 
@@ -1131,35 +1612,35 @@ $(document).ready(function() {
                     .gantt-overdue .gantt_task_content {
                         background-color: var(--bs-danger);
                         color: white;
-                    }
+                    }*/
 
                     /* Status colors for task bars */
-                    .gantt-status-info .gantt_task_content { 
+                    .gantt_task_line.gantt-status-info{ 
                         background-color: var(--bs-info); 
                         color: white;
                     }
-                    .gantt-status-warning .gantt_task_content { 
+                    .gantt_task_line.gantt-status-warning{ 
                         background-color: var(--bs-warning); 
                         color: #212529;
                     }
-                    .gantt-status-primary .gantt_task_content { 
+                    .gantt_task_line.gantt-status-primary{ 
                         background-color: var(--bs-primary); 
                         color: white;
                     }
-                    .gantt-status-success .gantt_task_content { 
+                    .gantt_task_line.gantt-status-success{ 
                         background-color: var(--bs-success); 
                         color: white;
                     }
-                    .gantt-status-danger .gantt_task_content { 
+                    .gantt_task_line.gantt-status-danger{ 
                         background-color: var(--bs-danger); 
                         color: white;
                     }
-                    .gantt-status-secondary .gantt_task_content { 
+                    .gantt_task_line.gantt-status-secondary{ 
                         background-color: var(--bs-secondary); 
                         color: white;
                     }
                     
-                    /* Priority border colors */
+                    /* Priority border colors
                     .gantt-priority-danger .gantt_task_line { 
                         border-color: var(--bs-danger); 
                         border-width: 3px; 
@@ -1175,7 +1656,7 @@ $(document).ready(function() {
                     .gantt-priority-secondary .gantt_task_line { 
                         border-color: var(--bs-secondary); 
                         border-width: 2px; 
-                    }
+                    } */
                     
                     
                     
@@ -1188,7 +1669,13 @@ $(document).ready(function() {
                         color: #6c757d;
                         font-size: 14px;
                     }
-                    
+                    .gantt_task_content .badge{
+                        font-size: 0.75rem;
+                        padding: 0.15rem 0.5rem;
+                        position: relative;
+                        top: -2px;
+                        left: -5px;
+                    }
                     
                   
                 `;
@@ -1196,8 +1683,49 @@ $(document).ready(function() {
             }
         }
     });
-    window.ganttApp = app;
-    app.mount('#app');
+    const vm = app.mount('#app');
+    window.ganttApp = vm;
+
+    // Sau khi Vue mount xong, apply lại trạng thái filter
+    // (Vue có thể reset DOM về giá trị mặc định trong template)
+    loadFiltersFromLocalStorage();
+    // Khôi phục status filter từ localStorage (nếu có)
+    try {
+        const saved = getFiltersFromLocalStorage();
+        if (saved.statusKey && window.ganttApp) {
+            const st = statuses.find(s => s.key === saved.statusKey);
+            window.ganttApp.selectedStatus = st || null;
+        } else if (window.ganttApp) {
+            // Mặc định: 'all' (không filter cụ thể)
+            window.ganttApp.selectedStatus = null;
+        }
+    } catch (e) {
+        console.warn('Failed to restore status filter from storage', e);
+    }
+    // Đồng bộ lại biến global hiển thị task text
+    window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
+    // Đồng bộ lại chế độ end_date (default / caily / guis)
+    (function syncEndDateModeAfterMount() {
+        let cChecked = $('#useCailyEndDate').is(':checked');
+        let gChecked = $('#useGuisEndDate').is(':checked');
+        if (cChecked && gChecked) {
+            $('#useGuisEndDate').prop('checked', false);
+            gChecked = false;
+        }
+        if (cChecked) {
+            window.ganttEndDateMode = 'caily';
+        } else if (gChecked) {
+            window.ganttEndDateMode = 'guis';
+        } else {
+            window.ganttEndDateMode = 'default';
+        }
+    })();
+    // Sau khi mọi thứ đã sync, render badge và cập nhật URL để phản ánh filter hiện tại
+    renderActiveFilters();
+    if (typeof saveFiltersToLocalStorage === 'function') {
+        // Hàm này cũng sẽ gọi updateUrlFromFilters để đẩy trạng thái filter lên thanh address
+        saveFiltersToLocalStorage();
+    }
 });
 
 function getInitials(name) {

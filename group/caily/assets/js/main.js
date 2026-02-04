@@ -5,9 +5,9 @@
 'use strict';
 
 /**
- * Tooltip giờ Việt Nam khi hover lên giờ Nhật. Định dạng: "VN hh:ii"
+ * Tooltip giờ Việt Nam khi hover lên giờ Nhật. Định dạng: "VN DD/MM/YYYY HH:mm"
  * @param {string} jpDateTimeStr - Ngày giờ JST (VD: "2025-01-30 14:00:00" hoặc "2025/01/30 14:00")
- * @returns {string} "VN HH:mm" hoặc "" nếu không parse được
+ * @returns {string} "VN DD/MM/YYYY HH:mm" hoặc "" nếu không parse được
  */
 window.formatVietnamTimeTooltip = function (jpDateTimeStr) {
   if (!jpDateTimeStr || typeof jpDateTimeStr !== 'string') return '';
@@ -16,7 +16,7 @@ window.formatVietnamTimeTooltip = function (jpDateTimeStr) {
   var m = window.moment && window.moment.parseZone ? window.moment.parseZone(s + '+09:00') : null;
   if (!m || !m.isValid()) return '';
   var vn = m.clone().subtract(2, 'hours');
-  return 'VN ' + vn.format('HH:mm');
+  return 'VN ' + vn.format('DD/MM/YYYY HH:mm');
 };
 
 window.isRtl = window.Helpers.isRtl();

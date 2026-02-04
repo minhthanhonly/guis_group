@@ -2,7 +2,7 @@
 
 <html
   lang="ja"
-  class="layout-wide layout-navbar-fixed"
+  class="layout-wide"
   dir="ltr"
   data-skin="default"
   data-assets-path="<?=$root?>assets/"
