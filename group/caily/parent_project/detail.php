@@ -127,6 +127,9 @@ $view->heading('建物詳細');
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label">
                                     <span data-i18n="担当様">担当様</span>
+                                    <button v-if="isEditMode" type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2" @click="openNewCustomerModal" title="新規顧客追加">
+                                        <i class="fa fa-plus me-1"></i> 新規顧客
+                                    </button>
                                     <button v-if="!isEditMode && parentProject.contact_name " type="button" class="btn btn-sm btn-outline-info py-0 small ms-2" @click="openCustomerInfoModal" title="顧客情報表示・編集">
                                         <i class="fa fa-info-circle me-1"></i> 顧客情報
                                     </button>
@@ -1067,27 +1070,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="案件番号">案件番号</span> <span class="text-danger">*</span></label>
-                                    <div class="input-group">
-                                        <input type="text" class="form-control" v-model="newChildProject.project_number"
-                                            readonly required>
-                                        <button type="button" class="btn btn-outline-primary"
-                                            @click="generateChildProjectNumber">
-                                            <i class="fa fa-refresh"></i> 再生成
-                                        </button>
-                                    </div>
-                                    <div v-if="childProjectValidationErrors.project_number"
-                                        class="invalid-feedback d-block">
-                                        {{ childProjectValidationErrors.project_number }}
-                                    </div>
-                                    <small class="form-text text-muted">
-                                        <span>建物番号 + "-" + 連番</span>
-                                    </small>
-                                </div>
-                            </div>
-                            <div class="col-md-4 col-xl-3">
+                            <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="開始日">開始日</span> <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.start_date"
@@ -1099,13 +1082,35 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-xl-3">
+                            <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span> <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.end_date"
                                         id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off" required>
                                     <div v-if="childProjectValidationErrors.end_date" class="invalid-feedback d-block">
                                         {{ childProjectValidationErrors.end_date }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
+                                    <div class="btn-group" style="width: 100%;">
+                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
+                                                :class="getProjectStatusButtonClass(newChildProject.status)"
+                                                id="createChildProjectStatusDropdown"
+                                                data-bs-toggle="dropdown" aria-expanded="false"
+                                                style="width: 100%; text-align: left;">
+                                            {{ getProjectStatusLabel(newChildProject.status) }}
+                                        </button>
+                                        <ul class="dropdown-menu" style="width: 100%;">
+                                            <li v-for="status in projectStatuses" :key="status.value">
+                                                <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                                @click="selectProjectStatus(status.value, false)">
+                                                    {{ status.label }}
+                                                </a>
+                                            </li>
+                                        </ul>
                                     </div>
                                 </div>
                             </div>
@@ -1128,41 +1133,6 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
-                                    <div class="btn-group" style="width: 100%;">
-                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
-                                                :class="getProjectStatusButtonClass(newChildProject.status)"
-                                                id="createChildProjectStatusDropdown"
-                                                data-bs-toggle="dropdown" aria-expanded="false"
-                                                style="width: 100%; text-align: left;">
-                                            {{ getProjectStatusLabel(newChildProject.status) }}
-                                        </button>
-                                        <ul class="dropdown-menu" style="width: 100%;">
-                                            <li v-for="status in projectStatuses" :key="status.value">
-                                                <a class="dropdown-item waves-effect" href="javascript:void(0);" 
-                                                @click="selectProjectStatus(status.value, false)">
-                                                    {{ status.label }}
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="管理">管理</span></label>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input class="form-control" type="text" id="create_child_project_manager_tags" name="create_child_project_manager_tags">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectManagerTags(false)" title="すべて削除"><i class="fa fa-times"></i></button>
-                                    </div>
-                                    <small class="form-text text-muted">
-                                        <span data-i18n="部署を選択すると、その部署のユーザーが表示されます">部署を選択すると、その部署のユーザーが表示されます</span>
-                                    </small>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="総額">総額</span></label>
                                     <div class="input-group">
                                         <span class="input-group-text">¥</span>
@@ -1173,9 +1143,10 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            
+                            <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">担当</label>
+                                    <label class="form-label">担当 <span class="text-danger">*</span></label>
                                     <div class="d-flex gap-3">
                                         <div class="form-check">
                                             <input class="form-check-input" type="radio" v-model="newChildProject.tantou" value="CAILY" id="create_tantou_caily">
@@ -1186,20 +1157,60 @@ $view->heading('建物詳細');
                                             <label class="form-check-label" for="create_tantou_guis">GUIS</label>
                                         </div>
                                     </div>
+                                    <div v-if="childProjectValidationErrors.tantou" class="invalid-feedback d-block">
+                                        {{ childProjectValidationErrors.tantou }}
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label">CAILY納期</label>
                                     <input type="text" class="form-control" v-model="newChildProject.caily_nouki" 
                                         id="create_caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label">GUIS納期</label>
                                     <input type="text" class="form-control" v-model="newChildProject.guis_nouki" 
                                         id="create_guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="進捗率">進捗率</span> (%)</label>
+                                    <input type="number" class="form-control" v-model.number="newChildProject.progress" min="0" max="100" value="0" placeholder="0">
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="チーム">チーム</span></label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="text" class="form-control" id="create_child_project_team_tags" placeholder="チームを選択">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectTeamTags(false)" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        <span data-i18n="部署を選択すると、その部署のユーザーが表示されます">部署を選択すると、その部署のユーザーが表示されます</span>
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="管理">管理</span></label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input class="form-control" type="text" id="create_child_project_manager_tags" name="create_child_project_manager_tags">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectManagerTags(false)" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="メンバー">メンバー</span></label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="text" class="form-control" id="create_child_project_members_tags" placeholder="メンバーを選択">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectMembersTags(false)" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-12">
@@ -1262,18 +1273,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="案件番号">案件番号</span> <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" v-model="editingChildProject.project_number"
-                                        required readonly>
-                                    <div v-if="editChildProjectValidationErrors.project_number"
-                                        class="invalid-feedback d-block">
-                                        {{ editChildProjectValidationErrors.project_number }}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4 col-xl-3">
+                            <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="開始日">開始日</span> <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.start_date"
@@ -1285,9 +1285,9 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-xl-3">
+                            <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="期限日">期限日</span> <span class="text-danger">*</span></label>
+                                    <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span> <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.end_date"
                                         id="edit_end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
                                         required>
@@ -1297,24 +1297,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="受注形態">受注形態</span> <span class="text-danger">*</span></label>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="text" class="form-control tagify"
-                                            v-model="editingChildProject.project_order_type"
-                                            id="edit_child_project_order_type" name="edit_child_project_order_type">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button"
-                                            @click="clearEditChildProjectTagifyTags('project_order_type')"
-                                            title="すべて削除"><i class="fa fa-times"></i></button>
-                                    </div>
-                                    <div v-if="editChildProjectValidationErrors.project_order_type"
-                                        class="invalid-feedback d-block">
-                                        {{ editChildProjectValidationErrors.project_order_type }}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                     <div class="btn-group" style="width: 100%;">
@@ -1338,14 +1321,19 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="管理">管理</span></label>
+                                    <label class="form-label"><span data-i18n="受注形態">受注形態</span> <span class="text-danger">*</span></label>
                                     <div class="d-flex align-items-center gap-2">
-                                        <input class="form-control" type="text" id="edit_child_project_manager_tags" name="edit_child_project_manager_tags">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectManagerTags(true)" title="すべて削除"><i class="fa fa-times"></i></button>
+                                        <input type="text" class="form-control tagify"
+                                            v-model="editingChildProject.project_order_type"
+                                            id="edit_child_project_order_type" name="edit_child_project_order_type">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                            @click="clearEditChildProjectTagifyTags('project_order_type')"
+                                            title="すべて削除"><i class="fa fa-times"></i></button>
                                     </div>
-                                    <small class="form-text text-muted">
-                                        <span data-i18n="部署を選択すると、その部署のユーザーが表示されます">部署を選択すると、その部署のユーザーが表示されます</span>
-                                    </small>
+                                    <div v-if="editChildProjectValidationErrors.project_order_type"
+                                        class="invalid-feedback d-block">
+                                        {{ editChildProjectValidationErrors.project_order_type }}
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -1360,9 +1348,9 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">担当</label>
+                                    <label class="form-label">担当 <span class="text-danger">*</span></label>
                                     <div class="d-flex gap-3">
                                         <div class="form-check">
                                             <input class="form-check-input" type="radio" v-model="editingChildProject.tantou" value="CAILY" id="edit_tantou_caily">
@@ -1373,20 +1361,59 @@ $view->heading('建物詳細');
                                             <label class="form-check-label" for="edit_tantou_guis">GUIS</label>
                                         </div>
                                     </div>
+                                    <div v-if="editChildProjectValidationErrors.tantou" class="invalid-feedback d-block">
+                                        {{ editChildProjectValidationErrors.tantou }}
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label">CAILY納期</label>
                                     <input type="text" class="form-control" v-model="editingChildProject.caily_nouki" 
                                         id="edit_caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label">GUIS納期</label>
                                     <input type="text" class="form-control" v-model="editingChildProject.guis_nouki" 
                                         id="edit_guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="進捗率">進捗率</span> (%)</label>
+                                    <input type="number" class="form-control" v-model.number="editingChildProject.progress" min="0" max="100" placeholder="0">
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="チーム">チーム</span></label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="text" class="form-control" id="edit_child_project_team_tags" placeholder="チームを選択">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectTeamTags(true)" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        <span data-i18n="部署を選択すると、その部署のユーザーが表示されます">部署を選択すると、その部署のユーザーが表示されます</span>
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="管理">管理</span></label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input class="form-control" type="text" id="edit_child_project_manager_tags" name="edit_child_project_manager_tags">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectManagerTags(true)" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="メンバー">メンバー</span></label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="text" class="form-control" id="edit_child_project_members_tags" placeholder="メンバーを選択">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectMembersTags(true)" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-12">
@@ -2916,6 +2943,10 @@ $view->heading('建物詳細');
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="alert alert-warning mb-3 mb-md-4" role="alert">
+                        <i class="fa fa-exclamation-triangle me-2"></i>
+                        <span data-i18n="お客様情報を更新すると、このお客様の情報を利用している他の建物の情報もすべて更新されます。">お客様情報を更新すると、このお客様の情報を利用している他の建物の情報もすべて更新されます。</span>
+                    </div>
                     <div v-if="selectedCustomer">
                         <form @submit.prevent="updateCustomer">
                             <div class="row">
@@ -3043,6 +3074,116 @@ $view->heading('建物詳細');
                         <span v-if="updatingCustomer" class="spinner-border spinner-border-sm me-1"></span>
                         <span data-i18n="更新">更新</span>
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Customer Modal (建物詳細 edit mode) -->
+    <div class="modal fade" id="newCustomerModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">新規顧客追加</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="saveNewCustomer">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">カテゴリー</label>
+                                <select class="form-select" v-model="newCustomer.category_id" required>
+                                    <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">会社名 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" v-model="newCustomer.company_name" required>
+                                <div v-if="customerErrors.company_name" class="text-danger small mt-1">{{ customerErrors.company_name }}</div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">会社名(ふりがな)</label>
+                                <input type="text" class="form-control" v-model="newCustomer.company_name_kana" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">担当者名 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" v-model="newCustomer.name" required>
+                                <div v-if="customerErrors.name" class="text-danger small mt-1">{{ customerErrors.name }}</div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">担当者名(ふりがな)</label>
+                                <input type="text" class="form-control" v-model="newCustomer.name_kana" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">支店名</label>
+                                <input type="text" class="form-control" v-model="newCustomer.branch" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">担当部署</label>
+                                <input type="text" class="form-control" v-model="newCustomer.department" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">役職</label>
+                                <input type="text" class="form-control" v-model="newCustomer.position" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">敬称</label>
+                                <select class="form-select" v-model="newCustomer.title" required>
+                                    <option>様</option>
+                                    <option>御社</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">メールアドレス</label>
+                                <input type="text" class="form-control" v-model="newCustomer.email" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">電話番号</label>
+                                <input type="text" class="form-control" v-model="newCustomer.tel" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">FAX</label>
+                                <input type="text" class="form-control" v-model="newCustomer.fax" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">携帯番号</label>
+                                <input type="text" class="form-control" v-model="newCustomer.phone" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">郵便番号</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" v-model="newCustomer.zip" required>
+                                    <button class="btn btn-outline-primary waves-effect" type="button" @click.prevent="searchAddressNewCustomer">住所検索</button>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">住所1</label>
+                                <input type="text" class="form-control" v-model="newCustomer.address1" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">住所2</label>
+                                <input type="text" class="form-control" v-model="newCustomer.address2" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">状況</label>
+                                <select class="form-select" v-model="newCustomer.status" required>
+                                    <option value="1">有効</option>
+                                    <option value="0">無効</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">自社担当部署名 <span class="text-danger">*</span></label>
+                                <select ref="newCustomerGuisDepartmentSelect" class="form-select select2" v-model="newCustomer.guis_department" required multiple>
+                                    <option v-for="department in departments" :key="department.id" :value="department.id">{{ department.name }}</option>
+                                </select>
+                                <div v-if="customerErrors.guis_department" class="text-danger small mt-1">{{ customerErrors.guis_department }}</div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" @click="saveNewCustomer">保存</button>
                 </div>
             </div>
         </div>

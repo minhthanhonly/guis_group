@@ -911,9 +911,13 @@ $(document).ready(function() {
                         }
                     }
 
+                    // 期間未定: thiếu start_date, hoặc (thiếu end_date và không có caily_nouki/guis_nouki)
+                    const hasNouki = !!(project.caily_nouki && String(project.caily_nouki).trim() && project.caily_nouki !== '-') ||
+                        !!(project.guis_nouki && String(project.guis_nouki).trim() && project.guis_nouki !== '-');
+                    const periodUndecided = !project.start_date || (!project.end_date && !hasNouki);
                     const task = {
                         id: project.id,
-                        text: project.name || '',
+                        text: (project.name || '') + (periodUndecided ? ' 期間未定' : ''),
                         start_date: startDate,
                         end_date: endDate,
                         progress: project.progress / 100,
@@ -932,6 +936,7 @@ $(document).ready(function() {
                         project_order_type: project.project_order_type || '',
                         project_number: project.project_number || '',
                         project_name: project.name || '',
+                        period_undecided: periodUndecided,
                         // Lưu end_date gốc từ project để hiển thị trong tooltip
                         project_end_date: project.end_date || '',
                         description: project.description || '',
@@ -1332,7 +1337,7 @@ $(document).ready(function() {
                     { name: "index", label: "ID", width: 50, align: "center", min_width: 40, template: function (obj) {
                         return obj.id || '';
                     }},
-                    { name: "text", label: "件名", width: 200, tree: true, min_width: 150 },
+                    { name: "text", label: "件名", width: 350, tree: true, min_width: 300 },
                     { name: "construction_number", label: "工事番号", width: 100, min_width: 80 },
                     { name: "start_date", label: "開始日", width: 100, align: "left", min_width: 80, template: function(obj) {
                         if (!obj.start_date) return 'N/A';
@@ -1386,9 +1391,12 @@ $(document).ready(function() {
                     if (t === '新規') return 'bg-primary small';
                     return 'bg-info small';
                 };
-                // Customize task text: orderType as badge, then team name & project name
+                // Customize task text: badge before project_order_type (e.g. 期間未定), then orderType badges, team name, project name
                 gantt.templates.task_text = function(start, end, task) {
                     const parts = [];
+                    if (task.period_undecided) {
+                        parts.push('<span class="badge bg-label-warning small me-1">期間未定</span>');
+                    }
                     const teamName = task.team_name || '';
                     const orderTypeRaw = task.project_order_type || '';
                     const projectName = task.project_name || '';

@@ -85,8 +85,9 @@ if($_SESSION['show_project'] == 0){
                                 <button v-if="!isEditMode && canEditProject && !(project && project.is_kadai == 1)" class="btn btn-outline-warning btn-sm me-2" @click="toggleEditMode" title="編集">
                                     <i class="fa fa-pencil-alt me-1"></i> <span data-i18n="編集">編集</span>
                                 </button>
-                                <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject" title="保存">
-                                    <i class="fa fa-save me-1"></i> <span data-i18n="保存">保存</span>
+                                <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject" :disabled="savingProject" title="保存">
+                                    <span v-if="savingProject" class="spinner-border spinner-border-sm me-1"></span>
+                                    <i v-else class="fa fa-save me-1"></i> <span v-if="savingProject" data-i18n="保存中">保存中...</span><span v-else data-i18n="保存">保存</span>
                                 </button>
                                 <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit" title="キャンセル">
                                     <i class="fa fa-times me-1"></i> <span data-i18n="キャンセル">キャンセル</span>
@@ -433,7 +434,12 @@ if($_SESSION['show_project'] == 0){
                                 <input v-else type="text" class="form-control" :value="project.tantou || '-'" readonly>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">CAILY納期</label>
+                                <label class="form-label">CAILY納期
+                                    <span v-if="getTimeRemainingForDate(project.caily_nouki)" :class="'badge ms-2 ' + getTimeRemainingForDate(project.caily_nouki).class"
+                                          :title="getTimeRemainingForDate(project.caily_nouki).isOverdue ? '期限を超過しています' : '残り時間'">
+                                        {{ getTimeRemainingForDate(project.caily_nouki).text }}
+                                    </span>
+                                </label>
                                 <div v-if="isEditMode" class="input-group">
                                     <input type="text" class="form-control" v-model="project.caily_nouki" id="caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>
@@ -441,7 +447,12 @@ if($_SESSION['show_project'] == 0){
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.caily_nouki)" :data-time="project.caily_nouki || ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.caily_nouki)" readonly>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">GUIS納期</label>
+                                <label class="form-label">GUIS納期
+                                    <span v-if="getTimeRemainingForDate(project.guis_nouki)" :class="'badge ms-2 ' + getTimeRemainingForDate(project.guis_nouki).class"
+                                          :title="getTimeRemainingForDate(project.guis_nouki).isOverdue ? '期限を超過しています' : '残り時間'">
+                                        {{ getTimeRemainingForDate(project.guis_nouki).text }}
+                                    </span>
+                                </label>
                                 <div v-if="isEditMode" class="input-group">
                                     <input type="text" class="form-control" v-model="project.guis_nouki" id="guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>

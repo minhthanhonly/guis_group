@@ -99,6 +99,7 @@ const vueApp = createApp({
             },
             // Project status update loading
             isUpdatingStatus: false,
+            savingProject: false,
             // Debounce timer for amount updates
             amountUpdateTimer: null,
             tagsUpdateTimer: null,
@@ -624,6 +625,47 @@ const vueApp = createApp({
                 }
             }
         },
+        /** Remaining time for a given date (e.g. caily_nouki, guis_nouki). Returns null if status is draft/paused/cancelled. */
+        getTimeRemainingForDate(dateStr) {
+            if (!this.project || !dateStr) return null;
+            if (['draft', 'paused', 'cancelled'].includes(String(this.project.status || '').toLowerCase())) return null;
+            const now = moment.tz('Asia/Tokyo');
+            const endDate = moment.tz(dateStr, 'Asia/Tokyo');
+            if (!endDate.isValid()) return null;
+            const isVietnamese = typeof i18next !== 'undefined' && i18next.isInitialized && i18next.language === 'vi';
+            const dayLabel = this.translateLabel('日');
+            const hourLabel = this.translateLabel('時間');
+            const minuteLabel = this.translateLabel('分');
+            const overdueLabel = this.translateLabel('超過');
+            const remainingLabel = this.translateLabel('残り');
+            const formatUnit = (value, label) => isVietnamese ? `${value} ${label}` : `${value}${label}`;
+            const formatTimeText = (parts) => isVietnamese ? parts.filter(p => p).join(' ') : parts.filter(p => p).join('');
+            if (endDate.isBefore(now)) {
+                const diff = now.diff(endDate);
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                if (days > 0) {
+                    return { text: formatTimeText([formatUnit(days, dayLabel), formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel), overdueLabel]), class: 'bg-danger', isOverdue: true };
+                } else if (hours > 0) {
+                    return { text: formatTimeText([formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel), overdueLabel]), class: 'bg-danger', isOverdue: true };
+                } else {
+                    return { text: formatTimeText([formatUnit(minutes, minuteLabel), overdueLabel]), class: 'bg-danger', isOverdue: true };
+                }
+            } else {
+                const diff = endDate.diff(now);
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                if (days > 0) {
+                    return { text: formatTimeText([remainingLabel, formatUnit(days, dayLabel), formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel)]), class: 'bg-label-info', isOverdue: false };
+                } else if (hours > 0) {
+                    return { text: formatTimeText([remainingLabel, formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel)]), class: hours <= 24 ? 'bg-label-warning' : 'bg-label-info', isOverdue: false };
+                } else {
+                    return { text: formatTimeText([remainingLabel, formatUnit(minutes, minuteLabel)]), class: 'bg-label-warning', isOverdue: false };
+                }
+            }
+        },
         formatDateForInput(date) {
             if (!date) return '';
             return moment(date).format('YYYY-MM-DD');
@@ -1014,18 +1056,26 @@ const vueApp = createApp({
                                 }
                             } catch (err) {}
                         });
-                        // Xử lý khi thêm team thì thêm member của team đó
+                        // Xử lý khi thêm team thì thêm member của team đó và team leader vào manager
                         this.tagify.on('add', async (e) => {
                             const addedTeamId = e.detail.data.id;
-                            if (!addedTeamId || !this.membersTagify) return;
+                            if (!addedTeamId) return;
                             try {
                                 const res = await axios.get(`/api/index.php?model=team&method=get&id=${addedTeamId}`);
                                 if (res.data && Array.isArray(res.data.members)) {
-                                    const teamMembers = res.data.members.map(m => ({ id: m.user_id, value: m.user_name }));
-                                    // Lọc ra các member chưa có trong Tagify
-                                    const currentIds = this.membersTagify.value.map(tag => String(tag.id));
-                                    const toAdd = teamMembers.filter(m => !currentIds.includes(String(m.id)));
-                                    this.membersTagify.addTags(toAdd);
+                                    if (this.membersTagify) {
+                                        const teamMembers = res.data.members.map(m => ({ id: m.user_id, value: m.user_name }));
+                                        const currentIds = this.membersTagify.value.map(tag => String(tag.id));
+                                        const toAdd = teamMembers.filter(m => !currentIds.includes(String(m.id)));
+                                        this.membersTagify.addTags(toAdd);
+                                    }
+                                    const leaders = res.data.members.filter(m => m.leader == 1 || m.leader === '1');
+                                    if (leaders.length && this.managerTagify) {
+                                        const leaderTags = leaders.map(m => ({ id: m.user_id, value: m.user_name || '' }));
+                                        const managerCurrentIds = this.managerTagify.value.map(tag => String(tag.id));
+                                        const leadersToAdd = leaderTags.filter(m => !managerCurrentIds.includes(String(m.id)));
+                                        this.managerTagify.addTags(leadersToAdd);
+                                    }
                                 }
                             } catch (err) {}
                         });
@@ -1048,7 +1098,7 @@ const vueApp = createApp({
                             }
                         }
                         this.projectOrderTypeTagify = new Tagify(orderTypeInput, {
-                            whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                            whitelist: ['新規', '修正', '免震', '耐震', '計画変更', '契約図', '実施図'],
                             maxTags: 5,
                             dropdown: {
                                 maxItems: 20,
@@ -1356,7 +1406,8 @@ const vueApp = createApp({
             });
         },
         toAPIDate(str) {
-            if (!str) return '';
+            if (str == null || str === '') return '';
+            if (typeof str !== 'string') str = String(str);
             return str.replace(/\//g, '-');
         },
         prepareCustomFieldsForSave() {
@@ -1397,7 +1448,14 @@ const vueApp = createApp({
             return allFields;
         },
         async saveProject() {
+            if (!this.project) {
+                if (typeof showMessage === 'function') showMessage('プロジェクトデータが読み込まれていません。', true);
+                return;
+            }
             if (!this.validateProjectForm()) {
+                const msg = this.validationErrors.name || this.validationErrors.project_number || '入力内容を確認してください。';
+                if (typeof showMessage === 'function') showMessage(msg, true);
+                else if (typeof this.showNotification === 'function') this.showNotification(msg, 'error');
                 return;
             }
             // Use the stored quill content instead of syncing from editor
@@ -1407,6 +1465,7 @@ const vueApp = createApp({
             
             // Save custom field values (no need to save set_id since we use all sets)
             this.project.custom_fields = JSON.stringify(this.prepareCustomFieldsForSave());
+            this.savingProject = true;
             try {
                 const formData = new FormData();
                 formData.append('id', this.project.id);
@@ -1419,9 +1478,28 @@ const vueApp = createApp({
                 formData.append('progress', this.project.progress);
                 formData.append('priority', this.project.priority || '');
                 formData.append('status', this.project.status);
-                formData.append('teams', this.newProject.teams);
-                formData.append('members', this.newProject.members || '');
-                formData.append('managers', this.newProject.managers || '');
+                // Use Tagify current value or project/managers/members (newProject only updates on change)
+                let teamsVal = this.newProject.teams || '';
+                if (this.tagify && this.tagify.value && this.tagify.value.length) {
+                    teamsVal = this.tagify.value.map(t => String(t.id)).join(',');
+                } else if (!teamsVal && this.project.teams) {
+                    teamsVal = typeof this.project.teams === 'string' ? this.project.teams : (this.project.teams || '');
+                }
+                let managersVal = this.newProject.managers || '';
+                if (this.managerTagify && this.managerTagify.value && this.managerTagify.value.length) {
+                    managersVal = this.managerTagify.value.map(t => String(t.id)).join(',');
+                } else if (!managersVal && this.managers && this.managers.length) {
+                    managersVal = this.managers.map(m => String(m.user_id)).join(',');
+                }
+                let membersVal = this.newProject.members || '';
+                if (this.membersTagify && this.membersTagify.value && this.membersTagify.value.length) {
+                    membersVal = this.membersTagify.value.map(t => String(t.id)).join(',');
+                } else if (!membersVal && this.members && this.members.length) {
+                    membersVal = this.members.map(m => String(m.user_id)).join(',');
+                }
+                formData.append('teams', teamsVal);
+                formData.append('members', membersVal);
+                formData.append('managers', managersVal);
                 formData.append('start_date', this.toAPIDate(this.project.start_date));
                 formData.append('end_date', this.toAPIDate(this.project.end_date));
                 formData.append('actual_end_date', this.toAPIDate(this.project.actual_end_date) || '');
@@ -1448,7 +1526,13 @@ const vueApp = createApp({
                 }
             } catch (error) {
                 console.error('Error saving project:', error);
-                showMessage('プロジェクトの更新に失敗しました。', true);
+                if (typeof showMessage === 'function') {
+                    showMessage('プロジェクトの更新に失敗しました。', true);
+                } else {
+                    alert('プロジェクトの更新に失敗しました。');
+                }
+            } finally {
+                this.savingProject = false;
             }
         },
         cancelEdit() {
@@ -2324,10 +2408,7 @@ const vueApp = createApp({
             //     this.validationErrors.customer_id = '担当者名は必須です';
             //     valid = false;
             // }
-            if (!this.project.project_number) {
-                this.validationErrors.project_number = 'プロジェクト番号は必須です';
-                valid = false;
-            }
+            // project_number は必須チェックを削除（フィールド削除に合わせて任意とする）
             if (!this.project.name) {
                 this.validationErrors.name = 'プロジェクト名は必須です';
                 valid = false;
@@ -2567,7 +2648,7 @@ const vueApp = createApp({
                                 }
                             }
                             this.projectOrderTypeTagify = new Tagify(input, {
-                                whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                                whitelist: ['新規', '修正', '免震', '耐震', '計画変更', '契約図', '実施図'],
                                 maxTags: 5,
                                 dropdown: {
                                     maxItems: 20,

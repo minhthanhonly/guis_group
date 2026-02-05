@@ -997,7 +997,7 @@ var projectTable;
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-start justify-content-start flex-column">
                                     <div class="mt-1">
-                                        <small class="text-muted d-block">${row.company_name.replace('株式会社', '').replace('有限会社', '') || '-'}</small>
+                                        <small class="text-muted d-block">${row.parent_branch_name|| '-'}</small>
                                         <small class="text-muted d-block">${row.customer_name || '-'}</small>
                                     </div>
                                 </div>`;
@@ -1353,13 +1353,22 @@ var projectTable;
                         });
                         quickEditTeamTagify.on('add', function(e) {
                             const addedTeamId = e.detail.data && e.detail.data.id;
-                            if (!addedTeamId || !quickEditMembersTagify) return;
+                            if (!addedTeamId) return;
                             axios.get('/api/index.php?model=team&method=get&id=' + addedTeamId).then(function(res) {
                                 if (res.data && Array.isArray(res.data.members)) {
-                                    const teamMembers = res.data.members.map(function(m) { return { id: m.user_id, value: m.user_name || '' }; });
-                                    const currentIds = quickEditMembersTagify.value.map(function(tag) { return String(tag.id); });
-                                    const toAdd = teamMembers.filter(function(m) { return currentIds.indexOf(String(m.id)) === -1; });
-                                    quickEditMembersTagify.addTags(toAdd);
+                                    if (quickEditMembersTagify) {
+                                        const teamMembers = res.data.members.map(function(m) { return { id: m.user_id, value: m.user_name || '' }; });
+                                        const currentIds = quickEditMembersTagify.value.map(function(tag) { return String(tag.id); });
+                                        const toAdd = teamMembers.filter(function(m) { return currentIds.indexOf(String(m.id)) === -1; });
+                                        quickEditMembersTagify.addTags(toAdd);
+                                    }
+                                    var leaders = res.data.members.filter(function(m) { return m.leader == 1 || m.leader === '1'; });
+                                    if (leaders.length && quickEditManagerTagify) {
+                                        var leaderTags = leaders.map(function(m) { return { id: m.user_id, value: m.user_name || '' }; });
+                                        var managerCurrentIds = quickEditManagerTagify.value.map(function(tag) { return String(tag.id); });
+                                        var leadersToAdd = leaderTags.filter(function(m) { return managerCurrentIds.indexOf(String(m.id)) === -1; });
+                                        quickEditManagerTagify.addTags(leadersToAdd);
+                                    }
                                 }
                             }).catch(function() {});
                         });
@@ -2258,7 +2267,7 @@ var projectTable;
                 const input = document.querySelector('#project_order_type');
                 if (input && window.Tagify) {
                     this.tagifyInstance = new Tagify(input, {
-                        whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                        whitelist: ['新規', '修正', '免震', '耐震', '計画変更', '契約図', '実施図'],
                         maxTags: 5,
                         dropdown: {
                             maxItems: 20,

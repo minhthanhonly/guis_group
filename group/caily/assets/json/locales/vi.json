@@ -448,5 +448,6 @@
     "期限日(実納期)": "Kì hạn cuối",
     "start_today": "BĐ Hôm nay",
     "start_tomorrow": "BĐ Ngày mai",
-    "start_in_n_days": "BĐ +{{n}} ngày"
+    "start_in_n_days": "BĐ +{{n}} ngày",
+    "お客様情報を更新すると、このお客様の情報を利用している他の建物の情報もすべて更新されます。": "Cập nhật thông tin khách hàng sẽ kéo theo cập nhật tất cả thông tin khách hàng đã sử dụng trong các dự án khác."
   }

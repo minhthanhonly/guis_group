@@ -49,12 +49,38 @@ createApp({
                 guis_department: ''
             },
             updatingCustomer: false,
+            // New customer modal (建物詳細 edit mode)
+            newCustomer: {
+                company_name: '大東建託株式会社',
+                company_name_kana: '',
+                name: '',
+                name_kana: '',
+                branch: '本社',
+                position: '',
+                department: '',
+                title: '',
+                tel: '',
+                fax: '',
+                phone: '',
+                email: '',
+                zip: '',
+                address1: '',
+                address2: '',
+                memo: '',
+                status: 1,
+                category_id: 0,
+                guis_department: []
+            },
             type1Tagify: null,
             type2Tagify: null,
             constructionBranchTagify: null,
             childProjectOrderTypeTagify: null,
             createChildProjectManagerTagify: null,
+            createChildProjectTeamTagify: null,
+            createChildProjectMembersTagify: null,
             editChildProjectManagerTagify: null,
+            editChildProjectTeamTagify: null,
+            editChildProjectMembersTagify: null,
             request_design: false,
             request_equipment: false,
             request_energy_saving: false,
@@ -99,7 +125,10 @@ createApp({
                 is_kadai: true,
                 status: 'draft',
                 amount: 0,
+                progress: 0,
+                teams: '',
                 managers: [],
+                members: [],
                 tantou: '',
                 caily_nouki: '',
                 guis_nouki: ''
@@ -118,7 +147,10 @@ createApp({
                 status: 'draft',
                 previous_status: '',
                 amount: 0,
+                progress: 0,
+                teams: '',
                 managers: [],
+                members: [],
                 tantou: '',
                 caily_nouki: '',
                 guis_nouki: ''
@@ -336,55 +368,81 @@ createApp({
             }
         },
         'newChildProject.department_id': {
-            handler(newDeptId, oldDeptId) {
+            async handler(newDeptId, oldDeptId) {
                 if (newDeptId && newDeptId !== oldDeptId) {
-                    // Load department users and update manager Tagify
-                    this.loadDepartmentUsers(newDeptId, false).then(() => {
-                        this.$nextTick(() => {
-                            const managerInput = document.getElementById('create_child_project_manager_tags');
-                            if (managerInput) {
-                                // Re-initialize Tagify to ensure whitelist is updated
-                                if (this.createChildProjectManagerTagify) {
-                                    this.createChildProjectManagerTagify.destroy();
-                                }
-                                this.initializeCreateChildProjectManagerTagify();
-                            }
-                        });
-                    });
+                    // Clear 管理 (manager), team, members when department changes so new Tagify start empty
+                    this.newChildProject.managers = [];
+                    this.newChildProject.teams = '';
+                    this.newChildProject.members = [];
+                    // Load department users first, then re-initialize all Tagify so whitelists are set
+                    await this.loadDepartmentUsers(newDeptId, false);
+                    await this.$nextTick();
+                    const managerInput = document.getElementById('create_child_project_manager_tags');
+                    if (managerInput) {
+                        if (this.createChildProjectManagerTagify) {
+                            this.createChildProjectManagerTagify.destroy();
+                            this.createChildProjectManagerTagify = null;
+                        }
+                        managerInput.value = '';
+                        await this.initializeCreateChildProjectManagerTagify();
+                        await this.initializeCreateChildProjectTeamTagify();
+                        await this.initializeCreateChildProjectMembersTagify();
+                    }
                 } else if (!newDeptId) {
-                    // Clear managers when department is cleared
+                    // Clear managers, team, members when department is cleared
                     if (this.createChildProjectManagerTagify) {
                         this.createChildProjectManagerTagify.removeAllTags();
                         this.newChildProject.managers = [];
                         this.createChildProjectManagerTagify.settings.whitelist = [];
                         this.createChildProjectManagerTagify.whitelist = [];
                     }
+                    if (this.createChildProjectTeamTagify) {
+                        this.createChildProjectTeamTagify.removeAllTags();
+                        this.newChildProject.teams = '';
+                    }
+                    if (this.createChildProjectMembersTagify) {
+                        this.createChildProjectMembersTagify.removeAllTags();
+                        this.newChildProject.members = [];
+                    }
                 }
             }
         },
         'editingChildProject.department_id': {
-            handler(newDeptId, oldDeptId) {
+            async handler(newDeptId, oldDeptId) {
                 if (newDeptId && newDeptId !== oldDeptId) {
-                    // Load department users and update manager Tagify
-                    this.loadDepartmentUsers(newDeptId, true).then(() => {
-                        this.$nextTick(() => {
-                            const managerInput = document.getElementById('edit_child_project_manager_tags');
-                            if (managerInput) {
-                                // Re-initialize Tagify to ensure whitelist is updated
-                                if (this.editChildProjectManagerTagify) {
-                                    this.editChildProjectManagerTagify.destroy();
-                                }
-                                this.initializeEditChildProjectManagerTagify();
-                            }
-                        });
-                    });
+                    // Clear 管理 (manager), team, members when department changes so new Tagify start empty
+                    this.editingChildProject.managers = [];
+                    this.editingChildProject.teams = '';
+                    this.editingChildProject.members = [];
+                    // Load department users first, then re-initialize all Tagify so whitelists are set
+                    await this.loadDepartmentUsers(newDeptId, true);
+                    await this.$nextTick();
+                    const managerInput = document.getElementById('edit_child_project_manager_tags');
+                    if (managerInput) {
+                        if (this.editChildProjectManagerTagify) {
+                            this.editChildProjectManagerTagify.destroy();
+                            this.editChildProjectManagerTagify = null;
+                        }
+                        managerInput.value = '';
+                        await this.initializeEditChildProjectManagerTagify();
+                        await this.initializeEditChildProjectTeamTagify();
+                        await this.initializeEditChildProjectMembersTagify();
+                    }
                 } else if (!newDeptId) {
-                    // Clear managers when department is cleared
+                    // Clear managers, team, members when department is cleared
                     if (this.editChildProjectManagerTagify) {
                         this.editChildProjectManagerTagify.removeAllTags();
                         this.editingChildProject.managers = [];
                         this.editChildProjectManagerTagify.settings.whitelist = [];
                         this.editChildProjectManagerTagify.whitelist = [];
+                    }
+                    if (this.editChildProjectTeamTagify) {
+                        this.editChildProjectTeamTagify.removeAllTags();
+                        this.editingChildProject.teams = '';
+                    }
+                    if (this.editChildProjectMembersTagify) {
+                        this.editChildProjectMembersTagify.removeAllTags();
+                        this.editingChildProject.members = [];
                     }
                 }
             }
@@ -799,8 +857,27 @@ createApp({
             const materials = materialsString.split(',').map(m => m.trim());
             return materials.includes(materialName);
         },
+        onBeforeUnload(e) {
+            if (this.isEditMode) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        },
+        addBeforeUnloadWarning() {
+            if (!this._boundBeforeUnload) {
+                this._boundBeforeUnload = this.onBeforeUnload.bind(this);
+                window.addEventListener('beforeunload', this._boundBeforeUnload);
+            }
+        },
+        removeBeforeUnloadWarning() {
+            if (this._boundBeforeUnload) {
+                window.removeEventListener('beforeunload', this._boundBeforeUnload);
+                this._boundBeforeUnload = null;
+            }
+        },
         toggleEditMode() {
             this.isEditMode = true;
+            this.addBeforeUnloadWarning();
             this.originalParentProject = JSON.parse(JSON.stringify(this.parentProject));
             this.loadInitialData();
             this.parseRequests();
@@ -815,6 +892,7 @@ createApp({
         },
         cancelEdit() {
             this.isEditMode = false;
+            this.removeBeforeUnloadWarning();
             this.parentProject = JSON.parse(JSON.stringify(this.originalParentProject));
             this.validationErrors = {
                 company_name: '',
@@ -834,7 +912,16 @@ createApp({
             try {
                 const response = await axios.get('/api/index.php?model=customer&method=list_companies');
                 if (response.data && response.data.status === 'success') {
-                    this.companies = response.data.data || [];
+                    const list = response.data.data || [];
+                    this.companies = list.slice().sort((a, b) => {
+                        const nameA = (a.company_name || '').toString();
+                        const nameB = (b.company_name || '').toString();
+                        const hasA = nameA.includes('大東');
+                        const hasB = nameB.includes('大東');
+                        if (hasA && !hasB) return -1;
+                        if (!hasA && hasB) return 1;
+                        return nameA.localeCompare(nameB);
+                    });
                 }
             } catch (error) {
                 console.error('Error loading companies:', error);
@@ -946,8 +1033,17 @@ createApp({
                             };
                         },
                         processResults: function(data) {
+                            const list = (data.data || []).slice().sort((a, b) => {
+                                const nameA = (a.company_name || '').toString();
+                                const nameB = (b.company_name || '').toString();
+                                const hasA = nameA.includes('大東');
+                                const hasB = nameB.includes('大東');
+                                if (hasA && !hasB) return -1;
+                                if (!hasA && hasB) return 1;
+                                return nameA.localeCompare(nameB);
+                            });
                             return {
-                                results: data.data.map(function(item) {
+                                results: list.map(function(item) {
                                     return {
                                         id: item.company_name,
                                         text: item.company_name
@@ -1544,6 +1640,7 @@ createApp({
                         confirmButtonColor: '#3085d6'
                     }).then(() => {
                         this.isEditMode = false;
+                        this.removeBeforeUnloadWarning();
                         this.destroySelect2Instances();
                         this.loadParentProject();
                     });
@@ -1669,6 +1766,17 @@ createApp({
 
 
         async showCreateChildProjectModal() {
+            // Clear all Tagify and input values before opening modal
+            this.destroyChildProjectTagify();
+            const clearInput = (id) => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            };
+            clearInput('child_project_order_type');
+            clearInput('create_child_project_manager_tags');
+            clearInput('create_child_project_team_tags');
+            clearInput('create_child_project_members_tags');
+
             this.resetChildProjectForm();
             // Set default name from parent project's project_name (お施主様名)
             if (this.parentProject && this.parentProject.project_name) {
@@ -1716,7 +1824,10 @@ createApp({
                 is_kadai: true,
                 status: 'draft',
                 amount: 0,
+                progress: 0,
+                teams: '',
                 managers: [],
+                members: [],
                 tantou: '',
                 caily_nouki: '',
                 guis_nouki: ''
@@ -1925,7 +2036,7 @@ createApp({
                 orderTypeInput.value = '';
                 
                 this.childProjectOrderTypeTagify = new Tagify(orderTypeInput, {
-                    whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                    whitelist: ['新規', '修正', '免震', '耐震', '計画変更', '契約図', '実施図'],
                     maxTags: 5,
                     dropdown: {
                         maxItems: 20,
@@ -1943,8 +2054,109 @@ createApp({
                 this.childProjectOrderTypeTagify.on('remove', updateOrderType);
             }
             
-            // Initialize Tagify for manager
+            // Initialize Tagify for manager, team, members
             await this.initializeCreateChildProjectManagerTagify();
+            await this.initializeCreateChildProjectTeamTagify();
+            await this.initializeCreateChildProjectMembersTagify();
+        },
+        
+        async initializeCreateChildProjectTeamTagify() {
+            const teamInput = document.getElementById('create_child_project_team_tags');
+            if (!teamInput || !window.Tagify) return;
+            if (teamInput._tagify) {
+                teamInput._tagify.destroy();
+            }
+            teamInput.value = '';
+            let departmentTeams = [];
+            const deptId = this.newChildProject.department_id;
+            if (deptId) {
+                try {
+                    const res = await axios.get('/api/index.php?model=team&method=listbydepartment&department_id=' + encodeURIComponent(deptId));
+                    const raw = res.data;
+                    departmentTeams = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.data) ? raw.data : []);
+                } catch (e) {
+                    departmentTeams = [];
+                }
+            }
+            const teamWhitelist = departmentTeams.map(t => ({ id: String(t.id), value: t.name || String(t.id) }));
+            this.createChildProjectTeamTagify = new Tagify(teamInput, {
+                whitelist: teamWhitelist,
+                enforceWhitelist: false,
+                dropdown: {
+                    maxItems: 1000,
+                    enabled: 0,
+                    closeOnSelect: true,
+                    searchKeys: ['value'],
+                    classname: 'tagify__dropdown'
+                }
+            });
+            this.createChildProjectTeamTagify.settings.whitelist = teamWhitelist;
+            this.createChildProjectTeamTagify.whitelist = teamWhitelist;
+            this.createChildProjectTeamTagify.on('focus', () => {
+                if (this.createChildProjectTeamTagify && this.createChildProjectTeamTagify.whitelist && this.createChildProjectTeamTagify.whitelist.length > 0) {
+                    this.createChildProjectTeamTagify.dropdown.show();
+                }
+            });
+            this.createChildProjectTeamTagify.on('change', () => {
+                this.newChildProject.teams = this.createChildProjectTeamTagify.value.map(t => t.id).join(',');
+            });
+            this.createChildProjectTeamTagify.on('add', async (e) => {
+                const addedTeamId = e.detail.data && e.detail.data.id;
+                if (!addedTeamId) return;
+                try {
+                    const res = await axios.get(`/api/index.php?model=team&method=get&id=${addedTeamId}`);
+                    if (res.data && Array.isArray(res.data.members)) {
+                        if (this.createChildProjectMembersTagify) {
+                            const teamMembers = res.data.members.map(m => ({ id: m.user_id, value: m.user_name || '' }));
+                            const currentIds = this.createChildProjectMembersTagify.value.map(tag => String(tag.id));
+                            const toAdd = teamMembers.filter(m => !currentIds.includes(String(m.id)));
+                            this.createChildProjectMembersTagify.addTags(toAdd);
+                        }
+                        const leaders = res.data.members.filter(m => m.leader == 1 || m.leader === '1');
+                        if (leaders.length && this.createChildProjectManagerTagify) {
+                            const leaderTags = leaders.map(m => ({ id: m.user_id, value: m.user_name || '' }));
+                            const managerCurrentIds = this.createChildProjectManagerTagify.value.map(tag => String(tag.id));
+                            const leadersToAdd = leaderTags.filter(m => !managerCurrentIds.includes(String(m.id)));
+                            this.createChildProjectManagerTagify.addTags(leadersToAdd);
+                        }
+                    }
+                } catch (err) {}
+            });
+            this.createChildProjectTeamTagify.on('remove', async (e) => {
+                const removedTeamId = e.detail.data && e.detail.data.id;
+                if (!removedTeamId || !this.createChildProjectMembersTagify) return;
+                try {
+                    const res = await axios.get(`/api/index.php?model=team&method=get&id=${removedTeamId}`);
+                    if (res.data && Array.isArray(res.data.members)) {
+                        const teamMemberIds = res.data.members.map(m => String(m.user_id));
+                        const remain = this.createChildProjectMembersTagify.value.filter(tag => !teamMemberIds.includes(String(tag.id)));
+                        this.createChildProjectMembersTagify.removeAllTags();
+                        this.createChildProjectMembersTagify.addTags(remain);
+                    }
+                } catch (err) {}
+            });
+        },
+
+        async initializeCreateChildProjectMembersTagify() {
+            const membersInput = document.getElementById('create_child_project_members_tags');
+            if (!membersInput || !window.Tagify) return;
+            if (membersInput._tagify) {
+                membersInput._tagify.destroy();
+            }
+            membersInput.value = '';
+            const users = (this.departmentUsers || []).map(u => ({
+                id: u.id || u.user_id,
+                value: u.user_name || u.realname || u.name,
+                name: u.user_name || u.realname || u.name
+            }));
+            this.createChildProjectMembersTagify = new Tagify(membersInput, {
+                whitelist: users,
+                enforceWhitelist: false,
+                dropdown: { maxItems: 1000, enabled: 0, closeOnSelect: true }
+            });
+            this.createChildProjectMembersTagify.on('change', () => {
+                this.newChildProject.members = this.createChildProjectMembersTagify.value.map(t => t.id);
+            });
         },
         
         async initializeCreateChildProjectManagerTagify() {
@@ -2016,15 +2228,48 @@ createApp({
                 this.createChildProjectManagerTagify.destroy();
                 this.createChildProjectManagerTagify = null;
             }
+            if (this.createChildProjectTeamTagify) {
+                this.createChildProjectTeamTagify.destroy();
+                this.createChildProjectTeamTagify = null;
+            }
+            if (this.createChildProjectMembersTagify) {
+                this.createChildProjectMembersTagify.destroy();
+                this.createChildProjectMembersTagify = null;
+            }
+        },
+
+        clearChildProjectTeamTags(isEdit = false) {
+            if (isEdit && this.editChildProjectTeamTagify) {
+                this.editChildProjectTeamTagify.removeAllTags();
+                this.editingChildProject.teams = '';
+            } else if (!isEdit && this.createChildProjectTeamTagify) {
+                this.createChildProjectTeamTagify.removeAllTags();
+                this.newChildProject.teams = '';
+            }
+        },
+
+        clearChildProjectMembersTags(isEdit = false) {
+            if (isEdit && this.editChildProjectMembersTagify) {
+                this.editChildProjectMembersTagify.removeAllTags();
+                this.editingChildProject.members = [];
+            } else if (!isEdit && this.createChildProjectMembersTagify) {
+                this.createChildProjectMembersTagify.removeAllTags();
+                this.newChildProject.members = [];
+            }
         },
         
         async showEditChildProjectModal(project) {
-            // Destroy existing Tagify instances first
-            if (this.editChildProjectManagerTagify) {
-                this.editChildProjectManagerTagify.destroy();
-                this.editChildProjectManagerTagify = null;
-            }
-            
+            // Clear all Tagify and input values before opening modal
+            this.destroyEditChildProjectTagify();
+            const clearInput = (id) => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            };
+            clearInput('edit_child_project_order_type');
+            clearInput('edit_child_project_manager_tags');
+            clearInput('edit_child_project_team_tags');
+            clearInput('edit_child_project_members_tags');
+
             this.editingChildProject = {
                 id: project.id,
                 name: project.name || '',
@@ -2039,16 +2284,17 @@ createApp({
                 status: project.status || '',
                 previous_status: project.previous_status || '',
                 amount: project.amount || project.total_amount || 0,
+                progress: project.progress != null ? parseInt(project.progress, 10) : 0,
+                teams: project.teams || '',
                 managers: [], // Initialize as empty, will be loaded later
+                members: [],
                 tantou: project.tantou || '',
                 caily_nouki: this.formatDateTimeForInput(project.caily_nouki) || '',
                 guis_nouki: this.formatDateTimeForInput(project.guis_nouki) || ''
             };
-            
 
-            
             this.loadDepartments();
-            
+
             // Reuse existing modal instance or create new one
             const modalEl = document.getElementById('editChildProjectModal');
             let modal = bootstrap.Modal.getInstance(modalEl);
@@ -2056,15 +2302,24 @@ createApp({
                 modal = new bootstrap.Modal(modalEl);
             }
             modal.show();
-            
-            this.$nextTick(() => {
+
+            // Run init after modal is fully shown so DOM is visible and Vue has updated inputs (fixes Tagify not showing previous values)
+            const onShown = async () => {
+                if (!(this.editingChildProject.teams || '').toString().trim() && this.editingChildProject.id) {
+                    try {
+                        const res = await axios.get(`/api/index.php?model=project&method=getById&id=${this.editingChildProject.id}`);
+                        if (res.data && res.data.teams != null) {
+                            this.editingChildProject.teams = (res.data.teams || '').toString();
+                        }
+                    } catch (e) { /* ignore */ }
+                }
                 this.initializeEditChildProjectDatePickers();
-                this.initializeEditChildProjectTagify();
-                // Add delay for Quill initialization to ensure DOM is ready
+                await this.initializeEditChildProjectTagify();
                 setTimeout(() => {
                     this.initializeEditChildProjectQuill();
                 }, 100);
-            });
+            };
+            modalEl.addEventListener('shown.bs.modal', onShown, { once: true });
         },
         
         initializeEditChildProjectDatePickers() {
@@ -2136,9 +2391,11 @@ createApp({
                 if (orderTypeInput.tagify) {
                     orderTypeInput.tagify.destroy();
                 }
+                // Clear input so Tagify does not parse existing value (avoids duplicate when we addTags below)
+                orderTypeInput.value = '';
                 
                 this.editChildProjectOrderTypeTagify = new Tagify(orderTypeInput, {
-                    whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                    whitelist: ['新規', '修正', '免震', '耐震', '計画変更', '契約図', '実施図'],
                     maxTags: 5,
                     dropdown: {
                         maxItems: 20,
@@ -2156,10 +2413,17 @@ createApp({
                 
                 this.editChildProjectOrderTypeTagify.on('add', updateOrderType);
                 this.editChildProjectOrderTypeTagify.on('remove', updateOrderType);
+                // Set tags once from model (input was cleared so no double-add from Tagify init)
+                const orderTypeVal = (this.editingChildProject.project_order_type || '').toString().trim();
+                if (orderTypeVal) {
+                    this.editChildProjectOrderTypeTagify.addTags(orderTypeVal);
+                }
             }
             
-            // Initialize Tagify for manager
+            // Initialize Tagify for manager, team, members
             await this.initializeEditChildProjectManagerTagify();
+            await this.initializeEditChildProjectTeamTagify();
+            await this.initializeEditChildProjectMembersTagify();
         },
         
         async initializeEditChildProjectManagerTagify() {
@@ -2212,14 +2476,17 @@ createApp({
                     this.editingChildProject.managers = selected;
                 });
                 
-                // Load existing managers for the project
+                // Load existing managers for the project (clear first to avoid add-then-remove-duplicates)
                 if (this.editingChildProject.id) {
                     try {
+                        if (this.editChildProjectManagerTagify) {
+                            this.editChildProjectManagerTagify.removeAllTags();
+                            this.editingChildProject.managers = [];
+                        }
                         const response = await axios.get(`/api/index.php?model=project&method=getMembers&project_id=${this.editingChildProject.id}&role=manager`);
                         if (response.data) {
                             const managers = Array.isArray(response.data) ? response.data : (response.data.data || []);
                             this.editingChildProject.managers = managers.map(m => String(m.user_id || m.id));
-                            // Wait for department users to be loaded before adding tags
                             if (this.departmentUsers && this.departmentUsers.length > 0) {
                                 const managerTags = managers.map(m => {
                                     const userId = String(m.user_id || m.id);
@@ -2229,18 +2496,161 @@ createApp({
                                         value: user.user_name || user.realname || user.name 
                                     } : null;
                                 }).filter(t => t !== null);
-                                if (managerTags.length > 0) {
-                                    this.$nextTick(() => {
-                                        if (this.editChildProjectManagerTagify) {
-                                            this.editChildProjectManagerTagify.addTags(managerTags);
-                                        }
-                                    });
+                                if (managerTags.length > 0 && this.editChildProjectManagerTagify) {
+                                    this.editChildProjectManagerTagify.addTags(managerTags);
                                 }
                             }
                         }
                     } catch (error) {
                         console.error('Error loading project managers:', error);
                     }
+                }
+            }
+        },
+        
+        async initializeEditChildProjectTeamTagify() {
+            const teamInput = document.getElementById('edit_child_project_team_tags');
+            if (!teamInput || !window.Tagify) return;
+            if (teamInput._tagify) {
+                teamInput._tagify.destroy();
+            }
+            teamInput.value = '';
+            let departmentTeams = [];
+            const deptId = this.editingChildProject.department_id;
+            if (deptId) {
+                try {
+                    const res = await axios.get('/api/index.php?model=team&method=listbydepartment&department_id=' + encodeURIComponent(deptId));
+                    const raw = res.data;
+                    departmentTeams = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.data) ? raw.data : []);
+                } catch (e) {
+                    departmentTeams = [];
+                }
+            }
+            const teamWhitelist = departmentTeams.map(t => ({ id: String(t.id), value: t.name || String(t.id) }));
+            this.editChildProjectTeamTagify = new Tagify(teamInput, {
+                whitelist: teamWhitelist,
+                enforceWhitelist: false,
+                dropdown: {
+                    maxItems: 1000,
+                    enabled: 0,
+                    closeOnSelect: true,
+                    searchKeys: ['value'],
+                    classname: 'tagify__dropdown'
+                }
+            });
+            this.editChildProjectTeamTagify.settings.whitelist = teamWhitelist;
+            this.editChildProjectTeamTagify.whitelist = teamWhitelist;
+            this.editChildProjectTeamTagify.on('focus', () => {
+                if (this.editChildProjectTeamTagify && this.editChildProjectTeamTagify.whitelist && this.editChildProjectTeamTagify.whitelist.length > 0) {
+                    this.editChildProjectTeamTagify.dropdown.show();
+                }
+            });
+            this.editChildProjectTeamTagify.on('change', () => {
+                this.editingChildProject.teams = this.editChildProjectTeamTagify.value.map(t => t.id).join(',');
+            });
+            // Load existing teams BEFORE attaching 'add'/'remove' so we don't auto-add team leaders/members (keep 管理 and メンバー as saved)
+            const teamsStr = (this.editingChildProject.teams || '').toString().trim();
+            if (teamsStr) {
+                const teamIds = teamsStr.split(',').map(s => s.trim()).filter(Boolean);
+                const tagsToAdd = teamIds.map(tid => {
+                    const t = departmentTeams.find(tt => String(tt.id) === String(tid));
+                    return { id: String(tid), value: (t && t.name) ? t.name : String(tid) };
+                });
+                if (tagsToAdd.length > 0) {
+                    this.$nextTick(() => {
+                        if (this.editChildProjectTeamTagify) {
+                            this.editChildProjectTeamTagify.addTags(tagsToAdd);
+                        }
+                    });
+                }
+            }
+            // Attach add/remove after loading existing teams so opening modal doesn't re-add team leaders to 管理 or team members to メンバー
+            this.editChildProjectTeamTagify.on('add', async (e) => {
+                const addedTeamId = e.detail.data && e.detail.data.id;
+                if (!addedTeamId) return;
+                try {
+                    const res = await axios.get(`/api/index.php?model=team&method=get&id=${addedTeamId}`);
+                    if (res.data && Array.isArray(res.data.members)) {
+                        if (this.editChildProjectMembersTagify) {
+                            const teamMembers = res.data.members.map(m => ({ id: m.user_id, value: m.user_name || '' }));
+                            const currentIds = this.editChildProjectMembersTagify.value.map(tag => String(tag.id));
+                            const toAdd = teamMembers.filter(m => !currentIds.includes(String(m.id)));
+                            this.editChildProjectMembersTagify.addTags(toAdd);
+                        }
+                        const leaders = res.data.members.filter(m => m.leader == 1 || m.leader === '1');
+                        if (leaders.length && this.editChildProjectManagerTagify) {
+                            const leaderTags = leaders.map(m => ({ id: m.user_id, value: m.user_name || '' }));
+                            const managerCurrentIds = this.editChildProjectManagerTagify.value.map(tag => String(tag.id));
+                            const leadersToAdd = leaderTags.filter(m => !managerCurrentIds.includes(String(m.id)));
+                            this.editChildProjectManagerTagify.addTags(leadersToAdd);
+                        }
+                    }
+                } catch (err) {}
+            });
+            this.editChildProjectTeamTagify.on('remove', async (e) => {
+                const removedTeamId = e.detail.data && e.detail.data.id;
+                if (!removedTeamId || !this.editChildProjectMembersTagify) return;
+                try {
+                    const res = await axios.get(`/api/index.php?model=team&method=get&id=${removedTeamId}`);
+                    if (res.data && Array.isArray(res.data.members)) {
+                        const teamMemberIds = res.data.members.map(m => String(m.user_id));
+                        const remain = this.editChildProjectMembersTagify.value.filter(tag => !teamMemberIds.includes(String(tag.id)));
+                        this.editChildProjectMembersTagify.removeAllTags();
+                        this.editChildProjectMembersTagify.addTags(remain);
+                    }
+                } catch (err) {}
+            });
+        },
+        
+        async initializeEditChildProjectMembersTagify() {
+            const membersInput = document.getElementById('edit_child_project_members_tags');
+            if (!membersInput || !window.Tagify) return;
+            if (membersInput._tagify) {
+                membersInput._tagify.destroy();
+            }
+            membersInput.value = '';
+            const users = (this.departmentUsers || []).map(u => ({
+                id: u.id || u.user_id,
+                value: u.user_name || u.realname || u.name,
+                name: u.user_name || u.realname || u.name
+            }));
+            this.editChildProjectMembersTagify = new Tagify(membersInput, {
+                whitelist: users,
+                enforceWhitelist: false,
+                dropdown: { maxItems: 1000, enabled: 0, closeOnSelect: true }
+            });
+            this.editChildProjectMembersTagify.on('change', () => {
+                this.editingChildProject.members = this.editChildProjectMembersTagify.value.map(t => t.id);
+            });
+            // Load existing members for the project (set editingChildProject.members only after addTags to avoid double-add)
+            if (this.editingChildProject.id) {
+                try {
+                    const response = await axios.get(`/api/index.php?model=project&method=getMembers&project_id=${this.editingChildProject.id}&role=member`);
+                    if (response.data) {
+                        const members = Array.isArray(response.data) ? response.data : (response.data.data || []);
+                        if (members.length > 0 && (this.departmentUsers || []).length > 0) {
+                            const memberTags = members.map(m => {
+                                const userId = String(m.user_id || m.id);
+                                const user = this.departmentUsers.find(u => String(u.id || u.user_id) === userId);
+                                return user ? { id: userId, value: user.user_name || user.realname || user.name } : null;
+                            }).filter(t => t !== null);
+                            if (memberTags.length > 0) {
+                                this.$nextTick(() => {
+                                    if (this.editChildProjectMembersTagify) {
+                                        this.editChildProjectMembersTagify.removeAllTags();
+                                        this.editChildProjectMembersTagify.addTags(memberTags);
+                                    }
+                                    this.editingChildProject.members = members.map(m => String(m.user_id || m.id));
+                                });
+                            } else {
+                                this.editingChildProject.members = members.map(m => String(m.user_id || m.id));
+                            }
+                        } else {
+                            this.editingChildProject.members = members.map(m => String(m.user_id || m.id));
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error loading project members:', error);
                 }
             }
         },
@@ -2270,6 +2680,14 @@ createApp({
             if (this.editChildProjectManagerTagify) {
                 this.editChildProjectManagerTagify.destroy();
                 this.editChildProjectManagerTagify = null;
+            }
+            if (this.editChildProjectTeamTagify) {
+                this.editChildProjectTeamTagify.destroy();
+                this.editChildProjectTeamTagify = null;
+            }
+            if (this.editChildProjectMembersTagify) {
+                this.editChildProjectMembersTagify.destroy();
+                this.editChildProjectMembersTagify = null;
             }
         },
 
@@ -2658,10 +3076,10 @@ createApp({
             this.editChildProjectValidationErrors = {
                 name: '',
                 department_id: '',
-                project_number: '',
                 start_date: '',
                 end_date: '',
-                project_order_type: ''
+                project_order_type: '',
+                tantou: ''
             };
             
             let isValid = true;
@@ -2673,11 +3091,6 @@ createApp({
             
             if (!this.editingChildProject.department_id) {
                 this.editChildProjectValidationErrors.department_id = '部署は必須です。';
-                isValid = false;
-            }
-            
-            if (!this.editingChildProject.project_number.trim()) {
-                this.editChildProjectValidationErrors.project_number = 'プロジェクト番号は必須です。';
                 isValid = false;
             }
             
@@ -2707,6 +3120,12 @@ createApp({
                 this.editChildProjectValidationErrors.project_order_type = '受注形態は必須です';
                 isValid = false;
             }
+
+            // Validate tantou (担当) is required
+            if (!this.editingChildProject.tantou || this.editingChildProject.tantou.trim() === '') {
+                this.editChildProjectValidationErrors.tantou = '担当は必須です';
+                isValid = false;
+            }
             
             return isValid;
         },
@@ -2728,7 +3147,7 @@ createApp({
                 formData.append('id', this.editingChildProject.id);
                 formData.append('name', this.editingChildProject.name);
                 formData.append('department_id', this.editingChildProject.department_id);
-                formData.append('project_number', this.editingChildProject.project_number);
+                formData.append('project_number', this.editingChildProject.project_number || '');
                 formData.append('description', this.editChildProjectQuillContent || '');
                 formData.append('start_date', this.editingChildProject.start_date);
                 formData.append('end_date', this.editingChildProject.end_date);
@@ -2739,6 +3158,11 @@ createApp({
                 formData.append('parent_project_id', this.editingChildProject.parent_project_id);
                 formData.append('status', this.editingChildProject.status || 'draft');
                 formData.append('amount', this.editingChildProject.amount || 0);
+                formData.append('progress', this.editingChildProject.progress != null ? parseInt(this.editingChildProject.progress, 10) : 0);
+                formData.append('teams', this.editingChildProject.teams || '');
+                if (this.editingChildProject.members && this.editingChildProject.members.length > 0) {
+                    formData.append('members', Array.isArray(this.editingChildProject.members) ? this.editingChildProject.members.join(',') : String(this.editingChildProject.members));
+                }
                 formData.append('tantou', this.editingChildProject.tantou || '');
                 formData.append('caily_nouki', this.editingChildProject.caily_nouki || '');
                 formData.append('guis_nouki', this.editingChildProject.guis_nouki || '');
@@ -2774,7 +3198,10 @@ createApp({
                         status: 'draft',
                         previous_status: '',
                         amount: 0,
+                        progress: 0,
+                        teams: '',
                         managers: [],
+                        members: [],
                         tantou: '',
                         caily_nouki: '',
                         guis_nouki: ''
@@ -2782,8 +3209,6 @@ createApp({
                     
                     // Reset Quill content
                     this.editChildProjectQuillContent = '';
-                } else if (response.data && response.data.message === 'Project number already exists') {
-                    this.editChildProjectValidationErrors.project_number = 'このプロジェクト番号は既に存在します。';
                 } else {
                     showMessage(response.data.message || '課題の更新に失敗しました。', true);
                 }
@@ -2852,10 +3277,10 @@ createApp({
             this.childProjectValidationErrors = {
                 name: '',
                 department_id: '',
-                project_number: '',
                 start_date: '',
                 end_date: '',
-                project_order_type: ''
+                project_order_type: '',
+                tantou: ''
             };
 
             let isValid = true;
@@ -2869,11 +3294,6 @@ createApp({
             const departmentId = this.newChildProject.department_id;
             if (!departmentId || departmentId === '' || departmentId === null || departmentId === undefined) {
                 this.childProjectValidationErrors.department_id = '部署は必須です';
-                isValid = false;
-            }
-
-            if (!this.newChildProject.project_number || this.newChildProject.project_number.trim() === '') {
-                this.childProjectValidationErrors.project_number = 'プロジェクト番号は必須です';
                 isValid = false;
             }
 
@@ -2904,6 +3324,12 @@ createApp({
                 isValid = false;
             }
 
+            // Validate tantou (担当) is required
+            if (!this.newChildProject.tantou || this.newChildProject.tantou.trim() === '') {
+                this.childProjectValidationErrors.tantou = '担当は必須です';
+                isValid = false;
+            }
+
             return isValid;
         },
 
@@ -2921,10 +3347,21 @@ createApp({
                     this.newChildProject.description = this.createChildProjectQuillContent;
                 }
 
+                // Sync Tagify values to model before submit (管理, チーム, メンバー)
+                if (this.createChildProjectManagerTagify) {
+                    this.newChildProject.managers = this.createChildProjectManagerTagify.value.map(t => String(t.id != null ? t.id : t.value)).filter(Boolean);
+                }
+                if (this.createChildProjectTeamTagify) {
+                    this.newChildProject.teams = this.createChildProjectTeamTagify.value.map(t => String(t.id != null ? t.id : t.value)).join(',') || '';
+                }
+                if (this.createChildProjectMembersTagify) {
+                    this.newChildProject.members = this.createChildProjectMembersTagify.value.map(t => String(t.id != null ? t.id : t.value)).filter(Boolean);
+                }
+
                 const formData = new FormData();
                 formData.append('name', this.newChildProject.name);
                 formData.append('department_id', this.newChildProject.department_id);
-                formData.append('project_number', this.newChildProject.project_number);
+                formData.append('project_number', '');
                 formData.append('description', this.newChildProject.description || '');
                 formData.append('start_date', this.newChildProject.start_date || '');
                 formData.append('end_date', this.newChildProject.end_date || '');
@@ -2933,6 +3370,11 @@ createApp({
                     formData.append('managers', this.newChildProject.managers.join(','));
                 }
                 formData.append('parent_project_id', this.newChildProject.parent_project_id);
+                formData.append('progress', this.newChildProject.progress != null ? parseInt(this.newChildProject.progress, 10) : 0);
+                formData.append('teams', this.newChildProject.teams || '');
+                if (this.newChildProject.members && this.newChildProject.members.length > 0) {
+                    formData.append('members', Array.isArray(this.newChildProject.members) ? this.newChildProject.members.join(',') : String(this.newChildProject.members));
+                }
                 // 総額: 必ず数値として送信（NaN/空の場合は 0）
                 const amountVal = this.newChildProject.amount;
                 const amountNum = (typeof amountVal === 'number' && !Number.isNaN(amountVal)) ? amountVal : (parseFloat(amountVal) || 0);
@@ -2965,8 +3407,6 @@ createApp({
                         // Reset form
                         this.resetChildProjectForm();
                     });
-                } else if (response.data && response.data.message === 'Project number already exists') {
-                    this.childProjectValidationErrors.project_number = 'このプロジェクト番号は既に存在します。';
                 } else {
                     showMessage(response.data?.error || response.data?.message || '課題の作成に失敗しました。', true);
                 }
@@ -6422,6 +6862,143 @@ createApp({
             }
         },
 
+        async openNewCustomerModal() {
+            if (this.categories.length === 0) {
+                await this.loadCategories();
+            }
+            if (this.departments.length === 0) {
+                await this.loadDepartments();
+            }
+            this.resetNewCustomerData();
+            const modalEl = document.getElementById('newCustomerModal');
+            if (modalEl) {
+                const onShown = () => {
+                    this.$nextTick(() => {
+                        this.initNewCustomerGuisDepartmentSelect2();
+                    });
+                };
+                modalEl.addEventListener('shown.bs.modal', onShown, { once: true });
+                const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                modal.show();
+            }
+        },
+
+        initNewCustomerGuisDepartmentSelect2() {
+            const el = this.$refs.newCustomerGuisDepartmentSelect;
+            if (!el) return;
+            const $el = $(el);
+            if ($el.data('select2')) {
+                $el.select2('destroy');
+            }
+            $el.select2({ placeholder: '選択してください', allowClear: true });
+            $el.off('change').on('change', (event) => {
+                const val = $(event.target).val();
+                this.newCustomer.guis_department = val ? val : [];
+            });
+            const ids = Array.isArray(this.newCustomer.guis_department) ? this.newCustomer.guis_department : [];
+            $el.val(ids).trigger('change');
+        },
+
+        resetNewCustomerData() {
+            this.newCustomer = {
+                company_name: '大東建託株式会社',
+                company_name_kana: '',
+                name: '',
+                name_kana: '',
+                branch: '本社',
+                position: '',
+                department: '',
+                title: '',
+                tel: '',
+                fax: '',
+                phone: '',
+                email: '',
+                zip: '',
+                address1: '',
+                address2: '',
+                memo: '',
+                status: 1,
+                category_id: this.categories.length > 0 ? this.categories[0].id : 0,
+                guis_department: []
+            };
+            this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
+        },
+
+        async saveNewCustomer() {
+            this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
+            let hasError = false;
+            if (!this.newCustomer.company_name) {
+                this.customerErrors.company_name = '会社名は必須です。';
+                hasError = true;
+            }
+            if (!this.newCustomer.name) {
+                this.customerErrors.name = '担当者名は必須です。';
+                hasError = true;
+            }
+            if (!this.newCustomer.guis_department || this.newCustomer.guis_department.length === 0) {
+                this.customerErrors.guis_department = '自社担当部署名は必須です。';
+                hasError = true;
+            }
+            if (hasError) return;
+            if (!this.newCustomer.branch || this.newCustomer.branch.trim() === '') {
+                this.newCustomer.branch = '本社';
+            }
+            try {
+                const response = await axios.post('/api/index.php?model=customer&method=add_customer', this.newCustomer, {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                });
+                if (response.data.status === 'success') {
+                    showMessage('顧客を保存しました。');
+                    const company_name = this.newCustomer.company_name;
+                    const branch_name = this.newCustomer.branch;
+                    const contact_name = this.newCustomer.name;
+                    $('#newCustomerModal').modal('hide');
+                    this.resetNewCustomerData();
+                    this.parentProject.company_name = company_name;
+                    this.parentProject.branch_name = branch_name;
+                    this.parentProject.contact_name = contact_name;
+                    this.customerDisplay = this.customerDisplay || {};
+                    this.customerDisplay.company_name = company_name;
+                    this.customerDisplay.branch_name = branch_name;
+                    this.customerDisplay.contact_name = contact_name;
+                    await this.loadCompanies();
+                    this.$nextTick(() => {
+                        this.initCompanySelect2();
+                        this.initBranchSelect2();
+                        this.initContactSelect2();
+                    });
+                } else {
+                    showMessage(response.data.message_code || '顧客の保存に失敗しました。', true);
+                }
+            } catch (error) {
+                console.error('Error saving customer:', error);
+                showMessage('顧客の保存に失敗しました。', true);
+            }
+        },
+
+        searchAddressNewCustomer() {
+            const postalCode = (this.newCustomer.zip || '').toString().replace(/\D/g, '');
+            if (postalCode.length >= 7) {
+                const apiUrl = `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${postalCode}`;
+                axios.get(apiUrl)
+                    .then(response => {
+                        if (response.data.results && response.data.results.length > 0) {
+                            const result = response.data.results[0];
+                            this.newCustomer.address1 = result.address1 || '';
+                            this.newCustomer.address2 = result.address2 || '';
+                        } else {
+                            showMessage('郵便番号が見つかりません。', true);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error searching address:', error);
+                        showMessage('住所の検索に失敗しました。', true);
+                    });
+            } else {
+                showMessage('郵便番号が正しくありません。', true);
+            }
+        },
+
         async loadCustomerDataByProject() {
             // 優先的にcustomer_idで顧客情報を取得する
             if (this.parentProject.customer_id) {
@@ -6577,6 +7154,18 @@ createApp({
                 hasError = true;
             }
             if (hasError) return;
+
+            const confirmResult = await Swal.fire({
+                title: '確認',
+                text: 'お客様情報を更新すると、このお客様の情報を利用している他の建物の情報もすべて更新されます。更新しますか？',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '更新する',
+                cancelButtonText: 'キャンセル',
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#6c757d'
+            });
+            if (!confirmResult.isConfirmed) return;
 
             this.updatingCustomer = true;
 
@@ -7058,6 +7647,20 @@ createApp({
                     // Reset customer data
                     this.selectedCustomer = null;
                     this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
+                });
+            }
+
+            // Add event listener for new customer modal (自社担当部署名 Select2 cleanup)
+            const newCustomerModal = document.getElementById('newCustomerModal');
+            if (newCustomerModal) {
+                newCustomerModal.addEventListener('hidden.bs.modal', () => {
+                    const el = this.$refs.newCustomerGuisDepartmentSelect;
+                    if (el) {
+                        const $el = $(el);
+                        if ($el.data('select2')) {
+                            $el.select2('destroy');
+                        }
+                    }
                 });
             }
 
