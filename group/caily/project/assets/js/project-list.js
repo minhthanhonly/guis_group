@@ -98,25 +98,83 @@ var projectTable;
         localStorage.setItem(COLUMN_VISIBILITY_KEY, JSON.stringify(visibility));
     }
     
-    function loadColumnVisibilityFromLocalStorage() {
+    function loadColumnVisibilityFromLocalStorage(customColDefs) {
         const saved = JSON.parse(localStorage.getItem(COLUMN_VISIBILITY_KEY) || '{}');
         const visibility = {};
         COLUMN_DEFINITIONS.forEach(col => {
             visibility[col.key] = saved[col.key] !== undefined ? saved[col.key] : col.defaultVisible;
         });
+        (customColDefs || []).forEach(col => {
+            visibility[col.key] = saved[col.key] !== undefined ? saved[col.key] : (col.defaultVisible !== undefined ? col.defaultVisible : false);
+        });
         return visibility;
     }
     
-    function applyColumnVisibility(table, visibility) {
+    function applyColumnVisibility(table, visibility, customColDefs) {
         if (!table || !$.fn.DataTable.isDataTable('#projectTable')) {
             return;
         }
-        
         COLUMN_DEFINITIONS.forEach(col => {
             const isVisible = visibility[col.key] !== false;
             table.column(col.index).visible(isVisible, false);
         });
+        (customColDefs || []).forEach(col => {
+            const isVisible = visibility[col.key] !== false;
+            table.column(col.index).visible(isVisible, false);
+        });
         table.columns.adjust().draw(false);
+    }
+
+    // Custom field columns (built when table is initialized for selected department)
+    var customFieldColumnDefinitions = [];
+
+    function customFieldKey(label) {
+        return 'custom_' + String(label).replace(/\s+/g, '_').replace(/[^\w\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g, '_');
+    }
+
+    function getCustomFieldValueFromRow(row, label) {
+        if (!row || !row.custom_fields) return '';
+        var raw = row.custom_fields;
+        if (typeof raw === 'string' && raw.indexOf('&quot;') !== -1) {
+            raw = raw.replace(/&quot;/g, '"');
+        }
+        var arr = [];
+        try {
+            arr = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);
+        } catch (e) {
+            return '';
+        }
+        var found = arr.find(function (f) { return f && f.label && String(f.label).trim() === String(label).trim(); });
+        return found && found.value !== undefined ? found.value : '';
+    }
+
+    function formatCustomFieldForList(value, type, options) {
+        if (value === undefined || value === null || String(value).trim() === '') return '<span class="text-muted">-</span>';
+        var v = String(value).trim();
+        if (type === 'datetime') {
+            if (typeof window.formatDateTime === 'function') return window.formatDateTime(v);
+            if (typeof moment !== 'undefined' && moment(v).isValid()) return '<span class="small text-nowrap">' +moment(v).format('M月D日 H:mm') + '</span>';
+            return v;
+        }
+        if (type === 'checkbox' || type === 'radio' || type === 'select') {
+            return '<span class="badge bg-label-secondary small">' + escapeHtmlForNote(v) + '</span>';
+        }
+        if (type === 'textarea') {
+            var short = v.length > 80 ? v.substring(0, 80) + '...' : v;
+            return '<span class="small" style="white-space: pre-wrap;">' + escapeHtmlForNote(short) + '</span>';
+        }
+        // Text field: nếu giống ngày (yyyy/m/d, m/d, yyyy/mm/dd hoặc có thời gian) thì format
+        if (typeof moment !== 'undefined') {
+            var m = moment(v, ['YYYY/M/D', 'YYYY/MM/DD', 'M/D', 'YYYY/M/D H:mm', 'YYYY/MM/DD HH:mm', 'M/D H:mm'], true);
+            if (m.isValid()) {
+                var timeStr = m.format('YYYY/M/D H:mm');
+                var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(timeStr) : '';
+                var attrs = ' data-time="' + String(timeStr).replace(/"/g, '&quot;') + '"';
+                if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
+                return '<span class="text-nowrap small"' + attrs + '>' + m.format('M月D日') + '</span>';
+            }
+        }
+        return '<span class="text-break small">' + escapeHtmlForNote(v) + '</span>';
     }
 
     function saveFiltersToLocalStorage() {
@@ -435,8 +493,46 @@ var projectTable;
         
         // Khôi phục filter từ localStorage trước khi load projectTable
         loadFiltersFromLocalStorage();
-        // Khởi tạo DataTable sau khi filter đã được khôi phục
         projectData = [];
+
+        // Fetch custom field sets for current department and build custom columns (at end of table, default hidden)
+        customFieldColumnDefinitions = [];
+        var customColumnConfigs = [];
+        try {
+            var cfRes = await axios.get('/api/index.php?model=department&method=getCustomFields');
+            var sets = cfRes.data || [];
+            var depId = app.selectedDepartment && app.selectedDepartment.id;
+            var mergedFields = [];
+            sets.filter(function(s) { return s.department_id == depId; }).forEach(function(s) {
+                if (s.fields && Array.isArray(s.fields)) {
+                    s.fields.forEach(function(f) {
+                        if (!mergedFields.some(function(ex) { return ex.label && String(ex.label).trim() === String(f.label || '').trim(); })) {
+                            mergedFields.push({ label: f.label || '', type: f.type || 'text', options: f.options || '' });
+                        }
+                    });
+                }
+            });
+            mergedFields.forEach(function(f, i) {
+                var key = customFieldKey(f.label);
+                customFieldColumnDefinitions.push({ key: key, label: f.label, type: f.type, options: f.options || '', index: 24 + i, defaultVisible: false });
+                var fieldLabel = f.label;
+                var fieldType = f.type;
+                var fieldOptions = f.options || '';
+                customColumnConfigs.push({
+                    data: null,
+                    render: function(data, type, row) {
+                        var val = getCustomFieldValueFromRow(row, fieldLabel);
+                        return formatCustomFieldForList(val, fieldType, fieldOptions);
+                    },
+                    title: fieldLabel,
+                    orderable: false,
+                    visible: false
+                });
+            });
+        } catch (e) {
+            console.warn('Failed to load custom fields for list', e);
+        }
+
         projectTable = $('#projectTable').DataTable({
             serverSide: true,
             processing: true,
@@ -1015,7 +1111,7 @@ var projectTable;
                     title: '<span data-i18n="GUIS 受付者">GUIS 受付者</span>',
                     visible: false
                 }
-            ],
+            ].concat(customColumnConfigs),
             order: [[COLUMN_DEFINITIONS.find(col => col.key === 'end_date').index, 'asc']],
            
             pageLength: 50,
@@ -1044,9 +1140,16 @@ var projectTable;
             
         });
         
-        // Apply column visibility after table initialization
-        const columnVisibility = loadColumnVisibilityFromLocalStorage();
-        applyColumnVisibility(projectTable, columnVisibility);
+        // Apply column visibility after table initialization (base + custom columns; custom default hidden)
+        var columnVisibility = loadColumnVisibilityFromLocalStorage(customFieldColumnDefinitions);
+        applyColumnVisibility(projectTable, columnVisibility, customFieldColumnDefinitions);
+        if (app) {
+            app.availableColumns = COLUMN_DEFINITIONS.map(function(col) {
+                return { key: col.key, label: col.label, visible: columnVisibility[col.key] !== false };
+            }).concat(customFieldColumnDefinitions.map(function(col) {
+                return { key: col.key, label: col.label, visible: columnVisibility[col.key] !== false };
+            }));
+        }
         
         // Reset flag after initialization
         isInitializingTable = false;
@@ -3422,9 +3525,12 @@ var projectTable;
                 });
                 saveColumnVisibilityToLocalStorage(visibility);
                 
-                // Apply to DataTable if it exists
+                // Apply to DataTable if it exists (base or custom column)
                 if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-                    const colDef = COLUMN_DEFINITIONS.find(col => col.key === columnKey);
+                    let colDef = COLUMN_DEFINITIONS.find(col => col.key === columnKey);
+                    if (!colDef && typeof customFieldColumnDefinitions !== 'undefined') {
+                        colDef = customFieldColumnDefinitions.find(col => col.key === columnKey);
+                    }
                     if (colDef) {
                         projectTable.column(colDef.index).visible(isVisible, false);
                         projectTable.columns.adjust().draw(false);
