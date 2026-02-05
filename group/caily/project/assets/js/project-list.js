@@ -660,24 +660,34 @@ var projectTable;
                     width: '240px',
                     className: 'confirmation-notes-column',
                     render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return `<div class="empty-notes-cell" data-project-id="${row.id}">
+                        if (type !== 'display') {
+                            return data || '';
+                        }
+                        // Return empty string, HTML will be set in createdCell
+                        return '';
+                    },
+                    createdCell: function(td, cellData, rowData, row, col) {
+                        // Set HTML trực tiếp để đảm bảo HTML được render đúng cách
+                        if (!cellData || cellData === '') {
+                            $(td).html(`<div class="empty-notes-cell" data-project-id="${rowData.id}">
                                         <span class="text-muted empty-notes-text">-</span>
                                         <span class="add-note-icon d-none" title="メモを追加" style="cursor: pointer;">
                                             <i class="fa fa-pencil-alt text-primary"></i>
                                         </span>
-                                    </div>`;
+                                    </div>`);
+                            return;
                         }
                         // Hiển thị toàn bộ nội dung (có thể nhiều ghi chú), giữ nguyên xuống dòng
                         // Định dạng data: "noteId::content | noteId::content | ..."
-                        const notes = data.split(' | ').filter(note => note.trim() !== '');
+                        const notes = cellData.split(' | ').filter(note => note.trim() !== '');
                         if (notes.length === 0) {
-                            return `<div class="empty-notes-cell" data-project-id="${row.id}">
+                            $(td).html(`<div class="empty-notes-cell" data-project-id="${rowData.id}">
                                         <span class="text-muted empty-notes-text">-</span>
                                         <span class="add-note-icon d-none" title="メモを追加" style="cursor: pointer;">
                                             <i class="fa fa-pencil-alt text-primary"></i>
                                         </span>
-                                    </div>`;
+                                    </div>`);
+                            return;
                         }
                         const html = notes.map(note => {
                             const raw = note.trim();
@@ -688,10 +698,21 @@ var projectTable;
                                 id = raw.substring(0, delimiterIndex);
                                 text = raw.substring(delimiterIndex + 2);
                             }
+                            // Decode HTML entities nếu text bị escape (ví dụ &lt; thành <)
+                            // Nếu text đã là HTML thuần thì không cần decode
+                            let decodedText = text;
+                            if (typeof decodeHtmlEntities !== 'undefined') {
+                                decodedText = decodeHtmlEntities(text);
+                            } else if (text.indexOf('&lt;') !== -1 || text.indexOf('&gt;') !== -1 || text.indexOf('&amp;') !== -1) {
+                                // Nếu có HTML entities thì decode
+                                decodedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+                            }
                             const isEditing = window.app && window.app.currentEditingNoteId === id;
+                            // Render HTML từ Quill editor (đã được sanitize khi lưu vào DB)
+                            // Thêm class ql-editor để styling đúng với Quill
                             return `
                                 <div class="confirmation-note-item mb-1 ${isEditing ? 'editing-note' : ''}" ${id ? `data-note-id="${id}"` : ''}>
-                                    <span class="note-text small" style="white-space: pre-wrap;">${escapeHtmlForNote(text)}</span>
+                                    <div class="note-text small ql-editor" style="max-height: 150px; overflow: hidden; word-break: break-word;">${decodedText || '-'}</div>
                                     <span class="note-actions d-none ms-1">
                                         <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
                                             <i class="fa fa-pencil-alt"></i>
@@ -703,12 +724,7 @@ var projectTable;
                                 </div>
                             `;
                         }).join('');
-                        return `
-                            <div class="confirmation-notes-wrapper" 
-                                 style="max-width: 250px; max-height: 200px; overflow-y: auto;">
-                                ${html}
-                            </div>
-                        `;
+                        $(td).html(`<div class="confirmation-notes-wrapper" style="max-width: 250px; max-height: 200px; overflow-y: auto;">${html}</div>`);
                     },
                     title: '<span data-i18n="確認必要メモ">確認必要メモ</span>',
                     orderable: false
@@ -2500,6 +2516,8 @@ var projectTable;
                     user_id: null
                 },
                 currentNoteProjectId: null,
+                quillNoteInstance: null,
+                quillNoteContent: '',
                 // Kadai queue properties
                 kadaiProjects: [],
                 isKadaiQueueExpanded: false,
@@ -3001,6 +3019,9 @@ var projectTable;
                             user_id: match.user_id
                         };
                     }
+                    this.$nextTick(() => {
+                        this.initQuillNoteEditor();
+                    });
                 });
             },
             openNoteModalFromList(projectId, noteContent = null) {
@@ -3034,12 +3055,16 @@ var projectTable;
                             this.editingNote.content = decodeHtmlForNote(noteContent);
                         }
                     }
+                    this.$nextTick(() => {
+                        this.initQuillNoteEditor();
+                    });
                 });
             },
             closeNoteModal() {
                 this.showNoteModal = false;
                 this.isNoteEditMode = false;
                 this.currentEditingNoteId = null; // Clear editing note tracking
+                this.destroyQuillNoteEditor();
                 
                 // Refresh table to remove highlight
                 if (projectTable) {
@@ -3054,14 +3079,61 @@ var projectTable;
                     needs_confirmation: false,
                     user_id: null
                 };
+                this.quillNoteContent = '';
+            },
+            initQuillNoteEditor() {
+                if (this.quillNoteInstance || !this.isNoteEditMode || !this.showNoteModal) return;
+                setTimeout(() => {
+                    const toolbarOptions = [
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ color: [] }, { background: [] }],
+                        [{ list: 'ordered' }, { list: 'bullet' }],
+                        [{ header: '1' }, { header: '2' }, 'blockquote'],
+                        ['link', 'clean']
+                    ];
+                    const el = document.getElementById('quill_note_content');
+                    if (!el) return;
+                    if (this.quillNoteInstance) {
+                        try {
+                            this.quillNoteInstance = null;
+                        } catch (e) {}
+                    }
+                    this.quillNoteInstance = new Quill(el, {
+                        bounds: el,
+                        placeholder: 'メモの詳細を入力してください...',
+                        modules: {
+                            toolbar: {
+                                container: toolbarOptions
+                            }
+                        },
+                        theme: 'snow'
+                    });
+                    if (this.editingNote.content) {
+                        const html = typeof decodeHtmlEntities !== 'undefined' ? decodeHtmlEntities(this.editingNote.content) : this.editingNote.content;
+                        this.quillNoteInstance.root.innerHTML = html;
+                    }
+                    this.quillNoteContent = this.quillNoteInstance.getSemanticHTML();
+                    this.quillNoteInstance.on('text-change', () => {
+                        this.quillNoteContent = this.quillNoteInstance.getSemanticHTML();
+                    });
+                }, 200);
+            },
+            destroyQuillNoteEditor() {
+                if (this.quillNoteInstance) {
+                    try {
+                        this.quillNoteInstance = null;
+                    } catch (e) {}
+                }
+                this.quillNoteContent = '';
             },
             async saveNote() {
-                // Tự động sinh title từ nội dung (ẩn field title khỏi UI)
-                const rawContent = (this.editingNote.content || '').trim();
+                // Lấy nội dung từ Quill editor nếu có, nếu không dùng editingNote.content
+                const rawContent = (this.quillNoteContent && this.quillNoteContent.trim()) || (this.editingNote.content || '').trim();
                 let title = (this.editingNote.title || '').trim();
                 if (!title) {
-                    // Lấy dòng đầu tiên của nội dung, giới hạn độ dài
-                    title = rawContent.split(/\r?\n/)[0].slice(0, 50) || 'メモ';
+                    // Lấy dòng đầu tiên của nội dung, giới hạn độ dài (strip HTML tags)
+                    const textContent = rawContent.replace(/<[^>]*>/g, '').trim();
+                    title = textContent.split(/\r?\n/)[0].slice(0, 50) || 'メモ';
                 }
                 try {
                     const formData = new FormData();

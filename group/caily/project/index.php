@@ -350,7 +350,7 @@ if($_SESSION['show_project'] == 0){
                     <div v-if="editingNote.id && !isNoteEditMode">
                         <div class="mb-3">
                             <label class="form-label"><span data-i18n="内容">内容</span></label>
-                            <div class="form-control" style="min-height:100px;white-space:pre-line;max-height:600px;overflow-y:auto;">{{ editingNote.content || '-' }}</div>
+                            <div class="form-control ql-editor" style="min-height:100px;max-height:600px;overflow-y:auto;" v-html="editingNote.content || '-'"></div>
                         </div>
                         <div class="mb-3" v-if="editingNote.is_important">
                             <label class="form-label"><span data-i18n="重要メモ">重要メモ</span></label>
@@ -369,7 +369,10 @@ if($_SESSION['show_project'] == 0){
                     <form v-else @submit.prevent="saveNote">
                         <div class="mb-3">
                             <label class="form-label"><span data-i18n="内容">内容</span></label>
-                            <textarea class="form-control" style="height:600px;overflow-y:auto;" v-model="editingNote.content" rows="6" placeholder="メモの詳細を入力してください..."></textarea>
+                            <div class="custom_editor">
+                                <div class="custom_editor_content" id="quill_note_content"></div>
+                                <textarea class="custom_editor_textarea d-none" v-model="editingNote.content" id="quill_note_content_textarea"></textarea>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <div class="form-check">
@@ -391,12 +394,12 @@ if($_SESSION['show_project'] == 0){
                 </div>
                 <div class="modal-footer">
                     <template v-if="editingNote.id && !isNoteEditMode">
-                        <button class="btn btn-primary" @click="isNoteEditMode = true"><i class="fa fa-pencil-alt me-2"></i> <span data-i18n="編集">編集</span></button>
+                        <button class="btn btn-primary" @click="isNoteEditMode = true; $nextTick(() => initQuillNoteEditor())"><i class="fa fa-pencil-alt me-2"></i> <span data-i18n="編集">編集</span></button>
                         <button class="btn btn-secondary" @click="closeNoteModal"><span data-i18n="閉じる">閉じる</span></button>
                     </template>
                     <template v-else>
                         <button class="btn btn-secondary" @click="closeNoteModal"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
-                        <button class="btn btn-primary" @click="saveNote" :disabled="!(editingNote.content && editingNote.content.trim())">
+                        <button class="btn btn-primary" @click="saveNote" :disabled="!((quillNoteContent && quillNoteContent.trim()) || (editingNote.content && editingNote.content.trim()))">
                             <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
                         </button>
                     </template>
@@ -694,6 +697,12 @@ $view->footing();
     padding-right: 40px; /* space for action icons on the right */
 }
 
+
+#projectTable td.confirmation-notes-column .note-text.ql-editor a {
+    color: var(--bs-primary);
+    text-decoration: underline;
+}
+
 #projectTable td.confirmation-notes-column .confirmation-note-item .note-actions {
     position: absolute;
     right: 6px;
@@ -768,6 +777,15 @@ $view->footing();
     opacity: 0.8;
 }
 
+/* Row hover: outline màu để nhận diện */
+#projectTable tbody tr:hover {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: -2px;
+}
+#projectTable tbody tr.table-row-status-secondary:hover, #projectTable tbody tr.table-row-status-info:hover, #projectTable tbody tr.table-row-status-primary:hover, #projectTable tbody tr.table-row-status-success:hover, #projectTable tbody tr.table-row-status-warning:hover, #projectTable tbody tr.table-row-status-danger:hover{
+    opacity: 1!important;
+}
+
 /* Active indicator dot for status filter buttons */
 .btn-group {
     overflow: visible !important;
@@ -838,6 +856,9 @@ $view->footing();
 </style>
 
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/tagify/tagify.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
 <script src="<?=ROOT?>assets/vendor/libs/tagify/tagify.j?v=<?=CACHE_VERSION?>"></script>
+<script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="assets/js/project-list.js?v=<?=CACHE_VERSION?>"></script>
