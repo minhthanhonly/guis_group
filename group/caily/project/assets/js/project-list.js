@@ -493,7 +493,7 @@ var projectTable;
             searching: false,
             dom: '<"row"<"col"l><"col text-end"p>>rti',
             scrollX: true,
-            scrollY: Math.round(window.innerHeight * 0.8) + 'px',
+            //scrollY: Math.round(window.innerHeight * 0.8) + 'px',
             columns: [
                 { 
                     data: 'is_favorite',
@@ -1189,9 +1189,338 @@ var projectTable;
                 .show();
         });
 
+        // ----- Context menu "案件を編集" (chỉ project manager) -----
+        const $rowContextMenu = $('<div id="projectRowContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="quickEditProjectRowBtn"><i class="fa fa-pencil-alt me-1"></i><span data-i18n="案件を編集">案件を編集</span></button>');
+        $('body').append($rowContextMenu);
+        let contextMenuRowProjectId = null;
+        let contextMenuIsManagerOnly = false;
+
+        function isCurrentUserManagerOfProject(rowData) {
+            if (typeof USER_AUTH_ID === 'undefined' || !USER_AUTH_ID || !rowData || !rowData.manager_id) return false;
+            const managerIdStr = String(rowData.manager_id).trim();
+            if (!managerIdStr) return false;
+            const members = managerIdStr.split('|').filter(function(m) { return m.trim() !== ''; });
+            for (var i = 0; i < members.length; i++) {
+                const parts = members[i].split(':');
+                if (parts.length && String(parts[0]).trim() === String(USER_AUTH_ID)) return true;
+            }
+            return false;
+        }
+
+        $('#projectTable tbody').on('contextmenu', 'tr', function(e) {
+            if ($(e.target).closest('td.confirmation-notes-column').length) return;
+            if (!window.app) return;
+            if (!projectTable) return;
+            const rowData = projectTable.row($(this)).data();
+            if (!rowData) return;
+            var canFullEdit = window.app.canManageProject();
+            var isManagerOfProject = isCurrentUserManagerOfProject(rowData);
+            if (!canFullEdit && !isManagerOfProject) return;
+            e.preventDefault();
+            contextMenuRowProjectId = rowData.id;
+            contextMenuIsManagerOnly = !canFullEdit && isManagerOfProject;
+            $rowContextMenu
+                .css({ top: e.pageY + 'px', left: e.pageX + 'px' })
+                .show();
+        });
+
+        $(document).on('click', function() {
+            $rowContextMenu.hide();
+        });
+        $rowContextMenu.on('click', '#quickEditProjectRowBtn', function(ev) {
+            ev.stopPropagation();
+            $rowContextMenu.hide();
+            if (contextMenuRowProjectId && typeof window.openQuickEditProjectModal === 'function') {
+                window.openQuickEditProjectModal(contextMenuRowProjectId, contextMenuIsManagerOnly);
+            }
+        });
+
+        // Quick Edit Tagify instances (destroy on each open, re-init after load)
+        let quickEditTeamTagify = null, quickEditManagerTagify = null, quickEditMembersTagify = null;
+        let quickEditIsManagerOnly = false;
+        function destroyQuickEditTagify() {
+            [quickEditTeamTagify, quickEditManagerTagify, quickEditMembersTagify].forEach(function(t) {
+                if (t && typeof t.destroy === 'function') { try { t.destroy(); } catch (e) {} }
+            });
+            quickEditTeamTagify = quickEditManagerTagify = quickEditMembersTagify = null;
+            // Clear value các input Tagify trước khi load dự án mới
+            $('#quickEditTeamTags, #quickEditManagerTags, #quickEditMembersTags').val('');
+        }
+
+        // Quick Edit Project Modal: open and save (isManagerOnly = true: chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー)
+        window.openQuickEditProjectModal = function(projectId, isManagerOnly) {
+            quickEditIsManagerOnly = !!isManagerOnly;
+            var $form = $('#quickEditProjectForm');
+            if (quickEditIsManagerOnly) $form.addClass('quick-edit-manager-only-mode'); else $form.removeClass('quick-edit-manager-only-mode');
+            destroyQuickEditTagify();
+            var modalEl = document.getElementById('quickEditProjectModal');
+            var quickEditModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            quickEditModal.show();
+            $('#quickEditModalLoading').removeClass('d-none');
+
+            axios.get('/api/index.php?model=project&method=getById&id=' + projectId).then(function(res) {
+                const p = res.data && res.data.data ? res.data.data : (res.data || {});
+                $('#quickEditProjectId').val(p.id || projectId);
+                $('#quickEditName').val(p.name || '');
+                $('#quickEditStartDate').val(p.start_date || '');
+                $('#quickEditEndDate').val(p.end_date || '');
+                $('#quickEditStatus').val(p.status || 'draft');
+                $('#quickEditAmount').val(p.amount || '');
+                $('#quickEditProjectOrderType').val(typeof p.project_order_type === 'string' ? p.project_order_type : (Array.isArray(p.project_order_type) ? (p.project_order_type || []).join(', ') : ''));
+                $('input[name="tantou"]').prop('checked', false);
+                if (p.tantou === 'CAILY') $('#quickEditTantouCaily').prop('checked', true);
+                else if (p.tantou === 'GUIS') $('#quickEditTantouGuis').prop('checked', true);
+                $('#quickEditCailyNouki').val(p.caily_nouki || '');
+                $('#quickEditGuisNouki').val(p.guis_nouki || '');
+                $('#quickEditProgress').val(p.progress != null && p.progress !== '' ? parseInt(p.progress, 10) : 0);
+                if (typeof $().flatpickr === 'function') {
+                    function makeTimeInputsEditable(selectedDates, dateStr, instance) {
+                        var cal = instance.calendarContainer;
+                        if (cal) {
+                            var inputs = cal.querySelectorAll('.flatpickr-time input, .flatpickr-time .numInputWrapper input');
+                            for (var i = 0; i < inputs.length; i++) {
+                                inputs[i].removeAttribute('readonly');
+                                inputs[i].readOnly = false;
+                            }
+                        }
+                    }
+                    var fpCommon = {
+                        enableTime: true,
+                        time_24hr: true,
+                        dateFormat: 'Y/m/d H:i',
+                        allowInput: true,
+                        locale: 'ja',
+                        onOpen: makeTimeInputsEditable
+                    };
+                    if ($('#quickEditStartDate').data('flatpickr')) $('#quickEditStartDate').data('flatpickr').destroy();
+                    $('#quickEditStartDate').flatpickr(Object.assign({}, fpCommon, { defaultHour: 9, defaultMinute: 0 }));
+                    if ($('#quickEditEndDate').data('flatpickr')) $('#quickEditEndDate').data('flatpickr').destroy();
+                    $('#quickEditEndDate').flatpickr(Object.assign({}, fpCommon, { defaultHour: 18, defaultMinute: 0 }));
+                    ['#quickEditCailyNouki', '#quickEditGuisNouki'].forEach(function(sel) {
+                        if ($(sel).data('flatpickr')) $(sel).data('flatpickr').destroy();
+                        $(sel).flatpickr(Object.assign({}, fpCommon, { defaultHour: 18, defaultMinute: 0 }));
+                    });
+                }
+
+                // Load team list, project members, department users then init Tagify
+                const teamIdsStr = (p.teams || '').toString().trim();
+                const depId = p.department_id || '';
+                Promise.all([
+                    teamIdsStr ? axios.get('/api/index.php?model=team&method=listbyids&ids=' + teamIdsStr.split(',').map(function(id) { return id.trim(); }).filter(Boolean).join(',')) : Promise.resolve({ data: [] }),
+                    axios.get('/api/index.php?model=project&method=getMembers&project_id=' + projectId).catch(function() { return { data: [] }; }),
+                    depId ? axios.get('/api/index.php?model=department&method=get_users&department_id=' + depId).catch(function() { return { data: [] }; }) : Promise.resolve({ data: [] }),
+                    axios.get('/api/index.php?model=team&method=list').catch(function() { return { data: [] }; })
+                ]).then(function(results) {
+                    const teamList = (results[0].data && Array.isArray(results[0].data)) ? results[0].data : [];
+                    const membersRaw = results[1].data || [];
+                    const managersRaw = membersRaw.filter(function(m) { return m && m.role === 'manager'; });
+                    const managerIds = managersRaw.map(function(m) { return m.user_id; });
+                    const membersOnly = membersRaw.filter(function(m) { return m && m.role === 'member' && managerIds.indexOf(m.user_id) === -1; });
+                    const departmentUsers = (results[2].data && Array.isArray(results[2].data)) ? results[2].data : [];
+                    const allTeams = (results[3].data && Array.isArray(results[3].data)) ? results[3].data : [];
+                    const departmentTeams = depId ? allTeams.filter(function(t) { return String(t.department_id) === String(depId); }) : allTeams;
+
+                    if (!window.Tagify) {
+                        $('#quickEditModalLoading').addClass('d-none');
+                        return;
+                    }
+
+                    // Clear trước khi gán tag mới, tránh giữ tag của dự án cũ
+                    $('#quickEditTeamTags, #quickEditManagerTags, #quickEditMembersTags').val('');
+
+                    const teamInput = document.getElementById('quickEditTeamTags');
+                    if (teamInput) {
+                        teamInput.value = '';
+                        quickEditTeamTagify = new window.Tagify(teamInput, {
+                            whitelist: departmentTeams.map(function(t) { return { value: t.name, id: t.id }; }),
+                            enforceWhitelist: false,
+                            dropdown: { maxItems: 1000, enabled: 0, closeOnSelect: true }
+                        });
+                        quickEditTeamTagify.addTags(teamList.map(function(t) { return { value: t.name, id: t.id }; }));
+                        // Tự động thêm/xóa members khi chọn/bỏ team (giống project/detail.php)
+                        quickEditTeamTagify.on('remove', function(e) {
+                            const removedTeamId = e.detail.data && e.detail.data.id;
+                            if (!removedTeamId || !quickEditMembersTagify) return;
+                            axios.get('/api/index.php?model=team&method=get&id=' + removedTeamId).then(function(res) {
+                                if (res.data && Array.isArray(res.data.members)) {
+                                    const teamMemberIds = res.data.members.map(function(m) { return String(m.user_id); });
+                                    const remain = quickEditMembersTagify.value.filter(function(tag) { return teamMemberIds.indexOf(String(tag.id)) === -1; });
+                                    quickEditMembersTagify.removeAllTags();
+                                    quickEditMembersTagify.addTags(remain);
+                                }
+                            }).catch(function() {});
+                        });
+                        quickEditTeamTagify.on('add', function(e) {
+                            const addedTeamId = e.detail.data && e.detail.data.id;
+                            if (!addedTeamId || !quickEditMembersTagify) return;
+                            axios.get('/api/index.php?model=team&method=get&id=' + addedTeamId).then(function(res) {
+                                if (res.data && Array.isArray(res.data.members)) {
+                                    const teamMembers = res.data.members.map(function(m) { return { id: m.user_id, value: m.user_name || '' }; });
+                                    const currentIds = quickEditMembersTagify.value.map(function(tag) { return String(tag.id); });
+                                    const toAdd = teamMembers.filter(function(m) { return currentIds.indexOf(String(m.id)) === -1; });
+                                    quickEditMembersTagify.addTags(toAdd);
+                                }
+                            }).catch(function() {});
+                        });
+                    }
+
+                    const managerInput = document.getElementById('quickEditManagerTags');
+                    if (managerInput) {
+                        managerInput.value = '';
+                        const allMembersForWhitelist = departmentUsers.map(function(u) { return { id: u.id || u.user_id, value: u.user_name || u.realname || '' }; });
+                        quickEditManagerTagify = new window.Tagify(managerInput, {
+                            whitelist: allMembersForWhitelist,
+                            enforceWhitelist: false,
+                            dropdown: { maxItems: 1000, enabled: 0, closeOnSelect: true }
+                        });
+                        quickEditManagerTagify.addTags(managersRaw.map(function(m) { return { id: m.user_id, value: m.user_name || '' }; }));
+                    }
+
+                    const membersInput = document.getElementById('quickEditMembersTags');
+                    if (membersInput) {
+                        membersInput.value = '';
+                        const allMembersForWhitelist = departmentUsers.map(function(u) { return { id: u.id || u.user_id, value: u.user_name || u.realname || '' }; });
+                        quickEditMembersTagify = new window.Tagify(membersInput, {
+                            whitelist: allMembersForWhitelist,
+                            enforceWhitelist: false,
+                            dropdown: { maxItems: 1000, enabled: 0, closeOnSelect: true }
+                        });
+                        quickEditMembersTagify.addTags(membersOnly.map(function(m) { return { id: m.user_id, value: m.user_name || '' }; }));
+                    }
+                    $('#quickEditModalLoading').addClass('d-none');
+                }).catch(function(err) {
+                    console.error('Quick edit load team/members:', err);
+                    $('#quickEditModalLoading').addClass('d-none');
+                });
+            }).catch(function(err) {
+                console.error('Load project for quick edit:', err);
+                $('#quickEditModalLoading').addClass('d-none');
+                quickEditModal.hide();
+                if (typeof alert === 'function') alert('プロジェクトの取得に失敗しました。');
+            });
+        };
+
+        $('#quickEditTeamTagsClear').on('click', function() { if (quickEditTeamTagify) quickEditTeamTagify.removeAllTags(); });
+        $('#quickEditManagerTagsClear').on('click', function() { if (quickEditManagerTagify) quickEditManagerTagify.removeAllTags(); });
+        $('#quickEditMembersTagsClear').on('click', function() { if (quickEditMembersTagify) quickEditMembersTagify.removeAllTags(); });
+
+        function isValidDateOrDateTime(str) {
+            if (!str || typeof str !== 'string') return false;
+            var s = str.trim();
+            if (s === '') return false;
+            var t = Date.parse(s);
+            return !isNaN(t);
+        }
+
+        $('#quickEditProjectSaveBtn').on('click', function() {
+            const id = $('#quickEditProjectId').val();
+            if (!id) return;
+            var $name = $('#quickEditName');
+            var $orderType = $('#quickEditProjectOrderType');
+            var $progress = $('#quickEditProgress');
+            var $startDate = $('#quickEditStartDate');
+            var $endDate = $('#quickEditEndDate');
+            var $cailyNouki = $('#quickEditCailyNouki');
+            var $guisNouki = $('#quickEditGuisNouki');
+            var $tantouWrap = $('#quickEditTantouWrap');
+            var errorIds = ['quickEditNameError', 'quickEditProjectOrderTypeError', 'quickEditTantouError', 'quickEditStartDateError', 'quickEditEndDateError', 'quickEditCailyNoukiError', 'quickEditGuisNoukiError', 'quickEditProgressError'];
+            errorIds.forEach(function(id) { $('#' + id).text(''); });
+            $name.removeClass('is-invalid');
+            $orderType.removeClass('is-invalid');
+            $progress.removeClass('is-invalid');
+            $startDate.removeClass('is-invalid');
+            $endDate.removeClass('is-invalid');
+            $cailyNouki.removeClass('is-invalid');
+            $guisNouki.removeClass('is-invalid');
+            $tantouWrap.removeClass('is-invalid');
+            var hasError = false;
+            if (!quickEditIsManagerOnly) {
+                if (!$name.val() || $name.val().toString().trim() === '') {
+                    $name.addClass('is-invalid');
+                    $('#quickEditNameError').text('案件名は必須です。');
+                    hasError = true;
+                }
+                if (!$orderType.val() || $orderType.val().toString().trim() === '') {
+                    $orderType.addClass('is-invalid');
+                    $('#quickEditProjectOrderTypeError').text('受注形態は必須です。');
+                    hasError = true;
+                }
+                if (!$('input[name="tantou"]:checked').length) {
+                    $tantouWrap.addClass('is-invalid');
+                    $('#quickEditTantouError').text('担当は必須です。');
+                    hasError = true;
+                }
+                if ($startDate.val() && $startDate.val().toString().trim() !== '' && !isValidDateOrDateTime($startDate.val())) {
+                    $startDate.addClass('is-invalid');
+                    $('#quickEditStartDateError').text('開始日の形式が正しくありません。（例: 2025-01-15 09:00）');
+                    hasError = true;
+                }
+                if ($endDate.val() && $endDate.val().toString().trim() !== '' && !isValidDateOrDateTime($endDate.val())) {
+                    $endDate.addClass('is-invalid');
+                    $('#quickEditEndDateError').text('期限日の形式が正しくありません。（例: 2025-02-28 18:00）');
+                    hasError = true;
+                }
+                if ($cailyNouki.val() && $cailyNouki.val().toString().trim() !== '' && !isValidDateOrDateTime($cailyNouki.val())) {
+                    $cailyNouki.addClass('is-invalid');
+                    $('#quickEditCailyNoukiError').text('CAILY納期の形式が正しくありません。（例: 2025-01-20 18:00）');
+                    hasError = true;
+                }
+                if ($guisNouki.val() && $guisNouki.val().toString().trim() !== '' && !isValidDateOrDateTime($guisNouki.val())) {
+                    $guisNouki.addClass('is-invalid');
+                    $('#quickEditGuisNoukiError').text('GUIS納期の形式が正しくありません。（例: 2025-01-25 18:00）');
+                    hasError = true;
+                }
+            }
+            var progressVal = $progress.val();
+            if (progressVal !== '' && progressVal != null) {
+                var p = parseInt(progressVal, 10);
+                if (isNaN(p) || p < 0 || p > 100) {
+                    $progress.addClass('is-invalid');
+                    $('#quickEditProgressError').text('進捗率は0〜100の範囲で入力してください。');
+                    hasError = true;
+                }
+            }
+            if (hasError) {
+                return;
+            }
+            const $btn = $('#quickEditProjectSaveBtn');
+            const $spinner = $('#quickEditSaveSpinner');
+            $btn.prop('disabled', true);
+            $spinner.removeClass('d-none');
+            const formData = new FormData();
+            formData.append('model', 'project');
+            formData.append('method', 'update');
+            formData.append('id', id);
+            formData.append('name', $('#quickEditName').val() || '');
+            formData.append('start_date', $('#quickEditStartDate').val() || '');
+            formData.append('end_date', $('#quickEditEndDate').val() || '');
+            formData.append('status', $('#quickEditStatus').val() || 'draft');
+            formData.append('amount', $('#quickEditAmount').val() || '');
+            formData.append('tantou', $('input[name="tantou"]:checked').val() || '');
+            formData.append('caily_nouki', $('#quickEditCailyNouki').val() || '');
+            formData.append('guis_nouki', $('#quickEditGuisNouki').val() || '');
+            formData.append('progress', $('#quickEditProgress').val() !== '' ? parseInt($('#quickEditProgress').val(), 10) : 0);
+            formData.append('project_order_type', $('#quickEditProjectOrderType').val() || '');
+            formData.append('teams', (quickEditTeamTagify && quickEditTeamTagify.value) ? quickEditTeamTagify.value.map(function(t) { return t.id; }).join(',') : '');
+            formData.append('managers', (quickEditManagerTagify && quickEditManagerTagify.value) ? quickEditManagerTagify.value.map(function(t) { return t.id; }).join(',') : '');
+            formData.append('members', (quickEditMembersTagify && quickEditMembersTagify.value) ? quickEditMembersTagify.value.map(function(t) { return t.id; }).join(',') : '');
+            axios.post('/api/index.php?model=project&method=update', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(function() {
+                bootstrap.Modal.getInstance(document.getElementById('quickEditProjectModal')).hide();
+                if (projectTable) projectTable.ajax.reload(null, false);
+            }).catch(function(err) {
+                console.error('Quick edit save:', err);
+                if (typeof alert === 'function') alert(err.response && err.response.data && err.response.data.message ? err.response.data.message : '更新に失敗しました。');
+            }).finally(function() {
+                $btn.prop('disabled', false);
+                $spinner.addClass('d-none');
+            });
+        });
+
         // Hide context menu on click elsewhere
         $(document).on('click', function() {
             $noteContextMenu.hide();
+            $rowContextMenu.hide();
         });
 
         // Handle "メモを追加" click
@@ -3133,6 +3462,8 @@ var projectTable;
             }
         }
     }).mount('#app');
+
+    window.app = app;
 
     // Global function for toggling favorite from DataTable render
     window.toggleProjectFavorite = async function(projectId, element) {
