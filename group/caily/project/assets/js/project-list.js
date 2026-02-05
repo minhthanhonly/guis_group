@@ -466,9 +466,37 @@ var projectTable;
         }
     }
 
+    // Destroy DataTable khi đổi department để refresh đúng custom fields và dropdown 列の表示
+    function destroyProjectTable() {
+        if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+            try {
+                // Hủy ajax request đang chờ để tránh response về sau khi destroy gây lỗi mData
+                var settings = projectTable.settings();
+                if (settings && settings[0] && settings[0].jqXHR && typeof settings[0].jqXHR.abort === 'function') {
+                    try { settings[0].jqXHR.abort(); } catch (e) {}
+                }
+                projectTable.destroy();
+            } catch (e) {
+                console.warn('DataTable destroy error:', e);
+            }
+            projectTable = null;
+            // Xóa nội dung table để init lại sạch, tránh lỗi mData do DOM cũ
+            var $tbl = $('#projectTable');
+            if ($tbl.length) $tbl.empty();
+        }
+        customFieldColumnDefinitions = [];
+        // Refresh dropdown 列の表示: chỉ còn cột cơ bản, bỏ hết custom field của department cũ
+        if (typeof app !== 'undefined' && app) {
+            var baseVis = loadColumnVisibilityFromLocalStorage([]);
+            app.availableColumns = COLUMN_DEFINITIONS.map(function(col) {
+                return { key: col.key, label: col.label, visible: baseVis[col.key] !== false };
+            });
+        }
+    }
+
     // Function to initialize DataTable
     async function initializeProjectTable() {
-        // Check if DataTable is already initialized
+        // Check if DataTable is already initialized (đổi department thì gọi destroyProjectTable trước)
         if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
             return; // Already initialized
         }
@@ -487,7 +515,7 @@ var projectTable;
         
         // Set flag to prevent multiple initializations
         isInitializingTable = true;
-        
+        try {
         // Load team map (id -> name) for display in table (badge, tooltip, ...)
         await loadTeamMap();
         
@@ -514,7 +542,7 @@ var projectTable;
             });
             mergedFields.forEach(function(f, i) {
                 var key = customFieldKey(f.label);
-                customFieldColumnDefinitions.push({ key: key, label: f.label, type: f.type, options: f.options || '', index: 24 + i, defaultVisible: false });
+                customFieldColumnDefinitions.push({ key: key, label: f.label, type: f.type, options: f.options || '', index: 24 + i, defaultVisible: true });
                 var fieldLabel = f.label;
                 var fieldType = f.type;
                 var fieldOptions = f.options || '';
@@ -526,7 +554,8 @@ var projectTable;
                     },
                     title: fieldLabel,
                     orderable: false,
-                    visible: false
+                    visible: true,
+                    width: '100px'
                 });
             });
         } catch (e) {
@@ -589,6 +618,7 @@ var projectTable;
             searching: false,
             dom: '<"row"<"col"l><"col text-end"p>>rti',
             scrollX: true,
+            autoWidth: false,
             //scrollY: Math.round(window.innerHeight * 0.8) + 'px',
             columns: [
                 { 
@@ -611,7 +641,7 @@ var projectTable;
                         }
                         return starHtml;
                     },
-                    title: '<span data-i18n="お気に入り">お気に入り</span>',
+                    title: '',
                     orderable: false,
                     width: '70px'
                 },
@@ -696,6 +726,7 @@ var projectTable;
                     },
                     title: '<span data-i18n="案件状況">案件状況</span>',
                     orderable: false,
+                    width: '60px',
                 },
                 {
                     data: 'progress',
@@ -1089,7 +1120,7 @@ var projectTable;
                 },
                 { 
                     data: 'name',
-                    width: '150px',
+                    width: '100px',
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-start justify-content-start flex-column">
                                     <div class="mt-1">
@@ -1136,6 +1167,12 @@ var projectTable;
                         $(row).addClass(`table-row-status-${status.color}`);
                     }
                 }
+            },
+            initComplete: function() {
+                var tableEl = document.getElementById('projectTable');
+                if (tableEl && typeof applyStickyScrollHead === 'function') {
+                    applyStickyScrollHead(tableEl);
+                }
             }
             
         });
@@ -1151,9 +1188,61 @@ var projectTable;
             }));
         }
         
-        // Reset flag after initialization
+        // Reset flag after initialization (cũng chạy trong finally nếu có lỗi)
         isInitializingTable = false;
 
+        var fixedScrollHeadUpdate = null;
+        function applyStickyScrollHead(tableEl) {
+            if (!tableEl) tableEl = document.getElementById('projectTable');
+            if (!tableEl || !tableEl.closest) return;
+            var wrapper = tableEl.closest('.dt-container') || tableEl.closest('.dataTables_wrapper');
+            if (!wrapper) return;
+            var containerEl = wrapper.closest('.dt-container') || wrapper;
+            var scrollHead = wrapper.querySelector('.dt-scroll-head') || wrapper.querySelector('.dataTables_scrollHead') || wrapper.querySelector('[class*="scrollHead"]');
+            if (!scrollHead) {
+                var scroll = wrapper.querySelector('.dataTables_scroll') || wrapper.querySelector('.dt-scroll');
+                if (scroll && scroll.firstElementChild) scrollHead = scroll.firstElementChild;
+            }
+            if (!scrollHead) return;
+            scrollHead.style.zIndex = '10';
+            scrollHead.style.backgroundColor = scrollHead.style.backgroundColor || '#fff';
+            scrollHead.style.boxShadow = '0 2px 4px rgba(0,0,0,0.08)';
+            var spacer = wrapper.querySelector('.dt-scroll-head-spacer');
+            if (!spacer) {
+                spacer = document.createElement('div');
+                spacer.className = 'dt-scroll-head-spacer';
+                spacer.style.display = 'block';
+                spacer.style.height = '0';
+                spacer.style.overflow = 'hidden';
+                scrollHead.parentNode.insertBefore(spacer, scrollHead.nextSibling);
+            }
+            function updateFixedHeaderPosition() {
+                if (!scrollHead.parentNode || !containerEl) return;
+                var rect = containerEl.getBoundingClientRect();
+                var isPastContainer = rect.top <= -scrollHead.offsetHeight * 2;
+                if (isPastContainer) {
+                    scrollHead.style.position = 'fixed';
+                    scrollHead.style.top = '0';
+                    scrollHead.style.left = rect.left + 'px';
+                    scrollHead.style.width = rect.width + 'px';
+                    if (spacer) spacer.style.height = scrollHead.offsetHeight + 'px';
+                } else {
+                    scrollHead.style.position = '';
+                    scrollHead.style.top = '';
+                    scrollHead.style.left = '';
+                    scrollHead.style.width = '';
+                    if (spacer) spacer.style.height = '0';
+                }
+            }
+            updateFixedHeaderPosition();
+            if (fixedScrollHeadUpdate) {
+                window.removeEventListener('scroll', fixedScrollHeadUpdate, true);
+                window.removeEventListener('resize', fixedScrollHeadUpdate);
+            }
+            fixedScrollHeadUpdate = function() { updateFixedHeaderPosition(); };
+            window.addEventListener('scroll', fixedScrollHeadUpdate, true);
+            window.addEventListener('resize', fixedScrollHeadUpdate);
+        }
         // Khởi tạo Bootstrap tooltip cho ô giờ (data-time) mỗi khi DataTable vẽ lại
         $('#projectTable').on('draw.dt', function() {
             var table = document.getElementById('projectTable');
@@ -1164,7 +1253,17 @@ var projectTable;
                 if (t) t.dispose();
                 new bootstrap.Tooltip(el);
             });
+            applyStickyScrollHead(table);
         });
+        // Retry sau khi draw (serverSide: ajax trả về mới có DOM scroll) — 300ms và 800ms
+        setTimeout(function() {
+            var el = document.getElementById('projectTable');
+            if (el) applyStickyScrollHead(el);
+        }, 300);
+        setTimeout(function() {
+            var el = document.getElementById('projectTable');
+            if (el) applyStickyScrollHead(el);
+        }, 800);
 
         // Giữ Space + kéo chuột để scroll ngang và dọc bảng
         (function() {
@@ -1225,6 +1324,9 @@ var projectTable;
                 dragging = false;
             });
         })();
+        } finally {
+            isInitializingTable = false;
+        }
 
         // Khôi phục filter từ localStorage khi load trang
         // Khi thay đổi filter thì lưu lại
@@ -1377,6 +1479,76 @@ var projectTable;
                 $('#quickEditCailyNouki').val(p.caily_nouki || '');
                 $('#quickEditGuisNouki').val(p.guis_nouki || '');
                 $('#quickEditProgress').val(p.progress != null && p.progress !== '' ? parseInt(p.progress, 10) : 0);
+
+                var depId = p.department_id || '';
+                var savedCustom = [];
+                try {
+                    var raw = p.custom_fields;
+                    if (typeof raw === 'string' && raw.indexOf('&quot;') !== -1) raw = raw.replace(/&quot;/g, '"');
+                    savedCustom = typeof raw === 'string' ? JSON.parse(raw || '[]') : (Array.isArray(raw) ? raw : []);
+                } catch (e) { savedCustom = []; }
+                var savedValueMap = {};
+                savedCustom.forEach(function(f) { if (f && f.label) savedValueMap[String(f.label).trim()] = f.value || ''; });
+
+                axios.get('/api/index.php?model=department&method=getCustomFields').then(function(cfRes) {
+                    var sets = cfRes.data || [];
+                    var mergedFields = [];
+                    sets.filter(function(s) { return s.department_id == depId; }).forEach(function(s) {
+                        if (s.fields && Array.isArray(s.fields)) {
+                            s.fields.forEach(function(f) {
+                                if (!mergedFields.some(function(ex) { return ex.label && String(ex.label).trim() === String(f.label || '').trim(); })) {
+                                    mergedFields.push({ label: f.label || '', type: f.type || 'text', options: f.options || '' });
+                                }
+                            });
+                        }
+                    });
+                    var $wrap = $('#quickEditCustomFieldsWrap');
+                    $wrap.empty();
+                    if (mergedFields.length === 0) return;
+                    var fpCommon = { enableTime: true, time_24hr: true, dateFormat: 'Y/m/d H:i', allowInput: true, locale: 'ja' };
+                    mergedFields.forEach(function(f, idx) {
+                        var label = f.label;
+                        var type = f.type;
+                        var options = (f.options || '').trim();
+                        var opts = options ? options.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+                        var val = savedValueMap[String(label).trim()] || '';
+                        var safeLabel = String(label).replace(/"/g, '&quot;');
+                        var colClass = type === 'textarea' ? 'col-12' : 'col-md-4';
+                        var html = '<div class="' + colClass + ' mb-3 quick-edit-custom-field" data-custom-label="' + safeLabel + '" data-custom-type="' + type + '">';
+                        html += '<label class="form-label">' + safeLabel + '</label>';
+                        if (type === 'textarea') {
+                            html += '<textarea class="form-control quickEditCustomInput" data-custom-label="' + safeLabel + '" rows="3">' + (val ? String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '') + '</textarea>';
+                        } else if (type === 'select') {
+                            html += '<select class="form-select quickEditCustomInput" data-custom-label="' + safeLabel + '"><option value="">選択してください</option>';
+                            opts.forEach(function(opt) { html += '<option value="' + String(opt).replace(/"/g, '&quot;') + '"' + (val === opt ? ' selected' : '') + '>' + String(opt).replace(/</g, '&lt;') + '</option>'; });
+                            html += '</select>';
+                        } else if (type === 'radio') {
+                            opts.forEach(function(opt) {
+                                html += '<div class="form-check form-check-inline"><input class="form-check-input quickEditCustomRadio" type="radio" name="quickEditCustomRadio_' + idx + '" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (val === opt ? ' checked' : '') + '><label class="form-check-label">' + String(opt).replace(/</g, '&lt;') + '</label></div>';
+                            });
+                        } else if (type === 'checkbox') {
+                            var arr = val ? String(val).split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+                            opts.forEach(function(opt) {
+                                var checked = arr.indexOf(opt) !== -1;
+                                html += '<div class="form-check form-check-inline"><input class="form-check-input quickEditCustomCheckbox" type="checkbox" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (checked ? ' checked' : '') + '><label class="form-check-label">' + String(opt).replace(/</g, '&lt;') + '</label></div>';
+                            });
+                        } else if (type === 'datetime') {
+                            html += '<input type="text" class="form-control quickEditCustomInput quickEditCustomDatetime" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">';
+                        } else {
+                            html += '<input type="text" class="form-control quickEditCustomInput" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '">';
+                        }
+                        html += '</div>';
+                        $wrap.append(html);
+                    });
+                    if (typeof $().flatpickr === 'function') {
+                        $wrap.find('.quickEditCustomDatetime').each(function() {
+                            var $el = $(this);
+                            if ($el.data('flatpickr')) $el.data('flatpickr').destroy();
+                            $el.flatpickr(Object.assign({}, fpCommon, { defaultHour: 9, defaultMinute: 0 }));
+                        });
+                    }
+                }).catch(function() { $('#quickEditCustomFieldsWrap').empty(); });
+
                 if (typeof $().flatpickr === 'function') {
                     function makeTimeInputsEditable(selectedDates, dateStr, instance) {
                         var cal = instance.calendarContainer;
@@ -1408,7 +1580,6 @@ var projectTable;
 
                 // Load team list, project members, department users then init Tagify
                 const teamIdsStr = (p.teams || '').toString().trim();
-                const depId = p.department_id || '';
                 Promise.all([
                     teamIdsStr ? axios.get('/api/index.php?model=team&method=listbyids&ids=' + teamIdsStr.split(',').map(function(id) { return id.trim(); }).filter(Boolean).join(',')) : Promise.resolve({ data: [] }),
                     axios.get('/api/index.php?model=project&method=getMembers&project_id=' + projectId).catch(function() { return { data: [] }; }),
@@ -1617,6 +1788,26 @@ var projectTable;
             formData.append('teams', (quickEditTeamTagify && quickEditTeamTagify.value) ? quickEditTeamTagify.value.map(function(t) { return t.id; }).join(',') : '');
             formData.append('managers', (quickEditManagerTagify && quickEditManagerTagify.value) ? quickEditManagerTagify.value.map(function(t) { return t.id; }).join(',') : '');
             formData.append('members', (quickEditMembersTagify && quickEditMembersTagify.value) ? quickEditMembersTagify.value.map(function(t) { return t.id; }).join(',') : '');
+            var customFieldsData = [];
+            $('#quickEditCustomFieldsWrap .quick-edit-custom-field').each(function() {
+                var $field = $(this);
+                var label = $field.attr('data-custom-label');
+                var type = $field.attr('data-custom-type');
+                if (!label) return;
+                var value = '';
+                if (type === 'checkbox') {
+                    var checked = $field.find('.quickEditCustomCheckbox:checked').map(function() { return $(this).val(); }).get();
+                    value = checked.join(',');
+                } else if (type === 'radio') {
+                    var checkedEl = $field.find('.quickEditCustomRadio:checked');
+                    value = checkedEl.length ? checkedEl.val() : '';
+                } else {
+                    var input = $field.find('.quickEditCustomInput');
+                    value = input.length ? (input.val() || '').trim() : '';
+                }
+                customFieldsData.push({ label: label, value: value });
+            });
+            if (customFieldsData.length) formData.append('custom_fields', JSON.stringify(customFieldsData));
             axios.post('/api/index.php?model=project&method=update', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(function() {
                 bootstrap.Modal.getInstance(document.getElementById('quickEditProjectModal')).hide();
                 if (projectTable) projectTable.ajax.reload(null, false);
@@ -2100,7 +2291,7 @@ var projectTable;
     }
 
     function getTimeRemaining(endDate, status) {
-        if (!endDate || status === 'completed' || status === 'deleted' || status === 'draft' || status === 'cancelled') {
+        if (!endDate || status === 'paused' || status === 'completed' || status === 'deleted' || status === 'draft' || status === 'cancelled') {
             return null;
         }
         
@@ -2946,12 +3137,16 @@ var projectTable;
                 // Save selected department to localStorage
                 this.saveSelectedDepartmentToLocalStorage(department);
                 
-                // Initialize DataTable if not already initialized
-                this.$nextTick(() => {
-                    initializeProjectTable();
-                });
+                // Destroy bảng cũ để refresh đúng custom fields và 列の表示 của department mới
+                destroyProjectTable();
                 
-                this.loadProjects();
+                // Đợi Vue cập nhật DOM rồi init lại DataTable, xong mới reload (tránh init chưa xong đã gọi loadProjects)
+                this.$nextTick(async () => {
+                    await initializeProjectTable();
+                    if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+                        projectTable.ajax.reload();
+                    }
+                });
 
                 
                 // Load user permissions for the selected department

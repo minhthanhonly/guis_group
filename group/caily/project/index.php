@@ -320,6 +320,9 @@ if($_SESSION['show_project'] == 0){
                                     <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditMembersTagsClear" title="すべて削除"><i class="fa fa-times"></i></button>
                                 </div>
                             </div>
+                            <div class="row mt-4 quick-edit-full-only" id="quickEditCustomFieldsWrap">
+                                <!-- Custom fields rendered by JS -->
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -490,6 +493,24 @@ $view->footing();
     100% {
         box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
     }
+}
+
+/* Cột 案件状況: cố định đúng 50px */
+#projectTable th.dt-status-col,
+#projectTable td.dt-status-col {
+    width: 50px !important;
+    min-width: 50px !important;
+    max-width: 50px !important;
+    box-sizing: border-box;
+}
+#projectTable td.dt-status-col .badge {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.35rem;
 }
 
 /* Badge styling for time remaining in end date column */
