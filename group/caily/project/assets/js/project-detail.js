@@ -97,6 +97,8 @@ const vueApp = createApp({
                 needs_confirmation: false,
                 user_id: null
             },
+            quillNoteInstance: null,
+            quillNoteContent: '',
             // Project status update loading
             isUpdatingStatus: false,
             savingProject: false,
@@ -1709,7 +1711,15 @@ const vueApp = createApp({
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getNotes&project_id=${this.projectId}`);
                 if (response.data && response.data.status === 'success') {
-                    this.notes = response.data.data || [];
+                    // Notes content từ server có thể đã là HTML thuần (từ Quill), không cần decode
+                    // Chỉ decode nếu có HTML entities bị escape
+                    this.notes = (response.data.data || []).map(note => {
+                        if (note.content && (note.content.indexOf('&lt;') !== -1 || note.content.indexOf('&gt;') !== -1)) {
+                            // Nếu có HTML entities thì decode
+                            note.content = this.decodeHtmlEntities(note.content);
+                        }
+                        return note;
+                    });
                 } else {
                     this.notes = [];
                 }
@@ -1743,10 +1753,18 @@ const vueApp = createApp({
                     user_id: null
                 };
             }
+            // Init Quill editor nếu ở edit mode
+            if (!note) {
+                this.isNoteEditMode = true;
+                this.$nextTick(() => {
+                    this.initQuillNoteEditor();
+                });
+            }
         },
         closeNoteModal() {
             this.showNoteModal = false;
             this.isNoteEditMode = false;
+            this.destroyQuillNoteEditor();
             this.editingNote = {
                 id: null,
                 title: '',
@@ -1755,17 +1773,20 @@ const vueApp = createApp({
                 needs_confirmation: false,
                 user_id: null
             };
+            this.quillNoteContent = '';
         },
         async saveNote() {
-            const rawContent = (this.editingNote.content || '').trim();
+            // Lấy nội dung từ Quill editor nếu có, nếu không dùng editingNote.content
+            const rawContent = (this.quillNoteContent && this.quillNoteContent.trim()) || (this.editingNote.content || '').trim();
             if (!rawContent) {
                 this.showNotification('内容を入力してください', 'error');
                 return;
             }
-            // Auto-generate title from content (first line, max 50 chars)
+            // Auto-generate title from content (first line, max 50 chars, strip HTML tags)
             let title = (this.editingNote.title || '').trim();
             if (!title) {
-                title = rawContent.split(/\r?\n/)[0].slice(0, 50) || 'メモ';
+                const textContent = rawContent.replace(/<[^>]*>/g, '').trim();
+                title = textContent.split(/\r?\n/)[0].slice(0, 50) || 'メモ';
             }
             
             try {
@@ -2036,6 +2057,62 @@ const vueApp = createApp({
                     this.quillInstance = null;
                 }
             }
+        },
+        initQuillNoteEditor() {
+            if (this.quillNoteInstance || !this.isNoteEditMode || !this.showNoteModal) return;
+            setTimeout(() => {
+                const toolbarOptions = [
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ color: [] }, { background: [] }],
+                    [{ list: 'ordered' }, { list: 'bullet' }],
+                    [{ header: '1' }, { header: '2' }, 'blockquote'],
+                    ['link', 'clean']
+                ];
+                const el = document.getElementById('quill_note_content_detail');
+                if (!el) return;
+                if (this.quillNoteInstance) {
+                    try {
+                        this.quillNoteInstance = null;
+                    } catch (e) {}
+                }
+                this.quillNoteInstance = new Quill(el, {
+                    bounds: el,
+                    placeholder: 'メモの詳細を入力してください...',
+                    modules: {
+                        toolbar: {
+                            container: toolbarOptions
+                        }
+                    },
+                    theme: 'snow'
+                });
+                if (this.editingNote.content) {
+                    const html = this.decodeHtmlEntities ? this.decodeHtmlEntities(this.editingNote.content) : this.editingNote.content;
+                    this.quillNoteInstance.root.innerHTML = html;
+                }
+                this.quillNoteContent = this.quillNoteInstance.getSemanticHTML();
+                this.quillNoteInstance.on('text-change', () => {
+                    this.quillNoteContent = this.quillNoteInstance.getSemanticHTML();
+                });
+            }, 200);
+        },
+        destroyQuillNoteEditor() {
+            if (this.quillNoteInstance) {
+                try {
+                    this.quillNoteInstance = null;
+                } catch (e) {}
+            }
+            this.quillNoteContent = '';
+        },
+        decodeNoteHtml(str) {
+            if (!str) return '';
+            // Nếu đã là HTML thuần thì không cần decode
+            // Chỉ decode nếu có HTML entities
+            if (str.indexOf('&lt;') !== -1 || str.indexOf('&gt;') !== -1 || str.indexOf('&amp;') !== -1) {
+                const txt = document.createElement('textarea');
+                txt.innerHTML = str;
+                return txt.value;
+            }
+            return str;
         },
         decodeHtmlEntities(str) {
             const txt = document.createElement('textarea');

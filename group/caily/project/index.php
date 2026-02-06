@@ -694,7 +694,6 @@ $view->footing();
 
 #projectTable td.confirmation-notes-column .confirmation-note-item .note-text {
     display: block;
-    padding-right: 40px; /* space for action icons on the right */
 }
 
 

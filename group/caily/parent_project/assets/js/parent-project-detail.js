@@ -2741,6 +2741,7 @@ createApp({
                     modules: {
                         toolbar: [
                             ['bold', 'italic', 'underline', 'strike'],
+                            [{ color: [] }, { background: [] }],
                             ['blockquote', 'code-block'],
                             [{ 'header': 1 }, { 'header': 2 }],
                             [{ 'list': 'ordered'}, { 'list': 'bullet' }],
@@ -2879,6 +2880,7 @@ createApp({
                     modules: {
                         toolbar: [
                             ['bold', 'italic', 'underline', 'strike'],
+                            [{ color: [] }, { background: [] }],
                             ['blockquote', 'code-block'],
                             [{ 'header': 1 }, { 'header': 2 }],
                             [{ 'list': 'ordered'}, { 'list': 'bullet' }],

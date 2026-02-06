@@ -664,9 +664,7 @@ if($_SESSION['show_project'] == 0){
                                             <span v-if="note.needs_confirmation == 1" class="badge bg-warning">確認必要</span>
                                         </div>
                                     </div>
-                                    <div v-if="note.content" class="text-muted small" style="white-space: pre-line; word-break: break-word;">
-                                        {{ note.content }}
-                                    </div>
+                                    <div v-if="note.content" class="text-muted small ql-editor" style="word-break: break-word;" v-html="decodeNoteHtml(note.content)"></div>
                                 </div>
                                 <button class="btn btn-outline-danger btn-sm ms-2" 
                                         @click="deleteNote(note.id)" 
@@ -822,7 +820,7 @@ if($_SESSION['show_project'] == 0){
                         <div v-if="editingNote.id && !isNoteEditMode">
                             <div class="mb-3">
                                 <label class="form-label"><span data-i18n="内容">内容</span></label>
-                                <div class="form-control" style="min-height:100px;white-space:pre-line;max-height:300px;overflow-y:auto;">{{ editingNote.content || '-' }}</div>
+                                <div class="form-control ql-editor" style="min-height:100px;max-height:300px;overflow-y:auto;" v-html="editingNote.content || '-'"></div>
                             </div>
                             <div class="mb-3" v-if="editingNote.is_important">
                                 <label class="form-label"><span data-i18n="重要メモ">重要メモ</span></label>
@@ -842,7 +840,10 @@ if($_SESSION['show_project'] == 0){
                         <form v-else @submit.prevent="saveNote">
                             <div class="mb-3">
                                 <label class="form-label"><span data-i18n="内容">内容</span></label>
-                                <textarea class="form-control" v-model="editingNote.content" rows="6" placeholder="メモの詳細を入力してください..."></textarea>
+                                <div class="custom_editor">
+                                    <div class="custom_editor_content" id="quill_note_content_detail"></div>
+                                    <textarea class="custom_editor_textarea d-none" v-model="editingNote.content" id="quill_note_content_detail_textarea"></textarea>
+                                </div>
                             </div>
                             <div class="mb-3">
                                 <div class="form-check">
@@ -864,13 +865,13 @@ if($_SESSION['show_project'] == 0){
                     </div>
                     <div class="modal-footer">
                         <template v-if="editingNote.id && !isNoteEditMode">
-                            <button class="btn btn-primary" @click="isNoteEditMode = true" v-if="canEditNote(editingNote)"><i class="fa fa-pencil-alt me-2"></i> <span data-i18n="編集">編集</span></button>
+                            <button class="btn btn-primary" @click="isNoteEditMode = true; $nextTick(() => initQuillNoteEditor())" v-if="canEditNote(editingNote)"><i class="fa fa-pencil-alt me-2"></i> <span data-i18n="編集">編集</span></button>
                             <button class="btn btn-secondary" @click="closeNoteModal"><span data-i18n="閉じる">閉じる</span></button>
                         </template>
                         <template v-else>
                             <button class="btn btn-secondary" @click="isNoteEditMode = false" v-if="editingNote.id"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
                             <button class="btn btn-secondary" @click="closeNoteModal" v-else><span data-i18n="キャンセル">キャンセル</span></button>
-                            <button class="btn btn-primary" @click="saveNote" :disabled="!(editingNote.content && editingNote.content.trim())">
+                            <button class="btn btn-primary" @click="saveNote" :disabled="!((quillNoteContent && quillNoteContent.trim()) || (editingNote.content && editingNote.content.trim()))">
                                 <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
                             </button>
                         </template>
@@ -904,6 +905,50 @@ $view->footing();
 
 
 /* Note content styling (now show full content in list) */
+.list-group-item .ql-editor {
+    padding: 0;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.list-group-item .ql-editor p {
+    margin: 0 0 4px 0;
+}
+
+.list-group-item .ql-editor p:last-child {
+    margin-bottom: 0;
+}
+
+.list-group-item .ql-editor ul,
+.list-group-item .ql-editor ol {
+    margin: 4px 0;
+    padding-left: 20px;
+}
+
+.list-group-item .ql-editor strong {
+    font-weight: 600;
+}
+
+.list-group-item .ql-editor em {
+    font-style: italic;
+}
+
+.list-group-item .ql-editor u {
+    text-decoration: underline;
+}
+
+.list-group-item .ql-editor a {
+    color: #0d6efd;
+    text-decoration: underline;
+}
+
+.list-group-item .ql-editor blockquote {
+    border-left: 3px solid #ddd;
+    padding-left: 10px;
+    margin: 4px 0;
+    color: #666;
+    font-style: italic;
+}
 
 /* Project tags styling */
 .project-tags .badge {

@@ -91,7 +91,13 @@ var projectTable;
     function decodeHtmlForNote(s) {
         if (s == null || s === '') return '';
         const t = String(s);
-        return t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+        // Giải mã các entity HTML cơ bản + &nbsp; thành khoảng trắng thường
+        return t
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/&nbsp;/g, ' ');
     }
 
     function saveColumnVisibilityToLocalStorage(visibility) {
@@ -616,6 +622,7 @@ var projectTable;
             paging: true,
             info: true,
             searching: false,
+            
             dom: '<"row"<"col"l><"col text-end"p>>rti',
             scrollX: true,
             autoWidth: false,
@@ -712,7 +719,7 @@ var projectTable;
                             // Thêm class ql-editor để styling đúng với Quill
                             return `
                                 <div class="confirmation-note-item mb-1 ${isEditing ? 'editing-note' : ''}" ${id ? `data-note-id="${id}"` : ''}>
-                                    <div class="note-text small ql-editor" style="max-height: 150px; overflow: hidden; word-break: break-word;">${decodedText || '-'}</div>
+                                    <div class="note-text small ql-editor">${decodedText || '-'}</div>
                                     <span class="note-actions d-none ms-1">
                                         <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
                                             <i class="fa fa-pencil-alt"></i>
@@ -1163,7 +1170,7 @@ var projectTable;
            
             pageLength: 50,
             ordering: true,
-            responsive: true,
+            responsive: false,
             language: {
                 search: '<span data-i18n="検索">検索</span>:',
                 lengthMenu: '<span data-i18n="表示">表示</span>: _MENU_',
@@ -1235,16 +1242,18 @@ var projectTable;
             function updateFixedHeaderPosition() {
                 if (!scrollHead.parentNode || !containerEl) return;
                 var rect = containerEl.getBoundingClientRect();
-                var isPastContainer = rect.top <= -scrollHead.offsetHeight * 2;
+                var isPastContainer = rect.top <= -scrollHead.offsetHeight * 2 + 60;
                 if (isPastContainer) {
                     scrollHead.style.position = 'fixed';
-                    scrollHead.style.top = '0';
+                    scrollHead.style.top = '4.6rem';
+                    scrollHead.style.zIndex = '1000';
                     scrollHead.style.left = rect.left + 'px';
                     scrollHead.style.width = rect.width + 'px';
                     if (spacer) spacer.style.height = scrollHead.offsetHeight + 'px';
                 } else {
                     scrollHead.style.position = '';
                     scrollHead.style.top = '';
+                    scrollHead.style.zIndex = '';
                     scrollHead.style.left = '';
                     scrollHead.style.width = '';
                     if (spacer) spacer.style.height = '0';
