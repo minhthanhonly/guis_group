@@ -99,6 +99,10 @@ if($_SESSION['show_project'] == 0){
             <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="キーワード">キーワード</label>
             <input type="text" class="form-control form-control-sm" id="filterKeyword" placeholder="検索...">
             </div>
+            <div class="col-md-2 col-6">
+            <label class="form-label form-label-sm mb-0 text-nowrap">案件ID</label>
+            <input type="text" class="form-control form-control-sm" id="filterProjectId" placeholder="ID">
+            </div>
             <div class="col-md-4 col-12 d-flex align-items-end">
             <div class="d-flex flex-wrap align-items-center gap-3">
                 <div class="form-check mb-0">
@@ -116,7 +120,16 @@ if($_SESSION['show_project'] == 0){
     </div>
     </div>
     <div class="card">
-        <div class="card-body">
+        <div class="card-body position-relative">
+            <!-- Loading overlay -->
+            <div v-if="loading" class="position-absolute top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center bg-white bg-opacity-90 rounded" style="z-index: 100;">
+                <div class="text-center">
+                    <div class="spinner-border text-primary mb-2" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div class="text-muted" data-i18n="データを読み込み中...">データを読み込み中...</div>
+                </div>
+            </div>
             <div class="d-flex align-items-center gap-2 mb-2">
                 <div class="btn-group">
                     <button 
@@ -863,7 +876,7 @@ $view->footing();
 
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/tagify/tagify.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css?v=<?=CACHE_VERSION?>" />
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <!-- Chat page context: AI can use current project list data -->

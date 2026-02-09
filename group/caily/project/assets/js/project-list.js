@@ -195,8 +195,10 @@ var projectTable;
             filterTantou: $('#filterTantou').val(),
             filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
             filterKeyword: $('#filterKeyword').val(),
+            filterProjectId: $('#filterProjectId').val(),
             showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
-            myProjects: app && app.filterMyProjects ? 1 : 0
+            myProjects: app && app.filterMyProjects ? 1 : 0,
+            favorites_only: $('#filterFavoritesOnly').is(':checked') ? 1 : 0
         };
         // Lưu thêm department hiện tại và status hiện tại để đồng bộ với URL
         try {
@@ -249,8 +251,10 @@ var projectTable;
         if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
         if (params.has('filterNoDates')) merged.filterNoDates = getBool('filterNoDates');
         if (params.has('filterKeyword')) merged.filterKeyword = params.get('filterKeyword') || '';
+        if (params.has('filterProjectId')) merged.filterProjectId = params.get('filterProjectId') || '';
         if (params.has('showInactive')) merged.showInactive = getBool('showInactive');
         if (params.has('my_projects')) merged.myProjects = getBool('my_projects');
+        if (params.has('favorites_only')) merged.favorites_only = getBool('favorites_only');
         if (params.has('status')) merged.statusKey = params.get('status') || '';
 
         // Department id để auto chọn đúng 部署 khi mở link
@@ -288,8 +292,18 @@ var projectTable;
         if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
         if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
         if (filters.filterKeyword !== undefined) $('#filterKeyword').val(filters.filterKeyword);
+        if (filters.filterProjectId !== undefined) $('#filterProjectId').val(filters.filterProjectId);
         if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
         if (filters.myProjects !== undefined && app) app.filterMyProjects = filters.myProjects == 1;
+        // Only restore favorites_only if it's explicitly set in filters (not undefined)
+        if (filters.favorites_only !== undefined) {
+            $('#filterFavoritesOnly').prop('checked', filters.favorites_only == 1);
+            if (app) app.showClearAllFavoritesBtn = filters.favorites_only == 1;
+        } else {
+            // If not in filters, ensure it's unchecked
+            $('#filterFavoritesOnly').prop('checked', false);
+            if (app) app.showClearAllFavoritesBtn = false;
+        }
     }
 
     function getFiltersFromLocalStorage() {
@@ -444,8 +458,10 @@ var projectTable;
         setOrDelete('filterTantou', filters.filterTantou);
         setOrDelete('filterNoDates', filters.filterNoDates ? 1 : '');
         setOrDelete('filterKeyword', filters.filterKeyword);
+        setOrDelete('filterProjectId', filters.filterProjectId);
         setOrDelete('showInactive', filters.showInactive ? 1 : '');
         setOrDelete('my_projects', filters.myProjects ? 1 : '');
+        setOrDelete('favorites_only', filters.favorites_only ? 1 : '');
         setOrDelete('status', filters.statusKey);
         setOrDelete('department_id', filters.department_id);
 
@@ -504,6 +520,7 @@ var projectTable;
     async function initializeProjectTable() {
         // Check if DataTable is already initialized (đổi department thì gọi destroyProjectTable trước)
         if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+            if (app) app.loading = false;
             return; // Already initialized
         }
         
@@ -516,6 +533,7 @@ var projectTable;
         // Check if selectedDepartment exists
         if (!app || !app.selectedDepartment || !app.selectedDepartment.id) {
             console.warn('Cannot initialize DataTable: selectedDepartment is not set');
+            if (app) app.loading = false;
             return;
         }
         
@@ -586,6 +604,7 @@ var projectTable;
                     const filterTantou = $('#filterTantou').val();
                     const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
                     const filterKeyword = $('#filterKeyword').val();
+                    const filterProjectId = $('#filterProjectId').val();
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
                     const myProjects = $('#filterMyProjects').is(':checked') ? 1 : 0;
                     const favoritesOnly = $('#filterFavoritesOnly').is(':checked') ? 1 : 0;
@@ -611,6 +630,7 @@ var projectTable;
                         filterNoDates,
                         my_projects: myProjects,
                         filterKeyword,
+                        filterProjectId,
                         showInactive,
                         favorites_only: favoritesOnly
                     };
@@ -639,13 +659,34 @@ var projectTable;
                                    style="cursor: pointer; font-size: 1.2em;"
                                    onclick="window.toggleProjectFavorite(${row.id}, this)"
                                    title="${isFavorite ? 'お気に入りから削除' : 'お気に入りに追加'}"></i></div>`;
+                        
+                        // Collect all badges to display
+                        const badges = [];
+                        
+                        // Start date label
                         const startLabel = getStartDateLabel(row.start_date);
                         if (startLabel) {
+                            badges.push('<span class="badge ' + startLabel.class + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + startLabel.text + '</span>');
+                        }
+                        
+                        // Overdue label (期限超過)
+                        if (isProjectOverdue(row)) {
+                            badges.push('<span class="badge bg-danger" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">期限超過</span>');
+                        }
+                        
+                        // Period undecided label (期間未定)
+                        if (isPeriodUndecided(row)) {
+                            badges.push('<span class="badge bg-label-warning" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">期間未定</span>');
+                        }
+                      
+                        
+                        if (badges.length > 0) {
                             return '<div class="d-flex flex-column align-items-center gap-1">' +
                                 starHtml +
-                                '<span class="badge ' + startLabel.class + ' mt-1" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + startLabel.text + '</span>' +
+                                badges.join('') +
                                 '</div>';
                         }
+                        
                         return starHtml;
                     },
                     title: '',
@@ -1216,8 +1257,19 @@ var projectTable;
             }));
         }
         
-        // Reset flag after initialization (cũng chạy trong finally nếu có lỗi)
-        isInitializingTable = false;
+        } catch (error) {
+            console.error('Error initializing project table:', error);
+            if (app) {
+                app.loading = false;
+            }
+        } finally {
+            // Reset flag after initialization (cũng chạy trong finally nếu có lỗi)
+            isInitializingTable = false;
+            // Tắt loading khi table đã init xong
+            if (app) {
+                app.loading = false;
+            }
+        }
 
         // Popup tasks khi hover cột ID hoặc name (di chuyển theo chuột, load task qua API)
         (function initProjectTasksPopup() {
@@ -1537,9 +1589,6 @@ var projectTable;
                 dragging = false;
             });
         })();
-        } finally {
-            isInitializingTable = false;
-        }
 
         // Khôi phục filter từ localStorage khi load trang
         // Khi thay đổi filter thì lưu lại
@@ -1706,26 +1755,39 @@ var projectTable;
                 axios.get('/api/index.php?model=department&method=getCustomFields').then(function(cfRes) {
                     var sets = cfRes.data || [];
                     var mergedFields = [];
-                    sets.filter(function(s) { return s.department_id == depId; }).forEach(function(s) {
+                    // Filter sets by department_id (use strict comparison)
+                    sets.filter(function(s) { 
+                        return s && s.department_id != null && String(s.department_id) === String(depId); 
+                    }).forEach(function(s) {
                         if (s.fields && Array.isArray(s.fields)) {
                             s.fields.forEach(function(f) {
-                                if (!mergedFields.some(function(ex) { return ex.label && String(ex.label).trim() === String(f.label || '').trim(); })) {
-                                    mergedFields.push({ label: f.label || '', type: f.type || 'text', options: f.options || '' });
+                                if (f && f.label && !mergedFields.some(function(ex) { 
+                                    return ex.label && String(ex.label).trim() === String(f.label || '').trim(); 
+                                })) {
+                                    mergedFields.push({ 
+                                        label: f.label || '', 
+                                        type: f.type || 'text', 
+                                        options: f.options || '' 
+                                    });
                                 }
                             });
                         }
                     });
                     var $wrap = $('#quickEditCustomFieldsWrap');
                     $wrap.empty();
-                    if (mergedFields.length === 0) return;
+                    if (mergedFields.length === 0) {
+                        // No custom fields found, but don't hide the wrapper
+                        return;
+                    }
                     var fpCommon = { enableTime: true, time_24hr: true, dateFormat: 'Y/m/d H:i', allowInput: true, locale: 'ja' };
                     mergedFields.forEach(function(f, idx) {
                         var label = f.label;
                         var type = f.type;
-                        var options = (f.options || '').trim();
+                        // Ensure options is a string before calling trim()
+                        var options = (f.options != null ? String(f.options) : '').trim();
                         var opts = options ? options.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
                         var val = savedValueMap[String(label).trim()] || '';
-                        var safeLabel = String(label).replace(/"/g, '&quot;');
+                        var safeLabel = String(label).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                         var colClass = type === 'textarea' ? 'col-12' : 'col-md-4';
                         var html = '<div class="' + colClass + ' mb-3 quick-edit-custom-field" data-custom-label="' + safeLabel + '" data-custom-type="' + type + '">';
                         html += '<label class="form-label">' + safeLabel + '</label>';
@@ -1760,7 +1822,10 @@ var projectTable;
                             $el.flatpickr(Object.assign({}, fpCommon, { defaultHour: 9, defaultMinute: 0 }));
                         });
                     }
-                }).catch(function() { $('#quickEditCustomFieldsWrap').empty(); });
+                }).catch(function(err) { 
+                    console.error('Error loading custom fields:', err);
+                    $('#quickEditCustomFieldsWrap').empty(); 
+                });
 
                 if (typeof $().flatpickr === 'function') {
                     function makeTimeInputsEditable(selectedDates, dateStr, instance) {
@@ -2447,6 +2512,7 @@ var projectTable;
             $('#filterTantou').val('');
             $('#filterNoDates').prop('checked', false);
             $('#filterKeyword').val('');
+            $('#filterProjectId').val('');
             $('#showInactiveSwitch').prop('checked', true); // hoặc giá trị mặc định
             // Reset favorites filter
             $('#filterFavoritesOnly').prop('checked', false);
@@ -2482,6 +2548,43 @@ var projectTable;
                 initializeProjectTable();
             }
         }, 100);
+    });
+    
+    // Handle browser back/forward button (pageshow event)
+    window.addEventListener('pageshow', function(event) {
+        // event.persisted is true when page is loaded from cache (back/forward navigation)
+        if (event.persisted) {
+            // Reload filters from localStorage to ensure correct state (especially favorites_only)
+            loadFiltersFromLocalStorage();
+            
+            // Reload departments and reinitialize if needed
+            if (window.app) {
+                // Always reload departments to ensure fresh data
+                if (!window.app.departments || window.app.departments.length === 0) {
+                    window.app.loadDepartments();
+                } else {
+                    // If departments are already loaded, check if we need to restore selected department
+                    const savedDepartment = window.app.loadSelectedDepartmentFromLocalStorage();
+                    if (savedDepartment && (!window.app.selectedDepartment || window.app.selectedDepartment.id !== savedDepartment.id)) {
+                        // Find and select the saved department
+                        const department = window.app.departments.find(d => d && d.id == savedDepartment.id && d.can_project == 1);
+                        if (department) {
+                            window.app.viewProjects(department);
+                        }
+                    } else if (window.app.selectedDepartment && window.app.selectedDepartment.id) {
+                        // If department is already selected, ensure DataTable is initialized and reload data
+                        setTimeout(function() {
+                            if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
+                                initializeProjectTable();
+                            } else {
+                                // Reload data if table already exists
+                                projectTable.ajax.reload(null, false);
+                            }
+                        }, 100);
+                    }
+                }
+            }
+        }
     });
 
     // Helper function to get initials from name
@@ -2618,6 +2721,37 @@ var projectTable;
         }
     }
 
+    // Helper function to check if project is overdue (similar to project-gantt.js)
+    function isProjectOverdue(row) {
+        // Skip if no end_date
+        if (!row.end_date) return false;
+        
+        // Skip if status is completed, cancelled, paused, deleted, or draft
+        const skipStatuses = ['completed', 'cancelled', 'paused', 'deleted'];
+        if (skipStatuses.includes(row.status)) return false;
+        
+        // Check if end_date is before today
+        try {
+            const endDate = new Date(row.end_date);
+            const today = new Date();
+            // Reset time to compare dates only
+            today.setHours(0, 0, 0, 0);
+            endDate.setHours(0, 0, 0, 0);
+            
+            return endDate < today;
+        } catch (e) {
+            return false;
+        }
+    }
+    
+    // Helper function to check if project period is undecided (期間未定)
+    // Similar to project-gantt.js logic
+    function isPeriodUndecided(row) {
+        const skipStatuses = ['completed', 'cancelled', 'paused', 'deleted'];
+        if (skipStatuses.includes(row.status)) return false;
+        return !row.start_date || (!row.end_date);
+    }
+    
     function getStartDateLabel(startDate) {
         if (!startDate) return null;
         const now = moment.tz('Asia/Tokyo');
@@ -2649,6 +2783,7 @@ var projectTable;
     const app = createApp({
         data() {
             return {
+                loading: true,
                 selectedDepartment: null,
                 showClearAllFavoritesBtn: false,
                 projects: [],
@@ -3115,6 +3250,7 @@ var projectTable;
             },
             
             async loadDepartments() {
+                this.loading = true;
                 try {
                     const response = await axios.get('/api/index.php?model=department&method=listByUser');
                     this.departments = response.data || [];
@@ -3134,6 +3270,8 @@ var projectTable;
                         const firstDepartment = this.departments.find(d => d && d.can_project == 1);
                         if (firstDepartment) {
                             this.viewProjects(firstDepartment);
+                        } else {
+                            this.loading = false;
                         }
                     } else {
                         throw new Error('No department found');
@@ -3141,6 +3279,7 @@ var projectTable;
                 } catch (error) {
                     console.error('Error loading departments:', error);
                     this.departments = [];
+                    this.loading = false;
                     showMessage('どの部署にも所属していません。管理者に問い合わせてください。', true);
                 }
             },
@@ -3408,6 +3547,7 @@ var projectTable;
                     return;
                 }
                 
+                this.loading = true;
                 this.selectedDepartment = department;
                 // Cập nhật context chat để AI biết đang xem danh sách dự án của department nào
                 if (typeof window !== 'undefined') {
@@ -3423,9 +3563,13 @@ var projectTable;
                 
                 // Đợi Vue cập nhật DOM rồi init lại DataTable, xong mới reload (tránh init chưa xong đã gọi loadProjects)
                 this.$nextTick(async () => {
-                    await initializeProjectTable();
-                    if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-                        projectTable.ajax.reload();
+                    try {
+                        await initializeProjectTable();
+                        if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+                            projectTable.ajax.reload();
+                        }
+                    } finally {
+                        this.loading = false;
                     }
                 });
 
@@ -3503,6 +3647,8 @@ var projectTable;
             onFavoritesFilterChange() {
                 const isChecked = $('#filterFavoritesOnly').is(':checked');
                 this.showClearAllFavoritesBtn = isChecked;
+                // Save filter state to localStorage
+                saveFiltersToLocalStorage();
                 if (projectTable) {
                     projectTable.ajax.reload();
                 }

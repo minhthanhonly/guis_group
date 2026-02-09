@@ -147,8 +147,13 @@ const app = Vue.createApp({
         openModalForEdit(set, idx) {
             console.log(set);
             this.editingSetIdx = idx;
-            // Deep copy
+            // Deep copy và chuẩn hóa từng field (đảm bảo có type để binding タイプ hoạt động)
             this.modalSet = JSON.parse(JSON.stringify(set));
+            this.modalSet.fields = (this.modalSet.fields || []).map(f => ({
+                label: f.label || '',
+                type: f.type || 'text',
+                options: f.options != null ? f.options : ''
+            }));
             this.showModal = true;
         },
         closeModal() {
@@ -187,8 +192,16 @@ const app = Vue.createApp({
                 }
             }
             const method = this.editingSetIdx === null ? 'addCustomFields' : 'saveCustomFields';
-            // Save only this set to the database
-            axios.post('/api/index.php?model=department&method=' + method, this.modalSet)
+            // Chuẩn hóa fields trước khi gửi (đảm bảo type luôn có, tránh mất タイプ khi lưu)
+            const payload = {
+                ...this.modalSet,
+                fields: this.modalSet.fields.map(f => ({
+                    label: f.label || '',
+                    type: f.type || 'text',
+                    options: f.options != null ? f.options : ''
+                }))
+            };
+            axios.post('/api/index.php?model=department&method=' + method, payload)
                 .then(() => {
                     this.showModal = false;
                     this.loadCustomFieldSets();

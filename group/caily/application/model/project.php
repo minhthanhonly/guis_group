@@ -83,32 +83,45 @@ class Project extends ApplicationModel {
         if (isset($_GET['department_id'])) {
             $whereArr[] = sprintf("p.department_id = %d", intval($_GET['department_id']));
         }
-        if (isset($_GET['status']) && $_GET['status'] != 'all') {
-            $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
-        } else {
-            $whereArr[] = "p.status != 'deleted'";
-        }
-
-
-        // Nếu có filterKeyword thì chỉ áp dụng điều kiện tìm kiếm keyword, bỏ qua các filter nâng cao khác
-        $hasKeyword = isset($_GET['filterKeyword']) && $_GET['filterKeyword'] !== '';
+        
+        // Nếu có filterKeyword hoặc filterProjectId thì chỉ áp dụng điều kiện tìm kiếm, bỏ qua các filter nâng cao khác
+        $hasKeyword = isset($_GET['filterKeyword']) && trim($_GET['filterKeyword']) !== '';
+        $hasProjectId = !empty($_GET['filterProjectId']) && intval($_GET['filterProjectId']) > 0;
+        $filterByIdOrKeyword = $hasKeyword || $hasProjectId;
         $hasStatus = isset($_GET['status']) && $_GET['status'] !== '' && $_GET['status'] !== 'all';
         $showInactive = isset($_GET['showInactive']) && $_GET['showInactive'] == '1';
-        if ($hasKeyword) {
-            $kw = $this->escape($_GET['filterKeyword']);
-            $whereArr[] = "(p.name LIKE '%$kw%' 
-            OR p.id LIKE '%$kw%' 
-            OR p.tags LIKE '%$kw%'
-            OR c.company_name LIKE '%$kw%'
-            OR c.company_name_kana LIKE '%$kw%'
-            OR c.branch LIKE '%$kw%'
-            OR c.name LIKE '%$kw%'
-            OR c.name_kana LIKE '%$kw%'
-            OR pp.construction_number LIKE '%$kw%'
-            OR pp.scale LIKE '%$kw%'
-            OR pp.type1 LIKE '%$kw%'
-            OR pp.type2 LIKE '%$kw%')";
+        
+        // Filter by project ID (案件ID)
+        if ($hasProjectId) {
+            $whereArr[] = "p.id = " . intval($_GET['filterProjectId']);
+        }
+        
+        if ($filterByIdOrKeyword) {
+            // Khi filter theo ID hoặc keyword: chỉ áp dụng điều kiện keyword (nếu có), bỏ qua các filter nâng cao khác
+            if ($hasKeyword) {
+                $kw = $this->escape($_GET['filterKeyword']);
+                $whereArr[] = "(p.name LIKE '%$kw%' 
+                OR p.id LIKE '%$kw%' 
+                OR p.tags LIKE '%$kw%'
+                OR c.company_name LIKE '%$kw%'
+                OR c.company_name_kana LIKE '%$kw%'
+                OR c.branch LIKE '%$kw%'
+                OR c.name LIKE '%$kw%'
+                OR c.name_kana LIKE '%$kw%'
+                OR pp.construction_number LIKE '%$kw%'
+                OR pp.scale LIKE '%$kw%'
+                OR pp.type1 LIKE '%$kw%'
+                OR pp.type2 LIKE '%$kw%')";
+            }
+            // Status: khi filter theo ID hoặc keyword thì chỉ ẩn deleted, không áp dụng status dropdown và showInactive
+            $whereArr[] = "p.status != 'deleted'";
         } else {
+            // Status filter (chỉ áp dụng khi không có filterByIdOrKeyword)
+            if (isset($_GET['status']) && $_GET['status'] != 'all') {
+                $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
+            } else {
+                $whereArr[] = "p.status != 'deleted'";
+            }
             // --- Advanced Filters ---
             $hasStartMonth = isset($_GET['filterStartMonth']) && $_GET['filterStartMonth'] !== '';
             $hasEndMonth = isset($_GET['filterEndMonth']) && $_GET['filterEndMonth'] !== '';
@@ -421,40 +434,52 @@ class Project extends ApplicationModel {
             $team_id = intval($_GET['team_id']);
             $whereArr[] = sprintf("FIND_IN_SET(%d, p.teams) > 0", $team_id);
         }
-        // Status filter + "完了・中止案件等も表示" (showInactive)
-        $showInactive = isset($_GET['showInactive']) && $_GET['showInactive'] === '1';
-        if (isset($_GET['status'])) {
-            if ($_GET['status'] == 'all') {
-                if ($showInactive) {
-                    $whereArr[] = "p.status != 'deleted'";
-                } else {
-                    // Ẩn completed / cancelled khi không bật showInactive
-                    $whereArr[] = "p.status NOT IN ('deleted','completed','cancelled')";
-                }
-            } else if ($_GET['status'] == 'active') {
-                $whereArr[] = "p.status NOT IN ('deleted', 'draft', 'completed', 'cancelled')";
-            } else {
-                $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
-            }
-        } else {
+        $hasKeyword = isset($_GET['filterKeyword']) && trim($_GET['filterKeyword']) !== '';
+        $hasProjectId = !empty($_GET['filterProjectId']) && intval($_GET['filterProjectId']) > 0;
+        $filterByIdOrKeyword = $hasKeyword || $hasProjectId;
+
+        // Status: khi filter theo ID hoặc keyword thì chỉ ẩn deleted, không áp dụng status dropdown và showInactive
+        if ($filterByIdOrKeyword) {
             $whereArr[] = "p.status != 'deleted'";
+        } else {
+            $showInactive = isset($_GET['showInactive']) && $_GET['showInactive'] === '1';
+            if (isset($_GET['status'])) {
+                if ($_GET['status'] == 'all') {
+                    if ($showInactive) {
+                        $whereArr[] = "p.status != 'deleted'";
+                    } else {
+                        $whereArr[] = "p.status NOT IN ('deleted','completed','cancelled')";
+                    }
+                } else if ($_GET['status'] == 'active') {
+                    $whereArr[] = "p.status NOT IN ('deleted', 'draft', 'completed', 'cancelled')";
+                } else {
+                    $whereArr[] = sprintf("p.status = '%s'", $this->escape($_GET['status']));
+                }
+            } else {
+                $whereArr[] = "p.status != 'deleted'";
+            }
         }
-        // --- Advanced Filters (same semantics as project list, without start/end month) ---
-        $hasKeyword = isset($_GET['filterKeyword']) && $_GET['filterKeyword'] !== '';
-        if ($hasKeyword) {
-            $kw = $this->escape($_GET['filterKeyword']);
-            $whereArr[] = "(p.name LIKE '%$kw%' 
-                OR p.id LIKE '%$kw%' 
-                OR p.tags LIKE '%$kw%'
-                OR c.company_name LIKE '%$kw%'
-                OR c.company_name_kana LIKE '%$kw%'
-                OR c.branch LIKE '%$kw%'
-                OR c.name LIKE '%$kw%'
-                OR c.name_kana LIKE '%$kw%'
-                OR pp.construction_number LIKE '%$kw%'
-                OR pp.scale LIKE '%$kw%'
-                OR pp.type1 LIKE '%$kw%'
-                OR pp.type2 LIKE '%$kw%')";
+        // Filter by project ID (案件ID)
+        if ($hasProjectId) {
+            $whereArr[] = "p.id = " . intval($_GET['filterProjectId']);
+        }
+        // Khi filter theo ID hoặc keyword: chỉ áp dụng điều kiện keyword (nếu có), bỏ qua các filter nâng cao khác
+        if ($filterByIdOrKeyword) {
+            if ($hasKeyword) {
+                $kw = $this->escape(trim($_GET['filterKeyword']));
+                $whereArr[] = "(p.name LIKE '%$kw%' 
+                    OR p.id LIKE '%$kw%' 
+                    OR p.tags LIKE '%$kw%'
+                    OR c.company_name LIKE '%$kw%'
+                    OR c.company_name_kana LIKE '%$kw%'
+                    OR c.branch LIKE '%$kw%'
+                    OR c.name LIKE '%$kw%'
+                    OR c.name_kana LIKE '%$kw%'
+                    OR pp.construction_number LIKE '%$kw%'
+                    OR pp.scale LIKE '%$kw%'
+                    OR pp.type1 LIKE '%$kw%'
+                    OR pp.type2 LIKE '%$kw%')";
+            }
         } else {
             if (isset($_GET['filterPriority']) && $_GET['filterPriority'] !== '') {
                 $priority = $this->escape($_GET['filterPriority']);
@@ -514,6 +539,21 @@ class Project extends ApplicationModel {
             // Filter projects without start_date or end_date
             if (isset($_GET['filterNoDates']) && $_GET['filterNoDates'] === '1') {
                 $whereArr[] = "(p.start_date IS NULL OR p.end_date IS NULL)";
+            }
+        }
+        // 表示期間: chỉ lấy dự án giao với khoảng gantt_start_date ~ gantt_end_date (hoặc 期間未定)
+        if (!empty($_GET['gantt_start_date']) && !empty($_GET['gantt_end_date'])) {
+            $gantt_start = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['gantt_start_date']) ? $_GET['gantt_start_date'] : null;
+            $gantt_end   = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['gantt_end_date'])   ? $_GET['gantt_end_date']   : null;
+            if ($gantt_start && $gantt_end) {
+                $gs = "'" . $this->quote($gantt_start) . "'";
+                $ge = "'" . $this->quote($gantt_end) . "'";
+                $whereArr[] = "(
+                    (p.start_date IS NOT NULL AND p.end_date IS NOT NULL AND DATE(p.start_date) <= $ge AND DATE(p.end_date) >= $gs)
+                    OR (p.start_date IS NOT NULL AND p.end_date IS NULL AND DATE(p.start_date) <= $ge)
+                    OR (p.start_date IS NULL AND p.end_date IS NOT NULL AND DATE(p.end_date) >= $gs)
+                    OR (p.start_date IS NULL AND p.end_date IS NULL)
+                )";
             }
         }
         $where = implode(" AND ", $whereArr);

@@ -215,15 +215,49 @@ class Department extends ApplicationModel {
     }
 
     // --- Custom Fields Management ---
+    private function _normalizeCustomFields($fields) {
+        if (!isset($fields) || !is_array($fields)) {
+            return [];
+        }
+        $normalized = [];
+        foreach ($fields as $f) {
+            $opts = [];
+            if (isset($f['options'])) {
+                if (is_array($f['options'])) {
+                    $opts = $f['options'];
+                } else {
+                    $opts = array_values(array_filter(array_map('trim', explode("\n", (string)$f['options']))));
+                }
+            }
+            $normalized[] = [
+                'label'   => isset($f['label']) ? (string)$f['label'] : '',
+                'type'    => isset($f['type']) && $f['type'] !== '' ? (string)$f['type'] : 'text',
+                'options' => $opts
+            ];
+        }
+        return $normalized;
+    }
+
     function saveCustomFields() {
         $json = file_get_contents('php://input');
         $data = json_decode($json, true);
+        if (!is_array($data)) {
+            return ['success' => false, 'message' => 'Invalid JSON'];
+        }
         // Lưu vào 1 bảng riêng: department_custom_fields (id, department_id, fields)
         $department_id = isset($data['department_id']) ? intval($data['department_id']) : 0;
         $id = intval($data['id']);
-        $name = $data['name'];
-        $fields = json_encode($data['fields'], JSON_UNESCAPED_UNICODE);
-        $this->query_update(['department_id' => $department_id, 'fields' => $fields, 'name' => $name], ['id' => $id], 'department_custom_fields');
+        $name = isset($data['name']) ? $data['name'] : '';
+        $fieldsRaw = isset($data['fields']) ? $data['fields'] : [];
+        $fields = json_encode($this->_normalizeCustomFields($fieldsRaw), JSON_UNESCAPED_UNICODE);
+
+        $affected = $this->query_update(['department_id' => $department_id, 'fields' => $fields, 'name' => $name], ['id' => $id], 'department_custom_fields');
+        if ($affected === false || $affected < 0) {
+            return ['success' => false, 'message' => '更新に失敗しました。'];
+        }
+        if ($affected === 0) {
+            return ['success' => false, 'message' => '該当するレコードが見つかりません。'];
+        }
         return ['success' => true];
     }
 
@@ -239,10 +273,14 @@ class Department extends ApplicationModel {
     function addCustomFields() {
         $json = file_get_contents('php://input');
         $data = json_decode($json, true);
+        if (!is_array($data)) {
+            return ['success' => false, 'message' => 'Invalid JSON'];
+        }
         // Lưu vào 1 bảng riêng: department_custom_fields (id, department_id, fields)
         $department_id = intval($data['department_id']);
-        $name = $data['name'];
-        $fields = json_encode($data['fields'], JSON_UNESCAPED_UNICODE);
+        $name = isset($data['name']) ? $data['name'] : '';
+        $fieldsRaw = isset($data['fields']) ? $data['fields'] : [];
+        $fields = json_encode($this->_normalizeCustomFields($fieldsRaw), JSON_UNESCAPED_UNICODE);
         $this->query_insert(['department_id' => $department_id, 'fields' => $fields, 'name' => $name], 'department_custom_fields');
         return ['success' => true];
     }

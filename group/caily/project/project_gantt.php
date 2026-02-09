@@ -91,6 +91,10 @@ if($_SESSION['show_project'] == 0){
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="キーワード">キーワード</label>
               <input type="text" class="form-control form-control-sm" id="filterKeyword" placeholder="検索...">
             </div>
+            <div class="col-md-2 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap">案件ID</label>
+              <input type="text" class="form-control form-control-sm" id="filterProjectId" placeholder="ID">
+            </div>
             <div class="col-md-4 col-12 d-flex align-items-end">
               <div class="d-flex flex-wrap align-items-center gap-3">
                 <div class="form-check mb-0">
@@ -152,6 +156,9 @@ if($_SESSION['show_project'] == 0){
                     <input type="date" class="form-control form-control-sm start_date" style="width: 140px;" @change="changeDates">
                     <span class="text-muted">–</span>
                     <input type="date" class="form-control form-control-sm end_date" style="width: 140px;" @change="changeDates">
+                    <button type="button" class="btn btn-outline-primary btn-sm" @click="scrollToTodayMinus7" title="今日-7日付近へスクロール">
+                        <i class="fa fa-calendar-check-o me-1"></i>今日付近
+                    </button>
                 </div>
                 
                 <!-- Scale Controls -->
@@ -180,6 +187,16 @@ if($_SESSION['show_project'] == 0){
                     </button>
                 </div> -->
                 
+                <!-- Zoom Controls -->
+                <div class="btn-group me-2">
+                    <button class="btn btn-outline-secondary btn-sm" @click="zoomOut" title="ズームアウト">
+                        <i class="fa fa-search-minus"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" @click="zoomIn" title="ズームイン">
+                        <i class="fa fa-search-plus"></i>
+                    </button>
+                </div>
+                
                 <!-- Fullscreen Button -->
                 <button class="btn btn-outline-secondary btn-sm me-2" @click="toggleFullscreen" title="フルスクリーン">
                     <i class="fa fa-expand" v-if="!isFullscreen"></i>
@@ -189,13 +206,34 @@ if($_SESSION['show_project'] == 0){
                     <input class="form-check-input" type="checkbox" id="toggleTaskText" checked>
                     <label class="form-check-label small" for="toggleTaskText">案件名を表示</label>
                 </div>
-                <div class="form-check ms-2">
-                    <input class="form-check-input" type="checkbox" id="useCailyEndDate">
-                    <label class="form-check-label small" for="useCailyEndDate">終了日をCAILY納期で表示</label>
+            </div>
+            <div class="mt-2 d-flex gap-2 align-items-center justify-content-between">
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <!-- CAILY納期 -->
+                  <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="useCailyEndDate" checked>
+                      <label class="form-check-label small" for="useCailyEndDate">CAILY納期を表示</label>
+                  </div>
+                  <div class="form-check ms-2">
+                      <input class="form-check-input" type="checkbox" id="useGuisEndDate" checked>
+                      <label class="form-check-label small" for="useGuisEndDate">GUIS納期を表示</label>
+                  </div>
+                  <div class="form-check ms-2">
+                      <input class="form-check-input" type="checkbox" id="useShowCailyStruct" checked>
+                      <label class="form-check-label small" for="useShowCailyStruct">構造データ送付 (CAILY)を表示</label>
+                  </div>
+                  <div class="form-check ms-2">
+                      <input class="form-check-input" type="checkbox" id="useShowGuisStruct" checked>
+                      <label class="form-check-label small" for="useShowGuisStruct">構造データ送付 (GUIS)を表示</label>
+                  </div>
+                  <div class="form-check ms-2">
+                      <input class="form-check-input" type="checkbox" id="useShowEquipmentNouki" checked>
+                      <label class="form-check-label small" for="useShowEquipmentNouki">設備 納期を表示</label>
+                  </div>
                 </div>
-                <div class="form-check ms-2">
-                    <input class="form-check-input" type="checkbox" id="useGuisEndDate">
-                    <label class="form-check-label small" for="useGuisEndDate">終了日をGUIS納期で表示</label>
+                <div class="ms-2 small text-muted self-end">
+                    <div title="Spaceキーを押しながらドラッグでチャートをスクロール">※Space＋ドラッグでスクロール</div>
+                    <!-- <div title="Ctrlキーを押しながらホイールでズーム">※Ctrl＋ホイールでズーム</div> -->
                 </div>
             </div>
         </div>

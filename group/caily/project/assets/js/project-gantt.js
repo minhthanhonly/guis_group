@@ -103,7 +103,12 @@ $(document).ready(function() {
             showTaskText: $('#toggleTaskText').is(':checked') ? 1 : 0,
             useCailyEndDate: $('#useCailyEndDate').is(':checked') ? 1 : 0,
             useGuisEndDate: $('#useGuisEndDate').is(':checked') ? 1 : 0,
+            useShowCailyStruct: $('#useShowCailyStruct').is(':checked') ? 1 : 0,
+            useShowGuisStruct: $('#useShowGuisStruct').is(':checked') ? 1 : 0,
+            useShowEquipmentNouki: $('#useShowEquipmentNouki').is(':checked') ? 1 : 0,
+            useShowEquipmentNouki: $('#useShowEquipmentNouki').is(':checked') ? 1 : 0,
             filterKeyword: $('#filterKeyword').val(),
+            filterProjectId: $('#filterProjectId').val(),
         };
         // Lưu thêm trạng thái status đang chọn (header buttons)
         try {
@@ -149,7 +154,12 @@ $(document).ready(function() {
         if (filters.showTaskText !== undefined) $('#toggleTaskText').prop('checked', filters.showTaskText == 1);
         if (filters.useCailyEndDate !== undefined) $('#useCailyEndDate').prop('checked', filters.useCailyEndDate == 1);
         if (filters.useGuisEndDate !== undefined) $('#useGuisEndDate').prop('checked', filters.useGuisEndDate == 1);
+        if (filters.useShowCailyStruct !== undefined) $('#useShowCailyStruct').prop('checked', filters.useShowCailyStruct == 1);
+        if (filters.useShowGuisStruct !== undefined) $('#useShowGuisStruct').prop('checked', filters.useShowGuisStruct == 1);
+        if (filters.useShowEquipmentNouki !== undefined) $('#useShowEquipmentNouki').prop('checked', filters.useShowEquipmentNouki == 1);
+        if (filters.useShowEquipmentNouki !== undefined) $('#useShowEquipmentNouki').prop('checked', filters.useShowEquipmentNouki == 1);
         if (filters.filterKeyword !== undefined) $('#filterKeyword').val(filters.filterKeyword);
+        if (filters.filterProjectId !== undefined) $('#filterProjectId').val(filters.filterProjectId);
     }
 
     function getFiltersFromLocalStorage() {
@@ -170,6 +180,7 @@ $(document).ready(function() {
             tantou: filters.filterTantou || '',
             noDates: filters.filterNoDates == 1,
             keyword: filters.filterKeyword || '',
+            projectId: filters.filterProjectId || '',
             showInactive: filters.showInactive == 1,
             myProjects: filters.myProjects == 1,
             showTaskText: filters.showTaskText == 1,
@@ -201,10 +212,15 @@ $(document).ready(function() {
         setOrDelete('showInactive', filters.showInactive ? 1 : '');
         setOrDelete('my_projects', filters.myProjects ? 1 : '');
         setOrDelete('filterKeyword', filters.filterKeyword);
+        setOrDelete('filterProjectId', filters.filterProjectId);
         setOrDelete('status', filters.statusKey);
         setOrDelete('showTaskText', filters.showTaskText ? 1 : '');
         setOrDelete('useCailyEndDate', filters.useCailyEndDate ? 1 : '');
         setOrDelete('useGuisEndDate', filters.useGuisEndDate ? 1 : '');
+        setOrDelete('useShowCailyStruct', filters.useShowCailyStruct ? 1 : '');
+        setOrDelete('useShowGuisStruct', filters.useShowGuisStruct ? 1 : '');
+        setOrDelete('useShowEquipmentNouki', filters.useShowEquipmentNouki ? 1 : '');
+        setOrDelete('useShowEquipmentNouki', filters.useShowEquipmentNouki ? 1 : '');
         setOrDelete('department_id', filters.department_id);
 
         const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
@@ -233,7 +249,8 @@ $(document).ready(function() {
             !filters.noDates &&
             !filters.showInactive &&
             !filters.myProjects &&
-            (!filters.keyword || filters.keyword.trim() === '')
+            (!filters.keyword || filters.keyword.trim() === '') &&
+            (!filters.projectId || filters.projectId.trim() === '')
         ) {
             $('#activeFilters').html('');
             return;
@@ -241,6 +258,12 @@ $(document).ready(function() {
 
         if (filters.keyword && filters.keyword.trim() !== '') {
             badges.push(`<span class="badge bg-label-info me-1">キーワード: ${filters.keyword}</span>`);
+        }
+        if (filters.projectId && filters.projectId.trim() !== '') {
+            badges.push(`<span class="badge bg-label-info me-1">案件ID: ${filters.projectId}</span>`);
+        }
+        if (filters.keyword && filters.keyword.trim() !== '') {
+            // keyword only: đã thêm badge ở trên
         } else {
             if (statusLabel && statusLabel.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1">案件状況: ${statusLabel}</span>`);
@@ -329,10 +352,15 @@ $(document).ready(function() {
         if (params.has('showInactive')) merged.showInactive = getBool('showInactive');
         if (params.has('my_projects')) merged.myProjects = getBool('my_projects');
         if (params.has('filterKeyword')) merged.filterKeyword = params.get('filterKeyword') || '';
+        if (params.has('filterProjectId')) merged.filterProjectId = params.get('filterProjectId') || '';
         if (params.has('status')) merged.statusKey = params.get('status') || '';
         if (params.has('showTaskText')) merged.showTaskText = getBool('showTaskText');
         if (params.has('useCailyEndDate')) merged.useCailyEndDate = getBool('useCailyEndDate');
         if (params.has('useGuisEndDate')) merged.useGuisEndDate = getBool('useGuisEndDate');
+        if (params.has('useShowCailyStruct')) merged.useShowCailyStruct = getBool('useShowCailyStruct');
+        if (params.has('useShowGuisStruct')) merged.useShowGuisStruct = getBool('useShowGuisStruct');
+        if (params.has('useShowEquipmentNouki')) merged.useShowEquipmentNouki = getBool('useShowEquipmentNouki');
+        if (params.has('useShowEquipmentNouki')) merged.useShowEquipmentNouki = getBool('useShowEquipmentNouki');
 
         // Department id cho Gantt – giúp auto chọn đúng 部署 khi mở link
         if (params.has('department_id')) {
@@ -358,25 +386,6 @@ $(document).ready(function() {
     // Trạng thái hiển thị task text trên bar (task.text)
     window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
 
-    // Chế độ tính end_date cho task: default / caily / guis
-    (function initEndDateMode() {
-        let cChecked = $('#useCailyEndDate').is(':checked');
-        let gChecked = $('#useGuisEndDate').is(':checked');
-        // Đảm bảo chỉ một checkbox được chọn cùng lúc
-        if (cChecked && gChecked) {
-            // Ưu tiên CAILY, tắt GUIS
-            $('#useGuisEndDate').prop('checked', false);
-            gChecked = false;
-        }
-        if (cChecked) {
-            window.ganttEndDateMode = 'caily';
-        } else if (gChecked) {
-            window.ganttEndDateMode = 'guis';
-        } else {
-            window.ganttEndDateMode = 'default';
-        }
-    })();
-
     renderActiveFilters();
     // Dùng event delegation để đảm bảo binding kể cả khi DOM thay đổi
     $(document).on('change keyup', '#projectFilterForm select, #projectFilterForm input', function() {
@@ -395,26 +404,9 @@ $(document).ready(function() {
         if (gantt) gantt.render();
         renderActiveFilters();
     });
-    // Checkbox hiển thị end_date theo CAILY/GUIS納期 (chỉ 1 trong 2 được chọn)
-    $(document).on('change', '#useCailyEndDate, #useGuisEndDate', function() {
-        console.log('endDateMode checkbox changed', this.id);
-        // Mutual exclusive
-        if (this.id === 'useCailyEndDate' && $('#useCailyEndDate').is(':checked')) {
-            $('#useGuisEndDate').prop('checked', false);
-        } else if (this.id === 'useGuisEndDate' && $('#useGuisEndDate').is(':checked')) {
-            $('#useCailyEndDate').prop('checked', false);
-        }
-        const cChecked = $('#useCailyEndDate').is(':checked');
-        const gChecked = $('#useGuisEndDate').is(':checked');
-        if (cChecked) {
-            window.ganttEndDateMode = 'caily';
-        } else if (gChecked) {
-            window.ganttEndDateMode = 'guis';
-        } else {
-            window.ganttEndDateMode = 'default';
-        }
+    // Checkbox ẩn/hiện milestone CAILY納期・GUIS納期・構造データ送付 (độc lập)
+    $(document).on('change', '#useCailyEndDate, #useGuisEndDate, #useShowCailyStruct, #useShowGuisStruct, #useShowEquipmentNouki', function() {
         saveFiltersToLocalStorage();
-        // Cần load lại projects để tính lại end_date cho task
         if (window.ganttApp && typeof window.ganttApp.loadProjects === 'function') {
             window.ganttApp.loadProjects();
         } else if (gantt) {
@@ -476,17 +468,19 @@ $(document).ready(function() {
             window.addEventListener('resize', this.handleResize);
             
         },
-        beforeUnmount() {
-            // Clean up Gantt when component is destroyed
-            if (gantt && this.ganttInitialized) {
-                gantt.clearAll();
-                gantt.destructor();
-                this.ganttInitialized = false;
-            }
-            // Remove resize listener
-            window.removeEventListener('resize', this.handleResize);
-            
-        },
+            beforeUnmount() {
+                // Clean up Space+drag scroll listeners
+                this.teardownSpaceDragScroll();
+                // Clean up Gantt when component is destroyed
+                if (gantt && this.ganttInitialized) {
+                    gantt.clearAll();
+                    gantt.destructor();
+                    this.ganttInitialized = false;
+                }
+                // Remove resize listener
+                window.removeEventListener('resize', this.handleResize);
+                
+            },
         methods: {
             async updateProjectDate(task) {
                 try {
@@ -603,7 +597,6 @@ $(document).ready(function() {
                     });
                     this.teams = response || [];
                     this.selectedTeam = null; // Reset team selection when department changes
-                    console.log('Loaded teams for department', this.selectedDepartment.id, ':', this.teams);
 
                     // Populate team filter options (#filterTeam) giống project-list (chỉ team của department hiện tại)
                     const $teamFilter = $('#filterTeam');
@@ -701,6 +694,29 @@ $(document).ready(function() {
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
                     const myProjects = $('#filterMyProjects').is(':checked') ? 1 : 0;
                     const filterKeyword = $('#filterKeyword').val();
+                    const filterProjectId = $('#filterProjectId').val();
+                    // 表示期間: từ gantt config hoặc từ input; lần đầu load dùng khoảng mặc định
+                    let ganttStart = null, ganttEnd = null;
+                    if (gantt && this.ganttInitialized && gantt.config.start_date && gantt.config.end_date) {
+                        ganttStart = this.formatDateForInput(gantt.config.start_date);
+                        ganttEnd = this.formatDateForInput(gantt.config.end_date);
+                    } else {
+                        const startEl = document.querySelector('.start_date');
+                        const endEl = document.querySelector('.end_date');
+                        if (startEl && endEl && startEl.value && endEl.value) {
+                            ganttStart = startEl.value;
+                            ganttEnd = endEl.value;
+                        }
+                    }
+                    if (!ganttStart || !ganttEnd) {
+                        const today = new Date();
+                        const start = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate());
+                        const end = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate());
+                        ganttStart = this.formatDateForInput(start);
+                        ganttEnd = this.formatDateForInput(end);
+                    }
+                    console.log('ganttStart:', ganttStart);
+                    console.log('ganttEnd:', ganttEnd);
                     const params = {
                         model: 'project',
                         method: 'listForGantt',
@@ -716,8 +732,11 @@ $(document).ready(function() {
                         filterNoDates,
                         showInactive,
                         my_projects: myProjects,
-                        filterKeyword
+                        filterKeyword,
+                        filterProjectId
                     };
+                    params.gantt_start_date = ganttStart;
+                    params.gantt_end_date = ganttEnd;
                     const response = await $.ajax({
                         url: '/api/index.php',
                         type: 'GET',
@@ -742,59 +761,49 @@ $(document).ready(function() {
             updateGanttData() {
                 if (!gantt || !this.ganttInitialized) return;
                 
+                // Giữ 表示期間 hiện tại khi chỉ đổi checkbox (bỏ check CAILY納期を表示 v.v.) để view không nhảy
+                const preservedStart = (gantt.config.start_date && !isNaN(gantt.config.start_date.getTime())) ? new Date(gantt.config.start_date.getTime()) : null;
+                const preservedEnd = (gantt.config.end_date && !isNaN(gantt.config.end_date.getTime())) ? new Date(gantt.config.end_date.getTime()) : null;
+                
                 const ganttData = this.convertProjectsToGanttData(projectData);
-                console.log('Gantt data to be parsed:', ganttData);
                 
                 gantt.clearAll();
                 gantt.parse(ganttData);
                 
-                // Set default date range and initialize date inputs
-                if (ganttData.data && ganttData.data.length > 0) {
+                if (preservedStart && preservedEnd && preservedStart < preservedEnd) {
+                    // Giữ nguyên 表示期間 đã chọn
+                    gantt.config.start_date = preservedStart;
+                    gantt.config.end_date = preservedEnd;
+                    gantt.render();
+                    this.updateDateInputs(preservedStart, preservedEnd);
+                } else if (ganttData.data && ganttData.data.length > 0) {
+                    // Lần đầu load hoặc chưa có range hợp lệ: tính từ data
                     const dates = ganttData.data.map(task => [task.start_date, task.end_date]).flat();
-                    console.log('All dates from tasks:', dates);
-                    
                     const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
                     const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
-                    
-                    // Calculate 1 week ago from today
-                    const today = new Date();
-                    const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-                    
-                    // Use the earlier of: 1 week ago or the earliest project date
-                    const viewStart = oneWeekAgo;
-                    
-                    // Add some padding to the view
-                    const padding = 7 * 24 * 60 * 60 * 1000; // 7 days
+                    const padding = 7 * 24 * 60 * 60 * 1000;
+                    const viewStart = new Date(minDate.getTime() - padding);
                     const viewEnd = new Date(maxDate.getTime() + padding);
-                    
-                    // Set the view range using proper DHTMLX methods
                     gantt.config.start_date = viewStart;
                     gantt.config.end_date = viewEnd;
                     gantt.render();
-                    
-                    // Initialize date inputs
                     this.updateDateInputs(viewStart, viewEnd);
-                    
-                    console.log('Gantt view range:', {
-                        minDate: minDate,
-                        maxDate: maxDate,
-                        oneWeekAgo: oneWeekAgo,
-                        viewStart: viewStart,
-                        viewEnd: viewEnd
-                    });
                 } else {
-                    // Set default range if no data
                     const today = new Date();
-                    const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 week ago
-                    const startDate = oneWeekAgo; // Start from 1 week ago
-                    const endDate = new Date(today.getFullYear(), today.getMonth() + 2, 0); // End of next month
-                    
+                    const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    const startDate = oneWeekAgo;
+                    const endDate = new Date(today.getFullYear(), today.getMonth() + 2, 0);
                     gantt.config.min_date = startDate;
                     gantt.config.max_date = endDate;
                     gantt.render();
-                    
-                    // Initialize date inputs
                     this.updateDateInputs(startDate, endDate);
+                }
+
+                // Sau reload/re-render: scroll view để hiển thị ngày hiện tại - 7 ngày
+                if (typeof gantt.showDate === 'function') {
+                    const today = new Date();
+                    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    gantt.showDate(sevenDaysAgo);
                 }
 
                 // Add current time marker
@@ -841,41 +850,8 @@ $(document).ready(function() {
                         endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
                     }
 
-                    // Ghi nhớ endDate gốc đề phòng không có CAILY/GUIS納期 hợp lệ
-                    let finalEndDate = endDate;
-                    const mode = window.ganttEndDateMode || 'default';
-                    try {
-                        if (mode === 'caily' && project.caily_nouki) {
-                            let rawC = project.caily_nouki;
-                            let cDate = null;
-                            if (typeof rawC === 'string' && rawC.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                                // Nếu chỉ có ngày, mặc định giờ là 19:00
-                                cDate = this.parseDate(rawC + ' 19:00:00');
-                            } else {
-                                cDate = this.parseDate(rawC);
-                            }
-                            if (!isNaN(cDate.getTime())) {
-                                finalEndDate = cDate;
-                            }
-                        } else if (mode === 'guis' && project.guis_nouki) {
-                            let rawG = project.guis_nouki;
-                            let gDate = null;
-                            if (typeof rawG === 'string' && rawG.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                                // Nếu chỉ có ngày, mặc định giờ là 19:00
-                                gDate = this.parseDate(rawG + ' 19:00:00');
-                            } else {
-                                gDate = this.parseDate(rawG);
-                            }
-                            if (!isNaN(gDate.getTime())) {
-                                finalEndDate = gDate;
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('Error applying end date mode for project', project.id, e);
-                    }
+                    // Project bar luôn theo project.end_date (không dùng mode caily/guis)
 
-                    endDate = finalEndDate;
-                    
                     // Ensure end date is after start date
                     if (endDate <= startDate) {
                         endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -898,16 +874,16 @@ $(document).ready(function() {
                         manager_names.push(name || 'N/A');
                     });
                     
-                    // Build team name from first team id in project.teams (if any)
+                    // Build team names from all team ids in project.teams, cách nhau bằng ","
                     let teamName = '';
                     if (project.teams && typeof project.teams === 'string') {
                         const teamIds = project.teams.split(',').map(t => t.trim()).filter(t => t);
                         if (teamIds.length > 0 && Array.isArray(this.teams) && this.teams.length > 0) {
-                            const firstId = teamIds[0];
-                            const foundTeam = this.teams.find(t => String(t.id) === String(firstId));
-                            if (foundTeam && foundTeam.name) {
-                                teamName = foundTeam.name;
-                            }
+                            const names = teamIds.map(id => {
+                                const found = this.teams.find(t => String(t.id) === String(id));
+                                return (found && found.name) ? found.name : null;
+                            }).filter(Boolean);
+                            teamName = names.join(', ');
                         }
                     }
 
@@ -922,6 +898,7 @@ $(document).ready(function() {
                         end_date: endDate,
                         progress: project.progress / 100,
                         parent: 0,
+                        open: true,
                         priority: project.priority || 'medium',
                         status: project.status || 'draft',
                         manager: manager_names.join(', ') || '-',
@@ -946,10 +923,172 @@ $(document).ready(function() {
                         manager_ids: manager_ids,
                         tantou: project.tantou || '-',
                         caily_nouki: project.caily_nouki || '-',
-                        guis_nouki: project.guis_nouki || '-'
+                        guis_nouki: project.guis_nouki || '-',
+                        custom_fields: project.custom_fields || ''
                     };
                     
                     tasks.push(task);
+
+                    // Helper: parse nouki string to Date (same logic as end-date mode)
+                    const parseNoukiToDate = (raw) => {
+                        if (!raw || String(raw).trim() === '' || String(raw).trim() === '-') return null;
+                        let d = null;
+                        if (typeof raw === 'string' && raw.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                            d = this.parseDate(raw + ' 18:00:00');
+                        } else {
+                            d = this.parseDate(raw);
+                        }
+                        return (d && !isNaN(d.getTime())) ? d : null;
+                    };
+
+                    // Subtask/link ID: một công thức duy nhất để tránh trùng. pid là số nguyên, slot 0-4 cố định.
+                    const SUBTASK_ID_BASE = 900000000;
+                    const LINK_ID_BASE = 800000000;
+                    const pid = parseInt(project.id, 10) || 0;
+                    const subId = (slot) => SUBTASK_ID_BASE + pid * 10 + slot;
+                    const linkId = (slot) => LINK_ID_BASE + pid * 10 + slot;
+                    const SLOT_CAILY_NOUKI = 0;
+                    const SLOT_GUIS_NOUKI = 1;
+                    const SLOT_CAILY_STRUCT = 2;
+                    const SLOT_GUIS_STRUCT = 3;
+                    const SLOT_EQUIPMENT = 4;
+
+                    // Milestone CAILY納期: tantou=CAILY thì hiển thị thêm team name
+                    const showCailyNouki = $('#useCailyEndDate').length && $('#useCailyEndDate').is(':checked');
+                    const cailyEnd = parseNoukiToDate(project.caily_nouki);
+                    if (showCailyNouki && cailyEnd) {
+                        const cailyNoukiText = (project.tantou === 'CAILY' && teamName) ? 'CAILY納期' + ': [' + teamName + ']' : 'CAILY納期';
+                        tasks.push({
+                            id: subId(SLOT_CAILY_NOUKI),
+                            text: cailyNoukiText,
+                            start_date: new Date(cailyEnd.getTime()),
+                            end_date: new Date(cailyEnd.getTime()),
+                            type: 'milestone',
+                            parent: project.id,
+                            open: true,
+                            duration: 0
+                        });
+                        links.push({ id: linkId(SLOT_CAILY_NOUKI), source: project.id, target: subId(SLOT_CAILY_NOUKI), type: 0 });
+                    }
+                    // Milestone GUIS納期: tantou=GUIS thì hiển thị thêm team name
+                    const showGuisNouki = $('#useGuisEndDate').length && $('#useGuisEndDate').is(':checked');
+                    const guisEnd = parseNoukiToDate(project.guis_nouki);
+                    if (showGuisNouki && guisEnd) {
+                        const guisNoukiText = (project.tantou === 'GUIS' && teamName) ? 'GUIS納期:' + '[' + teamName + ']' : 'GUIS納期';
+                        tasks.push({
+                            id: subId(SLOT_GUIS_NOUKI),
+                            text: guisNoukiText,
+                            start_date: new Date(guisEnd.getTime()),
+                            end_date: new Date(guisEnd.getTime()),
+                            type: 'milestone',
+                            parent: project.id,
+                            open: true,
+                            duration: 0
+                        });
+                        links.push({ id: linkId(SLOT_GUIS_NOUKI), source: project.id, target: subId(SLOT_GUIS_NOUKI), type: 0 });
+                    }
+
+                    // Helper: decode custom_fields (API có thể trả về &quot; thay vì ") rồi lấy giá trị theo label
+                    const getCustomFieldValue = (raw, label) => {
+                        if (!raw || !label) return null;
+                        try {
+                            if (typeof raw === 'string' && raw.includes('&quot;')) {
+                                raw = raw.replace(/&quot;/g, '"');
+                            }
+                            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                            if (Array.isArray(parsed)) {
+                                const item = parsed.find(f => f && String(f.label).trim() === String(label).trim());
+                                return item ? (item.value || null) : null;
+                            }
+                            if (parsed && typeof parsed === 'object' && parsed[label]) return parsed[label];
+                        } catch (e) { return null; }
+                        return null;
+                    };
+                    const parseCustomFieldDate = (val) => {
+                        if (!val || String(val).trim() === '') return null;
+                        const s = String(val).trim();
+                        const defaultHour = 18;
+                        const defaultMin = 0;
+                        // Đã có phần giờ (có dấu cách): YYYY/M/D HH:mm hoặc YYYY-M-D HH:mm
+                        if (s.includes(' ')) {
+                            const normalized = s.replace(/\//g, '-').replace(' ', 'T');
+                            const d = this.parseDate(normalized);
+                            return (d && !isNaN(d.getTime())) ? d : null;
+                        }
+                        const parts = s.split(/[/-]/).map(p => parseInt(p, 10)).filter(n => !isNaN(n));
+                        // yyyy/m/d hoặc yyyy-m-d
+                        if (parts.length === 3) {
+                            let year = parts[0];
+                            if (year < 100) year += 2000; // 24 → 2024
+                            const month = Math.max(0, Math.min(11, parts[1] - 1));
+                            const day = Math.max(1, Math.min(31, parts[2]));
+                            const d = new Date(year, month, day, defaultHour, defaultMin, 0);
+                            return !isNaN(d.getTime()) ? d : null;
+                        }
+                        // m/d hoặc m-d (dùng năm hiện tại)
+                        if (parts.length === 2) {
+                            const year = new Date().getFullYear();
+                            const month = Math.max(0, Math.min(11, parts[0] - 1));
+                            const day = Math.max(1, Math.min(31, parts[1]));
+                            const d = new Date(year, month, day, defaultHour, defaultMin, 0);
+                            return !isNaN(d.getTime()) ? d : null;
+                        }
+                        const normalized = s.replace(/\//g, '-');
+                        const d = this.parseDate(normalized + 'T' + defaultHour + ':00:00');
+                        return (d && !isNaN(d.getTime())) ? d : null;
+                    };
+
+                    // Milestone 構造データ送付 (CAILY): từ custom field, chỉ khi checkbox được chọn
+                    const showCailyStruct = $('#useShowCailyStruct').length && $('#useShowCailyStruct').is(':checked');
+                    const cailyStructVal = getCustomFieldValue(project.custom_fields, '構造データ送付 (CAILY)');
+                    const cailyStructDate = parseCustomFieldDate(cailyStructVal);
+                    if (showCailyStruct && cailyStructDate) {
+                        tasks.push({
+                            id: subId(SLOT_CAILY_STRUCT),
+                            text: '構造データ送付 (CAILY)',
+                            start_date: new Date(cailyStructDate.getTime()),
+                            end_date: new Date(cailyStructDate.getTime()),
+                            type: 'milestone',
+                            parent: project.id,
+                            open: true,
+                            duration: 0
+                        });
+                        links.push({ id: linkId(SLOT_CAILY_STRUCT), source: project.id, target: subId(SLOT_CAILY_STRUCT), type: 0 });
+                    }
+                    // Milestone 構造データ送付 (GUIS)
+                    const showGuisStruct = $('#useShowGuisStruct').length && $('#useShowGuisStruct').is(':checked');
+                    const guisStructVal = getCustomFieldValue(project.custom_fields, '構造データ送付 (GUIS)');
+                    const guisStructDate = parseCustomFieldDate(guisStructVal);
+                    if (showGuisStruct && guisStructDate) {
+                        tasks.push({
+                            id: subId(SLOT_GUIS_STRUCT),
+                            text: '構造データ送付 (GUIS)',
+                            start_date: new Date(guisStructDate.getTime()),
+                            end_date: new Date(guisStructDate.getTime()),
+                            type: 'milestone',
+                            parent: project.id,
+                            open: true,
+                            duration: 0
+                        });
+                        links.push({ id: linkId(SLOT_GUIS_STRUCT), source: project.id, target: subId(SLOT_GUIS_STRUCT), type: 0 });
+                    }
+                    // Milestone 設備 納期 (custom field)
+                    const showEquipmentNouki = $('#useShowEquipmentNouki').length && $('#useShowEquipmentNouki').is(':checked');
+                    const equipmentVal = getCustomFieldValue(project.custom_fields, '設備 納期');
+                    const equipmentDate = parseCustomFieldDate(equipmentVal);
+                    if (showEquipmentNouki && equipmentDate) {
+                        tasks.push({
+                            id: subId(SLOT_EQUIPMENT),
+                            text: '設備 納期',
+                            start_date: new Date(equipmentDate.getTime()),
+                            end_date: new Date(equipmentDate.getTime()),
+                            type: 'milestone',
+                            parent: project.id,
+                            open: true,
+                            duration: 0
+                        });
+                        links.push({ id: linkId(SLOT_EQUIPMENT), source: project.id, target: subId(SLOT_EQUIPMENT), type: 0 });
+                    }
                 });
                 
                 return { data: tasks, links: links };
@@ -957,8 +1096,6 @@ $(document).ready(function() {
             
             parseDate(dateString) {
                 if (!dateString) return new Date();
-                
-                console.log('Parsing date:', dateString, 'Type:', typeof dateString);
                 
                 // Handle different date formats more robustly
                 let date = null;
@@ -969,14 +1106,12 @@ $(document).ready(function() {
                     if (dateString.includes(' ')) {
                         const mysqlDate = dateString.replace(' ', 'T');
                         date = new Date(mysqlDate);
-                        console.log('MySQL format parsed:', mysqlDate, 'Result:', date);
                     }
                     
                     // Handle date only format: "2024-01-15"
                     if (!date || isNaN(date.getTime())) {
                         if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
                             date = new Date(dateString + 'T00:00:00');
-                            console.log('Date only format parsed:', dateString + 'T00:00:00', 'Result:', date);
                         }
                     }
                     
@@ -988,18 +1123,15 @@ $(document).ready(function() {
                             const month = parseInt(japaneseMatch[2]) - 1; // Month is 0-indexed
                             const day = parseInt(japaneseMatch[3]);
                             date = new Date(year, month, day);
-                            console.log('Japanese format parsed:', japaneseMatch, 'Result:', date);
                         }
                     }
                     
                     // Try standard Date constructor as fallback
                     if (!date || isNaN(date.getTime())) {
                         date = new Date(dateString);
-                        console.log('Standard Date constructor result:', date);
                     }
                 } else if (dateString instanceof Date) {
                     date = dateString;
-                    console.log('Already a Date object:', date);
                 }
                 
                 // Validate the parsed date
@@ -1015,7 +1147,6 @@ $(document).ready(function() {
                     return new Date();
                 }
                 
-                console.log('Final parsed date:', date, 'Year:', date.getFullYear());
                 return date;
             },
             
@@ -1027,79 +1158,108 @@ $(document).ready(function() {
             setDefaultScale() {
                 if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'week';
-                gantt.config.scales = [
-                    { unit: "week", step: 1, format: "%m月" },
-                    { unit: "day", step: 1, format: "%d日" }
-                ];
-                gantt.render();
+                if (gantt.ext && gantt.ext.zoom && typeof gantt.ext.zoom.setLevel === 'function') {
+                    gantt.ext.zoom.setLevel(1);
+                } else {
+                    gantt.config.scales = [
+                        { unit: "week", step: 1, format: "%m月" },
+                        { unit: "day", step: 1, format: "%d日" }
+                    ];
+                    gantt.render();
+                }
             },
             
             setMonthScale() {
                 if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'month';
-                gantt.config.scales = [
-                    { unit: "month", step: 1, format: "%m月" },
-                    { unit: "week", step: 1, format: "%d日" }
-                ];
-                gantt.render();
+                if (gantt.ext && gantt.ext.zoom && typeof gantt.ext.zoom.setLevel === 'function') {
+                    gantt.ext.zoom.setLevel(0);
+                } else {
+                    gantt.config.scales = [
+                        { unit: "month", step: 1, format: "%m月" },
+                        { unit: "week", step: 1, format: "%d日" }
+                    ];
+                    gantt.render();
+                }
             },
             
             setWeekScale() {
                 if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'week';
-                gantt.config.scales = [
-                    { unit: "week", step: 1, format: "%m月" },
-                    { unit: "day", step: 1, format: "%d日" }
-                ];
-                gantt.render();
+                if (gantt.ext && gantt.ext.zoom && typeof gantt.ext.zoom.setLevel === 'function') {
+                    gantt.ext.zoom.setLevel(1);
+                } else {
+                    gantt.config.scales = [
+                        { unit: "week", step: 1, format: "%m月" },
+                        { unit: "day", step: 1, format: "%d日" }
+                    ];
+                    gantt.render();
+                }
             },
             
             setDayScale() {
                 if (!gantt || !this.ganttInitialized) return;
                 this.currentScale = 'day';
-                gantt.config.scales = [
-                    { unit: "day", step: 1, format: "%m月%d日" },
-                    { unit: "hour", step: 1, format: "%H:%i" }
-                ];
-                gantt.render();
+                if (gantt.ext && gantt.ext.zoom && typeof gantt.ext.zoom.setLevel === 'function') {
+                    gantt.ext.zoom.setLevel(2);
+                } else {
+                    gantt.config.scales = [
+                        { unit: "day", step: 1, format: "%m月%d日" },
+                        { unit: "hour", step: 1, format: "%H:%i" }
+                    ];
+                    gantt.render();
+                }
             },
             
             // Zoom Controls
             zoomIn() {
                 if (!gantt || !this.ganttInitialized) return;
-                const currentDate = gantt.getState().min_date;
-                const currentRange = gantt.getState().max_date - gantt.getState().min_date;
-                const newRange = currentRange * 0.3;
-                const newMinDate = new Date(currentDate.getTime() + currentRange * 0.15);
-                const newMaxDate = new Date(newMinDate.getTime() + newRange);
-                
-                // Set new date range
-                gantt.config.start_date = newMinDate;
-                gantt.config.end_date = newMaxDate;
-                gantt.render();
-                
-                // Update date inputs
-                this.updateDateInputs(newMinDate, newMaxDate);
+                // Nếu có zoom extension thì dùng zoomIn của extension (chuyển level: 月→週→日)
+                if (gantt.ext && gantt.ext.zoom && typeof gantt.ext.zoom.zoomIn === 'function') {
+                    gantt.ext.zoom.zoomIn();
+                } else {
+                    // Fallback: zoom bằng cách thu hẹp date range
+                    const currentDate = gantt.getState().min_date;
+                    const currentRange = gantt.getState().max_date - gantt.getState().min_date;
+                    const newRange = currentRange * 0.3;
+                    const newMinDate = new Date(currentDate.getTime() + currentRange * 0.15);
+                    const newMaxDate = new Date(newMinDate.getTime() + newRange);
+                    
+                    gantt.config.start_date = newMinDate;
+                    gantt.config.end_date = newMaxDate;
+                    gantt.render();
+                    this.updateDateInputs(newMinDate, newMaxDate);
+                }
             },
             
             zoomOut() {
                 if (!gantt || !this.ganttInitialized) return;
-                const currentDate = gantt.getState().min_date;
-                const currentRange = gantt.getState().max_date - gantt.getState().min_date;
-                const newRange = currentRange * 1.4;
-                const newMinDate = new Date(currentDate.getTime() - currentRange * 0.2);
-                const newMaxDate = new Date(newMinDate.getTime() + newRange);
-                
-                // Set new date range
-                gantt.config.start_date = newMinDate;
-                gantt.config.end_date = newMaxDate;
-                gantt.render();
-                
-                // Update date inputs
-                this.updateDateInputs(newMinDate, newMaxDate);
+                // Nếu có zoom extension thì dùng zoomOut của extension (chuyển level: 日→週→月)
+                if (gantt.ext && gantt.ext.zoom && typeof gantt.ext.zoom.zoomOut === 'function') {
+                    gantt.ext.zoom.zoomOut();
+                } else {
+                    // Fallback: zoom bằng cách mở rộng date range
+                    const currentDate = gantt.getState().min_date;
+                    const currentRange = gantt.getState().max_date - gantt.getState().min_date;
+                    const newRange = currentRange * 1.4;
+                    const newMinDate = new Date(currentDate.getTime() - currentRange * 0.2);
+                    const newMaxDate = new Date(newMinDate.getTime() + newRange);
+                    
+                    gantt.config.start_date = newMinDate;
+                    gantt.config.end_date = newMaxDate;
+                    gantt.render();
+                    this.updateDateInputs(newMinDate, newMaxDate);
+                }
             },
             
             // Date Range Controls
+            scrollToTodayMinus7() {
+                if (!gantt || !this.ganttInitialized || typeof gantt.showDate !== 'function') return;
+                const today = new Date();
+                const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                gantt.showDate(sevenDaysAgo);
+            },
+            
             changeDates() {
                 if (!gantt || !this.ganttInitialized) return;
                 
@@ -1188,6 +1348,67 @@ $(document).ready(function() {
                 // }
             },
             
+            setupSpaceDragScroll() {
+                if (!gantt || typeof gantt.getScrollState !== 'function' || typeof gantt.scrollTo !== 'function') return;
+                const container = document.getElementById('gantt_container');
+                if (!container) return;
+                const state = { spaceDown: false, dragging: false, startX: 0, startY: 0, startScroll: null };
+                const onKeydown = (e) => {
+                    if (e.code === 'Space' || e.key === ' ') {
+                        state.spaceDown = true;
+                        container.classList.add('gantt-space-pan');
+                        e.preventDefault();
+                    }
+                };
+                const onKeyup = (e) => {
+                    if (e.code === 'Space' || e.key === ' ') {
+                        state.spaceDown = false;
+                        state.dragging = false;
+                        container.classList.remove('gantt-space-pan', 'gantt-space-pan-dragging');
+                        e.preventDefault();
+                    }
+                };
+                const onMousedown = (e) => {
+                    if (!state.spaceDown || state.dragging) return;
+                    state.dragging = true;
+                    state.startX = e.clientX;
+                    state.startY = e.clientY;
+                    state.startScroll = gantt.getScrollState();
+                    container.classList.add('gantt-space-pan-dragging');
+                    e.preventDefault();
+                };
+                const onMousemove = (e) => {
+                    if (!state.dragging || !state.startScroll) return;
+                    const dx = e.clientX - state.startX;
+                    const dy = e.clientY - state.startY;
+                    const newX = Math.max(0, state.startScroll.x - dx);
+                    const newY = Math.max(0, state.startScroll.y - dy);
+                    gantt.scrollTo(newX, newY);
+                };
+                const onMouseup = () => {
+                    state.dragging = false;
+                    state.startScroll = null;
+                    container.classList.remove('gantt-space-pan-dragging');
+                };
+                document.addEventListener('keydown', onKeydown);
+                document.addEventListener('keyup', onKeyup);
+                container.addEventListener('mousedown', onMousedown);
+                document.addEventListener('mousemove', onMousemove);
+                document.addEventListener('mouseup', onMouseup);
+                this._spacePanHandlers = { onKeydown, onKeyup, onMousedown, onMousemove, onMouseup };
+            },
+            teardownSpaceDragScroll() {
+                const container = document.getElementById('gantt_container');
+                const h = this._spacePanHandlers;
+                if (!h) return;
+                document.removeEventListener('keydown', h.onKeydown);
+                document.removeEventListener('keyup', h.onKeyup);
+                if (container) container.removeEventListener('mousedown', h.onMousedown);
+                document.removeEventListener('mousemove', h.onMousemove);
+                document.removeEventListener('mouseup', h.onMouseup);
+                this._spacePanHandlers = null;
+            },
+            
             handleFullscreenChange() {
                 this.isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullscreenElement || document.msFullscreenElement;
             },
@@ -1227,13 +1448,15 @@ $(document).ready(function() {
                     tooltip: true,
                     marker: true,
                     fullscreen: true,
+                    zoom: true,
                     //quick_info: true
                 });
                 gantt.config.quickinfo_buttons=["icon_edit"];
                 gantt.config.drag_lightbox = true;
+                // drag_timeline: chỉ hỗ trợ ignore, useKey, render (theo API). useKey: "ctrlKey" = giữ Ctrl + kéo để scroll.
                 gantt.config.drag_timeline = {
-                    ignore:".gantt_task_line, .gantt_task_link",
-                    useKey: false,
+                    ignore: ".gantt_task_line, .gantt_task_link",
+                    useKey: "ctrlKey",
                     render: false
                 };
                 gantt.config.lightbox.sections = [
@@ -1259,6 +1482,33 @@ $(document).ready(function() {
                         return "weekend"
                     }
                 };
+
+                // Disable lightbox for subtasks
+                gantt.attachEvent("onBeforeLightbox", function(id){
+                    const task = gantt.getTask(id);
+                    if (!task) return true;
+                    
+                    // Check if this is a subtask
+                    // Subtask ID range: SUBTASK_ID_BASE (900000000) and above
+                    const SUBTASK_ID_BASE = 900000000;
+                    const isSubtaskById = task.id >= SUBTASK_ID_BASE;
+                    
+                    // Also check by task text pattern
+                    const isSubtaskByText = task.text && (
+                        task.text.startsWith('CAILY納期') || 
+                        task.text.startsWith('GUIS納期') || 
+                        task.text.startsWith('構造データ送付 (CAILY)') || 
+                        task.text.startsWith('構造データ送付 (GUIS)') || 
+                        task.text.startsWith('設備 納期')
+                    );
+                    
+                    // If it's a subtask, prevent lightbox from opening
+                    if (isSubtaskById || isSubtaskByText) {
+                        return false;
+                    }
+                    
+                    return true;
+                });
 
                 gantt.attachEvent("onLightboxButton", function(button_id, node, e){
                     if(button_id == "open_project_btn"){
@@ -1293,6 +1543,9 @@ $(document).ready(function() {
                 
                 gantt.config.row_height = 30;
 	            gantt.config.grid_resize = true;
+                gantt.config.open_tree_initially = true;
+                gantt.config.show_tasks_outside_timescale = true;
+                gantt.config.initial_scroll = true;
               
                 
                 // // Set work time
@@ -1332,11 +1585,63 @@ $(document).ready(function() {
                     ]
                 }
                 
+                // Helper function to check if project is overdue
+                function isProjectOverdue(obj) {
+                    // Skip subtasks
+                    if (obj.parent && obj.parent !== 0) return false;
+                    
+                    // Skip if no end_date
+                    if (!obj.end_date) return false;
+                    
+                    // Skip if status is completed, cancelled, paused, deleted, or draft
+                    const skipStatuses = ['completed', 'cancelled', 'paused', 'deleted'];
+                    if (skipStatuses.includes(obj.status)) return false;
+                    
+                    // Check if end_date is before today
+                    try {
+                        const endDate = new Date(obj.end_date);
+                        const today = new Date();
+                        // Reset time to compare dates only
+                        today.setHours(0, 0, 0, 0);
+                        endDate.setHours(0, 0, 0, 0);
+                        
+                        return endDate < today;
+                    } catch (e) {
+                        return false;
+                    }
+                }
+                
                 // // Customize columns
                 gantt.config.columns = [
-                    { name: "index", label: "ID", width: 50, align: "center", min_width: 40, template: function (obj) {
-                        return obj.id || '';
-                    }},
+                    { name: "index", label: "ID", width: 70, align: "center", min_width: 50, 
+                      template: function (obj) {
+                          if (obj.parent && obj.parent !== 0) return ''; // Ẩn ID cho subtask (CAILY納期, GUIS納期)
+                          return String(obj.id || '');
+                      },
+                      onrender: function (task, cell) {
+                          // Custom render for overdue badge
+                          if (task.parent && task.parent !== 0) {
+                              cell.innerHTML = '';
+                              return;
+                          }
+                          const idText = String(task.id || '');
+                          const isOverdue = isProjectOverdue(task);
+                          
+                          if (isOverdue) {
+                              cell.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.2;">' +
+                                             '<span>' + idText + '</span>' +
+                                             '<span style="background-color:#dc3545;color:#fff;font-size:0.625rem;padding:0.1rem 0.25rem;border-radius:0.25rem;line-height:1; position: relative; top: -5px;">期限超過</span>' +
+                                             '</div>';
+                          } else if(task.status == 'paused'){
+                              cell.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.2;">' +
+                                             '<span>' + idText + '</span>' +
+                                             '<span style="background-color:#fdf3e7;color:rgb(255, 159, 67);font-size:0.625rem;padding:0.1rem 0.25rem;border-radius:0.25rem;line-height:1; position: relative; top: -5px;">停止中</span>' +
+                                             '</div>';
+                          } else {
+                              cell.innerHTML = idText;
+                          }
+                      }
+                    },
                     { name: "branch_name", label: "支店名", width: 90, min_width: 50, template: function(obj) {
                         return obj.branch_name || '-';
                     }},
@@ -1372,6 +1677,19 @@ $(document).ready(function() {
                 gantt.templates.task_class = function(start, end, task) {
                     let classes = [];
                     
+                    // Sub-task CAILY納期 / GUIS納期 / 構造データ送付 (CAILY/GUIS) colors (task.text có thể kèm team name)
+                    if (task.text && task.text.startsWith('CAILY納期')) {
+                        classes.push('gantt-task-caily-nouki');
+                    } else if (task.text && task.text.startsWith('GUIS納期')) {
+                        classes.push('gantt-task-guis-nouki');
+                    } else if (task.text && task.text.startsWith('構造データ送付 (CAILY)')) {
+                        classes.push('gantt-task-caily-struct');
+                    } else if (task.text && task.text.startsWith('構造データ送付 (GUIS)')) {
+                        classes.push('gantt-task-guis-struct');
+                    } else if (task.text && task.text.startsWith('設備 納期')) {
+                        classes.push('gantt-task-equipment-nouki');
+                    }
+                    
                     // Add status color
                     if (task.statusColor) {
                         classes.push(`gantt-status-${task.statusColor}`);
@@ -1400,6 +1718,19 @@ $(document).ready(function() {
                 // Customize task text: badge before project_order_type (e.g. 期間未定), then orderType badges, team name, project name
                 gantt.templates.task_text = function(start, end, task) {
                     const parts = [];
+                    
+                    // Check if this is a subtask (not a main project task)
+                    const isSubtask = task.text && (
+                        task.text.startsWith('CAILY納期') || 
+                        task.text.startsWith('GUIS納期') || 
+                        task.text.startsWith('構造データ送付 (CAILY)') || 
+                        task.text.startsWith('構造データ送付 (GUIS)') || 
+                        task.text.startsWith('設備 納期')
+                    );
+                    
+                    // Add progress % for project tasks only (not subtasks)
+                    
+                    
                     if (task.period_undecided) {
                         parts.push('<span class="badge bg-label-warning small me-1">期間未定</span>');
                     }
@@ -1421,7 +1752,51 @@ $(document).ready(function() {
                     if (window.ganttShowTaskText && projectName) {
                         parts.push(projectName.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
                     }
+                    if (!isSubtask && task.progress != null) {
+                        const progressPercent = Math.round((task.progress || 0) * 100);
+                        parts.push('<span class="bg-label-primary small ms-1 px-1" style="font-weight: bold;">' + progressPercent + '%</span>');
+                    }
                     return parts.join('');
+                };
+                // Nhãn bên phải thanh task (cho milestone vì thanh có độ dài 0)
+                gantt.templates.rightside_text = function(start, end, task) {
+                    if (task.type === 'milestone' && task.text) {
+                        // Check if this is a subtask milestone
+                        const isSubtask = task.text && (
+                            task.text.startsWith('CAILY納期') || 
+                            task.text.startsWith('GUIS納期') || 
+                            task.text.startsWith('構造データ送付 (CAILY)') || 
+                            task.text.startsWith('構造データ送付 (GUIS)') || 
+                            task.text.startsWith('設備 納期')
+                        );
+                        
+                        if (isSubtask && start) {
+                            // For subtasks, show task name (without team name) + start time
+                            let text = task.text;
+                            // Remove team name part (e.g., ": [Team A]" or ":[Team A]")
+                            text = text.replace(/:\s*\[[^\]]+\]\s*$/, '');
+                            text = text.replace(/\[[^\]]+\]\s*$/, ''); // Also handle case without colon
+                            text = text.trim();
+                            
+                            // Format start date: m月d日 h:i (e.g., 2月5日 9:00)
+                            let dateStr = '';
+                            if (typeof moment !== 'undefined' && moment(start).isValid()) {
+                                dateStr = moment(start).format('M月D日 H:mm');
+                            } else if (start instanceof Date) {
+                                const month = start.getMonth() + 1;
+                                const day = start.getDate();
+                                const hours = start.getHours();
+                                const minutes = start.getMinutes();
+                                dateStr = `${month}月${day}日 ${hours}:${String(minutes).padStart(2, '0')}`;
+                            }
+                            
+                            // Return task name + start time
+                            return dateStr ? `${text} ${dateStr}` : text;
+                        }
+                        // For non-subtask milestones, return text as before
+                        return task.text;
+                    }
+                    return '';
                 };
                 
                 // Helper function to format date string (for caily_nouki, guis_nouki)
@@ -1478,6 +1853,17 @@ $(document).ready(function() {
                 
                 // // Customize tooltip
                 gantt.templates.tooltip_text = function(start, end, task) {
+                    // Subtask (CAILY納期 / GUIS納期 / 構造データ送付 / 設備 納期): có thể kèm team name
+                    const isSubtask = task.text && (
+                        task.text.startsWith('CAILY納期') || task.text.startsWith('GUIS納期') ||
+                        task.text.startsWith('構造データ送付 (CAILY)') || task.text.startsWith('構造データ送付 (GUIS)') ||
+                        task.text.startsWith('設備 納期')
+                    );
+                    if (isSubtask) {
+                        const dateStr = start ? gantt.templates.tooltip_date_format(start) : '-';
+                        return `<div class="gantt-tooltip"><h6>${task.text}</h6><p class="m-0">${dateStr}</p></div>`;
+                    }
+
                     // Safely find status and priority with fallback
                     const status = statuses.find(s => s.key === task.status);
                     const priority = priorities.find(p => p.key === task.priority);
@@ -1524,9 +1910,36 @@ $(document).ready(function() {
                             <p class="m-0"><strong>チーム:</strong> ${task.team_name || '-'}</p>
                             <p class="m-0"><strong>CAILY納期:</strong> ${formatDateStringWithVN(task.caily_nouki)}</p>
                             <p class="m-0"><strong>GUIS納期:</strong> ${formatDateStringWithVN(task.guis_nouki)}</p>
+                            ${formatCustomFieldsForTooltip(task.custom_fields)}
                         </div>
                     `;
                 };
+
+                function formatCustomFieldsForTooltip(raw) {
+                    if (!raw) return '';
+                    try {
+                        if (typeof raw === 'string' && raw.includes('&quot;')) {
+                            raw = raw.replace(/&quot;/g, '"');
+                        }
+                        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            return parsed.map(f => {
+                                const label = (f && f.label) ? String(f.label).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+                                const value = (f && f.value != null) ? String(f.value).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '-';
+                                return label ? `<p class="m-0"><strong>${label}:</strong> ${value || '-'}</p>` : '';
+                            }).filter(Boolean).join('');
+                        }
+                        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                            return Object.keys(parsed).map(label => {
+                                const value = parsed[label];
+                                const escLabel = String(label).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                const escVal = value != null ? String(value).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '-';
+                                return `<p class="m-0"><strong>${escLabel}:</strong> ${escVal}</p>`;
+                            }).join('');
+                        }
+                    } catch (e) { return ''; }
+                    return '';
+                }
                 
                 gantt.templates.tooltip_date_format = function(date) {
                     // Format Japan time (default): MM/DD HH:ii
@@ -1554,6 +1967,136 @@ $(document).ready(function() {
                     
                     return `${japanTime} (VN: ${vnTime})`;
                 };
+                
+                // Context menu for tasks
+                const $ganttContextMenu = $('<div id="ganttTaskContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999; min-width: 200px;"></div>');
+                $ganttContextMenu.html(`
+                    <button class="dropdown-item" type="button" id="ganttMenuCopyProjectId">
+                        <i class="fa fa-copy me-1"></i> Copy Project ID
+                    </button>
+                    <button class="dropdown-item" type="button" id="ganttMenuCopyConstructNumber">
+                        <i class="fa fa-copy me-1"></i> Copy Construct Number
+                    </button>
+                    <button class="dropdown-item" type="button" id="ganttMenuCopyProjectName">
+                        <i class="fa fa-copy me-1"></i> Copy Project Name
+                    </button>
+                    <div class="dropdown-divider"></div>
+                    <button class="dropdown-item" type="button" id="ganttMenuGoToDetail">
+                        <i class="fa fa-external-link-alt me-1"></i> プロジェクト詳細へ
+                    </button>
+                `);
+                $('body').append($ganttContextMenu);
+                
+                let contextMenuTaskId = null;
+                
+                // Handle context menu actions
+                $ganttContextMenu.on('click', '#ganttMenuCopyProjectId', function(e) {
+                    e.stopPropagation();
+                    if (contextMenuTaskId) {
+                        const task = gantt.getTask(contextMenuTaskId);
+                        if (task && task.id) {
+                            // For subtasks, get parent project id
+                            const projectId = task.parent && task.parent !== 0 ? task.parent : task.id;
+                            copyToClipboard(String(projectId));
+                            showMessage('Project ID copied to clipboard');
+                        }
+                    }
+                    $ganttContextMenu.hide();
+                });
+                
+                $ganttContextMenu.on('click', '#ganttMenuCopyConstructNumber', function(e) {
+                    e.stopPropagation();
+                    if (contextMenuTaskId) {
+                        const task = gantt.getTask(contextMenuTaskId);
+                        if (task) {
+                            // For subtasks, get parent task to get construction_number
+                            const projectTask = task.parent && task.parent !== 0 ? gantt.getTask(task.parent) : task;
+                            const constructNumber = projectTask.construction_number || '-';
+                            copyToClipboard(String(constructNumber));
+                            showMessage('Construct Number copied to clipboard');
+                        }
+                    }
+                    $ganttContextMenu.hide();
+                });
+                
+                $ganttContextMenu.on('click', '#ganttMenuCopyProjectName', function(e) {
+                    e.stopPropagation();
+                    if (contextMenuTaskId) {
+                        const task = gantt.getTask(contextMenuTaskId);
+                        if (task) {
+                            // For subtasks, get parent task to get project name
+                            const projectTask = task.parent && task.parent !== 0 ? gantt.getTask(task.parent) : task;
+                            const projectName = projectTask.project_name || task.text || '-';
+                            // Remove "期間未定" suffix if present
+                            const cleanName = projectName.replace(/\s*期間未定\s*$/, '');
+                            copyToClipboard(cleanName);
+                            showMessage('Project Name copied to clipboard');
+                        }
+                    }
+                    $ganttContextMenu.hide();
+                });
+                
+                $ganttContextMenu.on('click', '#ganttMenuGoToDetail', function(e) {
+                    e.stopPropagation();
+                    if (contextMenuTaskId) {
+                        const task = gantt.getTask(contextMenuTaskId);
+                        if (task) {
+                            // For subtasks, get parent project id
+                            const projectId = task.parent && task.parent !== 0 ? task.parent : task.id;
+                            window.open(`detail.php?id=${projectId}`, '_blank');
+                        }
+                    }
+                    $ganttContextMenu.hide();
+                });
+                
+                // Hide context menu when clicking elsewhere
+                $(document).on('click', function() {
+                    $ganttContextMenu.hide();
+                });
+                
+                // Attach context menu event to Gantt
+                gantt.attachEvent("onContextMenu", function(taskId, linkId, event) {
+                    if (!taskId) return true; // Allow default context menu for non-task areas
+                    
+                    event.preventDefault();
+                    contextMenuTaskId = taskId;
+                    
+                    // Show menu at mouse position
+                    $ganttContextMenu
+                        .css({ top: event.pageY + 'px', left: event.pageX + 'px' })
+                        .show();
+                    
+                    return false; // Prevent default context menu
+                });
+                
+                // Helper function to copy to clipboard
+                function copyToClipboard(text) {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(text).catch(function(err) {
+                            console.error('Failed to copy:', err);
+                            fallbackCopyToClipboard(text);
+                        });
+                    } else {
+                        fallbackCopyToClipboard(text);
+                    }
+                }
+                
+                function fallbackCopyToClipboard(text) {
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                    } catch (err) {
+                        console.error('Fallback copy failed:', err);
+                    }
+                    document.body.removeChild(textArea);
+                }
                 
                 // // Add click event to open project detail
                 // gantt.attachEvent("onTaskClick", function(id, e) {
@@ -1583,7 +2126,31 @@ $(document).ready(function() {
                     // // Initialize Gantt
                     gantt.init("gantt_container");
                     this.ganttInitialized = true;
-                   
+                    // Zoom extension: Ctrl + wheel để zoom in/out (levels = 月 / 週 / 日)
+                    if (gantt.ext && gantt.ext.zoom && typeof gantt.ext.zoom.init === 'function') {
+                        const zoomConfig = {
+                            trigger: "wheel",
+                            useKey: "ctrlKey",
+                            activeLevelIndex: 1,
+                            levels: [
+                                { name: "month", scale_height: 27, min_column_width: 60, scales: [
+                                    { unit: "month", step: 1, format: "%m月" },
+                                    { unit: "week", step: 1, format: "%d日" }
+                                ]},
+                                { name: "week", scale_height: 27, min_column_width: 80, scales: [
+                                    { unit: "week", step: 1, format: "%m月" },
+                                    { unit: "day", step: 1, format: "%d日" }
+                                ]},
+                                { name: "day", scale_height: 27, min_column_width: 100, scales: [
+                                    { unit: "day", step: 1, format: "%m月%d日" },
+                                    { unit: "hour", step: 1, format: "%H:%i" }
+                                ]}
+                            ]
+                        };
+                        gantt.ext.zoom.init(zoomConfig);
+                    }
+                    // Space + drag to scroll chart (pan)
+                    this.setupSpaceDragScroll();
                 } catch (error) {
                     console.error('Error initializing Gantt:', error);
                     this.ganttInitialized = false;
@@ -1595,6 +2162,13 @@ $(document).ready(function() {
                 style.textContent = `
                     #gantt_container {
                         z-index: 2000 !important;
+                    }
+                    #gantt_container.gantt-space-pan {
+                        cursor: grab;
+                    }
+                    #gantt_container.gantt-space-pan-dragging {
+                        cursor: grabbing;
+                        user-select: none;
                     }
                     .gantt_tooltip,
                     .gantt_modal_box,
@@ -1652,6 +2226,36 @@ $(document).ready(function() {
                     .gantt_task_line.gantt-status-secondary{ 
                         background-color: var(--bs-secondary); 
                         color: white;
+                    }
+                    
+                    /* CAILY納期 / GUIS納期: bản Free không hỗ trợ type milestone → thư viện render
+                       zero-duration task thành gantt_bar_task + gantt_thin_task (không có gantt_milestone/gantt_bar_milestone). */
+                    .gantt_task_line.gantt-task-caily-nouki {
+                        background-color: #90ee90;
+                        color: #1a3d1a;
+                        width: 4px !important;
+                    }
+                    .gantt_task_line.gantt-task-guis-nouki {
+                        background-color: #000;
+                        color: #fff;
+                        width: 4px !important;
+                    }
+                    /* 構造データ送付 (CAILY) / (GUIS): cùng màu với CAILY納期・GUIS納期 */
+                    .gantt_task_line.gantt-task-caily-struct {
+                        background-color: #90ee90;
+                        color: #1a3d1a;
+                        width: 4px !important;
+                    }
+                    .gantt_task_line.gantt-task-guis-struct {
+                        background-color: #000;
+                        color: #fff;
+                        width: 4px !important;
+                    }
+                    /* 設備 納期 (custom field) */
+                    .gantt_task_line.gantt-task-equipment-nouki {
+                        background-color:rgb(177, 6, 177);
+                        color: #1a1a1a;
+                        width: 4px !important;
                     }
                     
                     /* Priority border colors
@@ -1718,22 +2322,6 @@ $(document).ready(function() {
     }
     // Đồng bộ lại biến global hiển thị task text
     window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
-    // Đồng bộ lại chế độ end_date (default / caily / guis)
-    (function syncEndDateModeAfterMount() {
-        let cChecked = $('#useCailyEndDate').is(':checked');
-        let gChecked = $('#useGuisEndDate').is(':checked');
-        if (cChecked && gChecked) {
-            $('#useGuisEndDate').prop('checked', false);
-            gChecked = false;
-        }
-        if (cChecked) {
-            window.ganttEndDateMode = 'caily';
-        } else if (gChecked) {
-            window.ganttEndDateMode = 'guis';
-        } else {
-            window.ganttEndDateMode = 'default';
-        }
-    })();
     // Sau khi mọi thứ đã sync, render badge và cập nhật URL để phản ánh filter hiện tại
     renderActiveFilters();
     if (typeof saveFiltersToLocalStorage === 'function') {

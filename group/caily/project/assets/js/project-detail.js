@@ -1307,26 +1307,43 @@ const vueApp = createApp({
             this.initCustomFieldDatePickers();
         },
         initCustomFieldDatePickers() {
-            if (!this.isEditMode || !this.customFields) return;
+            if (!this.isEditMode || !this.customFields) {
+                console.log('initCustomFieldDatePickers: early return', { isEditMode: this.isEditMode, customFields: this.customFields });
+                return;
+            }
             this.$nextTick(() => {
+                // Similar to project-list.js: flatpickr will automatically parse the value from input
+                // Vue's v-model already sets the value to the input element
                 this.customFields.forEach((field, idx) => {
                     if (field.type === 'datetime') {
                         const el = document.getElementById('custom_datetime_' + idx);
-                        if (el) {
-                            if (el._flatpickr) el._flatpickr.destroy();
-                            flatpickr(el, {
-                                enableTime: true,
-                                dateFormat: "Y/m/d H:i",
-                                time_24hr: true,
-                                allowInput: true,
-                                locale: "ja",
-                                defaultHour: 9,
-                                defaultMinute: 0,
-                                onChange: (selectedDates, dateStr) => {
-                                    this.customFields[idx].value = dateStr;
-                                }
-                            });
+                        if (!el) {
+                            return;
                         }
+                        
+                        if (el._flatpickr) el._flatpickr.destroy();
+
+                        
+                        // Ensure the input has the value from field.value (v-model should have set it, but double-check)
+                        const fieldValue = field.value || '';
+                        if (fieldValue && el.value !== fieldValue) {
+                            el.value = fieldValue;
+                        }
+                        
+                        // Initialize flatpickr - it will automatically parse the value from the input
+                        const fp = flatpickr(el, {
+                            enableTime: true,
+                            dateFormat: "Y/m/d H:i",
+                            time_24hr: true,
+                            allowInput: true,
+                            locale: "ja",
+                            defaultHour: 18,
+                            defaultMinute: 0,
+                            onChange: (selectedDates, dateStr) => {
+                                this.customFields[idx].value = dateStr;
+                            }
+                        });
+                        
                     }
                 });
             });
@@ -2529,7 +2546,6 @@ const vueApp = createApp({
                     } else if (Array.isArray(raw)) {
                         saved = raw;
                     }
-                    
                     // Merge all fields from all department custom field sets
                     const allFieldsFromSets = [];
                     if (this.allDepartmentCustomFieldSets && this.allDepartmentCustomFieldSets.length > 0) {
@@ -2544,9 +2560,8 @@ const vueApp = createApp({
                             }
                         });
                     }
-                    
                     // Nếu có dữ liệu custom_fields với cấu trúc đầy đủ (có type), merge với saved values
-                    if (saved.length && saved[0] && saved[0].type) {
+                    if (saved.length && saved[0]) {
                         // Create value map from saved data
                         const savedValueMap = {};
                         saved.forEach(f => {
@@ -2565,12 +2580,14 @@ const vueApp = createApp({
                                 }
                                 return { label: f.label, type: f.type, options: f.options, value: arr.join(','), valueArr: arr };
                             } else if (f.type === 'datetime') {
-                                const value = savedField && savedField.value ? savedField.value : '';
+                                // Get value directly from saved field, no parsing needed
+                                // Flatpickr will handle parsing when initialized (similar to project-list.js)
+                                const value = savedField && savedField.value ? String(savedField.value).trim() : '';
                                 return { 
                                     label: f.label, 
                                     type: f.type, 
                                     options: f.options, 
-                                    value: (value && this.isEditMode) ? this.formatDateTime(value) : value 
+                                    value: value 
                                 };
                             } else {
                                 return { 
@@ -2581,6 +2598,13 @@ const vueApp = createApp({
                                 };
                             }
                         });
+                        
+                        // Initialize datetime pickers after customFields is set
+                        this.$nextTick(() => {
+                            setTimeout(() => {
+                                this.initCustomFieldDatePickers();
+                            }, 100);
+                        });
                     } else if (allFieldsFromSets.length > 0) {
                         // No saved data, just use fields from all sets
                         this.customFields = allFieldsFromSets.map(f => {
@@ -2589,6 +2613,13 @@ const vueApp = createApp({
                             } else {
                                 return { label: f.label, type: f.type, options: f.options, value: '' };
                             }
+                        });
+                        
+                        // Initialize datetime pickers after customFields is set
+                        this.$nextTick(() => {
+                            setTimeout(() => {
+                                this.initCustomFieldDatePickers();
+                            }, 100);
                         });
                     } else {
                         this.customFields = [];
@@ -2885,27 +2916,48 @@ const vueApp = createApp({
                         if (allFieldsFromSets.length > 0) {
                             const savedValueMap = {};
                             saved.forEach(f => {
-                                if (f.label) {
+                                if (f && f.label) {
+                                    // Handle both formats: {label, value} or {label, type, value}
                                     savedValueMap[f.label.trim()] = f;
                                 }
                             });
                             
+                            console.log('allDepartmentCustomFieldSets watcher: setting customFields', {
+                                allFieldsFromSetsCount: allFieldsFromSets.length,
+                                savedCount: saved.length,
+                                savedValueMap: savedValueMap
+                            });
+                            
                             this.customFields = allFieldsFromSets.map(f => {
                                 const savedField = savedValueMap[f.label.trim()];
+                                console.log('allDepartmentCustomFieldSets watcher: mapping field', {
+                                    label: f.label,
+                                    type: f.type,
+                                    savedField: savedField,
+                                    savedFieldValue: savedField ? savedField.value : null
+                                });
+                                
                                 if (f.type === 'checkbox') {
                                     let arr = [];
                                     if (savedField && savedField.value) {
                                         arr = savedField.value.split(',').map(s => s.trim()).filter(Boolean);
                                     }
                                     return { label: f.label, type: f.type, options: f.options, value: arr.join(','), valueArr: arr };
-                                } else if (f.type === 'datetime') {
-                                    const value = savedField && savedField.value ? savedField.value : '';
-                                    return { 
-                                        label: f.label, 
-                                        type: f.type, 
-                                        options: f.options, 
-                                        value: (value && this.isEditMode) ? this.formatDateTime(value) : value 
-                                    };
+                            } else if (f.type === 'datetime') {
+                                // Get value directly from saved field, no parsing needed
+                                // Flatpickr will handle parsing when initialized (similar to project-list.js)
+                                const value = savedField && savedField.value ? String(savedField.value).trim() : '';
+                                console.log('allDepartmentCustomFieldSets watcher: datetime field', {
+                                    label: f.label,
+                                    savedField: savedField,
+                                    value: value
+                                });
+                                return { 
+                                    label: f.label, 
+                                    type: f.type, 
+                                    options: f.options, 
+                                    value: value 
+                                };
                                 } else {
                                     return { 
                                         label: f.label, 
@@ -2914,6 +2966,13 @@ const vueApp = createApp({
                                         value: savedField ? savedField.value : '' 
                                     };
                                 }
+                            });
+                            
+                            // Initialize datetime pickers after customFields is set
+                            this.$nextTick(() => {
+                                setTimeout(() => {
+                                    this.initCustomFieldDatePickers();
+                                }, 100);
                             });
                         }
                     });
