@@ -910,5 +910,14 @@ createApp({
             console.error('Upload error:', fileName, error);
             this.showNotification(`ファイル「${fileName}」のアップロードに失敗しました`, 'error');
         });
+
+        window.addEventListener('ai-action-success', (event) => {
+            const { action } = event.detail || {};
+            const pid = action && (action.id || (action.params && action.params.project_id));
+            if (pid && String(pid) === String(this.projectId)) {
+                this.loadProject();
+                this.loadFoldersAndFiles();
+            }
+        });
     }
 }).mount('#app'); 

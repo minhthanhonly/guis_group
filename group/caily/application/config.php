@@ -48,7 +48,7 @@ define('DB_STORAGE', 'mysql');
 //define('DB_HOSTNAME', 'mysql653.db.sakura.ne.jp');
 define('DB_HOSTNAME', 'localhost');
 //データベース名
-define('DB_DATABASE', 'cail9460_group');
+define('DB_DATABASE', 'guis2_group_2025');
 //データベースユーザー名
 define('DB_USERNAME', 'root');
 // define('DB_USERNAME', 'guis2');

@@ -83,6 +83,19 @@ class Controller {
 					if (method_exists($model, $method)) {
 						$model->connect();
 						$hash = $model->$method($params);
+						// Phase 4 – If model returns http_status (e.g. 403 Forbidden), set response code and remove from body
+						if (isset($hash['http_status']) && is_numeric($hash['http_status'])) {
+							http_response_code((int) $hash['http_status']);
+							unset($hash['http_status']);
+						}
+						// Phase 5.2 – Audit log for AI-triggered writes (request has ai_action=1 and response is success)
+						if (isset($_REQUEST['ai_action']) && $_REQUEST['ai_action'] == '1' && isset($hash['status']) && $hash['status'] === 'success') {
+							$userId = isset($_SESSION['userid']) ? $_SESSION['userid'] : (isset($_SESSION['id']) ? (string) $_SESSION['id'] : '');
+							$targetIds = [];
+							if (isset($hash['id'])) $targetIds['id'] = $hash['id'];
+							if (isset($hash['project_id'])) $targetIds['project_id'] = $hash['project_id'];
+							Helper::logAiTriggeredAction($model, $method, $userId, $targetIds);
+						}
 						$hash = $model->sanitize($hash);
 						$model->close();
 						if (isset($model->error) && count($model->error) > 0) {

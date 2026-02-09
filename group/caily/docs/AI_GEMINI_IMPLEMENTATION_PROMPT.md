@@ -1,5 +1,7 @@
 # Implementation Prompt: Gemini AI for Parent Project, Project, and Task Management
 
+**Implementation status:** Phase 1–5 implemented. See `application/model/ai.php`, `application/model/project.php`, `application/model/task.php`, `application/model/parentproject.php`, `application/controller.php`, `application/library/helper.php`.
+
 **Purpose:** This document is a coding prompt / technical specification. Use it to implement Gemini support for managing parent_project, project, and task: operations, statistics, scheduling, team/member assignment, and customer add/edit. Implement **one feature at a time**; do not implement everything in one go.
 
 **Language:** All implementation instructions and acceptance criteria are in English.

@@ -265,6 +265,13 @@ const vueApp = createApp({
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
                 this.project = response.data;
+                // Cho phép AI lấy dữ liệu dự án hiện tại đang xem
+                if (typeof window !== 'undefined' && this.project) {
+                    window.__chatPageContext = window.__chatPageContext || {};
+                    window.__chatPageContext.project_id = this.projectId;
+                    window.__chatPageContext.page = 'project_detail';
+                    window.__chatPageContext.page_project = this.project;
+                }
                 // Load parent project information if this is a child project
                 if (this.project.parent_project_id) {
                     await this.loadParentProjectInfo();
@@ -1021,7 +1028,7 @@ const vueApp = createApp({
                     // --- Tagify for team selection ---
                     const teamInput = document.getElementById('team_tags');
                     if (teamInput && window.Tagify && !teamInput._tagify) {
-                        await this.loadAllTeams();
+                        // allTeams đã được load sẵn trong toggleEditMode
                         if (this.tagify) {
                             try {
                                 this.tagify.destroy();
@@ -1325,8 +1332,10 @@ const vueApp = createApp({
             });
         },
         async initManagerMembersTagify() {
-            // Lấy toàn bộ user trong department
-            await this.loadDepartmentUsers();
+            // departmentUsers đã được load sẵn trong toggleEditMode; chỉ gọi khi chưa có
+            if (!this.departmentUsers || this.departmentUsers.length === 0) {
+                await this.loadDepartmentUsers();
+            }
             const allMembers = (this.departmentUsers || []).map(u => ({
                 user_id: u.id,
                 id: u.id,
@@ -1396,15 +1405,19 @@ const vueApp = createApp({
             }
             // Lưu lại prevTeamIds khi vào edit mode
             this.prevTeamIds = (this.project.team_list || []).map(t => String(t.id)).sort();
-            // Sync custom fields
-            this.$nextTick(() => {
-                this.initDatePickers();
-                // Thêm delay để đảm bảo Vue đã render xong các element
-                setTimeout(() => {
-                    this.initTagify();
-                    this.initManagerMembersTagify();
-                    this.initCustomFieldDatePickers();
-                }, 200);
+            // Preload teams + department users song song để Tagify không phải chờ API khi init
+            Promise.all([
+                this.loadAllTeams(),
+                this.project.department_id ? this.loadDepartmentUsers() : Promise.resolve([])
+            ]).then(() => {
+                this.$nextTick(() => {
+                    this.initDatePickers();
+                    setTimeout(() => {
+                        this.initTagify();
+                        this.initManagerMembersTagify();
+                        this.initCustomFieldDatePickers();
+                    }, 200);
+                });
             });
         },
         toAPIDate(str) {
@@ -1480,12 +1493,14 @@ const vueApp = createApp({
                 formData.append('progress', this.project.progress);
                 formData.append('priority', this.project.priority || '');
                 formData.append('status', this.project.status);
-                // Use Tagify current value or project/managers/members (newProject only updates on change)
-                let teamsVal = this.newProject.teams || '';
-                if (this.tagify && this.tagify.value && this.tagify.value.length) {
-                    teamsVal = this.tagify.value.map(t => String(t.id)).join(',');
-                } else if (!teamsVal && this.project.teams) {
-                    teamsVal = typeof this.project.teams === 'string' ? this.project.teams : (this.project.teams || '');
+                // Use Tagify current value (kể cả khi rỗng) hoặc project khi chưa có tagify
+                let teamsVal = '';
+                if (this.tagify) {
+                    teamsVal = (this.tagify.value || []).map(t => String(t.id)).join(',');
+                } else if (this.newProject.teams !== undefined && this.newProject.teams !== null) {
+                    teamsVal = String(this.newProject.teams);
+                } else if (this.project.teams) {
+                    teamsVal = typeof this.project.teams === 'string' ? this.project.teams : String(this.project.teams || '');
                 }
                 let managersVal = this.newProject.managers || '';
                 if (this.managerTagify && this.managerTagify.value && this.managerTagify.value.length) {
@@ -1522,7 +1537,8 @@ const vueApp = createApp({
                     this.isEditMode = false;
                     this.originalProject = null;
                     showMessage('プロジェクトを更新しました。');
-                    await this.loadProject();
+                    // Hoãn loadProject để trình duyệt kịp vẽ thông báo trước khi xử lý nặng
+                    setTimeout(() => { this.loadProject(); }, 0);
                 } else {
                     showMessage('プロジェクトの更新に失敗しました。', true);
                 }
@@ -1566,8 +1582,7 @@ const vueApp = createApp({
                     const response = await axios.post('/api/index.php?model=project&method=confirm', formData);
                     if (response.data && response.data.status === 'success') {
                         showMessage('プロジェクトを承認しました。');
-                        // Reload project data to reflect changes
-                        await this.loadProject();
+                        setTimeout(() => { this.loadProject(); }, 0);
                     } else {
                         showMessage(response.data?.message || 'プロジェクトの承認に失敗しました。', true);
                     }
@@ -1606,10 +1621,11 @@ const vueApp = createApp({
                     
                     if (response.data && response.data.status === 'success') {
                         showMessage('プロジェクトに参加しました。');
-                        // Reload project data to reflect changes
-                        await this.loadProject();
-                        // Reload permission after joining project
-                        await this.loadPermission();
+                        const self = this;
+                        setTimeout(async () => {
+                            await self.loadProject();
+                            await self.loadPermission();
+                        }, 0);
                     } else {
                         showMessage(response.data?.message || 'プロジェクトへの参加に失敗しました。', true);
                     }
@@ -2988,6 +3004,49 @@ const vueApp = createApp({
         window.addEventListener('uploadError', (event) => {
             const { error, fileName } = event.detail;
             this.handleUploadError(fileName, error);
+        });
+
+        window.addEventListener('ai-action-success', (event) => {
+            const { action, actions, response } = event.detail || {};
+            
+            // Support both single action (backward compatible) and multiple actions
+            const allActions = actions && Array.isArray(actions) ? actions : (action ? [action] : []);
+            
+            if (allActions.length === 0) return;
+            
+            // Check if any action affects the current project
+            let shouldReload = false;
+            const memberManagerTeamActions = [
+                'project_add_member', 'project_add_manager',
+                'project_remove_member', 'project_remove_manager',
+                'project_set_teams', 'project_add_team', 'project_remove_team',
+                'project_clear_teams', 'project_clear_members', 'project_clear_managers',
+                'project_clear_all_members', 'project_clear_all', 'project_add_team_members'
+            ];
+            
+            for (const act of allActions) {
+                const pid = act && (act.id || (act.params && act.params.project_id));
+                if (pid && String(pid) === String(this.projectId)) {
+                    // If action affects members/managers/teams, reload data
+                    if (memberManagerTeamActions.includes(act.type)) {
+                        shouldReload = true;
+                        break;
+                    }
+                    // For other project actions, also reload
+                    if (act.type && act.type.startsWith('project_')) {
+                        shouldReload = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (shouldReload) {
+                // Reload project data and members to reflect changes
+                this.loadProject().then(() => {
+                    // Also reload members separately to ensure avatars are updated
+                    this.loadMembers();
+                });
+            }
         });
 
         // Start timer to update time remaining every minute

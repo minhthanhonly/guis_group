@@ -1,6 +1,8 @@
 <?php
 
-
+/**
+ * Team model. Table team_members: user_id = numeric (user.id), not userid string.
+ */
 class Team extends ApplicationModel {
 	
 	function __construct() {
@@ -73,12 +75,14 @@ class Team extends ApplicationModel {
 		);
 		$team_id = $this->query_insert($data);
 		
-		// Add team members
+		// Add team members. team_members.user_id = numeric (user.id), not userid string.
 		if (isset($_POST['members']) && is_array($_POST['members'])) {
 			foreach ($_POST['members'] as $user_id) {
+				$uid = intval($user_id);
+				if ($uid <= 0) continue;
 				$member_data = array(
 					'team_id' => $team_id,
-					'user_id' => $user_id,
+					'user_id' => $uid,
 					'leader' => isset($_POST['leader'][$user_id]) && $_POST['leader'][$user_id] == 'true' ? 1 : 0
 				);
 				$this->query_insert($member_data, DB_PREFIX . 'team_members');
@@ -100,16 +104,15 @@ class Team extends ApplicationModel {
 		// Update team info
 		$this->query_update($data, ['id' => $id]);
 		
-		// Update team members
+		// Update team members. team_members.user_id = numeric (user.id), not userid string.
 		if (isset($_POST['members']) && is_array($_POST['members'])) {
-			// First delete existing members
 			$this->query("DELETE FROM " . DB_PREFIX . "team_members WHERE team_id = " . intval($id));
-			
-			// Then add new members
 			foreach ($_POST['members'] as $user_id) {
+				$uid = intval($user_id);
+				if ($uid <= 0) continue;
 				$member_data = array(
 					'team_id' => $id,
-					'user_id' => $user_id,
+					'user_id' => $uid,
 					'leader' => isset($_POST['leader'][$user_id]) && $_POST['leader'][$user_id] == 'true' ? 1 : 0
 				);
 				$this->query_insert($member_data, DB_PREFIX . 'team_members');

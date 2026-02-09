@@ -242,12 +242,22 @@
   display: flex;
   justify-content: flex-start;
 }
+.app-chat .app-chat-history .chat-history-body .chat-history .chat-message .chat-message-wrapper {
+  min-width: 0;
+}
 .app-chat .app-chat-history .chat-history-body .chat-history .chat-message .chat-message-text {
   border-radius: 0.375rem;
   background-color: var(--bs-paper-bg);
   box-shadow: var(--bs-box-shadow-xs);
   padding-block: 0.543rem;
   padding-inline: 1rem;
+}
+.app-chat .app-chat-history .chat-history-body .chat-history .chat-message .chat-message-text .table-responsive {
+  display: block;
+  max-width: 600px;
+}
+.app-chat .app-chat-history .chat-history-body .chat-history .chat-message .chat-message-text .table-responsive .table {
+  margin-bottom: 0;
 }
 .app-chat .app-chat-history .chat-history-body .chat-history .chat-message.chat-message-right {
   justify-content: flex-end;

@@ -13,6 +13,7 @@ if($_SESSION['show_project'] == 0){
     exit;
 }
 ?>
+<script>window.__chatPageContext = { project_id: <?php echo (int)$project_id; ?> };</script>
 <div id="app" class="container-fluid mt-4" v-cloak>
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">

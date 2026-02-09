@@ -654,9 +654,10 @@ var projectTable;
                 },
                 { 
                     data: 'id',
+                    className: 'project-id-cell',
                     render: function(data, type, row) {
-                        return `<div class="d-flex align-items-center">
-                                    <a href="detail.php?id=${row.id}" class="text-decoration-none"><span class="project-id badge bg-primary">${data || '-'}</span></a>
+                        return `<div class="d-flex align-items-center project-hover-tasks-trigger" data-project-id="${row.id}">
+                                    <a href="detail.php?id=${row.id}" class="text-decoration-none"><span class="project-id border border-primary px-1 py-1 small text-center" style="min-width: 3em; display: inline-block;">${data || '-'}</span></a>
                                 </div>`;
                     },
                     title: '<span data-i18n="ID">ID</span>',
@@ -664,7 +665,7 @@ var projectTable;
                 },
                 { 
                     data: 'confirmation_notes',
-                    width: '240px',
+                    width: '250px',
                     className: 'confirmation-notes-column',
                     render: function(data, type, row) {
                         if (type !== 'display') {
@@ -685,8 +686,8 @@ var projectTable;
                             return;
                         }
                         // Hiển thị toàn bộ nội dung (có thể nhiều ghi chú), giữ nguyên xuống dòng
-                        // Định dạng data: "noteId::content | noteId::content | ..."
-                        const notes = cellData.split(' | ').filter(note => note.trim() !== '');
+                        // Định dạng data: "noteId_:_content_|_noteId_:_content_|_..."
+                        const notes = cellData.split('_|_').filter(note => note.trim() !== '');
                         if (notes.length === 0) {
                             $(td).html(`<div class="empty-notes-cell" data-project-id="${rowData.id}">
                                         <span class="text-muted empty-notes-text">-</span>
@@ -698,12 +699,13 @@ var projectTable;
                         }
                         const html = notes.map(note => {
                             const raw = note.trim();
-                            const delimiterIndex = raw.indexOf('::');
+                            const delim = '_:_';
+                            const delimiterIndex = raw.indexOf(delim);
                             let id = null;
                             let text = raw;
                             if (delimiterIndex !== -1) {
                                 id = raw.substring(0, delimiterIndex);
-                                text = raw.substring(delimiterIndex + 2);
+                                text = raw.substring(delimiterIndex + delim.length);
                             }
                             // Decode HTML entities nếu text bị escape (ví dụ &lt; thành <)
                             // Nếu text đã là HTML thuần thì không cần decode
@@ -714,6 +716,8 @@ var projectTable;
                                 // Nếu có HTML entities thì decode
                                 decodedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
                             }
+                            // Chuẩn hóa &nbsp; và ký tự non-breaking (U+00A0) thành space thường để xuống dòng đúng chỗ (tránh ngắt giữa từ tiếng Việt)
+                            decodedText = (decodedText || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
                             const isEditing = window.app && window.app.currentEditingNoteId === id;
                             // Render HTML từ Quill editor (đã được sanitize khi lưu vào DB)
                             // Thêm class ql-editor để styling đúng với Quill
@@ -731,7 +735,7 @@ var projectTable;
                                 </div>
                             `;
                         }).join('');
-                        $(td).html(`<div class="confirmation-notes-wrapper" style="max-width: 250px; max-height: 200px; overflow-y: auto;">${html}</div>`);
+                        $(td).html(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
                     },
                     title: '<span data-i18n="確認必要メモ">確認必要メモ</span>',
                     orderable: false
@@ -902,9 +906,10 @@ var projectTable;
                 { 
                     data: 'name',
                     width: '150px',
+                    className: 'project-name-cell',
                     render: function(data, type, row) {
-                        return `<div class="d-flex align-items-start justify-content-start flex-column">
-                                    <a href="detail.php?id=${row.id}" class="text-decoration-none small">${data}</a>
+                        return `<div class="d-flex align-items-start justify-content-start flex-column project-hover-tasks-trigger" data-project-id="${row.id}">
+                                    <a href="detail.php?id=${row.id}" class="text-decoration-none small">${escapeHtmlForNote(data || '')}</a>
                                 </div>`;
                     },
                     title: '<span data-i18n="お施主様名">お施主様名</span>'
@@ -1214,6 +1219,180 @@ var projectTable;
         // Reset flag after initialization (cũng chạy trong finally nếu có lỗi)
         isInitializingTable = false;
 
+        // Popup tasks khi hover cột ID hoặc name (di chuyển theo chuột, load task qua API)
+        (function initProjectTasksPopup() {
+            var popup = null;
+            var hideTimer = null;
+            var lastProjectId = null;
+            var abortController = null;
+            var offsetX = 12;
+            var offsetY = 8;
+
+            function getPopup() {
+                if (!popup) {
+                    popup = document.createElement('div');
+                    popup.id = 'projectTasksPopup';
+                    popup.className = 'project-tasks-popup shadow border rounded bg-white p-2';
+                    popup.style.cssText = 'position: fixed; z-index: 9999; min-width: 420px; max-width: 480px; max-height: 320px; overflow: auto; display: none; pointer-events: auto;';
+                    popup.setAttribute('role', 'tooltip');
+                    document.body.appendChild(popup);
+                }
+                return popup;
+            }
+
+            function movePopup(e) {
+                var el = getPopup();
+                if (el.style.display !== 'none') {
+                    el.style.left = (e.clientX + offsetX) + 'px';
+                    el.style.top = (e.clientY + offsetY) + 'px';
+                }
+            }
+
+            function showPopup(projectId, clientX, clientY) {
+                if (hideTimer) {
+                    clearTimeout(hideTimer);
+                    hideTimer = null;
+                }
+                var el = getPopup();
+                el.style.left = (clientX + offsetX) + 'px';
+                el.style.top = (clientY + offsetY) + 'px';
+                el.style.display = 'block';
+                if (lastProjectId === projectId && el.getAttribute('data-loaded') === '1') return;
+                lastProjectId = projectId;
+                el.setAttribute('data-loaded', '0');
+                el.innerHTML = '<div class="text-muted small"><span class="spinner-border spinner-border-sm me-1" role="status"></span>Loading...</div>';
+                if (abortController) abortController.abort();
+                abortController = new AbortController();
+                var axiosOpt = { signal: abortController.signal };
+                if (typeof axios === 'undefined') {
+                    el.innerHTML = '<div class="text-muted small">axios not found</div>';
+                    return;
+                }
+                var taskStatuses = [
+                    { value: 'todo', label: '未開始', color: 'secondary' },
+                    { value: 'in-progress', label: '進行中', color: 'primary' },
+                    { value: 'confirming', label: '確認中', color: 'warning' },
+                    { value: 'paused', label: '一時停止', color: 'warning' },
+                    { value: 'completed', label: '完了', color: 'success' },
+                    { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+                ];
+                function getTaskStatusLabel(s) {
+                    var o = taskStatuses.find(function(x) { return x.value === s; });
+                    return o ? o.label : (s || '');
+                }
+                function getTaskStatusBadgeClass(s) {
+                    var o = taskStatuses.find(function(x) { return x.value === s; });
+                    return 'badge bg-' + (o ? o.color : 'secondary');
+                }
+                function formatTaskDue(d) {
+                    if (!d) return '-';
+                    if (typeof moment !== 'undefined' && moment(d).isValid()) return moment(d).format('MM/DD');
+                    return String(d).substring(0, 10);
+                }
+                function getTaskAssigneeDisplay(t, members) {
+                    if (!t.assigned_to && !t.assigned_to_name) return { firstInitials: '', firstTitle: '', restCount: 0 };
+                    var ids = t.assigned_to ? String(t.assigned_to).split(',').map(function(x) { return x.trim(); }).filter(Boolean) : [];
+                    var firstInitials = '';
+                    var firstTitle = '';
+                    var restCount = 0;
+                    if (ids.length === 0 && t.assigned_to_name) {
+                        firstInitials = getInitials(t.assigned_to_name);
+                        firstTitle = t.assigned_to_name;
+                    } else if (members && members.length > 0) {
+                        var names = ids.map(function(uid) {
+                            var m = members.find(function(x) { return String(x.user_id) === String(uid) || String(x.id) === String(uid); });
+                            return m ? (m.realname || m.user_name || '') : '';
+                        }).filter(Boolean);
+                        if (names.length > 0) {
+                            firstInitials = getInitials(names[0]);
+                            firstTitle = names[0];
+                            restCount = names.length - 1;
+                        } else {
+                            firstInitials = t.assigned_to_name ? getInitials(t.assigned_to_name) : '';
+                            firstTitle = t.assigned_to_name || '';
+                        }
+                    } else {
+                        firstInitials = t.assigned_to_name ? getInitials(t.assigned_to_name) : '';
+                        firstTitle = t.assigned_to_name || '';
+                    }
+                    return { firstInitials: firstInitials, firstTitle: firstTitle, restCount: restCount };
+                }
+                Promise.all([
+                    axios.get('/api/index.php?model=task&method=list&project_id=' + encodeURIComponent(projectId) + '&include_subtasks=1', axiosOpt),
+                    axios.get('/api/index.php?model=project&method=getMembers&project_id=' + encodeURIComponent(projectId), axiosOpt)
+                ]).then(function(results) {
+                    var tasks = results[0].data || [];
+                    var members = results[1].data || [];
+                    if (tasks.length === 0) {
+                        el.innerHTML = '<div class="text-muted small">タスクなし</div>';
+                    } else {
+                        var html = '<div class="small fw-bold mb-1">タスク (' + tasks.length + ')</div><ul class="list-unstyled mb-0 small">';
+                        tasks.slice(0, 20).forEach(function(t) {
+                            var statusLabel = getTaskStatusLabel(t.status);
+                            var statusClass = getTaskStatusBadgeClass(t.status);
+                            var title = (t.title || '').toString().trim() || '-';
+                            if (title.length > 26) title = title.substring(0, 26) + '…';
+                            var assigneeDisplay = getTaskAssigneeDisplay(t, members);
+                            var dueStr = formatTaskDue(t.due_date);
+                            var progressVal = t.progress != null ? parseInt(t.progress, 10) : 0;
+                            html += '<li class="py-1 border-bottom border-light d-flex flex-wrap align-items-center gap-1">';
+                            html += '<span class="' + statusClass + ' me-1">' + statusLabel + '</span>';
+                            html += '<span class="text-nowrap" title="' + escapeHtmlForNote(title) + '">' + escapeHtmlForNote(title) + '</span>';
+                            html += '<span class="ms-auto d-flex align-items-center gap-1 flex-nowrap">';
+                            if (assigneeDisplay.firstInitials) {
+                                html += '<span class="avatar-initial rounded-circle bg-label-primary" style="padding: 0 2px;height:18px;font-size:9px;line-height:18px;display:inline-flex;align-items:center;justify-content:center;" title="' + escapeHtmlForNote(assigneeDisplay.firstTitle) + '">' + (assigneeDisplay.firstInitials) + '</span>';
+                                for (var r = 1; r <= assigneeDisplay.restCount; r++) {
+                                    html += '<span class="avatar-initial rounded-circle bg-label-secondary text-white" style="width:18px;height:18px;font-size:9px;line-height:18px;display:inline-flex;align-items:center;justify-content:center;" title="担当者' + r + '">+' + r + '</span>';
+                                }
+                            }
+                            html += '<span class="text-muted" style="font-size:0.7rem;">' + dueStr + '</span>';
+                            html += '<span class="text-muted" style="font-size:0.7rem;">' + progressVal + '%</span>';
+                            html += '</span></li>';
+                        });
+                        if (tasks.length > 20) html += '<li class="text-muted py-1">+' + (tasks.length - 20) + ' more</li>';
+                        html += '</ul>';
+                        el.innerHTML = html;
+                    }
+                    el.setAttribute('data-loaded', '1');
+                })
+                    .catch(function(err) {
+                        if (err.name === 'CanceledError' || err.name === 'AbortError') return;
+                        el.innerHTML = '<div class="text-danger small">Failed to load tasks</div>';
+                    });
+            }
+
+            function scheduleHide() {
+                if (hideTimer) clearTimeout(hideTimer);
+                hideTimer = setTimeout(function() {
+                    hideTimer = null;
+                    var el = getPopup();
+                    el.style.display = 'none';
+                }, 200);
+            }
+
+            function cancelHide() {
+                if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+            }
+
+            $(document).on('mousemove', function(e) {
+                if ($(e.target).closest('#projectTasksPopup').length) return;
+                movePopup(e);
+            });
+
+            $('#projectTable').on('mouseenter', '.project-hover-tasks-trigger', function(e) {
+                var projectId = $(this).data('project-id');
+                if (!projectId) return;
+                cancelHide();
+                showPopup(projectId, e.clientX, e.clientY);
+            });
+            $('#projectTable').on('mouseleave', '.project-id-cell, .project-name-cell', function() {
+                scheduleHide();
+            });
+
+            $(document).on('mouseenter', '#projectTasksPopup', cancelHide);
+            $(document).on('mouseleave', '#projectTasksPopup', scheduleHide);
+        })();
+
         var fixedScrollHeadUpdate = null;
         function applyStickyScrollHead(tableEl) {
             if (!tableEl) tableEl = document.getElementById('projectTable');
@@ -1268,7 +1447,7 @@ var projectTable;
             window.addEventListener('scroll', fixedScrollHeadUpdate, true);
             window.addEventListener('resize', fixedScrollHeadUpdate);
         }
-        // Khởi tạo Bootstrap tooltip cho ô giờ (data-time) mỗi khi DataTable vẽ lại
+        // Khởi tạo Bootstrap tooltip cho ô giờ (data-time) mỗi khi DataTable vẽ lại + cập nhật context chat cho AI
         $('#projectTable').on('draw.dt', function() {
             var table = document.getElementById('projectTable');
             if (!table || !window.bootstrap || !bootstrap.Tooltip) return;
@@ -1279,6 +1458,15 @@ var projectTable;
                 new bootstrap.Tooltip(el);
             });
             applyStickyScrollHead(table);
+            // Cho phép AI lấy dữ liệu danh sách dự án hiện đang hiển thị trên trang
+            if (projectTable && typeof $.fn.DataTable !== 'undefined' && $.fn.DataTable.isDataTable('#projectTable')) {
+                try {
+                    var rows = projectTable.rows({ search: 'applied' }).data();
+                    if (typeof window.__chatPageContext !== 'object' || window.__chatPageContext === null) window.__chatPageContext = {};
+                    window.__chatPageContext.page = 'project_list';
+                    window.__chatPageContext.page_projects = Array.isArray(rows) ? Array.from(rows) : [];
+                } catch (e) { /* ignore */ }
+            }
         });
         // Retry sau khi draw (serverSide: ajax trả về mới có DOM scroll) — 300ms và 800ms
         setTimeout(function() {
@@ -2575,6 +2763,13 @@ var projectTable;
             
             this.loadDepartments();
             // Không load dự án ngay lập tức, chỉ load khi có department được chọn
+
+            window.addEventListener('ai-action-success', (event) => {
+                const { action } = event.detail || {};
+                if (action && action.type && (action.type.indexOf('project_') === 0 || action.type.indexOf('parent_project_') === 0)) {
+                    this.loadProjects();
+                }
+            });
             
             // Auto-refresh kadai queue every 5 minutes (chỉ khi có department được chọn)
             // setInterval(() => {
@@ -3214,7 +3409,12 @@ var projectTable;
                 }
                 
                 this.selectedDepartment = department;
-                
+                // Cập nhật context chat để AI biết đang xem danh sách dự án của department nào
+                if (typeof window !== 'undefined') {
+                    window.__chatPageContext = window.__chatPageContext || {};
+                    window.__chatPageContext.page = 'project_list';
+                    window.__chatPageContext.department_id = department && department.id ? department.id : null;
+                }
                 // Save selected department to localStorage
                 this.saveSelectedDepartmentToLocalStorage(department);
                 

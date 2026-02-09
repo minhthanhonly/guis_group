@@ -411,17 +411,16 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
-     * Get user's team ID
+     * Get user's team ID.
+     * team_members.user_id is numeric (user.id), not userid string.
      */
     private function getUserTeamId($user_id) {
+        $uid = intval($user_id);
+        if ($uid <= 0) return null;
         $query = sprintf(
-            "SELECT team_id
-            FROM " . DB_PREFIX . "team_members
-            WHERE user_id = '%s'
-            LIMIT 1",
-            $this->quote($user_id)
+            "SELECT team_id FROM " . DB_PREFIX . "team_members WHERE user_id = %d LIMIT 1",
+            $uid
         );
-        
         $result = $this->fetchOne($query);
         return $result ? intval($result['team_id']) : null;
     }

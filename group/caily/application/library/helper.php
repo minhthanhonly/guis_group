@@ -113,6 +113,17 @@ class Helper {
 		
 	}
 
+	/**
+	 * Phase 5.2 – Log AI-triggered write operations for audit.
+	 * Call when a write (project/task/member/customer) succeeds and was triggered from the AI flow (request has ai_action=1).
+	 */
+	public static function logAiTriggeredAction($model, $method, $userId, $targetIds = []) {
+		$ts = date('Y-m-d H:i:s');
+		$targetStr = is_array($targetIds) ? json_encode($targetIds) : (string) $targetIds;
+		$line = sprintf("[AI_AUDIT] %s user_id=%s model=%s method=%s target=%s\n", $ts, $userId, $model, $method, $targetStr);
+		error_log($line);
+	}
+
 }
 
 ?>

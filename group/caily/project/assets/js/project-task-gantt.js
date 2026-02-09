@@ -104,6 +104,19 @@ $(document).ready(function() {
             
             // Handle window resize
             window.addEventListener('resize', this.handleResize);
+
+            window.addEventListener('ai-action-success', (event) => {
+                const { action } = event.detail || {};
+                const pid = action && (action.id || (action.params && action.params.project_id));
+                if (pid && String(pid) === String(this.projectId)) {
+                    this.loadProjectInfo();
+                    this.loadTasks();
+                    this.loadLinks();
+                    this.$nextTick(() => {
+                        if (this.ganttInitialized) this.initGantt();
+                    });
+                }
+            });
             
         },
         beforeUnmount() {

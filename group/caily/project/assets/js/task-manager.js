@@ -282,6 +282,16 @@ const TaskApp = createApp({
             const { error, fileName } = event.detail;
             this.handleUploadError(fileName, error);
         });
+
+        window.addEventListener('ai-action-success', (event) => {
+            const { action } = event.detail || {};
+            const pid = action && (action.id || (action.params && action.params.project_id));
+            if (pid && String(pid) === String(this.projectId)) {
+                this.loadProjectInfo();
+                this.loadProjectMembers();
+                this.loadTasks();
+            }
+        });
         
         // Auto-refresh task list every 10 seconds if no task is in edit mode
         setInterval(() => {
@@ -448,7 +458,12 @@ const TaskApp = createApp({
                 tasks.forEach(task => {
                     this.unreadComments[task.id] = task.unread_count || 0;
                 });
-                
+                // Cho phép AI lấy dữ liệu task hiện tại đang hiển thị
+                if (typeof window !== 'undefined') {
+                    window.__chatPageContext = window.__chatPageContext || {};
+                    window.__chatPageContext.page = 'task_manager';
+                    window.__chatPageContext.page_tasks = this.tasks;
+                }
                 // Reinitialize sortable after tasks are loaded
                 this.$nextTick(() => {
                     this.initSortable();

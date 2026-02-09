@@ -25,6 +25,35 @@ class Task extends ApplicationModel {
         $this->connect();
     }
 
+    /**
+     * If value is date-only (YYYY-MM-DD) append default time; else parse with strtotime or d/m format.
+     * Start date → 09:00, due date (期限) → 18:00.
+     * Supports Vietnamese d/m format: 10/2 = 2 Feb, 15/2 = 15 Feb (day/month).
+     */
+    private function normalize_datetime_with_default($value, $defaultTime) {
+        $value = trim($value ?? '');
+        if ($value === '') {
+            return null;
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return $value . ' ' . $defaultTime;
+        }
+        // Định dạng d/m hoặc d/m/y (tiếng Việt: ngày/tháng)
+        if (preg_match('/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/', $value, $m)) {
+            $d = (int) $m[1];
+            $mo = (int) $m[2];
+            $y = isset($m[3]) && $m[3] !== '' ? (int) $m[3] : (int) date('Y');
+            if ($y < 100) {
+                $y += 2000;
+            }
+            if ($d >= 1 && $d <= 31 && $mo >= 1 && $mo <= 12 && checkdate($mo, $d, $y)) {
+                return sprintf('%04d-%02d-%02d %s', $y, $mo, $d, $defaultTime);
+            }
+        }
+        $ts = strtotime($value);
+        return $ts !== false ? date('Y-m-d H:i', $ts) : null;
+    }
+
     function list($params = null) {
         $whereArr = [];
         
@@ -158,6 +187,20 @@ class Task extends ApplicationModel {
     }
 
     function add() {
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        if ($project_id <= 0) {
+            return ['status' => 'error', 'message' => 'project_id required'];
+        }
+        // Phase 4.2 – Permission check: user can edit task only if they can edit the project
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        $projectModel = new Project();
+        if (!$projectModel->canUserEditProject($project_id)) {
+            return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
+        }
+        $dueDate = isset($_POST['due_date']) && trim((string)$_POST['due_date']) !== '' ? $this->normalize_datetime_with_default($_POST['due_date'], '18:00') : null;
+        $startDate = isset($_POST['start_date']) && trim((string)$_POST['start_date']) !== '' ? $this->normalize_datetime_with_default($_POST['start_date'], '09:00') : null;
         $data = array(
             'project_id' => $_POST['project_id'],
             'parent_id' => isset($_POST['parent_id']) && $_POST['parent_id'] ? $_POST['parent_id'] : null,
@@ -167,17 +210,31 @@ class Task extends ApplicationModel {
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
             'assigned_to' => isset($_POST['assigned_to']) ? $_POST['assigned_to'] : null,
             'created_by' => isset($_POST['created_by']) ? $_POST['created_by'] : $_SESSION['user_id'],
-            'due_date' => isset($_POST['due_date']) ? $_POST['due_date'] : null,
-            'start_date' => isset($_POST['start_date']) ? $_POST['start_date'] : null,
             // 'category_id' => isset($_POST['category_id']) ? $_POST['category_id'] : null,
             // 'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
             // 'actual_hours' => isset($_POST['actual_hours']) ? $_POST['actual_hours'] : 0,
-            'progress' => isset($_POST['progress']) ? $_POST['progress'] : null,
+            'progress' => (isset($_POST['progress']) && $_POST['progress'] !== '' && $_POST['progress'] !== null) ? intval($_POST['progress']) : 0,
             'position' => isset($_POST['position']) ? $_POST['position'] : 0,
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
-        
+        if ($dueDate !== null) {
+            $data['due_date'] = $dueDate;
+        }
+        if ($startDate !== null) {
+            $data['start_date'] = $startDate;
+        }
+
+        // Nếu user được phân công chưa là thành viên dự án thì tự động thêm vào dự án (role = member)
+        if (!empty($data['assigned_to'])) {
+            $assignedIds = array_filter(array_map('intval', explode(',', (string)$data['assigned_to'])));
+            foreach ($assignedIds as $uid) {
+                if ($uid > 0) {
+                    $projectModel->addMember($project_id, $uid, null, 'member', true);
+                }
+            }
+        }
+
         $task_id = $this->query_insert($data);
         // if ($task_id && $data['project_id']) {
         //     $this->updateProjectProgress($data['project_id']);
@@ -207,7 +264,8 @@ class Task extends ApplicationModel {
             }
             
             return [
-                'status' => 'success'
+                'status' => 'success',
+                'task_id' => $task_id
             ];
         }
         
@@ -217,10 +275,32 @@ class Task extends ApplicationModel {
     }
 
     function edit() {
-        $id = $_POST['id'];
-        
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) {
+            return ['status' => 'error', 'message' => 'Task id required'];
+        }
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        // If project_id not provided, resolve from task (only task id is required for update)
+        if (!$project_id) {
+            $existing = $this->getById($id);
+            if ($existing && !empty($existing['project_id'])) {
+                $project_id = (int) $existing['project_id'];
+                $_POST['project_id'] = $project_id;
+            }
+        }
+        if (!$project_id) {
+            return ['status' => 'error', 'message' => 'Task not found'];
+        }
+        // Phase 4.2 – Permission check: user can edit task only if they can edit the project
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        $projectModel = new Project();
+        if (!$projectModel->canUserEditProject($project_id)) {
+            return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
+        }
         if (isset($_POST['status']) || isset($_POST['progress'])) {
-            if (!$this->checkPermission($_POST['project_id'], $id)) {
+            if (!$this->checkPermission($project_id, $id)) {
                return [
                 'status' => 'error',
                 'message' => 'このタスクを更新する権限がありません'
@@ -229,29 +309,42 @@ class Task extends ApplicationModel {
         }
         
         $old = $this->getById($id);
+        if (!$old) {
+            return ['status' => 'error', 'message' => 'Task not found'];
+        }
+        $title = (isset($_POST['title']) && trim((string)$_POST['title']) !== '') ? trim($_POST['title']) : (isset($old['title']) ? $old['title'] : '');
+        $description = isset($_POST['description']) ? $_POST['description'] : (isset($old['description']) ? $old['description'] : '');
+        $status = isset($_POST['status']) ? $_POST['status'] : (isset($old['status']) ? $old['status'] : 'new');
+        $priority = isset($_POST['priority']) ? $_POST['priority'] : (isset($old['priority']) ? $old['priority'] : 'medium');
+        $assignedTo = isset($_POST['assigned_to']) ? $_POST['assigned_to'] : (isset($old['assigned_to']) ? $old['assigned_to'] : null);
+        $dueDate = (isset($_POST['due_date']) && trim((string)$_POST['due_date']) !== '') ? $this->normalize_datetime_with_default($_POST['due_date'], '18:00') : null;
+        $startDate = (isset($_POST['start_date']) && trim((string)$_POST['start_date']) !== '') ? $this->normalize_datetime_with_default($_POST['start_date'], '09:00') : null;
         $data = array(
             'project_id' => $_POST['project_id'],
-            'title' => $_POST['title'],
-            'description' => isset($_POST['description']) ? $_POST['description'] : '',
-            'status' => isset($_POST['status']) ? $_POST['status'] : 'new',
-            'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
-            'assigned_to' => isset($_POST['assigned_to']) ? $_POST['assigned_to'] : null,
-            'due_date' => isset($_POST['due_date']) ? $_POST['due_date'] : null,
-            'start_date' => isset($_POST['start_date']) ? $_POST['start_date'] : null,
-            'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
-            'actual_hours' => isset($_POST['actual_hours']) ? $_POST['actual_hours'] : 0,
+            'title' => $title,
+            'description' => $description,
+            'status' => $status,
+            'priority' => $priority,
+            'assigned_to' => $assignedTo,
+            'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : (isset($old['estimated_hours']) ? $old['estimated_hours'] : 0),
+            'actual_hours' => isset($_POST['actual_hours']) ? $_POST['actual_hours'] : (isset($old['actual_hours']) ? $old['actual_hours'] : 0),
             'updated_at' => date('Y-m-d H:i:s')
         );
+        if ($dueDate !== null) {
+            $data['due_date'] = $dueDate;
+        }
+        if ($startDate !== null) {
+            $data['start_date'] = $startDate;
+        }
 
-        if(isset($_POST['position'])){
+        if (isset($_POST['position'])) {
             $data['position'] = $_POST['position'];
         }
-        
         if (isset($_POST['progress'])) {
-            $data['progress'] = intval($_POST['progress']);
+            $data['progress'] = ($_POST['progress'] !== '' && $_POST['progress'] !== null) ? intval($_POST['progress']) : (isset($old['progress']) ? (int)$old['progress'] : 0);
         }
         if (isset($_POST['parent_id'])) {
-            $data['parent_id'] = intval($_POST['parent_id']);
+            $data['parent_id'] = ($_POST['parent_id'] !== '' && $_POST['parent_id'] !== null) ? intval($_POST['parent_id']) : (isset($old['parent_id']) ? $old['parent_id'] : null);
         }
         $result = $this->query_update($data, ['id' => $id]);
         
@@ -880,6 +973,76 @@ class Task extends ApplicationModel {
     }
 
 
+    /**
+     * Phase 2.3 – Task list/read for AI context.
+     * Returns tasks for a project only if the current user can view the project (via Project::canUserEditProject).
+     *
+     * @param int $project_id
+     * @param array $options ['limit' => int, 'include_subtasks' => bool]
+     * @return array
+     */
+    public function getForAiContext($project_id, $options = []) {
+        $project_id = intval($project_id);
+        if ($project_id <= 0) {
+            return [];
+        }
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        $projectModel = new Project();
+        if (!$projectModel->canUserEditProject($project_id)) {
+            return [];
+        }
+        $limit = isset($options['limit']) ? min(100, max(1, intval($options['limit']))) : 50;
+        $include_subtasks = !empty($options['include_subtasks']);
+        $whereArr = ["t.project_id = " . $project_id];
+        if (!$include_subtasks) {
+            $whereArr[] = "t.parent_id IS NULL";
+        }
+        $where = "WHERE " . implode(" AND ", $whereArr);
+        $fields = "t.id, t.project_id, t.title, t.status, t.assigned_to, t.due_date, t.progress, t.parent_id, t.position, u.realname as assigned_to_name";
+        $query = "SELECT " . $fields . " FROM " . $this->table . " t LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id " . $where . " ORDER BY t.position, t.created_at DESC LIMIT " . $limit;
+        return $this->fetchAll($query);
+    }
+
+    /**
+     * Phase 2.4 – Task statistics for AI context.
+     * Returns task count by status and overdue count for projects the user can see (same visibility as Project::getForAiContext).
+     *
+     * @param int|null $department_id optional filter by project department
+     * @return array ['by_status' => [...], 'overdue_count' => int]
+     */
+    public function getStatsForAiContext($department_id = null) {
+        $user_id = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
+        $is_admin = (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator');
+        $permJoin = "";
+        $permWhere = "";
+        if (!$is_admin && $user_id) {
+            $permJoin = " INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id ";
+            $permWhere = sprintf(
+                " AND (p.created_by = %d OR EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_members pm WHERE pm.project_id = p.id AND pm.user_id = %d))",
+                $user_id,
+                $user_id
+            );
+        } else {
+            $permJoin = " INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id ";
+        }
+        $deptWhere = ($department_id !== null && $department_id > 0) ? sprintf(" AND p.department_id = %d", $department_id) : "";
+        $baseWhere = "WHERE p.status != 'deleted'" . $permWhere . $deptWhere;
+
+        $by_status = $this->fetchAll(
+            "SELECT t.status, COUNT(*) as count FROM " . $this->table . " t " . $permJoin . $baseWhere . " GROUP BY t.status"
+        );
+        $overdue = $this->fetchOne(
+            "SELECT COUNT(*) as c FROM " . $this->table . " t " . $permJoin . $baseWhere .
+            " AND t.due_date IS NOT NULL AND t.due_date < NOW() AND t.status NOT IN ('completed','cancelled')"
+        );
+        return [
+            'by_status' => $by_status ?: [],
+            'overdue_count' => isset($overdue['c']) ? (int)$overdue['c'] : 0
+        ];
+    }
+
     function getPermission() {
         $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
         $project = null;
@@ -927,10 +1090,10 @@ class Task extends ApplicationModel {
 
         $isTeamLeader = false;
         if (!$isAdmin) {
+            // team_members.user_id is numeric (user.id), not userid string
             $teamLeaderCheck = $this->fetchOne(
                 "SELECT COUNT(*) as count FROM " . DB_PREFIX . "team_members " .
-                "WHERE user_id = '" . $currentUserIdNumber . "' " .
-                "AND leader = 1"
+                "WHERE user_id = " . intval($currentUserIdNumber) . " AND leader = 1"
             );
             $isTeamLeader = ($teamLeaderCheck && $teamLeaderCheck['count'] > 0);
         }
@@ -1137,10 +1300,10 @@ class Task extends ApplicationModel {
         ];
         
         if ($start_date !== null) {
-            $data['start_date'] = $start_date;
+            $data['start_date'] = $this->normalize_datetime_with_default($start_date, '09:00');
         }
         if ($due_date !== null) {
-            $data['due_date'] = $due_date;
+            $data['due_date'] = $this->normalize_datetime_with_default($due_date, '18:00');
         }
         if ($progress !== null) {
             $data['progress'] = $progress;

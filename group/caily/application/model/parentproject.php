@@ -235,39 +235,50 @@ class ParentProject extends ApplicationModel {
     function update($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => '建物IDが指定されていません'];
-        
-        // Validate and sanitize input to ensure UTF-8 MB4 compatibility
-        $company_name = isset($_POST['company_name']) ? $this->validateUTF8MB4($_POST['company_name']) : '';
-        $project_name = isset($_POST['project_name']) ? $this->validateUTF8MB4($_POST['project_name']) : '';
-        $requests = isset($_POST['requests']) ? $this->validateUTF8MB4($_POST['requests']) : '';
-        $materials = isset($_POST['materials']) ? $this->validateUTF8MB4($_POST['materials']) : '';
-        $notes = isset($_POST['notes']) ? $this->validateUTF8MB4($_POST['notes']) : '';
-        
+
+        $old = $this->getById($id);
+        if (!$old) return ['status' => 'error', 'error' => '建物が見つかりません'];
+
+        // Partial update: use existing values when field not in $_POST or empty (avoid '' for datetime)
+        $company_name = isset($_POST['company_name']) ? $this->validateUTF8MB4($_POST['company_name']) : (isset($old['company_name']) ? $old['company_name'] : '');
+        $project_name = isset($_POST['project_name']) ? $this->validateUTF8MB4($_POST['project_name']) : (isset($old['project_name']) ? $old['project_name'] : '');
+        $requests = isset($_POST['requests']) ? $this->validateUTF8MB4($_POST['requests']) : (isset($old['requests']) ? $old['requests'] : '');
+        $materials = isset($_POST['materials']) ? $this->validateUTF8MB4($_POST['materials']) : (isset($old['materials']) ? $old['materials'] : '');
+        $notes = isset($_POST['notes']) ? $this->validateUTF8MB4($_POST['notes']) : (isset($old['notes']) ? $old['notes'] : '');
+
+        $requestDate = null;
+        if (isset($_POST['request_date']) && trim((string)$_POST['request_date']) !== '') {
+            $requestDate = trim($_POST['request_date']);
+        } elseif (isset($old['request_date']) && trim((string)$old['request_date']) !== '') {
+            $requestDate = $old['request_date'];
+        }
+        // Only include request_date in $data if we have a valid value (never '' for datetime column)
         $data = array(
             'company_name' => $company_name,
-            'branch_name' => isset($_POST['branch_name']) ? $_POST['branch_name'] : '',
-            'contact_name' => isset($_POST['contact_name']) ? $_POST['contact_name'] : '',
-            'customer_id' => isset($_POST['customer_id']) ? intval($_POST['customer_id']) : null,
-            'guis_receiver' => isset($_POST['guis_receiver']) ? $_POST['guis_receiver'] : '',
-            'request_date' => (isset($_POST['request_date']) && trim($_POST['request_date']) !== '') ? $_POST['request_date'] : null,
-            'construction_number' => isset($_POST['construction_number']) ? $_POST['construction_number'] : '',
+            'branch_name' => isset($_POST['branch_name']) ? $_POST['branch_name'] : (isset($old['branch_name']) ? $old['branch_name'] : ''),
+            'contact_name' => isset($_POST['contact_name']) ? $_POST['contact_name'] : (isset($old['contact_name']) ? $old['contact_name'] : ''),
+            'customer_id' => isset($_POST['customer_id']) ? (trim((string)$_POST['customer_id']) !== '' ? intval($_POST['customer_id']) : null) : (isset($old['customer_id']) ? $old['customer_id'] : null),
+            'guis_receiver' => isset($_POST['guis_receiver']) ? $_POST['guis_receiver'] : (isset($old['guis_receiver']) ? $old['guis_receiver'] : ''),
+            'construction_number' => isset($_POST['construction_number']) ? $_POST['construction_number'] : (isset($old['construction_number']) ? $old['construction_number'] : ''),
             'project_name' => $project_name,
-            'scale' => isset($_POST['scale']) ? $_POST['scale'] : '',
-            'type1' => isset($_POST['type1']) ? $_POST['type1'] : '',
-            'type2' => isset($_POST['type2']) ? $_POST['type2'] : '',
-            'type3' => isset($_POST['type3']) ? $_POST['type3'] : '',
-            'request_type' => isset($_POST['request_type']) ? $_POST['request_type'] : '',
-            //'desired_delivery_date' => (isset($_POST['desired_delivery_date']) && trim($_POST['desired_delivery_date']) !== '') ? $_POST['desired_delivery_date'] : null,
+            'scale' => isset($_POST['scale']) ? $_POST['scale'] : (isset($old['scale']) ? $old['scale'] : ''),
+            'type1' => isset($_POST['type1']) ? $_POST['type1'] : (isset($old['type1']) ? $old['type1'] : ''),
+            'type2' => isset($_POST['type2']) ? $_POST['type2'] : (isset($old['type2']) ? $old['type2'] : ''),
+            'type3' => isset($_POST['type3']) ? $_POST['type3'] : (isset($old['type3']) ? $old['type3'] : ''),
+            'request_type' => isset($_POST['request_type']) ? $_POST['request_type'] : (isset($old['request_type']) ? $old['request_type'] : ''),
             'requests' => $requests,
             'materials' => $materials,
-            'structural_office' => isset($_POST['structural_office']) ? $_POST['structural_office'] : '',
-            'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
-            'construction_branch' => isset($_POST['construction_branch']) ? $_POST['construction_branch'] : '',
+            'structural_office' => isset($_POST['structural_office']) ? $_POST['structural_office'] : (isset($old['structural_office']) ? $old['structural_office'] : ''),
+            'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : (isset($old['project_number']) ? $old['project_number'] : ''),
+            'construction_branch' => isset($_POST['construction_branch']) ? $_POST['construction_branch'] : (isset($old['construction_branch']) ? $old['construction_branch'] : ''),
             'notes' => $notes,
-            'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
-            'updated_by' => $_SESSION['userid'],
+            'status' => isset($_POST['status']) ? $_POST['status'] : (isset($old['status']) ? $old['status'] : 'draft'),
+            'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : '',
             'updated_at' => date('Y-m-d H:i:s')
         );
+        if ($requestDate !== null && $requestDate !== '') {
+            $data['request_date'] = $requestDate;
+        }
 
         try {
             $result = $this->query_update($data, ['id' => $id]);
@@ -569,6 +580,58 @@ class ParentProject extends ApplicationModel {
             intval($id)
         );
         return $this->fetchOne($query);
+    }
+
+    /**
+     * Get parent_project by project_number (exact match). Used for AI when user says "tòa nhà #P000008".
+     * @param string $project_number e.g. "P000008"
+     * @return array|null row with id, project_name, project_number or null
+     */
+    public function getByProjectNumber($project_number) {
+        $pn = trim((string) $project_number);
+        if ($pn === '') {
+            return null;
+        }
+        $query = "SELECT id, project_name, project_number, construction_number FROM " . $this->table
+            . " WHERE project_number = '" . $this->quote($pn) . "' AND status != 'deleted' LIMIT 1";
+        return $this->fetchOne($query);
+    }
+
+    /**
+     * Phase 2.1 – Parent project list/read for AI context.
+     * Returns minimal list or single parent project (id, project_name, construction_number, status, department_id, company_name)
+     * with existing permission/filters (status != deleted, optional department_id, status). No write operations.
+     *
+     * @param array $options ['department_id' => int, 'status' => string, 'limit' => int, 'id' => int for single]
+     * @return array
+     */
+    public function getForAiContext($options = []) {
+        $department_id = isset($options['department_id']) ? intval($options['department_id']) : null;
+        $status_raw = isset($options['status']) ? trim($options['status']) : null;
+        $status = ($status_raw !== null && $status_raw !== '') ? $this->quote($status_raw) : null;
+        $limit = isset($options['limit']) ? min(100, max(1, intval($options['limit']))) : 50;
+        $id = isset($options['id']) ? intval($options['id']) : null;
+
+        $whereArr = ["p.status != 'deleted'"];
+        if ($department_id !== null && $department_id > 0) {
+            $whereArr[] = "p.department_id = " . $department_id;
+        }
+        if ($status !== null && $status !== '') {
+            $whereArr[] = "p.status = '" . $status . "'";
+        }
+        if ($id !== null && $id > 0) {
+            $whereArr[] = "p.id = " . $id;
+        }
+        $where = "WHERE " . implode(" AND ", $whereArr);
+
+        $fields = "p.id, p.project_name, p.construction_number, p.status, p.department_id, p.company_name";
+        $query = "SELECT " . $fields . " FROM " . $this->table . " p " . $where;
+        if ($id !== null && $id > 0) {
+            $row = $this->fetchOne($query);
+            return $row ? [$row] : [];
+        }
+        $query .= " ORDER BY p.updated_at DESC LIMIT " . $limit;
+        return $this->fetchAll($query);
     }
 
     function getChildProjects($params = null) {

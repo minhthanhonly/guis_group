@@ -671,20 +671,21 @@ $view->footing();
     margin-right: 0;
 }
 
-/* Confirmation notes column fixed width */
+/* Confirmation notes column: đủ rộng để hiển thị đầy đủ nội dung từng note */
 #projectTable td.confirmation-notes-column {
-    width: 200px;
-    max-width: 200px;
+    min-width: 200px;
+    max-width: 250px;
+    width: 250px;
 }
 
 /* Style for each confirmation note item */
 #projectTable td.confirmation-notes-column .mb-1 {
     background-color: #fff9e6;
-    padding: 6px 8px;
+    padding: 4px 4px;
     margin-bottom: 6px !important;
     border-radius: 4px;
-    border-left: 3px solid #ffd700;
 }
+
 
 /* Layout for confirmation note content & action icons */
 #projectTable td.confirmation-notes-column .confirmation-note-item {
@@ -694,6 +695,12 @@ $view->footing();
 
 #projectTable td.confirmation-notes-column .confirmation-note-item .note-text {
     display: block;
+}
+
+
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-text blockquote{
+    font-size: 0.8125rem;
+    padding-left: 8px;
 }
 
 
@@ -857,7 +864,11 @@ $view->footing();
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/tagify/tagify.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
-<script src="<?=ROOT?>assets/vendor/libs/tagify/tagify.j?v=<?=CACHE_VERSION?>"></script>
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
+<!-- Chat page context: AI can use current project list data -->
+<script>
+window.__chatPageContext = window.__chatPageContext || {};
+window.__chatPageContext.page = 'project_list';
+</script>
 <script src="assets/js/project-list.js?v=<?=CACHE_VERSION?>"></script>

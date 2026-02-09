@@ -306,6 +306,16 @@ createApp({
             this.handleCtrlKeyChange(false);
             this.handleShiftKeyChange(false);
         });
+
+        window.addEventListener('ai-action-success', (event) => {
+            const { action } = event.detail || {};
+            const pid = action && (action.id || (action.params && action.params.project_id));
+            if (typeof PROJECT_ID !== 'undefined' && pid && String(pid) === String(PROJECT_ID)) {
+                this.loadProject();
+                this.loadProjectMembers();
+                this.loadDrawings();
+            }
+        });
     },
     
     methods: {

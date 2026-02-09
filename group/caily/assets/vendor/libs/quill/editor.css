@@ -776,3 +776,6 @@
 .ql-editor p{
   word-break: break-all;
 }
+.ql-editor.note-text p{
+  word-break: break-word;
+}

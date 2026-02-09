@@ -1035,9 +1035,10 @@ $view->footing();
 
 </style>
 
-<!-- Define PROJECT_ID before loading Vue and project-detail.js -->
+<!-- Define PROJECT_ID and chat page context (for AI: default project_id) -->
 <script>
 const PROJECT_ID = <?php echo $project_id; ?>;
+window.__chatPageContext = { project_id: PROJECT_ID };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
@@ -1051,6 +1052,5 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <script src="<?=ROOT?>assets/js/sw-manager.js"></script>
 <script src="/assets/js/mention.js?v=<?=CACHE_VERSION?>"></script>
 <script src="/assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
-<script src="<?=ROOT?>assets/vendor/libs/tagify/tagify.j?v=<?=CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail.js?v=<?=CACHE_VERSION?>"></script>
 

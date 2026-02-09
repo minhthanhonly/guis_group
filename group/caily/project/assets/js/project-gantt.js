@@ -1337,7 +1337,13 @@ $(document).ready(function() {
                     { name: "index", label: "ID", width: 50, align: "center", min_width: 40, template: function (obj) {
                         return obj.id || '';
                     }},
+                    { name: "branch_name", label: "支店名", width: 90, min_width: 50, template: function(obj) {
+                        return obj.branch_name || '-';
+                    }},
                     { name: "text", label: "件名", width: 350, tree: true, min_width: 300 },
+                    { name: "team_name", label: "チーム", width: 120, min_width: 80, template: function(obj) {
+                        return obj.team_name || '-';
+                    }},
                     { name: "construction_number", label: "工事番号", width: 100, min_width: 80 },
                     { name: "start_date", label: "開始日", width: 100, align: "left", min_width: 80, template: function(obj) {
                         if (!obj.start_date) return 'N/A';

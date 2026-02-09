@@ -169,7 +169,7 @@
           <!-- Chat message form -->
           <div class="chat-history-footer shadow-xs">
             <form class="form-send-message d-flex justify-content-between align-items-center ">
-              <input class="form-control message-input border-0 me-4 shadow-none" placeholder="メッセージを入力してください..." autofocus />
+              <textarea class="form-control message-input border-0 me-4 shadow-none" placeholder="メッセージを入力してください..." rows="2" autofocus style="resize: none; min-height: 42px; max-height: 120px;"></textarea>
               <div class="message-actions d-flex align-items-center">
                 <!-- <span class="btn btn-text-secondary btn-icon rounded-pill cursor-pointer">
                   <i class="speech-to-text icon-base ti tabler-microphone icon-22px text-heading"></i>

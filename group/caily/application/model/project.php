@@ -98,18 +98,16 @@ class Project extends ApplicationModel {
             $kw = $this->escape($_GET['filterKeyword']);
             $whereArr[] = "(p.name LIKE '%$kw%' 
             OR p.id LIKE '%$kw%' 
-            OR p.description LIKE '%$kw%' 
             OR p.tags LIKE '%$kw%'
             OR c.company_name LIKE '%$kw%'
             OR c.company_name_kana LIKE '%$kw%'
+            OR c.branch LIKE '%$kw%'
+            OR c.name LIKE '%$kw%'
             OR c.name_kana LIKE '%$kw%'
-            OR pp.company_name LIKE '%$kw%'
-            OR pp.contact_name LIKE '%$kw%'
             OR pp.construction_number LIKE '%$kw%'
             OR pp.scale LIKE '%$kw%'
             OR pp.type1 LIKE '%$kw%'
-            OR pp.type2 LIKE '%$kw%'
-            OR c.name LIKE '%$kw%')";
+            OR pp.type2 LIKE '%$kw%')";
         } else {
             // --- Advanced Filters ---
             $hasStartMonth = isset($_GET['filterStartMonth']) && $_GET['filterStartMonth'] !== '';
@@ -285,7 +283,7 @@ class Project extends ApplicationModel {
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
              WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
-           (SELECT GROUP_CONCAT(CONCAT(n.id, '::', n.content) SEPARATOR ' | ') 
+           (SELECT GROUP_CONCAT(CONCAT(n.id, '_:_', n.content) SEPARATOR '_|_') 
              FROM " . DB_PREFIX . "project_notes n 
              WHERE n.project_id = p.id AND n.needs_confirmation = 1 
              ORDER BY n.is_important DESC, n.created_at DESC) as confirmation_notes
@@ -303,6 +301,9 @@ class Project extends ApplicationModel {
             $start,
             $length
         );
+
+        // GROUP_CONCAT mặc định giới hạn 1024 byte → cắt nội dung confirmation_notes. Tăng để hiển thị đầy đủ.
+        $this->query("SET SESSION group_concat_max_len = 1048576");
 
         $data = $this->fetchAll($query);
         
@@ -443,16 +444,17 @@ class Project extends ApplicationModel {
         if ($hasKeyword) {
             $kw = $this->escape($_GET['filterKeyword']);
             $whereArr[] = "(p.name LIKE '%$kw%' 
-                OR p.description LIKE '%$kw%' 
                 OR p.id LIKE '%$kw%' 
                 OR p.tags LIKE '%$kw%'
+                OR c.company_name LIKE '%$kw%'
                 OR c.company_name_kana LIKE '%$kw%'
+                OR c.branch LIKE '%$kw%'
+                OR c.name LIKE '%$kw%'
                 OR c.name_kana LIKE '%$kw%'
                 OR pp.construction_number LIKE '%$kw%'
                 OR pp.scale LIKE '%$kw%'
                 OR pp.type1 LIKE '%$kw%'
-                OR pp.type2 LIKE '%$kw%'
-                OR c.name LIKE '%$kw%')";
+                OR pp.type2 LIKE '%$kw%')";
         } else {
             if (isset($_GET['filterPriority']) && $_GET['filterPriority'] !== '') {
                 $priority = $this->escape($_GET['filterPriority']);
@@ -552,6 +554,616 @@ class Project extends ApplicationModel {
     }
 
     /**
+     * Phase 1.2 – Permission helper for backend.
+     * Returns true only if the current session user may edit the given project:
+     * - Session authority is 'administrator', or
+     * - User is manager of that project (project_members.role = 'manager'), or
+     * - User has project_manager for the project's department (user_department.project_manager = 1).
+     * Used by AI-triggered and other APIs before any project/task/member write.
+     *
+     * @param int $project_id
+     * @return bool
+     */
+    public function canUserEditProject($project_id) {
+        $project_id = intval($project_id);
+        if ($project_id <= 0) {
+            return false;
+        }
+        $project = $this->fetchOne("SELECT id, department_id FROM " . $this->table . " WHERE id = " . $project_id);
+        if (!$project || !isset($project['department_id'])) {
+            return false;
+        }
+        $current_user_id = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
+        $current_userid = isset($_SESSION['userid']) ? $this->quote($_SESSION['userid']) : '';
+        if (!$current_user_id && !$current_userid) {
+            return false;
+        }
+        if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
+            return true;
+        }
+        $memberCheck = $this->fetchOne(
+            "SELECT COUNT(*) as c FROM " . DB_PREFIX . "project_members " .
+            "WHERE project_id = " . $project_id . " AND user_id = " . $current_user_id . " AND role = 'manager'"
+        );
+        if ($memberCheck && isset($memberCheck['c']) && (int)$memberCheck['c'] > 0) {
+            return true;
+        }
+        $dept_id = intval($project['department_id']);
+        if ($dept_id > 0 && $current_userid) {
+            $deptCheck = $this->fetchOne(
+                "SELECT COUNT(*) as c FROM " . DB_PREFIX . "user_department " .
+                "WHERE department_id = " . $dept_id . " AND userid = '" . $current_userid . "' AND project_manager = 1"
+            );
+            if ($deptCheck && isset($deptCheck['c']) && (int)$deptCheck['c'] > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if the current user may edit sensitive project fields (amount, name, start_date, end_date, caily_nouki, guis_nouki, tantou).
+     * Only administrator or department project_manager (user_department.project_manager = 1); project member manager is not enough.
+     *
+     * @param int $project_id
+     * @return bool
+     */
+    public function canUserEditProjectSensitiveFields($project_id) {
+        $project_id = intval($project_id);
+        if ($project_id <= 0) {
+            return false;
+        }
+        if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
+            return true;
+        }
+        $project = $this->fetchOne("SELECT department_id FROM " . $this->table . " WHERE id = " . $project_id);
+        if (!$project || !isset($project['department_id'])) {
+            return false;
+        }
+        $dept_id = intval($project['department_id']);
+        $current_userid = isset($_SESSION['userid']) ? $this->escape($_SESSION['userid']) : '';
+        if ($dept_id <= 0 || !$current_userid) {
+            return false;
+        }
+        $row = $this->fetchOne(
+            "SELECT COUNT(*) as c FROM " . DB_PREFIX . "user_department " .
+            "WHERE department_id = " . $dept_id . " AND userid = '" . $current_userid . "' AND project_manager = 1"
+        );
+        return $row && isset($row['c']) && (int)$row['c'] > 0;
+    }
+
+    /**
+     * Phase 2.2 – Project list/read for AI context.
+     * Returns minimal list or single project (id, name, status, department_id, manager_ids, member_count)
+     * with existing list/detail permission applied (department filter, admin/department-manager or member visibility).
+     *
+     * @param array $options ['department_id' => int, 'status' => string, 'limit' => int, 'id' => int for single]
+     * @return array
+     */
+    public function getForAiContext($options = []) {
+        $department_id = isset($options['department_id']) ? intval($options['department_id']) : null;
+        $status = isset($options['status']) ? trim($options['status']) : null;
+        $id = isset($options['id']) ? intval($options['id']) : null;
+        $ids = isset($options['ids']) && is_array($options['ids']) ? array_values(array_unique(array_filter(array_map('intval', $options['ids'])))) : [];
+        $searchFilters = isset($options['search_filters']) && is_array($options['search_filters']) ? $options['search_filters'] : [];
+        
+        // Luôn giới hạn ở 20 dự án gần nhất cho display (theo updated_at DESC)
+        // Nếu có search filters → vẫn chỉ hiển thị 20 dự án gần nhất
+        // Nếu không có search filters → limit theo option hoặc mặc định 20
+        if (!empty($searchFilters)) {
+            // Có search filters → vẫn chỉ hiển thị 20 dự án gần nhất
+            $limit = 20;
+        } else {
+            // Không có search filters → limit tối đa 20, mặc định 20
+            $limit = isset($options['limit']) ? min(20, max(1, intval($options['limit']))) : 20;
+        }
+
+        $user_id = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
+        $is_admin = (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator');
+        $is_dept_manager = false;
+        if ($department_id > 0 && isset($_SESSION['userid'])) {
+            $q = sprintf(
+                "SELECT COUNT(id) as c FROM " . DB_PREFIX . "user_department WHERE userid = '%s' AND department_id = %d AND (project_manager = 1 OR project_director = 1)",
+                $this->quote($_SESSION['userid']),
+                $department_id
+            );
+            $row = $this->fetchOne($q);
+            $is_dept_manager = ($row && isset($row['c']) && (int)$row['c'] > 0);
+        }
+        $whereArr = ["p.status != 'deleted'"];
+        if (!$is_admin && !$is_dept_manager) {
+            $whereArr[] = sprintf(
+                "(p.created_by = %d OR EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_members pm WHERE pm.project_id = p.id AND pm.user_id = %d))",
+                $user_id,
+                $user_id
+            );
+        }
+        if ($department_id !== null && $department_id > 0) {
+            $whereArr[] = "p.department_id = " . $department_id;
+        }
+        if ($status !== null && $status !== '') {
+            if ($status === 'not_started') {
+                $whereArr[] = "p.status IN ('quotation','draft','contract','open','confirming')";
+            } else {
+                $whereArr[] = "p.status = '" . $this->quote($status) . "'";
+            }
+        }
+        if (!empty($ids)) {
+            $whereArr[] = "p.id IN (" . implode(",", array_map("intval", $ids)) . ")";
+        } elseif ($id !== null && $id > 0) {
+            $whereArr[] = "p.id = " . $id;
+        }
+        // Thêm search filters cho parent_project fields, team_id, person_name, overdue, tantou
+        if (!empty($searchFilters)) {
+            if (isset($searchFilters['construction_number']) && trim($searchFilters['construction_number']) !== '') {
+                $whereArr[] = "pp.construction_number LIKE '%" . $this->quote($searchFilters['construction_number']) . "%'";
+            }
+            if (isset($searchFilters['contact_name']) && trim($searchFilters['contact_name']) !== '') {
+                $whereArr[] = "pp.contact_name LIKE '%" . $this->quote($searchFilters['contact_name']) . "%'";
+            }
+            if (isset($searchFilters['company_name']) && trim($searchFilters['company_name']) !== '') {
+                $whereArr[] = "pp.company_name LIKE '%" . $this->quote($searchFilters['company_name']) . "%'";
+            }
+            if (isset($searchFilters['project_name']) && trim($searchFilters['project_name']) !== '') {
+                $whereArr[] = "pp.project_name LIKE '%" . $this->quote($searchFilters['project_name']) . "%'";
+            }
+            if (isset($searchFilters['branch_name']) && trim($searchFilters['branch_name']) !== '') {
+                $whereArr[] = "pp.branch_name LIKE '%" . $this->quote($searchFilters['branch_name']) . "%'";
+            }
+            // Filter theo team_id hoặc team_ids (nhiều team: dự án thuộc BẤT KỲ team nào trong danh sách)
+            if (!empty($searchFilters['team_ids']) && is_array($searchFilters['team_ids'])) {
+                $teamIds = array_values(array_unique(array_filter(array_map('intval', $searchFilters['team_ids']))));
+                if (!empty($teamIds)) {
+                    $conds = array_map(function ($tid) { return "FIND_IN_SET(" . $tid . ", p.teams) > 0"; }, $teamIds);
+                    $whereArr[] = "(" . implode(" OR ", $conds) . ")";
+                }
+            } elseif (isset($searchFilters['team_id']) && intval($searchFilters['team_id']) > 0) {
+                $team_id = intval($searchFilters['team_id']);
+                $whereArr[] = "FIND_IN_SET(" . $team_id . ", p.teams) > 0";
+            }
+            // Filter theo tantou (担当会社: CAILY / GUIS)
+            if (isset($searchFilters['tantou']) && in_array($searchFilters['tantou'], ['CAILY','GUIS'], true)) {
+                $whereArr[] = "p.tantou = '" . $this->quote($searchFilters['tantou']) . "'";
+            }
+            // Filter theo tên người tham gia (member hoặc manager): hỗ trợ nhiều tên (Thom,Hoàng) – dự án phải có TẤT CẢ các người tham gia
+            if (isset($searchFilters['person_name']) && trim($searchFilters['person_name']) !== '') {
+                $personRaw = trim($searchFilters['person_name']);
+                $personParts = array_map('trim', preg_split('/[\s,]+/', $personRaw, -1, PREG_SPLIT_NO_EMPTY));
+                $personParts = array_unique(array_filter($personParts));
+                foreach ($personParts as $oneName) {
+                    if ($oneName === '') continue;
+                    $person = $this->quote($oneName);
+                    $whereArr[] = "EXISTS (
+                        SELECT 1
+                        FROM " . DB_PREFIX . "project_members pm_person
+                        LEFT JOIN " . DB_PREFIX . "user u_person ON pm_person.user_id = u_person.id
+                        WHERE pm_person.project_id = p.id
+                          AND u_person.realname LIKE '%" . $person . "%'
+                    )";
+                }
+            }
+            // Filter theo overdue (đã trễ kỳ hạn): end_date < NOW() và status chưa completed/cancelled/deleted
+            if (isset($searchFilters['overdue']) && $searchFilters['overdue']) {
+                $now = date('Y-m-d H:i:s');
+                $whereArr[] = "(p.end_date IS NOT NULL AND p.end_date < '" . $this->quote($now) . "' AND p.status NOT IN ('completed','cancelled','deleted'))";
+            }
+            // Filter theo date (ngày cụ thể hoặc date_type như yesterday, today, this_week, etc.)
+            // Tìm các dự án có khoảng thời gian (start_date đến end_date) chứa thời gian đó
+            if (isset($searchFilters['date']) && !empty($searchFilters['date'])) {
+                // Ngày cụ thể: tìm các dự án mà ngày đó nằm trong khoảng start_date đến end_date
+                $date = trim($searchFilters['date']);
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                    $dateStart = $date . ' 00:00:00';
+                    $dateEnd = $date . ' 23:59:59';
+                    // Dự án giao với ngày đó: start_date <= cuối ngày VÀ (end_date >= đầu ngày HOẶC end_date IS NULL)
+                    $whereArr[] = "(p.start_date IS NOT NULL AND p.start_date <= '" . $this->quote($dateEnd) . "' AND (p.end_date IS NULL OR p.end_date >= '" . $this->quote($dateStart) . "'))";
+                }
+            } elseif (isset($searchFilters['date_start']) && isset($searchFilters['date_end']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($searchFilters['date_start'])) && preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($searchFilters['date_end']))) {
+                // Khoảng ngày: dự án có [start_date, end_date] giao với [date_start, date_end]
+                // Giao khi: start_date <= date_end VÀ (end_date >= date_start HOẶC end_date IS NULL) → ví dụ dự án 10/1–21/1 vẫn nằm trong khoảng 1/1–20/1
+                $rangeStart = trim($searchFilters['date_start']) . ' 00:00:00';
+                $rangeEnd = trim($searchFilters['date_end']) . ' 23:59:59';
+                $whereArr[] = "(p.start_date IS NOT NULL AND p.start_date <= '" . $this->quote($rangeEnd) . "' AND (p.end_date IS NULL OR p.end_date >= '" . $this->quote($rangeStart) . "'))";
+            } elseif (isset($searchFilters['date_type']) && !empty($searchFilters['date_type'])) {
+                // Date type: yesterday, today, tomorrow, this_week, last_week, next_week, this_month, last_month, next_month
+                $dateType = trim($searchFilters['date_type']);
+                $today = date('Y-m-d');
+                switch ($dateType) {
+                    case 'yesterday':
+                        $yesterday = date('Y-m-d', strtotime('-1 day'));
+                        // Tính toán date range: từ đầu ngày đến cuối ngày hôm qua
+                        $dateStart = $yesterday . ' 00:00:00';
+                        $dateEnd = $yesterday . ' 23:59:59';
+                        // Dự án phải có start_date <= cuối ngày hôm qua VÀ (end_date >= đầu ngày hôm qua HOẶC end_date IS NULL)
+                        $whereArr[] = "(p.start_date IS NOT NULL AND p.start_date <= '" . $this->quote($dateEnd) . "' AND (p.end_date IS NULL OR p.end_date >= '" . $this->quote($dateStart) . "'))";
+                        break;
+                    case 'today':
+                        // Tính toán date range: từ đầu ngày đến cuối ngày hôm nay
+                        $dateStart = $today . ' 00:00:00';
+                        $dateEnd = $today . ' 23:59:59';
+                        // Dự án phải có start_date <= cuối ngày hôm nay VÀ (end_date >= đầu ngày hôm nay HOẶC end_date IS NULL)
+                        $whereArr[] = "(p.start_date IS NOT NULL AND p.start_date <= '" . $this->quote($dateEnd) . "' AND (p.end_date IS NULL OR p.end_date >= '" . $this->quote($dateStart) . "'))";
+                        break;
+                    case 'tomorrow':
+                        $tomorrow = date('Y-m-d', strtotime('+1 day'));
+                        // Tính toán date range: từ đầu ngày đến cuối ngày mai
+                        $dateStart = $tomorrow . ' 00:00:00';
+                        $dateEnd = $tomorrow . ' 23:59:59';
+                        // Dự án phải có start_date <= cuối ngày mai VÀ (end_date >= đầu ngày mai HOẶC end_date IS NULL)
+                        $whereArr[] = "(p.start_date IS NOT NULL AND p.start_date <= '" . $this->quote($dateEnd) . "' AND (p.end_date IS NULL OR p.end_date >= '" . $this->quote($dateStart) . "'))";
+                        break;
+                    case 'this_week':
+                        $weekStart = date('Y-m-d', strtotime('monday this week'));
+                        $weekEnd = date('Y-m-d', strtotime('sunday this week'));
+                        // Khoảng thời gian tuần này phải giao với khoảng start_date đến end_date
+                        // Tức là: start_date <= weekEnd AND (end_date >= weekStart OR end_date IS NULL)
+                        $whereArr[] = "(DATE(p.start_date) <= '" . $this->quote($weekEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($weekStart) . "' OR p.end_date IS NULL))";
+                        break;
+                    case 'last_week':
+                        $lastWeekStart = date('Y-m-d', strtotime('monday last week'));
+                        $lastWeekEnd = date('Y-m-d', strtotime('sunday last week'));
+                        // Khoảng thời gian tuần trước phải giao với khoảng start_date đến end_date
+                        $whereArr[] = "(DATE(p.start_date) <= '" . $this->quote($lastWeekEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($lastWeekStart) . "' OR p.end_date IS NULL))";
+                        break;
+                    case 'next_week':
+                        $nextWeekStart = date('Y-m-d', strtotime('monday next week'));
+                        $nextWeekEnd = date('Y-m-d', strtotime('sunday next week'));
+                        $whereArr[] = "(DATE(p.start_date) <= '" . $this->quote($nextWeekEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($nextWeekStart) . "' OR p.end_date IS NULL))";
+                        break;
+                    case 'this_month':
+                        $monthStart = date('Y-m-01');
+                        $monthEnd = date('Y-m-t');
+                        // Khoảng thời gian tháng này phải giao với khoảng start_date đến end_date
+                        $whereArr[] = "(DATE(p.start_date) <= '" . $this->quote($monthEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($monthStart) . "' OR p.end_date IS NULL))";
+                        break;
+                    case 'last_month':
+                        $lastMonthStart = date('Y-m-01', strtotime('first day of last month'));
+                        $lastMonthEnd = date('Y-m-t', strtotime('last day of last month'));
+                        // Khoảng thời gian tháng trước phải giao với khoảng start_date đến end_date
+                        $whereArr[] = "(DATE(p.start_date) <= '" . $this->quote($lastMonthEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($lastMonthStart) . "' OR p.end_date IS NULL))";
+                        break;
+                    case 'next_month':
+                        $nextMonthStart = date('Y-m-01', strtotime('first day of next month'));
+                        $nextMonthEnd = date('Y-m-t', strtotime('last day of next month'));
+                        $whereArr[] = "(DATE(p.start_date) <= '" . $this->quote($nextMonthEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($nextMonthStart) . "' OR p.end_date IS NULL))";
+                        break;
+                }
+            }
+        }
+        $where = "WHERE " . implode(" AND ", $whereArr);
+
+        $fields = "p.id, p.name, p.status, p.priority, p.progress, p.amount, p.guis_nouki, p.caily_nouki, p.department_id, p.start_date, p.end_date, p.tantou,
+            d.name as department_name,
+            pp.company_name as parent_company_name,
+            pp.project_name as parent_project_name,
+            pp.branch_name as parent_branch_name,
+            pp.contact_name as parent_contact_name,
+            pp.construction_number as parent_construction_number,
+            (SELECT GROUP_CONCAT(u.realname SEPARATOR ', ') FROM " . DB_PREFIX . "project_members pm LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id WHERE pm.project_id = p.id AND pm.role = 'manager') as manager_names,
+            (SELECT GROUP_CONCAT(u2.realname SEPARATOR ', ') FROM " . DB_PREFIX . "project_members pm2 LEFT JOIN " . DB_PREFIX . "user u2 ON pm2.user_id = u2.id WHERE pm2.project_id = p.id AND pm2.role = 'member') as member_names,
+            (SELECT GROUP_CONCAT(team.name SEPARATOR ', ') FROM " . DB_PREFIX . "team team WHERE p.teams IS NOT NULL AND p.teams != '' AND FIND_IN_SET(team.id, p.teams) > 0) as team_names";
+        $query = "SELECT " . $fields . " FROM " . $this->table . " p 
+            LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id 
+            LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id " . $where;
+        if ($id !== null && $id > 0) {
+            $row = $this->fetchOne($query);
+            return $row ? [$row] : [];
+        }
+        $query .= " ORDER BY p.updated_at DESC";
+        // Luôn thêm LIMIT để chỉ lấy 20 dự án gần nhất
+        $query .= " LIMIT " . $limit;
+        $results = $this->fetchAll($query);
+        return $results;
+    }
+
+    /**
+     * Nhóm và người chưa được phân công dự án trong khoảng thời gian (rảnh việc).
+     * Dùng cho AI khi user hỏi "nhóm nào tuần sau rảnh", "ai rảnh tuần sau".
+     * Visibility giống getForAiContext (admin/dept_manager thấy hết; user thường chỉ dự án mình tạo hoặc tham gia).
+     *
+     * @param int $department_id bắt buộc (chỉ xét team/user trong department này)
+     * @param string $dateStart Y-m-d
+     * @param string $dateEnd Y-m-d
+     * @return array ['free_teams' => [['id'=>N,'name'=>'...'], ...], 'free_members' => [['id'=>N,'realname'=>'...'], ...], 'period' => ['date_start'=>..., 'date_end'=>...]]
+     */
+    public function getFreeTeamsAndMembersInPeriod($department_id, $dateStart, $dateEnd) {
+        $department_id = (int) $department_id;
+        if ($department_id <= 0) {
+            return ['free_teams' => [], 'free_members' => [], 'period' => ['date_start' => $dateStart, 'date_end' => $dateEnd]];
+        }
+        $user_id = isset($_SESSION['id']) ? (int) $_SESSION['id'] : 0;
+        $is_admin = (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator');
+        $is_dept_manager = false;
+        if ($department_id > 0 && isset($_SESSION['userid'])) {
+            $q = sprintf(
+                "SELECT COUNT(id) as c FROM " . DB_PREFIX . "user_department WHERE userid = '%s' AND department_id = %d AND (project_manager = 1 OR project_director = 1)",
+                $this->quote($_SESSION['userid']),
+                $department_id
+            );
+            $row = $this->fetchOne($q);
+            $is_dept_manager = ($row && isset($row['c']) && (int) $row['c'] > 0);
+        }
+        $permWhere = "";
+        if (!$is_admin && !$is_dept_manager) {
+            $permWhere = sprintf(
+                " AND (p.created_by = %d OR EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_members pm WHERE pm.project_id = p.id AND pm.user_id = %d))",
+                $user_id,
+                $user_id
+            );
+        }
+        $rangeStart = $dateStart . ' 00:00:00';
+        $rangeEnd = $dateEnd . ' 23:59:59';
+        $overlapWhere = "p.status != 'deleted' AND p.department_id = " . $department_id . $permWhere
+            . " AND (p.start_date IS NOT NULL AND p.start_date <= '" . $this->quote($rangeEnd) . "' AND (p.end_date IS NULL OR p.end_date >= '" . $this->quote($rangeStart) . "'))";
+        $projectIds = $this->fetchAll("SELECT p.id, p.teams FROM " . $this->table . " p WHERE " . $overlapWhere);
+        $busyTeamIds = [];
+        $overlappingIds = [];
+        foreach ($projectIds as $row) {
+            $overlappingIds[] = (int) $row['id'];
+            if (!empty($row['teams']) && trim($row['teams']) !== '') {
+                foreach (array_map('intval', explode(',', trim($row['teams']))) as $tid) {
+                    if ($tid > 0) {
+                        $busyTeamIds[$tid] = true;
+                    }
+                }
+            }
+        }
+        $allTeams = $this->fetchAll("SELECT id, name FROM " . DB_PREFIX . "team WHERE department_id = " . $department_id . " AND is_active = 1 ORDER BY name");
+        $free_teams = [];
+        foreach ($allTeams as $t) {
+            $tid = (int) $t['id'];
+            if (!isset($busyTeamIds[$tid])) {
+                $free_teams[] = ['id' => $tid, 'name' => isset($t['name']) ? $t['name'] : ''];
+            }
+        }
+        $busyUserIds = [];
+        if (!empty($overlappingIds)) {
+            $placeholders = implode(',', array_map('intval', $overlappingIds));
+            $rows = $this->fetchAll("SELECT DISTINCT user_id FROM " . DB_PREFIX . "project_members WHERE project_id IN (" . $placeholders . ") AND user_id > 0");
+            foreach ($rows as $r) {
+                $busyUserIds[(int) $r['user_id']] = true;
+            }
+        }
+        $deptUsers = $this->fetchAll(
+            "SELECT u.id, u.realname FROM " . DB_PREFIX . "user u "
+            . "JOIN " . DB_PREFIX . "user_department ud ON u.userid = ud.userid WHERE ud.department_id = " . $department_id . " ORDER BY u.realname"
+        );
+        $free_members = [];
+        foreach ($deptUsers as $u) {
+            $uid = (int) $u['id'];
+            if (!isset($busyUserIds[$uid])) {
+                $free_members[] = ['id' => $uid, 'realname' => isset($u['realname']) ? $u['realname'] : ''];
+            }
+        }
+        return [
+            'free_teams' => $free_teams,
+            'free_members' => $free_members,
+            'period' => ['date_start' => $dateStart, 'date_end' => $dateEnd],
+        ];
+    }
+
+    /**
+     * Phase 2.4 – Statistics aggregation for AI.
+     * Returns project counts (overview, by department) for use as context sent to Gemini.
+     * Respects visibility: non-admin sees only projects they created or are member of (same as getForAiContext).
+     *
+     * @param int|null $department_id optional filter
+     * @return array ['overview' => [...], 'by_department' => [...]]
+     */
+    public function getStatsForAiContext($department_id = null, $statusFilter = null, $searchFilters = []) {
+        $user_id = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
+        $is_admin = (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator');
+        $permWhere = "";
+        if (!$is_admin && $user_id) {
+            $permWhere = sprintf(
+                " AND (p.created_by = %d OR EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_members pm WHERE pm.project_id = p.id AND pm.user_id = %d))",
+                $user_id,
+                $user_id
+            );
+        }
+        $deptWhere = ($department_id !== null && $department_id > 0) ? sprintf(" AND p.department_id = %d", $department_id) : "";
+        // Thêm status filter nếu có
+        $statusWhere = "";
+        if ($statusFilter !== null && $statusFilter !== '') {
+            if ($statusFilter === 'not_started') {
+                // "Chưa tiến hành" = chưa bắt đầu: quotation, draft, contract, open, confirming
+                $statusWhere = " AND p.status IN ('quotation','draft','contract','open','confirming')";
+            } else {
+                $statusWhere = " AND p.status = '" . $this->quote($statusFilter) . "'";
+            }
+        }
+        $baseWhere = "WHERE p.status != 'deleted'" . $permWhere . $deptWhere . $statusWhere;
+
+        // Thêm các filter bổ sung (team_id, tantou, person_name, overdue, date, parent_project fields) giống getForAiContext
+        $extraWhere = "";
+        $joinParent = "";
+        if (is_array($searchFilters) && !empty($searchFilters)) {
+            // parent_project fields (cần JOIN pp) – construction_number, branch_name, company_name, project_name, contact_name
+            if (isset($searchFilters['construction_number']) && trim($searchFilters['construction_number']) !== '') {
+                $joinParent = " LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id";
+                $extraWhere .= " AND pp.construction_number LIKE '%" . $this->quote($searchFilters['construction_number']) . "%'";
+            }
+            if (isset($searchFilters['branch_name']) && trim($searchFilters['branch_name']) !== '') {
+                if ($joinParent === '') $joinParent = " LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id";
+                $extraWhere .= " AND pp.branch_name LIKE '%" . $this->quote($searchFilters['branch_name']) . "%'";
+            }
+            if (isset($searchFilters['company_name']) && trim($searchFilters['company_name']) !== '') {
+                if ($joinParent === '') $joinParent = " LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id";
+                $extraWhere .= " AND pp.company_name LIKE '%" . $this->quote($searchFilters['company_name']) . "%'";
+            }
+            if (isset($searchFilters['project_name']) && trim($searchFilters['project_name']) !== '') {
+                if ($joinParent === '') $joinParent = " LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id";
+                $extraWhere .= " AND pp.project_name LIKE '%" . $this->quote($searchFilters['project_name']) . "%'";
+            }
+            if (isset($searchFilters['contact_name']) && trim($searchFilters['contact_name']) !== '') {
+                if ($joinParent === '') $joinParent = " LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id";
+                $extraWhere .= " AND pp.contact_name LIKE '%" . $this->quote($searchFilters['contact_name']) . "%'";
+            }
+            // team_id / team_ids (nhiều team: dự án thuộc bất kỳ team nào trong danh sách)
+            if (!empty($searchFilters['team_ids']) && is_array($searchFilters['team_ids'])) {
+                $teamIds = array_values(array_unique(array_filter(array_map('intval', $searchFilters['team_ids']))));
+                if (!empty($teamIds)) {
+                    $conds = array_map(function ($tid) { return "FIND_IN_SET(" . $tid . ", p.teams) > 0"; }, $teamIds);
+                    $extraWhere .= " AND (" . implode(" OR ", $conds) . ")";
+                }
+            } elseif (isset($searchFilters['team_id']) && intval($searchFilters['team_id']) > 0) {
+                $team_id = intval($searchFilters['team_id']);
+                $extraWhere .= " AND FIND_IN_SET(" . $team_id . ", p.teams) > 0";
+            }
+            // tantou (担当会社: CAILY / GUIS)
+            if (isset($searchFilters['tantou']) && in_array($searchFilters['tantou'], ['CAILY','GUIS'], true)) {
+                $extraWhere .= " AND p.tantou = '" . $this->quote($searchFilters['tantou']) . "'";
+            }
+            // person_name (nhiều tên: Thom,Hoàng – dự án phải có TẤT CẢ các người tham gia)
+            if (isset($searchFilters['person_name']) && trim($searchFilters['person_name']) !== '') {
+                $personRaw = trim($searchFilters['person_name']);
+                $personParts = array_map('trim', preg_split('/[\s,]+/', $personRaw, -1, PREG_SPLIT_NO_EMPTY));
+                $personParts = array_unique(array_filter($personParts));
+                foreach ($personParts as $oneName) {
+                    if ($oneName === '') continue;
+                    $person = $this->quote($oneName);
+                    $extraWhere .= " AND EXISTS (
+                        SELECT 1
+                        FROM " . DB_PREFIX . "project_members pm_person
+                        LEFT JOIN " . DB_PREFIX . "user u_person ON pm_person.user_id = u_person.id
+                        WHERE pm_person.project_id = p.id
+                          AND u_person.realname LIKE '%" . $person . "%'
+                    )";
+                }
+            }
+            // overdue: end_date < NOW() và status chưa completed/cancelled/deleted
+            if (isset($searchFilters['overdue']) && $searchFilters['overdue']) {
+                $now = date('Y-m-d H:i:s');
+                $extraWhere .= " AND (p.end_date IS NOT NULL AND p.end_date < '" . $this->quote($now) . "' AND p.status NOT IN ('completed','cancelled','deleted'))";
+            }
+            // Date filters (ngày cụ thể hoặc khoảng thời gian) – áp dụng giống logic trong getForAiContext
+            if (isset($searchFilters['date']) && !empty($searchFilters['date'])) {
+                $date = trim($searchFilters['date']);
+                if (preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date)) {
+                    $dateStart = $date . ' 00:00:00';
+                    $dateEnd = $date . ' 23:59:59';
+                    $extraWhere .= " AND (p.start_date IS NOT NULL AND p.start_date <= '" . $this->quote($dateEnd) . "' AND (p.end_date IS NULL OR p.end_date >= '" . $this->quote($dateStart) . "'))";
+                }
+            } elseif (isset($searchFilters['date_start']) && isset($searchFilters['date_end']) && preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', trim($searchFilters['date_start'])) && preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', trim($searchFilters['date_end']))) {
+                $rangeStart = trim($searchFilters['date_start']) . ' 00:00:00';
+                $rangeEnd = trim($searchFilters['date_end']) . ' 23:59:59';
+                $extraWhere .= " AND (p.start_date IS NOT NULL AND p.start_date <= '" . $this->quote($rangeEnd) . "' AND (p.end_date IS NULL OR p.end_date >= '" . $this->quote($rangeStart) . "'))";
+            } elseif (isset($searchFilters['date_type']) && !empty($searchFilters['date_type'])) {
+                $dateType = trim($searchFilters['date_type']);
+                $today = date('Y-m-d');
+                switch ($dateType) {
+                    case 'yesterday':
+                        $yesterday = date('Y-m-d', strtotime('-1 day'));
+                        $dateStart = $yesterday . ' 00:00:00';
+                        $dateEnd = $yesterday . ' 23:59:59';
+                        $extraWhere .= " AND (p.start_date IS NOT NULL AND p.start_date <= '" . $this->quote($dateEnd) . "' AND (p.end_date IS NULL OR p.end_date >= '" . $this->quote($dateStart) . "'))";
+                        break;
+                    case 'today':
+                        $dateStart = $today . ' 00:00:00';
+                        $dateEnd = $today . ' 23:59:59';
+                        $extraWhere .= " AND (p.start_date IS NOT NULL AND p.start_date <= '" . $this->quote($dateEnd) . "' AND (p.end_date IS NULL OR p.end_date >= '" . $this->quote($dateStart) . "'))";
+                        break;
+                    case 'tomorrow':
+                        $tomorrow = date('Y-m-d', strtotime('+1 day'));
+                        $dateStart = $tomorrow . ' 00:00:00';
+                        $dateEnd = $tomorrow . ' 23:59:59';
+                        $extraWhere .= " AND (p.start_date IS NOT NULL AND p.start_date <= '" . $this->quote($dateEnd) . "' AND (p.end_date IS NULL OR p.end_date >= '" . $this->quote($dateStart) . "'))";
+                        break;
+                    case 'this_week':
+                        $weekStart = date('Y-m-d', strtotime('monday this week'));
+                        $weekEnd = date('Y-m-d', strtotime('sunday this week'));
+                        $extraWhere .= " AND (DATE(p.start_date) <= '" . $this->quote($weekEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($weekStart) . "' OR p.end_date IS NULL))";
+                        break;
+                    case 'last_week':
+                        $lastWeekStart = date('Y-m-d', strtotime('monday last week'));
+                        $lastWeekEnd = date('Y-m-d', strtotime('sunday last week'));
+                        $extraWhere .= " AND (DATE(p.start_date) <= '" . $this->quote($lastWeekEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($lastWeekStart) . "' OR p.end_date IS NULL))";
+                        break;
+                    case 'next_week':
+                        $nextWeekStart = date('Y-m-d', strtotime('monday next week'));
+                        $nextWeekEnd = date('Y-m-d', strtotime('sunday next week'));
+                        $extraWhere .= " AND (DATE(p.start_date) <= '" . $this->quote($nextWeekEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($nextWeekStart) . "' OR p.end_date IS NULL))";
+                        break;
+                    case 'this_month':
+                        $monthStart = date('Y-m-01');
+                        $monthEnd = date('Y-m-t');
+                        $extraWhere .= " AND (DATE(p.start_date) <= '" . $this->quote($monthEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($monthStart) . "' OR p.end_date IS NULL))";
+                        break;
+                    case 'last_month':
+                        $lastMonthStart = date('Y-m-01', strtotime('first day of last month'));
+                        $lastMonthEnd = date('Y-m-t', strtotime('last day of last month'));
+                        $extraWhere .= " AND (DATE(p.start_date) <= '" . $this->quote($lastMonthEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($lastMonthStart) . "' OR p.end_date IS NULL))";
+                        break;
+                    case 'next_month':
+                        $nextMonthStart = date('Y-m-01', strtotime('first day of next month'));
+                        $nextMonthEnd = date('Y-m-t', strtotime('last day of next month'));
+                        $extraWhere .= " AND (DATE(p.start_date) <= '" . $this->quote($nextMonthEnd) . "' AND (DATE(p.end_date) >= '" . $this->quote($nextMonthStart) . "' OR p.end_date IS NULL))";
+                        break;
+                }
+            }
+        }
+
+        $baseWhereWithFilters = $baseWhere . $extraWhere;
+        $fromClause = "FROM " . $this->table . " p " . $joinParent . " " . $baseWhereWithFilters;
+
+        // Khi có statusFilter, active và completed phải phản ánh đúng theo filter
+        // Nếu statusFilter = 'in_progress', thì active = total và completed = 0
+        // Nếu statusFilter = 'completed', thì active = 0 và completed = total
+        // Nếu không có statusFilter, tính như bình thường
+        $overviewSql = "";
+        $byDeptSql = "";
+        if ($statusFilter !== null && $statusFilter !== '') {
+            // Có statusFilter → active và completed phải phản ánh đúng theo filter
+            if ($statusFilter === 'in_progress') {
+                $overviewSql =
+                    "SELECT COUNT(*) as total, " .
+                    "COUNT(*) as active, " .
+                    "0 as completed " .
+                    $fromClause;
+            } elseif ($statusFilter === 'completed') {
+                $overviewSql =
+                    "SELECT COUNT(*) as total, " .
+                    "0 as active, " .
+                    "COUNT(*) as completed " .
+                    $fromClause;
+            } elseif ($statusFilter === 'not_started') {
+                // "Chưa tiến hành" → total = số dự án chưa bắt đầu, active/completed = 0
+                $overviewSql =
+                    "SELECT COUNT(*) as total, " .
+                    "0 as active, " .
+                    "0 as completed " .
+                    $fromClause;
+            } else {
+                // Status khác → active = total (vì đã filter theo status đó), completed = 0
+                $overviewSql =
+                    "SELECT COUNT(*) as total, " .
+                    "COUNT(*) as active, " .
+                    "0 as completed " .
+                    $fromClause;
+            }
+        } else {
+            // Không có statusFilter → tính như bình thường
+            $overviewSql =
+                "SELECT COUNT(*) as total, " .
+                "SUM(CASE WHEN p.status NOT IN ('completed','cancelled','deleted') THEN 1 ELSE 0 END) as active, " .
+                "SUM(CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END) as completed " .
+                $fromClause;
+        }
+        $byDeptSql =
+            "SELECT d.id as department_id, d.name as department_name, COUNT(*) as count " .
+            "FROM " . $this->table . " p " .
+            $joinParent .
+            " LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id " .
+            $baseWhereWithFilters . " GROUP BY p.department_id, d.id, d.name ORDER BY count DESC";
+
+        // Thực thi SQL
+        $overview = $this->fetchOne($overviewSql);
+        $by_department = $this->fetchAll($byDeptSql);
+
+        return ['overview' => $overview ?: [], 'by_department' => $by_department ?: []];
+    }
+
+    /**
      * Validate and ensure UTF-8 MB4 compatibility for strings containing emojis
      */
     private function validateUTF8MB4($str) {
@@ -617,35 +1229,35 @@ class Project extends ApplicationModel {
         if (isset($_POST['custom_fields']) && $_POST['custom_fields'] != '') {
             $data['custom_fields'] = $_POST['custom_fields'];
         }
-        if(isset($_POST['start_date']) && $_POST['start_date'] != ''){
-            $data['start_date'] = date('Y-m-d H:i', strtotime($_POST['start_date']));
+        if (isset($_POST['start_date']) && $_POST['start_date'] != '') {
+            $data['start_date'] = $this->normalize_datetime_with_default($_POST['start_date'], '09:00');
         }
-        if(isset($_POST['actual_end_date']) && $_POST['actual_end_date'] != ''){
-            $data['actual_end_date'] = date('Y-m-d H:i', strtotime($_POST['actual_end_date']));
+        if (isset($_POST['actual_end_date']) && $_POST['actual_end_date'] != '') {
+            $data['actual_end_date'] = $this->normalize_datetime_with_default($_POST['actual_end_date'], '18:00');
         }
-        if(isset($_POST['end_date']) && $_POST['end_date'] != ''){
-            $data['end_date'] = date('Y-m-d H:i', strtotime($_POST['end_date']));
+        if (isset($_POST['end_date']) && $_POST['end_date'] != '') {
+            $data['end_date'] = $this->normalize_datetime_with_default($_POST['end_date'], '18:00');
         }
 
-        // 担当, CAILY納期, GUIS納期 (child project)
+        // 担当, CAILY納期, GUIS納期 (child project) — date-only → 18:00
         if (array_key_exists('tantou', $_POST)) {
             $data['tantou'] = (isset($_POST['tantou']) && in_array($_POST['tantou'], ['CAILY', 'GUIS'], true)) ? $_POST['tantou'] : null;
         }
         if (array_key_exists('caily_nouki', $_POST)) {
             $val = isset($_POST['caily_nouki']) ? trim($_POST['caily_nouki']) : '';
             if ($val !== '') {
-                $timestamp = strtotime($val);
-                if ($timestamp !== false) {
-                    $data['caily_nouki'] = date('Y-m-d H:i', $timestamp);
+                $parsed = $this->normalize_datetime_with_default($val, '18:00');
+                if ($parsed !== null) {
+                    $data['caily_nouki'] = $parsed;
                 }
             }
         }
         if (array_key_exists('guis_nouki', $_POST)) {
             $val = isset($_POST['guis_nouki']) ? trim($_POST['guis_nouki']) : '';
             if ($val !== '') {
-                $timestamp = strtotime($val);
-                if ($timestamp !== false) {
-                    $data['guis_nouki'] = date('Y-m-d H:i', $timestamp);
+                $parsed = $this->normalize_datetime_with_default($val, '18:00');
+                if ($parsed !== null) {
+                    $data['guis_nouki'] = $parsed;
                 }
             }
         }
@@ -768,32 +1380,82 @@ class Project extends ApplicationModel {
     function update() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
+        // Phase 4.1 – Permission check for project update (AI-triggered or any caller)
+        if (!$this->canUserEditProject($id)) {
+            return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
+        }
         $old = $this->getById($id);
-        
-        // Validate and sanitize input to ensure UTF-8 MB4 compatibility
-        $name = isset($_POST['name']) ? $this->validateUTF8MB4($_POST['name']) : '';
-        $description = isset($_POST['description']) ? $this->validateUTF8MB4($_POST['description']) : '';
-        
+        if (!$old) {
+            return ['status' => 'error', 'error' => 'Project not found'];
+        }
+
+        // Sensitive fields (amount, name, start_date, end_date, caily_nouki, guis_nouki, tantou) require project_manager or administrator
+        $sensitiveFields = ['amount', 'name', 'start_date', 'end_date', 'caily_nouki', 'guis_nouki', 'tantou'];
+        $changingSensitive = false;
+        foreach ($sensitiveFields as $field) {
+            if (!array_key_exists($field, $_POST)) {
+                continue;
+            }
+            $newVal = isset($_POST[$field]) ? trim((string)$_POST[$field]) : '';
+            $oldVal = isset($old[$field]) ? $old[$field] : '';
+            if ($field === 'amount') {
+                if (floatval($_POST[$field]) != floatval($oldVal)) {
+                    $changingSensitive = true;
+                    break;
+                }
+            } elseif ($newVal !== (is_string($oldVal) ? trim($oldVal) : (string)$oldVal)) {
+                $changingSensitive = true;
+                break;
+            }
+        }
+        if ($changingSensitive && !$this->canUserEditProjectSensitiveFields($id)) {
+            return ['status' => 'error', 'error' => 'Forbidden: only project_manager or administrator can change amount, name, dates (start_date, end_date, caily_nouki, guis_nouki), or tantou', 'http_status' => 403];
+        }
+
+        // Chỉ cập nhật các trường có trong request; trường không gửi lên không bị ghi đè
         $data = array(
-            'name' => $name,
-            'description' => $description,
-            'building_branch' => isset($_POST['building_branch']) ? $_POST['building_branch'] : '',
-            'building_size' => isset($_POST['building_size']) ? $_POST['building_size'] : '',
-            'building_type' => isset($_POST['building_type']) ? $_POST['building_type'] : '',
-            'building_number' => isset($_POST['building_number']) ? $_POST['building_number'] : '',
-            'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
-            // progress はリクエストに含まれる場合のみ更新（parent_project/detail.php の編集では送らない → 上書きしない）
-            'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
-            // teams はリクエストに含まれる場合のみ更新（parent_project/detail.php の編集では送らない → 上書きしない）
-            'project_order_type' => isset($_POST['project_order_type']) ? $_POST['project_order_type'] : '',
-            'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
-            // amount はリクエストに含まれる場合のみ更新（project/detail.php の保存では送らない → 上書きしない / parent_project/detail.php では送る → 更新する）
-            'estimate_status' => isset($_POST['estimate_status']) ? $_POST['estimate_status'] : '未発行',
-            'invoice_status' => isset($_POST['invoice_status']) ? $_POST['invoice_status'] : '未発行',
-            'tags' => isset($_POST['tags']) ? $_POST['tags'] : '',
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => $_SESSION['userid']
         );
+        if (array_key_exists('name', $_POST)) {
+            $data['name'] = $this->validateUTF8MB4($_POST['name']);
+        }
+        if (array_key_exists('description', $_POST)) {
+            $data['description'] = $this->validateUTF8MB4($_POST['description']);
+        }
+        if (array_key_exists('building_branch', $_POST)) {
+            $data['building_branch'] = $_POST['building_branch'];
+        }
+        if (array_key_exists('building_size', $_POST)) {
+            $data['building_size'] = $_POST['building_size'];
+        }
+        if (array_key_exists('building_type', $_POST)) {
+            $data['building_type'] = $_POST['building_type'];
+        }
+        if (array_key_exists('building_number', $_POST)) {
+            $data['building_number'] = $_POST['building_number'];
+        }
+        if (array_key_exists('project_number', $_POST)) {
+            $data['project_number'] = $_POST['project_number'];
+        }
+        if (array_key_exists('status', $_POST)) {
+            $data['status'] = $_POST['status'];
+        }
+        if (array_key_exists('project_order_type', $_POST)) {
+            $data['project_order_type'] = $_POST['project_order_type'];
+        }
+        if (array_key_exists('priority', $_POST)) {
+            $data['priority'] = $_POST['priority'];
+        }
+        if (array_key_exists('estimate_status', $_POST)) {
+            $data['estimate_status'] = $_POST['estimate_status'];
+        }
+        if (array_key_exists('invoice_status', $_POST)) {
+            $data['invoice_status'] = $_POST['invoice_status'];
+        }
+        if (array_key_exists('tags', $_POST)) {
+            $data['tags'] = $_POST['tags'];
+        }
         if (array_key_exists('amount', $_POST)) {
             $data['amount'] = floatval($_POST['amount']);
         }
@@ -803,42 +1465,38 @@ class Project extends ApplicationModel {
         if (array_key_exists('progress', $_POST)) {
             $data['progress'] = intval($_POST['progress']);
         }
-        
-        // Add department_id and parent_project_id support for child projects
-        if (isset($_POST['department_id'])) {
+        if (array_key_exists('department_id', $_POST)) {
             $data['department_id'] = intval($_POST['department_id']);
         }
-        if (isset($_POST['parent_project_id'])) {
+        if (array_key_exists('parent_project_id', $_POST)) {
             $data['parent_project_id'] = intval($_POST['parent_project_id']);
         }
-        if (isset($_POST['is_kadai'])) {
+        if (array_key_exists('is_kadai', $_POST)) {
             $data['is_kadai'] = intval($_POST['is_kadai']);
         }
-        
-        // Save custom field set id and custom fields JSON if provided
-        if (isset($_POST['department_custom_fields_set_id']) && $_POST['department_custom_fields_set_id'] != '') {
+        if (array_key_exists('department_custom_fields_set_id', $_POST) && $_POST['department_custom_fields_set_id'] != '') {
             $data['department_custom_fields_set_id'] = $_POST['department_custom_fields_set_id'];
         }
-        if (isset($_POST['custom_fields']) && $_POST['custom_fields'] != '') {
+        if (array_key_exists('custom_fields', $_POST) && $_POST['custom_fields'] != '') {
             $data['custom_fields'] = $_POST['custom_fields'];
         }
-        if(isset($_POST['start_date']) && $_POST['start_date'] != ''){
-            $data['start_date'] = date('Y-m-d H:i', strtotime($_POST['start_date']));
+        if (array_key_exists('start_date', $_POST) && $_POST['start_date'] != '') {
+            $data['start_date'] = $this->normalize_datetime_with_default($_POST['start_date'], '09:00');
         }
-        if(isset($_POST['end_date']) && $_POST['end_date'] != ''){
-            $data['end_date'] = date('Y-m-d H:i', strtotime($_POST['end_date']));
+        if (array_key_exists('end_date', $_POST) && $_POST['end_date'] != '') {
+            $data['end_date'] = $this->normalize_datetime_with_default($_POST['end_date'], '18:00');
         }
         if (array_key_exists('tantou', $_POST)) {
-            $data['tantou'] = (isset($_POST['tantou']) && in_array($_POST['tantou'], ['CAILY', 'GUIS'], true)) ? $_POST['tantou'] : null;
+            $data['tantou'] = (isset($_POST['tantou']) && $_POST['tantou'] !== '' && in_array($_POST['tantou'], ['CAILY', 'GUIS'], true)) ? $_POST['tantou'] : null;
         }
-        // Handle datetime fields - set to null if empty, otherwise format
+        // Handle datetime fields - start_date 9:00, end/nouki/actual_end 18:00 when date-only
         $nullDatetimeFields = [];
         if (array_key_exists('caily_nouki', $_POST)) {
             $val = isset($_POST['caily_nouki']) ? trim($_POST['caily_nouki']) : '';
             if ($val !== '') {
-                $timestamp = strtotime($val);
-                if ($timestamp !== false) {
-                    $data['caily_nouki'] = date('Y-m-d H:i', $timestamp);
+                $parsed = $this->normalize_datetime_with_default($val, '18:00');
+                if ($parsed !== null) {
+                    $data['caily_nouki'] = $parsed;
                 } else {
                     $nullDatetimeFields[] = 'caily_nouki';
                 }
@@ -849,9 +1507,9 @@ class Project extends ApplicationModel {
         if (array_key_exists('guis_nouki', $_POST)) {
             $val = isset($_POST['guis_nouki']) ? trim($_POST['guis_nouki']) : '';
             if ($val !== '') {
-                $timestamp = strtotime($val);
-                if ($timestamp !== false) {
-                    $data['guis_nouki'] = date('Y-m-d H:i', $timestamp);
+                $parsed = $this->normalize_datetime_with_default($val, '18:00');
+                if ($parsed !== null) {
+                    $data['guis_nouki'] = $parsed;
                 } else {
                     $nullDatetimeFields[] = 'guis_nouki';
                 }
@@ -862,9 +1520,9 @@ class Project extends ApplicationModel {
         if (array_key_exists('actual_end_date', $_POST)) {
             $val = isset($_POST['actual_end_date']) ? trim($_POST['actual_end_date']) : '';
             if ($val !== '') {
-                $timestamp = strtotime($val);
-                if ($timestamp !== false) {
-                    $data['actual_end_date'] = date('Y-m-d H:i', $timestamp);
+                $parsed = $this->normalize_datetime_with_default($val, '18:00');
+                if ($parsed !== null) {
+                    $data['actual_end_date'] = $parsed;
                 } else {
                     $nullDatetimeFields[] = 'actual_end_date';
                 }
@@ -872,9 +1530,9 @@ class Project extends ApplicationModel {
                 $nullDatetimeFields[] = 'actual_end_date';
             }
         }
-        
-        // Auto-set progress to 100 if status is completed
-        if ($data['status'] == 'completed') {
+
+        // Auto-set progress to 100 when status is being set to completed
+        if (isset($data['status']) && $data['status'] === 'completed') {
             $data['progress'] = 100;
         }
         
@@ -1006,10 +1664,141 @@ class Project extends ApplicationModel {
             }
         }
         if ($result) {
-            $this->logProjectAction($id, 'updated', '案件情報を変更');
+            $this->logProjectUpdateByField($id, $data, $old, $nullDatetimeFields);
             return ['status' => 'success', 'message' => 'Project updated successfully'];
         } else {
             return ['status' => 'error', 'message' => 'Update failed'];
+        }
+    }
+
+    /**
+     * Normalize datetime for comparison so that "2026-01-30 09:00:00" and "2026-01-30 09:00" are equal.
+     * Returns comparable string (Y-m-d H:i:s) or '' for empty.
+     */
+    private function normalizeDatetimeForCompare($val) {
+        if ($val === null || $val === '') {
+            return '';
+        }
+        $s = trim((string)$val);
+        if ($s === '' || preg_match('/^0000-00-00/', $s)) {
+            return '';
+        }
+        $ts = strtotime($s);
+        return ($ts !== false) ? date('Y-m-d H:i:s', $ts) : $s;
+    }
+
+    /**
+     * Rút giá trị hiển thị từ custom field (object có 'value' hoặc scalar), không trả về JSON.
+     */
+    private function customFieldValueToDisplay($val) {
+        if ($val === null) {
+            return '';
+        }
+        if (is_scalar($val)) {
+            return trim((string)$val);
+        }
+        if (is_array($val) && isset($val['value'])) {
+            $v = $val['value'];
+            return is_scalar($v) ? trim((string)$v) : '';
+        }
+        return '';
+    }
+
+    /**
+     * Log each changed field separately; append " [AI]" when update was triggered by AI.
+     * Chỉ ghi log khi dữ liệu thực sự thay đổi (datetime được chuẩn hóa để so sánh).
+     */
+    private function logProjectUpdateByField($project_id, $data, $old, $nullDatetimeFields = []) {
+        $aiLabel = (isset($_POST['_ai_triggered']) && $_POST['_ai_triggered']) ? ' [AI]' : '';
+        $datetimeFields = ['start_date', 'end_date', 'actual_end_date', 'caily_nouki', 'guis_nouki'];
+        $fieldLabels = [
+            'name' => '名前を変更',
+            'description' => '説明を変更',
+            'building_branch' => '建物支店を変更',
+            'building_size' => '建物規模を変更',
+            'building_type' => '建物タイプを変更',
+            'building_number' => '建物番号を変更',
+            'project_number' => '案件番号を変更',
+            'status' => 'ステータスを変更',
+            'project_order_type' => '受注形態を変更',
+            'priority' => '優先度を変更',
+            'estimate_status' => '見積ステータスを変更',
+            'invoice_status' => '請求ステータスを変更',
+            'tags' => 'タグを変更',
+            'amount' => '総額を変更',
+            'teams' => 'チームを変更',
+            'progress' => '進捗を変更',
+            'department_id' => '部門を変更',
+            'parent_project_id' => '親案件を変更',
+            // 'is_kadai' => '課題を変更',
+            // 'department_custom_fields_set_id' => 'カスタムフィールドセットを変更',
+            'custom_fields' => 'custom_fieldsを変更',
+            'start_date' => '開始日を変更',
+            'end_date' => '終了日を変更',
+            'tantou' => '担当を変更',
+            'caily_nouki' => 'CAILY納期を変更',
+            'guis_nouki' => 'GUIS納期を変更',
+            'actual_end_date' => '実終了日を変更',
+        ];
+        $skipKeys = ['updated_at', 'updated_by'];
+        foreach ($data as $key => $newVal) {
+            if (in_array($key, $skipKeys, true)) {
+                continue;
+            }
+            $oldVal = isset($old[$key]) ? $old[$key] : '';
+            $oldStr = is_scalar($oldVal) ? (string)$oldVal : json_encode($oldVal);
+            $newStr = is_scalar($newVal) ? (string)$newVal : json_encode($newVal);
+            
+            // custom_fields: so sánh theo từng key JSON, chỉ ghi log key nào thay đổi; chỉ lưu tên trường + giá trị mới (không lưu JSON)
+            if ($key === 'custom_fields') {
+                $oldArr = is_string($oldVal) ? (json_decode($oldVal, true) ?: []) : (is_array($oldVal) ? $oldVal : []);
+                $newArr = is_string($newVal) ? (json_decode($newVal, true) ?: []) : (is_array($newVal) ? $newVal : []);
+                $allKeys = array_unique(array_merge(array_keys($oldArr), array_keys($newArr)));
+                foreach ($allKeys as $fieldKey) {
+                    $o = array_key_exists($fieldKey, $oldArr) ? $oldArr[$fieldKey] : null;
+                    $n = array_key_exists($fieldKey, $newArr) ? $newArr[$fieldKey] : null;
+                    $oStr = $o === null ? '' : (is_scalar($o) ? (string)$o : json_encode($o));
+                    $nStr = $n === null ? '' : (is_scalar($n) ? (string)$n : json_encode($n));
+                    if ($oStr !== $nStr) {
+                        $note = (isset($fieldLabels[$key]) ? $fieldLabels[$key] : $key . 'を変更') . ' (' . $fieldKey . ')';
+                        $labelDisplay = (is_array($n) && isset($n['label'])) ? trim((string)$n['label']) : ((is_array($o) && isset($o['label'])) ? trim((string)$o['label']) : '');
+                        $newDisplay = $this->customFieldValueToDisplay($n);
+                        $this->logProjectAction($project_id, 'updated', $note . $aiLabel, $labelDisplay, $newDisplay);
+                    }
+                }
+                continue;
+            }
+            
+            // Nếu là teams, convert IDs thành names
+            if ($key === 'teams') {
+                $oldStr = $this->convertTeamIdsToNames($oldStr);
+                $newStr = $this->convertTeamIdsToNames($newStr);
+            }
+            
+            $changed = false;
+            if (in_array($key, $datetimeFields, true)) {
+                $oldNorm = $this->normalizeDatetimeForCompare($oldVal);
+                $newNorm = $this->normalizeDatetimeForCompare($newVal);
+                $changed = ($oldNorm !== $newNorm);
+            } else {
+                $changed = ($oldStr !== $newStr);
+            }
+            if ($changed) {
+                $note = isset($fieldLabels[$key]) ? $fieldLabels[$key] : $key . 'を変更';
+                // Không lưu nội dung origin/thay đổi cho một số trường (vd: description)
+                $noValueLogFields = ['description'];
+                $v1 = in_array($key, $noValueLogFields, true) ? '' : $oldStr;
+                $v2 = in_array($key, $noValueLogFields, true) ? '' : $newStr;
+                $this->logProjectAction($project_id, 'updated', $note . $aiLabel, $v1, $v2);
+            }
+        }
+        foreach ($nullDatetimeFields as $field) {
+            $oldVal = isset($old[$field]) ? $old[$field] : '';
+            if ($this->normalizeDatetimeForCompare($oldVal) === '') {
+                continue; // Cũ đã rỗng, không coi là thay đổi
+            }
+            $note = isset($fieldLabels[$field]) ? $fieldLabels[$field] : $field . 'を変更';
+            $this->logProjectAction($project_id, 'updated', $note . $aiLabel, (string)$oldVal, '');
         }
     }
 
@@ -1017,6 +1806,10 @@ class Project extends ApplicationModel {
     function delete() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
+        // Phase 4.1 – Permission check for project delete (AI-triggered or any caller)
+        if (!$this->canUserEditProject($id)) {
+            return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
+        }
         $old = $this->getById($id);
         $result = $this->query_update(['status' => 'deleted'], ['id' => $id]);
         if ($result) {
@@ -1060,10 +1853,14 @@ class Project extends ApplicationModel {
         return $this->fetchAll($query);
     }
 
+    /**
+     * Add a member to project. project_members: user_id = numeric (user.id), userid = string (user.userid).
+     * @param int $project_id
+     * @param int $user_id user.id (numeric), not userid string
+     * @param string $username user.userid (string login), for project_members.userid
+     */
     function addMember($project_id, $user_id, $username, $role = 'member', $log = true) {
-        
         if(!$user_id) return false;
-        
         // If username is not provided, get it from user_id
         if (!$username) {
             $user = $this->fetchOne("SELECT userid FROM " . DB_PREFIX . "user WHERE id = " . intval($user_id));
@@ -1095,8 +1892,19 @@ class Project extends ApplicationModel {
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
         
         if ($result && $log) {
-            // Log the action
-            $this->logProjectAction($project_id, 'member_added', 'メンバー追加', '', '');
+            // Lấy tên user để log chi tiết hơn
+            $user = $this->fetchOne("SELECT realname FROM " . DB_PREFIX . "user WHERE id = " . intval($user_id));
+            $userName = isset($user['realname']) ? $user['realname'] : '';
+            
+            // Xác định là AI hay manual
+            $isAi = (isset($_POST['_ai_triggered']) && $_POST['_ai_triggered']) ? true : false;
+            $sourceLabel = $isAi ? '[AI]' : '[手動]';
+            
+            // Format note với tên user và role
+            $roleLabel = ($role === 'manager') ? 'マネージャー' : 'メンバー';
+            $note = $userName ? "メンバー追加 $sourceLabel: {$userName} ({$roleLabel})" : "メンバー追加 $sourceLabel: {$roleLabel}";
+            
+            $this->logProjectAction($project_id, 'member_added', $note, '', '');
         }
         
         return $result;
@@ -1119,6 +1927,10 @@ class Project extends ApplicationModel {
                 'status' => 'error',
                 'message' => 'Project ID and User ID are required'
             ];
+        }
+        // Phase 4.3 – Permission check for project member/team assignment
+        if (!$this->canUserEditProject($project_id)) {
+            return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
         }
         
         // Get project to check department
@@ -1166,17 +1978,25 @@ class Project extends ApplicationModel {
             ];
         }
         
-        // Check if member already exists
+        // Check if member already exists; allow changing role (member <-> manager)
         $existing = $this->fetchOne(
-            "SELECT id FROM " . DB_PREFIX . "project_members " .
+            "SELECT id, role FROM " . DB_PREFIX . "project_members " .
             "WHERE project_id = " . intval($project_id) . " " .
             "AND user_id = " . intval($user_id)
         );
         if ($existing) {
-            return [
-                'status' => 'error',
-                'message' => 'User is already a member of this project'
-            ];
+            $currentRole = isset($existing['role']) ? $existing['role'] : 'member';
+            $newRole = ($role === 'manager') ? 'manager' : 'member';
+            if ($currentRole === $newRole) {
+                return [
+                    'status' => 'success',
+                    'message' => 'User already has this role'
+                ];
+            }
+            $result = $this->updateMemberRole($project_id, $user_id, $newRole);
+            return $result
+                ? ['status' => 'success', 'message' => 'Role updated to ' . $newRole]
+                : ['status' => 'error', 'message' => 'Failed to update role'];
         }
 
         // Call the original addMember method
@@ -1195,12 +2015,77 @@ class Project extends ApplicationModel {
         ];
     }
 
-    function removeMember($project_id, $user_id) {
+    /**
+     * Update a project member's role (member <-> manager).
+     * @param int $project_id
+     * @param int $user_id user.id (numeric)
+     * @param string $role 'member' or 'manager'
+     */
+    function updateMemberRole($project_id, $user_id, $role) {
+        $role = ($role === 'manager') ? 'manager' : 'member';
         $this->table = DB_PREFIX . 'project_members';
-        $result = $this->query_delete(['project_id' => $project_id, 'user_id' => $user_id]);
+        
+        // Lấy role cũ và tên user trước khi update
+        $existing = $this->fetchOne(
+            "SELECT pm.role, u.realname " .
+            "FROM " . DB_PREFIX . "project_members pm " .
+            "LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id " .
+            "WHERE pm.project_id = " . intval($project_id) . " AND pm.user_id = " . intval($user_id)
+        );
+        $oldRole = isset($existing['role']) ? $existing['role'] : '';
+        $userName = isset($existing['realname']) ? $existing['realname'] : '';
+        
+        $result = $this->query_update(
+            ['role' => $role],
+            ['project_id' => intval($project_id), 'user_id' => intval($user_id)]
+        );
+        $this->table = DB_PREFIX . 'projects';
+        if ($result) {
+            // Xác định là AI hay manual
+            $isAi = (isset($_POST['_ai_triggered']) && $_POST['_ai_triggered']) ? true : false;
+            $sourceLabel = $isAi ? '[AI]' : '';
+            
+            // Format note với tên user và role
+            $roleLabel = ($role === 'manager') ? 'マネージャー' : 'メンバー';
+            $oldRoleLabel = ($oldRole === 'manager') ? 'マネージャー' : 'メンバー';
+            $note = $userName ? "権限変更 $sourceLabel: {$userName} ({$oldRoleLabel} → {$roleLabel})" : "権限変更 $sourceLabel: {$oldRoleLabel} → {$roleLabel}";
+            
+            $this->logProjectAction($project_id, 'member_role_updated', $note, $oldRole, $role);
+        }
+        return $result;
+    }
+
+    /**
+     * Remove a member from project. $user_id = numeric id (user.id), not userid string.
+     * project_members: user_id = numeric, userid = string login.
+     */
+    function removeMember($project_id, $user_id) {
+        // Lấy thông tin user và role trước khi xóa để log
+        $existing = $this->fetchOne(
+            "SELECT pm.role, u.realname " .
+            "FROM " . DB_PREFIX . "project_members pm " .
+            "LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id " .
+            "WHERE pm.project_id = " . intval($project_id) . " AND pm.user_id = " . intval($user_id)
+        );
+        $role = isset($existing['role']) ? $existing['role'] : '';
+        $userName = isset($existing['realname']) ? $existing['realname'] : '';
+        
+        $this->table = DB_PREFIX . 'project_members';
+        $result = $this->query_delete(['project_id' => intval($project_id), 'user_id' => intval($user_id)]);
         $this->table = DB_PREFIX . 'projects'; // Reset table back to projects
-        // if ($result) {
-        // }
+        
+        if ($result) {
+            // Xác định là AI hay manual
+            $isAi = (isset($_POST['_ai_triggered']) && $_POST['_ai_triggered']) ? true : false;
+            $sourceLabel = $isAi ? '[AI]' : '';
+            
+            // Format note với tên user và role
+            $roleLabel = ($role === 'manager') ? 'マネージャー' : 'メンバー';
+            $note = $userName ? "メンバー削除 $sourceLabel: {$userName} ({$roleLabel})" : "メンバー削除 $sourceLabel: {$roleLabel}";
+            
+            $this->logProjectAction($project_id, 'member_removed', $note, '', '');
+        }
+        
         return $result;
     }
 
@@ -1341,6 +2226,63 @@ class Project extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s')
         );
         return $this->query_update($data, ['id' => $id]);
+    }
+
+    /**
+     * Update project status from AI/API (checks canUserEditProject).
+     * @param int $project_id
+     * @param string $status draft|open|confirming|quotation|contract|in_progress|completed|paused|cancelled
+     * @return array ['status'=>'success'|'error', 'message'|'error'=>...]
+     */
+    public function updateStatusForAi($project_id, $status) {
+        $project_id = intval($project_id);
+        $status = trim((string) $status);
+        $allowed = ['draft', 'open', 'confirming', 'quotation', 'contract', 'in_progress', 'completed', 'paused', 'cancelled'];
+        if ($project_id <= 0 || !in_array($status, $allowed, true)) {
+            return ['status' => 'error', 'error' => 'Invalid project_id or status'];
+        }
+        if (!$this->canUserEditProject($project_id)) {
+            return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
+        }
+        $proj = $this->getById($project_id);
+        if (!$proj) {
+            return ['status' => 'error', 'error' => 'Project not found'];
+        }
+        $_POST['id'] = $project_id;
+        $_POST['status'] = $status;
+        $_POST['name'] = isset($proj['name']) ? $proj['name'] : '';
+        $_POST['project_number'] = isset($proj['project_number']) ? $proj['project_number'] : '';
+        return $this->updateStatus(null);
+    }
+
+    /**
+     * Update only 受注形態 (project_order_type) for a project. Used by AI execute_action.
+     * @param int $project_id
+     * @param string $project_order_type e.g. 修正, 契約図, 新規, その他
+     */
+    public function updateProjectOrderTypeForAi($project_id, $project_order_type) {
+        $project_id = intval($project_id);
+        $project_order_type = trim((string) $project_order_type);
+        if ($project_id <= 0) {
+            return ['status' => 'error', 'error' => 'Invalid project_id'];
+        }
+        if (!$this->canUserEditProject($project_id)) {
+            return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
+        }
+        $proj = $this->getById($project_id);
+        if (!$proj) {
+            return ['status' => 'error', 'error' => 'Project not found'];
+        }
+        $this->table = DB_PREFIX . 'projects';
+        $ok = $this->query_update(
+            [
+                'project_order_type' => $project_order_type,
+                'updated_at' => date('Y-m-d H:i:s'),
+                'updated_by' => $_SESSION['userid']
+            ],
+            ['id' => $project_id]
+        );
+        return $ok ? ['status' => 'success', 'message' => '受注形態を更新しました'] : ['status' => 'error', 'error' => 'Update failed'];
     }
 
     function updateStatus($params = null) {
@@ -2613,7 +3555,26 @@ class Project extends ApplicationModel {
         return $logs;
     }
 
-    // Ghi log hành động dự án
+    /**
+     * Convert comma-separated team IDs to comma-separated team names.
+     * @param string $teamIds Comma-separated team IDs (e.g. "1,2,3" or "")
+     * @return string Comma-separated team names (e.g. "Team A, Team B, Team C" or "")
+     */
+    private function convertTeamIdsToNames($teamIds) {
+        if (empty($teamIds) || trim($teamIds) === '') {
+            return '';
+        }
+        $ids = array_filter(array_map('intval', explode(',', $teamIds)));
+        if (empty($ids)) {
+            return '';
+        }
+        $idsStr = implode(',', $ids);
+        $query = "SELECT GROUP_CONCAT(name SEPARATOR ', ') as team_names FROM " . DB_PREFIX . "team WHERE id IN (" . $idsStr . ")";
+        $result = $this->fetchOne($query);
+        return isset($result['team_names']) ? $result['team_names'] : '';
+    }
+
+    // Ghi log hành động dự án (xóa thành viên, xóa manager, thay đổi team, v.v.)
     private function logProjectAction($project_id, $action, $note = '', $value1 = '', $value2 = '') {
         $user_id = $_SESSION['userid'] ?? '';
         $username = $_SESSION['realname'] ?? '';
@@ -2627,9 +3588,14 @@ class Project extends ApplicationModel {
             'value2' => $value2,
             'time' => date('Y-m-d H:i:s')
         ];
-        $this->table = DB_PREFIX . 'project_logs';
-        $this->query_insert($data);
-        $this->table = DB_PREFIX . 'projects'; // reset lại table
+        try {
+            $this->table = DB_PREFIX . 'project_logs';
+            $this->query_insert($data);
+            $this->table = DB_PREFIX . 'projects'; // reset lại table
+        } catch (Exception $e) {
+            error_log('Project log insert failed: ' . $e->getMessage() . ' [project_id=' . $project_id . ', action=' . $action . ']');
+            $this->table = DB_PREFIX . 'projects';
+        }
     }
 
     // Attachment management methods
@@ -3794,10 +4760,27 @@ class Project extends ApplicationModel {
     }
 
     /**
+     * Normalize date/datetime from POST: if value is date-only (YYYY-MM-DD) append default time; else parse with strtotime.
+     * Start date → 09:00, deadline/end date → 18:00.
+     */
+    private function normalize_datetime_with_default($value, $defaultTime) {
+        $value = trim($value ?? '');
+        if ($value === '') {
+            return null;
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return $value . ' ' . $defaultTime;
+        }
+        $ts = strtotime($value);
+        return $ts !== false ? date('Y-m-d H:i', $ts) : null;
+    }
+
+    /**
      * Parse date input to datetime Y-m-d H:i:s (GMT+9 / Asia/Tokyo). Same logic as ParentProject::parse_request_date_to_datetime.
      * Supports: "Mon Jun 30 22:00:00 GMT+07:00 2025" (JS Date → JST), "2025/07/09" (Y/m/d), "7/9" (m/d), "07/09/2025" (m/d/Y).
+     * @param string $defaultTime e.g. '09:00:00' for start_date, '18:00:00' for end/nouki
      */
-    private function parse_date_to_datetime($input, $year) {
+    private function parse_date_to_datetime($input, $year, $defaultTime = '00:00:00') {
         $input = trim($input ?? '');
         if ($input === '') {
             return null;
@@ -3836,7 +4819,7 @@ class Project extends ApplicationModel {
                 $y += 2000;
             }
             if ($m >= 1 && $m <= 12 && $d >= 1 && $d <= 31 && checkdate($m, $d, $y)) {
-                return sprintf('%04d-%02d-%02d 00:00:00', $y, $m, $d);
+                return sprintf('%04d-%02d-%02d %s', $y, $m, $d, $defaultTime);
             }
         }
         if (count($parts) === 2) {
@@ -3844,7 +4827,7 @@ class Project extends ApplicationModel {
             $d = (int) $parts[1];
             $y = (int) $year;
             if ($m >= 1 && $m <= 12 && $d >= 1 && $d <= 31 && checkdate($m, $d, $y)) {
-                return sprintf('%04d-%02d-%02d 00:00:00', $y, $m, $d);
+                return sprintf('%04d-%02d-%02d %s', $y, $m, $d, $defaultTime);
             }
         }
         return null;
@@ -3910,11 +4893,10 @@ class Project extends ApplicationModel {
         $year = date('Y');
 
        
-        $start_date = $this->parse_date_to_datetime(isset($params['start_date']) ? $params['start_date'] : '', $year);
-        
-        $end_date = $this->parse_date_to_datetime(isset($params['end_date']) ? $params['end_date'] : '', $year);
-        $caily_nouki = $this->parse_date_to_datetime(isset($params['caily_nouki']) ? $params['caily_nouki'] : '', $year);
-        $guis_nouki = $this->parse_date_to_datetime(isset($params['guis_nouki']) ? $params['guis_nouki'] : '', $year);
+        $start_date = $this->parse_date_to_datetime(isset($params['start_date']) ? $params['start_date'] : '', $year, '09:00:00');
+        $end_date = $this->parse_date_to_datetime(isset($params['end_date']) ? $params['end_date'] : '', $year, '18:00:00');
+        $caily_nouki = $this->parse_date_to_datetime(isset($params['caily_nouki']) ? $params['caily_nouki'] : '', $year, '18:00:00');
+        $guis_nouki = $this->parse_date_to_datetime(isset($params['guis_nouki']) ? $params['guis_nouki'] : '', $year, '18:00:00');
        
        
         $existing = $this->get_by_name_customer_order_type($name, $customer_id, $project_order_type, $end_date);
