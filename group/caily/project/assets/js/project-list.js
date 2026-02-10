@@ -200,6 +200,7 @@ var projectTable;
             filterPriority: $('#filterPriority').val(),
             filterProgress: $('#filterProgress').val(),
             filterTimeLeft: $('#filterTimeLeft').val(),
+            filterToday: $('#filterToday').val(),
             filterProjectOrderType: $('#filterProjectOrderType').val(),
             filterTeam: $('#filterTeam').val(),
             filterTantou: $('#filterTantou').val(),
@@ -256,6 +257,7 @@ var projectTable;
         if (params.has('filterPriority')) merged.filterPriority = params.get('filterPriority') || '';
         if (params.has('filterProgress')) merged.filterProgress = params.get('filterProgress') || '';
         if (params.has('filterTimeLeft')) merged.filterTimeLeft = params.get('filterTimeLeft') || '';
+        if (params.has('filterToday')) merged.filterToday = params.get('filterToday') || '';
         if (params.has('filterProjectOrderType')) merged.filterProjectOrderType = params.get('filterProjectOrderType') || '';
         if (params.has('filterTeam')) merged.filterTeam = params.get('filterTeam') || '';
         if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
@@ -297,6 +299,7 @@ var projectTable;
         if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
         if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
         if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
+        if (filters.filterToday !== undefined) $('#filterToday').val(filters.filterToday);
         if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
         if (filters.filterTeam !== undefined) $('#filterTeam').val(filters.filterTeam);
         if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
@@ -331,6 +334,7 @@ var projectTable;
             priority: filters.filterPriority || '',
             progress: filters.filterProgress || '',
             timeLeft: filters.filterTimeLeft || '',
+            today: filters.filterToday || '',
             projectOrderType: filters.filterProjectOrderType || '',
             team: filters.filterTeam || '',
             tantou: filters.filterTantou || '',
@@ -353,6 +357,7 @@ var projectTable;
             (!filters.priority || filters.priority.trim() === '') &&
             (!filters.progress || filters.progress.trim() === '') &&
             (!filters.timeLeft || filters.timeLeft.trim() === '') &&
+            (!filters.today || filters.today.trim() === '') &&
             (!filters.projectOrderType || filters.projectOrderType.trim() === '') &&
             (!filters.team || filters.team.trim() === '') &&
             (!filters.tantou || filters.tantou.trim() === '') &&
@@ -363,6 +368,43 @@ var projectTable;
         ) {
             $('#activeFilters').html('');
             return;
+        }
+        if (filters.today && filters.today.trim() !== '') {
+            const todayVal = filters.today.trim();
+            // Built-in today filters
+            if (todayVal === 'start_today' || todayVal === 'caily_today' || todayVal === 'guis_today' || todayVal === 'end_today') {
+                let labelKey = '';
+                switch (todayVal) {
+                    case 'start_today':
+                        labelKey = '開始日=本日';
+                        break;
+                    case 'caily_today':
+                        labelKey = 'CAILY納期=本日';
+                        break;
+                    case 'guis_today':
+                        labelKey = 'GUIS納期=本日';
+                        break;
+                    case 'end_today':
+                        labelKey = '終了日=本日';
+                        break;
+                }
+                if (labelKey) {
+                    const label = translateText(labelKey);
+                    badges.push(`<span class="badge bg-label-primary me-1">${label}</span>`);
+                }
+            } else if (todayVal.indexOf('cf:') === 0) {
+                // Custom datetime field today filter: value = 'cf:' + encodeURIComponent(label)
+                try {
+                    const encoded = todayVal.substring(3);
+                    const rawLabel = decodeURIComponent(encoded || '');
+                    if (rawLabel) {
+                        const text = escapeHtmlForNote(rawLabel + '=本日');
+                        badges.push(`<span class="badge bg-label-primary me-1">${text}</span>`);
+                    }
+                } catch (e) {
+                    // ignore decode error
+                }
+            }
         }
         if (filters.keyword && filters.keyword.trim() !== '') {
             badges.push(`<span class="badge bg-label-info me-1" >キーワード: ${filters.keyword}</span>`);
@@ -463,6 +505,7 @@ var projectTable;
         setOrDelete('filterPriority', filters.filterPriority);
         setOrDelete('filterProgress', filters.filterProgress);
         setOrDelete('filterTimeLeft', filters.filterTimeLeft);
+        setOrDelete('filterToday', filters.filterToday);
         setOrDelete('filterProjectOrderType', filters.filterProjectOrderType);
         setOrDelete('filterTeam', filters.filterTeam);
         setOrDelete('filterTantou', filters.filterTantou);
@@ -592,6 +635,25 @@ var projectTable;
                     width: '100px'
                 });
             });
+
+            // Bổ sung các custom datetime fields vào filter "本日フィルター"
+            var $today = $('#filterToday');
+            if ($today.length) {
+                // Xóa các option custom cũ (giữ lại option mặc định/built-in)
+                $today.find('option[data-custom-today="1"]').remove();
+                mergedFields.forEach(function(f) {
+                    if (!f || String(f.type || '').toLowerCase() !== 'datetime') return;
+                    var label = String(f.label || '').trim();
+                    if (!label) return;
+                    var value = 'cf:' + encodeURIComponent(label);
+                    var text = label + '=本日';
+                    var opt = $('<option>')
+                        .val(value)
+                        .attr('data-custom-today', '1')
+                        .text(text);
+                    $today.append(opt);
+                });
+            }
         } catch (e) {
             console.warn('Failed to load custom fields for list', e);
         }
@@ -609,6 +671,7 @@ var projectTable;
                     const filterPriority = $('#filterPriority').val();
                     const filterProgress = $('#filterProgress').val();
                     const filterTimeLeft = $('#filterTimeLeft').val();
+                    const filterToday = $('#filterToday').val();
                     const filterProjectOrderType = $('#filterProjectOrderType').val();
                     const filterTeam = $('#filterTeam').val();
                     const filterTantou = $('#filterTantou').val();
@@ -634,6 +697,7 @@ var projectTable;
                         filterPriority,
                         filterProgress,
                         filterTimeLeft,
+                        filterToday,
                         filterProjectOrderType,
                         filterTeam,
                         filterTantou,
@@ -1669,7 +1733,7 @@ var projectTable;
         // ----- Context menu "案件を編集" + "Thêm vào todo" (gộp chung, ẩn/hiện Thêm vào todo theo ô có data-todo-title) -----
         const $rowContextMenu = $('<div id="projectRowContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="quickEditProjectRowBtn"><i class="fa fa-pencil-alt me-1"></i><span data-i18n="案件を編集">案件を編集</span></button>');
-        $rowContextMenu.append('<button class="dropdown-item" type="button" id="addToTodoFromRowBtn" style="display:none;"><i class="fas fa-list-check me-1"></i><span data-i18n="Add to todo">Thêm vào todo</span></button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="addToTodoFromRowBtn" style="display:none;"><i class="fas fa-list-check me-1"></i><span data-i18n="追加Todo">追加Todo</span></button>');
         $('body').append($rowContextMenu);
         let contextMenuRowProjectId = null;
         let contextMenuIsManagerOnly = false;
@@ -1697,7 +1761,6 @@ var projectTable;
             var isManagerOfProject = isCurrentUserManagerOfProject(rowData);
             var canShowEdit = canFullEdit || isManagerOfProject;
             contextMenuTodoEl = $(e.target).closest('td').find('[data-todo-title]')[0] || null;
-            console.log(canShowEdit, contextMenuTodoEl);
             if (!canShowEdit && !contextMenuTodoEl) return;
             e.preventDefault();
             contextMenuRowProjectId = rowData.id;
@@ -2521,7 +2584,7 @@ var projectTable;
         // Gọi khi filter thay đổi hoặc khi load trang
         renderActiveFilters();
         // Gọi lại renderActiveFilters mỗi khi filter thay đổi
-        $('#filterStartMonth, #filterEndMonth, #filterPriority, #filterProgress, #filterTimeLeft, #filterProjectOrderType, #filterTeam, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
+        $('#filterStartMonth, #filterEndMonth, #filterPriority, #filterProgress, #filterTimeLeft, #filterToday, #filterProjectOrderType, #filterTeam, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
            renderActiveFilters();
         });
         let timer = null;
@@ -2540,6 +2603,7 @@ var projectTable;
             $('#filterPriority').val('');
             $('#filterProgress').val('');
             $('#filterTimeLeft').val('');
+            $('#filterToday').val('');
             $('#filterProjectOrderType').val('');
             $('#filterTeam').val('');
             $('#filterTantou').val('');

@@ -152,7 +152,8 @@ const app = Vue.createApp({
             this.modalSet.fields = (this.modalSet.fields || []).map(f => ({
                 label: f.label || '',
                 type: f.type || 'text',
-                options: f.options != null ? f.options : ''
+                // options có thể là string hoặc array từ DB → luôn ép về string để .trim() an toàn
+                options: f.options != null ? String(f.options) : ''
             }));
             this.showModal = true;
         },
@@ -186,7 +187,8 @@ const app = Vue.createApp({
                     return;
                 }
                 labels.add(field.label.trim());
-                if (['select', 'radio', 'checkbox'].includes(field.type) && !field.options.trim()) {
+                const optsStr = field.options != null ? String(field.options) : '';
+                if (['select', 'radio', 'checkbox'].includes(field.type) && !optsStr.trim()) {
                     alert(`項目${idx + 1}：選択肢を入力してください`);
                     return;
                 }
@@ -198,7 +200,8 @@ const app = Vue.createApp({
                 fields: this.modalSet.fields.map(f => ({
                     label: f.label || '',
                     type: f.type || 'text',
-                    options: f.options != null ? f.options : ''
+                    // Lưu options dưới dạng string (danh sách option, phân tách bởi dấu phẩy)
+                    options: f.options != null ? String(f.options) : ''
                 }))
             };
             axios.post('/api/index.php?model=department&method=' + method, payload)

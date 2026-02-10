@@ -72,6 +72,16 @@ if($_SESSION['show_project'] == 0){
             </select>
             </div>
             <div class="col-md-3 col-6">
+            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="本日フィルター">本日フィルター</label>
+            <select class="form-select form-select-sm" id="filterToday">
+                <option value="" data-i18n="すべて">すべて</option>
+                <option value="start_today" data-i18n="開始日=本日">開始日=本日</option>
+                <option value="caily_today" data-i18n="CAILY納期=本日">CAILY納期=本日</option>
+                <option value="guis_today" data-i18n="GUIS納期=本日">GUIS納期=本日</option>
+                <option value="end_today" data-i18n="終了日=本日">終了日=本日</option>
+            </select>
+            </div>
+            <div class="col-md-3 col-6">
             <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="受注形態">受注形態</label>
             <select class="form-select form-select-sm" id="filterProjectOrderType">
                 <option value="">すべて</option>
@@ -878,7 +888,6 @@ $view->footing();
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css?v=<?=CACHE_VERSION?>" />
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <!-- Chat page context: AI can use current project list data -->
 <script>
 window.__chatPageContext = window.__chatPageContext || {};

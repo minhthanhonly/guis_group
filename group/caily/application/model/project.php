@@ -162,6 +162,49 @@ class Project extends ApplicationModel {
                     $whereArr[] = "p.end_date >= NOW() AND p.end_date <= DATE_ADD(NOW(), INTERVAL ".$this->quote($val)." DAY) AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
                 }
             }
+            // Filter by specific dates == today (start_date / CAILY納期 / GUIS納期 / end_date / custom datetime fields)
+            if (isset($_GET['filterToday']) && $_GET['filterToday'] !== '') {
+                $val = $_GET['filterToday'];
+                if ($val === 'start_today') {
+                    $whereArr[] = "DATE(p.start_date) = CURDATE()";
+                } elseif ($val === 'caily_today') {
+                    $whereArr[] = "DATE(p.caily_nouki) = CURDATE() AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
+                } elseif ($val === 'guis_today') {
+                    $whereArr[] = "DATE(p.guis_nouki) = CURDATE() AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
+                } elseif ($val === 'end_today') {
+                    $whereArr[] = "DATE(p.end_date) = CURDATE() AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
+                } elseif (strpos($val, 'cf:') === 0) {
+                    // Custom datetime field: value = 'cf:' + encodeURIComponent(label)
+                    $encoded = substr($val, 3);
+                    $label = urldecode($encoded);
+                    if ($label !== '') {
+                        $labelEsc = $this->escape($label);
+                        // custom_fields.value có thể dùng các format như 'Y/m/d' hoặc 'Y/n/j' → tạo nhiều pattern theo ngày hôm nay
+                        $y = date('Y');
+                        $mNum = date('n'); // 1-12
+                        $dNum = date('j'); // 1-31
+                        $mm = sprintf('%02d', $mNum);
+                        $dd = sprintf('%02d', $dNum);
+                        $patterns = array(
+                            $y . '/' . $mm . '/' . $dd, // Y/mm/dd
+                            $y . '/' . $mNum . '/' . $dNum, // Y/m/d
+                            $y . '/' . $mm . '/' . $dNum, // Y/mm/d
+                            $y . '/' . $mNum . '/' . $dd, // Y/m/dd
+                        );
+                        $likeParts = array();
+                        foreach ($patterns as $patt) {
+                            $pEsc = $this->escape($patt);
+                            // Tìm đúng object có label tương ứng VÀ value bắt đầu bằng ngày hôm nay (bất kể có giờ hay không)
+                            // Ví dụ: ..."label":"構造データ送付 (CAILY)","value":"2026/3/17"...
+                            // hoặc ..."value":"2026/03/17 09:00"...
+                            $likeParts[] = "(p.custom_fields LIKE '%\"label\":\"" . $labelEsc . "\",\"value\":\"" . $pEsc . "%')";
+                        }
+                        if (!empty($likeParts)) {
+                            $whereArr[] = "(p.custom_fields IS NOT NULL AND p.custom_fields != '' AND (" . implode(' OR ', $likeParts) . "))";
+                        }
+                    }
+                }
+            }
             // Filter by project_order_type (契約図 / 新規 / 修正 / その他)
             if (isset($_GET['filterProjectOrderType']) && $_GET['filterProjectOrderType'] !== '') {
                 $type = $_GET['filterProjectOrderType'];
@@ -2248,12 +2291,30 @@ class Project extends ApplicationModel {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         $progress = isset($_POST['progress']) ? intval($_POST['progress']) : 0;
         if (!$id) return false;
+
+        // Lấy giá trị cũ để ghi log
+        $old = $this->getById($id);
+        $oldProgress = isset($old['progress']) ? $old['progress'] : null;
+
         $data = array(
             'progress' => $progress,
             'updated_by' => $_SESSION['userid'],
             'updated_at' => date('Y-m-d H:i:s')
         );
-        return $this->query_update($data, ['id' => $id]);
+        $result = $this->query_update($data, ['id' => $id]);
+
+        // Ghi project log nếu tiến độ thay đổi
+        if ($result && $oldProgress !== null && (int)$oldProgress !== (int)$progress) {
+            $this->logProjectAction(
+                $id,
+                'progress_updated',
+                '進捗率変更',
+                (string)$oldProgress,
+                (string)$progress
+            );
+        }
+
+        return $result;
     }
 
     function updatePojectTags($params = null) {
@@ -3134,12 +3195,14 @@ class Project extends ApplicationModel {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
         
+        // Lấy dữ liệu cũ để so sánh và ghi log
+        $old = $this->getById($id);
+        
         $data = array(
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => $_SESSION['userid']
         );
 
-        
         // Add fields if they exist in POST
         if (isset($_POST['amount'])) {
             $data['amount'] = floatval($_POST['amount']);
@@ -3154,7 +3217,35 @@ class Project extends ApplicationModel {
         $result = $this->query_update($data, ['id' => $id]);
         
         if ($result) {
-         
+            // Ghi log cho từng trường nếu có thay đổi
+            if (isset($data['amount']) && isset($old['amount']) && (float)$old['amount'] !== (float)$data['amount']) {
+                $this->logProjectAction(
+                    $id,
+                    'amount_updated',
+                    '金額変更',
+                    (string)$old['amount'],
+                    (string)$data['amount']
+                );
+            }
+            if (isset($data['estimate_status']) && isset($old['estimate_status']) && $old['estimate_status'] !== $data['estimate_status']) {
+                $this->logProjectAction(
+                    $id,
+                    'estimate_status_updated',
+                    '見積ステータス変更',
+                    (string)$old['estimate_status'],
+                    (string)$data['estimate_status']
+                );
+            }
+            if (isset($data['invoice_status']) && isset($old['invoice_status']) && $old['invoice_status'] !== $data['invoice_status']) {
+                $this->logProjectAction(
+                    $id,
+                    'invoice_status_updated',
+                    '請求ステータス変更',
+                    (string)$old['invoice_status'],
+                    (string)$data['invoice_status']
+                );
+            }
+
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
