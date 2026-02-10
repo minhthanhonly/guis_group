@@ -637,7 +637,7 @@ const vueApp = createApp({
         /** Remaining time for a given date (e.g. caily_nouki, guis_nouki). Returns null if status is draft/paused/cancelled. */
         getTimeRemainingForDate(dateStr) {
             if (!this.project || !dateStr) return null;
-            if (['draft', 'paused', 'cancelled'].includes(String(this.project.status || '').toLowerCase())) return null;
+            if (['draft', 'paused', 'cancelled', 'completed', 'deleted'].includes(String(this.project.status || '').toLowerCase())) return null;
             const now = moment.tz('Asia/Tokyo');
             const endDate = moment.tz(dateStr, 'Asia/Tokyo');
             if (!endDate.isValid()) return null;

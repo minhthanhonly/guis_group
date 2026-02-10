@@ -567,6 +567,234 @@
           </nav>
 
           <!-- / Navbar -->
+          <!-- Todo Widget Offcanvas -->
+          <div class="offcanvas offcanvas-bottom" tabindex="-1" id="offcanvasTodo" aria-labelledby="offcanvasTodoLabel" style="height: 80vh;">
+            <div class="offcanvas-header border-bottom">
+              <h5 class="offcanvas-title" id="offcanvasTodoLabel"><i class="fas fa-list-check me-2"></i><span data-i18n="Todo List">Todoリスト</span></h5>
+              <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="閉じる"></button>
+            </div>
+            <div class="offcanvas-body" id="todoApp">
+               <!-- Vue App will mount here -->
+                   <div class="nav-align-top mb-4 h-100 d-flex flex-column">
+                    <ul class="nav nav-tabs nav-fill" role="tablist">
+                      <li class="nav-item">
+                        <button type="button" class="nav-link" :class="{ active: activeTab === 'tasks' }" role="tab" aria-controls="navs-tasks" :aria-selected="activeTab === 'tasks'" @click="activeTab = 'tasks'">
+                          <i class="fas fa-briefcase me-1"></i> <span data-i18n="マイタスク">マイタスク</span>
+                          <span class="badge rounded-pill badge-center h-px-20 w-px-20 bg-danger ms-1" v-if="myTaskCount > 0">{{ myTaskCount }}</span>
+                        </button>
+                      </li>
+                      <li class="nav-item">
+                        <button type="button" class="nav-link" :class="{ active: activeTab === 'todos' }" role="tab" aria-controls="navs-todos" :aria-selected="activeTab === 'todos'" @click="activeTab = 'todos'">
+                          <i class="fas fa-list me-1"></i> <span data-i18n="カスタムTodo">カスタムTodo</span>
+                          <span class="badge rounded-pill badge-center h-px-20 w-px-20 bg-danger ms-1" v-if="incompleteTodoCount > 0">{{ incompleteTodoCount }}</span>
+                        </button>
+                      </li>
+                    </ul>
+                    <div class="tab-content flex-grow-1 overflow-auto pt-3">
+                      <!-- My Tasks Tab -->
+                      <div class="tab-pane fade" :class="{ 'show active': activeTab === 'tasks' }" id="navs-tasks" role="tabpanel">
+                         <div v-if="loadingTasks" class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                              <span class="visually-hidden" data-i18n="読み込み中...">読み込み中...</span>
+                            </div>
+                         </div>
+                         <div v-else-if="tasks.length === 0" class="text-center text-muted py-5">
+                            <i class="fas fa-inbox fa-3x mb-3"></i>
+                            <p data-i18n="割り当てられたタスクはありません">割り当てられたタスクはありません</p>
+                         </div>
+                         <div v-else class="table-responsive">
+                            <table class="table table-sm table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th><span data-i18n="案件">案件</span></th>
+                                        <th><span data-i18n="タスク">タスク</span></th>
+                                        <th><span data-i18n="受領">受領</span></th>
+                                        <th><span data-i18n="ステータス">ステータス</span></th>
+                                        <th><span data-i18n="優先度">優先度</span></th>
+                                        <th><span data-i18n="進捗">進捗</span></th>
+                                        <th><span data-i18n="期限">期限</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="task in tasks" :key="task.id">
+                                        <td>
+                                            <a :href="'/project/detail.php?id=' + task.project_id" class="text-decoration-none small">
+                                                <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
+                                                {{ task.project_name }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <a :href="'/project/task.php?project_id=' + task.project_id + '&task_id=' + task.id" class="text-decoration-none fw-bold small">
+                                                <span class="badge bg-label-secondary me-1">#{{ task.id }}</span>
+                                                {{ task.title }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <button v-if="!isAcknowledged(task)" type="button" class="btn btn-sm btn-outline-success" @click="acknowledgeTask(task)" title="受領">
+                                                <i class="fas fa-check me-1"></i><span data-i18n="受領">受領</span>
+                                            </button>
+                                            <span v-else class="badge bg-success" title="受領済み"><i class="fas fa-check me-1"></i><span data-i18n="受領済み">受領済み</span></span>
+                                        </td>
+                                        <td>
+                                            <select class="form-select form-select-sm" style="min-width: 90px;" :value="task.status" @change="updateTaskStatus(task, $event.target.value)">
+                                                <option v-for="s in taskStatuses" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <span class="badge" :class="'bg-' + getPriorityColor(task.priority)">{{ getPriorityLabel(task.priority) }}</span>
+                                        </td>
+                                        <td>
+                                            <select class="form-select form-select-sm"  :value="task.progress != null ? task.progress : 0" @change="updateTaskProgress(task, parseInt($event.target.value, 10))">
+                                                <option v-for="p in [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]" :key="p" :value="p">{{ p }}%</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex flex-start gap-1">
+                                                <small class="text-nowrap text-muted">{{ formatDate(task.due_date) }}</small>
+                                                <span v-if="task.status !== 'completed' && task.status !== 'cancelled' && getTimeRemainingForDue(task.due_date)" :class="['badge badge-sm', getTimeRemainingForDue(task.due_date).class]" style="font-size: 0.7rem;">
+                                                    {{ getTimeRemainingForDue(task.due_date).text }}
+                                                </span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                         </div>
+                      </div>
+
+                      <!-- Custom Todos Tab -->
+                      <div class="tab-pane fade" :class="{ 'show active': activeTab === 'todos' }" id="navs-todos" role="tabpanel">
+                        <div class="input-group mb-3">
+                          <input type="text" class="form-control" v-model="newTodo.title" :placeholder="t('Add a new todo...', '新しいTodoを追加...')" data-i18n="Add a new todo..." @keyup.enter="addTodo">
+                          
+                          <!-- Priority Select -->
+                          <select class="form-select" v-model="newTodo.priority" style="max-width: 220px;">
+                              <option value="10" data-i18n="優先度: 低">低</option>
+                              <option value="50" data-i18n="優先度: 中">中</option>
+                              <option value="100" data-i18n="優先度: 高">高</option>
+                          </select>
+
+                          <!-- Deadline Input -->
+                          <input type="text" class="form-control flatpickr-input" id="new-todo-date" :placeholder="t('期限')" data-i18n="期限" style="max-width: 200px;">
+                          
+                          <button class="btn btn-primary" type="button" @click="addTodo">
+                            <i class="fas fa-plus me-1"></i><span class="d-none d-sm-inline" data-i18n="追加">追加</span>
+                          </button>
+                          <button v-if="todos.some(t => t.todo_complete == 1)" type="button" class="btn btn-outline-danger ms-2" @click="deleteCompletedTodos" title="完了済みのTodoを削除">
+                            <i class="fas fa-trash-alt me-1"></i><span data-i18n="完了済みを削除">完了済みを削除</span>
+                          </button>
+                        </div>
+
+                        <div v-if="loadingTodos" class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                              <span class="visually-hidden" data-i18n="Loading...">読み込み中...</span>
+                            </div>
+                         </div>
+                         <div v-else-if="todos.length === 0" class="text-center text-muted py-5">
+                            <i class="fas fa-clipboard-list fa-3x mb-3"></i>
+                            <p data-i18n="Todoはありません">Todoはありません</p>
+                         </div>
+                        <div v-else class="table-responsive">
+                            <table class="table table-sm table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 36px;" class="text-center"><span data-i18n="完了">完了</span></th>
+                                        <th style="width: 30%;"><span data-i18n="Todo">Todo</span></th>
+                                        <th><span data-i18n="優先度">優先度</span></th>
+                                        <th><span data-i18n="期限">期限</span></th>
+                                        <th style="min-width: 100px;"><span data-i18n="Link">リンク</span></th>
+                                        <th style="min-width: 120px;"><span data-i18n="備考">備考</span></th>
+                                        <th style="width: 80px;"><span data-i18n="操作">操作</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="todo in todos" :key="todo.id" :class="{'table-secondary': todo.todo_complete == 1}">
+                                        <td class="align-middle">
+                                            <div class="form-check mb-0">
+                                                <input class="form-check-input" type="checkbox" :checked="todo.todo_complete == 1" @change="toggleTodo(todo)">
+                                            </div>
+                                        </td>
+                                        <td class="align-middle">
+                                            <input v-if="editingTodoId === todo.id" ref="editTodoInput" type="text" class="form-control form-control-sm" v-model="editingTodoTitle" @keyup.enter="saveTodoEdit(todo)" @keyup.esc="cancelEditTodo">
+                                            <span v-else :class="{'text-decoration-line-through text-muted': todo.todo_complete == 1}" :style="todo.todo_complete != 1 ? { cursor: 'pointer' } : {}" @click="startEditTodo(todo)" title="クリックして編集">{{ todo.todo_title }}</span>
+                                        </td>
+                                        <td class="align-middle">
+                                            <select v-if="editingTodoId === todo.id" class="form-select form-select-sm" v-model.number="editingTodoPriority" style="width: auto; min-width: 70px;">
+                                                <option :value="10">低</option>
+                                                <option :value="50">中</option>
+                                                <option :value="100">高</option>
+                                            </select>
+                                            <span v-else class="badge" :class="'bg-' + getTodoPriorityColor(todo.todo_priority)">{{ getTodoPriorityLabel(todo.todo_priority) }}</span>
+                                        </td>
+                                        <td class="align-middle">
+                                            <template v-if="editingTodoId === todo.id">
+                                                <input ref="editTodoDateInput" type="text" class="form-control form-control-sm" readonly :placeholder="t('期限')" style="max-width: 180px;">
+                                            </template>
+                                            <template v-else>
+                                                <div v-if="todo.todo_term" class="d-flex flex-start gap-1">
+                                                    <small class="text-nowrap text-muted">{{ formatDate(todo.todo_term) }}</small>
+                                                    <span v-if="todo.todo_complete != 1 && getTimeRemainingForDue(todo.todo_term)" :class="['badge badge-sm', getTimeRemainingForDue(todo.todo_term).class]" style="font-size: 0.7rem;">
+                                                        {{ getTimeRemainingForDue(todo.todo_term).text }}
+                                                    </span>
+                                                </div>
+                                                <span v-else class="text-muted">-</span>
+                                            </template>
+                                        </td>
+                                        <td class="align-middle">
+                                            <template v-if="editingTodoId === todo.id">
+                                                <input type="text" class="form-control form-control-sm" v-model="editingTodoLink" :placeholder="t('Link', 'リンク')" style="min-width: 100px;">
+                                            </template>
+                                            <template v-else>
+                                                <a v-if="todo.todo_link" :href="todo.todo_link" target="_blank" rel="noopener" class="small text-truncate d-inline-block" style="max-width: 150px;" :title="todo.todo_link">{{ todo.todo_link }}</a>
+                                                <span v-else class="text-muted">-</span>
+                                            </template>
+                                        </td>
+                                        <td class="align-middle">
+                                            <template v-if="editingTodoId === todo.id">
+                                                <textarea class="form-control form-control-sm" v-model="editingTodoComment" rows="2" :placeholder="t('備考', '備考')" style="min-width: 120px; resize: vertical;"></textarea>
+                                            </template>
+                                            <template v-else>
+                                                <span v-if="todo.todo_comment" class="small text-break" style="max-width: 200px; display: inline-block; white-space: pre-wrap;">{{ todo.todo_comment }}</span>
+                                                <span v-else class="text-muted">-</span>
+                                            </template>
+                                        </td>
+                                        <td class="align-middle">
+                                          <div class="d-flex gap-1">
+                                            <button v-if="editingTodoId === todo.id" class="btn btn-sm btn-success me-1 text-nowrap" @click="saveTodoEdit(todo)" title="保存">
+                                                <i class="fas fa-check me-1"></i> <span data-i18n="保存">保存</span>
+                                            </button>
+                                            <button v-if="editingTodoId === todo.id" class="btn btn-sm btn-secondary me-1 text-nowrap" @click="cancelEditTodo" title="キャンセル">
+                                                <i class="fas fa-times me-1"></i> <span data-i18n="キャンセル">キャンセル</span>
+                                            </button>
+                                            <button v-if="editingTodoId !== todo.id && todo.todo_complete != 1" class="btn btn-sm btn-outline-primary me-1 text-nowrap" @click="startEditTodo(todo)" title="編集">
+                                                <i class="fas fa-pen me-1"></i> <span data-i18n="編集">編集</span>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger text-nowrap" @click="deleteTodo(todo)" title="削除">
+                                                <i class="fas fa-trash me-1"></i> <span data-i18n="削除">削除</span>
+                                            </button>
+                                          </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                      </div>
+                    </div>
+                   </div>
+            </div>
+          </div>
+          <style>
+            #offcanvasTodo{
+              z-index: 9999;
+            }
+          </style>
+
+          <!-- Todo Toggle Button (same style as AI Chat button) -->
+          <button data-bs-toggle="offcanvas" data-bs-target="#offcanvasTodo" id="todo-toggle" class="btn btn-primary rounded-circle position-fixed waves-effect waves-light">
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="todo-badge"></span>
+            <i class="fas fa-list-check"></i>
+          </button>
+
           <!-- AI Chat Widget -->
           <div class="modal fade" id="modalAI" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-simple modal-dialog-centered modal-chat-w">
@@ -583,5 +811,3 @@
           <button data-bs-toggle="modal" data-bs-target="#modalAI" id="ai-chat-toggle" class="btn btn-primary rounded-circle position-fixed"><i class="icon-base ti tabler-message-circle-2 icon-md"></i></button>
           <!-- Content wrapper -->
           <div class="content-wrapper">
-
-            

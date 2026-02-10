@@ -2308,7 +2308,7 @@ class Task extends ApplicationModel {
                 t.due_date,
                 t.start_date,
                 t.progress,
-                p.project_number,
+                p.id AS project_id,
                 p.name AS project_name,
                 p.department_id,
                 p.end_date AS project_end_date,

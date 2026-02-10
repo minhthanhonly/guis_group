@@ -10,6 +10,7 @@ class Todo extends ApplicationModel {
 		'folder_id'=>array('fix'=>0, 'except'=>array('search', 'update')),
 		'todo_parent'=>array('except'=>array('search', 'update')),
 		'todo_title'=>array('タイトル', 'notnull', 'length:1000'),
+		'todo_link'=>array('length:2000', 'except'=>array('search')),
 		'todo_name'=>array('fix'=>$_SESSION['realname'], 'update'),
 		'todo_term'=>array('except'=>array('search')),
 		'todo_noterm'=>array('numeric', 'except'=>array('search')),
@@ -197,7 +198,160 @@ class Todo extends ApplicationModel {
 		}
 
 	}
-	
+
+	function api_index() {
+		$this->where[] = "(owner = '".$this->quote($_SESSION['userid'])."')";
+		// Default sort
+		$sort = 'todo_complete, todo_completedate DESC, todo_priority DESC, todo_term';
+		$desc = 0; // Handled in sort string
+		
+		// Reuse findLimit logic but return clean array
+		if (isset($_REQUEST['sort']) && strlen($_REQUEST['sort']) > 0) {
+			$order = " ORDER BY ".$this->quote($_REQUEST['sort']);
+		} else {
+			$order = " ORDER BY ".$sort;
+		}
+		
+		$where = "WHERE ".implode(" AND ", $this->where);
+		// Minimal fields for list
+		$query = sprintf("SELECT id, todo_title, todo_link, todo_comment, todo_priority, todo_complete, todo_term, todo_noterm, todo_completedate FROM %s %s %s", $this->table, $where, $order);
+		
+		$list = $this->fetchAll($query);
+		return $list;
+	}
+
+	function api_add() {
+		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+			$this->validateSchema('insert');
+			// Custom API validation if needed
+			if (count($this->error) <= 0) {
+				$field = $this->schematize('insert');
+				if (is_array($field) && count($field) > 0) {
+					$this->post['created'] = date('Y-m-d H:i:s');
+					// Ensure owner is set
+					if (!isset($this->post['owner'])) {
+						$this->post['owner'] = $_SESSION['userid'];
+					}
+					// Ensure todo_parent is set
+					if (!isset($this->post['todo_parent'])) {
+						$this->post['todo_parent'] = 0;
+					}
+					
+					$keys = [];
+					$values = [];
+					foreach ($field as $key) {
+						if (isset($this->post[$key])) {
+							$keys[] = $key;
+							$values[] = $this->quote($this->post[$key]);
+						}
+					}
+					
+					// Insert
+					$query = "INSERT INTO ".$this->table." (".implode(",", $keys).") VALUES ('".implode("','", $values)."')";
+					$result = $this->query($query);
+					
+					if ($result) {
+						return ['status' => 'success', 'id' => $this->insertid()];
+					}
+				}
+			}
+			return ['status' => 'error', 'message' => implode("\n", $this->error)];
+		}
+		return ['status' => 'error', 'message' => 'Invalid method'];
+	}
+
+	function api_update() {
+		// Basic permission check
+		$id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+		if ($id <= 0) return ['status' => 'error', 'message' => 'Invalid ID'];
+		
+		// Ensure ownership and load existing row
+		$existing = $this->fetchOne(sprintf("SELECT * FROM %s WHERE id = %d AND owner = '%s'", $this->table, $id, $this->quote($_SESSION['userid'])));
+		if (!$existing) return ['status' => 'error', 'message' => 'Not found or permission denied'];
+
+		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+			// Merge existing row into POST so validateSchema('update') has required fields (todo_title, todo_priority, etc.)
+			foreach ($existing as $key => $value) {
+				if (!isset($_POST[$key]) || $_POST[$key] === '') {
+					$_POST[$key] = $value;
+				}
+			}
+			$this->validateSchema('update');
+			
+			if (count($this->error) <= 0) {
+				$field = $this->schematize('update');
+				$array = array();
+				$this->post['editor'] = $_SESSION['userid'];
+				$this->post['updated'] = date('Y-m-d H:i:s');
+				
+				// Handle completions (toggle complete from widget only sends id + todo_complete)
+				if (isset($_POST['todo_complete'])) {
+					$this->post['todo_complete'] = (int) $_POST['todo_complete'];
+					$field[] = 'todo_complete';
+					if ($_POST['todo_complete'] == 1) {
+						$this->post['todo_completedate'] = date('Y-m-d H:i:s');
+						$field[] = 'todo_completedate';
+					} else {
+						$this->post['todo_completedate'] = null;
+						$field[] = 'todo_completedate';
+					}
+				}
+
+				if (is_array($field) && count($field) > 0) {
+					foreach ($this->post as $key => $value) {
+						if (in_array($key, $field)) {
+							// Handle null/empty for completedate
+							if ($key == 'todo_completedate' && empty($value)) {
+								$array[] = $key." = NULL"; 
+							} else {
+								$array[] = $key." = '".$this->quote($value)."'";
+							}
+						}
+					}
+					$query = "UPDATE ".$this->table." SET ".implode(",", $array)." WHERE id = ".intval($id);
+					$result = $this->query($query);
+					
+					if ($result) {
+						return ['status' => 'success'];
+					}
+				}
+			}
+			return ['status' => 'error', 'message' => implode("\n", $this->error)];
+		}
+		return ['status' => 'error', 'message' => 'Invalid method'];
+	}
+
+	function api_delete() {
+		$id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+		if ($id <= 0) return ['status' => 'error', 'message' => 'Invalid ID'];
+		
+		// Ensure ownership
+		$check = $this->fetchOne(sprintf("SELECT id FROM %s WHERE id = %d AND owner = '%s'", $this->table, $id, $this->quote($_SESSION['userid'])));
+		if (!$check) return ['status' => 'error', 'message' => 'Not found or permission denied'];
+		
+		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+			$query = sprintf("DELETE FROM %s WHERE id = %d AND owner = '%s'", $this->table, $id, $this->quote($_SESSION['userid']));
+			$result = $this->query($query);
+			
+			if ($result) {
+				return ['status' => 'success'];
+			}
+			return ['status' => 'error', 'message' => 'Delete failed'];
+		}
+		return ['status' => 'error', 'message' => 'Invalid method'];
+	}
+
+	function api_delete_completed() {
+		if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+			return ['status' => 'error', 'message' => 'Invalid method'];
+		}
+		$query = sprintf("DELETE FROM %s WHERE owner = '%s' AND todo_complete = 1", $this->table, $this->quote($_SESSION['userid']));
+		$result = $this->query($query);
+		if ($result) {
+			return ['status' => 'success'];
+		}
+		return ['status' => 'error', 'message' => 'Delete failed'];
+	}
 }
 
 ?>

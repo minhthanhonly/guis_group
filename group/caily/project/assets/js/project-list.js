@@ -154,13 +154,23 @@ var projectTable;
         return found && found.value !== undefined ? found.value : '';
     }
 
-    function formatCustomFieldForList(value, type, options) {
+    function formatCustomFieldForList(value, type, options, row, label) {
         if (value === undefined || value === null || String(value).trim() === '') return '<span class="text-muted">-</span>';
         var v = String(value).trim();
+        var todoAttrs = (typeof getTodoDataAttrs === 'function' && row ? getTodoDataAttrs(row, label) : '');
         if (type === 'datetime') {
-            if (typeof window.formatDateTime === 'function') return window.formatDateTime(v);
-            if (typeof moment !== 'undefined' && moment(v).isValid()) return '<span class="small text-nowrap">' +moment(v).format('M月D日 H:mm') + '</span>';
-            return v;
+            var rawEsc = v.replace(/\//g, '-').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+            var attrs = ' data-time="' + rawEsc + '"' + todoAttrs;
+            if (typeof window.formatVietnamTimeTooltip === 'function') {
+                var vnTip = window.formatVietnamTimeTooltip(v);
+                if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
+            }
+            if (typeof moment !== 'undefined' && moment(v).isValid()) {
+                var displayStr = moment(v).format('M月D日 H:mm');
+                return '<span class="small text-nowrap"' + attrs + '>' + displayStr + '</span>';
+            }
+            if (typeof window.formatDateTime === 'function') return '<span class="small text-nowrap"' + attrs + '>' + window.formatDateTime(v) + '</span>';
+            return '<span class="small text-nowrap"' + attrs + '>' + v + '</span>';
         }
         if (type === 'checkbox' || type === 'radio' || type === 'select') {
             return '<span class="badge bg-label-secondary small">' + escapeHtmlForNote(v) + '</span>';
@@ -175,7 +185,7 @@ var projectTable;
             if (m.isValid()) {
                 var timeStr = m.format('YYYY/M/D H:mm');
                 var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(timeStr) : '';
-                var attrs = ' data-time="' + String(timeStr).replace(/"/g, '&quot;') + '"';
+                var attrs = ' data-time="' + String(timeStr).replace(/"/g, '&quot;') + '"' + todoAttrs;
                 if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
                 return '<span class="text-nowrap small"' + attrs + '>' + m.format('M月D日') + '</span>';
             }
@@ -574,7 +584,7 @@ var projectTable;
                     data: null,
                     render: function(data, type, row) {
                         var val = getCustomFieldValueFromRow(row, fieldLabel);
-                        return formatCustomFieldForList(val, fieldType, fieldOptions);
+                        return formatCustomFieldForList(val, fieldType, fieldOptions, row, fieldLabel);
                     },
                     title: fieldLabel,
                     orderable: false,
@@ -998,11 +1008,11 @@ var projectTable;
                     title: '<span data-i18n="種類2">種類2</span>',
                     visible: false
                 },
-                { data: 'start_date', title: '<span data-i18n="開始日">開始日</span>', render: function(data) {
+                { data: 'start_date', title: '<span data-i18n="開始日">開始日</span>', render: function(data, type, row) {
                     if(data) {
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-                        var attrs = ' data-time="' + rawEsc + '"';
+                        var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, '開始日') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
                         return '<span class="text-muted small text-nowrap"' + attrs + '>' + moment(data).format('M月D日 H:mm') + '</span>';
                     } else {
@@ -1017,7 +1027,7 @@ var projectTable;
                         }
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-                        var attrs = ' data-time="' + rawEsc + '"';
+                        var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, 'CAILY納期') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
                         const timeRemaining = getTimeRemaining(data, row.status);
                         const dateStr = moment(data).format('M月D日 H:mm');
@@ -1050,7 +1060,7 @@ var projectTable;
                         }
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-                        var attrs = ' data-time="' + rawEsc + '"';
+                        var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, 'GUIS納期') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
                         const timeRemaining = getTimeRemaining(data, row.status);
                         const dateStr = moment(data).format('M月D日 H:mm');
@@ -1078,7 +1088,7 @@ var projectTable;
                     if(data) {
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-                        var attrs = ' data-time="' + rawEsc + '"';
+                        var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, '終了日') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
                         const timeRemaining = getTimeRemaining(data, row.status);
                         const dateStr = moment(data).format('M月D日 H:mm');
@@ -1656,12 +1666,14 @@ var projectTable;
                 .show();
         });
 
-        // ----- Context menu "案件を編集" (chỉ project manager) -----
+        // ----- Context menu "案件を編集" + "Thêm vào todo" (gộp chung, ẩn/hiện Thêm vào todo theo ô có data-todo-title) -----
         const $rowContextMenu = $('<div id="projectRowContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="quickEditProjectRowBtn"><i class="fa fa-pencil-alt me-1"></i><span data-i18n="案件を編集">案件を編集</span></button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="addToTodoFromRowBtn" style="display:none;"><i class="fas fa-list-check me-1"></i><span data-i18n="Add to todo">Thêm vào todo</span></button>');
         $('body').append($rowContextMenu);
         let contextMenuRowProjectId = null;
         let contextMenuIsManagerOnly = false;
+        let contextMenuTodoEl = null;
 
         function isCurrentUserManagerOfProject(rowData) {
             if (typeof USER_AUTH_ID === 'undefined' || !USER_AUTH_ID || !rowData || !rowData.manager_id) return false;
@@ -1683,10 +1695,23 @@ var projectTable;
             if (!rowData) return;
             var canFullEdit = window.app.canManageProject();
             var isManagerOfProject = isCurrentUserManagerOfProject(rowData);
-            if (!canFullEdit && !isManagerOfProject) return;
+            var canShowEdit = canFullEdit || isManagerOfProject;
+            contextMenuTodoEl = $(e.target).closest('td').find('[data-todo-title]')[0] || null;
+            console.log(canShowEdit, contextMenuTodoEl);
+            if (!canShowEdit && !contextMenuTodoEl) return;
             e.preventDefault();
             contextMenuRowProjectId = rowData.id;
             contextMenuIsManagerOnly = !canFullEdit && isManagerOfProject;
+            if (canShowEdit) {
+                $('#quickEditProjectRowBtn').show();
+            } else {
+                $('#quickEditProjectRowBtn').hide();
+            }
+            if (contextMenuTodoEl) {
+                $('#addToTodoFromRowBtn').show();
+            } else {
+                $('#addToTodoFromRowBtn').hide();
+            }
             $rowContextMenu
                 .css({ top: e.pageY + 'px', left: e.pageX + 'px' })
                 .show();
@@ -1701,6 +1726,14 @@ var projectTable;
             if (contextMenuRowProjectId && typeof window.openQuickEditProjectModal === 'function') {
                 window.openQuickEditProjectModal(contextMenuRowProjectId, contextMenuIsManagerOnly);
             }
+        });
+        $rowContextMenu.on('click', '#addToTodoFromRowBtn', function(ev) {
+            ev.stopPropagation();
+            $rowContextMenu.hide();
+            if (contextMenuTodoEl && typeof window.openAddToTodoModalFromContext === 'function') {
+                window.openAddToTodoModalFromContext(contextMenuTodoEl);
+            }
+            contextMenuTodoEl = null;
         });
 
         // Quick Edit Tagify instances (destroy on each open, re-init after load)
@@ -2604,6 +2637,14 @@ var projectTable;
             return i18next.t(key) || key;
         }
         return key;
+    }
+
+    /** Build data-todo-title and data-todo-link for context menu "Thêm vào todo" */
+    function getTodoDataAttrs(data, type) {
+        if (!data || data.id == null) return '';
+        var title = String('#' + data.id + ' ' + (data.name || '')) + (type ? ' ' + type : '');
+        var link = String('/project/detail.php?id=' + data.id).replace(/"/g, '&quot;');
+        return ' data-todo-title="' + title + '" data-todo-link="' + link + '"';
     }
 
     function getTimeRemaining(endDate, status) {

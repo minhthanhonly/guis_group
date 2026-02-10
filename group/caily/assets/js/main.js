@@ -1185,7 +1185,7 @@ if (typeof window !== 'undefined') {
       updateBarState(null)
       if (fabEl) {
         fabEl.classList.remove('is-open')
-        fabEl.style.width = '50px'
+        fabEl.style.width = '36px'
         fabEl.style.borderRadius = '50%'
         fabEl.innerHTML = '<i class="fa fa-microphone"></i>'
       }
@@ -1330,12 +1330,12 @@ if (typeof window !== 'undefined') {
       fabEl.innerHTML = '<i class="fa fa-microphone"></i>'
       Object.assign(fabEl.style, {
         position: 'fixed',
-        bottom: '20px',
-        right: '80px',
+        bottom: '10px',
+        right: '56px',
         zIndex: '9998',
         borderRadius: '50%',
-        width: '50px',
-        height: '50px',
+        width: '36px',
+        height: '36px',
         padding: '0',
         boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
         transition: 'all 0.2s ease'
@@ -1361,3 +1361,217 @@ if (typeof window !== 'undefined') {
     }
   })()
 }
+
+/**
+ * Context menu "Thêm vào todo" for elements with [data-todo-title].
+ * Opens modal to add todo with title, deadline (from data-time), priority; submits via todo api_add.
+ */
+(function () {
+  var contextMenuEl = null
+  var addToTodoModalEl = null
+  var addToTodoModal = null
+  var addToTodoFlatpickr = null
+  var lastTodoTargetEl = null
+
+  function getContextMenu() {
+    if (contextMenuEl) return contextMenuEl
+    contextMenuEl = document.createElement('div')
+    contextMenuEl.id = 'addToTodoContextMenu'
+    contextMenuEl.className = 'dropdown-menu show position-fixed shadow'
+    contextMenuEl.style.minWidth = '160px'
+    contextMenuEl.innerHTML = '<a class="dropdown-item" href="#" data-action="add-to-todo"><i class="fas fa-list-check me-2"></i><span data-i18n="追加Todo">追加Todo</span></a>'
+    document.body.appendChild(contextMenuEl)
+    contextMenuEl.querySelector('[data-action="add-to-todo"]').addEventListener('click', function (e) {
+      e.preventDefault()
+      hideContextMenu()
+      if (lastTodoTargetEl) openAddToTodoModal(lastTodoTargetEl)
+    })
+    return contextMenuEl
+  }
+
+  function showContextMenu(x, y, targetEl) {
+    lastTodoTargetEl = targetEl
+    var menu = getContextMenu()
+    menu.style.left = x + 'px'
+    menu.style.top = y + 'px'
+    menu.style.display = 'block'
+    document.addEventListener('click', hideContextMenuOnce)
+    document.addEventListener('contextmenu', hideContextMenuOnce)
+  }
+
+  function hideContextMenu() {
+    if (contextMenuEl) contextMenuEl.style.display = 'none'
+    document.removeEventListener('click', hideContextMenuOnce)
+    document.removeEventListener('contextmenu', hideContextMenuOnce)
+  }
+
+  function hideContextMenuOnce() {
+    hideContextMenu()
+  }
+
+  function ensureAddToTodoModal() {
+    if (addToTodoModalEl) return
+    var t = document.createElement('div')
+    t.id = 'addToTodoFromContextModal'
+    t.className = 'modal fade'
+    t.setAttribute('tabindex', '-1')
+    t.innerHTML =
+      '<div class="modal-dialog modal-dialog-centered">' +
+        '<div class="modal-content">' +
+          '<div class="modal-header">' +
+            '<h5 class="modal-title"><span data-i18n="追加Todo">追加Todo</span></h5>' +
+            '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>' +
+          '</div>' +
+          '<div class="modal-body">' +
+            '<div class="mb-3">' +
+              '<label class="form-label"><span data-i18n="Todo">Todo</span></label>' +
+              '<input type="text" class="form-control" id="addToTodoContextTitle" placeholder="">' +
+            '</div>' +
+            '<div class="mb-3">' +
+              '<label class="form-label"><span data-i18n="期限">期限</span></label>' +
+              '<input type="text" class="form-control" id="addToTodoContextDeadline" placeholder="YYYY-MM-DD HH:mm" readonly>' +
+            '</div>' +
+            '<div class="mb-3">' +
+              '<label class="form-label"><span data-i18n="優先度">優先度</span></label>' +
+              '<select class="form-select" id="addToTodoContextPriority">' +
+                '<option value="10">低</option>' +
+                '<option value="50" selected>中</option>' +
+                '<option value="100">高</option>' +
+              '</select>' +
+            '</div>' +
+            '<div class="mb-3">' +
+              '<label class="form-label"><span data-i18n="リンク">リンク</span></label>' +
+              '<input type="text" class="form-control" id="addToTodoContextLink" placeholder="">' +
+            '</div>' +
+            '<div class="mb-3">' +
+              '<label class="form-label"><span data-i18n="備考">備考</span></label>' +
+              '<textarea class="form-control" id="addToTodoContextComment" rows="3" placeholder=""></textarea>' +
+            '</div>' +
+          '</div>' +
+          '<div class="modal-footer">' +
+            '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>' +
+            '<button type="button" class="btn btn-primary" id="addToTodoContextSubmit"><i class="fas fa-plus me-1"></i><span data-i18n="追加">追加</span></button>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    document.body.appendChild(t)
+    addToTodoModalEl = t
+    addToTodoModal = window.bootstrap && window.bootstrap.Modal ? new window.bootstrap.Modal(t) : null
+    var deadlineInput = document.getElementById('addToTodoContextDeadline')
+    if (deadlineInput && typeof flatpickr !== 'undefined') {
+      addToTodoFlatpickr = flatpickr(deadlineInput, {
+        dateFormat: 'Y-m-d H:i',
+        enableTime: true,
+        time_24hr: true,
+        locale: typeof window.moment !== 'undefined' && window.moment.locale() === 'vi' ? 'vi' : 'ja'
+      })
+    }
+    document.getElementById('addToTodoContextSubmit').addEventListener('click', submitAddToTodoFromContext)
+  }
+
+  function dataTimeToApiTerm(dataTime) {
+    if (!dataTime || typeof dataTime !== 'string') return ''
+    var s = String(dataTime).trim().replace(/\//g, '-')
+    var match = s.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}):(\d{2})(?::\d{2})?/)
+    if (match) return match[1] + ' ' + match[2].padStart(2, '0') + ':' + match[3]
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s + ' 00:00'
+    return s
+  }
+
+  function openAddToTodoModal(sourceEl) {
+    ensureAddToTodoModal()
+    var title = (sourceEl.getAttribute('data-todo-title') || '').trim()
+    var time = (sourceEl.getAttribute('data-time') || '').trim()
+    var link = (sourceEl.getAttribute('data-todo-link') || '').trim()
+    document.getElementById('addToTodoContextTitle').value = title
+    document.getElementById('addToTodoContextDeadline').value = dataTimeToApiTerm(time)
+    document.getElementById('addToTodoContextPriority').value = '50'
+    document.getElementById('addToTodoContextLink').value = link
+    document.getElementById('addToTodoContextComment').value = ''
+    if (addToTodoFlatpickr) addToTodoFlatpickr.setDate(document.getElementById('addToTodoContextDeadline').value || null, false)
+    if (addToTodoModal) addToTodoModal.show()
+    lastTodoTargetEl = null
+  }
+
+  window.openAddToTodoModalFromContext = function (el) {
+    if (el && el.getAttribute && el.getAttribute('data-todo-title') != null) openAddToTodoModal(el)
+  }
+
+  function submitAddToTodoFromContext() {
+    var titleEl = document.getElementById('addToTodoContextTitle')
+    var deadlineEl = document.getElementById('addToTodoContextDeadline')
+    var priorityEl = document.getElementById('addToTodoContextPriority')
+    var linkEl = document.getElementById('addToTodoContextLink')
+    var commentEl = document.getElementById('addToTodoContextComment')
+    if (!titleEl || !deadlineEl || !priorityEl) return
+    var title = (titleEl.value || '').trim()
+    if (!title) {
+      if (typeof window.alert === 'function') window.alert(typeof window.i18next !== 'undefined' && window.i18next.t ? window.i18next.t('Please enter a title') : 'Please enter a title')
+      return
+    }
+    var formData = new FormData()
+    formData.append('todo_title', title)
+    formData.append('todo_priority', priorityEl.value || '50')
+    formData.append('todo_term', (deadlineEl.value || '').trim())
+    formData.append('todo_complete', '0')
+    if (linkEl) formData.append('todo_link', (linkEl.value || '').trim())
+    if (commentEl) formData.append('todo_comment', (commentEl.value || '').trim())
+    var submitBtn = document.getElementById('addToTodoContextSubmit')
+    if (submitBtn) {
+      submitBtn.disabled = true
+    }
+    if (typeof window.axios !== 'undefined') {
+      window.axios.post('/api/index.php?model=todo&method=api_add', formData)
+        .then(function (response) {
+          if (response.data && response.data.status === 'success') {
+            if (addToTodoModal) addToTodoModal.hide()
+            document.body.dispatchEvent(new CustomEvent('todo-added-from-context'))
+          } else {
+            if (window.alert) window.alert('Failed to add todo: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'))
+          }
+        })
+        .catch(function (err) {
+          if (window.alert) window.alert('Error: ' + (err.message || 'Request failed'))
+        })
+        .finally(function () {
+          if (submitBtn) submitBtn.disabled = false
+        })
+    } else {
+      var xhr = new XMLHttpRequest()
+      xhr.open('POST', '/api/index.php?model=todo&method=api_add')
+      xhr.onload = function () {
+        if (submitBtn) submitBtn.disabled = false
+        try {
+          var data = JSON.parse(xhr.responseText)
+          if (data && data.status === 'success') {
+            if (addToTodoModal) addToTodoModal.hide()
+            document.body.dispatchEvent(new CustomEvent('todo-added-from-context'))
+          } else {
+            if (window.alert) window.alert('Failed to add todo: ' + (data && data.message ? data.message : 'Unknown error'))
+          }
+        } catch (e) {
+          if (window.alert) window.alert('Request failed')
+        }
+      }
+      xhr.onerror = function () {
+        if (submitBtn) submitBtn.disabled = false
+        if (window.alert) window.alert('Request failed')
+      }
+      xhr.send(formData)
+    }
+  }
+
+  document.addEventListener('contextmenu', function (e) {
+    var el = e.target && e.target.closest ? e.target.closest('[data-todo-title]') : null
+    if (!el || !el.getAttribute('data-todo-title')) return
+    if (el.closest && el.closest('#projectTable')) return
+    e.preventDefault()
+    showContextMenu(e.clientX, e.clientY, el)
+  })
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', ensureAddToTodoModal)
+  } else {
+    ensureAddToTodoModal()
+  }
+})()

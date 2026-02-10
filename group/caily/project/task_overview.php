@@ -113,7 +113,7 @@ if($_SESSION['show_project'] == 0){
                                 <tr v-for="task in filteredTasks" :key="task.id">
                                     <td>
                                         <a :href="`detail.php?id=${task.project_id}`" class="text-decoration-none">
-                                            <span class="badge bg-label-primary me-1">#{{ task.project_number }}</span>
+                                            <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
                                             <span>{{ task.project_name }}</span>
                                         </a>
                                     </td>
@@ -235,7 +235,7 @@ window.currentUser = {
     isProjectManager: <?= json_encode($_SESSION['isProjectManager'] ?? false) ?>
 };
 </script>
-<script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
+
 <script src="assets/js/task-overview.js?v=<?=CACHE_VERSION?>"></script>
 
 

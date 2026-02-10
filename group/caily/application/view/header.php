@@ -49,6 +49,7 @@
     <!-- Helpers -->
      
     <script src="<?=$root?>assets/vendor/js/template-customizer.js?v=<?=CACHE_VERSION?>"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31/dist/vue.global.prod.js"></script>
     <script src="<?=$root?>assets/vendor/js/helpers.js?v=<?=CACHE_VERSION?>"></script>
     <script src="<?=$root?>assets/js/config.js?v=<?=CACHE_VERSION?>"></script>
     <!-- Notification System -->

@@ -33,6 +33,11 @@
 
 
 
+<script>
+  window.currentUserId = <?= json_encode($_SESSION['id'] ?? 0) ?>;
+</script>
+
+<script src="<?=$root?>assets/js/todo-modal.js?v=<?=CACHE_VERSION?>"></script>
 <script src="<?=$root?>assets/js/main.js?v=<?=CACHE_VERSION?>"></script>
 <script src="<?=$root?>assets/js/app-chat.js?v=<?=CACHE_VERSION?>"></script>
 <link rel="stylesheet" href="<?=$root?>assets/css/app-chat.css?v=<?=CACHE_VERSION?>">
