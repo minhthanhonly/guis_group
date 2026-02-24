@@ -187,7 +187,7 @@ createApp({
             return [
                 {
                     label: '図面総数',
-                    value: this.drawings.length,
+                    value: this.drawings.filter(d => d.name && d.name.includes('.')).length,
                     icon: 'fa fa-file-alt text-primary',
                     color: 'text-primary',
                     status: ''
@@ -235,6 +235,22 @@ createApp({
                     status: 'rejected'
                 }
             ];
+        },
+
+        totalStat() {
+            return this.stats.find(s => s.status === '');
+        },
+
+        statusStats() {
+            return this.stats.filter(s => s.status !== '');
+        },
+
+        hasActiveFilter() {
+            return !!(this.searchQuery || this.statusFilter);
+        },
+
+        hasUnassignedDrawings() {
+            return this.drawings.some(d => !this.isUserAssigned(d));
         }
     },
     
@@ -1212,7 +1228,7 @@ createApp({
         
         getStatusLabel(status) {
             const s = this.drawingStatuses.find(s => s.value === status);
-            return s ? s.label : status;
+            return s ? this.$t(s.label) : status;
         },
         
         getStatusButtonClass(status) {

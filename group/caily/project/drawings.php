@@ -87,18 +87,18 @@ if($_SESSION['show_project'] == 0){
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
                         
-                        <!-- Drawing Statistics -->
+                        <!-- Status filter statistics & totals -->
                         <div class="row mb-4">
-                            <div class="col-auto" v-for="stat in stats" :key="stat.label">
+                            <div class="col-auto" v-for="stat in statusStats" :key="stat.label">
                                 <div class="card border text-center"
-                                     :class="{'border-primary': statusFilter === stat.status || (stat.status === '' && !statusFilter)}"
+                                     :class="{'border-primary': statusFilter === stat.status}"
                                      style="min-width: 140px; cursor: pointer;"
                                      @click="filterByStatus(stat.status)">
                                     <div class="card-body py-3 px-2">
                                         <div :class="'fs-5 mb-1 ' + stat.color" style="font-size: 1.25rem;">
                                             <i :class="stat.icon"></i> {{ stat.value }}
                                         </div>
-                                        <div class="fw-bold small">{{ stat.label }}</div>
+                                        <div class="fw-bold small">{{ $t(stat.label) }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -118,10 +118,19 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
+                            <!-- Total drawings badge on the right -->
+                            <div class="col-auto ms-auto d-flex align-items-center" v-if="totalStat">
+                                <span class="badge bg-primary rounded-pill px-3 py-2 text-white"
+                                      style="cursor: pointer; font-size: 1.05rem;"
+                                      @click="filterByStatus('')">
+                                    {{ $t(totalStat.label) }}:
+                                    <span class="fw-bold text-warning ms-1">{{ totalStat.value }}</span>
+                                </span>
+                            </div>
                         </div>
 
                         <!-- Filters and Search -->
-                        <div class="row mb-4">
+                        <div class="row mb-2">
                             <div class="col-md-6">
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="fa fa-search"></i></span>
@@ -140,10 +149,18 @@ if($_SESSION['show_project'] == 0){
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <button class="btn btn-outline-secondary w-100" @click="clearFilters">
+                                <button class="btn w-100"
+                                        :class="hasActiveFilter ? 'btn-outline-danger' : 'btn-outline-secondary'"
+                                        @click="clearFilters">
                                     <i class="fa fa-times me-1"></i><span data-i18n="クリア">クリア</span>
                                 </button>
                             </div>
+                        </div>
+
+                        <!-- Unassigned drawings warning -->
+                        <div v-if="hasUnassignedDrawings" class="alert alert-warning py-2 mb-4">
+                            <i class="fa fa-exclamation-triangle me-2"></i>
+                            <span data-i18n="未割り当ての図面があります">未割り当ての図面があります</span>
                         </div>
                         
                         <!-- Selection Mode Indicator -->
@@ -175,6 +192,9 @@ if($_SESSION['show_project'] == 0){
                                     <tr>
                                         <th width="50">
                                             <input type="checkbox" class="form-check-input" @change="toggleSelectAll" :checked="isAllSelected">
+                                        </th>
+                                        <th width="60" class="text-center">
+                                            <span data-i18n="番号">番号</span>
                                         </th>
                                         <th @click="sortBy('name')" style="cursor: pointer;">
                                             <div class="d-flex align-items-center">
@@ -226,6 +246,9 @@ if($_SESSION['show_project'] == 0){
                                         <td @click.stop @mousedown.stop>
                                             <input type="checkbox" class="form-check-input" :value="drawing.id" v-model="selectedDrawings" @change="handleCheckboxClick(drawing.id)">
                                         </td>
+                                        <td class="text-center align-middle">
+                                            {{ index + 1 }}
+                                        </td>
                                         <td style="position: relative;">
                                             <div class="d-flex align-items-center">
                                                 <div class="flex-grow-1">
@@ -263,7 +286,7 @@ if($_SESSION['show_project'] == 0){
                                                 </button>
                                                 <ul class="dropdown-menu">
                                                     <li v-for="status in drawingStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateStatus(drawing.id, status.value)">
-                                                        {{ status.label }}
+                                                        {{ $t(status.label) }}
                                                     </li>
                                                 </ul>
                                             </div>
@@ -639,7 +662,7 @@ $view->footing();
     color: white;
     padding: 15px 0;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
-    z-index: 9998;
+    z-index: 9999;
     animation: slideUp 0.3s ease-out;
 }
 

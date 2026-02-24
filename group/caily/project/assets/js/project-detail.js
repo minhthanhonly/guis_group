@@ -126,6 +126,7 @@ const vueApp = createApp({
             },
             timeRemainingTimer: null,
             autoRefreshTimer: null,
+            savingCustomFieldLabel: null,
         }
     },
     computed: {
@@ -2381,6 +2382,51 @@ const vueApp = createApp({
                     value: savedField ? savedField.value : ''
                 };
             });
+        },
+        async updateCustomFieldValue(label, value) {
+            if (!this.project || !label) return;
+            const newValue = (value != null) ? String(value).trim() : '';
+            let saved = [];
+            let raw = this.project.custom_fields;
+            if (typeof raw === 'string' && raw.includes('&quot;')) raw = raw.replace(/&quot;/g, '"');
+            try {
+                saved = typeof raw === 'string' ? JSON.parse(raw || '[]') : (Array.isArray(raw) ? raw : []);
+            } catch (e) { saved = []; }
+            const updated = saved.filter(f => f && f.label && String(f.label).trim() !== String(label).trim());
+            updated.push({ label: label, value: newValue });
+            if (this.savingCustomFieldLabel === label) return;
+            this.savingCustomFieldLabel = label;
+            try {
+                const formData = new FormData();
+                formData.append('id', this.project.id);
+                formData.append('custom_fields', JSON.stringify(updated));
+                const res = await axios.post('/api/index.php?model=project&method=update', formData);
+                if (res.data && res.data.status === 'success') {
+                    this.project.custom_fields = JSON.stringify(updated);
+                    if (typeof showMessage === 'function') showMessage('保存しました');
+                } else {
+                    showMessage(res.data?.message || res.data?.error || '更新に失敗しました。', true);
+                }
+            } catch (err) {
+                console.error('Custom field save:', err);
+                showMessage(err.response?.data?.message || '更新に失敗しました。', true);
+            } finally {
+                this.savingCustomFieldLabel = null;
+            }
+        },
+        isCustomFieldCheckboxChecked(fieldLabel, opt) {
+            const val = this.getCustomFieldValue(fieldLabel);
+            return (val || '').split(',').map(s => s.trim()).includes(opt);
+        },
+        onCustomFieldCheckboxChange(field, opt, checked) {
+            const current = (this.getCustomFieldValue(field.label) || '').split(',').map(s => s.trim()).filter(Boolean);
+            if (checked) {
+                if (!current.includes(opt)) current.push(opt);
+            } else {
+                const i = current.indexOf(opt);
+                if (i !== -1) current.splice(i, 1);
+            }
+            this.updateCustomFieldValue(field.label, current.join(','));
         },
         async loadCompaniesByCategory() {
             if (!this.project.category_id) {

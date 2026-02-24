@@ -1797,8 +1797,13 @@ var projectTable;
             }
             $(document).on('keydown', function(e) {
                 if (e.key === ' ' || e.which === 32) {
-                    var tag = (e.target || e.srcElement).tagName.toLowerCase();
-                    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+                    var target = e.target || e.srcElement;
+                    var tag = target.tagName.toLowerCase();
+                    // Cho phép Space trong input, textarea, select, và editor Quill (contenteditable / .ql-editor)
+                    if (tag === 'input' || tag === 'textarea' || tag === 'select' ||
+                        target.isContentEditable || $(target).closest('.ql-editor').length) {
+                        return;
+                    }
                     e.preventDefault();
                     spaceHeld = true;
                 }

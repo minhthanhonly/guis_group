@@ -3,6 +3,7 @@
       <div class="layout-container">
         <!-- Menu -->
         <aside id="layout-menu" class="layout-menu menu-vertical menu">
+          <div class="layout-menu-collapsed-wrapper" style="position: fixed; top: 0;">
           <div class="app-brand demo">
             <a href="/" class="app-brand-link">
               <span class="app-brand-logo demo">
@@ -235,7 +236,23 @@
 
             
           </ul>
+          </div>
         </aside>
+        <style>
+          
+          .layout-menu-hover .app-brand .layout-menu-toggle {
+              display: block;
+          }
+          .layout-menu-collapsed .layout-menu-toggle{
+            display: none;
+          }
+          .layout-menu-collapsed .layout-menu-collapsed-wrapper{
+            width: var(--bs-menu-collapsed-width);
+          }
+          .layout-menu-hover .layout-menu-collapsed-wrapper{
+            width: auto;
+          }
+        </style>
 
         <div class="menu-mobile-toggler d-xl-none rounded-1">
           <a href="javascript:void(0);" class="layout-menu-toggle menu-link text-large text-bg-secondary p-2 rounded-1">
