@@ -10,7 +10,7 @@ createApp({
             statusFilter: '',
             
             // Sorting
-            sortField: 'id',
+            sortField: 'created_at',
             sortDirection: 'asc',
             
             // Form data

@@ -420,7 +420,7 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">担当</label>
+                                <label class="form-label"><span data-i18n="担当">担当</span></label>
                                 <div v-if="isEditMode" class="d-flex gap-3">
                                     <div class="form-check">
                                         <input class="form-check-input" type="radio" v-model="project.tantou" value="CAILY" id="tantou_caily">
@@ -434,30 +434,54 @@ if($_SESSION['show_project'] == 0){
                                 <input v-else type="text" class="form-control" :value="project.tantou || '-'" readonly>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">CAILY納期
-                                    <span v-if="getTimeRemainingForDate(project.caily_nouki)" :class="'badge ms-2 ' + getTimeRemainingForDate(project.caily_nouki).class"
+                                <label class="form-label"><span data-i18n="CAILY納期">CAILY納期</span>
+                                    <span v-if="getTimeRemainingForDate(project.caily_nouki) && project.caily_nouki_status !== '納品済み'" :class="'badge ms-2 ' + getTimeRemainingForDate(project.caily_nouki).class"
                                           :title="getTimeRemainingForDate(project.caily_nouki).isOverdue ? '期限を超過しています' : '残り時間'">
                                         {{ getTimeRemainingForDate(project.caily_nouki).text }}
                                     </span>
                                 </label>
-                                <div v-if="isEditMode" class="input-group">
-                                    <input type="text" class="form-control" v-model="project.caily_nouki" id="caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
-                                    <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                                <div v-if="isEditMode">
+                                    <div class="input-group mb-1">
+                                        <input type="text" class="form-control" v-model="project.caily_nouki" id="caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                        <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                                    </div>
+                                    <div class="form-check mt-1">
+                                        <input class="form-check-input" type="checkbox" id="caily_nouki_status" v-model="project.caily_nouki_status" true-value="納品済み" false-value="">
+                                        <label class="form-check-label" for="caily_nouki_status"><span data-i18n="納品済み">納品済み</span></label>
+                                    </div>
                                 </div>
-                                <input v-else type="text" class="form-control" :value="formatDateTime(project.caily_nouki)" :data-time="project.caily_nouki || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' CAILY納期'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.caily_nouki)" readonly>
+                                <div v-else class="d-flex flex-column">
+                                    <input type="text" class="form-control" :value="formatDateTime(project.caily_nouki)" :data-time="project.caily_nouki || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' CAILY納期'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.caily_nouki)" readonly>
+                                    <div class="form-check mt-1">
+                                        <input class="form-check-input" type="checkbox" id="caily_nouki_status_view" v-model="project.caily_nouki_status" true-value="納品済み" false-value="" @change="quickUpdateNoukiStatus('caily')">
+                                        <label class="form-check-label" for="caily_nouki_status_view"><span data-i18n="納品済み">納品済み</span></label>
+                                    </div>
+                                </div>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">GUIS納期
-                                    <span v-if="getTimeRemainingForDate(project.guis_nouki)" :class="'badge ms-2 ' + getTimeRemainingForDate(project.guis_nouki).class"
+                                <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span>
+                                    <span v-if="getTimeRemainingForDate(project.guis_nouki) && project.guis_nouki_status !== '納品済み'" :class="'badge ms-2 ' + getTimeRemainingForDate(project.guis_nouki).class"
                                           :title="getTimeRemainingForDate(project.guis_nouki).isOverdue ? '期限を超過しています' : '残り時間'">
                                         {{ getTimeRemainingForDate(project.guis_nouki).text }}
                                     </span>
                                 </label>
-                                <div v-if="isEditMode" class="input-group">
-                                    <input type="text" class="form-control" v-model="project.guis_nouki" id="guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
-                                    <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                                <div v-if="isEditMode">
+                                    <div class="input-group mb-1">
+                                        <input type="text" class="form-control" v-model="project.guis_nouki" id="guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                        <span class="input-group-text"><i class="fa fa-calendar"></i></span>
+                                    </div>
+                                    <div class="form-check mt-1">
+                                        <input class="form-check-input" type="checkbox" id="guis_nouki_status" v-model="project.guis_nouki_status" true-value="納品済み" false-value="">
+                                        <label class="form-check-label" for="guis_nouki_status"><span data-i18n="納品済み">納品済み</span></label>
+                                    </div>
                                 </div>
-                                <input v-else type="text" class="form-control" :value="formatDateTime(project.guis_nouki)" :data-time="project.guis_nouki || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' GUIS納期'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)" readonly>
+                                <div v-else class="d-flex flex-column">
+                                    <input type="text" class="form-control" :value="formatDateTime(project.guis_nouki)" :data-time="project.guis_nouki || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' GUIS納期'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)" readonly>
+                                    <div class="form-check mt-1">
+                                        <input class="form-check-input" type="checkbox" id="guis_nouki_status_view" v-model="project.guis_nouki_status" true-value="納品済み" false-value="" @change="quickUpdateNoukiStatus('guis')">
+                                        <label class="form-check-label" for="guis_nouki_status_view"><span data-i18n="納品済み">納品済み</span></label>
+                                    </div>
+                                </div>
                             </div>
                             
                             <div class="col-md-4">
@@ -468,7 +492,7 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
                             </div>
-                            
+                            <hr class="mt-4 border-primary">
                             <div class="col-12 mt-3">
                                 <template v-if="isEditMode">
                                     <div v-if="customFields && customFields.length > 0" class="mt-3">
@@ -478,7 +502,7 @@ if($_SESSION['show_project'] == 0){
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
                                                     <textarea class="form-control" v-model="field.value"></textarea>
                                                 </div>
-                                                <div v-else class="col-md-4 mb-3">
+                                                <div v-else class="col-md-6 mb-3">
                                                     <div class="form-label">{{ translateLabel(field.label) }}</div>
                                                     <template v-if="field.type === 'radio'">
                                                         <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
@@ -524,7 +548,7 @@ if($_SESSION['show_project'] == 0){
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
                                                     <div class="form-control" style="min-height:80px;white-space:pre-line;">{{ field.value || '-' }}</div>
                                                 </div>
-                                                <div v-else class="col-md-4 mb-3">
+                                                <div v-else class="col-md-6 mb-3">
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
                                                     <template v-if="field.type === 'checkbox' || field.type === 'radio' || field.type === 'select'">
                                                         <div>
@@ -546,6 +570,7 @@ if($_SESSION['show_project'] == 0){
                                     </template>
                                 </template>
                             </div>
+                            <hr class="mt-4 border-primary">
                             <div class="col-md-12">
                                 <label class="form-label"><span data-i18n="タグ">タグ</span><i class="fa fa-question-circle text-muted ms-2" 
                                 data-bs-toggle="tooltip" 

@@ -22,7 +22,9 @@ class Project extends ApplicationModel {
             'actual_end_date' => array(), //timestamp
             'tantou' => array(), //CAILY or GUIS
             'caily_nouki' => array(), //CAILY納期
+            'caily_nouki_status' => array(), //CAILY納期状況
             'guis_nouki' => array(), //GUIS納期
+            'guis_nouki_status' => array(), //GUIS納期状況
             'created_by' => array(), //userid
             'updated_by' => array(), //userid
             'created_at' => array('except' => array('search')), //timestamp
@@ -915,7 +917,7 @@ class Project extends ApplicationModel {
         }
         $where = "WHERE " . implode(" AND ", $whereArr);
 
-        $fields = "p.id, p.name, p.status, p.priority, p.progress, p.amount, p.guis_nouki, p.caily_nouki, p.department_id, p.start_date, p.end_date, p.tantou,
+        $fields = "p.id, p.name, p.status, p.priority, p.progress, p.amount, p.guis_nouki, p.guis_nouki_status, p.caily_nouki, p.caily_nouki_status, p.department_id, p.start_date, p.end_date, p.tantou,
             d.name as department_name,
             pp.company_name as parent_company_name,
             pp.project_name as parent_project_name,
@@ -1335,6 +1337,9 @@ class Project extends ApplicationModel {
                 }
             }
         }
+        if (array_key_exists('caily_nouki_status', $_POST)) {
+            $data['caily_nouki_status'] = trim((string)$_POST['caily_nouki_status']);
+        }
         if (array_key_exists('guis_nouki', $_POST)) {
             $val = isset($_POST['guis_nouki']) ? trim($_POST['guis_nouki']) : '';
             if ($val !== '') {
@@ -1343,6 +1348,9 @@ class Project extends ApplicationModel {
                     $data['guis_nouki'] = $parsed;
                 }
             }
+        }
+        if (array_key_exists('guis_nouki_status', $_POST)) {
+            $data['guis_nouki_status'] = trim((string)$_POST['guis_nouki_status']);
         }
         // 総額 (amount) - 必ずリクエストから取得して数値で保存
         $data['amount'] = (array_key_exists('amount', $_POST) && $_POST['amount'] !== '' && $_POST['amount'] !== null)
@@ -1389,30 +1397,36 @@ class Project extends ApplicationModel {
             $managers = explode(',', $_POST['managers']);
         }
         $listAllUserIds = array_merge($members, $managers);
+        $listAllUserIds = array_filter(array_map('intval', $listAllUserIds));
+        $listAllUserIds = array_unique($listAllUserIds);
         $listAllUsers = $this->getListUserName($listAllUserIds);
-        $new_users = array_filter($listAllUsers, function($user) use ($members) {
-            return in_array($user['id'], $members);
-        });
-        $new_managers = array_filter($listAllUsers, function($user) use ($managers) {
-            return in_array($user['id'], $managers);
-        });
-
-        if (isset($_POST['members']) && !empty($_POST['members'])) {
-            foreach ($members as $user_id) {
-                if (!empty($user_id)) {
-                    $this->addMember($project_id, intval($user_id), $new_users[$user_id]['userid'], 'member');
-                }
-            }
+        // Index by user id để addMember nhận đúng userid
+        $users_by_id = [];
+        foreach ($listAllUsers as $u) {
+            $users_by_id[(int)$u['id']] = $u;
         }
 
         // Add managers if provided
         if (isset($_POST['managers']) && !empty($_POST['managers'])) {
             foreach ($managers as $user_id) {
                 if (!empty($user_id)) {
-                    $this->addMember($project_id, intval($user_id), $new_managers[$user_id]['userid'],'manager');
+                    $uid = intval($user_id);
+                    $username = isset($users_by_id[$uid]) ? $users_by_id[$uid]['userid'] : '';
+                    $this->addMember($project_id, $uid, $username, 'manager');
                 }
             }
         }
+        
+        if (isset($_POST['members']) && !empty($_POST['members'])) {
+            foreach ($members as $user_id) {
+                if (!empty($user_id)) {
+                    $uid = intval($user_id);
+                    $username = isset($users_by_id[$uid]) ? $users_by_id[$uid]['userid'] : '';
+                    $this->addMember($project_id, $uid, $username, 'member');
+                }
+            }
+        }
+
         
         $this->notifyProjectCreated($project_id, $data['name'], array_column($listAllUsers, 'userid'));
         $this->logProjectAction($project_id, 'created', '案件作成', '', '');
@@ -1491,9 +1505,9 @@ class Project extends ApplicationModel {
                 break;
             }
         }
-        if ($changingSensitive && !$this->canUserEditProjectSensitiveFields($id)) {
-            return ['status' => 'error', 'error' => 'Forbidden: only project_manager or administrator can change amount, name, dates (start_date, end_date, caily_nouki, guis_nouki), or tantou', 'http_status' => 403];
-        }
+        // if ($changingSensitive && !$this->canUserEditProjectSensitiveFields($id)) {
+        //     return ['status' => 'error', 'error' => 'Forbidden: only project_manager or administrator can change amount, name, dates (start_date, end_date, caily_nouki, guis_nouki), or tantou', 'http_status' => 403];
+        // }
 
         // Chỉ cập nhật các trường có trong request; trường không gửi lên không bị ghi đè
         $data = array(
@@ -1587,6 +1601,9 @@ class Project extends ApplicationModel {
                 $nullDatetimeFields[] = 'caily_nouki';
             }
         }
+        if (array_key_exists('caily_nouki_status', $_POST)) {
+            $data['caily_nouki_status'] = trim((string)$_POST['caily_nouki_status']);
+        }
         if (array_key_exists('guis_nouki', $_POST)) {
             $val = isset($_POST['guis_nouki']) ? trim($_POST['guis_nouki']) : '';
             if ($val !== '') {
@@ -1599,6 +1616,9 @@ class Project extends ApplicationModel {
             } else {
                 $nullDatetimeFields[] = 'guis_nouki';
             }
+        }
+        if (array_key_exists('guis_nouki_status', $_POST)) {
+            $data['guis_nouki_status'] = trim((string)$_POST['guis_nouki_status']);
         }
         if (array_key_exists('actual_end_date', $_POST)) {
             $val = isset($_POST['actual_end_date']) ? trim($_POST['actual_end_date']) : '';
@@ -1669,7 +1689,7 @@ class Project extends ApplicationModel {
         $managers = [];
         $members = [];
         if ($result && isset($_POST['managers'])) {
-            $managers = explode(',', $_POST['managers']);
+            $managers = array_filter(array_map('intval', explode(',', $_POST['managers'])));
         }
         if ($result && isset($_POST['members'])) {
             $members = explode(',', $_POST['members']);
@@ -1718,6 +1738,12 @@ class Project extends ApplicationModel {
             $new_managers = array_diff($managers, $exist_managers_ids);
             $removed_managers = array_diff($exist_managers_ids, $managers);
 
+            // Khi danh sách managers rỗng, xóa toàn bộ manager của dự án
+            if (empty($managers) && !empty($exist_managers_ids)) {
+                $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id) . " AND role = 'manager'");
+                $this->notifyMemberRemoved($data['project_number'], $id, $data['name'], array_column($exist_managers, 'userid'), 'manager');
+            } else {
+
             $listAllUserIds = array_merge($new_managers, $removed_managers);
             $listAllUserIds = array_unique($listAllUserIds);
             $listAllUserIds = array_map('intval', $listAllUserIds);
@@ -1744,6 +1770,7 @@ class Project extends ApplicationModel {
             }
             if (!empty($removed_managers)) {
                 $this->notifyMemberRemoved($data['project_number'], $id, $data['name'], array_column($removed_users, 'userid'), 'manager');
+            }
             }
         }
         if ($result) {
@@ -1822,6 +1849,8 @@ class Project extends ApplicationModel {
             'caily_nouki' => 'CAILY納期を変更',
             'guis_nouki' => 'GUIS納期を変更',
             'actual_end_date' => '実終了日を変更',
+            'caily_nouki_status' => 'CAILY納期状況を変更',
+            'guis_nouki_status' => 'GUIS納期状況を変更',
         ];
         $skipKeys = ['updated_at', 'updated_by'];
         foreach ($data as $key => $newVal) {
@@ -1842,11 +1871,12 @@ class Project extends ApplicationModel {
                     $n = array_key_exists($fieldKey, $newArr) ? $newArr[$fieldKey] : null;
                     $oStr = $o === null ? '' : (is_scalar($o) ? (string)$o : json_encode($o));
                     $nStr = $n === null ? '' : (is_scalar($n) ? (string)$n : json_encode($n));
-                    if ($oStr !== $nStr) {
-                        $note = (isset($fieldLabels[$key]) ? $fieldLabels[$key] : $key . 'を変更') . ' (' . $fieldKey . ')';
+                    $oldDisplay = $this->customFieldValueToDisplay($o);
+                    $newDisplay = $this->customFieldValueToDisplay($n);
+                    if ($oldDisplay !== $newDisplay) {
                         $labelDisplay = (is_array($n) && isset($n['label'])) ? trim((string)$n['label']) : ((is_array($o) && isset($o['label'])) ? trim((string)$o['label']) : '');
-                        $newDisplay = $this->customFieldValueToDisplay($n);
-                        $this->logProjectAction($project_id, 'updated', $note . $aiLabel, $labelDisplay, $newDisplay);
+                        $note = $labelDisplay . 'を変更';
+                        $this->logProjectAction($project_id, 'updated', $note . $aiLabel, $oldDisplay ? $oldDisplay : 'null', $newDisplay ? $newDisplay : 'null');
                     }
                 }
                 continue;

@@ -23,7 +23,7 @@ var projectTable;
         { key: 'quotation', name: '見積', color: 'info' },
         { key: 'contract', name: '請負', color: 'info' },
         { key: 'in_progress', name: '進行中', color: 'primary' },
-        { key: 'completed', name: '納品', color: 'success' },
+        { key: 'completed', name: '完了', color: 'success' },
         { key: 'paused', name: '一時停止', color: 'warning' },
         { key: 'cancelled', name: '中止', color: 'danger' }
     ];
@@ -81,6 +81,8 @@ var projectTable;
         { key: 'customer_info', label: '顧客情報', index: 22, defaultVisible: true },
         { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 23, defaultVisible: false }
     ];
+    // Số cột base trước khi chèn các cột custom (bắt đầu từ CAILY納期)
+    const BASE_CUSTOM_START_INDEX = COLUMN_DEFINITIONS.find(col => col.key === 'caily_nouki').index; // 16
     
     function escapeHtmlForNote(s) {
         if (s == null || s === '') return '';
@@ -116,23 +118,51 @@ var projectTable;
         return visibility;
     }
     
+    // Tính index cột trong DataTable theo key (xử lý lệch index do chèn custom columns)
+    function getDataTableColumnIndexByKey(columnKey, customColDefs) {
+        const customDefs = customColDefs || customFieldColumnDefinitions || [];
+        const baseDef = COLUMN_DEFINITIONS.find(col => col.key === columnKey);
+        if (baseDef) {
+            const baseIdx = baseDef.index;
+            // Các cột base sau vị trí chèn custom sẽ bị đẩy sang phải theo số lượng custom
+            if (baseIdx >= BASE_CUSTOM_START_INDEX) {
+                return baseIdx + customDefs.length;
+            }
+            return baseIdx;
+        }
+        const customIndex = customDefs.findIndex(col => col.key === columnKey);
+        if (customIndex !== -1) {
+            return BASE_CUSTOM_START_INDEX + customIndex;
+        }
+        return null;
+    }
+
     function applyColumnVisibility(table, visibility, customColDefs) {
         if (!table || !$.fn.DataTable.isDataTable('#projectTable')) {
             return;
         }
+        const customDefs = customColDefs || customFieldColumnDefinitions || [];
         COLUMN_DEFINITIONS.forEach(col => {
             const isVisible = visibility[col.key] !== false;
-            table.column(col.index).visible(isVisible, false);
+            const dtIndex = getDataTableColumnIndexByKey(col.key, customDefs);
+            if (dtIndex !== null) {
+                table.column(dtIndex).visible(isVisible, false);
+            }
         });
-        (customColDefs || []).forEach(col => {
+        customDefs.forEach((col, idx) => {
             const isVisible = visibility[col.key] !== false;
-            table.column(col.index).visible(isVisible, false);
+            const dtIndex = getDataTableColumnIndexByKey(col.key, customDefs);
+            if (dtIndex !== null) {
+                table.column(dtIndex).visible(isVisible, false);
+            }
         });
         table.columns.adjust().draw(false);
     }
 
     // Custom field columns (built when table is initialized for selected department)
     var customFieldColumnDefinitions = [];
+    // Map base custom field label -> array of status fields ({ label, type, options })
+    var customFieldStatusMap = {};
 
     function customFieldKey(label) {
         return 'custom_' + String(label).replace(/\s+/g, '_').replace(/[^\w\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g, '_');
@@ -166,14 +196,58 @@ var projectTable;
                 if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
             }
             if (typeof moment !== 'undefined' && moment(v).isValid()) {
-                var displayStr = moment(v).format('M月D日 H:mm');
+                var m = moment(v);
+                var dateFormatStr = 'M月D日 H:mm';
+                var displayStr = m.format(dateFormatStr);
+                var now = moment();
+                var isToday = m.isSame(now, 'day');
+                var isOverdue = m.isBefore(now);
+                
+                // Kiểm tra xem có trường trạng thái kèm theo chứa '送信済み' hay không (đã gửi)
+                var hasSentStatus = false;
+                if (typeof customFieldStatusMap !== 'undefined' && customFieldStatusMap[label] && row) {
+                    var statusDefs = customFieldStatusMap[label] || [];
+                    for (var i = 0; i < statusDefs.length; i++) {
+                        var sf = statusDefs[i];
+                        var sv = getCustomFieldValueFromRow(row, sf.label);
+                        if (sv && String(sv).indexOf('送信済み') !== -1) {
+                            hasSentStatus = true;
+                            break;
+                        }
+                    }
+                }
+                
+                var badgeHtml = '';
+                if (isToday) {
+                    var todayText = (typeof translateText === 'function' ? translateText('本日') : '本日');
+                    badgeHtml = '<span class="badge bg-label-primary mt-1" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + todayText + '</span>';
+                }
+                if (isOverdue && !hasSentStatus) {
+                    var lateText = (typeof translateText === 'function' ? translateText('遅れ') : '遅れ');
+                    badgeHtml += '<span class="badge bg-label-danger mt-1" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + lateText + '</span>';
+                }
+                
+                if (badgeHtml) {
+                    return '<div class="d-flex flex-column">' +
+                        '<span class="small text-nowrap"' + attrs + '>' + displayStr + '</span>' +
+                        badgeHtml +
+                    '</div>';
+                }
                 return '<span class="small text-nowrap"' + attrs + '>' + displayStr + '</span>';
             }
             if (typeof window.formatDateTime === 'function') return '<span class="small text-nowrap"' + attrs + '>' + window.formatDateTime(v) + '</span>';
             return '<span class="small text-nowrap"' + attrs + '>' + v + '</span>';
         }
         if (type === 'checkbox' || type === 'radio' || type === 'select') {
-            return '<span class="badge bg-label-secondary small">' + escapeHtmlForNote(v) + '</span>';
+            var badgeClass = 'bg-label-secondary';
+            // Nếu giá trị chứa '問題' hoặc 'エラー' → đỏ
+            if (v.indexOf('問題') !== -1 || v.indexOf('エラー') !== -1) {
+                badgeClass = 'bg-label-danger';
+            } else if (v.indexOf('済み') !== -1) {
+                // Nếu chứa '済み' → xanh
+                badgeClass = 'bg-label-success';
+            }
+            return '<span class="badge ' + badgeClass + ' small">' + (typeof translateText === 'function' ? translateText(escapeHtmlForNote(v)) : escapeHtmlForNote(v)) + '</span>';
         }
         if (type === 'textarea') {
             var short = v.length > 80 ? v.substring(0, 80) + '...' : v;
@@ -602,24 +676,45 @@ var projectTable;
 
         // Fetch custom field sets for current department and build custom columns (at end of table, default hidden)
         customFieldColumnDefinitions = [];
+        customFieldStatusMap = {};
         var customColumnConfigs = [];
         try {
             var cfRes = await axios.get('/api/index.php?model=department&method=getCustomFields');
             var sets = cfRes.data || [];
             var depId = app.selectedDepartment && app.selectedDepartment.id;
             var mergedFields = [];
+            var statusSuffix = '状況';
+            var statusMap = {};
+
+            // Gom các trường custom theo label; nếu label kết thúc bằng '状況' thì coi là cột trạng thái cho base label
             sets.filter(function(s) { return s.department_id == depId; }).forEach(function(s) {
                 if (s.fields && Array.isArray(s.fields)) {
                     s.fields.forEach(function(f) {
-                        if (!mergedFields.some(function(ex) { return ex.label && String(ex.label).trim() === String(f.label || '').trim(); })) {
-                            mergedFields.push({ label: f.label || '', type: f.type || 'text', options: f.options || '' });
+                        if (!f || !f.label) return;
+                        var label = String(f.label || '').trim();
+                        var type = f.type || 'text';
+                        var options = f.options || '';
+
+                        if (label.endsWith(statusSuffix)) {
+                            // Ví dụ: '構造データ送付 (CAILY)状況' -> baseLabel = '構造データ送付 (CAILY)'
+                            var baseLabel = label.replace(/状況\s*$/,'').trim();
+                            if (!statusMap[baseLabel]) statusMap[baseLabel] = [];
+                            statusMap[baseLabel].push({ label: label, type: type, options: options });
+                        } else {
+                            if (!mergedFields.some(function(ex) { return ex.label && String(ex.label).trim() === label; })) {
+                                mergedFields.push({ label: label, type: type, options: options });
+                            }
                         }
                     });
                 }
             });
+
+            customFieldStatusMap = statusMap;
+
             mergedFields.forEach(function(f, i) {
                 var key = customFieldKey(f.label);
-                customFieldColumnDefinitions.push({ key: key, label: f.label, type: f.type, options: f.options || '', index: 24 + i, defaultVisible: true });
+                // Index trong DataTable: ngay sau các cột base trước custom
+                customFieldColumnDefinitions.push({ key: key, label: f.label, type: f.type, options: f.options || '', index: BASE_CUSTOM_START_INDEX + i, defaultVisible: true });
                 var fieldLabel = f.label;
                 var fieldType = f.type;
                 var fieldOptions = f.options || '';
@@ -627,7 +722,20 @@ var projectTable;
                     data: null,
                     render: function(data, type, row) {
                         var val = getCustomFieldValueFromRow(row, fieldLabel);
-                        return formatCustomFieldForList(val, fieldType, fieldOptions, row, fieldLabel);
+                        var mainHtml = formatCustomFieldForList(val, fieldType, fieldOptions, row, fieldLabel);
+
+                        var statusDefs = (typeof customFieldStatusMap !== 'undefined' && customFieldStatusMap[fieldLabel]) || [];
+                        if (!statusDefs.length) return mainHtml;
+
+                        var parts = [mainHtml];
+                        statusDefs.forEach(function(sf) {
+                            var sv = getCustomFieldValueFromRow(row, sf.label);
+                            if (sv !== undefined && String(sv).trim() !== '') {
+                                var statusHtml = formatCustomFieldForList(sv, sf.type, sf.options || '', row, sf.label);
+                                parts.push('<div class="mt-1">' + statusHtml + '</div>');
+                            }
+                        });
+                        return parts.join('');
                     },
                     title: fieldLabel,
                     orderable: false,
@@ -740,17 +848,24 @@ var projectTable;
                         // Start date label
                         const startLabel = getStartDateLabel(row.start_date);
                         if (startLabel) {
-                            badges.push('<span class="badge ' + startLabel.class + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + startLabel.text + '</span>');
+                            var startText = (typeof translateText === 'function' ? translateText(startLabel.text) : startLabel.text);
+                            if (startText === startLabel.text && (startLabel.text === '開始今日' || startLabel.text === '開始明日')) {
+                                startText = (typeof translateText === 'function' ? translateText(startLabel.text === '開始今日' ? 'start_today' : 'start_tomorrow') : startLabel.text);
+                                if (startText === 'start_today' || startText === 'start_tomorrow') startText = startLabel.text;
+                            }
+                            badges.push('<span class="badge ' + startLabel.class + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + startText + '</span>');
                         }
                         
-                        // Overdue label (期限超過)
+                        // Overdue label — i18n
                         if (isProjectOverdue(row)) {
-                            badges.push('<span class="badge bg-danger" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">期限超過</span>');
+                            var overdueText = (typeof translateText === 'function' ? translateText('期限超過') : '期限超過');
+                            badges.push('<span class="badge bg-danger" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + overdueText + '</span>');
                         }
                         
-                        // Period undecided label (期間未定)
+                        // Period undecided label — i18n
                         if (isPeriodUndecided(row)) {
-                            badges.push('<span class="badge bg-label-warning" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">期間未定</span>');
+                            var undecidedText = (typeof translateText === 'function' ? translateText('期間未定') : '期間未定');
+                            badges.push('<span class="badge bg-label-warning" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + undecidedText + '</span>');
                         }
                       
                         
@@ -862,9 +977,10 @@ var projectTable;
                         if (type === 'sort' || type === 'type') {
                             return data || '';
                         }
-                        // Return HTML for display
-                        const status = statuses.find(status => status.key === data);
-                        return `<span class="badge bg-${status?.color || 'secondary'}">${status?.name || data}</span>`;
+                        // Return HTML for display (i18n: translate status name)
+                        const status = statuses.find(s => s.key === data);
+                        const label = (status && status.name) ? (typeof translateText === 'function' ? translateText(status.name) : status.name) : (data || '');
+                        return `<span class="badge bg-${status?.color || 'secondary'}">${label}</span>`;
                     },
                     title: '<span data-i18n="案件状況">案件状況</span>',
                     orderable: false,
@@ -1083,18 +1199,41 @@ var projectTable;
                         return '-';
                     }
                 }},
+            ].concat(customColumnConfigs).concat([
                 {
                     data: 'caily_nouki',
                     render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
+                        // Luôn tính statusBadge trước (từ row), kể cả khi caily_nouki rỗng → vẫn hiện 納品済み
+                        var statusBadge = '';
+                        var isDelivered = false;
+                        var statusVal = row && (row.caily_nouki_status !== undefined && row.caily_nouki_status !== null ? row.caily_nouki_status : '');
+                        if (statusVal !== '' && String(statusVal).trim() !== '') {
+                            var statusEsc = String(statusVal).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                            statusBadge = '<span class="badge bg-label-success mt-1" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + (typeof translateText === 'function' ? translateText(statusEsc) : statusEsc) + '</span>';
+                            if (String(statusVal).indexOf('納品済み') !== -1) {
+                                isDelivered = true;
+                            }
                         }
+
+                        var hasNoDate = !data || (typeof data === 'string' && data.trim() === '');
+                        if (hasNoDate) {
+                            return statusBadge ? '<div class="d-flex flex-column"><span class="text-muted small">-</span>' + statusBadge + '</div>' : '<span class="text-muted">-</span>';
+                        }
+
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
                         var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, 'CAILY納期') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
-                        const timeRemaining = getTimeRemaining(data, row.status);
                         const dateStr = moment(data).format('M月D日 H:mm');
+
+                        if (isDelivered) {
+                            return '<div class="d-flex flex-column">' +
+                                '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
+                                statusBadge +
+                            '</div>';
+                        }
+
+                        const timeRemaining = getTimeRemaining(data, row.status);
                         if (timeRemaining) {
                             const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
                             const titleText = timeRemaining.isOverdue
@@ -1107,9 +1246,13 @@ var projectTable;
                                              'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
                                              timeRemaining.text +
                                         '</span>' +
+                                        statusBadge +
                                     '</div>';
                         } else {
-                            return '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>';
+                            return '<div class="d-flex flex-column">' +
+                                '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>' +
+                                statusBadge +
+                            '</div>';
                         }
                     },
                     title: '<span data-i18n="CAILY納期">CAILY納期</span>',
@@ -1119,15 +1262,36 @@ var projectTable;
                 {
                     data: 'guis_nouki',
                     render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
+                        // Luôn tính statusBadge trước (từ row), kể cả khi guis_nouki rỗng → vẫn hiện 納品済み
+                        var statusBadge = '';
+                        var isDelivered = false;
+                        var statusVal = row && (row.guis_nouki_status !== undefined && row.guis_nouki_status !== null ? row.guis_nouki_status : '');
+                        if (statusVal !== '' && String(statusVal).trim() !== '') {
+                            var statusEsc = String(statusVal).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                            statusBadge = '<span class="badge bg-label-success mt-1" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + statusEsc + '</span>';
+                            if (String(statusVal).indexOf('納品済み') !== -1) {
+                                isDelivered = true;
+                            }
                         }
+
+                        var hasNoDate = !data || (typeof data === 'string' && data.trim() === '');
+                        if (hasNoDate) {
+                            return statusBadge ? '<div class="d-flex flex-column"><span class="text-muted small">-</span>' + statusBadge + '</div>' : '<span class="text-muted">-</span>';
+                        }
+
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
                         var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, 'GUIS納期') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
                         const timeRemaining = getTimeRemaining(data, row.status);
                         const dateStr = moment(data).format('M月D日 H:mm');
+
+                        if (isDelivered) {
+                            return '<div class="d-flex flex-column">' +
+                                '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
+                                statusBadge +
+                            '</div>';
+                        }
                         if (timeRemaining) {
                             const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
                             const titleText = timeRemaining.isOverdue
@@ -1140,9 +1304,13 @@ var projectTable;
                                              'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
                                              timeRemaining.text +
                                         '</span>' +
+                                        statusBadge +
                                     '</div>';
                         } else {
-                            return '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>';
+                            return '<div class="d-flex flex-column">' +
+                                '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>' +
+                                statusBadge +
+                            '</div>';
                         }
                     },
                     title: '<span data-i18n="GUIS納期">GUIS納期</span>',
@@ -1285,8 +1453,8 @@ var projectTable;
                     title: '<span data-i18n="GUIS 受付者">GUIS 受付者</span>',
                     visible: false
                 }
-            ].concat(customColumnConfigs),
-            order: [[COLUMN_DEFINITIONS.find(col => col.key === 'end_date').index, 'asc']],
+            ]),
+            order: [[getDataTableColumnIndexByKey('end_date', customFieldColumnDefinitions), 'asc']],
            
             pageLength: 50,
             ordering: true,
@@ -1801,7 +1969,35 @@ var projectTable;
 
         // Quick Edit Tagify instances (destroy on each open, re-init after load)
         let quickEditTeamTagify = null, quickEditManagerTagify = null, quickEditMembersTagify = null;
+        let quickEditQuillInstance = null;
         let quickEditIsManagerOnly = false;
+        function destroyQuickEditQuill() {
+            if (quickEditQuillInstance) {
+                try {
+                    if (typeof quickEditQuillInstance.setText === 'function') quickEditQuillInstance.setText('');
+                    if (typeof quickEditQuillInstance.destroy === 'function') quickEditQuillInstance.destroy();
+                } catch (e) {}
+                quickEditQuillInstance = null;
+            }
+            var quillContainer = document.getElementById('quickEditQuillDescription');
+            if (quillContainer) {
+                var parent = quillContainer.parentElement;
+                if (parent) {
+                    var toolbar = parent.querySelector('.ql-toolbar');
+                    if (toolbar) toolbar.remove();
+                    parent.querySelectorAll('.ql-container, .ql-editor').forEach(function(el) {
+                        if (el !== quillContainer) el.remove();
+                    });
+                }
+                quillContainer.innerHTML = '';
+                quillContainer.className = 'custom_editor_content';
+                quillContainer.setAttribute('id', 'quickEditQuillDescription');
+                quillContainer.removeAttribute('contenteditable');
+                quillContainer.removeAttribute('data-gramm');
+                quillContainer.removeAttribute('data-gramm_editor');
+                quillContainer.removeAttribute('data-enable-grammarly');
+            }
+        }
         function destroyQuickEditTagify() {
             [quickEditTeamTagify, quickEditManagerTagify, quickEditMembersTagify].forEach(function(t) {
                 if (t && typeof t.destroy === 'function') { try { t.destroy(); } catch (e) {} }
@@ -1824,7 +2020,9 @@ var projectTable;
 
             axios.get('/api/index.php?model=project&method=getById&id=' + projectId).then(function(res) {
                 const p = res.data && res.data.data ? res.data.data : (res.data || {});
-                $('#quickEditProjectId').val(p.id || projectId);
+                const effectiveId = p.id || projectId;
+                $('#quickEditProjectId').val(effectiveId);
+                $('#quickEditProjectIdBadge').text('#' + effectiveId);
                 $('#quickEditName').val(p.name || '');
                 $('#quickEditStartDate').val(p.start_date || '');
                 $('#quickEditEndDate').val(p.end_date || '');
@@ -1836,7 +2034,45 @@ var projectTable;
                 else if (p.tantou === 'GUIS') $('#quickEditTantouGuis').prop('checked', true);
                 $('#quickEditCailyNouki').val(p.caily_nouki || '');
                 $('#quickEditGuisNouki').val(p.guis_nouki || '');
+                $('#quickEditCailyNoukiStatus').prop('checked', !!(p.caily_nouki_status && String(p.caily_nouki_status).indexOf('納品済み') !== -1));
+                $('#quickEditGuisNoukiStatus').prop('checked', !!(p.guis_nouki_status && String(p.guis_nouki_status).indexOf('納品済み') !== -1));
                 $('#quickEditProgress').val(p.progress != null && p.progress !== '' ? parseInt(p.progress, 10) : 0);
+
+                // 説明 (description): Quill editor like parent_project edit child project modal (destroy + DOM cleanup để không sinh nhiều instance)
+                destroyQuickEditQuill();
+                var quickEditDescEl = document.getElementById('quickEditQuillDescription');
+                if (quickEditDescEl && window.Quill) {
+                    var existingToolbar = quickEditDescEl.parentElement && quickEditDescEl.parentElement.querySelector('.ql-toolbar');
+                    if (existingToolbar) existingToolbar.remove();
+                    if (quickEditDescEl.classList.contains('ql-container')) {
+                        quickEditDescEl.className = 'custom_editor_content';
+                        quickEditDescEl.setAttribute('id', 'quickEditQuillDescription');
+                    }
+                    quickEditDescEl.innerHTML = '';
+                    quickEditQuillInstance = new Quill(quickEditDescEl, {
+                        bounds: quickEditDescEl,
+                        placeholder: '説明を入力してください...',
+                        modules: {
+                            toolbar: [
+                                ['bold', 'italic', 'underline', 'strike'],
+                                [{ color: [] }, { background: [] }],
+                                ['blockquote', 'code-block'],
+                                [{ 'header': 1 }, { 'header': 2 }],
+                                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                                [{ 'indent': '-1'}, { 'indent': '+1' }],
+                                [{ 'align': [] }],
+                                ['link'],
+                                ['clean']
+                            ]
+                        },
+                        theme: 'snow'
+                    });
+                    var descHtml = (p.description || '').toString().trim();
+                    if (descHtml) {
+                        descHtml = (typeof decodeHtmlEntities === 'function') ? decodeHtmlEntities(descHtml) : descHtml.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+                        quickEditQuillInstance.root.innerHTML = descHtml;
+                    }
+                }
 
                 var depId = p.department_id || '';
                 var savedCustom = [];
@@ -1884,9 +2120,11 @@ var projectTable;
                         var opts = options ? options.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
                         var val = savedValueMap[String(label).trim()] || '';
                         var safeLabel = String(label).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                        var colClass = type === 'textarea' ? 'col-12' : 'col-md-4';
+                        var labelText = (typeof translateText === 'function' ? translateText(safeLabel) : safeLabel);
+                        var colClass = type === 'textarea' ? 'col-12' : 'col-md-6';
                         var html = '<div class="' + colClass + ' mb-3 quick-edit-custom-field" data-custom-label="' + safeLabel + '" data-custom-type="' + type + '">';
-                        html += '<label class="form-label">' + safeLabel + '</label>';
+                        
+                        html += '<label class="form-label">' + labelText + '</label>';
                         if (type === 'textarea') {
                             html += '<textarea class="form-control quickEditCustomInput" data-custom-label="' + safeLabel + '" rows="3">' + (val ? String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '') + '</textarea>';
                         } else if (type === 'select') {
@@ -1895,13 +2133,14 @@ var projectTable;
                             html += '</select>';
                         } else if (type === 'radio') {
                             opts.forEach(function(opt) {
-                                html += '<div class="form-check form-check-inline"><input class="form-check-input quickEditCustomRadio" type="radio" name="quickEditCustomRadio_' + idx + '" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (val === opt ? ' checked' : '') + '><label class="form-check-label">' + String(opt).replace(/</g, '&lt;') + '</label></div>';
+                                html += '<div class="form-check"><input class="form-check-input quickEditCustomRadio" type="radio" name="quickEditCustomRadio_' + idx + '" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (val === opt ? ' checked' : '') + '><label class="form-check-label">' + String(opt).replace(/</g, '&lt;') + '</label></div>';
                             });
                         } else if (type === 'checkbox') {
                             var arr = val ? String(val).split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
                             opts.forEach(function(opt) {
                                 var checked = arr.indexOf(opt) !== -1;
-                                html += '<div class="form-check form-check-inline"><input class="form-check-input quickEditCustomCheckbox" type="checkbox" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (checked ? ' checked' : '') + '><label class="form-check-label">' + String(opt).replace(/</g, '&lt;') + '</label></div>';
+                                var optText = (typeof translateText === 'function' ? translateText(String(opt).replace(/</g, '&lt;')) : String(opt).replace(/</g, '&lt;'));
+                                html += '<div class="form-check"><input class="form-check-input quickEditCustomCheckbox" type="checkbox" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (checked ? ' checked' : '') + '><label class="form-check-label">' + optText + '</label></div>';
                             });
                         } else if (type === 'datetime') {
                             html += '<input type="text" class="form-control quickEditCustomInput quickEditCustomDatetime" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">';
@@ -2062,6 +2301,13 @@ var projectTable;
         $('#quickEditManagerTagsClear').on('click', function() { if (quickEditManagerTagify) quickEditManagerTagify.removeAllTags(); });
         $('#quickEditMembersTagsClear').on('click', function() { if (quickEditMembersTagify) quickEditMembersTagify.removeAllTags(); });
 
+        var quickEditModalEl = document.getElementById('quickEditProjectModal');
+        if (quickEditModalEl) {
+            quickEditModalEl.addEventListener('hidden.bs.modal', function() {
+                destroyQuickEditQuill();
+            });
+        }
+
         function isValidDateOrDateTime(str) {
             if (!str || typeof str !== 'string') return false;
             var s = str.trim();
@@ -2069,6 +2315,8 @@ var projectTable;
             var t = Date.parse(s);
             return !isNaN(t);
         }
+
+        $('#quickEditProjectSaveBtnHeader').on('click', function() { $('#quickEditProjectSaveBtn').trigger('click'); });
 
         $('#quickEditProjectSaveBtn').on('click', function() {
             const id = $('#quickEditProjectId').val();
@@ -2141,8 +2389,8 @@ var projectTable;
             if (hasError) {
                 return;
             }
-            const $btn = $('#quickEditProjectSaveBtn');
-            const $spinner = $('#quickEditSaveSpinner');
+            const $btn = $('#quickEditProjectSaveBtn, #quickEditProjectSaveBtnHeader');
+            const $spinner = $('#quickEditSaveSpinner, #quickEditSaveSpinnerHeader');
             $btn.prop('disabled', true);
             $spinner.removeClass('d-none');
             const formData = new FormData();
@@ -2157,11 +2405,15 @@ var projectTable;
             formData.append('tantou', $('input[name="tantou"]:checked').val() || '');
             formData.append('caily_nouki', $('#quickEditCailyNouki').val() || '');
             formData.append('guis_nouki', $('#quickEditGuisNouki').val() || '');
+            formData.append('caily_nouki_status', $('#quickEditCailyNoukiStatus').is(':checked') ? '納品済み' : '');
+            formData.append('guis_nouki_status', $('#quickEditGuisNoukiStatus').is(':checked') ? '納品済み' : '');
             formData.append('progress', $('#quickEditProgress').val() !== '' ? parseInt($('#quickEditProgress').val(), 10) : 0);
             formData.append('project_order_type', $('#quickEditProjectOrderType').val() || '');
             formData.append('teams', (quickEditTeamTagify && quickEditTeamTagify.value) ? quickEditTeamTagify.value.map(function(t) { return t.id; }).join(',') : '');
             formData.append('managers', (quickEditManagerTagify && quickEditManagerTagify.value) ? quickEditManagerTagify.value.map(function(t) { return t.id; }).join(',') : '');
             formData.append('members', (quickEditMembersTagify && quickEditMembersTagify.value) ? quickEditMembersTagify.value.map(function(t) { return t.id; }).join(',') : '');
+            var descContent = (quickEditQuillInstance && typeof quickEditQuillInstance.getSemanticHTML === 'function') ? quickEditQuillInstance.getSemanticHTML() : ($('#quickEditQuillDescriptionTextarea').val() || '');
+            formData.append('description', descContent);
             var customFieldsData = [];
             $('#quickEditCustomFieldsWrap .quick-edit-custom-field').each(function() {
                 var $field = $(this);
@@ -4254,12 +4506,9 @@ var projectTable;
                 
                 // Apply to DataTable if it exists (base or custom column)
                 if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-                    let colDef = COLUMN_DEFINITIONS.find(col => col.key === columnKey);
-                    if (!colDef && typeof customFieldColumnDefinitions !== 'undefined') {
-                        colDef = customFieldColumnDefinitions.find(col => col.key === columnKey);
-                    }
-                    if (colDef) {
-                        projectTable.column(colDef.index).visible(isVisible, false);
+                    const dtIndex = getDataTableColumnIndexByKey(columnKey, customFieldColumnDefinitions);
+                    if (dtIndex !== null) {
+                        projectTable.column(dtIndex).visible(isVisible, false);
                         projectTable.columns.adjust().draw(false);
                     }
                 }

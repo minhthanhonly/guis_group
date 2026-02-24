@@ -237,8 +237,18 @@ if($_SESSION['show_project'] == 0){
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="quickEditProjectModalLabel"><span data-i18n="案件を編集">案件を編集</span></h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h5 class="modal-title" id="quickEditProjectModalLabel">
+                        <span data-i18n="案件を編集">案件を編集</span>
+                        <span class="badge bg-label-primary ms-2" id="quickEditProjectIdBadge"></span>
+                    </h5>
+                    <div class="d-flex align-items-center gap-2 ms-auto">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
+                        <button type="button" class="btn btn-primary btn-sm" id="quickEditProjectSaveBtnHeader">
+                            <span class="spinner-border spinner-border-sm d-none" id="quickEditSaveSpinnerHeader"></span>
+                            <span data-i18n="更新">更新</span>
+                        </button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
                 </div>
                 <div class="modal-body position-relative">
                     <div id="quickEditModalLoading" class="position-absolute top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center bg-white bg-opacity-90 rounded d-none" style="z-index: 10;">
@@ -270,15 +280,15 @@ if($_SESSION['show_project'] == 0){
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <select class="form-select" name="status" id="quickEditStatus">
-                                    <option value="draft">受付</option>
-                                    <option value="open">納期検討</option>
-                                    <option value="confirming">仮受</option>
-                                    <option value="quotation">見積</option>
-                                    <option value="contract">請負</option>
-                                    <option value="in_progress">進行中</option>
-                                    <option value="completed">納品</option>
-                                    <option value="paused">一時停止</option>
-                                    <option value="cancelled">中止</option>
+                                    <option value="draft" data-i18n="受付">受付</option>
+                                    <option value="open" data-i18n="納期検討">納期検討</option>
+                                    <option value="confirming" data-i18n="仮受">仮受</option>
+                                    <option value="quotation" data-i18n="見積">見積</option>
+                                    <option value="contract" data-i18n="請負">請負</option>
+                                    <option value="in_progress" data-i18n="進行中">進行中</option>
+                                    <option value="completed" data-i18n="完了">完了</option>
+                                    <option value="paused" data-i18n="一時停止">一時停止</option>
+                                    <option value="cancelled" data-i18n="中止">中止</option>
                                 </select>
                             </div>
                             <div class="col-md-6 quick-edit-full-only">
@@ -294,7 +304,7 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                             </div>
                             <div class="col-md-4 quick-edit-full-only">
-                                <label class="form-label">担当</label>
+                                <label class="form-label"><span data-i18n="担当">担当</span></label>
                                 <div class="d-flex gap-3" id="quickEditTantouWrap">
                                     <div class="form-check">
                                         <input class="form-check-input" type="radio" name="tantou" id="quickEditTantouCaily" value="CAILY">
@@ -307,14 +317,26 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div class="invalid-feedback" id="quickEditTantouError"></div>
                             </div>
-                            <div class="col-md-4 quick-edit-full-only">
-                                <label class="form-label">CAILY納期</label>
-                                <input type="text" class="form-control" name="caily_nouki" id="quickEditCailyNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
+                            <div class="col-md-4">
+                                <label class="form-label"><span data-i18n="CAILY納期">CAILY納期</span></label>
+                                <div class="d-flex flex-column">
+                                    <input type="text" class="form-control" name="caily_nouki" id="quickEditCailyNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
+                                    <div class="form-check mt-1">
+                                        <input class="form-check-input" type="checkbox" id="quickEditCailyNoukiStatus" name="caily_nouki_status" value="納品済み">
+                                        <label class="form-check-label" for="quickEditCailyNoukiStatus"><span data-i18n="納品済み">納品済み</span></label>
+                                    </div>
+                                </div>
                                 <div class="invalid-feedback" id="quickEditCailyNoukiError"></div>
                             </div>
-                            <div class="col-md-4 quick-edit-full-only">
-                                <label class="form-label">GUIS納期</label>
-                                <input type="text" class="form-control" name="guis_nouki" id="quickEditGuisNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
+                            <div class="col-md-4">
+                                <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span></label>
+                                <div class="d-flex flex-column">
+                                    <input type="text" class="form-control" name="guis_nouki" id="quickEditGuisNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
+                                    <div class="form-check mt-1">
+                                        <input class="form-check-input" type="checkbox" id="quickEditGuisNoukiStatus" name="guis_nouki_status" value="納品済み">
+                                        <label class="form-check-label" for="quickEditGuisNoukiStatus"><span data-i18n="納品済み">納品済み</span></label>
+                                    </div>
+                                </div>
                                 <div class="invalid-feedback" id="quickEditGuisNoukiError"></div>
                             </div>
                             <div class="col-md-4">
@@ -343,8 +365,15 @@ if($_SESSION['show_project'] == 0){
                                     <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditMembersTagsClear" title="すべて削除"><i class="fa fa-times"></i></button>
                                 </div>
                             </div>
-                            <div class="row mt-4 quick-edit-full-only" id="quickEditCustomFieldsWrap">
+                            <div class="col-12 mt-4 row" id="quickEditCustomFieldsWrap">
                                 <!-- Custom fields rendered by JS -->
+                            </div>
+                            <div class="col-12 quick-edit-full-only">
+                                <label class="form-label"><span data-i18n="説明">説明</span></label>
+                                <div class="custom_editor">
+                                    <div class="custom_editor_content" id="quickEditQuillDescription"></div>
+                                    <textarea class="custom_editor_textarea d-none" id="quickEditQuillDescriptionTextarea"></textarea>
+                                </div>
                             </div>
                         </div>
                     </form>
@@ -552,14 +581,19 @@ $view->footing();
 #projectTable .d-flex.flex-column .badge:hover {
     transform: scale(1.05);
 }
-
+#projectTable{
+    border: 0!important;
+}
 /* Ensure proper spacing in end date column */
 #projectTable td {
     vertical-align: middle;
-    padding: 0.5rem 0.4rem;
+    padding: 0.4rem;
+    border: 1px solid #aaa;
+    
 }
+
 .table thead tr th {
-    padding: 0.5rem 0.4rem!important;
+    padding: 0.4rem!important;
 }
 
 /* Cột CAILY納期: nền xanh lá nhạt */

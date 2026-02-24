@@ -108,7 +108,7 @@ createApp({
                 { value: 'quotation', label: '見積', color: 'info' },
                 { value: 'contract', label: '請負', color: 'info' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
-                { value: 'completed', label: '納品', color: 'success' },
+                { value: 'completed', label: '完了', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
                 { value: 'cancelled', label: '中止', color: 'danger' }
             ],
@@ -1804,11 +1804,21 @@ createApp({
             this.$nextTick(() => {
                 this.initializeChildProjectDatePickers();
                 this.initializeChildProjectTagify();
-                // Add delay for Quill initialization to ensure DOM is ready
+                if (this.newChildProject.department_id) {
+                    this.loadCreateChildProjectCustomFields(this.newChildProject.department_id);
+                }
                 setTimeout(() => {
                     this.initializeCreateChildProjectQuill();
                 }, 100);
             });
+        },
+
+        onCreateChildProjectDepartmentChange() {
+            this.loadCreateChildProjectCustomFields(this.newChildProject.department_id);
+        },
+
+        onEditChildProjectDepartmentChange() {
+            this.loadEditChildProjectCustomFields(this.editingChildProject.department_id, []);
         },
 
         resetChildProjectForm() {
@@ -1868,6 +1878,9 @@ createApp({
             
             // Destroy Tagify instance
             this.destroyChildProjectTagify();
+
+            const createCfWrap = document.getElementById('createChildProjectCustomFieldsWrap');
+            if (createCfWrap) createCfWrap.innerHTML = '';
         },
 
         async loadDepartments() {
@@ -2238,6 +2251,148 @@ createApp({
             }
         },
 
+        /** Load and render custom fields for create child project by department (like project-list quick edit). */
+        async loadCreateChildProjectCustomFields(departmentId) {
+            const wrap = document.getElementById('createChildProjectCustomFieldsWrap');
+            if (!wrap) return;
+            wrap.innerHTML = '';
+            if (!departmentId) return;
+            try {
+                const cfRes = await axios.get('/api/index.php?model=department&method=getCustomFields');
+                const sets = cfRes.data || [];
+                const mergedFields = [];
+                sets.filter(s => s && s.department_id != null && String(s.department_id) === String(departmentId)).forEach(s => {
+                    if (s.fields && Array.isArray(s.fields)) {
+                        s.fields.forEach(f => {
+                            if (f && f.label && !mergedFields.some(ex => ex.label && String(ex.label).trim() === String((f.label || '').trim()))) {
+                                mergedFields.push({ label: f.label || '', type: f.type || 'text', options: f.options || '' });
+                            }
+                        });
+                    }
+                });
+                this._renderChildProjectCustomFields(wrap, mergedFields, [], 'createChildProject');
+                this._initChildProjectCustomFieldsFlatpickr(wrap, 'createChildProjectCustomDatetime');
+            } catch (err) {
+                console.error('Error loading create child project custom fields:', err);
+            }
+        },
+
+        /** Load and render custom fields for edit child project by department; savedCustom = array of {label, value}. */
+        async loadEditChildProjectCustomFields(departmentId, savedCustom) {
+            const wrap = document.getElementById('editChildProjectCustomFieldsWrap');
+            if (!wrap) return;
+            wrap.innerHTML = '';
+            if (!departmentId) return;
+            const savedValueMap = {};
+            try {
+                const raw = typeof savedCustom === 'string' ? (savedCustom.indexOf('&quot;') !== -1 ? savedCustom.replace(/&quot;/g, '"') : savedCustom) : savedCustom;
+                const arr = typeof raw === 'string' ? (JSON.parse(raw || '[]') || []) : (Array.isArray(raw) ? raw : []);
+                arr.forEach(f => { if (f && f.label) savedValueMap[String(f.label).trim()] = f.value || ''; });
+            } catch (e) { /* ignore */ }
+            try {
+                const cfRes = await axios.get('/api/index.php?model=department&method=getCustomFields');
+                const sets = cfRes.data || [];
+                const mergedFields = [];
+                sets.filter(s => s && s.department_id != null && String(s.department_id) === String(departmentId)).forEach(s => {
+                    if (s.fields && Array.isArray(s.fields)) {
+                        s.fields.forEach(f => {
+                            if (f && f.label && !mergedFields.some(ex => ex.label && String(ex.label).trim() === String((f.label || '').trim()))) {
+                                mergedFields.push({ label: f.label || '', type: f.type || 'text', options: f.options || '' });
+                            }
+                        });
+                    }
+                });
+                this._renderChildProjectCustomFields(wrap, mergedFields, savedValueMap, 'editChildProject');
+                this._initChildProjectCustomFieldsFlatpickr(wrap, 'editChildProjectCustomDatetime');
+            } catch (err) {
+                console.error('Error loading edit child project custom fields:', err);
+            }
+        },
+
+        _renderChildProjectCustomFields(wrap, mergedFields, savedValueMap, prefix) {
+            const fieldClass = prefix + 'CustomField';
+            const inputClass = prefix + 'CustomInput';
+            const checkboxClass = prefix + 'CustomCheckbox';
+            const radioClass = prefix + 'CustomRadio';
+            const datetimeClass = prefix + 'CustomDatetime';
+            const fpCommon = { enableTime: true, time_24hr: true, dateFormat: 'Y/m/d H:i', allowInput: true, locale: 'ja' };
+            mergedFields.forEach((f, idx) => {
+                const label = f.label;
+                const type = f.type;
+                const options = (f.options != null ? String(f.options) : '').trim();
+                const opts = options ? options.split(',').map(s => s.trim()).filter(Boolean) : [];
+                const val = savedValueMap[String(label).trim()] || '';
+                const safeLabel = String(label).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const colClass = type === 'textarea' ? 'col-12' : 'col-md-6';
+                const div = document.createElement('div');
+                div.className = colClass + ' mb-3 ' + fieldClass;
+                div.setAttribute('data-custom-label', safeLabel);
+                div.setAttribute('data-custom-type', type);
+                let inner = '<label class="form-label">' + safeLabel + '</label>';
+                if (type === 'textarea') {
+                    inner += '<textarea class="form-control ' + inputClass + '" data-custom-label="' + safeLabel + '" rows="3">' + (val ? String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '') + '</textarea>';
+                } else if (type === 'select') {
+                    inner += '<select class="form-select ' + inputClass + '" data-custom-label="' + safeLabel + '"><option value="">選択してください</option>';
+                    opts.forEach(opt => { inner += '<option value="' + String(opt).replace(/"/g, '&quot;') + '"' + (val === opt ? ' selected' : '') + '>' + String(opt).replace(/</g, '&lt;') + '</option>'; });
+                    inner += '</select>';
+                } else if (type === 'radio') {
+                    opts.forEach(opt => {
+                        inner += '<div class="form-check"><input class="form-check-input ' + radioClass + '" type="radio" name="' + radioClass + '_' + idx + '" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (val === opt ? ' checked' : '') + '><label class="form-check-label">' + String(opt).replace(/</g, '&lt;') + '</label></div>';
+                    });
+                } else if (type === 'checkbox') {
+                    const arr = val ? String(val).split(',').map(s => s.trim()).filter(Boolean) : [];
+                    opts.forEach(opt => {
+                        const checked = arr.indexOf(opt) !== -1;
+                        inner += '<div class="form-check"><input class="form-check-input ' + checkboxClass + '" type="checkbox" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (checked ? ' checked' : '') + '><label class="form-check-label">' + String(opt).replace(/</g, '&lt;') + '</label></div>';
+                    });
+                } else if (type === 'datetime') {
+                    inner += '<input type="text" class="form-control ' + inputClass + ' ' + datetimeClass + '" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">';
+                } else {
+                    inner += '<input type="text" class="form-control ' + inputClass + '" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '">';
+                }
+                div.innerHTML = inner;
+                wrap.appendChild(div);
+            });
+        },
+
+        _initChildProjectCustomFieldsFlatpickr(wrapEl, datetimeClass) {
+            if (typeof wrapEl.querySelectorAll !== 'function') return;
+            const inputs = wrapEl.querySelectorAll('.' + datetimeClass);
+            const fpCommon = { enableTime: true, time_24hr: true, dateFormat: 'Y/m/d H:i', allowInput: true, locale: 'ja' };
+            if (typeof flatpickr !== 'undefined' && inputs.length) {
+                inputs.forEach(el => {
+                    if (el._flatpickr) el._flatpickr.destroy();
+                    el._flatpickr = flatpickr(el, Object.assign({}, fpCommon, { defaultHour: 9, defaultMinute: 0 }));
+                });
+            }
+        },
+
+        /** Collect custom field values from a wrap (create or edit). wrapId and rowClass identify the container and row class. */
+        collectChildProjectCustomFields(wrapId, rowClass, inputClass, checkboxClass, radioClass) {
+            const wrap = document.getElementById(wrapId);
+            if (!wrap) return [];
+            const rows = wrap.querySelectorAll('.' + rowClass);
+            const result = [];
+            rows.forEach(row => {
+                const label = row.getAttribute('data-custom-label');
+                const type = row.getAttribute('data-custom-type');
+                if (!label) return;
+                let value = '';
+                if (type === 'checkbox') {
+                    const checked = row.querySelectorAll('.' + checkboxClass + ':checked');
+                    value = Array.from(checked).map(el => el.value).join(',');
+                } else if (type === 'radio') {
+                    const checkedEl = row.querySelector('.' + radioClass + ':checked');
+                    value = checkedEl ? checkedEl.value : '';
+                } else {
+                    const input = row.querySelector('.' + inputClass);
+                    value = input ? (input.value || '').trim() : '';
+                }
+                result.push({ label: label.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>'), value });
+            });
+            return result;
+        },
+
         clearChildProjectTeamTags(isEdit = false) {
             if (isEdit && this.editChildProjectTeamTagify) {
                 this.editChildProjectTeamTagify.removeAllTags();
@@ -2286,16 +2441,16 @@ createApp({
                 amount: project.amount || project.total_amount || 0,
                 progress: project.progress != null ? parseInt(project.progress, 10) : 0,
                 teams: project.teams || '',
-                managers: [], // Initialize as empty, will be loaded later
+                managers: [],
                 members: [],
                 tantou: project.tantou || '',
                 caily_nouki: this.formatDateTimeForInput(project.caily_nouki) || '',
-                guis_nouki: this.formatDateTimeForInput(project.guis_nouki) || ''
+                guis_nouki: this.formatDateTimeForInput(project.guis_nouki) || '',
+                custom_fields: project.custom_fields != null ? project.custom_fields : ''
             };
 
             this.loadDepartments();
 
-            // Reuse existing modal instance or create new one
             const modalEl = document.getElementById('editChildProjectModal');
             let modal = bootstrap.Modal.getInstance(modalEl);
             if (!modal) {
@@ -2303,7 +2458,6 @@ createApp({
             }
             modal.show();
 
-            // Run init after modal is fully shown so DOM is visible and Vue has updated inputs (fixes Tagify not showing previous values)
             const onShown = async () => {
                 if (!(this.editingChildProject.teams || '').toString().trim() && this.editingChildProject.id) {
                     try {
@@ -2315,6 +2469,9 @@ createApp({
                 }
                 this.initializeEditChildProjectDatePickers();
                 await this.initializeEditChildProjectTagify();
+                if (this.editingChildProject.department_id) {
+                    await this.loadEditChildProjectCustomFields(this.editingChildProject.department_id, this.editingChildProject.custom_fields);
+                }
                 setTimeout(() => {
                     this.initializeEditChildProjectQuill();
                 }, 100);
@@ -2472,8 +2629,7 @@ createApp({
                 
                 // Update the model when tags change
                 this.editChildProjectManagerTagify.on('change', (e) => {
-                    const selected = this.editChildProjectManagerTagify.value.map(t => t.id);
-                    this.editingChildProject.managers = selected;
+                    this.editingChildProject.managers = this.editChildProjectManagerTagify.value.map(t => String(t.id != null ? t.id : t.value)).filter(Boolean);
                 });
                 
                 // Load existing managers for the project (clear first to avoid add-then-remove-duplicates)
@@ -3095,18 +3251,8 @@ createApp({
                 this.editChildProjectValidationErrors.department_id = '部署は必須です。';
                 isValid = false;
             }
-            
-            if (!this.editingChildProject.start_date) {
-                this.editChildProjectValidationErrors.start_date = '開始日は必須です。';
-                isValid = false;
-            }
-            
-            if (!this.editingChildProject.end_date) {
-                this.editChildProjectValidationErrors.end_date = '期限日は必須です。';
-                isValid = false;
-            }
 
-            // Validate that start date is before end date
+            // Validate that start date is before end date (only when both are filled)
             if (this.editingChildProject.start_date && this.editingChildProject.end_date) {
                 const startDate = new Date(this.editingChildProject.start_date);
                 const endDate = new Date(this.editingChildProject.end_date);
@@ -3145,6 +3291,11 @@ createApp({
             this.updatingChildProject = true;
 
             try {
+                // Đồng bộ managers từ Tagify trước khi gửi (giống create)
+                if (this.editChildProjectManagerTagify) {
+                    this.editingChildProject.managers = this.editChildProjectManagerTagify.value.map(t => String(t.id != null ? t.id : t.value)).filter(Boolean);
+                }
+
                 const formData = new FormData();
                 formData.append('id', this.editingChildProject.id);
                 formData.append('name', this.editingChildProject.name);
@@ -3154,9 +3305,8 @@ createApp({
                 formData.append('start_date', this.editingChildProject.start_date);
                 formData.append('end_date', this.editingChildProject.end_date);
                 formData.append('project_order_type', this.editingChildProject.project_order_type || '');
-                if (this.editingChildProject.managers && this.editingChildProject.managers.length > 0) {
-                    formData.append('managers', this.editingChildProject.managers.join(','));
-                }
+                // Luôn gửi managers (kể cả rỗng) để backend cập nhật đúng project_members
+                formData.append('managers', (this.editingChildProject.managers && this.editingChildProject.managers.length > 0) ? this.editingChildProject.managers.join(',') : '');
                 formData.append('parent_project_id', this.editingChildProject.parent_project_id);
                 formData.append('status', this.editingChildProject.status || 'draft');
                 formData.append('amount', this.editingChildProject.amount || 0);
@@ -3170,6 +3320,9 @@ createApp({
                 formData.append('guis_nouki', this.editingChildProject.guis_nouki || '');
 
                 formData.append('is_kadai', '0');
+
+                const editCustomFields = this.collectChildProjectCustomFields('editChildProjectCustomFieldsWrap', 'editChildProjectCustomField', 'editChildProjectCustomInput', 'editChildProjectCustomCheckbox', 'editChildProjectCustomRadio');
+                if (editCustomFields.length) formData.append('custom_fields', JSON.stringify(editCustomFields));
 
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
 
@@ -3299,17 +3452,7 @@ createApp({
                 isValid = false;
             }
 
-            if (!this.newChildProject.start_date || this.newChildProject.start_date.trim() === '') {
-                this.childProjectValidationErrors.start_date = '開始日は必須です';
-                isValid = false;
-            }
-
-            if (!this.newChildProject.end_date || this.newChildProject.end_date.trim() === '') {
-                this.childProjectValidationErrors.end_date = '期限日は必須です';
-                isValid = false;
-            }
-
-            // Validate that start date is before end date
+            // Validate that start date is before end date (only when both are filled)
             if (this.newChildProject.start_date && this.newChildProject.end_date) {
                 const startDate = new Date(this.newChildProject.start_date);
                 const endDate = new Date(this.newChildProject.end_date);
@@ -3349,9 +3492,10 @@ createApp({
                     this.newChildProject.description = this.createChildProjectQuillContent;
                 }
 
-                // Sync Tagify values to model before submit (管理, チーム, メンバー)
+                // Sync Tagify values to model before submit (管理, チーム, メンバー) — chỉ gửi id số để backend lưu đúng
                 if (this.createChildProjectManagerTagify) {
-                    this.newChildProject.managers = this.createChildProjectManagerTagify.value.map(t => String(t.id != null ? t.id : t.value)).filter(Boolean);
+                    const raw = this.createChildProjectManagerTagify.value.map(t => (t.id != null ? t.id : t.value)).filter(Boolean);
+                    this.newChildProject.managers = raw.map(v => String(v)).filter(id => /^\d+$/.test(id));
                 }
                 if (this.createChildProjectTeamTagify) {
                     this.newChildProject.teams = this.createChildProjectTeamTagify.value.map(t => String(t.id != null ? t.id : t.value)).join(',') || '';
@@ -3368,9 +3512,8 @@ createApp({
                 formData.append('start_date', this.newChildProject.start_date || '');
                 formData.append('end_date', this.newChildProject.end_date || '');
                 formData.append('project_order_type', this.newChildProject.project_order_type || '');
-                if (this.newChildProject.managers && this.newChildProject.managers.length > 0) {
-                    formData.append('managers', this.newChildProject.managers.join(','));
-                }
+                // Luôn gửi managers (kể cả rỗng) để backend lưu đúng
+                formData.append('managers', (this.newChildProject.managers && this.newChildProject.managers.length > 0) ? this.newChildProject.managers.join(',') : '');
                 formData.append('parent_project_id', this.newChildProject.parent_project_id);
                 formData.append('progress', this.newChildProject.progress != null ? parseInt(this.newChildProject.progress, 10) : 0);
                 formData.append('teams', this.newChildProject.teams || '');
@@ -3387,6 +3530,9 @@ createApp({
 
                 formData.append('is_kadai', '0');
                 formData.append('status', this.newChildProject.status || 'draft');
+
+                const createCustomFields = this.collectChildProjectCustomFields('createChildProjectCustomFieldsWrap', 'createChildProjectCustomField', 'createChildProjectCustomInput', 'createChildProjectCustomCheckbox', 'createChildProjectCustomRadio');
+                if (createCustomFields.length) formData.append('custom_fields', JSON.stringify(createCustomFields));
 
                 const response = await axios.post('/api/index.php?model=project&method=create', formData);
 

@@ -26,7 +26,7 @@ const vueApp = createApp({
                 { value: 'quotation', label: '見積', color: 'info' },
                 { value: 'contract', label: '請負', color: 'info' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
-                { value: 'completed', label: '納品', color: 'success' },
+                { value: 'completed', label: '完了', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
                 { value: 'cancelled', label: '中止', color: 'danger' }
             ],
@@ -276,6 +276,10 @@ const vueApp = createApp({
                 if (this.project.parent_project_id) {
                     await this.loadParentProjectInfo();
                 }
+                
+                // Khởi tạo trạng thái CAILY納期状況 / GUIS納期状況 từ cột riêng trong DB
+                this.project.caily_nouki_status = this.project.caily_nouki_status || '';
+                this.project.guis_nouki_status = this.project.guis_nouki_status || '';
                 
                 this.calculateStats();
                 
@@ -1479,6 +1483,35 @@ const vueApp = createApp({
             
             return allFields;
         },
+        async quickUpdateNoukiStatus(kind) {
+            if (!this.project || !this.project.id) return;
+            const prevCaily = this.project.caily_nouki_status;
+            const prevGuis = this.project.guis_nouki_status;
+            try {
+                const formData = new FormData();
+                formData.append('id', this.project.id);
+                if (kind === 'caily') {
+                    formData.append('caily_nouki_status', this.project.caily_nouki_status || '');
+                } else if (kind === 'guis') {
+                    formData.append('guis_nouki_status', this.project.guis_nouki_status || '');
+                }
+                const response = await axios.post('/api/index.php?model=project&method=update', formData);
+                if (!response.data || response.data.status !== 'success') {
+                    this.project.caily_nouki_status = prevCaily;
+                    this.project.guis_nouki_status = prevGuis;
+                    if (typeof showMessage === 'function') {
+                        showMessage('納期状況の更新に失敗しました。', true);
+                    }
+                }
+            } catch (e) {
+                this.project.caily_nouki_status = prevCaily;
+                this.project.guis_nouki_status = prevGuis;
+                console.error('Error updating nouki status quickly:', e);
+                if (typeof showMessage === 'function') {
+                    showMessage('納期状況の更新に失敗しました。', true);
+                }
+            }
+        },
         async saveProject() {
             if (!this.project) {
                 if (typeof showMessage === 'function') showMessage('プロジェクトデータが読み込まれていません。', true);
@@ -1540,6 +1573,8 @@ const vueApp = createApp({
                 formData.append('tantou', this.project.tantou || '');
                 formData.append('caily_nouki', this.toAPIDate(this.project.caily_nouki) || '');
                 formData.append('guis_nouki', this.toAPIDate(this.project.guis_nouki) || '');
+                formData.append('caily_nouki_status', this.project.caily_nouki_status || '');
+                formData.append('guis_nouki_status', this.project.guis_nouki_status || '');
                 formData.append('project_order_type', this.project.project_order_type);
                 formData.append('customer_id', this.project.customer_id);
                 // formData.append('amount', this.project.amount);
@@ -2304,7 +2339,12 @@ const vueApp = createApp({
                         set.fields.forEach(f => {
                             // Avoid duplicates by label
                             if (!allFieldsFromSets.find(existing => existing.label && existing.label.trim() === f.label.trim())) {
-                                allFieldsFromSets.push(f);
+                                allFieldsFromSets.push({
+                                    label: f.label,
+                                    type: f.type,
+                                    // Chuẩn hóa options thành string để template có thể gọi .split(',')
+                                    options: Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : '')
+                                });
                             }
                         });
                     }
@@ -2554,7 +2594,11 @@ const vueApp = createApp({
                                 set.fields.forEach(f => {
                                     // Avoid duplicates by label
                                     if (!allFieldsFromSets.find(existing => existing.label && existing.label.trim() === f.label.trim())) {
-                                        allFieldsFromSets.push(f);
+                                        allFieldsFromSets.push({
+                                            label: f.label,
+                                            type: f.type,
+                                            options: Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : '')
+                                        });
                                     }
                                 });
                             }

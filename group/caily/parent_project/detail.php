@@ -1058,7 +1058,7 @@ $view->heading('建物詳細');
                             <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="部署">部署</span> <span class="text-danger">*</span></label>
-                                    <select class="form-select" v-model="newChildProject.department_id" required>
+                                    <select class="form-select" v-model="newChildProject.department_id" required @change="onCreateChildProjectDepartmentChange">
                                         <option value="">選択してください</option>
                                         <option v-for="dept in departments" :key="dept.id" :value="dept.id">
                                             {{ dept.name }}
@@ -1072,10 +1072,9 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="開始日">開始日</span> <span class="text-danger">*</span></label>
+                                    <label class="form-label"><span data-i18n="開始日">開始日</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.start_date"
-                                        id="start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
-                                        required>
+                                        id="start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <div v-if="childProjectValidationErrors.start_date"
                                         class="invalid-feedback d-block">
                                         {{ childProjectValidationErrors.start_date }}
@@ -1084,9 +1083,9 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span> <span class="text-danger">*</span></label>
+                                    <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.end_date"
-                                        id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off" required>
+                                        id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <div v-if="childProjectValidationErrors.end_date" class="invalid-feedback d-block">
                                         {{ childProjectValidationErrors.end_date }}
                                     </div>
@@ -1180,7 +1179,7 @@ $view->heading('建物詳細');
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="進捗率">進捗率</span> (%)</label>
-                                    <input type="number" class="form-control" v-model.number="newChildProject.progress" min="0" max="100" value="0" placeholder="0">
+                                    <input type="number" class="form-control" v-model.number="newChildProject.progress" step="5" min="0" max="100" value="0" placeholder="0">
                                 </div>
                             </div>
                             <div class="col-12">
@@ -1211,6 +1210,11 @@ $view->heading('建物詳細');
                                         <input type="text" class="form-control" id="create_child_project_members_tags" placeholder="メンバーを選択">
                                         <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearChildProjectMembersTags(false)" title="すべて削除"><i class="fa fa-times"></i></button>
                                     </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="row" id="createChildProjectCustomFieldsWrap">
+                                    <!-- Custom fields rendered by JS when department is selected -->
                                 </div>
                             </div>
                             <div class="col-12">
@@ -1261,7 +1265,7 @@ $view->heading('建物詳細');
                             <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="部署">部署</span> <span class="text-danger">*</span></label>
-                                    <select class="form-select" v-model="editingChildProject.department_id" required>
+                                    <select class="form-select" v-model="editingChildProject.department_id" required @change="onEditChildProjectDepartmentChange">
                                         <option value="">選択してください</option>
                                         <option v-for="dept in departments" :key="dept.id" :value="dept.id">
                                             {{ dept.name }}
@@ -1275,10 +1279,9 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="開始日">開始日</span> <span class="text-danger">*</span></label>
+                                    <label class="form-label"><span data-i18n="開始日">開始日</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.start_date"
-                                        id="edit_start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
-                                        required>
+                                        id="edit_start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <div v-if="editChildProjectValidationErrors.start_date"
                                         class="invalid-feedback d-block">
                                         {{ editChildProjectValidationErrors.start_date }}
@@ -1287,10 +1290,9 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span> <span class="text-danger">*</span></label>
+                                    <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.end_date"
-                                        id="edit_end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
-                                        required>
+                                        id="edit_end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
                                     <div v-if="editChildProjectValidationErrors.end_date"
                                         class="invalid-feedback d-block">
                                         {{ editChildProjectValidationErrors.end_date }}
@@ -1383,7 +1385,7 @@ $view->heading('建物詳細');
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="進捗率">進捗率</span> (%)</label>
-                                    <input type="number" class="form-control" v-model.number="editingChildProject.progress" min="0" max="100" placeholder="0">
+                                    <input type="number" class="form-control" v-model.number="editingChildProject.progress" step="5" min="0" max="100" placeholder="0">
                                 </div>
                             </div>
                             <div class="col-12">
@@ -1417,6 +1419,11 @@ $view->heading('建物詳細');
                                 </div>
                             </div>
                             <div class="col-12">
+                                <div class="row" id="editChildProjectCustomFieldsWrap">
+                                    <!-- Custom fields rendered by JS when department is selected -->
+                                </div>
+                            </div>
+                             <div class="col-12">
                                 <div class="mb-3">
                                     <label class="form-label"><span data-i18n="説明">説明</span></label>
                                     <div class="custom_editor">

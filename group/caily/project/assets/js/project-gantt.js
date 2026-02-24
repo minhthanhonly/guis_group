@@ -38,7 +38,7 @@ var statuses = [
     },
     {
         key: 'completed',
-        name: '納品',
+        name: '完了',
         color: 'success'
     },
     {
