@@ -38,103 +38,161 @@ if($_SESSION['show_project'] == 0){
         </button>
     </div>
     <div class="collapse show" id="projectFilterBox">
-    <div class="card mb-3">
-        <div class="card-body pb-4 pt-3">
-        <form class="row g-3" id="projectFilterForm" autocomplete="off">
-            <div class="col-md-3 col-6">
-            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="開始月">開始月</label>
-            <input type="text" class="form-control form-control-sm" id="filterStartMonth" autocomplete="off">
-            </div>
-            <div class="col-md-3 col-6">
-            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="期限月">期限月</label>
-            <input type="text" class="form-control form-control-sm" id="filterEndMonth" autocomplete="off">
-            </div>
-            <div class="col-md-3 col-6">
-            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="優先度">優先度</label>
-            <select class="form-select form-select-sm" id="filterPriority"></select>
-            </div>
-            <div class="col-md-3 col-6">
-            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="進捗率">進捗率</label>
-            <select class="form-select form-select-sm" id="filterProgress">
-                <option value="" data-i18n="すべて">すべて</option>
-                <option value="0-50">0-50%</option>
-                <option value="51-99">51-99%</option>
-                <option value="100">100%</option>
-            </select>
-            </div>
-            <div class="col-md-3 col-6">
-            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="残り時間">残り時間</label>
-            <select class="form-select form-select-sm" id="filterTimeLeft">
-                <option value="" data-i18n="すべて">すべて</option>
-                <option value="7" data-i18n="7日以内">7日以内</option>
-                <option value="30" data-i18n="30日以内">30日以内</option>
-                <option value="overdue" data-i18n="期限切れ">期限切れ</option>
-            </select>
-            </div>
-            <div class="col-md-3 col-6">
-            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="本日フィルター">本日フィルター</label>
-            <select class="form-select form-select-sm" id="filterToday">
-                <option value="" data-i18n="すべて">すべて</option>
-                <option value="start_today" data-i18n="開始日=本日">開始日=本日</option>
-                <option value="caily_today" data-i18n="CAILY納期=本日">CAILY納期=本日</option>
-                <option value="guis_today" data-i18n="GUIS納期=本日">GUIS納期=本日</option>
-                <option value="end_today" data-i18n="終了日=本日">終了日=本日</option>
-            </select>
-            </div>
-            <div class="col-md-3 col-6">
-            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="受注形態">受注形態</label>
-            <select class="form-select form-select-sm" id="filterProjectOrderType">
-                <option value="">すべて</option>
-                <option value="contract">契約図</option>
-                <option value="new">新規・実施図</option>
-                <option value="edit">修正</option>
-                <option value="other">その他</option>
-            </select>
-            </div>
-            <div class="col-md-3 col-6">
-            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="チーム">チーム</label>
-            <select class="form-select form-select-sm" id="filterTeam">
-                <option value="">すべて</option>
-            </select>
-            </div>
-            <div class="col-md-3 col-6">
-            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="担当">担当</label>
-            <select class="form-select form-select-sm" id="filterTantou">
-                <option value="">すべて</option>
-                <option value="CAILY">CAILY</option>
-                <option value="GUIS">GUIS</option>
-            </select>
-            </div>
-            <div class="col-md-4 col-12">
-            <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="キーワード">キーワード</label>
-            <input
-                type="text"
-                class="form-control form-control-sm"
-                id="filterKeyword"
-                data-i18n="案件名、工事番号、支店名などで検索..."
-                placeholder="案件名、工事番号、支店名などで検索...">
-            </div>
-            <div class="col-md-2 col-6">
-            <label class="form-label form-label-sm mb-0 text-nowrap">案件ID</label>
-            <input type="text" class="form-control form-control-sm" id="filterProjectId" placeholder="ID">
-            </div>
-            <div class="col-md-4 col-12 d-flex align-items-end">
-            <div class="d-flex flex-wrap align-items-center gap-3">
-                <div class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" id="filterMyProjects" v-model="filterMyProjects" @change="loadProjects">
-                    <label class="form-check-label" for="filterMyProjects" data-i18n="私の案件">私の案件</label>
+        <div class="card mb-3">
+            <div class="card-body pb-4 pt-3">
+                <form class="row g-3" id="projectFilterForm" autocomplete="off">
+                    <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="開始月">開始月</label>
+                    <input type="text" class="form-control form-control-sm" id="filterStartMonth" autocomplete="off">
+                    </div>
+                    <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="期限月">期限月</label>
+                    <input type="text" class="form-control form-control-sm" id="filterEndMonth" autocomplete="off">
+                    </div>
+                    <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="優先度">優先度</label>
+                    <select class="form-select form-select-sm" id="filterPriority"></select>
+                    </div>
+                    <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="進捗率">進捗率</label>
+                    <select class="form-select form-select-sm" id="filterProgress">
+                        <option value="" data-i18n="すべて">すべて</option>
+                        <option value="0-50">0-50%</option>
+                        <option value="51-99">51-99%</option>
+                        <option value="100">100%</option>
+                    </select>
+                    </div>
+                    <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="残り時間">残り時間</label>
+                    <select class="form-select form-select-sm" id="filterTimeLeft">
+                        <option value="" data-i18n="すべて">すべて</option>
+                        <option value="7" data-i18n="7日以内">7日以内</option>
+                        <option value="30" data-i18n="30日以内">30日以内</option>
+                        <option value="overdue" data-i18n="期限切れ">期限切れ</option>
+                    </select>
+                    </div>
+                    <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="本日フィルター">本日フィルター</label>
+                    <select class="form-select form-select-sm" id="filterToday">
+                        <option value="" data-i18n="すべて">すべて</option>
+                        <option value="start_today" data-i18n="開始日=本日">開始日=本日</option>
+                        <option value="caily_today" data-i18n="CAILY納期=本日">CAILY納期=本日</option>
+                        <option value="guis_today" data-i18n="GUIS納期=本日">GUIS納期=本日</option>
+                        <option value="end_today" data-i18n="終了日=本日">終了日=本日</option>
+                    </select>
+                    </div>
+                    <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="受注形態">受注形態</label>
+                    <select class="form-select form-select-sm" id="filterProjectOrderType">
+                        <option value="">すべて</option>
+                        <option value="contract">契約図</option>
+                        <option value="new">新規・実施図</option>
+                        <option value="edit">修正</option>
+                        <option value="other">その他</option>
+                    </select>
+                    </div>
+                    <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="チーム">チーム</label>
+                    <select class="form-select form-select-sm" id="filterTeam">
+                        <option value="">すべて</option>
+                    </select>
+                    </div>
+                    <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="担当">担当</label>
+                    <select class="form-select form-select-sm" id="filterTantou">
+                        <option value="">すべて</option>
+                        <option value="CAILY">CAILY</option>
+                        <option value="GUIS">GUIS</option>
+                    </select>
+                    </div>
+                    <div class="col-md-4 col-12">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="キーワード">キーワード</label>
+                    <input
+                        type="text"
+                        class="form-control form-control-sm"
+                        id="filterKeyword"
+                        data-i18n="案件名、工事番号、支店名などで検索..."
+                        placeholder="案件名、工事番号、支店名などで検索...">
+                    </div>
+                    <div class="col-md-2 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap">案件ID</label>
+                    <input type="text" class="form-control form-control-sm" id="filterProjectId" placeholder="ID">
+                    </div>
+                    <div class="col-md-4 col-12 d-flex align-items-end">
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" id="filterMyProjects" v-model="filterMyProjects" @change="loadProjects">
+                            <label class="form-check-label" for="filterMyProjects" data-i18n="私の案件">私の案件</label>
+                        </div>
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" id="filterNoDates">
+                            <label class="form-check-label" for="filterNoDates" data-i18n="開始日・終了日未設定">開始日・終了日未設定</label>
+                        </div>
+                    </div>
+                    </div>
+                </form>
+
+                <div class="d-flex align-items-center gap-2 mb-2 mt-4">
+                    <div class="btn-group">
+                        <button 
+                            v-for="status in statuses" 
+                            :key="status.key"
+                            class="btn btn-sm status-filter-btn"
+                            :data-i18n="status.name"
+                            :class="{
+                                [`btn-label-${status.color}`]: !selectedStatus || selectedStatus?.key !== status.key,
+                                [`btn-${status.color}`]: selectedStatus?.key === status.key,
+                                'active': selectedStatus?.key === status.key
+                            }"
+                            @click="filterProjectByStatus(status)"
+                        >
+                            {{ status.name }}
+                            <span v-show="selectedStatus && selectedStatus.key === status.key" class="active-indicator"></span>
+                        </button>
+                    </div>
+                    <div class="form-check form-switch ms-2">
+                        <input class="form-check-input" type="checkbox" id="showInactiveSwitch" checked>
+                        <label class="form-check-label small" for="showInactiveSwitch" data-i18n="完了・中止案件等も表示">完了・中止案件等も表示</label>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" id="filterReset" type="button">
+                        <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
+                    </button>
+                    <div class="dropdown" v-if="availableColumns && availableColumns.length > 0">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="columnVisibilityDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fa fa-columns me-1"></i><span data-i18n="列の表示">列の表示</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="columnVisibilityDropdown" id="columnVisibilityMenu" style="max-height: 400px; overflow-y: auto; min-width: 200px;">
+                            <li v-for="column in availableColumns" :key="column.key" class="dropdown-item-text px-3 py-2">
+                                <div class="form-check">
+                                    <input class="form-check-input column-visibility-checkbox" 
+                                        type="checkbox" 
+                                        :value="column.key" 
+                                        :id="'col-' + column.key"
+                                        :checked="column.visible"
+                                        @change="toggleColumnVisibility(column.key, $event)">
+                                    <label class="form-check-label" :for="'col-' + column.key" style="cursor: pointer;">
+                                        {{ column.label }}
+                                    </label>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
-                <div class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" id="filterNoDates">
-                    <label class="form-check-label" for="filterNoDates" data-i18n="開始日・終了日未設定">開始日・終了日未設定</label>
+                <div class="d-flex align-items-center gap-2 mt-6">
+                    <div class="form-check d-flex align-items-center">
+                        <input class="form-check-input me-1" type="checkbox" id="filterFavoritesOnly" @change="onFavoritesFilterChange">
+                        <label class="form-check-label mb-0" for="filterFavoritesOnly">
+                            <i class="fa fa-star text-warning me-1"></i><span data-i18n="お気に入りのみ">お気に入りのみ</span>
+                        </label>
+                    </div>
+                    <button v-if="showClearAllFavoritesBtn" class="btn btn-sm btn-outline-danger ms-2" @click="clearAllFavorites">
+                        <i class="fa fa-trash me-1"></i><span data-i18n="お気に入りをすべて削除">お気に入りをすべて削除</span>
+                    </button>
                 </div>
             </div>
-            </div>
-        </form>
         </div>
     </div>
-    </div>
-    <div class="card">
+    <div class="card" id="projectTableCard">
         <div class="card-body position-relative">
             <!-- Loading overlay -->
             <div v-if="loading" class="position-absolute top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center bg-white bg-opacity-90 rounded" style="z-index: 100;">
@@ -145,70 +203,11 @@ if($_SESSION['show_project'] == 0){
                     <div class="text-muted" data-i18n="データを読み込み中...">データを読み込み中...</div>
                 </div>
             </div>
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <div class="btn-group">
-                    <button 
-                        v-for="status in statuses" 
-                        :key="status.key"
-                        class="btn btn-sm status-filter-btn"
-                        :data-i18n="status.name"
-                        :class="{
-                            [`btn-label-${status.color}`]: !selectedStatus || selectedStatus?.key !== status.key,
-                            [`btn-${status.color}`]: selectedStatus?.key === status.key,
-                            'active': selectedStatus?.key === status.key
-                        }"
-                        @click="filterProjectByStatus(status)"
-                    >
-                        {{ status.name }}
-                        <span v-show="selectedStatus && selectedStatus.key === status.key" class="active-indicator"></span>
-                    </button>
-                </div>
-                <div class="form-check form-switch ms-2">
-                    <input class="form-check-input" type="checkbox" id="showInactiveSwitch" checked>
-                    <label class="form-check-label small" for="showInactiveSwitch" data-i18n="完了・中止案件等も表示">完了・中止案件等も表示</label>
-                    
-                
-                </div>
-                <button class="btn btn-sm btn-outline-primary" id="filterReset" type="button">
-                    <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
-                </button>
-                <div class="dropdown" v-if="availableColumns && availableColumns.length > 0">
-                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="columnVisibilityDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fa fa-columns me-1"></i><span data-i18n="列の表示">列の表示</span>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="columnVisibilityDropdown" id="columnVisibilityMenu" style="max-height: 400px; overflow-y: auto; min-width: 200px;">
-                        <li v-for="column in availableColumns" :key="column.key" class="dropdown-item-text px-3 py-2">
-                            <div class="form-check">
-                                <input class="form-check-input column-visibility-checkbox" 
-                                       type="checkbox" 
-                                       :value="column.key" 
-                                       :id="'col-' + column.key"
-                                       :checked="column.visible"
-                                       @change="toggleColumnVisibility(column.key, $event)">
-                                <label class="form-check-label" :for="'col-' + column.key" style="cursor: pointer;">
-                                    {{ column.label }}
-                                </label>
-                            </div>
-                        </li>
-                    </ul>
-                </div>
-
-            </div>
-            <div class="d-flex align-items-center gap-2 mt-6">
-                <div class="form-check d-flex align-items-center">
-                    <input class="form-check-input me-1" type="checkbox" id="filterFavoritesOnly" @change="onFavoritesFilterChange">
-                    <label class="form-check-label mb-0" for="filterFavoritesOnly">
-                        <i class="fa fa-star text-warning me-1"></i><span data-i18n="お気に入りのみ">お気に入りのみ</span>
-                    </label>
-                </div>
-                <button v-if="showClearAllFavoritesBtn" class="btn btn-sm btn-outline-danger ms-2" @click="clearAllFavorites">
-                    <i class="fa fa-trash me-1"></i><span data-i18n="お気に入りをすべて削除">お気に入りをすべて削除</span>
-                </button>
-            </div>
+            
             <!-- Active Filters Display -->
             <div id="activeFilters" class="mb-2"></div>
             <p class="small text-muted mb-2" id="projectTableScrollHint">
-                <i class="fa fa-info-circle me-1"></i><span data-i18n="Spaceを押したままドラッグで表を横・縦スクロール">Spaceを押したままドラッグで表を横・縦スクロール</span>
+                <i class="fa fa-info-circle me-1"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
             </p>
             <table id="projectTable" class="table table-striped">
                 

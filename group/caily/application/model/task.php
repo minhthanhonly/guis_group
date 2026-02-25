@@ -343,6 +343,10 @@ class Task extends ApplicationModel {
         if (isset($_POST['progress'])) {
             $data['progress'] = ($_POST['progress'] !== '' && $_POST['progress'] !== null) ? intval($_POST['progress']) : (isset($old['progress']) ? (int)$old['progress'] : 0);
         }
+        // Khi trạng thái là completed thì tự động cập nhật tiến độ 100%
+        if ($status === 'completed') {
+            $data['progress'] = 100;
+        }
         if (isset($_POST['parent_id'])) {
             $data['parent_id'] = ($_POST['parent_id'] !== '' && $_POST['parent_id'] !== null) ? intval($_POST['parent_id']) : (isset($old['parent_id']) ? $old['parent_id'] : null);
         }
@@ -516,11 +520,18 @@ class Task extends ApplicationModel {
             'status' => $status,
             'updated_at' => date('Y-m-d H:i:s')
         );
-        
+        // Khi chuyển trạng thái sang completed thì tự động cập nhật tiến độ 100%
+        if ($status === 'completed') {
+            $data['progress'] = 100;
+        }
+
         $result = $this->query_update($data, ['id' => $id]);
-        
+
         if ($result) {
             $this->logTaskAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
+            if ($status === 'completed' && (isset($old['progress']) ? (int)$old['progress'] : 0) != 100) {
+                $this->logTaskAction($id, 'progress_updated', '進捗変更', isset($old['progress']) ? $old['progress'] : 0, 100);
+            }
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'message' => 'Update failed'];

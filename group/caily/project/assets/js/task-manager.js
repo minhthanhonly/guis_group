@@ -744,7 +744,10 @@ const TaskApp = createApp({
                 
                 if (response.data.status == 'success') {
                     this.showMessage('ステータスを更新しました。');
-                    // Reload tasks to get updated data
+                    // Nếu user được giao task và chưa acknowledge thì tự động acknowledge
+                    if (this.isAssignedToMe(targetTask) && !this.isAcknowledged(targetTask, this.currentUserId)) {
+                        await this.acknowledgeTask(targetTask, { silent: true });
+                    }
                     await this.loadTasks();
                 } else {
                     throw new Error(response.data.message);
@@ -753,7 +756,7 @@ const TaskApp = createApp({
                 this.showMessage(error.message || 'ステータスの更新に失敗しました', true);
             }
         },
-        
+
         async updateTaskProgress(task = null) {
             const targetTask = task || this.selectedTask;
             if (!targetTask) {
@@ -776,7 +779,10 @@ const TaskApp = createApp({
                 );
                 if (response.data.status == 'success') {
                     this.showMessage('進捗を更新しました。');
-                    // Reload tasks to get updated data
+                    // Nếu user được giao task và chưa acknowledge thì tự động acknowledge
+                    if (this.isAssignedToMe(targetTask) && !this.isAcknowledged(targetTask, this.currentUserId)) {
+                        await this.acknowledgeTask(targetTask, { silent: true });
+                    }
                     await this.loadTasks();
                 } else {
                     throw new Error(response.data.message);
@@ -785,7 +791,7 @@ const TaskApp = createApp({
                 this.showMessage(error.message || '進捗の更新に失敗しました', true);
             }
         },
-        
+
         setTaskProgress(task, percent) {
             if (!task) return;
             task.progress = percent;
@@ -982,6 +988,14 @@ const TaskApp = createApp({
                 if (response.data.status == 'success') {
                     this.showMessage(inlineTask.id ? 'タスクを更新しました。' : 'タスクを追加しました。');
                     await this.loadTasks();
+                    const savedTaskId = inlineTask.id || (response.data && response.data.id);
+                    if (savedTaskId) {
+                        const task = this.tasks.find(t => t.id == savedTaskId);
+                        if (task && this.isAssignedToMe(task) && !this.isAcknowledged(task, this.currentUserId)) {
+                            await this.acknowledgeTask(task, { silent: true });
+                            await this.loadTasks();
+                        }
+                    }
                     this.inlineTasks.splice(idx, 1);
                     this.editingInlineId = null;
                 } else {
@@ -2346,18 +2360,18 @@ const TaskApp = createApp({
             return ack && ack.acknowledged_at ? ack.acknowledged_at : null;
         },
         
-        async acknowledgeTask(task) {
+        async acknowledgeTask(task, options = {}) {
+            const silent = options.silent === true;
             try {
                 const formData = new FormData();
                 formData.append('task_id', task.id);
-                
+
                 const response = await axios.post(
                     '/api/index.php?model=task&method=acknowledgeTask',
                     formData
                 );
-                
+
                 if (response.data && response.data.status === 'success') {
-                    // Update local task data
                     if (!task.acknowledgements) {
                         task.acknowledgements = {};
                     }
@@ -2366,16 +2380,22 @@ const TaskApp = createApp({
                         acknowledged: 1,
                         acknowledged_at: new Date().toISOString().slice(0, 19).replace('T', ' ')
                     };
-                    
-                    showMessage('タスクを受領しました。', false);
-                    // Reload tasks to get updated data
-                    await this.loadTasks();
+                    if (!silent) {
+                        showMessage('タスクを受領しました。', false);
+                    }
+                    if (!silent) {
+                        await this.loadTasks();
+                    }
                 } else {
-                    showMessage(response.data?.message || 'エラーが発生しました。', true);
+                    if (!silent) {
+                        showMessage(response.data?.message || 'エラーが発生しました。', true);
+                    }
                 }
             } catch (error) {
                 console.error('Error acknowledging task:', error);
-                showMessage('エラーが発生しました。', true);
+                if (!silent) {
+                    showMessage('エラーが発生しました。', true);
+                }
             }
         },
         

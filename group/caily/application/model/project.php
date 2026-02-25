@@ -1924,9 +1924,9 @@ class Project extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
         }
         $old = $this->getById($id);
-        $result = $this->query_update(['status' => 'deleted'], ['id' => $id]);
+        $result = $this->query_update(['status' => 'cancelled'], ['id' => $id]);
         if ($result) {
-            $this->logProjectAction($id, 'deleted', '案件を削除', $old['status'], 'deleted');
+            $this->logProjectAction($id, 'deleted', '案件を削除', $old['status'], 'cancelled');
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Delete failed'];
@@ -2042,9 +2042,9 @@ class Project extends ApplicationModel {
             ];
         }
         // Phase 4.3 – Permission check for project member/team assignment
-        if (!$this->canUserEditProject($project_id)) {
-            return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
-        }
+        // if (!$this->canUserEditProject($project_id)) {
+        //     return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
+        // }
         
         // Get project to check department
         $project = $this->fetchOne("SELECT department_id FROM " . DB_PREFIX . "projects WHERE id = " . intval($project_id));

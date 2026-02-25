@@ -555,7 +555,7 @@ var projectTable;
 
         
         if (badges.length > 0) {
-            $('#activeFilters').html(`<span class="me-2 text-muted small" >適用中のフィルター:</span>` + badges.join(''));
+            $('#activeFilters').html(`<span class="me-2 text-muted small" ><span data-i18n="適用中のフィルター">適用中のフィルター</span>:</span>` + badges.join(''));
         } else {
            // $('#activeFilters').html(`<span class="text-muted small" >すべて表示中</span>`);
         }

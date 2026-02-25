@@ -530,19 +530,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 /**
                  * Acknowledge a task
+                 * @param {Object} task
+                 * @param {Object} options - { silent: true } to skip message and loadTasks (caller will reload)
                  */
-                async acknowledgeTask(task) {
+                async acknowledgeTask(task, options = {}) {
+                    const silent = options.silent === true;
                     try {
                         const formData = new FormData();
                         formData.append('task_id', task.id);
-                        
+
                         const response = await axios.post(
                             '/api/index.php?model=task&method=acknowledgeTask',
                             formData
                         );
-                        
+
                         if (response.data && response.data.status === 'success') {
-                            // Update local task data
                             if (!task.acknowledgements) {
                                 task.acknowledgements = {};
                             }
@@ -551,16 +553,15 @@ document.addEventListener('DOMContentLoaded', function() {
                                 acknowledged: 1,
                                 acknowledged_at: new Date().toISOString().slice(0, 19).replace('T', ' ')
                             };
-                            
-                            if (typeof showMessage === 'function') {
+                            if (!silent && typeof showMessage === 'function') {
                                 showMessage('タスクを受領しました。', false);
                             }
                         } else {
-                            throw new Error(response.data.message || 'Failed to acknowledge task');
+                            if (!silent) throw new Error(response.data.message || 'Failed to acknowledge task');
                         }
                     } catch (error) {
                         console.error('Error acknowledging task:', error);
-                        if (typeof showMessage === 'function') {
+                        if (!silent && typeof showMessage === 'function') {
                             showMessage('タスクの受領に失敗しました。', true);
                         }
                     }
@@ -588,7 +589,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (typeof showMessage === 'function') {
                                 showMessage('ステータスを更新しました。', false);
                             }
-                            // Reload tasks to get updated data
+                            // Nếu user được giao task và chưa acknowledge thì tự động acknowledge
+                            if (!this.isAcknowledged(task)) {
+                                await this.acknowledgeTask(task, { silent: true });
+                            }
                             await this.loadTasks();
                         } else {
                             throw new Error(response.data.message);
@@ -623,7 +627,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (typeof showMessage === 'function') {
                                 showMessage('進捗を更新しました。', false);
                             }
-                            // Reload tasks to get updated data
+                            // Nếu user được giao task và chưa acknowledge thì tự động acknowledge
+                            if (!this.isAcknowledged(task)) {
+                                await this.acknowledgeTask(task, { silent: true });
+                            }
                             await this.loadTasks();
                         } else {
                             throw new Error(response.data.message);
