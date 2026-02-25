@@ -66,6 +66,7 @@ if($_SESSION['show_project'] == 0){
                                     <th style="width:32px;"></th>
                                     <th>ラベル</th>
                                     <th>タイプ</th>
+                                    <th style="width:90px;">1行表示</th>
                                     <th>選択肢 (カンマ区切り)</th>
                                     <th>操作</th>
                                 </tr>
@@ -95,6 +96,16 @@ if($_SESSION['show_project'] == 0){
                                         </select>
                                     </td>
                                     <td>
+                                        <div class="form-check text-center">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                :checked="!!field.one_row"
+                                                @change="field.one_row = $event.target.checked"
+                                            >
+                                        </div>
+                                    </td>
+                                    <td>
                                         <input class="form-control" v-model="field.options" :disabled="!['select','radio','checkbox'].includes(field.type)" :placeholder="field.type === 'select' || field.type === 'radio' || field.type === 'checkbox' ? 'A,B,C' : ''">
                                     </td>
                                     <td>
@@ -102,7 +113,7 @@ if($_SESSION['show_project'] == 0){
                                     </td>
                                 </tr>
                                 <tr v-if="!modalSet.fields.length">
-                                    <td colspan="5" class="text-center text-muted">項目がありません</td>
+                                    <td colspan="6" class="text-center text-muted">項目がありません</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -145,7 +156,6 @@ const app = Vue.createApp({
             this.showModal = true;
         },
         openModalForEdit(set, idx) {
-            console.log(set);
             this.editingSetIdx = idx;
             // Deep copy và chuẩn hóa từng field (đảm bảo có type để binding タイプ hoạt động)
             this.modalSet = JSON.parse(JSON.stringify(set));
@@ -153,7 +163,9 @@ const app = Vue.createApp({
                 label: f.label || '',
                 type: f.type || 'text',
                 // options có thể là string hoặc array từ DB → luôn ép về string để .trim() an toàn
-                options: f.options != null ? String(f.options) : ''
+                options: f.options != null ? String(f.options) : '',
+                // one_row có thể là 0/1, '0'/'1', boolean → chuẩn hóa về boolean đúng
+                one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
             }));
             this.showModal = true;
         },
@@ -161,7 +173,7 @@ const app = Vue.createApp({
             this.showModal = false;
         },
         addFieldToModal() {
-            this.modalSet.fields.push({ label: '', type: 'text', options: '' });
+            this.modalSet.fields.push({ label: '', type: 'text', options: '', one_row: false });
         },
         removeFieldFromModal(idx) {
             this.modalSet.fields.splice(idx, 1);
@@ -201,7 +213,9 @@ const app = Vue.createApp({
                     label: f.label || '',
                     type: f.type || 'text',
                     // Lưu options dưới dạng string (danh sách option, phân tách bởi dấu phẩy)
-                    options: f.options != null ? String(f.options) : ''
+                    options: f.options != null ? String(f.options) : '',
+                    // one_row luôn gửi boolean true/false rõ ràng
+                    one_row: (f.one_row === true)
                 }))
             };
             axios.post('/api/index.php?model=department&method=' + method, payload)

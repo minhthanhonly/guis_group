@@ -123,7 +123,7 @@ createApp({
                 project_order_type: '',
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
-                status: 'draft',
+                status: '',
                 amount: 0,
                 progress: 0,
                 teams: '',
@@ -160,7 +160,8 @@ createApp({
                 department_id: '',
                 project_number: '',
                 start_date: '',
-                end_date: ''
+                end_date: '',
+                status: ''
             },
             editChildProjectValidationErrors: {
                 name: '',
@@ -1832,7 +1833,7 @@ createApp({
                 project_order_type: '',
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
-                status: 'draft',
+                status: '',
                 amount: 0,
                 progress: 0,
                 teams: '',
@@ -1842,7 +1843,7 @@ createApp({
                 caily_nouki: '',
                 guis_nouki: ''
             };
-            
+
             // Clear Quill content
             this.createChildProjectQuillContent = '';
             if (this.createChildProjectQuillInstance) {
@@ -1854,9 +1855,10 @@ createApp({
                 department_id: '',
                 project_number: '',
                 start_date: '',
-                end_date: ''
+                end_date: '',
+                status: ''
             };
-            
+
             // Destroy existing flatpickr instances if they exist
             const startPicker = document.getElementById('start_date_picker');
             const endPicker = document.getElementById('end_date_picker');
@@ -2265,7 +2267,12 @@ createApp({
                     if (s.fields && Array.isArray(s.fields)) {
                         s.fields.forEach(f => {
                             if (f && f.label && !mergedFields.some(ex => ex.label && String(ex.label).trim() === String((f.label || '').trim()))) {
-                                mergedFields.push({ label: f.label || '', type: f.type || 'text', options: f.options || '' });
+                                mergedFields.push({
+                                    label: f.label || '',
+                                    type: f.type || 'text',
+                                    options: f.options || '',
+                                    one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
+                                });
                             }
                         });
                     }
@@ -2297,7 +2304,12 @@ createApp({
                     if (s.fields && Array.isArray(s.fields)) {
                         s.fields.forEach(f => {
                             if (f && f.label && !mergedFields.some(ex => ex.label && String(ex.label).trim() === String((f.label || '').trim()))) {
-                                mergedFields.push({ label: f.label || '', type: f.type || 'text', options: f.options || '' });
+                                mergedFields.push({
+                                    label: f.label || '',
+                                    type: f.type || 'text',
+                                    options: f.options || '',
+                                    one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
+                                });
                             }
                         });
                     }
@@ -2323,7 +2335,8 @@ createApp({
                 const opts = options ? options.split(',').map(s => s.trim()).filter(Boolean) : [];
                 const val = savedValueMap[String(label).trim()] || '';
                 const safeLabel = String(label).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                const colClass = type === 'textarea' ? 'col-12' : 'col-md-6';
+                const isOneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
+                const colClass = type === 'textarea' || isOneRow ? 'col-12' : 'col-md-6';
                 const div = document.createElement('div');
                 div.className = colClass + ' mb-3 ' + fieldClass;
                 div.setAttribute('data-custom-label', safeLabel);
@@ -3435,7 +3448,8 @@ createApp({
                 start_date: '',
                 end_date: '',
                 project_order_type: '',
-                tantou: ''
+                tantou: '',
+                status: ''
             };
 
             let isValid = true;
@@ -3472,6 +3486,12 @@ createApp({
             // Validate tantou (担当) is required
             if (!this.newChildProject.tantou || this.newChildProject.tantou.trim() === '') {
                 this.childProjectValidationErrors.tantou = '担当は必須です';
+                isValid = false;
+            }
+
+            // Validate status (ステータス) is required
+            if (!this.newChildProject.status || this.newChildProject.status.trim() === '') {
+                this.childProjectValidationErrors.status = 'ステータスを選択してください';
                 isValid = false;
             }
 

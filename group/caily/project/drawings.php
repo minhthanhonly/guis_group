@@ -541,29 +541,31 @@ if($_SESSION['show_project'] == 0){
         <div class="container-fluid">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-3">
-                    <span class="fw-medium text-white">{{ selectedDrawings.length }}<span data-i18n="個のファイルが選択されています">個のファイルが選択されています</span></span>
+                    <span class="fw-medium text-white">
+                        {{ selectedDrawings.length }}{{ $t('個のファイルが選択されています') }}
+                    </span>
                     <button class="btn btn-light btn-sm" @click="clearSelection">
-                        <i class="fa fa-times me-1"></i><span data-i18n="選択解除">選択解除</span>
+                        <i class="fa fa-times me-1"></i>{{ $t('選択解除') }}
                     </button>
                 </div>
                 <div class="d-flex gap-2">
                     <button class="btn btn-info" @click="bulkCopyNames">
-                        <i class="fa fa-copy me-1"></i><span data-i18n="名前をコピー">名前をコピー</span>
+                        <i class="fa fa-copy me-1"></i>{{ $t('名前をコピー') }}
                     </button>
                     <button class="btn btn-success" @click="bulkAssign">
-                        <i class="fa fa-user-plus me-1"></i><span data-i18n="一括割り当て">一括割り当て</span>
+                        <i class="fa fa-user-plus me-1"></i>{{ $t('一括割り当て') }}
                     </button>
                     <button class="btn btn-warning" @click="bulkUnassign">
-                        <i class="fa fa-user-minus me-1"></i><span data-i18n="一括解除">一括解除</span>
+                        <i class="fa fa-user-minus me-1"></i>{{ $t('一括解除') }}
                     </button>
                     <button class="btn btn-warning" @click="bulkChangeStatus">
-                        <i class="fa fa-edit me-1"></i><span data-i18n="ステータス変更">ステータス変更</span>
+                        <i class="fa fa-edit me-1"></i>{{ $t('ステータス変更') }}
                     </button>
                     <button class="btn btn-outline-light" @click="bulkClearPrice" :title="$t('選択した図面の単価をクリア') || '選択した図面の単価をクリア'">
-                        <i class="fa fa-yen-sign me-1"></i><span data-i18n="単価をクリア">単価をクリア</span>
+                        <i class="fa fa-yen-sign me-1"></i>{{ $t('単価をクリア') }}
                     </button>
                     <button class="btn btn-danger" @click="bulkDelete">
-                        <i class="fa fa-trash me-1"></i><span data-i18n="一括削除">一括削除</span>
+                        <i class="fa fa-trash me-1"></i>{{ $t('一括削除') }}
                     </button>
                 </div>
             </div>

@@ -108,25 +108,44 @@ class ProjectNote extends ApplicationModel {
         }
         
         $currentUserId = $_SESSION['userid'];
+        $currentUserAuthId = isset($_SESSION['id']) ? $_SESSION['id'] : null;
         
-        // Check if user is the note creator
+        // Check if user is the note creator (project_notes.user_id stores userid string)
         $isCreator = (strval($note['user_id']) === strval($currentUserId));
         
-        // Check if user is project manager
+        // Check if user is project manager (project_members.user_id stores numeric auth id)
         $isManager = false;
-        if (!$isCreator) {
+        if (!$isCreator && $currentUserAuthId !== null) {
             $query = sprintf(
                 "SELECT COUNT(*) as count FROM " . DB_PREFIX . "project_members 
                 WHERE project_id = %d AND user_id = %s AND role = 'manager'",
                 intval($note['project_id']),
-                $this->quote($currentUserId)
+                $this->quote($currentUserAuthId)
             );
             $result = $this->fetchOne($query);
             $isManager = ($result && $result['count'] > 0);
         }
+
+        // Check if user is department manager of the note's project
+        $isDepartmentManager = false;
+        if (!$isCreator && !$isManager && $_SESSION['authority'] != 'administrator') {
+            $project = $this->fetchOne(
+                "SELECT department_id FROM " . DB_PREFIX . "projects WHERE id = " . intval($note['project_id'])
+            );
+            if ($project && !empty($project['department_id'])) {
+                $departmentCheck = $this->fetchOne(
+                    "SELECT project_manager FROM " . DB_PREFIX . "user_department ud " .
+                    "WHERE ud.department_id = " . intval($project['department_id']) . " " .
+                    "AND ud.userid = '" . $currentUserId . "' LIMIT 1"
+                );
+                if ($departmentCheck && isset($departmentCheck['project_manager'])) {
+                    $isDepartmentManager = ($departmentCheck['project_manager'] == 1);
+                }
+            }
+        }
         
-        // Only allow deletion if user is creator or manager
-        if (!$isCreator && !$isManager) {
+        // Only allow deletion if user is creator, project manager, department manager, or administrator
+        if (!$isCreator && !$isManager && !$isDepartmentManager && $_SESSION['authority'] != 'administrator') {
             return ['status' => 'error', 'error' => 'Permission denied'];
         }
         

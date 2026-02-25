@@ -123,7 +123,7 @@
     "私のプロジェクト": "Dự án của tôi",
     "キーワード": "Từ khóa",
     "検索...": "Tìm kiếm...",
-    "受付": "Nhận đơn",
+    "受付": "Nháp",
     "納期検討": "Đánh giá kì hạn",
     "仮受": "Tạm nhận",
     "見積": "Báo giá",
@@ -390,8 +390,6 @@
     "その他の理由・メモ（任意）": "Lý do khác / Ghi chú (tùy chọn)",
     "追加の理由やメモを入力してください...": "Nhập lý do hoặc ghi chú bổ sung...",
     "解除": "Hủy",
-    "キャンセル": "Hủy bỏ",
-    "保存": "Lưu",
     "コミュニケーションが良好": "Giao tiếp tốt",
     "早く完了した": "Hoàn thành sớm",
     "品質が良い": "Chất lượng tốt",
@@ -494,5 +492,8 @@
     "構造データ送付 (CAILY)状況": "Trạng thái gửi",
     "構造データ送付 (GUIS)": "Gửi kết cấu (GUIS)",
     "構造データ送付 (GUIS)状況": "Trạng thái gửi",
-    "設備 納期": "Kỳ hạn thiết bị"
+    "設備 納期": "Kỳ hạn thiết bị",
+    "先行納品図面": "Bản vẽ giao trước",
+    "開始日・終了日未設定": "Chưa có lịch trình",
+    "案件名、工事番号、支店名などで検索...": "Tìm kiếm theo tên dự án, mã công trình, chi nhánh..."
   }

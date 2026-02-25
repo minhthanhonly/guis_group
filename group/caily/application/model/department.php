@@ -232,7 +232,9 @@ class Department extends ApplicationModel {
             $normalized[] = [
                 'label'   => isset($f['label']) ? (string)$f['label'] : '',
                 'type'    => isset($f['type']) && $f['type'] !== '' ? (string)$f['type'] : 'text',
-                'options' => $opts
+                'options' => $opts,
+                // Thuộc tính one_row: lưu boolean (true nếu trường chiếm trọn 1 hàng / col-12)
+                'one_row' => !empty($f['one_row']) ? 1 : 0
             ];
         }
         return $normalized;

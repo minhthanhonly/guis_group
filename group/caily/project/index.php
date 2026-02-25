@@ -107,7 +107,12 @@ if($_SESSION['show_project'] == 0){
             </div>
             <div class="col-md-4 col-12">
             <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="キーワード">キーワード</label>
-            <input type="text" class="form-control form-control-sm" id="filterKeyword" placeholder="検索...">
+            <input
+                type="text"
+                class="form-control form-control-sm"
+                id="filterKeyword"
+                data-i18n="案件名、工事番号、支店名などで検索..."
+                placeholder="案件名、工事番号、支店名などで検索...">
             </div>
             <div class="col-md-2 col-6">
             <label class="form-label form-label-sm mb-0 text-nowrap">案件ID</label>
@@ -121,7 +126,7 @@ if($_SESSION['show_project'] == 0){
                 </div>
                 <div class="form-check mb-0">
                     <input class="form-check-input" type="checkbox" id="filterNoDates">
-                    <label class="form-check-label" for="filterNoDates">開始日・終了日未設定</label>
+                    <label class="form-check-label" for="filterNoDates" data-i18n="開始日・終了日未設定">開始日・終了日未設定</label>
                 </div>
             </div>
             </div>

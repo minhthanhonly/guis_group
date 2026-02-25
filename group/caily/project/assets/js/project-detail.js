@@ -1475,6 +1475,7 @@ const vueApp = createApp({
                                 label: f.label,
                                 type: f.type,
                                 options: f.options,
+                                one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true),
                                 value: valueMap[f.label.trim()] || ''
                             });
                         }
@@ -2344,7 +2345,9 @@ const vueApp = createApp({
                                     label: f.label,
                                     type: f.type,
                                     // Chuẩn hóa options thành string để template có thể gọi .split(',')
-                                    options: Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : '')
+                                    options: Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : ''),
+                                    // one_row từ backend: 0/1, '0'/'1', boolean → chuẩn hóa boolean
+                                    one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
                                 });
                             }
                         });
@@ -2379,6 +2382,7 @@ const vueApp = createApp({
                     label: f.label,
                     type: f.type,
                     options: f.options,
+                    one_row: f.one_row === true,
                     value: savedField ? savedField.value : ''
                 };
             });
@@ -2643,7 +2647,8 @@ const vueApp = createApp({
                                         allFieldsFromSets.push({
                                             label: f.label,
                                             type: f.type,
-                                            options: Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : '')
+                                            options: Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : ''),
+                                            one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
                                         });
                                     }
                                 });
@@ -2663,12 +2668,13 @@ const vueApp = createApp({
                         // Merge: use fields from sets, fill values from saved data
                         this.customFields = allFieldsFromSets.map(f => {
                             const savedField = savedValueMap[f.label.trim()];
+                            const oneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
                             if (f.type === 'checkbox') {
                                 let arr = [];
                                 if (savedField && savedField.value) {
                                     arr = savedField.value.split(',').map(s => s.trim()).filter(Boolean);
                                 }
-                                return { label: f.label, type: f.type, options: f.options, value: arr.join(','), valueArr: arr };
+                                return { label: f.label, type: f.type, options: f.options, one_row: oneRow, value: arr.join(','), valueArr: arr };
                             } else if (f.type === 'datetime') {
                                 // Get value directly from saved field, no parsing needed
                                 // Flatpickr will handle parsing when initialized (similar to project-list.js)
@@ -2677,6 +2683,7 @@ const vueApp = createApp({
                                     label: f.label, 
                                     type: f.type, 
                                     options: f.options, 
+                                    one_row: oneRow,
                                     value: value 
                                 };
                             } else {
@@ -2684,6 +2691,7 @@ const vueApp = createApp({
                                     label: f.label, 
                                     type: f.type, 
                                     options: f.options, 
+                                    one_row: oneRow,
                                     value: savedField ? savedField.value : '' 
                                 };
                             }
@@ -2698,10 +2706,11 @@ const vueApp = createApp({
                     } else if (allFieldsFromSets.length > 0) {
                         // No saved data, just use fields from all sets
                         this.customFields = allFieldsFromSets.map(f => {
+                            const oneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
                             if (f.type === 'checkbox') {
-                                return { label: f.label, type: f.type, options: f.options, value: '', valueArr: [] };
+                                return { label: f.label, type: f.type, options: f.options, one_row: oneRow, value: '', valueArr: [] };
                             } else {
-                                return { label: f.label, type: f.type, options: f.options, value: '' };
+                                return { label: f.label, type: f.type, options: f.options, one_row: oneRow, value: '' };
                             }
                         });
                         

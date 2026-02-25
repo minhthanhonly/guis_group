@@ -502,7 +502,7 @@ if($_SESSION['show_project'] == 0){
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
                                                     <textarea class="form-control" v-model="field.value"></textarea>
                                                 </div>
-                                                <div v-else class="col-md-6 mb-3">
+                                                <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
                                                     <div class="form-label">{{ translateLabel(field.label) }}</div>
                                                     <template v-if="field.type === 'radio'">
                                                         <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
@@ -548,7 +548,7 @@ if($_SESSION['show_project'] == 0){
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
                                                     <div class="form-control" style="min-height:80px;white-space:pre-line;">{{ field.value || '-' }}</div>
                                                 </div>
-                                                <div v-else class="col-md-6 mb-3">
+                                                <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
                                                     <template v-if="canEditProject && (field.type === 'select' || field.type === 'radio' || field.type === 'checkbox')">
                                                         <select v-if="field.type === 'select'" class="form-select form-select-sm" :value="field.value" @change="updateCustomFieldValue(field.label, $event.target.value)">

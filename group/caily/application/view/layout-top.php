@@ -806,6 +806,8 @@
             }
           </style>
 
+          <span class="app-version" style="background-color: #ccc; padding: 5px; border-radius: 5px; position: fixed; bottom: 10px; left: 10px; font-size: 10px; color: #000; z-index: 2000;">v<?=APP_VERSION?></span>
+
           <!-- Todo Toggle Button (same style as AI Chat button) -->
           <button data-bs-toggle="offcanvas" data-bs-target="#offcanvasTodo" id="todo-toggle" class="btn btn-primary rounded-circle position-fixed waves-effect waves-light">
             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="todo-badge"></span>

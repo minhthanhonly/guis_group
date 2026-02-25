@@ -667,6 +667,25 @@ var projectTable;
         // Set flag to prevent multiple initializations
         isInitializingTable = true;
         try {
+        // Ensure DataTables processing indicator is centered in the window (not only inside table)
+        if (!document.getElementById('project-table-processing-style')) {
+            var processingStyleEl = document.createElement('style');
+            processingStyleEl.id = 'project-table-processing-style';
+            processingStyleEl.textContent =
+                '#projectTable_wrapper .dataTables_processing {' +
+                'position: fixed !important;' +
+                'top: 50% !important;' +
+                'left: 50% !important;' +
+                'transform: translate(-50%, -50%) !important;' +
+                'margin: 0 !important;' +
+                'z-index: 2000 !important;' +
+                '}' +
+                '#projectTable_wrapper .dataTables_processing .dt-processing {' +
+                'box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);' +
+                '}';
+            document.head.appendChild(processingStyleEl);
+        }
+
         // Load team map (id -> name) for display in table (badge, tooltip, ...)
         await loadTeamMap();
         
@@ -702,7 +721,12 @@ var projectTable;
                             statusMap[baseLabel].push({ label: label, type: type, options: options });
                         } else {
                             if (!mergedFields.some(function(ex) { return ex.label && String(ex.label).trim() === label; })) {
-                                mergedFields.push({ label: label, type: type, options: options });
+                                mergedFields.push({
+                                    label: label,
+                                    type: type,
+                                    options: options,
+                                    one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
+                                });
                             }
                         }
                     });
@@ -2104,7 +2128,8 @@ var projectTable;
                                     mergedFields.push({ 
                                         label: f.label || '', 
                                         type: f.type || 'text', 
-                                        options: f.options || '' 
+                                        options: f.options || '',
+                                        one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
                                     });
                                 }
                             });
@@ -2126,7 +2151,8 @@ var projectTable;
                         var val = savedValueMap[String(label).trim()] || '';
                         var safeLabel = String(label).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                         var labelText = (typeof translateText === 'function' ? translateText(safeLabel) : safeLabel);
-                        var colClass = type === 'textarea' ? 'col-12' : 'col-md-6';
+                        var isOneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
+                        var colClass = type === 'textarea' || isOneRow ? 'col-12' : 'col-md-6';
                         var html = '<div class="' + colClass + ' mb-3 quick-edit-custom-field" data-custom-label="' + safeLabel + '" data-custom-type="' + type + '">';
                         
                         html += '<label class="form-label">' + labelText + '</label>';

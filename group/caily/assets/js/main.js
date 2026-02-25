@@ -293,7 +293,18 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     i18nList.forEach(function (item) {
-      item.innerHTML = i18next.t(item.dataset.i18n);
+      const key = item.dataset.i18n;
+      const translated = i18next.t(key);
+      // Nếu là input/textarea thì ưu tiên dịch placeholder, nếu không thì innerHTML như cũ
+      if (item.tagName === 'INPUT' || item.tagName === 'TEXTAREA') {
+        if (item.hasAttribute('placeholder')) {
+          item.setAttribute('placeholder', translated || item.getAttribute('placeholder') || key);
+        } else {
+          item.value = translated || item.value || key;
+        }
+      } else {
+        item.innerHTML = translated || key;
+      }
       /* FIX: Uncomment the following line to hide elements with the i18n attribute before translation to prevent text change flicker */
       // item.style.visibility = 'visible';
     });

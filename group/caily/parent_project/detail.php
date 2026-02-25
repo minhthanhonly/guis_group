@@ -1093,14 +1093,14 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
+                                    <label class="form-label"><span data-i18n="ステータス">ステータス</span> <span class="text-danger">*</span></label>
                                     <div class="btn-group" style="width: 100%;">
                                         <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
                                                 :class="getProjectStatusButtonClass(newChildProject.status)"
                                                 id="createChildProjectStatusDropdown"
                                                 data-bs-toggle="dropdown" aria-expanded="false"
                                                 style="width: 100%; text-align: left;">
-                                            {{ getProjectStatusLabel(newChildProject.status) }}
+                                            {{ newChildProject.status ? getProjectStatusLabel(newChildProject.status) : '選択してください' }}
                                         </button>
                                         <ul class="dropdown-menu" style="width: 100%;">
                                             <li v-for="status in projectStatuses" :key="status.value">
@@ -1110,6 +1110,9 @@ $view->heading('建物詳細');
                                                 </a>
                                             </li>
                                         </ul>
+                                    </div>
+                                    <div v-if="childProjectValidationErrors.status" class="invalid-feedback d-block">
+                                        {{ childProjectValidationErrors.status }}
                                     </div>
                                 </div>
                             </div>
