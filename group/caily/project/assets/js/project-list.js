@@ -891,8 +891,17 @@ var projectTable;
                             var undecidedText = (typeof translateText === 'function' ? translateText('期間未定') : '期間未定');
                             badges.push('<span class="badge bg-label-warning" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + undecidedText + '</span>');
                         }
-                      
-                        
+
+                        // NEW badge: 作成から6時間未満 (Japan timezone)
+                        if (row.created_at) {
+                            var nowJst = moment.tz ? moment.tz('Asia/Tokyo') : moment();
+                            var created = moment.tz ? moment.tz(row.created_at, 'Asia/Tokyo') : moment(row.created_at);
+                            if (created.isValid() && nowJst.diff(created, 'hours', true) < 6) {
+                                var newText = (typeof translateText === 'function' ? translateText('NEW') : 'NEW');
+                                badges.push('<span class="badge bg-success" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + newText + '</span>');
+                            }
+                        }
+
                         if (badges.length > 0) {
                             return '<div class="d-flex flex-column align-items-center gap-1">' +
                                 starHtml +
@@ -4586,6 +4595,57 @@ var projectTable;
     }).mount('#app');
 
     window.app = app;
+
+    // Fixed filter button: show when scroll reaches #projectTableCard; offcanvas shows #projectFilterBox content
+    (function() {
+        var floatBtn = document.getElementById('projectFilterFloatBtn');
+        var projectTableCard = document.getElementById('projectTableCard');
+        var projectFilterBox = document.getElementById('projectFilterBox');
+        var offcanvasBody = document.getElementById('projectFilterOffcanvasBody');
+        var offcanvasEl = document.getElementById('offcanvasProjectFilter');
+        if (!floatBtn || !projectTableCard || !projectFilterBox || !offcanvasBody || !offcanvasEl) return;
+
+        var filterCard = null; // ref to moved .card
+
+        function updateFloatButtonVisibility() {
+            var rect = projectTableCard.getBoundingClientRect();
+            if (rect.top <= 120) {
+                floatBtn.classList.remove('d-none');
+            } else {
+                floatBtn.classList.add('d-none');
+            }
+        }
+
+        window.addEventListener('scroll', function() { updateFloatButtonVisibility(); }, { passive: true });
+        window.addEventListener('resize', updateFloatButtonVisibility);
+        updateFloatButtonVisibility();
+
+        offcanvasEl.addEventListener('show.bs.offcanvas', function() {
+            if (!projectFilterBox.firstElementChild) return;
+            filterCard = projectFilterBox.firstElementChild;
+            var cardHeight = filterCard.offsetHeight;
+            projectFilterBox.removeChild(filterCard);
+            offcanvasBody.appendChild(filterCard);
+            var placeholder = document.createElement('div');
+            placeholder.className = 'project-filter-box-placeholder';
+            placeholder.setAttribute('aria-hidden', 'true');
+            placeholder.style.height = cardHeight + 'px';
+            placeholder.style.minHeight = cardHeight + 'px';
+            projectFilterBox.appendChild(placeholder);
+        });
+
+        offcanvasEl.addEventListener('hidden.bs.offcanvas', function() {
+            var placeholder = projectFilterBox.querySelector('.project-filter-box-placeholder');
+            if (placeholder) {
+                projectFilterBox.removeChild(placeholder);
+            }
+            if (filterCard && offcanvasBody.contains(filterCard)) {
+                offcanvasBody.removeChild(filterCard);
+                projectFilterBox.insertBefore(filterCard, projectFilterBox.firstChild);
+            }
+            filterCard = null;
+        });
+    })();
 
     // Global function for toggling favorite from DataTable render
     window.toggleProjectFavorite = async function(projectId, element) {

@@ -369,7 +369,7 @@ if($_SESSION['show_project'] == 0){
                                                 <li v-for="status in statuses" :key="status.value">
                                                     <a class="dropdown-item waves-effect" href="javascript:void(0);" 
                                                     @click="selectStatus(status.value)">
-                                                        {{ status.label }}
+                                                        {{ translateLabel(status.label) }}
                                                     </a>
                                                 </li>
                                             </ul>

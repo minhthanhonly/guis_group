@@ -310,6 +310,26 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  /** Gọi sau khi Vue (hoặc DOM động) đã vẽ xong để dịch [data-i18n] trong root (vd: #app). */
+  window.applyDataI18n = function (rootElement) {
+    var root = rootElement && rootElement.nodeType === 1 ? rootElement : document;
+    var list = root.querySelectorAll('[data-i18n]');
+    if (typeof i18next === 'undefined' || !i18next.t) return;
+    list.forEach(function (item) {
+      var key = item.dataset.i18n;
+      var translated = i18next.t(key);
+      if (item.tagName === 'INPUT' || item.tagName === 'TEXTAREA') {
+        if (item.hasAttribute('placeholder')) {
+          item.setAttribute('placeholder', translated || item.getAttribute('placeholder') || key);
+        } else {
+          item.value = translated || item.value || key;
+        }
+      } else {
+        item.innerHTML = translated || key;
+      }
+    });
+  };
+
   // Notification
   // ------------
   const notificationMarkAsReadAll = document.querySelector('.dropdown-notifications-all');

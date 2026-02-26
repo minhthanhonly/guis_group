@@ -9,7 +9,7 @@ if($_SESSION['show_project'] == 0){
 ?>
 
 <div id="app" class="container-fluid mt-4 mb-5" v-cloak>
-    <nav class="navbar navbar-expand-lg bg-dark mb-12">
+    <nav class="navbar navbar-expand-lg bg-dark mb-4">
         <div class="container-fluid">
             <span class="navbar-brand" href="javascript:void(0)"></span>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
@@ -215,6 +215,21 @@ if($_SESSION['show_project'] == 0){
         </div>
     </div>
 
+    <!-- Fixed filter button (shown when scroll reaches projectTableCard) -->
+    <button type="button" class="btn btn-sm btn-primary rounded-pill shadow-lg position-fixed d-none" id="projectFilterFloatBtn" style="bottom: 10px; left: 6rem; z-index: 1050;" data-bs-toggle="offcanvas" data-bs-target="#offcanvasProjectFilter" aria-controls="offcanvasProjectFilter" title="高度なフィルター">
+        <i class="fa fa-filter me-1"></i> <span data-i18n="高度なフィルター">高度なフィルター</span>
+    </button>
+
+    <!-- Offcanvas: nội dung = #projectFilterBox (mở từ bottom giống Todo List) -->
+    <div class="offcanvas offcanvas-bottom" tabindex="-1" id="offcanvasProjectFilter" aria-labelledby="offcanvasProjectFilterLabel" style="height: 30rem;">
+        <div class="offcanvas-header border-bottom">
+            <h5 class="offcanvas-title" id="offcanvasProjectFilterLabel"><i class="fa fa-filter me-2"></i><span data-i18n="高度なフィルター">高度なフィルター</span></h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="閉じる"></button>
+        </div>
+        <div class="offcanvas-body overflow-auto" id="projectFilterOffcanvasBody">
+            <!-- Nội dung #projectFilterBox sẽ được chuyển vào đây khi mở offcanvas -->
+        </div>
+    </div>
 
     <!-- Delete Confirmation Modal -->
     <div class="modal fade" id="deleteModal" tabindex="-1">

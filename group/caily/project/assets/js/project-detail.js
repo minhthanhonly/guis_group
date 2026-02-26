@@ -719,7 +719,7 @@ const vueApp = createApp({
         },
         getStatusLabel(status) {
             const s = this.statuses.find(s => s.value === status);
-            return s ? s.label : status;
+            return s ? this.translateLabel(s.label) : status;
         },
         getStatusBadgeClass(status) {
             const s = this.statuses.find(s => s.value === status);
@@ -3125,7 +3125,15 @@ const vueApp = createApp({
         this.loadLogs();
         this.loadCurrentUser();
         this.initTooltips();
-        
+
+        // Dịch [data-i18n] sau khi Vue đã vẽ DOM (tránh text không đúng ngôn ngữ khi load)
+        this.$nextTick(() => {
+            if (typeof window.applyDataI18n === 'function') {
+                var appEl = document.getElementById('app');
+                if (appEl) window.applyDataI18n(appEl);
+            }
+        });
+
         // Initialize mention manager
         this.$nextTick(() => {
             if (window.mentionManager) {
