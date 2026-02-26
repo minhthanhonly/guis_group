@@ -263,6 +263,29 @@ class NotificationManager {
         return this.isConnected;
     }
     
+    getLocalizedText(notification) {
+        const data = notification.data ? (typeof notification.data === 'string' ? JSON.parse(notification.data) : notification.data) : {};
+        let title = notification.title || '通知';
+        let message = notification.message || '';
+
+        try {
+            const lang = (typeof i18next !== 'undefined' && i18next.language) ? i18next.language : '';
+            if (lang) {
+                if (lang.startsWith('vi')) {
+                    if (data.title_vi) title = data.title_vi;
+                    if (data.message_vi) message = data.message_vi;
+                } else if (lang.startsWith('ja')) {
+                    if (data.title_ja) title = data.title_ja;
+                    if (data.message_ja) message = data.message_ja;
+                }
+            }
+        } catch (e) {
+            // fallback: keep original title/message
+        }
+
+        return { title, message, data };
+    }
+
     renderNotificationList() {
         const list = this.notifications || [];
         const ul = document.querySelector('#notification_list .dropdown-notifications-list ul');
@@ -283,7 +306,7 @@ class NotificationManager {
         }
         const count = list.filter(n => n.is_read == 0).length;
         list.forEach((n, idx) => {
-            const data = n.data ? (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) : {};
+            const { title, message, data } = this.getLocalizedText(n);
             const li = document.createElement('li');
             li.className = `list-group-item list-group-item-action dropdown-notifications-item${n.is_read == 1 ? ' marked-as-read' : ''}`;
             li.innerHTML = `
@@ -294,8 +317,8 @@ class NotificationManager {
                         </div>
                     </div>
                     <div class="flex-grow-1">
-                        <h6 class="mb-1">${this.escapeHtml(n.title || '通知')}</h6>
-                        <small class="mb-1 d-block text-body">${this.escapeHtml(n.message || '')}</small>
+                        <h6 class="mb-1">${this.escapeHtml(title)}</h6>
+                        <small class="mb-1 d-block text-body">${this.escapeHtml(message)}</small>
                         <small class="text-body-secondary">${n.created_at ? n.created_at : ''}</small>
                     </div>
                     <div class="flex-shrink-0 dropdown-notifications-actions">
@@ -402,8 +425,9 @@ class NotificationManager {
                     this.renderNotificationList();
                     this.showWindowsNotification(notif);
                     this.showToastNotification(notif);
-                    // Flash window title để thu hút sự chú ý
-                    this.startFlashingTitle(notif.title || '新しい通知');
+                    // Flash window title để thu hút sự chú ý (theo ngôn ngữ hiện tại)
+                    const localized = this.getLocalizedText(notif);
+                    this.startFlashingTitle(localized.title || '新しい通知');
                 }
             }
         });
@@ -490,9 +514,9 @@ class NotificationManager {
         
 
         try {
-            const data = notification.data ? (typeof notification.data === 'string' ? JSON.parse(notification.data) : notification.data) : {};
+            const { title, message, data } = this.getLocalizedText(notification);
             const notificationOptions = {
-                body: notification.message || '新しい通知があります',
+                body: message || '新しい通知があります',
                 icon: data.avatar || '/assets/img/avatars/1.png',
                 badge: '/assets/img/favicon/favicon.ico',
                 tag: `notification_${notification.id}`,
@@ -505,7 +529,6 @@ class NotificationManager {
                     task_id: data.task_id || ''
                 }
             };
-            console.log(data);
 
             // Add actions if available
             if (data.url) {
@@ -522,7 +545,7 @@ class NotificationManager {
                 // ];
             }
 
-            const desktopNotification = new Notification(notification.title || '通知', notificationOptions);
+            const desktopNotification = new Notification(title || '通知', notificationOptions);
 
             // Handle notification click
             desktopNotification.onclick = (event) => {
@@ -567,7 +590,7 @@ class NotificationManager {
      * Show a custom toast notification in the browser
      */
     showToastNotification(notification) {
-        const data = notification.data ? (typeof notification.data === 'string' ? JSON.parse(notification.data) : notification.data) : {};
+        const { title, message, data } = this.getLocalizedText(notification);
         
         // Create toast container if it doesn't exist
         let toastContainer = document.getElementById('toast-notification-container');
@@ -605,8 +628,8 @@ class NotificationManager {
             <img src="${data.avatar || '/assets/img/avatars/1.png'}" 
                  style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" />
             <div style="flex: 1;">
-                <div style="font-weight: 600; margin-bottom: 4px;">${this.escapeHtml(notification.title || '通知')}</div>
-                <div style="font-size: 14px; color: #666;">${this.escapeHtml(notification.message || '')}</div>
+                <div style="font-weight: 600; margin-bottom: 4px;">${this.escapeHtml(title || '通知')}</div>
+                <div style="font-size: 14px; color: #666;">${this.escapeHtml(message || '')}</div>
             </div>
             <button onclick="this.parentElement.remove()" 
                     style="background: none; border: none; font-size: 18px; cursor: pointer; color: #999;">×</button>

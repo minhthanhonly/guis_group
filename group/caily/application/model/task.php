@@ -470,28 +470,46 @@ class Task extends ApplicationModel {
             ];
         }
         
-        // $query = sprintf(
-        //     "SELECT COUNT(*) as count FROM " . DB_PREFIX . "time_entries WHERE task_id = %d",
-        //     intval($id)
-        // );
-        // $timeEntries = $this->fetchOne($query)['count'];
 
-        $query = sprintf(
-            "DELETE FROM " . DB_PREFIX . "comments WHERE task_id = %d",
-            intval($id)
-        );
-        $this->query($query);
         
-        //$task = $this->getById($id);
         $result = $this->query_delete(['id' => $id]);
-        // if ($result && $task['parent_id']) {
-        //     $this->updateParentTaskProgress($task['parent_id']);
-        // }
-        // if ($result && $task['project_id']) {
-        //     $this->updateProjectProgress($task['project_id']);
-        // }
+       
         if($result){
+            $query = sprintf(
+                "DELETE FROM " . DB_PREFIX . "comments WHERE task_id = %d",
+                intval($id)
+            );
+            $this->query($query);
+
+            $query = sprintf(
+                "DELETE FROM " . DB_PREFIX . "task_links WHERE source_task_id = %d OR target_task_id = %d",
+                intval($id),
+                intval($id)
+            );
+            $this->query($query);
+
+            $query = sprintf(
+                "DELETE FROM " . DB_PREFIX . "task_assignees WHERE task_id = %d",
+                intval($id)
+            );
+            $this->query($query);
+
+            $query = sprintf(
+                "DELETE FROM " . DB_PREFIX . "task_logs WHERE task_id = %d",
+                intval($id)
+            );
+            $this->query($query);
+
+            $query = sprintf(
+                "DELETE FROM " . DB_PREFIX . "task_reactions WHERE task_id = %d",
+                intval($id)
+            );
+            $this->query($query);
+
            // $this->logTaskAction($id, 'deleted', 'タスク削除', $old['status'], 'deleted');
+
+            $assignedUserIds = $this->convertIdsToUserIds($old['assigned_to']);
+            $this->notifyTaskDeleted($id, $old['title'], $projectId, $assignedUserIds);
 
             return [
                 'status' => 'success'
@@ -501,6 +519,35 @@ class Task extends ApplicationModel {
             'status' => 'error'
         ];
     }
+
+    function notifyTaskDeleted($taskId, $taskTitle, $projectId, $assignedUserIds) {
+        $taskTitle = strlen($taskTitle) > 15 ? substr($taskTitle, 0, 15) . '...' : $taskTitle;
+        $titleJa = '#'.$projectId.': タスクが削除されました';
+        $messageJa = sprintf('%sがタスク#%s「%s」を削除しました', $this->getUserRealname(), $taskId, $taskTitle);
+        $titleVi = '#'.$projectId.': Task đã được xóa';
+        $messageVi = sprintf('%s đã xóa task #%s「%s」', $this->getUserRealname(), $taskId,  $taskTitle);
+        $params = [
+            'event' => 'task_deleted',
+            'title' => $titleJa,
+            'message' => $messageJa,
+            'project_id' => $projectId,
+            'task_id' => $taskId,
+            'user_ids' => $assignedUserIds,
+            'data' => [
+                'task_title' => $taskTitle,
+                'project_id' => $projectId,
+                'avatar' => $this->getUserImageUrl(),
+                'action' => 'task_deleted',
+                'url' => "/project/task.php?project_id=$projectId",
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
+            ],
+        ];
+        return $this->sendTaskNotification($params);
+    }
+
 
     function updateStatus() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -2097,7 +2144,6 @@ class Task extends ApplicationModel {
      * Notify users when a task is created and assigned
      */
     function notifyTaskCreated($taskId, $taskTitle, $projectId, $projectNumber, $projectName, $assignedUserIds) {
-        error_log("notifyTaskCreated: " . print_r($assignedUserIds, true));
         if (empty($assignedUserIds)) {
             return false;
         }
@@ -2108,11 +2154,15 @@ class Task extends ApplicationModel {
         if (empty($userIds)) {
             return false;
         }
-        
+
+        $titleJa = '#'.$projectId.': タスクが作成されました';
+        $messageJa = sprintf('%sがあなたにタスク#%s「%s」を割り当てました', $this->getUserRealname(), $taskId, $taskTitle);
+        $titleVi = '#'.$projectId.': Task đã được tạo';
+        $messageVi = sprintf('%s đã gán task #%s「%s」cho bạn', $this->getUserRealname(), $taskId, $taskTitle);
         $params = [
             'event' => 'task_created',
-            'title' => '#'.$projectNumber.': タスクが作成されました',
-            'message' => sprintf('%sがあなたにタスク「%s」を割り当てました', $this->getUserRealname(), $taskTitle),
+            'title' => $titleJa,
+            'message' => $messageJa,
             'project_id' => $projectId,
             'task_id' => $taskId,
             'user_ids' => $userIds,
@@ -2123,6 +2173,10 @@ class Task extends ApplicationModel {
                 'avatar' => $this->getUserImageUrl(),
                 'action' => 'task_created',
                 'url' => "/project/task.php?project_id=$projectId",
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
             ],
             'type' => 'task',
             'priority' => 'normal'
@@ -2156,11 +2210,17 @@ class Task extends ApplicationModel {
         if (empty($newlyAssigned)) {
             return false;
         }
-        
+
+        $taskTitle = strlen($taskTitle) > 15 ? substr($taskTitle, 0, 15) . '...' : $taskTitle;
+        $projectName = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
+        $titleJa = '#'.$projectNumber.': タスクが割り当てられました';
+        $messageJa = sprintf('%sがあなたにタスク#%s「%s」を割り当てました', $this->getUserRealname(), $taskId, $taskTitle);
+        $titleVi = '#'.$projectNumber.': Task đã được gán';
+        $messageVi = sprintf('%s đã gán task #%s「%s」cho bạn', $this->getUserRealname(), $taskId, $taskTitle);
         $params = [
             'event' => 'task_assigned',
-            'title' => '#'.$projectNumber.': タスクが割り当てられました',
-            'message' => sprintf('%sがあなたにタスク「%s」を割り当てました', $this->getUserRealname(), $taskTitle),
+            'title' => $titleJa,
+            'message' => $messageJa,
             'project_id' => $projectId,
             'task_id' => $taskId,
             'user_ids' => array_values($newlyAssigned),
@@ -2171,11 +2231,53 @@ class Task extends ApplicationModel {
                 'avatar' => $this->getUserImageUrl(),
                 'action' => 'task_assigned',
                 'url' => "/project/task.php?project_id=$projectId",
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
             ],
             'type' => 'task',
             'priority' => 'normal'
         ];
+
+        //notify removeed 
+        $removedAssignees = array_diff($oldAssignedUserIds, $newAssignedUserIds);
+        if (!empty($removedAssignees)) {
+            $removedAssignees = $this->convertIdsToUserIds($removedAssignees);
+            $this->notifyTaskAssigneeRemoved($taskId, $taskTitle, $projectId, $projectNumber, $projectName, $removedAssignees);
+        }
         
+        return $this->sendTaskNotification($params);
+    }   
+
+    function notifyTaskAssigneeRemoved($taskId, $taskTitle, $projectId, $projectNumber, $projectName, $removedAssignees) {
+        $taskTitle = strlen($taskTitle) > 15 ? substr($taskTitle, 0, 15) . '...' : $taskTitle;
+        $titleJa = '#'.$projectId.': タスクが割り当て解除されました';
+        $messageJa = sprintf('%sがあなたのタスク「%s」を割り当て解除しました', $this->getUserRealname(), $taskTitle);
+        $titleVi = '#'.$projectId.': Task đã hủy gán';
+        $messageVi = sprintf('%s đã hủy gán task「%s」', $this->getUserRealname(), $taskTitle);
+        $params = [
+            'event' => 'task_assignee_removed',
+            'title' => $titleJa,
+            'message' => $messageJa,
+            'project_id' => $projectId,
+            'task_id' => $taskId,
+            'user_ids' => $removedAssignees,
+            'data' => [
+                'task_title' => $taskTitle,
+                'project_name' => $projectName,
+                'project_number' => $projectNumber,
+                'avatar' => $this->getUserImageUrl(),
+                'action' => 'task_assignee_removed',
+                'url' => "/project/task.php?project_id=$projectId",
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
+            ],
+            'type' => 'task',
+            'priority' => 'normal'
+        ];
         return $this->sendTaskNotification($params);
     }
 

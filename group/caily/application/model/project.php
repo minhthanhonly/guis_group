@@ -3095,14 +3095,18 @@ class Project extends ApplicationModel {
                 }
                 
                 $sentUserIds[] = $mentionedUser['userid'];
-                
+
+                $titleJa = '#'.$projectId.': 案件でメンションされました';
+                $messageJa = sprintf('%sさんが案件「%s」であなたをメンションしました', 
+                    $_SESSION['realname'], 
+                    $project['name']
+                );
+                $titleVi = '#'.$projectId.': Dự án có bình luận mới';
+                $messageVi = sprintf('%s đã nhắc đến bạn trong dự án「%s」', $_SESSION['realname'], $project['name']);
                 $payload = [
                     'event' => 'project_mention',
-                    'title' => '案件でメンションされました',
-                    'message' => sprintf('%sさんが案件「%s」であなたをメンションしました', 
-                        $_SESSION['realname'], 
-                        $project['name']
-                    ),
+                    'title' => $titleJa,
+                    'message' => $messageJa,
                     'data' => [
                         'project_id' => $projectId,
                         'project_name' => $project['name'],
@@ -3111,7 +3115,11 @@ class Project extends ApplicationModel {
                         'commenter_id' => $commentUserId,
                         'commenter_name' => $_SESSION['realname'],
                         'avatar' => $this->getUserImage(),
-                        'url' => "/project/detail.php?id=$projectId#comment-$commentId"
+                        'url' => "/project/detail.php?id=$projectId#comment-$commentId",
+                        'title_ja' => $titleJa,
+                        'message_ja' => $messageJa,
+                        'title_vi' => $titleVi,
+                        'message_vi' => $messageVi,
                     ],
                     'project_id' => $projectId,
                     'user_ids' => [$mentionedUser['userid']]
@@ -3496,6 +3504,7 @@ class Project extends ApplicationModel {
      * Hàm tiện ích để gửi thông báo khi tạo dự án mới
      */
     function notifyProjectCreated($projectId, $projectName, $userIds = null) {
+
         // Get project information to get department_id
         $project = $this->getById($projectId);
         $departmentId = $project ? $project['department_id'] : 0;
@@ -3515,11 +3524,20 @@ class Project extends ApplicationModel {
             $allUserIds = array_merge($allUserIds, $managerIds);
         }
         $allUserIds = array_unique($allUserIds);
+
+        $projectName = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
+        
+        // Title / message đa ngôn ngữ
+        $titleJa = '#'.$projectId.': 新しい案件が作成されました';
+        $messageJa = sprintf('%sが案件「%s」を作成しました', $this->getUserRealname(), $projectName);
+        $titleVi = '#'.$projectId.': Dự án mới đã được tạo';
+        $messageVi = sprintf('%s đã tạo dự án「%s」', $this->getUserRealname(), $projectName);
         
         $params = [
             'event' => 'project_created',
-            'title' => '新しい案件が作成されました',
-            'message' => sprintf('%sが案件「%s」を作成しました', $this->getUserRealname(), $projectName),
+            // Tiêu đề/mô tả mặc định (JA) để backend và client cũ sử dụng
+            'title' => $titleJa,
+            'message' => $messageJa,
             'project_id' => $projectId,
             'user_ids' => $allUserIds,
             'data' => [
@@ -3527,6 +3545,11 @@ class Project extends ApplicationModel {
                 'action' => 'created',
                 'avatar' => $this->getUserImage(),
                 'url' => "/project/detail.php?id=$projectId",
+                // Đa ngôn ngữ cho frontend (notification.js chọn theo i18n)
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
             ],
             'type' => 'project'
         ];
@@ -3538,15 +3561,25 @@ class Project extends ApplicationModel {
      * Hàm tiện ích để gửi thông báo khi cập nhật dự án
      */
     function notifyProjectUpdated($projectId, $projectName, $changes = []) {
+        // Title / message đa ngôn ngữ
+        $titleJa = '#'.$projectId.': 案件が更新されました';
+        $messageJa = sprintf('案件「%s」が更新されました', $projectName);
+        $titleVi =  '#'.$projectId.': Dự án đã được cập nhật';
+        $messageVi = sprintf('Dự án「%s」đã được cập nhật', $projectName);
+        
         $params = [
             'event' => 'project_updated',
-            'title' => '案件が更新されました',
-            'message' => sprintf('案件「%s」が更新されました', $projectName),
+            'title' => $titleJa,
+            'message' => $messageJa,
             'project_id' => $projectId,
             'data' => [
                 'project_name' => $projectName,
                 'changes' => $changes,
-                'action' => 'updated'
+                'action' => 'updated',
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
             ],
             'url' => "/project/detail.php?id=$projectId",
             'type' => 'project'
@@ -3559,23 +3592,45 @@ class Project extends ApplicationModel {
      * Hàm tiện ích để gửi thông báo khi thay đổi trạng thái dự án
      */
     function notifyProjectStatusChanged($projectNumber, $projectId, $projectName, $newStatus, $memberIds) {
-        $statusLabels = [
-            'draft' => '下書き',
-            'open' => 'オープン',
-            'confirming' => '確認中',
+        $projectName = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
+        $statusLabelsJa = [
+            'draft' => '受付',
+            'open' => '納期検討',
+            'confirming' => '仮受',
+            'quotation' => '見積',
+            'contract' => '請負',
             'in_progress' => '進行中',
             'completed' => '完了',
             'paused' => '一時停止',
-            'cancelled' => 'キャンセル',
+            'cancelled' => '中止',
             'deleted' => '削除'
         ];
+
+        $statusLabelsVi = [
+            'draft' => 'Nháp',
+            'open' => 'Đánh giá kì hạn',
+            'confirming' => 'Tạm nhận',
+            'quotation' => 'Báo giá',
+            'contract' => 'Hợp đồng',
+            'in_progress' => 'Đang tiến hành',
+            'completed' => 'Hoàn thành',
+            'paused' => 'Tạm dừng',
+            'cancelled' => 'Hủy bỏ',
+            'deleted' => 'Đã xóa'
+        ];
         
-        $newStatusLabel = $statusLabels[$newStatus] ?? $newStatus;
+        $newStatusLabelJa = $statusLabelsJa[$newStatus] ?? $newStatus;
+        $newStatusLabelVi = $statusLabelsVi[$newStatus] ?? $newStatus;
+        
+        $titleJa = '#'.$projectId.': ステータスが変更されました';
+        $messageJa = sprintf('%sが案件「%s」のステータスを「%s」に変更しました', $this->getUserRealname(), $projectName, $newStatusLabelJa);
+        $titleVi = '#'.$projectId.': Trạng thái đã được thay đổi';
+        $messageVi = sprintf('%s đã thay đổi trạng thái của dự án「%s」thành「%s」', $this->getUserRealname(), $projectName, $newStatusLabelVi);
         
         $params = [
             'event' => 'project_status_changed',
-            'title' => '#'.$projectNumber.': ステータスが変更されました',
-            'message' => sprintf('%sが案件「%s」のステータスを「%s」に変更しました', $this->getUserRealname(), $projectName, $newStatusLabel),
+            'title' => $titleJa,
+            'message' => $messageJa,
             'project_id' => $projectId,
             'user_ids' => $memberIds,
             'data' => [
@@ -3584,6 +3639,10 @@ class Project extends ApplicationModel {
                 'action' => 'status_changed',
                 'avatar' => $this->getUserImage(),
                 'url' => "/project/detail.php?id=$projectId",
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
             ],
             'type' => 'project',
             'priority' => $newStatus === 'completed' ? 'high' : 'normal'
@@ -3604,22 +3663,33 @@ class Project extends ApplicationModel {
      */
     function notifyMemberAdded($projectNumber, $projectId, $projectName, $memberIds, $role = 'member') {
         if (empty($memberIds)) return false;
+        $projectName = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
         
-        $roleLabel = $role === 'manager' ? 'マネージャー' : 'メンバー';
+        $roleLabelJa = $role === 'manager' ? 'マネージャー' : 'メンバー';
+        $roleLabelVi = $role === 'manager' ? 'Quản lý' : 'Thành viên';
+        
+        $titleJa = '#'.$projectId.': メンバーが追加されました';
+        $messageJa = sprintf('%sがあなたを案件「%s」に%sを追加しました', $this->getUserRealname(), $projectName, $roleLabelJa);
+        $titleVi = '#'.$projectId.': Thành viên đã được thêm';
+        $messageVi = sprintf('%s đã thêm bạn làm %s trong dự án「%s」', $this->getUserRealname(), $roleLabelVi, $projectName);
         
         $params = [
             'event' => 'project_member_added',
-            'title' => '#'.$projectNumber.': メンバーが追加されました',
-            'message' => sprintf('%sがあなたを案件「%s」に%sを追加しました', $this->getUserRealname(), $projectName, $roleLabel),
+            'title' => $titleJa,
+            'message' => $messageJa,
             'project_id' => $projectId,
             'user_ids' => $memberIds,
             'data' => [
                 'project_name' => $projectName,
                 'avatar' => $this->getUserImage(),
                 'role' => $role,
-                'role_label' => $roleLabel,
+                'role_label' => $roleLabelJa,
                 'action' => 'member_added',
                 'url' => "/project/detail.php?id=$projectId",
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
             ],
             'type' => 'project'
         ];
@@ -3646,15 +3716,19 @@ class Project extends ApplicationModel {
      */
     function notifyMemberRemoved($projectNumber, $projectId, $projectName, $memberIds, $role = 'member') {
         if (empty($memberIds)) return false;
-        
+        $projectName = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
         $roleLabel = $role === 'manager' ? 'マネージャー' : 'メンバー';
-        
+        $roleLabelVi = $role === 'manager' ? 'Quản lý' : 'Thành viên';
+        $titleJa = '#'.$projectId.': メンバーが削除されました';
+        $messageJa = sprintf('%sがあなたを案件「%s」から%sを削除しました', $this->getUserRealname(), $projectName, $roleLabel);
+        $titleVi = '#'.$projectId.': Thành viên đã được xóa';
+        $messageVi = sprintf('%s đã xóa bạn khỏi %s của dự án「%s」', $this->getUserRealname(), $roleLabelVi, $projectName);
         $params = [
             'event' => 'project_member_removed',
-            'title' => '#'.$projectNumber.': メンバーが削除されました',
-            'message' => sprintf('%sがあなたを案件「%s」から%sを削除しました', $this->getUserRealname(), $projectName, $roleLabel),
             'project_id' => $projectId,
             'user_ids' => $memberIds,
+            'title' => $titleJa,
+            'message' => $messageJa,
             'data' => [
                 'project_name' => $projectName,
                 'avatar' => $this->getUserImage(),
@@ -3662,6 +3736,10 @@ class Project extends ApplicationModel {
                 'role_label' => $roleLabel,
                 'action' => 'member_removed',
                 'url' => "",
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
             ],
             'type' => 'project'
         ];
@@ -3673,10 +3751,16 @@ class Project extends ApplicationModel {
      * Hàm tiện ích để gửi thông báo khi có comment mới
      */
     function notifyNewComment($projectId, $projectName, $commentId, $commentContent, $excludeUserId = null) {
+
+        $projectName = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
+        $titleJa = '案件に新しいコメントがあります';
+        $messageJa = sprintf('案件「%s」に新しいコメントが追加されました', $projectName);
+        $titleVi = 'Dự án có bình luận mới';
+        $messageVi = sprintf('Dự án「%s」có bình luận mới', $projectName);
         $params = [
             'event' => 'project_comment_added',
-            'title' => '案件に新しいコメントがあります',
-            'message' => sprintf('案件「%s」に新しいコメントが追加されました', $projectName),
+            'title' => $titleJa,
+            'message' => $messageJa,
             'project_id' => $projectId,
             'exclude_user_ids' => $excludeUserId ? [$excludeUserId] : [],
             'data' => [
@@ -3685,6 +3769,10 @@ class Project extends ApplicationModel {
                 'comment_content' => substr($commentContent, 0, 100) . (strlen($commentContent) > 100 ? '...' : ''),
                 'action' => 'comment_added',
                 'avatar' => $this->getUserImage(),
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
             ],
             'url' => "/project/detail.php?id=$projectId#comment-$commentId",
             'type' => 'comment'
