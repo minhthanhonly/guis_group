@@ -3,23 +3,24 @@ export default {
   computed: {
     paidTypeLabel() {
       switch(this.data.paid_type) {
-        case 'full': return '全休';
-        case 'am': return '午前休';
-        case 'pm': return '午後休';
+        case '全休': return '全休';
+        case '午前休': return '午前休';
+        case '午後休': return '午後休';
         default: return '';
       }
     },
     unpaidTypeLabel() {
       switch(this.data.unpaid_type) {
-        case 'congratulatory': return '慶弔休暇';
-        case 'menstrual': return '生理休暇';
-        case 'child_nursing': return '子の看護休暇';
+        case '慶弔休暇': return '慶弔休暇';
+        case '生理休暇': return '生理休暇';
+        case '子の看護休暇': return '子の看護休暇';
+        case 'その他': return 'その他';
         default: return '';
       }
     },
     leaveTypeLabel() {
-      if(this.data.leave_type === 'paid') return '有給休暇';
-      if(this.data.leave_type === 'unpaid') return '無給休暇';
+      if(this.data.leave_type === '有給休暇') return '有給休暇';
+      if(this.data.leave_type === '無給休暇') return '無給休暇';
       return '';
     }
   },
@@ -36,7 +37,7 @@ export default {
       const wd = youbi[d.getDay()];
       // yyyy/mm/dd(曜) hh:mm:ss
       return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}(${wd}) ` +
-        `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}:${d.getSeconds().toString().padStart(2,'0')}`;
+        `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
     }
   },
   template: `
@@ -54,11 +55,11 @@ export default {
           <th>休暇種別</th>
           <td>{{ leaveTypeLabel }}</td>
         </tr>
-        <tr v-if="data.leave_type === 'paid' && data.paid_type">
+        <tr v-if="data.leave_type === '有給休暇' && data.paid_type">
           <th>有給休暇</th>
           <td>{{ paidTypeLabel }}</td>
         </tr>
-        <tr v-if="data.leave_type === 'unpaid' && data.unpaid_type">
+        <tr v-if="data.leave_type === '無給休暇' && data.unpaid_type">
           <th>無給休暇</th>
           <td>{{ unpaidTypeLabel }}</td>
         </tr>
@@ -69,6 +70,10 @@ export default {
         <tr v-if="data.note">
           <th>注記</th>
           <td>{{ data.note }}</td>
+        </tr>
+        <tr v-if="data.approver_user_id">
+          <th>承認者(指定)</th>
+          <td>{{ $root.request.approver_user_realname }}</td>
         </tr>
       </tbody>
     </table>

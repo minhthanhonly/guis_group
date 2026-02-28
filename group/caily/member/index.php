@@ -44,6 +44,7 @@ $view->heading('メンバー一覧');
 						<th>従業員の種類</th>
 						<th>ステータス</th>
 						<th class="show-project-column" style="display: none;">案件表示</th>
+						<th class="approve-request-column" style="display: none;">申請承認を許可</th>
 						<th>アクション</th>
 					</tr>
 				</thead>
@@ -237,6 +238,14 @@ $view->heading('メンバー一覧');
               <input class="form-check-input" type="checkbox" id="edit-user-show-project" name="show_project" value="1">
               <label class="form-check-label" for="edit-user-show-project">
                 <span data-i18n="案件関連を表示">案件関連を表示</span>
+              </label>
+            </div>
+          </div>
+          <div class="mb-4 form-control-validation">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="edit-user-can-approve-request" name="can_approve_request" value="1">
+              <label class="form-check-label" for="edit-user-can-approve-request">
+                <span data-i18n="申請関係の承認を許可します">申請関係の承認を許可します</span>
               </label>
             </div>
           </div>

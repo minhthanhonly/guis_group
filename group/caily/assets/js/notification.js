@@ -288,76 +288,99 @@ class NotificationManager {
 
     renderNotificationList() {
         const list = this.notifications || [];
-        const ul = document.querySelector('#notification_list .dropdown-notifications-list ul');
-        if (!ul) return;
-        ul.innerHTML = '';
-        if (list.length === 0) {
-            ul.innerHTML = `
-                <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                    <div class="d-flex">
-                        <div class="flex-grow-1">
-                            <h6 class="small mb-1">通知はありません 🎉</h6>
-                        </div>
-                    </div>
-                </li>
-            `;
-            this.updateNotificationDot();
-            return;
-        }
-        const count = list.filter(n => n.is_read == 0).length;
-        list.forEach((n, idx) => {
-            const { title, message, data } = this.getLocalizedText(n);
-            const li = document.createElement('li');
-            li.className = `list-group-item list-group-item-action dropdown-notifications-item${n.is_read == 1 ? ' marked-as-read' : ''}`;
-            li.innerHTML = `
-                <div class="d-flex">
-                    <div class="flex-shrink-0 me-3">
-                        <div class="avatar">
-                            <img src="${data.avatar || '/assets/img/avatars/1.png'}" alt class="rounded-circle" />
-                        </div>
-                    </div>
-                    <div class="flex-grow-1">
-                        <h6 class="mb-1">${this.escapeHtml(title)}</h6>
-                        <small class="mb-1 d-block text-body">${this.escapeHtml(message)}</small>
-                        <small class="text-body-secondary">${n.created_at ? n.created_at : ''}</small>
-                    </div>
-                    <div class="flex-shrink-0 dropdown-notifications-actions">
-                        <a href="javascript:void(0)" class="dropdown-notifications-read"
-                            ><span class="badge badge-dot"></span
-                        ></a>
-                    </div>
-                </div>
-            `;
-            // Đánh dấu đã đọc/hoặc chưa đọc khi click vào icon read
-            li.querySelector('.dropdown-notifications-read').addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (n.is_read == 1) {
-                    await this.markAsUnread(n.id);
-                    n.is_read = 0;
-                    li.classList.remove('marked-as-read');
-                } else {
-                    await this.markAsRead(n.id);
-                    n.is_read = 1;
-                    li.classList.add('marked-as-read');
-                }
-                this.renderNotificationList();
-            });
-            // Đánh dấu đã đọc khi click vào notification (trừ icon read)
-            li.addEventListener('click', async (evt) => {
-                if (evt.target.classList.contains('dropdown-notifications-read')) return;
-                if (n.is_read == 0) {
-                    await this.markAsRead(n.id);
-                    n.is_read = 1;
-                    li.classList.add('marked-as-read');
-                }
-                if (data.url) {
-                    window.location.href = data.url;
-                }
-            });
-            ul.appendChild(li);
+        const projectUl = document.getElementById('notification_list_project');
+        const soumuUl = document.getElementById('notification_list_soumu');
+        if (!projectUl || !soumuUl) return;
+
+        // Chia notification theo event:
+        // - event bắt đầu bằng 'form' hoặc 'other' => 総務
+        // - còn lại => 案件
+        const projectList = [];
+        const soumuList = [];
+        list.forEach((n) => {
+            const ev = (n.event || '').toString();
+            if (ev.startsWith('form') || ev.startsWith('other')) {
+                soumuList.push(n);
+            } else {
+                projectList.push(n);
+            }
         });
+
+        const renderTo = (ul, items) => {
+            ul.innerHTML = '';
+            if (!items || items.length === 0) {
+                ul.innerHTML = `
+                    <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
+                        <div class="d-flex">
+                            <div class="flex-grow-1">
+                                <h6 class="small mb-1">通知はありません 🎉</h6>
+                            </div>
+                        </div>
+                    </li>
+                `;
+                return;
+            }
+            items.forEach((n) => {
+                const { title, message, data } = this.getLocalizedText(n);
+                const li = document.createElement('li');
+                li.className = `list-group-item list-group-item-action dropdown-notifications-item${n.is_read == 1 ? ' marked-as-read' : ''}`;
+                li.innerHTML = `
+                    <div class="d-flex">
+                        <div class="flex-shrink-0 me-3">
+                            <div class="avatar">
+                                <img src="${data.avatar || '/assets/img/avatars/1.png'}" alt class="rounded-circle" />
+                            </div>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">${this.escapeHtml(title)}</h6>
+                            <small class="mb-1 d-block text-body">${this.escapeHtml(message)}</small>
+                            <small class="text-body-secondary">${n.created_at ? n.created_at : ''}</small>
+                        </div>
+                        <div class="flex-shrink-0 dropdown-notifications-actions">
+                            <a href="javascript:void(0)" class="dropdown-notifications-read"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top"
+                                title="${n.is_read == 1 ? '未読にする' : '既読にする'}"
+                                ><span class="badge badge-dot"></span
+                            ></a>
+                        </div>
+                    </div>
+                `;
+                // Đánh dấu đã đọc/hoặc chưa đọc khi click vào icon read
+                li.querySelector('.dropdown-notifications-read').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (n.is_read == 1) {
+                        await this.markAsUnread(n.id);
+                        n.is_read = 0;
+                        li.classList.remove('marked-as-read');
+                    } else {
+                        await this.markAsRead(n.id);
+                        n.is_read = 1;
+                        li.classList.add('marked-as-read');
+                    }
+                    this.renderNotificationList();
+                });
+                // Đánh dấu đã đọc khi click vào notification (trừ icon read)
+                li.addEventListener('click', async (evt) => {
+                    if (evt.target.classList.contains('dropdown-notifications-read')) return;
+                    if (n.is_read == 0) {
+                        await this.markAsRead(n.id);
+                        n.is_read = 1;
+                        li.classList.add('marked-as-read');
+                    }
+                    if (data.url) {
+                        window.location.href = data.url;
+                    }
+                });
+                ul.appendChild(li);
+            });
+        };
+
+        renderTo(projectUl, projectList);
+        renderTo(soumuUl, soumuList);
+
         this.updateNotificationDot();
-        this.updateNotificationCount(count);
+        this.updateNotificationCount();
         
         // Dừng flash nếu không còn notification chưa đọc
         const unreadCount = this.notifications.filter(n => n.is_read == 0).length;
@@ -444,7 +467,17 @@ class NotificationManager {
         const btn = document.querySelector('#mark_all');
         if (!btn) return;
         btn.addEventListener('click', async () => {
-            const unread = this.notifications.filter(n => n.is_read == 0);
+            const activeTab = document.querySelector('#notification_list .nav-tabs .nav-link.active');
+            let target = 'project';
+            if (activeTab && activeTab.id === 'notification_tab_soumu_button') {
+                target = 'soumu';
+            }
+            const unread = this.notifications.filter(n => {
+                if (n.is_read != 0) return false;
+                const ev = (n.event || '').toString();
+                const isSoumu = ev.startsWith('form') || ev.startsWith('other');
+                return target === 'soumu' ? isSoumu : !isSoumu;
+            });
             if (unread.length === 0) return;
             const ids = unread.map(n => n.id);
             // Gọi API mark_read_multi
@@ -457,8 +490,11 @@ class NotificationManager {
                 n.is_read = 1;
             }
             this.renderNotificationList();
-            // Dừng flash sau khi đánh dấu tất cả là đã đọc
-            this.stopFlashingTitle();
+            // Dừng flash sau khi đánh dấu tất cả là đã đọc (nếu không còn unread)
+            const unreadCount = this.notifications.filter(n => n.is_read == 0).length;
+            if (unreadCount === 0) {
+                this.stopFlashingTitle();
+            }
         });
     }
 
@@ -469,12 +505,41 @@ class NotificationManager {
         dot.style.display = hasUnread ? 'inline-block' : 'none';
     }
     
-    updateNotificationCount(count = 0) {
+    updateNotificationCount() {
+        const list = this.notifications || [];
+        const totalUnread = list.filter(n => n.is_read == 0).length;
+
+        // Tổng số notification chưa đọc (badge ở header)
         const countElement = document.getElementById('notification_count');
-        if (!countElement) return;
-        countElement.textContent = count;
-        countElement.style.display = count > 0 ? 'inline' : 'none';
-        countElement.textContent = count > 0 ? count + ' New' : '';
+        if (countElement) {
+            countElement.style.display = totalUnread > 0 ? 'inline' : 'none';
+            countElement.textContent = totalUnread > 0 ? totalUnread + ' New' : '';
+        }
+
+        // Số lượng cho từng tab
+        const projectBadge = document.getElementById('notification_count_project');
+        const soumuBadge = document.getElementById('notification_count_soumu');
+        let projectUnread = 0;
+        let soumuUnread = 0;
+
+        list.forEach((n) => {
+            if (n.is_read != 0) return;
+            const ev = (n.event || '').toString();
+            if (ev.startsWith('form') || ev.startsWith('other')) {
+                soumuUnread++;
+            } else {
+                projectUnread++;
+            }
+        });
+
+        if (projectBadge) {
+            projectBadge.style.display = projectUnread > 0 ? 'inline' : 'none';
+            projectBadge.textContent = projectUnread > 0 ? projectUnread : '';
+        }
+        if (soumuBadge) {
+            soumuBadge.style.display = soumuUnread > 0 ? 'inline' : 'none';
+            soumuBadge.textContent = soumuUnread > 0 ? soumuUnread : '';
+        }
     }
 
     /**

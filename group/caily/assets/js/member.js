@@ -403,11 +403,18 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             { data: 'status',
               title: 'ステータス'
             },
-            ...(user_role == 'administrator' ? [{
-              data: 'show_project',
-              title: '案件表示',
-              className: 'show-project-column'
-            }] : []),
+            ...(user_role == 'administrator' ? [
+              {
+                data: 'show_project',
+                title: '案件表示',
+                className: 'show-project-column'
+              },
+              {
+                data: 'can_approve_request',
+                title: '申請承認を許可',
+                className: 'approve-request-column'
+              }
+            ] : []),
             { data: 'action',
               title: '操作'
             }
@@ -522,19 +529,34 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                   }
               }
             },
-            ...(user_role == 'administrator' ? [{
-              // Show Project column (only for administrator)
-              targets: 8,
-              className: 'show-project-column',
-              render: function (data, type, full, meta) {
-                  const showProject = full['show_project'];
-                  if(showProject == 1 || showProject === '1'){
-                      return '<span class="badge bg-label-success">表示</span>';
-                  }else{
-                      return '<span class="badge bg-label-secondary">非表示</span>';
-                  }
+            ...(user_role == 'administrator' ? [
+              {
+                // Show Project column (only for administrator)
+                targets: 8,
+                className: 'show-project-column',
+                render: function (data, type, full, meta) {
+                    const showProject = full['show_project'];
+                    if(showProject == 1 || showProject === '1'){
+                        return '<span class="badge bg-label-success">表示</span>';
+                    }else{
+                        return '<span class="badge bg-label-secondary">非表示</span>';
+                    }
+                }
+              },
+              {
+                // Approve request permission column (only for administrator)
+                targets: 9,
+                className: 'approve-request-column',
+                render: function (data, type, full, meta) {
+                    const canApprove = full['can_approve_request'];
+                    if(canApprove == 1 || canApprove === '1'){
+                        return '<span class="badge bg-label-success">許可</span>';
+                    }else{
+                        return '<span class="badge bg-label-secondary">不可</span>';
+                    }
+                }
               }
-            }] : []),
+            ] : []),
             {
               targets: -1,
               title: '操作',
@@ -698,6 +720,13 @@ document.addEventListener('DOMContentLoaded', async function (e) {
               showProjectCheckbox.checked = userinfo.show_project == 1 || userinfo.show_project === '1';
             }
             
+
+            // Set can_approve_request checkbox
+            const canApproveRequestCheckbox = document.getElementById('edit-user-can-approve-request');
+            if (canApproveRequestCheckbox) {
+              canApproveRequestCheckbox.checked = userinfo.can_approve_request == 1 || userinfo.can_approve_request === '1';
+            }
+
             const editModal = new bootstrap.Modal(document.getElementById('modalEditUser'));
             editModal.show();
           }else{
@@ -934,6 +963,14 @@ document.addEventListener('DOMContentLoaded', async function (e) {
         showProjectHeader.style.display = '';
       } else {
         showProjectHeader.style.display = 'none';
+      }
+    }
+    const approveRequestHeader = document.querySelector('.approve-request-column');
+    if (approveRequestHeader) {
+      if (user_role == 'administrator') {
+        approveRequestHeader.style.display = '';
+      } else {
+        approveRequestHeader.style.display = 'none';
       }
     }
     

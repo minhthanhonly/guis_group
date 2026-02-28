@@ -9,29 +9,24 @@ export default {
         start_datetime: '',
         end_datetime: '',
         days: '',
-        leave_type: '',
-        paid_type: '',
-        unpaid_type: '',
+        destination: '',
         reason: '',
         note: '',
         approver_user_id: ''
       },
       errors: {},
-      modalTitle: this.mode == 'edit' ? '休暇申請編集' :  '休暇申請' ,
+      modalTitle: this.mode === 'edit' ? '出張申請編集' : '出張申請書',
       submitting: false,
       approvers: []
-    }
+    };
   },
   created() {
-    // Immediately set formData if defaultData exists
     if (this.defaultData && Object.keys(this.defaultData).length > 0) {
       this.formData = Object.assign({
         start_datetime: '',
         end_datetime: '',
         days: '',
-        leave_type: '',
-        paid_type: '',
-        unpaid_type: '',
+        destination: '',
         reason: '',
         note: '',
         approver_user_id: ''
@@ -49,9 +44,7 @@ export default {
             start_datetime: '',
             end_datetime: '',
             days: '',
-            leave_type: '',
-            paid_type: '',
-            unpaid_type: '',
+            destination: '',
             reason: '',
             note: '',
             approver_user_id: ''
@@ -84,14 +77,11 @@ export default {
       const start = new Date(startStr);
       const end = new Date(endStr);
       if (isNaN(start) || isNaN(end) || end < start) return;
-      // Tính số ngày làm việc (loại trừ Thứ 7 & Chủ nhật), bao gồm cả ngày bắt đầu và kết thúc
       let workDays = 0;
       const cur = new Date(start.getTime());
       while (cur <= end) {
-        const day = cur.getDay(); // 0=Sun, 6=Sat
-        if (day !== 0 && day !== 6) {
-          workDays += 1;
-        }
+        const day = cur.getDay();
+        if (day !== 0 && day !== 6) workDays += 1;
         cur.setDate(cur.getDate() + 1);
       }
       this.formData.days = workDays > 0 ? String(workDays) : '';
@@ -119,24 +109,16 @@ export default {
         this.errors.days = '日間は0より大きい値を入力してください。';
         valid = false;
       }
-      if (!this.formData.leave_type) {
-        this.errors.leave_type = '休暇種別を選択してください。';
-        valid = false;
-      }
-      if (this.formData.leave_type === '有給休暇' && !this.formData.paid_type) {
-        this.errors.paid_type = '有給休暇の種類を選択してください。';
-        valid = false;
-      }
-      if (this.formData.leave_type === '無給休暇' && !this.formData.unpaid_type) {
-        this.errors.unpaid_type = '無給休暇の種類を選択してください。';
-        valid = false;
-      }
-      if (!this.formData.approver_user_id) {
-        this.errors.approver_user_id = '承認者を選択してください。';
+      if (!this.formData.destination || !String(this.formData.destination).trim()) {
+        this.errors.destination = '行先を入力してください。';
         valid = false;
       }
       if (!this.formData.reason || !String(this.formData.reason).trim()) {
         this.errors.reason = '事由を入力してください。';
+        valid = false;
+      }
+      if (!this.formData.approver_user_id) {
+        this.errors.approver_user_id = '承認者を選択してください。';
         valid = false;
       }
       return valid;
@@ -153,21 +135,15 @@ export default {
       } else if (field === 'days') {
         if (!this.formData.days || isNaN(this.formData.days) || Number(this.formData.days) <= 0) err.days = '日間は0より大きい値を入力してください。';
         else { delete err.days; }
-      } else if (field === 'leave_type') {
-        if (!this.formData.leave_type) err.leave_type = '休暇種別を選択してください。';
-        else { delete err.leave_type; }
-      } else if (field === 'paid_type') {
-        if (this.formData.leave_type === '有給休暇' && !this.formData.paid_type) err.paid_type = '有給休暇の種類を選択してください。';
-        else { delete err.paid_type; }
-      } else if (field === 'unpaid_type') {
-        if (this.formData.leave_type === '無給休暇' && !this.formData.unpaid_type) err.unpaid_type = '無給休暇の種類を選択してください。';
-        else { delete err.unpaid_type; }
-      } else if (field === 'approver_user_id') {
-        if (!this.formData.approver_user_id) err.approver_user_id = '承認者を選択してください。';
-        else { delete err.approver_user_id; }
+      } else if (field === 'destination') {
+        if (!this.formData.destination || !String(this.formData.destination).trim()) err.destination = '行先を入力してください。';
+        else { delete err.destination; }
       } else if (field === 'reason') {
         if (!this.formData.reason || !String(this.formData.reason).trim()) err.reason = '事由を入力してください。';
         else { delete err.reason; }
+      } else if (field === 'approver_user_id') {
+        if (!this.formData.approver_user_id) err.approver_user_id = '承認者を選択してください。';
+        else { delete err.approver_user_id; }
       }
       this.errors = err;
     },
@@ -185,11 +161,11 @@ export default {
           this.$emit('submitted', this.formData);
           this.close();
         } else {
-          const payload = { type: 'leave', data: this.formData, status, start_date: startDate, end_date: endDate, approver_user_id: this.formData.approver_user_id || '' };
+          const payload = { type: 'trip', data: this.formData, status, start_date: startDate, end_date: endDate, approver_user_id: this.formData.approver_user_id || '' };
           await axios.post('/api/index.php?model=request&method=add', payload, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
           });
-          if(status === 'draft') alert('下書き保存しました。');
+          if (status === 'draft') alert('下書き保存しました。');
           this.$emit('submitted', this.formData);
           this.close();
         }
@@ -213,75 +189,40 @@ export default {
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">期間 <span class="text-danger">*</span></label>
             <div class="col-sm-4">
-              <input type="datetime-local" class="form-control" v-model="formData.start_datetime" @blur="validateField('start_datetime')">
+              <input type="date" class="form-control" v-model="formData.start_datetime" @blur="validateField('start_datetime')">
               <div class="text-danger small" v-if="errors.start_datetime">{{ errors.start_datetime }}</div>
             </div>
             <div class="col-sm-1 text-center">~</div>
             <div class="col-sm-4">
-              <input type="datetime-local" class="form-control" v-model="formData.end_datetime" @blur="validateField('end_datetime')">
+              <input type="date" class="form-control" v-model="formData.end_datetime" @blur="validateField('end_datetime')">
               <div class="text-danger small" v-if="errors.end_datetime">{{ errors.end_datetime }}</div>
             </div>
           </div>
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">日間 <span class="text-danger">*</span></label>
             <div class="col-sm-4">
-              <input type="number" step="0.5" min="0" class="form-control" v-model="formData.days" @blur="validateField('days')">
+              <input type="number" step="1" min="0" class="form-control" v-model="formData.days" readonly>
               <div class="text-danger small" v-if="errors.days">{{ errors.days }}</div>
             </div>
           </div>
           <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">休暇種別 <span class="text-danger">*</span></label>
+            <label class="col-sm-3 col-form-label">行先 <span class="text-danger">*</span></label>
             <div class="col-sm-9">
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="paid" value="有給休暇" v-model="formData.leave_type" @change="validateField('leave_type'); validateField('paid_type'); validateField('unpaid_type')">
-                <label class="form-check-label" for="paid">有給休暇</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="unpaid" value="無給休暇" v-model="formData.leave_type" @change="validateField('leave_type'); validateField('paid_type'); validateField('unpaid_type')">
-                <label class="form-check-label" for="unpaid">無給休暇</label>
-              </div>
-              <div class="text-danger small" v-if="errors.leave_type">{{ errors.leave_type }}</div>
+              <input type="text" class="form-control" v-model="formData.destination" maxlength="255" @blur="validateField('destination')">
+              <div class="text-danger small" v-if="errors.destination">{{ errors.destination }}</div>
             </div>
           </div>
-         
-          <div class="mb-3 row" v-if="formData.leave_type === 'paid' || formData.leave_type === '有給休暇'">
-            <label class="col-sm-3 col-form-label">有給休暇 <span class="text-danger">*</span></label>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">事由 <span class="text-danger">*</span></label>
             <div class="col-sm-9">
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="full" value="全休" v-model="formData.paid_type" @change="validateField('paid_type')">
-                <label class="form-check-label" for="full">全休</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="am" value="午前休" v-model="formData.paid_type" @change="validateField('paid_type')">
-                <label class="form-check-label" for="am">午前休</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="pm" value="午後休" v-model="formData.paid_type" @change="validateField('paid_type')">
-                <label class="form-check-label" for="pm">午後休</label>
-              </div>
-              <div class="text-danger small" v-if="errors.paid_type">{{ errors.paid_type }}</div>
+              <input type="text" class="form-control" v-model="formData.reason" maxlength="255" @blur="validateField('reason')">
+              <div class="text-danger small" v-if="errors.reason">{{ errors.reason }}</div>
             </div>
           </div>
-          <div class="mb-3 row" v-if="formData.leave_type === 'unpaid' || formData.leave_type === '無給休暇'">
-            <label class="col-sm-3 col-form-label">無給休暇 <span class="text-danger">*</span></label>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">備考</label>
             <div class="col-sm-9">
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="congratulatory" value="慶弔休暇" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
-                <label class="form-check-label" for="congratulatory">慶弔休暇</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="menstrual" value="生理休暇" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
-                <label class="form-check-label" for="menstrual">生理休暇</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="child_nursing" value="子の看護休暇" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
-                <label class="form-check-label" for="child_nursing">子の看護休暇</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="child_nursing_other" value="その他" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
-                <label class="form-check-label" for="child_nursing_other">その他</label>
-              </div>
-              <div class="text-danger small" v-if="errors.unpaid_type">{{ errors.unpaid_type }}</div>
+              <textarea class="form-control" v-model="formData.note" rows="2"></textarea>
             </div>
           </div>
           <div class="mb-3 row">
@@ -296,19 +237,6 @@ export default {
               <div class="text-danger small" v-if="errors.approver_user_id">{{ errors.approver_user_id }}</div>
             </div>
           </div>
-          <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">事由 <span class="text-danger">*</span></label>
-            <div class="col-sm-9">
-              <input type="text" class="form-control" v-model="formData.reason" maxlength="255" @blur="validateField('reason')">
-              <div class="text-danger small" v-if="errors.reason">{{ errors.reason }}</div>
-            </div>
-          </div>
-          <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">注記</label>
-            <div class="col-sm-9">
-              <textarea class="form-control" v-model="formData.note" rows="2"></textarea>
-            </div>
-          </div>
         </form>
       </div>
       <div class="modal-footer">
@@ -316,14 +244,14 @@ export default {
         <button v-if="mode==='add'" type="button" class="btn btn-outline-secondary" :disabled="submitting" @click="submit('draft')">下書き保存</button>
         <button v-if="mode==='add'" type="button" class="btn btn-primary" :disabled="submitting" @click="submit('pending')">申請</button>
         <button v-if="mode==='edit'" type="button" class="btn btn-primary" :disabled="submitting" @click="submit()">保存</button>
-      
-        <div class="text-muted small mt-4" v-if="mode==='add'">
+      </div>
+      <div class="text-muted small" v-if="mode==='add'">
           <ul>
             <li>1週間前までに提出して下さい。</li>
-            <li>有給休暇以外に無給休暇※（慶弔休暇、生理休暇、子の看護休暇）を取得する場合も休暇届で申請してください。<br>※無給休暇とは・・給与計算上は欠勤と同じ扱いになるため休んだ日数について欠勤控除が発生します。</li>
+            <li>宿泊を伴う出張が必要になった場合に提出してください。</li>
+            <li>出張に伴う交通機関や宿泊施設の手配については総務課から都度案内します。 </li>
           </ul>
         </div>
-      </div>
     </div>
   `
 };

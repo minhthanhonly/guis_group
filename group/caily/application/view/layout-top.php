@@ -150,20 +150,32 @@
             <?php } ?>
             
 
-            <!-- <li class="menu-item <?php if($directory == 'form') echo 'active open'; ?>">
-              <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base ti tabler-settings"></i>
+            <?php
+            $form_pending_badge = 0;
+            if (!empty($_SESSION['userid'])) {
+              $is_admin = (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator');
+              $is_approver = false;
+              require_once DIR_MODEL.'request.php';
+              $reqModel = new Request();
+              $reqModel->connect();
+              if (!$is_admin) {
+                $u = $reqModel->fetchOne("SELECT can_approve_request FROM " . DB_PREFIX . "user WHERE userid = '" . $reqModel->quote($_SESSION['userid']) . "'");
+                $is_approver = !empty($u['can_approve_request']);
+              }
+              if ($is_admin || $is_approver) {
+                $row = $reqModel->fetchOne("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "requests WHERE status = 'pending'");
+                $form_pending_badge = $row ? (int)$row['cnt'] : 0;
+              }
+              $reqModel->close();
+            }
+            ?>
+            <li class="menu-item <?php if($directory == 'form') echo 'active open'; ?>">
+              <a href="<?=$root?>form/index.php" class="menu-link">
+                <i class="menu-icon icon-base fa fa-file-alt"></i>
                 <div data-i18n="申請・承認">申請・承認</div>
+                <?php if ($form_pending_badge > 0) { ?><span class="badge badge_number text-bg-danger rounded-pill ms-auto"><?= $form_pending_badge ?></span><?php } ?>
               </a>
-
-              <ul class="menu-sub">
-                <li class="menu-item <?php echo $active1; ?>">
-                  <a href="<?=$root?>form/index.php" class="menu-link">
-                    <div data-i18n="休職">休職</div>
-                  </a>
-                </li>
-              </ul>
-            </li> -->
+            </li>
 
             <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7' && $_SESSION['group'] != '6'){
               $active = '';
@@ -463,43 +475,76 @@
                         <h6 class="mb-0 me-auto" data-i18n="通知">通知</h6>
                         <div class="d-flex align-items-center h6 mb-0">
                           <span class="badge bg-label-primary me-2" id="notification_count"></span>
-                          <a
-                            href="javascript:void(0)"
-                            class="dropdown-notifications-all p-2 btn btn-icon"
-                            data-bs-toggle="tooltip"
-                            data-bs-placement="top"
-                            title="Mark all as read"
-                            id="mark_all"
-                            ><i class="icon-base ti tabler-mail-opened text-heading"></i
-                          ></a>
                         </div>
                       </div>
                     </li>
-                    <li class="dropdown-notifications-list scrollable-container">
-                      <ul class="list-group list-group-flush">
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                          <div class="d-flex">
-                            <div class="flex-shrink-0 me-3">
-                              <div class="avatar">
-                                <img src="<?=$root?>assets/img/avatars/1.png" alt class="rounded-circle" />
-                              </div>
-                            </div>
-                            <div class="flex-grow-1">
-                              <h6 class="small mb-1" data-i18n="通知はありません">通知はありません 🎉</h6>
-                              <!-- <small class="text-body-secondary">1h ago</small> -->
-                            </div>
-                            <div class="flex-shrink-0 dropdown-notifications-actions">
-                              <a href="javascript:void(0)" class="dropdown-notifications-read"
-                                ><span class="badge badge-dot"></span
-                              ></a>
-                              <a href="javascript:void(0)" class="dropdown-notifications-archive"
-                                ><span class="icon-base ti tabler-x"></span
-                              ></a>
-                            </div>
-                          </div>
+                    <li class="dropdown-notifications-list">
+                      <!-- Tabs: 案件 / 総務 -->
+                      <div class="d-flex align-items-center justify-content-between border-bottom">
+                        <ul class="nav nav-tabs nav-fill border-0 flex-grow-1" role="tablist">
+                        <li class="nav-item" role="presentation">
+                          <button
+                            class="nav-link active d-flex align-items-center justify-content-center h-100"
+                            id="notification_tab_project_button"
+                            data-bs-toggle="tab"
+                            data-bs-target="#notification_tab_project"
+                            type="button"
+                            role="tab"
+                            aria-controls="notification_tab_project"
+                            aria-selected="true"
+                          >
+                            <span>案件</span>
+                            <span class="badge badge-sm bg-label-primary ms-2 px-2" id="notification_count_project"></span>
+                          </button>
                         </li>
-                       
-                      </ul>
+                        <li class="nav-item" role="presentation">
+                          <button
+                            class="nav-link d-flex align-items-center justify-content-center h-100"
+                            id="notification_tab_soumu_button"
+                            data-bs-toggle="tab"
+                            data-bs-target="#notification_tab_soumu"
+                            type="button"
+                            role="tab"
+                            aria-controls="notification_tab_soumu"
+                            aria-selected="false"
+                          >
+                            <span>総務</span>
+                            <span class="badge badge-sm bg-label-primary ms-2 px-2" id="notification_count_soumu"></span>
+                          </button>
+                        </li>
+                        </ul>
+                        <a
+                          href="javascript:void(0)"
+                          class="dropdown-notifications-all p-2 btn btn-icon ms-2"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          title="すべて既読にする"
+                          id="mark_all"
+                          ><i class="icon-base ti tabler-mail-opened text-heading"></i
+                        ></a>
+                      </div>
+                      <div class="tab-content p-0 scrollable-container">
+                        <div
+                          class="tab-pane fade show active"
+                          id="notification_tab_project"
+                          role="tabpanel"
+                          aria-labelledby="notification_tab_project_button"
+                        >
+                          <ul class="list-group list-group-flush" id="notification_list_project">
+                            <!-- JS will render project notifications here -->
+                          </ul>
+                        </div>
+                        <div
+                          class="tab-pane fade"
+                          id="notification_tab_soumu"
+                          role="tabpanel"
+                          aria-labelledby="notification_tab_soumu_button"
+                        >
+                          <ul class="list-group list-group-flush" id="notification_list_soumu">
+                            <!-- JS will render general (form/other) notifications here -->
+                          </ul>
+                        </div>
+                      </div>
                     </li>
                     <!-- <li class="border-top">
                       <div class="d-grid p-4">

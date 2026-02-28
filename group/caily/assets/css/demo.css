@@ -614,3 +614,21 @@ li.storageprevious {
 	color: #fff;
     font-size: 0.6rem;
 }
+.layout-navbar .navbar-dropdown.dropdown-notifications .dropdown-notifications-list{
+	max-block-size: max(24.08rem, 50vh);
+}
+.layout-navbar .navbar-dropdown .dropdown-menu{
+	min-inline-size: 30rem;
+}
+.layout-navbar .navbar-dropdown.dropdown-notifications .dropdown-notifications-list .tab-content{
+	height: 45rem;
+}
+.badge_number{
+	transform: scale(0.8);
+}
+.layout-menu-collapsed:not(.layout-menu-hover) .menu-link .badge_number{
+	position: absolute;
+	top: -0.5rem;
+	right: -0.5rem;
+	transform: scale(0.6);
+}

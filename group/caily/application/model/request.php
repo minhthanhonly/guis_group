@@ -8,8 +8,11 @@ class Request extends ApplicationModel {
             'user_id' => array(),
             'type' => array(),
             'data' => array(),
+            'start_date' => array(),
+            'end_date' => array(),
             'status' => array(),
             'approver_id' => array(),
+            'approver_user_id' => array(),
             'approved_at' => array(),
             'history' => array(),
             'comments' => array(),
@@ -32,10 +35,65 @@ class Request extends ApplicationModel {
             }
             if (empty($data['days']) || !is_numeric($data['days']) || floatval($data['days']) <= 0) $errors[] = '日間は0より大きい値を入力してください。';
             if (empty($data['leave_type'])) $errors[] = '休暇種別を選択してください。';
-            if ($data['leave_type'] === 'paid' && empty($data['paid_type'])) $errors[] = '有給休暇の種類を選択してください。';
-            if ($data['leave_type'] === 'unpaid' && empty($data['unpaid_type'])) $errors[] = '無給休暇の種類を選択してください。';
+            if ($data['leave_type'] === '有給休暇' && empty($data['paid_type'])) {
+                $errors[] = '有給休暇の種類を選択してください。';
+            }
+            if ($data['leave_type'] === '無給休暇' && empty($data['unpaid_type'])) {
+                $errors[] = '無給休暇の種類を選択してください。';
+            }
+        } elseif ($type == 'outing') {
+            if (empty($data['date'])) $errors[] = '日付を入力してください。';
+            if (empty($data['start_time'])) $errors[] = '開始時刻を入力してください。';
+            if (empty($data['end_time'])) $errors[] = '終了時刻を入力してください。';
+            if (empty($data['destination'])) $errors[] = '行先を入力してください。';
+            if (empty($data['reason'])) $errors[] = '事由を入力してください。';
+        } elseif ($type == 'trip') {
+            if (empty($data['start_datetime'])) $errors[] = '開始日時を入力してください。';
+            if (empty($data['end_datetime'])) $errors[] = '終了日時を入力してください。';
+            if (!empty($data['start_datetime']) && !empty($data['end_datetime']) && strtotime($data['start_datetime']) >= strtotime($data['end_datetime'])) {
+                $errors[] = '終了日時は開始日時より後にしてください。';
+            }
+            if (empty($data['days']) || !is_numeric($data['days']) || floatval($data['days']) <= 0) $errors[] = '日間は0より大きい値を入力してください。';
+            if (empty(trim($data['destination'] ?? ''))) $errors[] = '行先を入力してください。';
+            if (empty(trim($data['reason'] ?? ''))) $errors[] = '事由を入力してください。';
+        } elseif ($type == 'holiday_work') {
+            if (empty($data['date'])) $errors[] = '日付を入力してください。';
+            if (empty($data['start_time'])) $errors[] = '開始時刻を入力してください。';
+            if (empty($data['end_time'])) $errors[] = '終了時刻を入力してください。';
+            if (!empty($data['start_time']) && !empty($data['end_time']) && $data['start_time'] >= $data['end_time']) {
+                $errors[] = '終了時刻は開始時刻より後にしてください。';
+            }
+            if (empty(trim($data['reason'] ?? ''))) $errors[] = '事由を入力してください。';
+        } elseif ($type == 'overtime') {
+            if (empty($data['date'])) $errors[] = '日付を入力してください。';
+            if (empty($data['start_time'])) $errors[] = '開始時刻を入力してください。';
+            if (empty($data['end_time'])) $errors[] = '終了時刻を入力してください。';
+            if (!empty($data['start_time']) && !empty($data['end_time']) && $data['start_time'] >= $data['end_time']) {
+                $errors[] = '終了時刻は開始時刻より後にしてください。';
+            }
+            $purpose = $data['purpose'] ?? null;
+            $allowed = ['遅刻', '早退', '時間外勤務'];
+            if (is_array($purpose)) {
+                $purpose = isset($purpose[0]) ? $purpose[0] : '';
+            }
+            if (empty(trim((string)$purpose)) || !in_array(trim($purpose), $allowed, true)) {
+                $errors[] = '用途を選択してください。';
+            }
+        } elseif ($type == 'attendance_correction') {
+            if (empty($data['date'])) $errors[] = '日付を入力してください。';
+            if (empty($data['time'])) $errors[] = '時間を入力してください。';
+            $ctype = trim($data['correction_type'] ?? '');
+            if ($ctype === '' || !in_array($ctype, ['出社', '退社'], true)) $errors[] = '区分を選択してください。';
+            if (empty(trim($data['reason'] ?? ''))) $errors[] = '事由を入力してください。';
+        } elseif ($type == 'travel_expense') {
+            if (empty(trim($data['attachment'] ?? ''))) $errors[] = '交通費精算書のファイルをアップロードしてください。';
+        } elseif ($type == 'expense') {
+            if (empty(trim($data['attachment'] ?? ''))) $errors[] = '経費精算書のファイルをアップロードしてください。';
+        } elseif ($type == 'trip_expense') {
+            if (empty(trim($data['attachment'] ?? ''))) $errors[] = '出張旅費精算書のファイルをアップロードしてください。';
+        } elseif ($type == 'commuting_allowance') {
+            if (empty(trim($data['attachment'] ?? ''))) $errors[] = '通勤手当申請書のファイルをアップロードしてください。';
         }
-        // Có thể bổ sung validate cho các loại khác ở đây
         return $errors;
     }
 
@@ -68,55 +126,206 @@ class Request extends ApplicationModel {
                 echo json_encode(['error' => $errors]);
                 exit;
             }
+            // 承認者は必須
+            if (empty($_POST['approver_user_id'])) {
+                http_response_code(400);
+                echo json_encode(['error' => '承認者を選択してください。']);
+                exit;
+            }
+        }
+        $start_date = null;
+        $end_date = null;
+        if (!empty($_POST['start_date']) && preg_match('/^\d{4}-\d{2}-\d{2}/', $_POST['start_date'])) {
+            $start_date = substr($_POST['start_date'], 0, 10);
+        }
+        if (!empty($_POST['end_date']) && preg_match('/^\d{4}-\d{2}-\d{2}/', $_POST['end_date'])) {
+            $end_date = substr($_POST['end_date'], 0, 10);
+        }
+        if ($start_date === null && $type === 'leave' && !empty($data['start_datetime'])) {
+            $start_date = substr($data['start_datetime'], 0, 10);
+        }
+        if ($end_date === null && $type === 'leave' && !empty($data['end_datetime'])) {
+            $end_date = substr($data['end_datetime'], 0, 10);
+        }
+        // 外出申請書: start_date / end_date を日付から設定
+        if ($start_date === null && $type === 'outing' && !empty($data['date'])) {
+            $start_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($end_date === null && $type === 'outing' && !empty($data['date'])) {
+            $end_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($start_date === null && $type === 'trip' && !empty($data['start_datetime'])) {
+            $start_date = substr($data['start_datetime'], 0, 10);
+        }
+        if ($end_date === null && $type === 'trip' && !empty($data['end_datetime'])) {
+            $end_date = substr($data['end_datetime'], 0, 10);
+        }
+        if ($start_date === null && $type === 'holiday_work' && !empty($data['date'])) {
+            $start_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($end_date === null && $type === 'holiday_work' && !empty($data['date'])) {
+            $end_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($start_date === null && $type === 'overtime' && !empty($data['date'])) {
+            $start_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($end_date === null && $type === 'overtime' && !empty($data['date'])) {
+            $end_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($start_date === null && $type === 'attendance_correction' && !empty($data['date'])) {
+            $start_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($end_date === null && $type === 'attendance_correction' && !empty($data['date'])) {
+            $end_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
         }
         $row = array(
             'user_id' => $_SESSION['userid'],
             'type' => $type,
             'data' => json_encode($data, JSON_UNESCAPED_UNICODE),
             'status' => $status,
+            'approver_user_id' => !empty($_POST['approver_user_id']) ? $_POST['approver_user_id'] : null,
             'history' => json_encode([
                 [
                     'action' => 'created',
                     'user' => $_SESSION['userid'],
                     'time' => date('Y-m-d H:i:s'),
-                    'note' => ($status === 'draft' ? '下書き保存' : 'Khởi tạo')
-                ]
+                    'note' => ''
+                ]   
             ], JSON_UNESCAPED_UNICODE),
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
+        if ($start_date !== null) {
+            $row['start_date'] = $start_date;
+        }
+        if ($end_date !== null) {
+            $row['end_date'] = $end_date;
+        }
         $result = $this->query_insert($row);
         
         // Send Pusher notification if request was created successfully
         if ($result && $status === 'pending') {
-            $this->sendRequestCreatedNotification($result, $type, $_SESSION['userid']);
+            $approverUserId = !empty($_POST['approver_user_id']) ? $_POST['approver_user_id'] : null;
+            $this->sendRequestCreatedNotification($result, $type, $_SESSION['userid'], $approverUserId);
         }
         
         return $result;
     }
 
-    // Lấy danh sách đơn (có thể lọc theo type, user, status)
+    // Lấy danh sách đơn (có thể lọc theo type, user, status), hỗ trợ phân trang & sắp xếp
+    // Mặc định chỉ hiển thị đơn của user đang đăng nhập. Chỉ administrator hoặc user có quyền duyệt (can_approve_request) mới xem tất cả.
     function list() {
         $where = [];
         if (!empty($_GET['type'])) {
             $where[] = "type = '" . $this->quote($_GET['type']) . "'";
         }
-        if (!empty($_GET['user_id'])) {
+        $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
+        $isApprover = false;
+        if (!empty($_SESSION['userid'])) {
+            $u = $this->fetchOne("SELECT can_approve_request FROM " . DB_PREFIX . "user WHERE userid = '" . $this->quote($_SESSION['userid']) . "'");
+            $isApprover = !empty($u['can_approve_request']);
+        }
+        if (!$isAdmin && !$isApprover) {
+            $where[] = "user_id = '" . $this->quote($_SESSION['userid'] ?? '') . "'";
+        } elseif (!empty($_GET['user_id'])) {
             $where[] = "user_id = '" . $this->quote($_GET['user_id']) . "'";
         }
         if (!empty($_GET['status'])) {
             $where[] = "status = '" . $this->quote($_GET['status']) . "'";
         }
+        // Keyword search (tìm trong JSON data – ví dụ reason, note, và realname người đăng ký)
+        if (!empty($_GET['keyword'])) {
+            $rawKw = trim($_GET['keyword']);
+            if ($rawKw !== '') {
+                $kw = '%' . $rawKw . '%';
+                $like = $this->quote($kw);
+                $cond = "(data LIKE $like";
+                // Tìm user_id theo realname để cho phép search theo tên người đăng ký
+                $userLike = $this->quote($kw);
+                $users = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE realname LIKE $userLike");
+                if ($users && count($users)) {
+                    $ids = array();
+                    foreach ($users as $u) {
+                        if (!empty($u['userid'])) {
+                            $ids[] = $this->quote($u['userid']);
+                        }
+                    }
+                    if (count($ids)) {
+                        $cond .= " OR user_id IN (" . implode(',', $ids) . ")";
+                    }
+                }
+                $cond .= ")";
+                $where[] = $cond;
+            }
+        }
+        // 期間フィルタ: 21日～翌20日。start_date がある場合は start_date、ない場合は created_at の日付で判定
+        if (!empty($_GET['from_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['from_date'])
+            && !empty($_GET['to_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['to_date'])) {
+            $from_date = $_GET['from_date'];
+            $to_date = $_GET['to_date'];
+            $where[] = "((start_date IS NOT NULL AND start_date >= '" . $this->quote($from_date) . "' AND start_date <= '" . $this->quote($to_date) . "')"
+                . " OR (start_date IS NULL AND DATE(created_at) >= '" . $this->quote($from_date) . "' AND DATE(created_at) <= '" . $this->quote($to_date) . "'))";
+        }
         $whereSql = count($where) ? ('WHERE ' . implode(' AND ', $where)) : '';
-        $query = "SELECT * FROM {$this->table} $whereSql ORDER BY created_at DESC";
+
+        // Sắp xếp
+        $allowedSort = ['id', 'created_at', 'status', 'start_date', 'end_date'];
+        $sort_by = isset($_GET['sort_by']) && in_array($_GET['sort_by'], $allowedSort, true) ? $_GET['sort_by'] : 'created_at';
+        $sort_dir = (isset($_GET['sort_dir']) && strtolower($_GET['sort_dir']) === 'asc') ? 'ASC' : 'DESC';
+        $orderSql = "ORDER BY {$sort_by} {$sort_dir}";
+
+        // Phân trang
+        $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
+        if ($page < 1) $page = 1;
+        $perPage = isset($_GET['per_page']) ? intval($_GET['per_page']) : 50;
+        if ($perPage < 1) $perPage = 50;
+        if ($perPage > 200) $perPage = 200;
+        $offset = ($page - 1) * $perPage;
+
+        $countRow = $this->fetchOne("SELECT COUNT(*) AS cnt FROM {$this->table} $whereSql");
+        $total = $countRow ? intval($countRow['cnt']) : 0;
+        $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 0;
+
+        $query = "SELECT * FROM {$this->table} $whereSql $orderSql LIMIT {$perPage} OFFSET {$offset}";
         $rows = $this->fetchAll($query);
-        // Parse JSON fields
+
+        // Parse JSON fields and collect user ids for name lookup
+        $user_ids = array();
         foreach ($rows as &$row) {
             $row['data'] = json_decode($row['data'], true);
             $row['history'] = json_decode($row['history'], true);
             $row['comments'] = json_decode($row['comments'], true);
+            $row['comment_count'] = is_array($row['comments']) ? count($row['comments']) : 0;
+            if (!empty($row['user_id'])) $user_ids[$row['user_id']] = true;
+            if (!empty($row['approver_id'])) $user_ids[$row['approver_id']] = true;
+            if (!empty($row['approver_user_id'])) $user_ids[$row['approver_user_id']] = true;
         }
-        return $rows;
+        unset($row);
+
+        $user_map = array();
+        if (count($user_ids)) {
+            $in = "'" . implode("','", array_map([$this, 'quote'], array_keys($user_ids))) . "'";
+            $users = $this->fetchAll("SELECT userid, realname FROM " . DB_PREFIX . "user WHERE userid IN ($in)");
+            foreach ($users as $u) {
+                $user_map[$u['userid']] = $u['realname'];
+            }
+        }
+        foreach ($rows as &$row) {
+            $row['user_realname'] = isset($user_map[$row['user_id']]) ? $user_map[$row['user_id']] : ($row['user_id'] ?? '');
+            $row['approver_realname'] = !empty($row['approver_id']) && isset($user_map[$row['approver_id']]) ? $user_map[$row['approver_id']] : '';
+            $row['approver_user_realname'] = !empty($row['approver_user_id']) && isset($user_map[$row['approver_user_id']]) ? $user_map[$row['approver_user_id']] : ($row['approver_user_id'] ?? '');
+        }
+        unset($row);
+
+        return [
+            'data' => $rows,
+            'pagination' => [
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'total_pages' => $totalPages
+            ]
+        ];
     }
 
     // Thêm comment
@@ -172,8 +381,21 @@ class Request extends ApplicationModel {
         $note = isset($_POST['note']) ? $_POST['note'] : '';
         $user = $_SESSION['userid'];
         
-        // Get current request info for notifications
-        $currentRequest = $this->fetchOne("SELECT type, user_id FROM {$this->table} WHERE id = $id");
+        // Get current request info for permissions & notifications
+        $currentRequest = $this->fetchOne("SELECT type, user_id, approver_user_id FROM {$this->table} WHERE id = $id");
+        if (!$currentRequest) {
+            http_response_code(404);
+            echo json_encode(['error' => '申請が見つかりません。']);
+            exit;
+        }
+        // Only administrator or designated approver can update status
+        $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
+        $isDesignatedApprover = !empty($currentRequest['approver_user_id']) && $currentRequest['approver_user_id'] === $_SESSION['userid'];
+        if (!$isAdmin && !$isDesignatedApprover) {
+            http_response_code(403);
+            echo json_encode(['error' => '状態を変更する権限がありません。']);
+            exit;
+        }
         
         $row = $this->fetchOne("SELECT history FROM {$this->table} WHERE id = $id");
         $history = $row && $row['history'] ? json_decode($row['history'], true) : [];
@@ -220,6 +442,8 @@ class Request extends ApplicationModel {
             }
             // Thêm user_id của người đăng ký
             if (!empty($row['user_id'])) $user_ids[] = $row['user_id'];
+            // Thêm user chỉ định duyệt (approver_user_id) nếu có
+            if (!empty($row['approver_user_id'])) $user_ids[] = $row['approver_user_id'];
             $user_ids = array_unique($user_ids);
             if (count($user_ids)) {
                 $in = "'" . implode("','", array_map([$this, 'quote'], $user_ids)) . "'";
@@ -250,6 +474,10 @@ class Request extends ApplicationModel {
                 if (!empty($row['user_id']) && !empty($user_map[$row['user_id']])) {
                     $row['realname'] = $user_map[$row['user_id']]['realname'];
                     $row['user_image'] = $user_map[$row['user_id']]['user_image'];
+                }
+                // Gán realname cho người chỉ định duyệt (approver_user_id)
+                if (!empty($row['approver_user_id']) && !empty($user_map[$row['approver_user_id']])) {
+                    $row['approver_user_realname'] = $user_map[$row['approver_user_id']]['realname'];
                 }
             }
         }
@@ -297,6 +525,15 @@ class Request extends ApplicationModel {
                 echo json_encode(['error' => $errors]);
                 exit;
             }
+            // 承認者は必須（現在の値または送信された値）
+            $newApprover = array_key_exists('approver_user_id', $_POST)
+                ? (isset($_POST['approver_user_id']) ? $_POST['approver_user_id'] : '')
+                : (isset($row['approver_user_id']) ? $row['approver_user_id'] : '');
+            if (empty($newApprover)) {
+                http_response_code(400);
+                echo json_encode(['error' => '承認者を選択してください。']);
+                exit;
+            }
         }
         // Cập nhật history
         $history = $row['history'] ? json_decode($row['history'], true) : [];
@@ -306,11 +543,62 @@ class Request extends ApplicationModel {
             'time' => date('Y-m-d H:i:s'),
             'note' => '内容を編集'
         ];
+        $start_date = null;
+        $end_date = null;
+        if (!empty($_POST['start_date']) && preg_match('/^\d{4}-\d{2}-\d{2}/', $_POST['start_date'])) {
+            $start_date = substr($_POST['start_date'], 0, 10);
+        }
+        if (!empty($_POST['end_date']) && preg_match('/^\d{4}-\d{2}-\d{2}/', $_POST['end_date'])) {
+            $end_date = substr($_POST['end_date'], 0, 10);
+        }
+        if ($start_date === null && $row['type'] === 'leave' && !empty($data['start_datetime'])) {
+            $start_date = substr($data['start_datetime'], 0, 10);
+        }
+        if ($end_date === null && $row['type'] === 'leave' && !empty($data['end_datetime'])) {
+            $end_date = substr($data['end_datetime'], 0, 10);
+        }
+        // 外出申請書: start_date / end_date を日付から設定
+        if ($start_date === null && $row['type'] === 'outing' && !empty($data['date'])) {
+            $start_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($end_date === null && $row['type'] === 'outing' && !empty($data['date'])) {
+            $end_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($start_date === null && $row['type'] === 'trip' && !empty($data['start_datetime'])) {
+            $start_date = substr($data['start_datetime'], 0, 10);
+        }
+        if ($end_date === null && $row['type'] === 'trip' && !empty($data['end_datetime'])) {
+            $end_date = substr($data['end_datetime'], 0, 10);
+        }
+        if ($start_date === null && $row['type'] === 'holiday_work' && !empty($data['date'])) {
+            $start_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($end_date === null && $row['type'] === 'holiday_work' && !empty($data['date'])) {
+            $end_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($start_date === null && $row['type'] === 'overtime' && !empty($data['date'])) {
+            $start_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($end_date === null && $row['type'] === 'overtime' && !empty($data['date'])) {
+            $end_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($start_date === null && $row['type'] === 'attendance_correction' && !empty($data['date'])) {
+            $start_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($end_date === null && $row['type'] === 'attendance_correction' && !empty($data['date'])) {
+            $end_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
         $update = [
             'data' => json_encode($data, JSON_UNESCAPED_UNICODE),
             'history' => json_encode($history, JSON_UNESCAPED_UNICODE),
             'updated_at' => date('Y-m-d H:i:s')
         ];
+        // Cập nhật người chỉ định duyệt nếu có (cho phép clear về null)
+        if (array_key_exists('approver_user_id', $_POST)) {
+            $update['approver_user_id'] = $_POST['approver_user_id'] !== '' ? $_POST['approver_user_id'] : null;
+        }
+        if ($start_date !== null) $update['start_date'] = $start_date;
+        if ($end_date !== null) $update['end_date'] = $end_date;
         $result = $this->query_update($update, ['id' => $id]);
         
         // Send Pusher notification for request update
@@ -322,18 +610,33 @@ class Request extends ApplicationModel {
     }
 
     // Firebase notification methods (NEW: dùng NotificationService)
-    private function sendRequestCreatedNotification($requestId, $requestType, $userId) {
+    private function sendRequestCreatedNotification($requestId, $requestType, $userId, $approverUserId = null) {
         try {
             require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
-            // Lấy danh sách admin
-            $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
-            $admin_ids = array_map(function($a){return $a['userid'];}, $admins);
-            if (empty($admin_ids)) return;
+            $targetUserIds = [];
+            if (!empty($approverUserId)) {
+                // Chỉ gửi cho người được chỉ định duyệt nếu có
+                $targetUserIds = [$approverUserId];
+            } else {
+                // Nếu không chỉ định, fallback gửi cho admin như hiện tại
+                $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
+                $targetUserIds = array_map(function($a){return $a['userid'];}, $admins);
+            }
+            // Loại trừ user hiện tại khỏi danh sách notify
+            if (!empty($_SESSION['userid'])) {
+                $currentUserId = $_SESSION['userid'];
+                $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($currentUserId) {
+                    return $id !== $currentUserId;
+                }));
+            }
+            if (empty($targetUserIds)) return;
+            // 日本語ラベルに変換（例: leave -> 休暇届）
+            $typeLabel = $this->getRequestTypeLabel($requestType);
             $payload = [
                 'event' => 'form_request_update',
-                'title' => '申請作成',
-                'message' => '新しい申請が作成されました',
+                'title' => $typeLabel . 'が作成されました',
+                'message' => $typeLabel . 'の申請が作成されました',
                 'data' => [
                     'request_id' => $requestId,
                     'request_type' => $requestType,
@@ -342,7 +645,7 @@ class Request extends ApplicationModel {
                     'url' => "/form/detail.php?id=$requestId"
                 ],
                 'request_id' => $requestId,
-                'user_ids' => $admin_ids
+                'user_ids' => $targetUserIds
             ];
             $notiService->create($payload);
         } catch (Exception $e) {
@@ -354,9 +657,23 @@ class Request extends ApplicationModel {
         try {
             require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
-            $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
-            $admin_ids = array_map(function($a){return $a['userid'];}, $admins);
-            if (empty($admin_ids)) return;
+            // Ưu tiên gửi cho người được chỉ định duyệt, fallback về admin nếu không có
+            $targetUserIds = [];
+            $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
+            if ($req && !empty($req['approver_user_id'])) {
+                $targetUserIds = [$req['approver_user_id']];
+            } else {
+                $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
+                $targetUserIds = array_map(function($a){return $a['userid'];}, $admins);
+            }
+            // Loại trừ user hiện tại khỏi danh sách notify
+            if (!empty($_SESSION['userid'])) {
+                $currentUserId = $_SESSION['userid'];
+                $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($currentUserId) {
+                    return $id !== $currentUserId;
+                }));
+            }
+            if (empty($targetUserIds)) return;
             $payload = [
                 'event' => 'form_request_update',
                 'title' => '申請更新',
@@ -370,7 +687,7 @@ class Request extends ApplicationModel {
                     'url' => "/form/detail.php?id=$requestId"
                 ],
                 'request_id' => $requestId,
-                'user_ids' => $admin_ids
+                'user_ids' => $targetUserIds
             ];
             $notiService->create($payload);
         } catch (Exception $e) {
@@ -382,29 +699,72 @@ class Request extends ApplicationModel {
         try {
             require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
+            // 日本語ラベル（例: leave -> 休暇届）
+            $typeLabel = $this->getRequestTypeLabel($requestType);
+            // ステータスごとのメッセージ文言
+            switch ($status) {
+                case 'approved':
+                    $statusMessageText = $typeLabel . 'が承認されました';
+                    break;
+                case 'rejected':
+                    $statusMessageText = $typeLabel . 'が却下されました';
+                    break;
+                default:
+                    $statusMessageText = $typeLabel . 'のステータスが変更されました';
+                    break;
+            }
             // Gửi cho chủ đơn
-            $payload_user = [
-                'event' => 'form_request_update',
-                'title' => '申請ステータス',
-                'message' => '申請のステータスが変更されました',
-                'data' => [
+            if (empty($_SESSION['userid']) || $_SESSION['userid'] !== $userId) {
+                $payload_user = [
+                    'event' => 'form_request_update',
+                    'title' => $typeLabel . 'ステータス',
+                    'message' => $statusMessageText,
+                    'data' => [
+                        'request_id' => $requestId,
+                        'request_type' => $requestType,
+                        'status' => $status,
+                        'action_user' => $actionUser,
+                        'action' => $action,
+                        'url' => "/form/detail.php?id=$requestId"
+                    ],
                     'request_id' => $requestId,
-                    'request_type' => $requestType,
-                    'status' => $status,
-                    'action_user' => $actionUser,
-                    'action' => $action,
-                    'url' => "/form/detail.php?id=$requestId"
-                ],
-                'request_id' => $requestId,
-                'user_ids' => [$userId]
-            ];
-            $notiService->create($payload_user);
-            // Gửi cho admin
-            $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
-            $admin_ids = array_map(function($a){return $a['userid'];}, $admins);
-            if (!empty($admin_ids)) {
-                $payload_admin = $payload_user;
-                $payload_admin['user_ids'] = $admin_ids;
+                    'user_ids' => [$userId]
+                ];
+                $notiService->create($payload_user);
+            }
+            // Gửi cho người chỉ định duyệt (hoặc admin nếu không có)
+            $targetUserIds = [];
+            $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
+            if ($req && !empty($req['approver_user_id'])) {
+                $targetUserIds = [$req['approver_user_id']];
+            } else {
+                $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
+                $targetUserIds = array_map(function($a){return $a['userid'];}, $admins);
+            }
+            if (!empty($targetUserIds)) {
+                // Loại trừ user hiện tại khỏi danh sách notify
+                if (!empty($_SESSION['userid'])) {
+                    $currentUserId = $_SESSION['userid'];
+                    $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($currentUserId) {
+                        return $id !== $currentUserId;
+                    }));
+                }
+                if (empty($targetUserIds)) return;
+                $payload_admin = isset($payload_user) ? $payload_user : [
+                    'event' => 'form_request_update',
+                    'title' => $typeLabel . 'ステータス',
+                    'message' => $statusMessageText,
+                    'data' => [
+                        'request_id' => $requestId,
+                        'request_type' => $requestType,
+                        'status' => $status,
+                        'action_user' => $actionUser,
+                        'action' => $action,
+                        'url' => "/form/detail.php?id=$requestId"
+                    ],
+                    'request_id' => $requestId,
+                ];
+                $payload_admin['user_ids'] = $targetUserIds;
                 $notiService->create($payload_admin);
             }
         } catch (Exception $e) {
@@ -416,12 +776,14 @@ class Request extends ApplicationModel {
         try {
             require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
+            // 日本語ラベル（例: leave -> 休暇届）
+            $typeLabel = $this->getRequestTypeLabel($requestType);
             // Gửi cho chủ đơn nếu người comment khác chủ đơn
             if ($userId !== $commentUserId) {
                 $payload_user = [
                     'event' => 'form_comment',
-                    'title' => '新しいコメント',
-                    'message' => '申請に新しいコメントが追加されました',
+                    'title' => '新しいコメント（' . $typeLabel . '）',
+                    'message' => $typeLabel . 'に新しいコメントが追加されました',
                     'data' => [
                         'request_id' => $requestId,
                         'request_type' => $requestType,
@@ -433,14 +795,28 @@ class Request extends ApplicationModel {
                 ];
                 $notiService->create($payload_user);
             }
-            // Gửi cho admin
-            $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
-            $admin_ids = array_map(function($a){return $a['userid'];}, $admins);
-            if (!empty($admin_ids)) {
+            // Gửi cho người chỉ định duyệt (hoặc admin nếu không có)
+            $targetUserIds = [];
+            $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
+            if ($req && !empty($req['approver_user_id'])) {
+                $targetUserIds = [$req['approver_user_id']];
+            } else {
+                $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
+                $targetUserIds = array_map(function($a){return $a['userid'];}, $admins);
+            }
+            if (!empty($targetUserIds)) {
+                // Loại trừ user hiện tại khỏi danh sách notify
+                if (!empty($_SESSION['userid'])) {
+                    $currentUserId = $_SESSION['userid'];
+                    $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($currentUserId) {
+                        return $id !== $currentUserId;
+                    }));
+                }
+                if (empty($targetUserIds)) return;
                 $payload_admin = [
                     'event' => 'form_comment',
-                    'title' => '新しいコメント',
-                    'message' => '申請に新しいコメントが追加されました',
+                    'title' => '新しいコメント（' . $typeLabel . '）',
+                    'message' => $typeLabel . 'に新しいコメントが追加されました',
                     'data' => [
                         'request_id' => $requestId,
                         'request_type' => $requestType,
@@ -449,12 +825,77 @@ class Request extends ApplicationModel {
                         'url' => "/form/detail.php?id=$requestId"
                     ],
                     'request_id' => $requestId,
-                    'user_ids' => $admin_ids
+                    'user_ids' => $targetUserIds
                 ];
                 $notiService->create($payload_admin);
             }
         } catch (Exception $e) {
             error_log('Failed to send request comment notification: ' . $e->getMessage());
+        }
+    }
+
+    // Upload file for form (e.g. 交通費精算書) to application/upload/form/ with unique name
+    function uploadFormFile($params = null) {
+        if (empty($_SESSION['userid'])) {
+            return ['success' => false, 'error' => 'ユーザー情報がありません。'];
+        }
+        $fieldName = 'file';
+        if (!isset($_FILES[$fieldName]) || $_FILES[$fieldName]['error'] !== UPLOAD_ERR_OK) {
+            return ['success' => false, 'error' => 'ファイルが選択されていないか、アップロードエラーです。'];
+        }
+        $file = $_FILES[$fieldName];
+        $originalName = $file['name'];
+        $tmpName = $file['tmp_name'];
+        $fileSize = $file['size'];
+        if ($fileSize > 20 * 1024 * 1024) {
+            return ['success' => false, 'error' => 'ファイルサイズは20MB以下にしてください。'];
+        }
+        $ext = pathinfo($originalName, PATHINFO_EXTENSION);
+        $safeName = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', basename($originalName, '.'.$ext));
+        $uniqueName = date('YmdHis') . '_' . uniqid() . '_' . ($safeName ?: 'file') . ($ext ? '.' . $ext : '');
+        $uploadDir = DIR_UPLOAD . 'form/';
+        if (!is_dir($uploadDir)) {
+            if (!@mkdir($uploadDir, 0755, true)) {
+                return ['success' => false, 'error' => 'アップロードフォルダを作成できませんでした。'];
+            }
+        }
+        $filePath = $uploadDir . $uniqueName;
+        if (!move_uploaded_file($tmpName, $filePath)) {
+            return ['success' => false, 'error' => 'ファイルの保存に失敗しました。'];
+        }
+        return [
+            'success' => true,
+            'filename' => $uniqueName,
+            'original_name' => $originalName,
+            'path' => 'form/' . $uniqueName
+        ];
+    }
+
+    // Helper: map request type -> Japanese label
+    private function getRequestTypeLabel($type) {
+        switch ($type) {
+            case 'leave':
+                return '休暇届';
+            case 'outing':
+                return '外出申請書';
+            case 'trip':
+                return '出張申請書';
+            case 'holiday_work':
+                return '休日勤務申請書';
+            case 'overtime':
+                return '遅刻・早退・時間外勤務';
+            case 'attendance_correction':
+                return '勤怠打刻修正';
+            case 'travel_expense':
+                return '交通費精算書';
+            case 'expense':
+                return '経費精算書';
+            case 'trip_expense':
+                return '出張旅費精算書';
+            case 'commuting_allowance':
+                return '通勤手当申請書';
+            default:
+                return '申請';
         }
     }
 
