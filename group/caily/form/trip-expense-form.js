@@ -71,7 +71,7 @@ export default {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       if (file.size > 20 * 1024 * 1024) {
-        alert('ファイルサイズは20MB以下にしてください。');
+        if (typeof showMessage === 'function') showMessage('ファイルサイズは20MB以下にしてください。', true);
         event.target.value = '';
         return;
       }
@@ -107,10 +107,10 @@ export default {
           this.formData.attachment_original = result.original_name || file.name;
           this.validateField('attachment');
         } else {
-          alert(result && result.error ? result.error : 'アップロードに失敗しました。');
+          if (typeof showMessage === 'function') showMessage(result && result.error ? result.error : 'アップロードに失敗しました。', true);
         }
       } catch (e) {
-        alert('アップロードに失敗しました。');
+        if (typeof showMessage === 'function') showMessage('アップロードに失敗しました。', true);
       }
       this.uploading = false;
       this.uploadProgress = 0;
@@ -127,7 +127,7 @@ export default {
       const maxSize = 20 * 1024 * 1024;
       const toUpload = files.filter(f => {
         if (f.size > maxSize) {
-          alert(`ファイル「${f.name}」は20MB以下にしてください。`);
+          if (typeof showMessage === 'function') showMessage(`ファイル「${f.name}」は20MB以下にしてください。`, true);
           return false;
         }
         return true;
@@ -164,10 +164,10 @@ export default {
             original_name: result.original_name || file.name
           });
         } else {
-          alert(result && result.error ? result.error : 'アップロードに失敗しました。');
+          if (typeof showMessage === 'function') showMessage(result && result.error ? result.error : 'アップロードに失敗しました。', true);
         }
       } catch (e) {
-        alert('アップロードに失敗しました。');
+        if (typeof showMessage === 'function') showMessage('アップロードに失敗しました。', true);
       }
     },
     removeReceipt(index) {
@@ -223,12 +223,12 @@ export default {
           await axios.post('/api/index.php?model=request&method=add', payload, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
           });
-          if (status === 'draft') alert('下書き保存しました。');
+          if (status === 'draft' && typeof showMessage === 'function') showMessage('下書き保存しました。');
           this.$emit('submitted', this.formData);
           this.close();
         }
       } catch (e) {
-        alert(this.mode === 'edit' ? '編集に失敗しました。' : '申請に失敗しました。');
+        if (typeof showMessage === 'function') showMessage(this.mode === 'edit' ? '編集に失敗しました。' : '申請に失敗しました。', true);
       }
       this.submitting = false;
     },

@@ -253,9 +253,9 @@ createApp({
                     this.fetchLeaves();
                     return;
                 }
-                alert('申請に失敗しました。', true);
+                if (typeof showMessage === 'function') showMessage('申請に失敗しました。', true);
             } catch (error) {
-                alert('申請に失敗しました。', true);
+                if (typeof showMessage === 'function') showMessage('申請に失敗しました。', true);
             }
         },
         resetForm() {

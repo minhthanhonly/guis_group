@@ -42,7 +42,29 @@ if (!is_file($filePath)) {
     exit;
 }
 $mime = @mime_content_type($filePath);
-header('Content-Type: ' . ($mime ?: 'application/octet-stream'));
-header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
+$downloadName = basename($filename);
+$userAgent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
+
+// Thiết lập header theo trình duyệt để hiển thị đúng tên file tiếng Nhật
+if (preg_match('/MSIE|Trident/', $userAgent)) {
+    // IE: dùng Shift_JIS
+    $ieName = mb_convert_encoding($downloadName, 'SJIS', 'UTF-8');
+    header('Cache-Control: public');
+    header('Pragma: public');
+    header('Content-Type: application/octet-stream; name="' . $ieName . '"');
+    header('Content-Disposition: attachment; filename="' . $ieName . '"');
+} else {
+    // Trình duyệt hiện đại: dùng UTF-8 với filename*
+    $encoded = rawurlencode($downloadName);
+    $ext = '';
+    if (strpos($downloadName, '.') !== false) {
+        $ext = substr($downloadName, strrpos($downloadName, '.'));
+    }
+    $fallback = 'download' . $ext;
+    header('Content-Type: ' . ($mime ?: 'application/octet-stream'));
+    header("Content-Disposition: attachment; filename=\"{$fallback}\"; filename*=UTF-8''{$encoded}");
+}
+
+header('Content-Length: ' . filesize($filePath));
 readfile($filePath);
 exit;

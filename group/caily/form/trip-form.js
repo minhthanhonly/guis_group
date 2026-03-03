@@ -177,12 +177,12 @@ export default {
           await axios.post('/api/index.php?model=request&method=add', payload, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
           });
-          if (status === 'draft') alert('下書き保存しました。');
+          if (status === 'draft' && typeof showMessage === 'function') showMessage('下書き保存しました。');
           this.$emit('submitted', this.formData);
           this.close();
         }
       } catch (e) {
-        alert(this.mode === 'edit' ? '編集に失敗しました。' : '申請に失敗しました。');
+        if (typeof showMessage === 'function') showMessage(this.mode === 'edit' ? '編集に失敗しました。' : '申請に失敗しました。', true);
       }
       this.submitting = false;
     },

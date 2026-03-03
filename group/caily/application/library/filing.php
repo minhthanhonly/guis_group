@@ -74,18 +74,28 @@ class Filing {
 		if (file_exists($file)) {
 			if (strlen($filename) <= 0) {
 				$filename = basename($file);
-				if (stristr(PHP_OS, 'win')) {
-					$filename = mb_convert_encoding($filename, 'UTF-8', 'UTF-8, SJIS');
-				}
-			}
-			if (stristr($_SERVER['HTTP_USER_AGENT'], 'MSIE')) {
-				$filename = mb_convert_encoding($filename, 'SJIS', 'UTF-8');
-				header('Cache-Control: public');
-				header('Pragma: public');
 			}
 			$filesize = filesize($file);
-			header('Content-Disposition: attachment; filename='.$filename);
-			header('Content-Type: application/octet-stream; name='.$filename);
+			$userAgent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
+
+			// IE (including Trident) – expect Shift_JIS filename
+			if (preg_match('/MSIE|Trident/', $userAgent)) {
+				$ieFilename = mb_convert_encoding($filename, 'SJIS', 'UTF-8');
+				header('Cache-Control: public');
+				header('Pragma: public');
+				header('Content-Disposition: attachment; filename="'.$ieFilename.'"');
+				header('Content-Type: application/octet-stream; name="'.$ieFilename.'"');
+			} else {
+				// Modern browsers – use RFC 5987 filename* with UTF-8
+				$encoded = rawurlencode($filename);
+				$extension = '';
+				if (strpos($filename, '.') !== false) {
+					$extension = substr($filename, strrpos($filename, '.'));
+				}
+				$fallback = 'download'.$extension;
+				header("Content-Disposition: attachment; filename=\"{$fallback}\"; filename*=UTF-8''{$encoded}");
+				header('Content-Type: application/octet-stream');
+			}
 			header('Content-Length: '.$filesize);
 			@readfile($file);
 			exit();

@@ -390,7 +390,7 @@ class Request extends ApplicationModel {
         $user = $_SESSION['userid'];
         
         // Get current request info for permissions & notifications (incl. add_to_calendar, schedule_id for calendar sync)
-        $currentRequest = $this->fetchOne("SELECT type, status, user_id, approver_user_id, add_to_calendar, schedule_id, data FROM {$this->table} WHERE id = $id");
+        $currentRequest = $this->fetchOne("SELECT id, type, status, user_id, approver_user_id, add_to_calendar, schedule_id, data FROM {$this->table} WHERE id = $id");
         if (!$currentRequest) {
             http_response_code(404);
             echo json_encode(['error' => '申請が見つかりません。']);
@@ -406,7 +406,7 @@ class Request extends ApplicationModel {
         // Only administrator or designated approver can update status
         $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
         $isDesignatedApprover = !empty($currentRequest['approver_user_id']) && $currentRequest['approver_user_id'] === $_SESSION['userid'];
-        if (!$isAdmin && !$isDesignatedApprover) {
+        if (!$isAdmin && !$isDesignatedApprover && $status !== 'pending') {
             http_response_code(403);
             echo json_encode(['error' => '状態を変更する権限がありません。']);
             exit;
@@ -447,6 +447,10 @@ class Request extends ApplicationModel {
         // Send Pusher notification for status change
         if ($result && $currentRequest && in_array($status, ['approved', 'rejected'])) {
             $this->sendRequestStatusNotification($id, $currentRequest['type'], $status, $currentRequest['user_id'], $user, $status);
+        }
+        if ($result && $status === 'pending') {
+            $approverUserId = !empty($_POST['approver_user_id']) ? $_POST['approver_user_id'] : null;
+            $this->sendRequestCreatedNotification($currentRequest['id'], $currentRequest['type'], $_SESSION['userid'], $approverUserId);
         }
         
         return $result;
@@ -817,14 +821,15 @@ class Request extends ApplicationModel {
             // 日本語ラベルに変換（例: leave -> 休暇届）
             $typeLabel = $this->getRequestTypeLabel($requestType);
             $payload = [
-                'event' => 'form_request_update',
+                'event' => 'form_request_created',
                 'title' => $typeLabel . 'が作成されました',
-                'message' => $typeLabel . 'の申請が作成されました',
+                'message' => $_SESSION['realname'] . 'が' . $typeLabel . 'の申請を作成しました',
                 'data' => [
                     'request_id' => $requestId,
                     'request_type' => $requestType,
                     'user_id' => $userId,
                     'action' => 'created',
+                    'avatar' => $_SESSION['user_image'],
                     'url' => "/form/detail.php?id=$requestId"
                 ],
                 'request_id' => $requestId,
@@ -860,14 +865,16 @@ class Request extends ApplicationModel {
             $payload = [
                 'event' => 'form_request_update',
                 'title' => '申請更新',
-                'message' => '申請が更新されました',
+                'message' => $_SESSION['realname'] . 'が' . $typeLabel . 'の申請を' . $statusLabel . 'に変更しました',
                 'data' => [
                     'request_id' => $requestId,
                     'request_type' => $requestType,
                     'status' => $status,
                     'user_id' => $userId,
+                    'user_name' => $_SESSION['realname'],
                     'action' => 'updated',
-                    'url' => "/form/detail.php?id=$requestId"
+                    'url' => "/form/detail.php?id=$requestId",
+                    'avatar' => $_SESSION['user_image']
                 ],
                 'request_id' => $requestId,
                 'user_ids' => $targetUserIds
@@ -884,16 +891,17 @@ class Request extends ApplicationModel {
             $notiService = new NotificationService();
             // 日本語ラベル（例: leave -> 休暇届）
             $typeLabel = $this->getRequestTypeLabel($requestType);
+            $statusMessageText = '';
             // ステータスごとのメッセージ文言
             switch ($status) {
                 case 'approved':
-                    $statusMessageText = $typeLabel . 'が承認されました';
+                    $statusMessageText = $_SESSION['realname'] . 'が' . $typeLabel . 'の申請を承認しました';
                     break;
                 case 'rejected':
-                    $statusMessageText = $typeLabel . 'が却下されました';
+                    $statusMessageText = $_SESSION['realname'] . 'が' . $typeLabel . 'の申請を却下しました';
                     break;
                 default:
-                    $statusMessageText = $typeLabel . 'のステータスが変更されました';
+                    $statusMessageText = $_SESSION['realname'] . 'が' . $typeLabel . 'の申請を' . $statusLabel . 'に変更しました';
                     break;
             }
             // Gửi cho chủ đơn
@@ -906,9 +914,10 @@ class Request extends ApplicationModel {
                         'request_id' => $requestId,
                         'request_type' => $requestType,
                         'status' => $status,
-                        'action_user' => $actionUser,
+                        'action_user' => $_SESSION['realname'],
                         'action' => $action,
-                        'url' => "/form/detail.php?id=$requestId"
+                        'url' => "/form/detail.php?id=$requestId",
+                        'avatar' => $_SESSION['user_image']
                     ],
                     'request_id' => $requestId,
                     'user_ids' => [$userId]
@@ -936,14 +945,15 @@ class Request extends ApplicationModel {
                 $payload_admin = isset($payload_user) ? $payload_user : [
                     'event' => 'form_request_update',
                     'title' => $typeLabel . 'ステータス',
-                    'message' => $statusMessageText,
+                    'message' => $_SESSION['realname'] . 'が' . $typeLabel . 'のステータスを' . $statusLabel . 'に変更しました',
                     'data' => [
                         'request_id' => $requestId,
                         'request_type' => $requestType,
                         'status' => $status,
                         'action_user' => $actionUser,
                         'action' => $action,
-                        'url' => "/form/detail.php?id=$requestId"
+                        'url' => "/form/detail.php?id=$requestId",
+                        'avatar' => $_SESSION['user_image']
                     ],
                     'request_id' => $requestId,
                 ];
@@ -966,12 +976,13 @@ class Request extends ApplicationModel {
                 $payload_user = [
                     'event' => 'form_comment',
                     'title' => '新しいコメント（' . $typeLabel . '）',
-                    'message' => $typeLabel . 'に新しいコメントが追加されました',
+                    'message' => $_SESSION['realname'] . 'が' . $typeLabel . 'に新しいコメントを追加しました',
                     'data' => [
                         'request_id' => $requestId,
                         'request_type' => $requestType,
                         'comment_user_id' => $commentUserId,
-                        'url' => "/form/detail.php?id=$requestId"
+                        'url' => "/form/detail.php?id=$requestId",
+                        'avatar' => $_SESSION['user_image']
                     ],
                     'request_id' => $requestId,
                     'user_ids' => [$userId]
@@ -1017,6 +1028,97 @@ class Request extends ApplicationModel {
         }
     }
 
+    /**
+     * Xóa đơn.
+     * - Người đăng ký: chỉ được xóa khi status = draft hoặc pending.
+     * - Khi người đăng ký xóa đơn pending: gửi thông báo cho người chỉ định duyệt.
+     * - Người chỉ định duyệt hoặc administrator: được xóa bất kể status.
+     */
+    function delete_request() {
+        if (empty($_SESSION['userid'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'ユーザー情報がありません。']);
+            exit;
+        }
+        if (empty($_POST['id'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'idが必要です。']);
+            exit;
+        }
+        $id = intval($_POST['id']);
+        $row = $this->fetchOne("SELECT id, type, status, user_id, approver_user_id, schedule_id FROM {$this->table} WHERE id = $id");
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['error' => '申請が見つかりません。']);
+            exit;
+        }
+        $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
+        $isApprover = !empty($row['approver_user_id']) && $row['approver_user_id'] === $_SESSION['userid'];
+        $isApplicant = $row['user_id'] === $_SESSION['userid'];
+
+        $canDelete = false;
+        if ($isAdmin || $isApprover) {
+            $canDelete = true;
+        } elseif ($isApplicant && in_array($row['status'], ['draft', 'pending'], true)) {
+            $canDelete = true;
+        }
+        if (!$canDelete) {
+            http_response_code(403);
+            echo json_encode(['error' => 'この申請を削除する権限がありません。']);
+            exit;
+        }
+
+        $wasPending = ($row['status'] === 'pending');
+        $approverUserId = $row['approver_user_id'];
+        $requestType = $row['type'];
+        $applicantUserId = $row['user_id'];
+
+        $deleted = $this->query_delete(['id' => $id]);
+        if (!$deleted) {
+            http_response_code(500);
+            echo json_encode(['error' => '削除に失敗しました。']);
+            exit;
+        }
+
+        if (!empty($row['schedule_id'])) {
+            $this->deleteScheduleForRequest((int) $row['schedule_id']);
+        }
+
+        if ($wasPending && $isApplicant && !empty($approverUserId)) {
+            $currentUserid = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
+            if ($currentUserid !== $approverUserId) {
+                $this->sendRequestDeletedNotification($id, $requestType, $applicantUserId, $approverUserId);
+            }
+        }
+
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    private function sendRequestDeletedNotification($requestId, $requestType, $applicantUserId, $approverUserId) {
+        try {
+            require_once(DIR_MODEL . 'NotificationService.php');
+            $notiService = new NotificationService();
+            $typeLabel = $this->getRequestTypeLabel($requestType);
+            $payload = [
+                'event' => 'form_request_deleted',
+                'title' => $typeLabel . 'が削除されました',
+                'message' => '申請者が申請を削除しました。',
+                'data' => [
+                    'request_id' => $requestId,
+                    'request_type' => $requestType,
+                    'deleted_by_user_id' => $applicantUserId,
+                    'url' => '/form/index.php'
+                ],
+                'request_id' => $requestId,
+                'user_ids' => [$approverUserId]
+            ];
+            $notiService->create($payload);
+        } catch (Exception $e) {
+            error_log('Failed to send request deleted notification: ' . $e->getMessage());
+        }
+    }
+
     // Upload file for form (e.g. 交通費精算書) to application/upload/form/ with unique name
     function uploadFormFile($params = null) {
         if (empty($_SESSION['userid'])) {
@@ -1033,9 +1135,27 @@ class Request extends ApplicationModel {
         if ($fileSize > 20 * 1024 * 1024) {
             return ['success' => false, 'error' => 'ファイルサイズは20MB以下にしてください。'];
         }
+
+        // Giữ nguyên tên gốc (kể cả tiếng Nhật), chỉ loại bỏ ký tự nguy hiểm
         $ext = pathinfo($originalName, PATHINFO_EXTENSION);
-        $safeName = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', basename($originalName, '.'.$ext));
-        $uniqueName = date('YmdHis') . '_' . uniqid() . '_' . ($safeName ?: 'file') . ($ext ? '.' . $ext : '');
+        $baseName = $ext
+            ? mb_substr($originalName, 0, mb_strrpos($originalName, '.'), 'UTF-8')
+            : $originalName;
+        // Loại bỏ dấu / \ và ký tự điều khiển
+        $baseName = str_replace(['/', '\\'], '_', $baseName);
+        $baseName = preg_replace('/[\x00-\x1F\x7F]/u', '', $baseName);
+        $baseName = trim($baseName);
+        if ($baseName === '') {
+            $baseName = 'file';
+        }
+        // Giới hạn độ dài phần tên gốc để tránh quá 255 byte trên filesystem
+        if (mb_strlen($baseName, 'UTF-8') > 100) {
+            $baseName = mb_substr($baseName, 0, 100, 'UTF-8');
+        }
+
+        // Sinh chuỗi duy nhất và gắn SAU tên gốc
+        $uniqueToken = uniqid();
+        $uniqueName = $baseName . '_' . $uniqueToken . ($ext ? '.' . $ext : '');
         $uploadDir = DIR_UPLOAD . 'form/';
         if (!is_dir($uploadDir)) {
             if (!@mkdir($uploadDir, 0755, true)) {

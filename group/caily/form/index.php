@@ -135,7 +135,8 @@
               </td>
               <td>{{ formatDateTime(req.created_at) }}</td>
               <td>
-                <a :href="'detail.php?id=' + req.id" class="btn btn-sm btn-outline-info">詳細</a>
+                <a :href="'detail.php?id=' + req.id" class="btn btn-sm btn-outline-info me-1">詳細</a>
+                <button v-if="canDelete(req)" type="button" class="btn btn-sm btn-outline-danger" @click="deleteRequest(req)" title="削除">削除</button>
               </td>
             </tr>
           </tbody>
@@ -227,6 +228,8 @@ createApp({
       sortBy: 'created_at',
       sortDir: 'desc',
       pendingCounts: {},
+      currentUserId: (typeof USER_ID !== 'undefined') ? USER_ID : '',
+      currentUserRole: (typeof USER_ROLE !== 'undefined') ? USER_ROLE : '',
     }
   },
   computed: {
@@ -616,6 +619,35 @@ createApp({
         'text-success': status === 'approved',
         'text-danger': status === 'rejected'
       };
+    },
+    canDelete(req) {
+      if (!req || !req.id) return false;
+      const isAdmin = this.currentUserRole === 'administrator';
+      const isApprover = req.approver_user_id && req.approver_user_id === this.currentUserId;
+      const isApplicant = req.user_id === this.currentUserId;
+      if (isAdmin || isApprover) return true;
+      if (isApplicant && (req.status === 'draft' || req.status === 'pending')) return true;
+      return false;
+    },
+    async deleteRequest(req) {
+      if (!this.canDelete(req)) return;
+      if (!confirm('この申請を削除してもよろしいですか？')) return;
+      try {
+        const res = await axios.post('/api/index.php?model=request&method=delete_request',
+          { id: req.id },
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+        );
+        const data = res.data;
+        if (data && data.error) {
+          if (typeof showMessage === 'function') showMessage(Array.isArray(data.error) ? data.error.join('、') : data.error, true);
+          return;
+        }
+        if (typeof showMessage === 'function') showMessage('削除しました。');
+        this.fetchRequests();
+        this.tabs.forEach(tab => { this.updatePendingCountForTab(tab.type); });
+      } catch (e) {
+        if (typeof showMessage === 'function') showMessage('削除に失敗しました。', true);
+      }
     }
   },
   mounted() {

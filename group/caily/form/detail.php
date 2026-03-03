@@ -81,6 +81,7 @@
               <button class="btn btn-primary btn-sm ms-2" @click="submitDraft"><i class="bi bi-send"></i> 申請</button>
             </template>
             <button v-if="canEdit" class="btn btn-outline-secondary btn-sm ms-2" @click="openEditModal"><i class="bi bi-pencil-square"></i> 編集</button>
+            <button v-if="canDelete" type="button" class="btn btn-outline-danger btn-sm ms-2" @click="confirmDelete"><i class="bi bi-trash"></i> 削除</button>
           </div>
           <div class="mt-1 small text-muted" v-if="decisionInfo">
             <span v-if="decisionInfo.status === 'approved'">承認者:</span>
@@ -318,6 +319,15 @@ createApp({
         && this.request.approver_user_id === CURRENT_USER_ID;
       return isAdmin || isDesignatedApprover;
     },
+    canDelete() {
+      if (!this.request || !this.request.id) return false;
+      const isAdmin = CURRENT_USER_ROLE === 'administrator';
+      const isDesignatedApprover = this.request.approver_user_id && this.request.approver_user_id === CURRENT_USER_ID;
+      const isApplicant = this.request.user_id === CURRENT_USER_ID;
+      if (isAdmin || isDesignatedApprover) return true;
+      if (isApplicant && (this.request.status === 'draft' || this.request.status === 'pending')) return true;
+      return false;
+    },
     isCalendarRequestType() {
       return ['leave', 'outing', 'trip', 'holiday_work'].includes(this.request?.type);
     },
@@ -456,12 +466,16 @@ createApp({
       try {
         const res = await axios.post('/api/index.php?model=request&method=update_status', {id: this.request.id, status: 'pending'}, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
         if (res.data && res.data.error) {
-          this.errorMessage = Array.isArray(res.data.error) ? res.data.error.join('、') : res.data.error;
+          const err = Array.isArray(res.data.error) ? res.data.error.join('、') : res.data.error;
+          this.errorMessage = err;
+          if (typeof showMessage === 'function') showMessage('申請に失敗しました。\n' + err, true);
         } else {
+          if (typeof showMessage === 'function') showMessage('申請しました。');
           this.fetchDetail();
         }
       } catch (e) {
         this.errorMessage = '申請処理に失敗しました。';
+        if (typeof showMessage === 'function') showMessage('申請処理に失敗しました。', true);
       }
     },
     async addComment() {
@@ -534,6 +548,29 @@ createApp({
     async onEditSubmitted(updatedData) {
       await this.fetchDetail();
       this.closeEditModal();
+    },
+    confirmDelete() {
+      if (!this.canDelete) return;
+      if (!confirm('この申請を削除してもよろしいですか？')) return;
+      this.doDelete();
+    },
+    async doDelete() {
+      this.errorMessage = '';
+      try {
+        const res = await axios.post('/api/index.php?model=request&method=delete_request',
+          { id: this.request.id },
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+        );
+        const data = res.data;
+        if (data && data.error) {
+          this.errorMessage = Array.isArray(data.error) ? data.error.join('、') : data.error;
+          return;
+        }
+        if (typeof showMessage === 'function') showMessage('削除しました。');
+        window.location.href = 'index.php';
+      } catch (e) {
+        this.errorMessage = '削除に失敗しました。';
+      }
     }
   },
   mounted() {
