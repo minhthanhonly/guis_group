@@ -14,6 +14,7 @@ export default {
         unpaid_type: '',
         reason: '',
         note: '',
+        add_to_calendar: false,
         approver_user_id: ''
       },
       errors: {},
@@ -34,11 +35,15 @@ export default {
         unpaid_type: '',
         reason: '',
         note: '',
+        add_to_calendar: false,
         approver_user_id: ''
       }, this.defaultData);
+      this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
     }
   },
   mounted() {
+    // Initialize flatpickr for datetime fields when component is mounted
+    this.initDateTimePickers();
     this.loadApprovers();
   },
   watch: {
@@ -54,8 +59,10 @@ export default {
             unpaid_type: '',
             reason: '',
             note: '',
+            add_to_calendar: false,
             approver_user_id: ''
           }, newVal);
+          this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
         }
       },
       immediate: true,
@@ -69,6 +76,59 @@ export default {
     }
   },
   methods: {
+    normalizeAddToCalendar(value) {
+      if (value === true) return true;
+      if (value === false || value === null || value === undefined) return false;
+      // Chuyển 0/1 hoặc '0'/'1' sang boolean
+      if (value === 1 || value === '1') return true;
+      if (value === 0 || value === '0') return false;
+      return !!value;
+    },
+    initDateTimePickers() {
+      if (typeof flatpickr === 'undefined') return;
+      const startEl = document.getElementById('leave-start-datetime');
+      const endEl = document.getElementById('leave-end-datetime');
+      if (startEl) {
+        if (startEl._flatpickr) startEl._flatpickr.destroy();
+        startEl._flatpickr = flatpickr(startEl, {
+          enableTime: true,
+          dateFormat: 'Y-m-d H:i',
+          time_24hr: true,
+          locale: typeof flatpickr !== 'undefined' && flatpickr.l10ns ? flatpickr.l10ns.ja : undefined,
+          defaultHour: 9,
+          defaultMinute: 0,
+          onChange: (selectedDates, dateStr) => {
+            this.formData.start_datetime = dateStr ? dateStr.replace(' ', 'T') : '';
+            this.updateDaysByDateRange();
+            this.validateField('start_datetime');
+          }
+        });
+        if (this.formData.start_datetime) {
+          const v = this.formData.start_datetime.replace('T', ' ');
+          startEl._flatpickr.setDate(v, false, 'Y-m-d H:i');
+        }
+      }
+      if (endEl) {
+        if (endEl._flatpickr) endEl._flatpickr.destroy();
+        endEl._flatpickr = flatpickr(endEl, {
+          enableTime: true,
+          dateFormat: 'Y-m-d H:i',
+          time_24hr: true,
+          locale: typeof flatpickr !== 'undefined' && flatpickr.l10ns ? flatpickr.l10ns.ja : undefined,
+          defaultHour: 18,
+          defaultMinute: 0,
+          onChange: (selectedDates, dateStr) => {
+            this.formData.end_datetime = dateStr ? dateStr.replace(' ', 'T') : '';
+            this.updateDaysByDateRange();
+            this.validateField('end_datetime');
+          }
+        });
+        if (this.formData.end_datetime) {
+          const v = this.formData.end_datetime.replace('T', ' ');
+          endEl._flatpickr.setDate(v, false, 'Y-m-d H:i');
+        }
+      }
+    },
     async loadApprovers() {
       try {
         const res = await axios.get('/api/index.php?model=member&method=list_request_approvers');
@@ -213,12 +273,24 @@ export default {
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">期間 <span class="text-danger">*</span></label>
             <div class="col-sm-4">
-              <input type="datetime-local" class="form-control" v-model="formData.start_datetime" @blur="validateField('start_datetime')">
+              <input
+                type="text"
+                id="leave-start-datetime"
+                class="form-control"
+                :value="formData.start_datetime ? formData.start_datetime.replace('T', ' ').slice(0, 16) : ''"
+                readonly
+              >
               <div class="text-danger small" v-if="errors.start_datetime">{{ errors.start_datetime }}</div>
             </div>
             <div class="col-sm-1 text-center">~</div>
             <div class="col-sm-4">
-              <input type="datetime-local" class="form-control" v-model="formData.end_datetime" @blur="validateField('end_datetime')">
+              <input
+                type="text"
+                id="leave-end-datetime"
+                class="form-control"
+                :value="formData.end_datetime ? formData.end_datetime.replace('T', ' ').slice(0, 16) : ''"
+                readonly
+              >
               <div class="text-danger small" v-if="errors.end_datetime">{{ errors.end_datetime }}</div>
             </div>
           </div>
@@ -230,7 +302,7 @@ export default {
             </div>
           </div>
           <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">休暇種別 <span class="text-danger">*</span></label>
+            <label class="col-sm-3">休暇種別 <span class="text-danger">*</span></label>
             <div class="col-sm-9">
               <div class="form-check form-check-inline">
                 <input class="form-check-input" type="radio" id="paid" value="有給休暇" v-model="formData.leave_type" @change="validateField('leave_type'); validateField('paid_type'); validateField('unpaid_type')">
@@ -284,6 +356,7 @@ export default {
               <div class="text-danger small" v-if="errors.unpaid_type">{{ errors.unpaid_type }}</div>
             </div>
           </div>
+          
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">承認者 <span class="text-danger">*</span></label>
             <div class="col-sm-9">
@@ -309,6 +382,15 @@ export default {
               <textarea class="form-control" v-model="formData.note" rows="2"></textarea>
             </div>
           </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3">カレンダーに追加</label>
+            <div class="col-sm-9">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="leave-add-to-calendar" v-model="formData.add_to_calendar">
+                <label class="form-check-label" for="leave-add-to-calendar">承認後にカレンダーに追加する</label>
+              </div>
+            </div>
+          </div>
         </form>
       </div>
       <div class="modal-footer">
@@ -316,14 +398,13 @@ export default {
         <button v-if="mode==='add'" type="button" class="btn btn-outline-secondary" :disabled="submitting" @click="submit('draft')">下書き保存</button>
         <button v-if="mode==='add'" type="button" class="btn btn-primary" :disabled="submitting" @click="submit('pending')">申請</button>
         <button v-if="mode==='edit'" type="button" class="btn btn-primary" :disabled="submitting" @click="submit()">保存</button>
-      
-        <div class="text-muted small mt-4" v-if="mode==='add'">
+      </div>
+       <div class="text-muted small" v-if="mode==='add'">
           <ul>
             <li>1週間前までに提出して下さい。</li>
             <li>有給休暇以外に無給休暇※（慶弔休暇、生理休暇、子の看護休暇）を取得する場合も休暇届で申請してください。<br>※無給休暇とは・・給与計算上は欠勤と同じ扱いになるため休んだ日数について欠勤控除が発生します。</li>
           </ul>
         </div>
-      </div>
     </div>
   `
 };

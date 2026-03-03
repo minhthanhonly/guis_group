@@ -178,12 +178,17 @@ class Request extends ApplicationModel {
         if ($end_date === null && $type === 'attendance_correction' && !empty($data['date'])) {
             $end_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
         }
+        $addToCalendar = 0;
+        if (in_array($type, ['leave', 'outing', 'trip', 'holiday_work'], true)) {
+            $addToCalendar = !empty($data['add_to_calendar']) ? 1 : 0;
+        }
         $row = array(
             'user_id' => $_SESSION['userid'],
             'type' => $type,
             'data' => json_encode($data, JSON_UNESCAPED_UNICODE),
             'status' => $status,
             'approver_user_id' => !empty($_POST['approver_user_id']) ? $_POST['approver_user_id'] : null,
+            'add_to_calendar' => $addToCalendar,
             'history' => json_encode([
                 [
                     'action' => 'created',
@@ -239,21 +244,23 @@ class Request extends ApplicationModel {
             if ($rawKw !== '') {
                 $kw = '%' . $rawKw . '%';
                 $like = $this->quote($kw);
-                $cond = "(data LIKE $like";
+                $cond = "(data LIKE '" . $like . "'";
                 // Tìm user_id theo realname để cho phép search theo tên người đăng ký
                 $userLike = $this->quote($kw);
-                $users = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE realname LIKE $userLike");
+                $users = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE realname LIKE '" . $userLike . "'");
                 if ($users && count($users)) {
                     $ids = array();
                     foreach ($users as $u) {
                         if (!empty($u['userid'])) {
-                            $ids[] = $this->quote($u['userid']);
+                            $ids[] = "'" . $this->quote($u['userid']) . "'";
                         }
                     }
                     if (count($ids)) {
                         $cond .= " OR user_id IN (" . implode(',', $ids) . ")";
                     }
                 }
+                // 検索キーワードで user_id も部分一致検索
+                $cond .= " OR user_id LIKE '" . $userLike . "'";
                 $cond .= ")";
                 $where[] = $cond;
             }
@@ -264,7 +271,8 @@ class Request extends ApplicationModel {
             $from_date = $_GET['from_date'];
             $to_date = $_GET['to_date'];
             $where[] = "((start_date IS NOT NULL AND start_date >= '" . $this->quote($from_date) . "' AND start_date <= '" . $this->quote($to_date) . "')"
-                . " OR (start_date IS NULL AND DATE(created_at) >= '" . $this->quote($from_date) . "' AND DATE(created_at) <= '" . $this->quote($to_date) . "'))";
+                . " OR (end_date IS NOT NULL AND end_date >= '" . $this->quote($from_date) . "' AND end_date <= '" . $this->quote($to_date) . "')"
+                . " OR (start_date IS NULL AND end_date IS NULL AND DATE(created_at) >= '" . $this->quote($from_date) . "' AND DATE(created_at) <= '" . $this->quote($to_date) . "'))";
         }
         $whereSql = count($where) ? ('WHERE ' . implode(' AND ', $where)) : '';
 
@@ -381,13 +389,20 @@ class Request extends ApplicationModel {
         $note = isset($_POST['note']) ? $_POST['note'] : '';
         $user = $_SESSION['userid'];
         
-        // Get current request info for permissions & notifications
-        $currentRequest = $this->fetchOne("SELECT type, user_id, approver_user_id FROM {$this->table} WHERE id = $id");
+        // Get current request info for permissions & notifications (incl. add_to_calendar, schedule_id for calendar sync)
+        $currentRequest = $this->fetchOne("SELECT type, status, user_id, approver_user_id, add_to_calendar, schedule_id, data FROM {$this->table} WHERE id = $id");
         if (!$currentRequest) {
             http_response_code(404);
             echo json_encode(['error' => '申請が見つかりません。']);
             exit;
         }
+
+        if($currentRequest['status']  === $status) {
+            http_response_code(400);
+            echo json_encode(['error' => '状態が変更されていません。']);
+            exit;
+        }
+
         // Only administrator or designated approver can update status
         $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
         $isDesignatedApprover = !empty($currentRequest['approver_user_id']) && $currentRequest['approver_user_id'] === $_SESSION['userid'];
@@ -413,8 +428,21 @@ class Request extends ApplicationModel {
         if ($status === 'approved') {
             $update['approver_id'] = $user;
             $update['approved_at'] = date('Y-m-d H:i:s');
+            // 承認時: add_to_calendar ならカレンダーに追加し schedule_id を保存
+            if (!empty($currentRequest['add_to_calendar']) && in_array($currentRequest['type'], ['leave', 'outing', 'trip', 'holiday_work'], true)) {
+                $scheduleId = $this->createScheduleFromRequest($id);
+                if ($scheduleId) {
+                    $update['schedule_id'] = $scheduleId;
+                }
+            }
+        }
+        if (($status === 'rejected' || $status === 'pending' || $status === 'draft') && !empty($currentRequest['schedule_id'])) {
+            $this->deleteScheduleForRequest((int) $currentRequest['schedule_id']);
         }
         $result = $this->query_update($update, ['id' => $id]);
+        if ($result && $status === 'rejected' && !empty($currentRequest['schedule_id'])) {
+            $this->query("UPDATE {$this->table} SET schedule_id = NULL WHERE id = " . intval($id));
+        }
         
         // Send Pusher notification for status change
         if ($result && $currentRequest && in_array($status, ['approved', 'rejected'])) {
@@ -593,6 +621,9 @@ class Request extends ApplicationModel {
             'history' => json_encode($history, JSON_UNESCAPED_UNICODE),
             'updated_at' => date('Y-m-d H:i:s')
         ];
+        if (in_array($row['type'], ['leave', 'outing', 'trip', 'holiday_work'], true)) {
+            $update['add_to_calendar'] = !empty($data['add_to_calendar']) ? 1 : 0;
+        }
         // Cập nhật người chỉ định duyệt nếu có (cho phép clear về null)
         if (array_key_exists('approver_user_id', $_POST)) {
             $update['approver_user_id'] = $_POST['approver_user_id'] !== '' ? $_POST['approver_user_id'] : null;
@@ -601,12 +632,164 @@ class Request extends ApplicationModel {
         if ($end_date !== null) $update['end_date'] = $end_date;
         $result = $this->query_update($update, ['id' => $id]);
         
+        // 承認済みでカレンダー連携: スケジュールを更新するか削除
+        if ($result && $row['status'] === 'approved' && in_array($row['type'], ['leave', 'outing', 'trip', 'holiday_work'], true)) {
+            $scheduleId = isset($row['schedule_id']) ? (int) $row['schedule_id'] : 0;
+            if ($scheduleId > 0) {
+                if (!empty($data['add_to_calendar'])) {
+                    $this->updateScheduleFromRequest($scheduleId, $id);
+                } else {
+                    $this->deleteScheduleForRequest($scheduleId);
+                    $this->query("UPDATE {$this->table} SET schedule_id = NULL WHERE id = " . intval($id));
+                }
+            }
+        }
+        
         // Send Pusher notification for request update
         if ($result) {
             $this->sendRequestUpdatedNotification($id, $row['type'], $row['status'], $row['user_id']);
         }
         
         return $result;
+    }
+
+    /**
+     * Build schedule row (title, schedule_date, schedule_time, schedule_date_end, schedule_endtime, schedule_allday, schedule_comment) from request.
+     * @param array $requestRow ['type' => ..., 'data' => json string, 'user_id' => ...]
+     * @return array|null assoc for INSERT/UPDATE or null if unsupported type
+     */
+    private function buildScheduleRowFromRequest($requestRow) {
+        $type = $requestRow['type'] ?? '';
+        $data = is_array($requestRow['data']) ? $requestRow['data'] : json_decode($requestRow['data'], true);
+        if (!is_array($data)) $data = [];
+        $owner = $requestRow['user_id'] ?? $_SESSION['userid'];
+        $realname = '';
+        if (!empty($owner)) {
+            $u = $this->fetchOne("SELECT realname FROM " . DB_PREFIX . "user WHERE userid = '" . $this->quote($owner) . "'");
+            $realname = isset($u['realname']) ? $u['realname'] : '';
+        }
+        $title = '';
+        $schedule_date = '';
+        $schedule_time = '';
+        $schedule_date_end = '';
+        $schedule_endtime = '';
+        $schedule_allday = 0;
+        $comment = '';
+        if ($type === 'leave') {
+            $title = $realname;
+            $start = $data['start_datetime'] ?? '';
+            $end = $data['end_datetime'] ?? '';
+            if (preg_match('/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/', $start, $m)) {
+                $schedule_date = $m[1];
+                $schedule_time = $m[2] . ':00';
+                if (strlen($schedule_time) === 7) $schedule_time = $m[2] . ':00';
+            }
+            if (preg_match('/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/', $end, $m)) {
+                $schedule_date_end = $m[1];
+                $schedule_endtime = $m[2] . ':00';
+                if (strlen($schedule_endtime) === 7) $schedule_endtime = $m[2] . ':00';
+            }
+            if (!$schedule_time) $schedule_time = '00:00:00';
+            if (!$schedule_endtime) $schedule_endtime = '23:59:00';
+            $paidType = isset($data['paid_type']) ? trim($data['paid_type']) : '';
+            if ($paidType === '全休') {
+                $schedule_date_end = $requestRow['end_date'] ?? '';
+                $schedule_date_end = date('Y-m-d', strtotime($schedule_date_end . ' +1 day'));
+                $schedule_allday = 1;
+                $title .= '　休み';
+                $schedule_time = '00:00';
+                $schedule_endtime = '00:00';
+            } else {
+                if ($paidType !== '') $title .= '　' . $paidType;
+            }
+            
+        } elseif ($type === 'outing') {
+            $title = $realname . '　外出';
+            $schedule_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date'] ?? '') ? substr($data['date'], 0, 10) : '';
+            $schedule_date_end = $schedule_date;
+            $schedule_time = !empty($data['start_time']) ? $data['start_time'] . ':00' : '09:00:00';
+            if (strlen($schedule_time) === 7) $schedule_time = $data['start_time'] . ':00';
+            $schedule_endtime = !empty($data['end_time']) ? $data['end_time'] . ':00' : '18:00:00';
+            if (strlen($schedule_endtime) === 7) $schedule_endtime = $data['end_time'] . ':00';
+            $comment = $data['destination'] ?? '';
+        } elseif ($type === 'trip') {
+            $title = $realname . '　出張';
+            $schedule_date = $requestRow['start_date'] ?? '';
+            $schedule_date_end = $requestRow['end_date'] ?? '';
+            //+1 day
+            $schedule_date_end = date('Y-m-d', strtotime($schedule_date_end . ' +1 day'));
+            $schedule_time = '00:00';
+            $schedule_endtime = '00:00';
+            $schedule_allday = 1;
+        } elseif ($type === 'holiday_work') {
+            $title = $realname . '　休日勤務';
+            $schedule_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date'] ?? '') ? substr($data['date'], 0, 10) : '';
+            $schedule_date_end = $schedule_date;
+            $schedule_time = !empty($data['start_time']) ? $data['start_time'] . ':00' : '09:00:00';
+            if (strlen($schedule_time) === 7) $schedule_time = $data['start_time'] . ':00';
+            $schedule_endtime = !empty($data['end_time']) ? $data['end_time'] . ':00' : '18:00:00';
+            if (strlen($schedule_endtime) === 7) $schedule_endtime = $data['end_time'] . ':00';
+        } else {
+            return null;
+        }
+        if (!$schedule_date) return null;
+        if (!$schedule_date_end) $schedule_date_end = $schedule_date;
+        
+        return [
+            'schedule_title' => $title,
+            'schedule_date' => $schedule_date,
+            'schedule_time' => $schedule_time,
+            'schedule_date_end' => $schedule_date_end,
+            'schedule_endtime' => $schedule_endtime,
+            'schedule_allday' => $schedule_allday,
+            'schedule_comment' => $comment,
+            'public_level' => 0,
+            'schedule_category' => '勤怠',
+            'owner' => $owner
+        ];
+    }
+
+    /** Create schedule from approved request; returns schedule id or 0 */
+    private function createScheduleFromRequest($requestId) {
+        $row = $this->fetchOne("SELECT id, type, data, user_id, start_date, end_date FROM {$this->table} WHERE id = " . intval($requestId));
+        if (!$row) return 0;
+        $r = $this->buildScheduleRowFromRequest($row);
+        if (!$r) return 0;
+        $created = date('Y-m-d H:i:s');
+        $t = DB_PREFIX . 'schedule';
+        $sql = "INSERT INTO {$t} (schedule_title, schedule_date, schedule_time, schedule_date_end, schedule_endtime, schedule_allday, schedule_comment, public_level, created, schedule_category, owner) VALUES ("
+            . "'" . $this->quote($r['schedule_title']) . "', "
+            . "'" . $this->quote($r['schedule_date']) . "', "
+            . "'" . $this->quote($r['schedule_time']) . "', "
+            . "'" . $this->quote($r['schedule_date_end']) . "', "
+            . "'" . $this->quote($r['schedule_endtime']) . "', "
+            . intval($r['schedule_allday']) . ", "
+            . "'" . $this->quote($r['schedule_comment']) . "', "
+            . intval($r['public_level']) . ", "
+            . "'" . $this->quote($created) . "', "
+            . "'" . $this->quote($r['schedule_category']) . "', "
+            . "'" . $this->quote($r['owner']) . "')";
+        $this->query($sql);
+        return $this->insertid() ?: 0;
+    }
+
+    /** Update existing schedule from request data */
+    private function updateScheduleFromRequest($scheduleId, $requestId) {
+        $row = $this->fetchOne("SELECT id, type, data, user_id, start_date, end_date FROM {$this->table} WHERE id = " . intval($requestId));
+        if (!$row) return;
+        $r = $this->buildScheduleRowFromRequest($row);
+        if (!$r) return;
+        $updated = date('Y-m-d H:i:s');
+        $editor = $_SESSION['userid'];
+        $t = DB_PREFIX . 'schedule';
+        $sql = "UPDATE {$t} SET schedule_title = '" . $this->quote($r['schedule_title']) . "', schedule_date = '" . $this->quote($r['schedule_date']) . "', schedule_time = '" . $this->quote($r['schedule_time']) . "', schedule_date_end = '" . $this->quote($r['schedule_date_end']) . "', schedule_endtime = '" . $this->quote($r['schedule_endtime']) . "', schedule_allday = " . intval($r['schedule_allday']) . ", schedule_comment = '" . $this->quote($r['schedule_comment']) . "', public_level = " . intval($r['public_level']) . ", editor = '" . $this->quote($editor) . "', updated = '" . $this->quote($updated) . "', schedule_category = '" . $this->quote($r['schedule_category']) . "' WHERE id = " . intval($scheduleId);
+        $this->query($sql);
+    }
+
+    /** Delete schedule by id */
+    private function deleteScheduleForRequest($scheduleId) {
+        $t = DB_PREFIX . 'schedule';
+        $this->query("DELETE FROM {$t} WHERE id = " . intval($scheduleId));
     }
 
     // Firebase notification methods (NEW: dùng NotificationService)

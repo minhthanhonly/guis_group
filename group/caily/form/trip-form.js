@@ -12,6 +12,7 @@ export default {
         destination: '',
         reason: '',
         note: '',
+        add_to_calendar: false,
         approver_user_id: ''
       },
       errors: {},
@@ -29,8 +30,10 @@ export default {
         destination: '',
         reason: '',
         note: '',
+        add_to_calendar: false,
         approver_user_id: ''
       }, this.defaultData);
+      this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
     }
   },
   mounted() {
@@ -47,8 +50,10 @@ export default {
             destination: '',
             reason: '',
             note: '',
+            add_to_calendar: false,
             approver_user_id: ''
           }, newVal);
+          this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
         }
       },
       immediate: true,
@@ -62,6 +67,13 @@ export default {
     }
   },
   methods: {
+    normalizeAddToCalendar(value) {
+      if (value === true) return true;
+      if (value === false || value === null || value === undefined) return false;
+      if (value === 1 || value === '1') return true;
+      if (value === 0 || value === '0') return false;
+      return !!value;
+    },
     async loadApprovers() {
       try {
         const res = await axios.get('/api/index.php?model=member&method=list_request_approvers');
@@ -225,6 +237,7 @@ export default {
               <textarea class="form-control" v-model="formData.note" rows="2"></textarea>
             </div>
           </div>
+          
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">承認者 <span class="text-danger">*</span></label>
             <div class="col-sm-9">
@@ -235,6 +248,15 @@ export default {
                 </option>
               </select>
               <div class="text-danger small" v-if="errors.approver_user_id">{{ errors.approver_user_id }}</div>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3">カレンダーに追加</label>
+            <div class="col-sm-9">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="trip-add-to-calendar" v-model="formData.add_to_calendar">
+                <label class="form-check-label" for="trip-add-to-calendar">承認後にカレンダーに追加する</label>
+              </div>
             </div>
           </div>
         </form>

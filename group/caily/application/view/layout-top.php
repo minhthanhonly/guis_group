@@ -97,7 +97,33 @@
             </li>
             <?php } ?>
 
-           
+            <?php
+            $form_pending_badge = 0;
+            if (!empty($_SESSION['userid'])) {
+              $is_admin = (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator');
+              $is_approver = false;
+              require_once DIR_MODEL.'request.php';
+              $reqModel = new Request();
+              $reqModel->connect();
+              if (!$is_admin) {
+                $u = $reqModel->fetchOne("SELECT can_approve_request FROM " . DB_PREFIX . "user WHERE userid = '" . $reqModel->quote($_SESSION['userid']) . "'");
+                $is_approver = !empty($u['can_approve_request']);
+              }
+              if ($is_admin || $is_approver) {
+                $row = $reqModel->fetchOne("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "requests WHERE status = 'pending'");
+                $form_pending_badge = $row ? (int)$row['cnt'] : 0;
+              }
+              $reqModel->close();
+            }
+            ?>
+             
+            <li class="menu-item <?php if($directory == 'form') echo 'active open'; ?>">
+              <a href="<?=$root?>form/index.php" class="menu-link">
+                <i class="menu-icon icon-base fa fa-file-alt"></i>
+                <div data-i18n="申請・承認">申請・承認</div>
+                <?php if ($form_pending_badge > 0) { ?><span class="badge badge_number text-bg-danger rounded-pill ms-auto"><?= $form_pending_badge ?></span><?php } ?>
+              </a>
+            </li>
               <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
                 <a href="<?=$root?>schedule/" class="menu-link">
                   <i class="menu-icon icon-base ti tabler-calendar-event"></i>
@@ -150,32 +176,6 @@
             <?php } ?>
             
 
-            <?php
-            $form_pending_badge = 0;
-            if (!empty($_SESSION['userid'])) {
-              $is_admin = (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator');
-              $is_approver = false;
-              require_once DIR_MODEL.'request.php';
-              $reqModel = new Request();
-              $reqModel->connect();
-              if (!$is_admin) {
-                $u = $reqModel->fetchOne("SELECT can_approve_request FROM " . DB_PREFIX . "user WHERE userid = '" . $reqModel->quote($_SESSION['userid']) . "'");
-                $is_approver = !empty($u['can_approve_request']);
-              }
-              if ($is_admin || $is_approver) {
-                $row = $reqModel->fetchOne("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "requests WHERE status = 'pending'");
-                $form_pending_badge = $row ? (int)$row['cnt'] : 0;
-              }
-              $reqModel->close();
-            }
-            ?>
-            <li class="menu-item <?php if($directory == 'form') echo 'active open'; ?>">
-              <a href="<?=$root?>form/index.php" class="menu-link">
-                <i class="menu-icon icon-base fa fa-file-alt"></i>
-                <div data-i18n="申請・承認">申請・承認</div>
-                <?php if ($form_pending_badge > 0) { ?><span class="badge badge_number text-bg-danger rounded-pill ms-auto"><?= $form_pending_badge ?></span><?php } ?>
-              </a>
-            </li>
 
             <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7' && $_SESSION['group'] != '6'){
               $active = '';

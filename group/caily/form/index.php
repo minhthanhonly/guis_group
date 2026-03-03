@@ -46,7 +46,7 @@
         <div class="col-md-4">
           <label class="col-form-label col-form-label-sm d-block">&nbsp;</label>
           <div class="input-group input-group-sm">
-            <input type="text" class="form-control" v-model="keyword" placeholder="検索..." @keyup.enter="onSearch">
+            <input type="text" class="form-control" v-model="keyword" placeholder="ユーザー名、ユーザーID、事由、備考で検索..." @input="onSearchInput" @keyup.enter="onSearch">
             <button class="btn btn-outline-secondary" type="button" @click="clearSearch">
               <i class="fa fa-times"></i>
             </button>
@@ -216,6 +216,7 @@ createApp({
       loading: false,
       currentFormComponent: null,
       keyword: '',
+      searchDebounceTimer: null,
       statusFilter: '',
       monthFilter: '', // YYYY-MM, period 21/(M-1)～20/M
       formMonthPicker: null, // flatpickr instance
@@ -437,7 +438,19 @@ createApp({
       this.page = 1;
       this.fetchRequests();
     },
+    onSearchInput() {
+      if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = setTimeout(() => {
+        this.searchDebounceTimer = null;
+        this.page = 1;
+        this.fetchRequests();
+      }, 400);
+    },
     clearSearch() {
+      if (this.searchDebounceTimer) {
+        clearTimeout(this.searchDebounceTimer);
+        this.searchDebounceTimer = null;
+      }
       this.keyword = '';
       this.page = 1;
       this.fetchRequests();

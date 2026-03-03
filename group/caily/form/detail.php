@@ -43,6 +43,10 @@
               <i class="bi bi-clock-history me-1"></i>履歴
             </button>
           </div>
+          <div v-if="isCalendarRequestType" class="col-md-12 d-flex align-items-center mt-2">
+            <strong class="me-2">カレンダーに追加:</strong>
+            <span>{{ addToCalendarLabel }}</span>
+          </div>
         </div>
         <div class="mb-3">
           <component :is="detailComponent" :data="request.data" :request-id="request.id"></component>
@@ -314,6 +318,13 @@ createApp({
         && this.request.approver_user_id === CURRENT_USER_ID;
       return isAdmin || isDesignatedApprover;
     },
+    isCalendarRequestType() {
+      return ['leave', 'outing', 'trip', 'holiday_work'].includes(this.request?.type);
+    },
+    addToCalendarLabel() {
+      const v = this.request?.add_to_calendar;
+      return (v === 1 || v === '1' || v === true) ? 'する' : 'しない';
+    },
     detailComponent() {
       if (this.request.type === 'leave') return 'leave-detail';
       if (this.request.type === 'outing') return 'outing-detail';
@@ -507,7 +518,7 @@ createApp({
       if (!this.canEdit) {
         return;
       }
-      const data = { ...this.request.data, id: this.request.id, approver_user_id: this.request.approver_user_id || '' };
+      const data = { ...this.request.data, id: this.request.id, approver_user_id: this.request.approver_user_id || '', add_to_calendar: this.request.add_to_calendar || false };
       // 外出申請書: chuẩn hóa dữ liệu cũ (datetime) sang date + start_time + end_time
       if (this.request.type === 'outing' && data.datetime && !data.date) {
         data.date = data.datetime.slice(0, 10);
