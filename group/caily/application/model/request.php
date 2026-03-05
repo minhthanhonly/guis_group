@@ -208,10 +208,11 @@ class Request extends ApplicationModel {
         }
         $result = $this->query_insert($row);
         
-        // Send Pusher notification if request was created successfully
+        // Send Pusher + email notification if request was created successfully
         if ($result && $status === 'pending') {
             $approverUserId = !empty($_POST['approver_user_id']) ? $_POST['approver_user_id'] : null;
-            $this->sendRequestCreatedNotification($result, $type, $_SESSION['userid'], $approverUserId);
+            $applicantUserId = $_SESSION['userid'];
+            $this->sendRequestCreatedNotification($result, $type, $applicantUserId, $approverUserId);
         }
         
         return $result;
@@ -450,7 +451,12 @@ class Request extends ApplicationModel {
         }
         if ($result && $status === 'pending') {
             $approverUserId = !empty($_POST['approver_user_id']) ? $_POST['approver_user_id'] : null;
-            $this->sendRequestCreatedNotification($currentRequest['id'], $currentRequest['type'], $_SESSION['userid'], $approverUserId);
+
+            if($_SESSION['userid'] == $currentRequest['user_id']) {
+                $this->sendRequestCreatedNotification($currentRequest['id'], $currentRequest['type'], $_SESSION['userid'], $approverUserId);
+            } else{
+                $this->sendRequestStatusNotification($id, $currentRequest['type'], $status, $currentRequest['user_id'], $user, $status);
+            }
         }
         
         return $result;
@@ -567,13 +573,17 @@ class Request extends ApplicationModel {
                 exit;
             }
         }
-        // Cập nhật history
+        // Cập nhật history (lưu chi tiết các điểm đã thay đổi)
         $history = $row['history'] ? json_decode($row['history'], true) : [];
+        $diffNote = $this->formatRequestDiffForEmail($row['type'], isset($row['data']) ? $row['data'] : null, $data);
+        if ($diffNote === '') {
+            $diffNote = '内容を編集';
+        }
         $history[] = [
             'action' => 'edited',
             'user' => $_SESSION['userid'],
             'time' => date('Y-m-d H:i:s'),
-            'note' => '内容を編集'
+            'note' => $diffNote
         ];
         $start_date = null;
         $end_date = null;
@@ -649,9 +659,10 @@ class Request extends ApplicationModel {
             }
         }
         
-        // Send Pusher notification for request update
+        // Send Pusher notification + email for request update
         if ($result) {
             $this->sendRequestUpdatedNotification($id, $row['type'], $row['status'], $row['user_id']);
+            $this->sendRequestUpdatedEmail($id, $row['type'], $row['status'], $row['user_id'], isset($row['data']) ? $row['data'] : null);
         }
         
         return $result;
@@ -818,12 +829,14 @@ class Request extends ApplicationModel {
                 }));
             }
             if (empty($targetUserIds)) return;
-            // 日本語ラベルに変換（例: leave -> 休暇届）
+            // Message = subject email (100%)
             $typeLabel = $this->getRequestTypeLabel($requestType);
+            $applicantName = $this->getRealname($userId);
+            $message = '[' . $applicantName . ']が[' . $typeLabel . ']の申請を作成しました';
             $payload = [
                 'event' => 'form_request_created',
                 'title' => $typeLabel . 'が作成されました',
-                'message' => $_SESSION['realname'] . 'が' . $typeLabel . 'の申請を作成しました',
+                'message' => $message,
                 'data' => [
                     'request_id' => $requestId,
                     'request_type' => $requestType,
@@ -836,6 +849,8 @@ class Request extends ApplicationModel {
                 'user_ids' => $targetUserIds
             ];
             $notiService->create($payload);
+            
+            $this->sendRequestCreatedEmail($result, $type, $applicantUserId, $approverUserId);
         } catch (Exception $e) {
             error_log('Failed to send request created notification: ' . $e->getMessage());
         }
@@ -852,20 +867,36 @@ class Request extends ApplicationModel {
                 $targetUserIds = [$req['approver_user_id']];
             } else {
                 $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
-                $targetUserIds = array_map(function($a){return $a['userid'];}, $admins);
+                foreach ($admins as $a) {
+                    if (!empty($a['userid']) && !in_array($a['userid'], $targetUserIds, true)) {
+                        $targetUserIds[] = $a['userid'];
+                    }
+                }
+            }
+            // Nếu người sửa khác chủ đơn thì cũng gửi cho chủ đơn
+            $currentUserId = !empty($_SESSION['userid']) ? $_SESSION['userid'] : '';
+            if ($currentUserId !== '' && $currentUserId !== $userId && !in_array($userId, $targetUserIds, true)) {
+                $targetUserIds[] = $userId;
             }
             // Loại trừ user hiện tại khỏi danh sách notify
-            if (!empty($_SESSION['userid'])) {
-                $currentUserId = $_SESSION['userid'];
+            if ($currentUserId !== '') {
                 $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($currentUserId) {
                     return $id !== $currentUserId;
                 }));
             }
             if (empty($targetUserIds)) return;
+            $operator = isset($_SESSION['realname']) ? $_SESSION['realname'] : '';
+            $typeLabel = $this->getRequestTypeLabel($requestType);
+            $applicantName = $this->getRealname($userId);
+            if ($operator !== $applicantName) {
+                $message = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $applicantName . ']の[' . $typeLabel . ']の申請を編集しました';
+            } else {
+                $message = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $typeLabel . ']の申請を編集しました';
+            }
             $payload = [
                 'event' => 'form_request_update',
                 'title' => '申請更新',
-                'message' => $_SESSION['realname'] . 'が' . $typeLabel . 'の申請を' . $statusLabel . 'に変更しました',
+                'message' => $message,
                 'data' => [
                     'request_id' => $requestId,
                     'request_type' => $requestType,
@@ -889,63 +920,49 @@ class Request extends ApplicationModel {
         try {
             require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
-            // 日本語ラベル（例: leave -> 休暇届）
+            // Message = subject email (100%). statusText: 承認/却下/更新
             $typeLabel = $this->getRequestTypeLabel($requestType);
-            $statusMessageText = '';
-            // ステータスごとのメッセージ文言
-            switch ($status) {
-                case 'approved':
-                    $statusMessageText = $_SESSION['realname'] . 'が' . $typeLabel . 'の申請を承認しました';
-                    break;
-                case 'rejected':
-                    $statusMessageText = $_SESSION['realname'] . 'が' . $typeLabel . 'の申請を却下しました';
-                    break;
-                default:
-                    $statusMessageText = $_SESSION['realname'] . 'が' . $typeLabel . 'の申請を' . $statusLabel . 'に変更しました';
-                    break;
+            $applicantName = $this->getRealname($userId);
+            $operator = isset($_SESSION['realname']) ? $_SESSION['realname'] : '';
+            $statusText = $status === 'approved' ? '承認' : ($status === 'rejected' ? '却下' : '更新');
+            if ($operator !== $applicantName) {
+                $statusMessageText = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $applicantName . ']の[' . $typeLabel . ']の申請を' . $statusText . 'しました';
+            } else {
+                $statusMessageText = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $typeLabel . ']の申請を' . $statusText . 'しました';
             }
             // Gửi cho chủ đơn
-            if (empty($_SESSION['userid']) || $_SESSION['userid'] !== $userId) {
-                $payload_user = [
-                    'event' => 'form_request_update',
-                    'title' => $typeLabel . 'ステータス',
-                    'message' => $statusMessageText,
-                    'data' => [
-                        'request_id' => $requestId,
-                        'request_type' => $requestType,
-                        'status' => $status,
-                        'action_user' => $_SESSION['realname'],
-                        'action' => $action,
-                        'url' => "/form/detail.php?id=$requestId",
-                        'avatar' => $_SESSION['user_image']
-                    ],
-                    'request_id' => $requestId,
-                    'user_ids' => [$userId]
-                ];
-                $notiService->create($payload_user);
-            }
-            // Gửi cho người chỉ định duyệt (hoặc admin nếu không có)
             $targetUserIds = [];
+            if (empty($_SESSION['userid']) || $_SESSION['userid'] !== $userId) {
+                $targetUserIds[] = $userId;
+            }
+            // Gửi thêm cho người chỉ định duyệt (hoặc admin nếu không có)
             $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
             if ($req && !empty($req['approver_user_id'])) {
-                $targetUserIds = [$req['approver_user_id']];
+                if (!in_array($req['approver_user_id'], $targetUserIds, true)) {
+                    $targetUserIds[] = $req['approver_user_id'];
+                }
             } else {
                 $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
-                $targetUserIds = array_map(function($a){return $a['userid'];}, $admins);
+                foreach ($admins as $a) {
+                    if (!empty($a['userid']) && !in_array($a['userid'], $targetUserIds, true)) {
+                        $targetUserIds[] = $a['userid'];
+                    }
+                }
             }
             if (!empty($targetUserIds)) {
                 // Loại trừ user hiện tại khỏi danh sách notify
                 if (!empty($_SESSION['userid'])) {
                     $currentUserId = $_SESSION['userid'];
-                    $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($currentUserId) {
+                    $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($currentUserId, $userId) {
                         return $id !== $currentUserId;
                     }));
                 }
+                
                 if (empty($targetUserIds)) return;
                 $payload_admin = isset($payload_user) ? $payload_user : [
                     'event' => 'form_request_update',
                     'title' => $typeLabel . 'ステータス',
-                    'message' => $_SESSION['realname'] . 'が' . $typeLabel . 'のステータスを' . $statusLabel . 'に変更しました',
+                    'message' => $statusMessageText,
                     'data' => [
                         'request_id' => $requestId,
                         'request_type' => $requestType,
@@ -960,6 +977,9 @@ class Request extends ApplicationModel {
                 $payload_admin['user_ids'] = $targetUserIds;
                 $notiService->create($payload_admin);
             }
+
+            // Email notification to applicant about status change
+            $this->sendRequestStatusEmail($requestId, $requestType, $status, $userId);
         } catch (Exception $e) {
             error_log('Failed to send request status notification: ' . $e->getMessage());
         }
@@ -971,38 +991,31 @@ class Request extends ApplicationModel {
             $notiService = new NotificationService();
             // 日本語ラベル（例: leave -> 休暇届）
             $typeLabel = $this->getRequestTypeLabel($requestType);
-            // Gửi cho chủ đơn nếu người comment khác chủ đơn
-            if ($userId !== $commentUserId) {
-                $payload_user = [
-                    'event' => 'form_comment',
-                    'title' => '新しいコメント（' . $typeLabel . '）',
-                    'message' => $_SESSION['realname'] . 'が' . $typeLabel . 'に新しいコメントを追加しました',
-                    'data' => [
-                        'request_id' => $requestId,
-                        'request_type' => $requestType,
-                        'comment_user_id' => $commentUserId,
-                        'url' => "/form/detail.php?id=$requestId",
-                        'avatar' => $_SESSION['user_image']
-                    ],
-                    'request_id' => $requestId,
-                    'user_ids' => [$userId]
-                ];
-                $notiService->create($payload_user);
-            }
+        
             // Gửi cho người chỉ định duyệt (hoặc admin nếu không có)
             $targetUserIds = [];
+            // Gửi cho chủ đơn nếu người comment khác chủ đơn
+            if ($userId !== $commentUserId) {
+                $targetUserIds[] = $userId;
+            }
             $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
             if ($req && !empty($req['approver_user_id'])) {
-                $targetUserIds = [$req['approver_user_id']];
+                if (!in_array($req['approver_user_id'], $targetUserIds, true)) {
+                    $targetUserIds[] = $req['approver_user_id'];
+                }
             } else {
                 $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
-                $targetUserIds = array_map(function($a){return $a['userid'];}, $admins);
+                foreach ($admins as $a) {
+                    if (!empty($a['userid']) && !in_array($a['userid'], $targetUserIds, true)) {
+                        $targetUserIds[] = $a['userid'];
+                    }
+                }
             }
             if (!empty($targetUserIds)) {
                 // Loại trừ user hiện tại khỏi danh sách notify
                 if (!empty($_SESSION['userid'])) {
                     $currentUserId = $_SESSION['userid'];
-                    $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($currentUserId) {
+                    $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($currentUserId, $userId) {
                         return $id !== $currentUserId;
                     }));
                 }
@@ -1023,8 +1036,90 @@ class Request extends ApplicationModel {
                 ];
                 $notiService->create($payload_admin);
             }
+
+            $this->sendRequestCommentEmail($requestId, $requestType, $userId, $commentUserId);
         } catch (Exception $e) {
             error_log('Failed to send request comment notification: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Gửi email khi có comment mới trên đơn.
+     * - Người nhận: chủ đơn + người chỉ định duyệt (hoặc admin nếu không có).
+     * - Subject: [người thao tác] が[申請者]の[種別]にコメントしました
+     * - Body: hiển thị 申請者, nội dung comment (nếu lấy được) và link chi tiết.
+     */
+    private function sendRequestCommentEmail($requestId, $requestType, $userId, $commentUserId) {
+        // Lấy thông tin đơn để biết người đăng ký và comment cuối
+        $row = $this->fetchOne("SELECT user_id, comments FROM {$this->table} WHERE id = " . intval($requestId));
+        if (!$row) {
+            return;
+        }
+        $applicantUserId = $row['user_id'];
+        if (empty($applicantUserId)) {
+            return;
+        }
+
+        // Tập người nhận: chủ đơn + approver/admin (tương tự notification)
+        $targetUserIds = [];
+        if ($applicantUserId !== $commentUserId) {
+            $targetUserIds[] = $applicantUserId;
+        }
+        $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
+        if ($req && !empty($req['approver_user_id'])) {
+            if (!in_array($req['approver_user_id'], $targetUserIds, true)) {
+                $targetUserIds[] = $req['approver_user_id'];
+            }
+        } else {
+            $admins = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
+            foreach ($admins as $a) {
+                if (!empty($a['userid']) && !in_array($a['userid'], $targetUserIds, true)) {
+                    $targetUserIds[] = $a['userid'];
+                }
+            }
+        }
+        // Loại trừ người comment khỏi danh sách nhận
+        if (!empty($targetUserIds)) {
+            $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($commentUserId) {
+                return $id !== $commentUserId;
+            }));
+        }
+        if (empty($targetUserIds)) {
+            return;
+        }
+
+        $typeLabel = $this->getRequestTypeLabel($requestType);
+        $applicantName = $this->getRealname($applicantUserId);
+        $commentUserName = $this->getRealname($commentUserId);
+        $url = $this->getBaseUrl() . '/form/detail.php?id=' . intval($requestId);
+
+        $subject = '[' . $commentUserName . '] が[' . $applicantName . ']の[' . $typeLabel . ']にコメントしました';
+
+        // Lấy nội dung comment mới nhất của commentUserId (nếu có)
+        $commentText = '';
+        if (!empty($row['comments'])) {
+            $comments = json_decode($row['comments'], true);
+            if (is_array($comments)) {
+                for ($i = count($comments) - 1; $i >= 0; $i--) {
+                    $c = $comments[$i];
+                    if (isset($c['user_id']) && $c['user_id'] === $commentUserId && !empty($c['message'])) {
+                        $commentText = trim((string)$c['message']);
+                        break;
+                    }
+                }
+            }
+        }
+
+        $body = $subject . "。\n\n"
+              . "申請者: " . $applicantName . "\n"
+              . "コメント者: " . $commentUserName . "\n\n";
+        if ($commentText !== '') {
+            $body .= "【コメント内容】\n" . $commentText . "\n\n";
+        }
+        $body .= "詳細: " . $url . "\n";
+
+        foreach ($targetUserIds as $uid) {
+            $this->sendEmailToUser($uid, $subject, $body);
         }
     }
 
@@ -1046,7 +1141,7 @@ class Request extends ApplicationModel {
             exit;
         }
         $id = intval($_POST['id']);
-        $row = $this->fetchOne("SELECT id, type, status, user_id, approver_user_id, schedule_id FROM {$this->table} WHERE id = $id");
+        $row = $this->fetchOne("SELECT id, type, status, user_id, approver_user_id, schedule_id, data FROM {$this->table} WHERE id = $id");
         if (!$row) {
             http_response_code(404);
             echo json_encode(['error' => '申請が見つかりません。']);
@@ -1087,7 +1182,7 @@ class Request extends ApplicationModel {
         if ($wasPending && $isApplicant && !empty($approverUserId)) {
             $currentUserid = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
             if ($currentUserid !== $approverUserId) {
-                $this->sendRequestDeletedNotification($id, $requestType, $applicantUserId, $approverUserId);
+                $this->sendRequestDeletedNotification($id, $requestType, $applicantUserId, $approverUserId, isset($row['data']) ? $row['data'] : null);
             }
         }
 
@@ -1095,15 +1190,22 @@ class Request extends ApplicationModel {
         exit;
     }
 
-    private function sendRequestDeletedNotification($requestId, $requestType, $applicantUserId, $approverUserId) {
+    private function sendRequestDeletedNotification($requestId, $requestType, $applicantUserId, $approverUserId, $requestDataJson = null) {
         try {
             require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
             $typeLabel = $this->getRequestTypeLabel($requestType);
+            $applicantName = $this->getRealname($applicantUserId);
+            $operator = isset($_SESSION['realname']) ? $_SESSION['realname'] : '';
+            if ($operator !== $applicantName) {
+                $message = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $applicantName . ']の[' . $typeLabel . ']の申請を削除しました';
+            } else {
+                $message = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $typeLabel . ']の申請を削除しました';
+            }
             $payload = [
                 'event' => 'form_request_deleted',
                 'title' => $typeLabel . 'が削除されました',
-                'message' => '申請者が申請を削除しました。',
+                'message' => $message,
                 'data' => [
                     'request_id' => $requestId,
                     'request_type' => $requestType,
@@ -1114,8 +1216,460 @@ class Request extends ApplicationModel {
                 'user_ids' => [$approverUserId]
             ];
             $notiService->create($payload);
+
+            // Email notification to approver about deleted pending request (pass data because row already deleted)
+            $this->sendRequestDeletedEmail($requestId, $requestType, $approverUserId, $applicantUserId, $requestDataJson);
         } catch (Exception $e) {
             error_log('Failed to send request deleted notification: ' . $e->getMessage());
+        }
+    }
+
+    // Helper: get environment variable with multiple fallbacks (.env, $_ENV, $_SERVER)
+    private function env($key, $default = '') {
+        $value = getenv($key);
+        if ($value !== false && $value !== '') {
+            return $value;
+        }
+        if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+            return $_ENV[$key];
+        }
+        if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') {
+            return $_SERVER[$key];
+        }
+        static $envCache = null;
+        if ($envCache === null) {
+            $envCache = [];
+            // request.php is in application/model → project root is two levels up
+            $envPath = dirname(__DIR__, 2) . '/.env';
+            if (file_exists($envPath)) {
+                $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if ($line === '' || strpos($line, '#') === 0 || strpos($line, '=') === false) continue;
+                    list($k, $v) = explode('=', $line, 2);
+                    $k = trim($k);
+                    $v = trim($v);
+                    if ($k !== '' && $v !== '') {
+                        $envCache[$k] = $v;
+                    }
+                }
+            }
+        }
+        if (isset($envCache[$key]) && $envCache[$key] !== '') {
+            return $envCache[$key];
+        }
+        return $default;
+    }
+
+    // Helper: enqueue email vào bảng email_queue để worker xử lý, tránh chặn API
+    private function sendEmailToUser($userId, $subject, $body) {
+        if (empty($userId)) {
+            return;
+        }
+        $subject = trim((string) $subject);
+        $body = (string) $body;
+        if ($subject === '' || $body === '') {
+            return;
+        }
+        $now = date('Y-m-d H:i:s');
+        $table = DB_PREFIX . 'email_queue';
+        // Lưu user_id, subject, body, trạng thái pending; worker sẽ lookup email thật khi gửi
+        $sql = "INSERT INTO {$table} (user_id, subject, body, status, attempts, created_at, updated_at) VALUES ("
+             . "'" . $this->quote($userId) . "', "
+             . "'" . $this->quote($subject) . "', "
+             . "'" . $this->quote($body) . "', "
+             . "'pending', "
+             . "0, "
+             . "'" . $this->quote($now) . "', "
+             . "'" . $this->quote($now) . "')";
+        try {
+            $this->query($sql);
+        } catch (\Exception $e) {
+            error_log('Failed to enqueue email: ' . $e->getMessage());
+        }
+    }
+
+    private function getBaseUrl() {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
+        return $scheme . '://' . $host;
+    }
+
+    private function getRealname($userid) {
+        if (empty($userid)) return $userid;
+        $row = $this->fetchOne("SELECT realname FROM " . DB_PREFIX . "user WHERE userid = '" . $this->quote($userid) . "'");
+        return $row && !empty($row['realname']) ? $row['realname'] : $userid;
+    }
+
+    /**
+     * Format request data as plain text for email body (chi tiết nội dung đơn).
+     * @param int $requestId
+     * @return string
+     */
+    private function formatRequestDetailForEmail($requestId) {
+        $row = $this->fetchOne("SELECT type, data, user_id FROM {$this->table} WHERE id = " . intval($requestId));
+        if (!$row || empty($row['data'])) {
+            return '';
+        }
+        $data = is_string($row['data']) ? json_decode($row['data'], true) : $row['data'];
+        if (!is_array($data)) {
+            return '';
+        }
+        $type = $row['type'];
+        $lines = [];
+        $fmt = function($label, $value) {
+            if ($value === null || $value === '') return;
+            return $label . ': ' . trim((string) $value);
+        };
+        if ($type === 'leave') {
+            if (!empty($data['start_datetime'])) $lines[] = $fmt('期間（開始）', $data['start_datetime']);
+            if (!empty($data['end_datetime'])) $lines[] = $fmt('期間（終了）', $data['end_datetime']);
+            if (isset($data['days']) && $data['days'] !== '') $lines[] = $fmt('日間', $data['days']);
+            if (!empty($data['leave_type'])) $lines[] = $fmt('休暇種別', $data['leave_type']);
+            if (!empty($data['paid_type'])) $lines[] = $fmt('有給休暇', $data['paid_type']);
+            if (!empty($data['unpaid_type'])) $lines[] = $fmt('無給休暇', $data['unpaid_type']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($type === 'outing') {
+            if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
+            if (!empty($data['start_time'])) $lines[] = $fmt('開始時刻', $data['start_time']);
+            if (!empty($data['end_time'])) $lines[] = $fmt('終了時刻', $data['end_time']);
+            if (!empty($data['destination'])) $lines[] = $fmt('行先', $data['destination']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($type === 'trip') {
+            if (!empty($data['start_datetime'])) $lines[] = $fmt('期間（開始）', $data['start_datetime']);
+            if (!empty($data['end_datetime'])) $lines[] = $fmt('期間（終了）', $data['end_datetime']);
+            if (isset($data['days']) && $data['days'] !== '') $lines[] = $fmt('日間', $data['days']);
+            if (!empty($data['destination'])) $lines[] = $fmt('行先', $data['destination']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($type === 'holiday_work') {
+            if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
+            if (!empty($data['start_time'])) $lines[] = $fmt('開始時刻', $data['start_time']);
+            if (!empty($data['end_time'])) $lines[] = $fmt('終了時刻', $data['end_time']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($type === 'overtime') {
+            if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
+            if (!empty($data['start_time'])) $lines[] = $fmt('開始時刻', $data['start_time']);
+            if (!empty($data['end_time'])) $lines[] = $fmt('終了時刻', $data['end_time']);
+            if (!empty($data['purpose'])) {
+                $p = is_array($data['purpose']) ? implode('、', $data['purpose']) : $data['purpose'];
+                $lines[] = $fmt('用途', $p);
+            }
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($type === 'attendance_correction') {
+            if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
+            if (!empty($data['time'])) $lines[] = $fmt('時間', $data['time']);
+            if (!empty($data['correction_type'])) $lines[] = $fmt('区分', $data['correction_type']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif (in_array($type, ['travel_expense', 'expense', 'trip_expense', 'commuting_allowance'], true)) {
+            if (!empty($data['attachment_original'])) $lines[] = $fmt('添付ファイル', $data['attachment_original']);
+            elseif (!empty($data['attachment'])) $lines[] = $fmt('添付ファイル', $data['attachment']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } else {
+            foreach ($data as $k => $v) {
+                if ($v === null || $v === '' || is_array($v)) continue;
+                $lines[] = $k . ': ' . trim((string) $v);
+            }
+        }
+        $lines = array_filter($lines);
+        if (empty($lines)) {
+            return '';
+        }
+        return "【申請内容】\n" . implode("\n", $lines);
+    }
+
+    /** Format request detail from type + data array (for deleted request when row no longer exists). */
+    private function formatRequestDetailFromData($requestType, $data) {
+        if (!is_array($data)) {
+            $data = is_string($data) ? json_decode($data, true) : [];
+        }
+        if (empty($data)) {
+            return '';
+        }
+        $lines = [];
+        $fmt = function($label, $value) {
+            if ($value === null || $value === '') return null;
+            return $label . ': ' . trim((string) $value);
+        };
+        if ($requestType === 'leave') {
+            if (!empty($data['start_datetime'])) $lines[] = $fmt('期間（開始）', $data['start_datetime']);
+            if (!empty($data['end_datetime'])) $lines[] = $fmt('期間（終了）', $data['end_datetime']);
+            if (isset($data['days']) && $data['days'] !== '') $lines[] = $fmt('日間', $data['days']);
+            if (!empty($data['leave_type'])) $lines[] = $fmt('休暇種別', $data['leave_type']);
+            if (!empty($data['paid_type'])) $lines[] = $fmt('有給休暇', $data['paid_type']);
+            if (!empty($data['unpaid_type'])) $lines[] = $fmt('無給休暇', $data['unpaid_type']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($requestType === 'outing') {
+            if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
+            if (!empty($data['start_time'])) $lines[] = $fmt('開始時刻', $data['start_time']);
+            if (!empty($data['end_time'])) $lines[] = $fmt('終了時刻', $data['end_time']);
+            if (!empty($data['destination'])) $lines[] = $fmt('行先', $data['destination']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($requestType === 'trip') {
+            if (!empty($data['start_datetime'])) $lines[] = $fmt('期間（開始）', $data['start_datetime']);
+            if (!empty($data['end_datetime'])) $lines[] = $fmt('期間（終了）', $data['end_datetime']);
+            if (isset($data['days']) && $data['days'] !== '') $lines[] = $fmt('日間', $data['days']);
+            if (!empty($data['destination'])) $lines[] = $fmt('行先', $data['destination']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($requestType === 'holiday_work') {
+            if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
+            if (!empty($data['start_time'])) $lines[] = $fmt('開始時刻', $data['start_time']);
+            if (!empty($data['end_time'])) $lines[] = $fmt('終了時刻', $data['end_time']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($requestType === 'overtime') {
+            if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
+            if (!empty($data['start_time'])) $lines[] = $fmt('開始時刻', $data['start_time']);
+            if (!empty($data['end_time'])) $lines[] = $fmt('終了時刻', $data['end_time']);
+            if (!empty($data['purpose'])) {
+                $p = is_array($data['purpose']) ? implode('、', $data['purpose']) : $data['purpose'];
+                $lines[] = $fmt('用途', $p);
+            }
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($requestType === 'attendance_correction') {
+            if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
+            if (!empty($data['time'])) $lines[] = $fmt('時間', $data['time']);
+            if (!empty($data['correction_type'])) $lines[] = $fmt('区分', $data['correction_type']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif (in_array($requestType, ['travel_expense', 'expense', 'trip_expense', 'commuting_allowance'], true)) {
+            if (!empty($data['attachment_original'])) $lines[] = $fmt('添付ファイル', $data['attachment_original']);
+            elseif (!empty($data['attachment'])) $lines[] = $fmt('添付ファイル', $data['attachment']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } else {
+            foreach ($data as $k => $v) {
+                if ($v === null || $v === '' || is_array($v)) continue;
+                $lines[] = $k . ': ' . trim((string) $v);
+            }
+        }
+        $lines = array_filter($lines);
+        if (empty($lines)) return '';
+        return "【申請内容】\n" . implode("\n", $lines);
+    }
+
+    /**
+     * Format diff (old -> new) between two data snapshots for email when editing.
+     * Chỉ liệt kê những trường có thay đổi.
+     *
+     * @param string $requestType
+     * @param mixed $oldDataRaw  JSON string hoặc array cũ
+     * @param mixed $newDataRaw  JSON string hoặc array mới
+     * @return string
+     */
+    private function formatRequestDiffForEmail($requestType, $oldDataRaw, $newDataRaw) {
+        $old = is_array($oldDataRaw) ? $oldDataRaw : (is_string($oldDataRaw) ? json_decode($oldDataRaw, true) : []);
+        $new = is_array($newDataRaw) ? $newDataRaw : (is_string($newDataRaw) ? json_decode($newDataRaw, true) : []);
+        if (!is_array($old) || !is_array($new)) {
+            return '';
+        }
+        $lines = [];
+        $addDiff = function($label, $key) use (&$lines, $old, $new) {
+            $ov = array_key_exists($key, $old) ? $old[$key] : '';
+            $nv = array_key_exists($key, $new) ? $new[$key] : '';
+            if ($ov === $nv) {
+                return;
+            }
+            // Chuyển array thành chuỗi đọc được
+            if (is_array($ov)) $ov = implode('、', $ov);
+            if (is_array($nv)) $nv = implode('、', $nv);
+            $ovStr = trim((string) $ov);
+            $nvStr = trim((string) $nv);
+            if ($ovStr === '' && $nvStr === '') {
+                return;
+            }
+            if ($ovStr === '') $ovStr = '（なし）';
+            if ($nvStr === '') $nvStr = '（なし）';
+            $lines[] = $label . ': ' . $ovStr . ' → ' . $nvStr;
+        };
+
+        if ($requestType === 'leave') {
+            $addDiff('期間（開始）', 'start_datetime');
+            $addDiff('期間（終了）', 'end_datetime');
+            $addDiff('日間', 'days');
+            $addDiff('休暇種別', 'leave_type');
+            $addDiff('有給休暇', 'paid_type');
+            $addDiff('無給休暇', 'unpaid_type');
+            $addDiff('事由', 'reason');
+            $addDiff('注記', 'note');
+        } elseif ($requestType === 'outing') {
+            $addDiff('日付', 'date');
+            $addDiff('開始時刻', 'start_time');
+            $addDiff('終了時刻', 'end_time');
+            $addDiff('行先', 'destination');
+            $addDiff('事由', 'reason');
+            $addDiff('注記', 'note');
+        } elseif ($requestType === 'trip') {
+            $addDiff('期間（開始）', 'start_datetime');
+            $addDiff('期間（終了）', 'end_datetime');
+            $addDiff('日間', 'days');
+            $addDiff('行先', 'destination');
+            $addDiff('事由', 'reason');
+            $addDiff('注記', 'note');
+        } elseif ($requestType === 'holiday_work') {
+            $addDiff('日付', 'date');
+            $addDiff('開始時刻', 'start_time');
+            $addDiff('終了時刻', 'end_time');
+            $addDiff('事由', 'reason');
+            $addDiff('注記', 'note');
+        } elseif ($requestType === 'overtime') {
+            $addDiff('日付', 'date');
+            $addDiff('開始時刻', 'start_time');
+            $addDiff('終了時刻', 'end_time');
+            $addDiff('用途', 'purpose');
+            $addDiff('備考', 'note');
+        } elseif ($requestType === 'attendance_correction') {
+            $addDiff('日付', 'date');
+            $addDiff('時間', 'time');
+            $addDiff('区分', 'correction_type');
+            $addDiff('事由', 'reason');
+            $addDiff('注記', 'note');
+        } elseif (in_array($requestType, ['travel_expense', 'expense', 'trip_expense', 'commuting_allowance'], true)) {
+            $addDiff('添付ファイル', 'attachment_original');
+            $addDiff('備考', 'note');
+        } else {
+            foreach ($new as $k => $v) {
+                if (is_array($v)) continue;
+                $addDiff($k, $k);
+            }
+        }
+
+        $lines = array_filter($lines);
+        if (empty($lines)) {
+            return '';
+        }
+        return "【変更内容】\n" . implode("\n", $lines);
+    }
+
+    private function sendRequestCreatedEmail($requestId, $requestType, $applicantUserId, $approverUserId) {
+        if (empty($approverUserId)) {
+            return;
+        }
+        $typeLabel = $this->getRequestTypeLabel($requestType);
+        $applicantName = $this->getRealname($applicantUserId);
+        $url = $this->getBaseUrl() . '/form/detail.php?id=' . intval($requestId);
+        // Tiêu đề: [người thao tác] [申請者][種別]...
+        $operator = isset($_SESSION['realname']) ? $_SESSION['realname'] : '';
+        $subject = '[' . $applicantName . ']が[' . $typeLabel . ']の申請を作成しました';
+        $footText = "ご承認のほど、よろしくお願いいたします。\n";
+        $detail = $this->formatRequestDetailForEmail($requestId);
+        $body = $subject . "。\n\n"
+              . "申請者: " . $applicantName . "\n\n"
+              . ($detail ? $detail . "\n\n" : '')
+              . "詳細: " . $url . "\n"
+              . $footText;
+        $this->sendEmailToUser($approverUserId, $subject, $body);
+    }
+
+    private function sendRequestStatusEmail($requestId, $requestType, $status, $userId) {
+        if (empty($userId)) {
+            return;
+        }
+        $typeLabel = $this->getRequestTypeLabel($requestType);
+        $applicantName = $this->getRealname($userId);
+        $url = $this->getBaseUrl() . '/form/detail.php?id=' . intval($requestId);
+        // Tiêu đề: [người thao tác] [申請者][種別]...
+        $operator = isset($_SESSION['realname']) ? $_SESSION['realname'] : '';
+        $statusText = $status === 'approved' ? '承認' : ($status === 'rejected' ? '却下' : '更新');
+        if($operator !== $applicantName) {
+            $subject = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $applicantName . ']の[' . $typeLabel . ']の申請を' . $statusText . 'しました';
+        }
+        else{
+            $subject = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $typeLabel . ']の申請を' . $statusText . 'しました';
+        }
+        $detail = $this->formatRequestDetailForEmail($requestId);
+        
+        $body = $subject . "。\n\n"
+              . "申請者: " . $applicantName . "\n\n"
+              . ($detail ? $detail . "\n\n" : '')
+              . "詳細: " . $url . "\n";
+        $this->sendEmailToUser($userId, $subject, $body);
+    }
+
+    private function sendRequestDeletedEmail($requestId, $requestType, $approverUserId, $applicantUserId, $requestDataJson = null) {
+        if (empty($approverUserId)) {
+            return;
+        }
+        $typeLabel = $this->getRequestTypeLabel($requestType);
+        $applicantName = $this->getRealname($applicantUserId);
+        $url = $this->getBaseUrl() . '/form/detail.php?id=' . intval($requestId);
+        // Tiêu đề: [người thao tác] [申請者][種別]...
+        $operator = isset($_SESSION['realname']) ? $_SESSION['realname'] : '';
+        if($operator !== $applicantName) {
+            $subject = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $applicantName . ']の[' . $typeLabel . ']の申請を削除しました';
+        }
+        else{
+            $subject = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $typeLabel . ']の申請を削除しました';
+        }
+        $detail = $requestDataJson !== null
+            ? $this->formatRequestDetailFromData($requestType, $requestDataJson)
+            : $this->formatRequestDetailForEmail($requestId);
+        $body = $subject . "。\n\n"
+              . "申請者: " . $applicantName . "\n\n"
+              . ($detail ? $detail . "\n\n" : '')
+              . "詳細: " . $url . "\n";
+        $this->sendEmailToUser($approverUserId, $subject, $body);
+    }
+
+    /**
+     * Gửi email khi nội dung đơn được chỉnh sửa.
+     * - Người nhận: người được chỉ định duyệt (approver_user_id). Nếu không có thì gửi cho administrator.
+     * - Chủ đề: [người thao tác] [申請者][種別]が更新されました
+     * - Nội dung: hiển thị 申請者, chi tiết thay đổi (旧 -> 新) và link chi tiết.
+     */
+    private function sendRequestUpdatedEmail($requestId, $requestType, $status, $userId, $oldDataJson = null) {
+        // Lấy người chỉ định duyệt, nếu không có thì lấy admin
+        $targetUserIds = [];
+        $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
+        if ($req && !empty($req['approver_user_id'])) {
+            $targetUserIds = [$req['approver_user_id']];
+        } else {
+            $admins = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
+            $targetUserIds = array_map(function($a){ return $a['userid']; }, $admins);
+        }
+        if (empty($targetUserIds)) {
+            return;
+        }
+
+        $typeLabel = $this->getRequestTypeLabel($requestType);
+        $applicantName = $this->getRealname($userId);
+        $operator = isset($_SESSION['realname']) ? $_SESSION['realname'] : '';
+        $url = $this->getBaseUrl() . '/form/detail.php?id=' . intval($requestId);
+        if($operator !== $applicantName) {
+            $subject = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $applicantName . ']の[' . $typeLabel . ']の申請を編集しました';
+        }
+        else{
+            $subject = ($operator !== '' ? '[' . $operator . '] ' : '') . 'が[' . $typeLabel . ']の申請を編集しました';
+        }
+        // Ưu tiên hiển thị phần diff (cũ -> mới); nếu không có diff thì fallback về chi tiết hiện tại
+        $detail = '';
+        if ($oldDataJson !== null) {
+            $currentRow = $this->fetchOne("SELECT data FROM {$this->table} WHERE id = " . intval($requestId));
+            if ($currentRow && isset($currentRow['data'])) {
+                $detail = $this->formatRequestDiffForEmail($requestType, $oldDataJson, $currentRow['data']);
+            }
+        }
+        if ($detail === '') {
+            $detail = $this->formatRequestDetailForEmail($requestId);
+        }
+        $footText = "ご承認のほど、よろしくお願いいたします。\n";
+        $body = $subject . "。\n\n"
+              . "申請者: " . $applicantName . "\n\n"
+              . ($detail ? $detail . "\n\n" : '')
+              . "詳細: " . $url . "\n"
+              . $footText;
+
+        // Gửi cho từng user mục tiêu
+        foreach ($targetUserIds as $uid) {
+            $this->sendEmailToUser($uid, $subject, $body);
         }
     }
 

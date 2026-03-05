@@ -18,7 +18,8 @@ export default {
       errors: {},
       modalTitle: this.mode === 'edit' ? '出張申請編集' : '出張申請書',
       submitting: false,
-      approvers: []
+      approvers: [],
+      originalData: null
     };
   },
   created() {
@@ -34,6 +35,7 @@ export default {
         approver_user_id: ''
       }, this.defaultData);
       this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
+      this.originalData = JSON.parse(JSON.stringify(this.formData));
     }
   },
   mounted() {
@@ -54,6 +56,7 @@ export default {
             approver_user_id: ''
           }, newVal);
           this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
+          this.originalData = JSON.parse(JSON.stringify(this.formData));
         }
       },
       immediate: true,
@@ -64,6 +67,13 @@ export default {
     },
     'formData.end_datetime'() {
       this.updateDaysByDateRange();
+    }
+  },
+  computed: {
+    isDirty() {
+      if (this.mode !== 'edit') return true;
+      if (!this.originalData) return false;
+      return JSON.stringify(this.formData) !== JSON.stringify(this.originalData);
     }
   },
   methods: {
@@ -191,7 +201,13 @@ export default {
     }
   },
   template: `
-    <div>
+    <div class="position-relative">
+      <div v-if="submitting" class="position-absolute top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center bg-white bg-opacity-75 rounded" style="z-index: 1050;">
+        <div class="text-center">
+          <div class="spinner-border text-primary mb-2" role="status" style="width: 2rem; height: 2rem;"></div>
+          <div class="text-muted small">保存中...</div>
+        </div>
+      </div>
       <div class="modal-header">
         <h5 class="modal-title">{{ modalTitle }}</h5>
         <button type="button" class="btn-close" @click="close"></button>
@@ -265,7 +281,7 @@ export default {
         <button type="button" class="btn btn-secondary" @click="close">キャンセル</button>
         <button v-if="mode==='add'" type="button" class="btn btn-outline-secondary" :disabled="submitting" @click="submit('draft')">下書き保存</button>
         <button v-if="mode==='add'" type="button" class="btn btn-primary" :disabled="submitting" @click="submit('pending')">申請</button>
-        <button v-if="mode==='edit'" type="button" class="btn btn-primary" :disabled="submitting" @click="submit()">保存</button>
+        <button v-if="mode==='edit'" type="button" class="btn btn-primary" :disabled="submitting || !isDirty" @click="submit()">保存</button>
       </div>
       <div class="text-muted small" v-if="mode==='add'">
           <ul>

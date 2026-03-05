@@ -1,8 +1,13 @@
 <?php require_once('../application/loader.php'); $view->heading('申請詳細'); ?>
 <div id="app" v-cloak>
   <div v-if="loading" class="text-center py-4"><span class="spinner-border"></span></div>
-  <div v-else>
-    
+  <div v-else class="position-relative">
+    <div v-if="actionLoading" class="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center bg-white bg-opacity-75" style="z-index: 9999;">
+      <div class="text-center">
+        <div class="spinner-border text-primary mb-2" role="status" style="width: 3rem; height: 3rem;"></div>
+        <div class="text-muted">処理中...</div>
+      </div>
+    </div>
     <div class="row">
         <!-- Back button -->
         <div class="col-12 mb-3 mt-4">
@@ -157,12 +162,14 @@
                       <span class="text-muted small">{{ formatDate(h.time) }}</span>
                     </div>
                   </div>
-                  <div class="flex-grow-1 d-flex align-items-center">
-                    <span>
+                  <div class="flex-grow-1 d-flex flex-column justify-content-center">
+                    <div>
                       <i :class="historyIcon(h.action)" class="me-2"></i>
                       <span class="me-2">{{ actionLabel(h.action) }}</span>
-                      <span v-if="h.note" class="text-muted">({{ h.note }})</span>
-                    </span>
+                    </div>
+                    <div v-if="h.note" class="text-muted small mt-1" style="white-space: pre-line;">
+                      {{ h.note }}
+                    </div>
                   </div>
                 </div>
               </li>
@@ -288,6 +295,7 @@ createApp({
     return {
       request: {},
       loading: true,
+      actionLoading: false,
       newComment: '',
       errorMessage: '',
       editForm: null,
@@ -450,6 +458,7 @@ createApp({
     async updateStatus(newStatus) {
       if (!['pending','approved','rejected'].includes(newStatus)) return;
       this.errorMessage = '';
+      this.actionLoading = true;
       try {
         const res = await axios.post('/api/index.php?model=request&method=update_status', {id: this.request.id, status: newStatus}, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
         if (res.data && res.data.error) {
@@ -459,10 +468,13 @@ createApp({
         }
       } catch (e) {
         this.errorMessage = '状態変更に失敗しました。';
+      } finally {
+        this.actionLoading = false;
       }
     },
     async submitDraft() {
       this.errorMessage = '';
+      this.actionLoading = true;
       try {
         const res = await axios.post('/api/index.php?model=request&method=update_status', {id: this.request.id, status: 'pending'}, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
         if (res.data && res.data.error) {
@@ -476,11 +488,14 @@ createApp({
       } catch (e) {
         this.errorMessage = '申請処理に失敗しました。';
         if (typeof showMessage === 'function') showMessage('申請処理に失敗しました。', true);
+      } finally {
+        this.actionLoading = false;
       }
     },
     async addComment() {
       this.errorMessage = '';
       if (!this.newComment) return;
+      this.actionLoading = true;
       try {
         const res = await axios.post('/api/index.php?model=request&method=add_comment', {id: this.request.id, message: this.newComment}, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
         if (res.data && res.data.error) {
@@ -491,6 +506,8 @@ createApp({
         }
       } catch (e) {
         this.errorMessage = 'コメント追加に失敗しました。';
+      } finally {
+        this.actionLoading = false;
       }
     },
     statusLabel(status) {
@@ -556,6 +573,7 @@ createApp({
     },
     async doDelete() {
       this.errorMessage = '';
+      this.actionLoading = true;
       try {
         const res = await axios.post('/api/index.php?model=request&method=delete_request',
           { id: this.request.id },
@@ -570,6 +588,8 @@ createApp({
         window.location.href = 'index.php';
       } catch (e) {
         this.errorMessage = '削除に失敗しました。';
+      } finally {
+        this.actionLoading = false;
       }
     }
   },

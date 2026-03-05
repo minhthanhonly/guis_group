@@ -35,6 +35,12 @@
           <div class="text-muted">データを読み込み中...</div>
         </div>
       </div>
+      <div v-if="actionLoading" class="position-absolute top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center bg-white bg-opacity-75 rounded" style="z-index: 101;">
+        <div class="text-center">
+          <div class="spinner-border text-primary mb-2" role="status" style="width: 3rem; height: 3rem;"></div>
+          <div class="text-muted">処理中...</div>
+        </div>
+      </div>
       <div class="row mb-3 align-items-end">
         <div class="col-md-2">
           <label for="form-month-input" class="col-form-label col-form-label-sm">年月</label>
@@ -230,6 +236,7 @@ createApp({
       pendingCounts: {},
       currentUserId: (typeof USER_ID !== 'undefined') ? USER_ID : '',
       currentUserRole: (typeof USER_ROLE !== 'undefined') ? USER_ROLE : '',
+      actionLoading: false,
     }
   },
   computed: {
@@ -632,6 +639,7 @@ createApp({
     async deleteRequest(req) {
       if (!this.canDelete(req)) return;
       if (!confirm('この申請を削除してもよろしいですか？')) return;
+      this.actionLoading = true;
       try {
         const res = await axios.post('/api/index.php?model=request&method=delete_request',
           { id: req.id },
@@ -647,6 +655,8 @@ createApp({
         this.tabs.forEach(tab => { this.updatePendingCountForTab(tab.type); });
       } catch (e) {
         if (typeof showMessage === 'function') showMessage('削除に失敗しました。', true);
+      } finally {
+        this.actionLoading = false;
       }
     }
   },
