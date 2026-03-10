@@ -1,0 +1,1 @@
+cd /home/guis3/www/kanri/cron; /usr/local/bin/php email_queue_worker.php 1> /dev/null 2>&1

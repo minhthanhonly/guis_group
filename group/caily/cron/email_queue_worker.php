@@ -6,7 +6,11 @@
 chdir(__DIR__ . '/..');
 
 require_once __DIR__ . '/../application/config.php';
+require_once __DIR__ . '/../application/library/connectionmysql.php';
 require_once __DIR__ . '/../application/model/model.php';
+
+$now = date('Y-m-d H:i:s');
+
 
 class EmailQueueWorker extends Model
 {
@@ -57,7 +61,6 @@ class EmailQueueWorker extends Model
     public function run($limit = 20)
     {
         // Lấy các email pending, khóa soft bằng cách set status = 'processing'
-        $now = date('Y-m-d H:i:s');
         $rows = $this->fetchAll(
             "SELECT * FROM {$this->table} WHERE status = 'pending' ORDER BY id ASC LIMIT " . intval($limit)
         );
@@ -69,7 +72,7 @@ class EmailQueueWorker extends Model
             $id = (int)$row['id'];
             // đánh dấu đang xử lý
             $this->query_update(
-                ['status' => 'processing', 'updated_at' => $now],
+                ['status' => 'processing', 'updated_at' => date('Y-m-d H:i:s')],
                 ['id' => $id]
             );
             $this->processOne($row);

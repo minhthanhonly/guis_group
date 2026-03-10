@@ -1,15 +1,15 @@
 <?php require_once('../application/loader.php'); $view->heading('申請一覧'); ?>
 <div id="app" class="container-fluid mt-4 mb-5" v-cloak>
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-    <div class="container-fluid">
-      <span class="navbar-brand"></span>
+    <div class="container-fluid pl-0">
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#formNavbarContent" aria-controls="formNavbarContent" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse justify-content-start" id="formNavbarContent">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <!-- Inline tabs (khi đủ chiều ngang) -->
+        <ul v-show="!navUseDropdown" ref="navTabsEl" class="navbar-nav me-auto mb-2 mb-lg-0 flex-wrap">
           <li class="nav-item" v-for="tab in tabs" :key="tab.type" :class="{ 'active bg-primary text-white rounded-3': currentTab === tab.type }">
-            <a href="#" class="nav-link d-flex align-items-center" @click.prevent="selectTab(tab.type)">
+            <a href="#" class="nav-link d-flex align-items-center text-nowrap" @click.prevent="selectTab(tab.type)">
               <span>{{ tab.label }}</span>
               <span v-if="pendingCounts[tab.type] > 0" class="badge rounded-pill bg-warning text-dark ms-2">
                 {{ pendingCounts[tab.type] }}
@@ -17,8 +17,23 @@
             </a>
           </li>
         </ul>
+        <!-- Dropdown (khi thiếu chiều ngang) -->
+        <div v-show="navUseDropdown" class="dropdown me-auto mb-2 mb-lg-0">
+          <button class="btn btn-outline-light dropdown-toggle text-nowrap" type="button" id="formTabDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            {{ currentTabLabel }}
+            <span v-if="pendingCounts[currentTab] > 0" class="badge rounded-pill bg-warning text-dark ms-2">{{ pendingCounts[currentTab] }}</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-dark form-tab-dropdown-menu" aria-labelledby="formTabDropdown">
+            <li v-for="tab in tabs" :key="tab.type">
+              <a class="dropdown-item d-flex align-items-center justify-content-between" href="#" @click.prevent="selectTab(tab.type); closeTabDropdown()" :class="{ 'active': currentTab === tab.type }">
+                <span>{{ tab.label }}</span>
+                <span v-if="pendingCounts[tab.type] > 0" class="badge rounded-pill bg-warning text-dark">{{ pendingCounts[tab.type] }}</span>
+              </a>
+            </li>
+          </ul>
+        </div>
         <div class="d-flex gap-2">
-          <button class="btn btn-primary" @click="openForm">
+          <button class="btn btn-primary text-nowrap" @click="openForm">
             <i class="fa fa-plus me-1"></i>新規申請
           </button>
         </div>
@@ -88,9 +103,15 @@
               <th v-if="currentTab === 'overtime'">用途</th>
               <th v-if="currentTab === 'attendance_correction'">日時</th>
               <th v-if="currentTab === 'attendance_correction'">区分</th>
-              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction'">事由</th>
-              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance'">注記</th>
-              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance'">指定承認者</th>
+              <th v-if="currentTab === 'purchase'">購入区分</th>
+              <th v-if="currentTab === 'purchase'">品名</th>
+              <th v-if="currentTab === 'purchase'">数量</th>
+              <th v-if="currentTab === 'it_support'">区分</th>
+              <th v-if="currentTab === 'it_support'">件名</th>
+              <th v-if="currentTab === 'it_support'">緊急度</th>
+              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">事由</th>
+              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">注記</th>
+              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">指定承認者</th>
               <th>コメント数</th>
               <th>承認者</th>
               <th class="user-select-none" style="cursor:pointer;" @click="changeSort('status')">
@@ -129,9 +150,15 @@
               <td v-if="currentTab === 'overtime'">{{ formatOvertimePurpose(req.data?.purpose) }}</td>
               <td v-if="currentTab === 'attendance_correction'">{{ formatAttendanceCorrectionDateTime(req) }}</td>
               <td v-if="currentTab === 'attendance_correction'">{{ req.data?.correction_type || '-' }}</td>
-              <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction'">{{ req.data?.reason || '-' }}</td>
-              <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance'">{{ req.data?.note || '-' }}</td>
-              <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance'">{{ req.approver_user_realname || req.approver_user_id || '-' }}</td>
+              <td v-if="currentTab === 'purchase'">{{ req.data?.category || '-' }}</td>
+              <td v-if="currentTab === 'purchase'">{{ req.data?.item_name || '-' }}</td>
+              <td v-if="currentTab === 'purchase'">{{ req.data?.quantity != null && req.data?.quantity !== '' ? req.data.quantity : '-' }}</td>
+              <td v-if="currentTab === 'it_support'">{{ req.data?.category || '-' }}</td>
+              <td v-if="currentTab === 'it_support'">{{ req.data?.subject || '-' }}</td>
+              <td v-if="currentTab === 'it_support'">{{ req.data?.priority || '-' }}</td>
+              <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">{{(req.data?.reason || '-') }}</td>
+              <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">{{ req.data?.note || '-' }}</td>
+              <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">{{ req.approver_user_realname || req.approver_user_id || '-' }}</td>
               <td>{{ req.comment_count }}</td>
               <td>{{ req.approver_realname || '-' }}</td>
               <td>
@@ -187,21 +214,24 @@
 #requestTableCard .table td { vertical-align: middle; padding: 0.5rem; }
 #requestTableCard .table thead th { padding: 0.5rem; }
 #requestTableCard .table tbody tr:hover { outline: 2px solid var(--bs-primary); outline-offset: -2px; }
+.form-tab-dropdown-menu { max-height: 70vh; overflow-y: auto; }
 </style>
 <?php $view->footing(); ?>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="/assets/js/axios.min.js"></script>
+<script src="/assets/js/axios.min.js?v=<?=CACHE_VERSION?>"></script>
 <script type="module">
-import leaveForm from './leave-form.js';
-import outingForm from './outing-form.js';
-import tripForm from './trip-form.js';
-import holidayWorkForm from './holiday-work-form.js';
-import overtimeForm from './overtime-form.js';
-import attendanceCorrectionForm from './attendance-correction-form.js';
-import travelExpenseForm from './travel-expense-form.js';
-import expenseForm from './expense-form.js';
-import tripExpenseForm from './trip-expense-form.js';
-import commutingAllowanceForm from './commuting-allowance-form.js';
+import leaveForm from './leave-form.js?v=<?=CACHE_VERSION?>';
+import outingForm from './outing-form.js?v=<?=CACHE_VERSION?>';
+import tripForm from './trip-form.js?v=<?=CACHE_VERSION?>';
+import holidayWorkForm from './holiday-work-form.js?v=<?=CACHE_VERSION?>';
+import overtimeForm from './overtime-form.js?v=<?=CACHE_VERSION?>';
+import attendanceCorrectionForm from './attendance-correction-form.js?v=<?=CACHE_VERSION?>';
+import travelExpenseForm from './travel-expense-form.js?v=<?=CACHE_VERSION?>';
+import expenseForm from './expense-form.js?v=<?=CACHE_VERSION?>';
+import tripExpenseForm from './trip-expense-form.js?v=<?=CACHE_VERSION?>';
+import commutingAllowanceForm from './commuting-allowance-form.js?v=<?=CACHE_VERSION?>';
+import purchaseForm from './purchase-form.js?v=<?=CACHE_VERSION?>';
+import itSupportForm from './it-support-form.js?v=<?=CACHE_VERSION?>';
 const { createApp, defineAsyncComponent } = Vue;
 createApp({
   data() {
@@ -217,6 +247,8 @@ createApp({
         {type: 'expense', label: '経費精算書', form: 'expense-form'},
         {type: 'trip_expense', label: '出張旅費精算書', form: 'trip-expense-form'},
         {type: 'commuting_allowance', label: '通勤手当申請書', form: 'commuting-allowance-form'},
+        {type: 'purchase', label: '購入申請', form: 'purchase-form'},
+        {type: 'it_support', label: 'ITサポート', form: 'it-support-form'},
       ],
       currentTab: 'leave',
       requests: [],
@@ -237,9 +269,16 @@ createApp({
       currentUserId: (typeof USER_ID !== 'undefined') ? USER_ID : '',
       currentUserRole: (typeof USER_ROLE !== 'undefined') ? USER_ROLE : '',
       actionLoading: false,
+      navUseDropdown: false,
+      navBreakpoint: 1200,
+      _resizeHandler: null,
     }
   },
   computed: {
+    currentTabLabel() {
+      const t = this.tabs.find(x => x.type === this.currentTab);
+      return t ? t.label : '申請種別';
+    },
     pageStart() {
       if (this.total === 0) return 0;
       return (this.page - 1) * this.perPage + 1;
@@ -566,6 +605,10 @@ createApp({
         this.currentFormComponent = tripExpenseForm;
       } else if (current && current.form === 'commuting-allowance-form') {
         this.currentFormComponent = commutingAllowanceForm;
+      } else if (current && current.form === 'purchase-form') {
+        this.currentFormComponent = purchaseForm;
+      } else if (current && current.form === 'it-support-form') {
+        this.currentFormComponent = itSupportForm;
       } else {
         this.currentFormComponent = null;
       }
@@ -575,6 +618,16 @@ createApp({
     closeForm() {
       const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('formModal'));
       modal.hide();
+    },
+    checkNavMode() {
+      this.navUseDropdown = window.innerWidth < this.navBreakpoint;
+    },
+    closeTabDropdown() {
+      const btn = document.getElementById('formTabDropdown');
+      if (btn && typeof bootstrap !== 'undefined') {
+        const inst = bootstrap.Dropdown.getInstance(btn);
+        if (inst) inst.hide();
+      }
     },
     onFormSubmitted() {
       this.closeForm();
@@ -676,11 +729,17 @@ createApp({
     this.tabs.forEach(tab => {
       this.updatePendingCountForTab(tab.type);
     });
+    this.checkNavMode();
+    this._resizeHandler = () => this.checkNavMode();
+    window.addEventListener('resize', this._resizeHandler);
     this.$nextTick(() => {
       this.initFormMonthPicker();
     });
   },
   beforeUnmount() {
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+    }
     if (this.formMonthPicker) {
       this.formMonthPicker.destroy();
       this.formMonthPicker = null;
@@ -697,6 +756,8 @@ createApp({
     'expense-form': expenseForm,
     'trip-expense-form': tripExpenseForm,
     'commuting-allowance-form': commutingAllowanceForm,
+    'purchase-form': purchaseForm,
+    'it-support-form': itSupportForm,
   }
 }).mount('#app');
 </script> 

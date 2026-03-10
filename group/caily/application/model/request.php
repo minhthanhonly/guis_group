@@ -93,6 +93,25 @@ class Request extends ApplicationModel {
             if (empty(trim($data['attachment'] ?? ''))) $errors[] = '出張旅費精算書のファイルをアップロードしてください。';
         } elseif ($type == 'commuting_allowance') {
             if (empty(trim($data['attachment'] ?? ''))) $errors[] = '通勤手当申請書のファイルをアップロードしてください。';
+        } elseif ($type == 'purchase') {
+            $allowed = ['備品', '事務用品', 'ソフトウェア', 'その他'];
+            if (empty(trim($data['category'] ?? '')) || !in_array(trim($data['category']), $allowed, true)) {
+                $errors[] = '購入区分を選択してください。';
+            }
+            if (empty(trim($data['item_name'] ?? ''))) $errors[] = '品名を入力してください。';
+            $q = isset($data['quantity']) ? $data['quantity'] : '';
+            if ($q === '' || !preg_match('/^\d+$/', (string) $q) || (int) $q < 1) {
+                $errors[] = '数量は1以上の整数を入力してください。';
+            }
+            if (empty(trim($data['reason'] ?? ''))) $errors[] = '事由・用途を入力してください。';
+        } elseif ($type == 'it_support') {
+            $allowed = ['ハードウェア', 'ソフトウェア', 'ネットワーク', 'アカウント/権限', 'その他'];
+            $cat = trim($data['category'] ?? '');
+            if ($cat === '' || !in_array($cat, $allowed, true)) {
+                $errors[] = '区分を選択してください。';
+            }
+            if (empty(trim($data['subject'] ?? ''))) $errors[] = '件名を入力してください。';
+            if (empty(trim($data['description'] ?? ''))) $errors[] = '内容・詳細を入力してください。';
         }
         return $errors;
     }
@@ -850,7 +869,7 @@ class Request extends ApplicationModel {
             ];
             $notiService->create($payload);
             
-            $this->sendRequestCreatedEmail($result, $type, $applicantUserId, $approverUserId);
+            $this->sendRequestCreatedEmail($requestId, $type, $applicantUserId, $approverUserId, $message, $applicantName);
         } catch (Exception $e) {
             error_log('Failed to send request created notification: ' . $e->getMessage());
         }
@@ -979,7 +998,7 @@ class Request extends ApplicationModel {
             }
 
             // Email notification to applicant about status change
-            $this->sendRequestStatusEmail($requestId, $requestType, $status, $userId);
+            $this->sendRequestStatusEmail($requestId, $requestType, $status, $userId, $applicantName);
         } catch (Exception $e) {
             error_log('Failed to send request status notification: ' . $e->getMessage());
         }
@@ -1020,10 +1039,12 @@ class Request extends ApplicationModel {
                     }));
                 }
                 if (empty($targetUserIds)) return;
+                $commentUserName = $this->getRealname($commentUserId);
+                $message = '[' . $commentUserName . '] が[' . $typeLabel . ']の申請にコメントしました';
                 $payload_admin = [
                     'event' => 'form_comment',
                     'title' => '新しいコメント（' . $typeLabel . '）',
-                    'message' => $typeLabel . 'に新しいコメントが追加されました',
+                    'message' => $message,
                     'data' => [
                         'request_id' => $requestId,
                         'request_type' => $requestType,
@@ -1037,7 +1058,7 @@ class Request extends ApplicationModel {
                 $notiService->create($payload_admin);
             }
 
-            $this->sendRequestCommentEmail($requestId, $requestType, $userId, $commentUserId);
+            $this->sendRequestCommentEmail($requestId, $requestType, $userId, $commentUserId, $message);
         } catch (Exception $e) {
             error_log('Failed to send request comment notification: ' . $e->getMessage());
         }
@@ -1049,7 +1070,7 @@ class Request extends ApplicationModel {
      * - Subject: [người thao tác] が[申請者]の[種別]にコメントしました
      * - Body: hiển thị 申請者, nội dung comment (nếu lấy được) và link chi tiết.
      */
-    private function sendRequestCommentEmail($requestId, $requestType, $userId, $commentUserId) {
+    private function sendRequestCommentEmail($requestId, $requestType, $userId, $commentUserId, $message) {
         // Lấy thông tin đơn để biết người đăng ký và comment cuối
         $row = $this->fetchOne("SELECT user_id, comments FROM {$this->table} WHERE id = " . intval($requestId));
         if (!$row) {
@@ -1093,7 +1114,14 @@ class Request extends ApplicationModel {
         $commentUserName = $this->getRealname($commentUserId);
         $url = $this->getBaseUrl() . '/form/detail.php?id=' . intval($requestId);
 
-        $subject = '[' . $commentUserName . '] が[' . $applicantName . ']の[' . $typeLabel . ']にコメントしました';
+        $subject = '';
+
+        if($commentUserName !== $applicantName) {
+            $subject = '[' . $commentUserName . '] が[' . $applicantName . ']の[' . $typeLabel . ']にコメントしました';
+        }
+        else{
+            $subject = '[' . $commentUserName . '] が[' . $typeLabel . ']の申請にコメントしました';
+        }
 
         // Lấy nội dung comment mới nhất của commentUserId (nếu có)
         $commentText = '';
@@ -1111,7 +1139,6 @@ class Request extends ApplicationModel {
         }
 
         $body = $subject . "。\n\n"
-              . "申請者: " . $applicantName . "\n"
               . "コメント者: " . $commentUserName . "\n\n";
         if ($commentText !== '') {
             $body .= "【コメント内容】\n" . $commentText . "\n\n";
@@ -1308,12 +1335,32 @@ class Request extends ApplicationModel {
      */
     private function formatRequestDetailForEmail($requestId) {
         $row = $this->fetchOne("SELECT type, data, user_id FROM {$this->table} WHERE id = " . intval($requestId));
-        if (!$row || empty($row['data'])) {
+        if (!$row || !isset($row['data'])) {
             return '';
         }
-        $data = is_string($row['data']) ? json_decode($row['data'], true) : $row['data'];
+        $raw = $row['data'];
+        // Chuẩn hóa data: ưu tiên JSON, fallback serialize, cuối cùng là plain text
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $data = $decoded;
+            } else {
+                $unser = @unserialize($raw);
+                if (is_array($unser)) {
+                    $data = $unser;
+                } else {
+                    $data = $raw;
+                }
+            }
+        } else {
+            $data = $raw;
+        }
         if (!is_array($data)) {
-            return '';
+            $text = trim((string) $data);
+            if ($text === '') {
+                return '';
+            }
+            return "【申請内容】\n" . $text;
         }
         $type = $row['type'];
         $lines = [];
@@ -1369,6 +1416,27 @@ class Request extends ApplicationModel {
         } elseif (in_array($type, ['travel_expense', 'expense', 'trip_expense', 'commuting_allowance'], true)) {
             if (!empty($data['attachment_original'])) $lines[] = $fmt('添付ファイル', $data['attachment_original']);
             elseif (!empty($data['attachment'])) $lines[] = $fmt('添付ファイル', $data['attachment']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($type === 'purchase') {
+            if (!empty($data['category'])) $lines[] = $fmt('購入区分', $data['category']);
+            if (!empty($data['item_name'])) $lines[] = $fmt('品名', $data['item_name']);
+            if (!empty($data['product_link'])) $lines[] = $fmt('商品リンク', $data['product_link']);
+            if (isset($data['quantity']) && $data['quantity'] !== '') $lines[] = $fmt('数量', $data['quantity']);
+            if (isset($data['estimated_price']) && $data['estimated_price'] !== '') $lines[] = $fmt('見積金額（円）', $data['estimated_price']);
+            if (!empty($data['item_list'])) $lines[] = $fmt('購入品目詳細', $data['item_list']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由・用途', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($type === 'it_support') {
+            if (!empty($data['category'])) $lines[] = $fmt('区分', $data['category']);
+            if (!empty($data['subject'])) $lines[] = $fmt('件名', $data['subject']);
+            if (!empty($data['description'])) $lines[] = $fmt('内容・詳細', $data['description']);
+            if (!empty($data['priority'])) $lines[] = $fmt('緊急度', $data['priority']);
+            if (!empty($data['attachments']) && is_array($data['attachments'])) {
+                $names = array_map(function ($a) {
+                    return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+                }, $data['attachments']);
+                $lines[] = $fmt('添付資料', implode('、', array_filter($names)));
+            }
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
         } else {
             foreach ($data as $k => $v) {
@@ -1444,6 +1512,27 @@ class Request extends ApplicationModel {
         } elseif (in_array($requestType, ['travel_expense', 'expense', 'trip_expense', 'commuting_allowance'], true)) {
             if (!empty($data['attachment_original'])) $lines[] = $fmt('添付ファイル', $data['attachment_original']);
             elseif (!empty($data['attachment'])) $lines[] = $fmt('添付ファイル', $data['attachment']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($requestType === 'purchase') {
+            if (!empty($data['category'])) $lines[] = $fmt('購入区分', $data['category']);
+            if (!empty($data['item_name'])) $lines[] = $fmt('品名', $data['item_name']);
+            if (!empty($data['product_link'])) $lines[] = $fmt('商品リンク', $data['product_link']);
+            if (isset($data['quantity']) && $data['quantity'] !== '') $lines[] = $fmt('数量', $data['quantity']);
+            if (isset($data['estimated_price']) && $data['estimated_price'] !== '') $lines[] = $fmt('見積金額（円）', $data['estimated_price']);
+            if (!empty($data['item_list'])) $lines[] = $fmt('購入品目詳細', $data['item_list']);
+            if (!empty($data['reason'])) $lines[] = $fmt('事由・用途', $data['reason']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($requestType === 'it_support') {
+            if (!empty($data['category'])) $lines[] = $fmt('区分', $data['category']);
+            if (!empty($data['subject'])) $lines[] = $fmt('件名', $data['subject']);
+            if (!empty($data['description'])) $lines[] = $fmt('内容・詳細', $data['description']);
+            if (!empty($data['priority'])) $lines[] = $fmt('緊急度', $data['priority']);
+            if (!empty($data['attachments']) && is_array($data['attachments'])) {
+                $names = array_map(function ($a) {
+                    return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+                }, $data['attachments']);
+                $lines[] = $fmt('添付資料', implode('、', array_filter($names)));
+            }
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
         } else {
             foreach ($data as $k => $v) {
@@ -1535,6 +1624,32 @@ class Request extends ApplicationModel {
         } elseif (in_array($requestType, ['travel_expense', 'expense', 'trip_expense', 'commuting_allowance'], true)) {
             $addDiff('添付ファイル', 'attachment_original');
             $addDiff('備考', 'note');
+        } elseif ($requestType === 'purchase') {
+            $addDiff('購入区分', 'category');
+            $addDiff('品名', 'item_name');
+            $addDiff('商品リンク', 'product_link');
+            $addDiff('数量', 'quantity');
+            $addDiff('見積金額（円）', 'estimated_price');
+            $addDiff('購入品目詳細', 'item_list');
+            $addDiff('事由・用途', 'reason');
+            $addDiff('注記', 'note');
+        } elseif ($requestType === 'it_support') {
+            $addDiff('区分', 'category');
+            $addDiff('件名', 'subject');
+            $addDiff('内容・詳細', 'description');
+            $addDiff('緊急度', 'priority');
+            $oldAtt = isset($old['attachments']) && is_array($old['attachments']) ? $old['attachments'] : [];
+            $newAtt = isset($new['attachments']) && is_array($new['attachments']) ? $new['attachments'] : [];
+            $oldNames = array_map(function ($a) {
+                return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+            }, $oldAtt);
+            $newNames = array_map(function ($a) {
+                return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+            }, $newAtt);
+            if (implode('、', $oldNames) !== implode('、', $newNames)) {
+                $lines[] = '添付資料: ' . (count($oldNames) ? implode('、', $oldNames) : '（なし）') . ' → ' . (count($newNames) ? implode('、', $newNames) : '（なし）');
+            }
+            $addDiff('注記', 'note');
         } else {
             foreach ($new as $k => $v) {
                 if (is_array($v)) continue;
@@ -1549,16 +1664,11 @@ class Request extends ApplicationModel {
         return "【変更内容】\n" . implode("\n", $lines);
     }
 
-    private function sendRequestCreatedEmail($requestId, $requestType, $applicantUserId, $approverUserId) {
+    private function sendRequestCreatedEmail($requestId, $requestType, $applicantUserId, $approverUserId, $subject, $applicantName) {
         if (empty($approverUserId)) {
             return;
         }
-        $typeLabel = $this->getRequestTypeLabel($requestType);
-        $applicantName = $this->getRealname($applicantUserId);
         $url = $this->getBaseUrl() . '/form/detail.php?id=' . intval($requestId);
-        // Tiêu đề: [người thao tác] [申請者][種別]...
-        $operator = isset($_SESSION['realname']) ? $_SESSION['realname'] : '';
-        $subject = '[' . $applicantName . ']が[' . $typeLabel . ']の申請を作成しました';
         $footText = "ご承認のほど、よろしくお願いいたします。\n";
         $detail = $this->formatRequestDetailForEmail($requestId);
         $body = $subject . "。\n\n"
@@ -1569,12 +1679,11 @@ class Request extends ApplicationModel {
         $this->sendEmailToUser($approverUserId, $subject, $body);
     }
 
-    private function sendRequestStatusEmail($requestId, $requestType, $status, $userId) {
+    private function sendRequestStatusEmail($requestId, $requestType, $status, $userId, $applicantName) {
         if (empty($userId)) {
             return;
         }
         $typeLabel = $this->getRequestTypeLabel($requestType);
-        $applicantName = $this->getRealname($userId);
         $url = $this->getBaseUrl() . '/form/detail.php?id=' . intval($requestId);
         // Tiêu đề: [người thao tác] [申請者][種別]...
         $operator = isset($_SESSION['realname']) ? $_SESSION['realname'] : '';
@@ -1751,6 +1860,10 @@ class Request extends ApplicationModel {
                 return '出張旅費精算書';
             case 'commuting_allowance':
                 return '通勤手当申請書';
+            case 'purchase':
+                return '購入申請';
+            case 'it_support':
+                return 'ITサポート';
             default:
                 return '申請';
         }

@@ -255,6 +255,20 @@
             @submitted="onEditSubmitted"
             @close="closeEditModal"
           ></commuting-allowance-form>
+          <purchase-form
+            v-else-if="request.type === 'purchase' && editForm && Object.keys(editForm).length > 0"
+            :key="'edit-purchase-' + editFormKey + '-' + JSON.stringify(editForm)"
+            v-bind="{ defaultData: editForm, mode: 'edit' }"
+            @submitted="onEditSubmitted"
+            @close="closeEditModal"
+          ></purchase-form>
+          <it-support-form
+            v-else-if="request.type === 'it_support' && editForm && Object.keys(editForm).length > 0"
+            :key="'edit-it-support-' + editFormKey + '-' + JSON.stringify(editForm)"
+            v-bind="{ defaultData: editForm, mode: 'edit' }"
+            @submitted="onEditSubmitted"
+            @close="closeEditModal"
+          ></it-support-form>
         </div>
       </div>
     </div>
@@ -263,28 +277,32 @@
 <?php $view->footing(); ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="/assets/js/axios.min.js"></script>
+<script src="/assets/js/axios.min.js?v=<?=CACHE_VERSION?>"></script>
 <script type="module">
-import leaveDetail from './leave-detail.js';
-import leaveForm from './leave-form.js';
-import outingDetail from './outing-detail.js';
-import outingForm from './outing-form.js';
-import tripDetail from './trip-detail.js';
-import tripForm from './trip-form.js';
-import holidayWorkDetail from './holiday-work-detail.js';
-import holidayWorkForm from './holiday-work-form.js';
-import overtimeDetail from './overtime-detail.js';
-import overtimeForm from './overtime-form.js';
-import attendanceCorrectionDetail from './attendance-correction-detail.js';
-import attendanceCorrectionForm from './attendance-correction-form.js';
-import travelExpenseDetail from './travel-expense-detail.js';
-import travelExpenseForm from './travel-expense-form.js';
-import expenseDetail from './expense-detail.js';
-import expenseForm from './expense-form.js';
-import tripExpenseDetail from './trip-expense-detail.js';
-import tripExpenseForm from './trip-expense-form.js';
-import commutingAllowanceDetail from './commuting-allowance-detail.js';
-import commutingAllowanceForm from './commuting-allowance-form.js';
+import leaveDetail from './leave-detail.js?v=<?=CACHE_VERSION?>';
+import leaveForm from './leave-form.js?v=<?=CACHE_VERSION?>';
+import outingDetail from './outing-detail.js?v=<?=CACHE_VERSION?>';
+import outingForm from './outing-form.js?v=<?=CACHE_VERSION?>';
+import tripDetail from './trip-detail.js?v=<?=CACHE_VERSION?>';
+import tripForm from './trip-form.js?v=<?=CACHE_VERSION?>';
+import holidayWorkDetail from './holiday-work-detail.js?v=<?=CACHE_VERSION?>';
+import holidayWorkForm from './holiday-work-form.js?v=<?=CACHE_VERSION?>';
+import overtimeDetail from './overtime-detail.js?v=<?=CACHE_VERSION?>';
+import overtimeForm from './overtime-form.js?v=<?=CACHE_VERSION?>';
+import attendanceCorrectionDetail from './attendance-correction-detail.js?v=<?=CACHE_VERSION?>';
+import attendanceCorrectionForm from './attendance-correction-form.js?v=<?=CACHE_VERSION?>';
+import travelExpenseDetail from './travel-expense-detail.js?v=<?=CACHE_VERSION?>';
+import travelExpenseForm from './travel-expense-form.js?v=<?=CACHE_VERSION?>';
+import expenseDetail from './expense-detail.js?v=<?=CACHE_VERSION?>';
+import expenseForm from './expense-form.js?v=<?=CACHE_VERSION?>';
+import tripExpenseDetail from './trip-expense-detail.js?v=<?=CACHE_VERSION?>';
+import tripExpenseForm from './trip-expense-form.js?v=<?=CACHE_VERSION?>';
+import commutingAllowanceDetail from './commuting-allowance-detail.js?v=<?=CACHE_VERSION?>';
+import commutingAllowanceForm from './commuting-allowance-form.js?v=<?=CACHE_VERSION?>';
+import purchaseDetail from './purchase-detail.js?v=<?=CACHE_VERSION?>';
+import purchaseForm from './purchase-form.js?v=<?=CACHE_VERSION?>';
+import itSupportDetail from './it-support-detail.js?v=<?=CACHE_VERSION?>';
+import itSupportForm from './it-support-form.js?v=<?=CACHE_VERSION?>';
 const { createApp } = Vue;
 const CURRENT_USER_ID = USER_ID || '';
 const CURRENT_USER_ROLE = USER_ROLE || '';
@@ -354,6 +372,8 @@ createApp({
       if (this.request.type === 'expense') return 'expense-detail';
       if (this.request.type === 'trip_expense') return 'trip-expense-detail';
       if (this.request.type === 'commuting_allowance') return 'commuting-allowance-detail';
+      if (this.request.type === 'purchase') return 'purchase-detail';
+      if (this.request.type === 'it_support') return 'it-support-detail';
       return 'default-detail';
     },
     sortedComments() {
@@ -542,6 +562,8 @@ createApp({
         case 'expense': return '経費精算書';
         case 'trip_expense': return '出張旅費精算書';
         case 'commuting_allowance': return '通勤手当申請書';
+        case 'purchase': return '購入申請';
+        case 'it_support': return 'ITサポート';
         default: return type;
       }
     },
@@ -617,6 +639,10 @@ createApp({
     'trip-expense-form': tripExpenseForm,
     'commuting-allowance-detail': commutingAllowanceDetail,
     'commuting-allowance-form': commutingAllowanceForm,
+    'purchase-detail': purchaseDetail,
+    'purchase-form': purchaseForm,
+    'it-support-detail': itSupportDetail,
+    'it-support-form': itSupportForm,
     'default-detail': {props:['data'], template:'<div>内容: {{ data }}</div>'}
   }
 }).mount('#app');

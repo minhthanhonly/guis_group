@@ -112,6 +112,9 @@
               if ($is_admin || $is_approver) {
                 $row = $reqModel->fetchOne("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "requests WHERE status = 'pending'");
                 $form_pending_badge = $row ? (int)$row['cnt'] : 0;
+              } else{
+                $row = $reqModel->fetchOne("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "requests WHERE status = 'pending' AND user_id = '" . $reqModel->quote($_SESSION['userid']) . "'");
+                $form_pending_badge = $row ? (int)$row['cnt'] : 0;
               }
               $reqModel->close();
             }
