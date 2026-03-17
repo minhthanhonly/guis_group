@@ -183,6 +183,22 @@ class Member extends ApplicationModel {
 			if($this->post['firstname'] != '') {
 				$this->post['realname'] .= ' '.$this->post['firstname'];
 			}
+			// Handle branch_id: convert empty string to NULL
+			if (isset($this->post['branch_id']) && $this->post['branch_id'] === '') {
+				$this->post['branch_id'] = NULL;
+			}
+			// Handle show_project checkbox: if not set in POST, set to 0
+			if (!isset($_POST['show_project']) || $_POST['show_project'] != '1') {
+				$this->post['show_project'] = 0;
+			} else {
+				$this->post['show_project'] = 1;
+			}
+			// Handle can_approve_request checkbox: if not set in POST, set to 0
+			if (!isset($_POST['can_approve_request']) || $_POST['can_approve_request'] != '1') {
+				$this->post['can_approve_request'] = 0;
+			} else {
+				$this->post['can_approve_request'] = 1;
+			}
 			$this->insertPost();
 			if($_POST['department_id']){
 				$this->updateDepartment($_POST['userid'], $_POST['department_id']);

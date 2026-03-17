@@ -53,33 +53,59 @@ var projectTable;
     const FILTER_STORAGE_KEY = 'projectListFilters';
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment';
     const COLUMN_VISIBILITY_KEY = 'projectListColumnVisibility';
+
+    // Cột dùng cho note 表示列 (giống project-detail.js, bỏ is_favorite, ID, CAILYメモ, GUISメモ)
+    const NOTE_DISPLAY_COLUMNS = [
+        { key: 'status', label: '案件状況' },
+        { key: 'progress', label: '進捗率' },
+        { key: 'tantou', label: '担当' },
+        { key: 'manager', label: '管理' },
+        { key: 'teams', label: 'チーム' },
+        { key: 'members', label: 'メンバー' },
+        { key: 'parent_construction_number', label: '工事番号' },
+        { key: 'parent_branch_name', label: '支店名' },
+        { key: 'name', label: 'お施主様名' },
+        { key: 'parent_scale', label: '規模' },
+        { key: 'parent_type1', label: '種類1' },
+        { key: 'parent_type2', label: '種類2' },
+        { key: 'start_date', label: '開始日' },
+        { key: 'caily_nouki', label: 'CAILY納期' },
+        { key: 'guis_nouki', label: 'GUIS納期' },
+        { key: 'end_date', label: '終了日' },
+        { key: 'project_order_type', label: '受注形態' },
+        { key: 'priority', label: '優先度' },
+        { key: 'amount', label: '総額' },
+        { key: 'customer_info', label: '顧客情報' },
+        { key: 'parent_guis_receiver', label: 'GUIS 受付者' }
+    ];
     
     // Column definitions with mapping to DataTable column indices
     const COLUMN_DEFINITIONS = [
         { key: 'is_favorite', label: 'お気に入り', index: 0, defaultVisible: true },
         { key: 'id', label: 'ID', index: 1, defaultVisible: true },
-        { key: 'confirmation_notes', label: '確認必要メモ', index: 2, defaultVisible: false },
-        { key: 'status', label: '案件状況', index: 3, defaultVisible: true },
-        { key: 'progress', label: '進捗率', index: 4, defaultVisible: true },
-        { key: 'tantou', label: '担当', index: 5, defaultVisible: false },
-        { key: 'manager', label: '管理', index: 6, defaultVisible: false },
-        { key: 'teams', label: 'チーム', index: 7, defaultVisible: true },
-        { key: 'members', label: 'メンバー', index: 8, defaultVisible: false },
-        { key: 'parent_construction_number', label: '工事番号', index: 9, defaultVisible: true },
-        { key: 'parent_branch_name', label: '支店名', index: 10, defaultVisible: true },
-        { key: 'name', label: 'お施主様名', index: 11, defaultVisible: true },
-        { key: 'parent_scale', label: '規模', index: 12, defaultVisible: false },
-        { key: 'parent_type1', label: '種類1', index: 13, defaultVisible: false },
-        { key: 'parent_type2', label: '種類2', index: 14, defaultVisible: false },
-        { key: 'start_date', label: '開始日', index: 15, defaultVisible: true },
-        { key: 'caily_nouki', label: 'CAILY納期', index: 16, defaultVisible: true },
-        { key: 'guis_nouki', label: 'GUIS納期', index: 17, defaultVisible: false },
-        { key: 'end_date', label: '終了日', index: 18, defaultVisible: true },
-        { key: 'project_order_type', label: '受注形態', index: 19, defaultVisible: true },
-        { key: 'priority', label: '優先度', index: 20, defaultVisible: true },
-        { key: 'amount', label: '総額', index: 21, defaultVisible: false },
-        { key: 'customer_info', label: '顧客情報', index: 22, defaultVisible: true },
-        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 23, defaultVisible: false }
+        { key: 'confirmation_notes_caily', label: 'CAILYメモ', index: 2, defaultVisible: false },
+        { key: 'confirmation_notes_guis', label: 'GUISメモ', index: 3, defaultVisible: false },
+        { key: 'status', label: '案件状況', index: 4, defaultVisible: true },
+        { key: 'progress', label: '進捗率', index: 5, defaultVisible: true },
+        { key: 'tantou', label: '担当', index: 6, defaultVisible: false },
+        { key: 'manager', label: '管理', index: 7, defaultVisible: false },
+        { key: 'teams', label: 'チーム', index: 8, defaultVisible: true },
+        { key: 'members', label: 'メンバー', index: 9, defaultVisible: false },
+        { key: 'parent_construction_number', label: '工事番号', index: 10, defaultVisible: true },
+        { key: 'parent_branch_name', label: '支店名', index: 11, defaultVisible: true },
+        { key: 'name', label: 'お施主様名', index: 12, defaultVisible: true },
+        { key: 'parent_scale', label: '規模', index: 13, defaultVisible: false },
+        { key: 'parent_type1', label: '種類1', index: 14, defaultVisible: false },
+        { key: 'parent_type2', label: '種類2', index: 15, defaultVisible: false },
+        { key: 'start_date', label: '開始日', index: 16, defaultVisible: true },
+        { key: 'caily_nouki', label: 'CAILY納期', index: 17, defaultVisible: true },
+        { key: 'guis_nouki', label: 'GUIS納期', index: 18, defaultVisible: false },
+        { key: 'end_date', label: '終了日', index: 19, defaultVisible: true },
+        { key: 'project_order_type', label: '受注形態', index: 20, defaultVisible: true },
+        { key: 'priority', label: '優先度', index: 21, defaultVisible: true },
+        { key: 'amount', label: '総額', index: 22, defaultVisible: false },
+        { key: 'customer_info', label: '顧客情報', index: 23, defaultVisible: true },
+        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 24, defaultVisible: false }
     ];
     // Số cột base trước khi chèn các cột custom (bắt đầu từ CAILY納期)
     const BASE_CUSTOM_START_INDEX = COLUMN_DEFINITIONS.find(col => col.key === 'caily_nouki').index; // 16
@@ -88,6 +114,14 @@ var projectTable;
         if (s == null || s === '') return '';
         const t = String(s);
         return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /** Format date-time as "M月D日<br>H:mm" for display (date and time on separate lines) */
+    function formatDateTimeWithLineBreak(v) {
+        if (typeof moment === 'undefined' || !v) return '';
+        var m = moment(v);
+        if (!m.isValid()) return '';
+        return m.format('M月D日') + '<br>' + m.format('H:mm');
     }
 
     function decodeHtmlForNote(s) {
@@ -100,6 +134,16 @@ var projectTable;
             .replace(/&quot;/g, '"')
             .replace(/&amp;/g, '&')
             .replace(/&nbsp;/g, ' ');
+    }
+    /** Giải mã HTML (giống cột CAILYメモ), strip thẻ, rồi cắt còn maxLen ký tự cho snippet note. */
+    function noteSnippetText(content, maxLen) {
+        if (content == null) return { short: '', full: '' };
+        var raw = String(content);
+        var decoded = decodeHtmlForNote(raw);
+        decoded = (decoded || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
+        var full = decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+        var short = full.length <= (maxLen || 40) ? full : full.substring(0, maxLen || 40) + '…';
+        return { short: short, full: full };
     }
 
     function saveColumnVisibilityToLocalStorage(visibility) {
@@ -197,8 +241,7 @@ var projectTable;
             }
             if (typeof moment !== 'undefined' && moment(v).isValid()) {
                 var m = moment(v);
-                var dateFormatStr = 'M月D日 H:mm';
-                var displayStr = m.format(dateFormatStr);
+                var displayStr = formatDateTimeWithLineBreak(v);
                 var now = moment();
                 var isToday = m.isSame(now, 'day');
                 var isOverdue = m.isBefore(now);
@@ -229,11 +272,11 @@ var projectTable;
                 
                 if (badgeHtml) {
                     return '<div class="d-flex flex-column">' +
-                        '<span class="small text-nowrap"' + attrs + '>' + displayStr + '</span>' +
+                        '<span class="small"' + attrs + '>' + displayStr + '</span>' +
                         badgeHtml +
                     '</div>';
                 }
-                return '<span class="small text-nowrap"' + attrs + '>' + displayStr + '</span>';
+                return '<span class="small"' + attrs + '>' + displayStr + '</span>';
             }
             if (typeof window.formatDateTime === 'function') return '<span class="small text-nowrap"' + attrs + '>' + window.formatDateTime(v) + '</span>';
             return '<span class="small text-nowrap"' + attrs + '>' + v + '</span>';
@@ -249,9 +292,9 @@ var projectTable;
             }
             return '<span class="badge ' + badgeClass + ' small">' + (typeof translateText === 'function' ? translateText(escapeHtmlForNote(v)) : escapeHtmlForNote(v)) + '</span>';
         }
-        if (type === 'textarea') {
-            var short = v.length > 80 ? v.substring(0, 80) + '...' : v;
-            return '<span class="small" style="white-space: pre-wrap;">' + escapeHtmlForNote(short) + '</span>';
+        if (type === 'textarea' || type === 'text') {
+            var short = v.length > 40 ? v.substring(0, 40) + '...' : v;
+            return '<span data-bs-toggle="tooltip" data-bs-title="' + escapeHtmlForNote(v) + '" class="small" style="white-space: pre-wrap; width: 100px; display: block;">' + escapeHtmlForNote(short) + '</span>';
         }
         // Text field: nếu giống ngày (yyyy/m/d, m/d, yyyy/mm/dd hoặc có thời gian) thì format
         if (typeof moment !== 'undefined') {
@@ -764,7 +807,7 @@ var projectTable;
                     title: fieldLabel,
                     orderable: false,
                     visible: true,
-                    width: '100px'
+                    width: '80px'
                 });
             });
 
@@ -927,7 +970,7 @@ var projectTable;
                     width: '40px'
                 },
                 { 
-                    data: 'confirmation_notes',
+                    data: 'confirmation_notes_caily',
                     width: '250px',
                     className: 'confirmation-notes-column',
                     render: function(data, type, row) {
@@ -938,6 +981,7 @@ var projectTable;
                         return '';
                     },
                     createdCell: function(td, cellData, rowData, row, col) {
+                        $(td).attr('data-notes-type', 'caily');
                         // Set HTML trực tiếp để đảm bảo HTML được render đúng cách
                         if (!cellData || cellData === '') {
                             $(td).html(`<div class="empty-notes-cell" data-project-id="${rowData.id}">
@@ -948,7 +992,6 @@ var projectTable;
                                     </div>`);
                             return;
                         }
-                        // Hiển thị toàn bộ nội dung (có thể nhiều ghi chú), giữ nguyên xuống dòng
                         // Định dạng data: "noteId_:_content_|_noteId_:_content_|_..."
                         const notes = cellData.split('_|_').filter(note => note.trim() !== '');
                         if (notes.length === 0) {
@@ -963,29 +1006,20 @@ var projectTable;
                         const html = notes.map(note => {
                             const raw = note.trim();
                             const delim = '_:_';
-                            const delimiterIndex = raw.indexOf(delim);
-                            let id = null;
-                            let text = raw;
-                            if (delimiterIndex !== -1) {
-                                id = raw.substring(0, delimiterIndex);
-                                text = raw.substring(delimiterIndex + delim.length);
-                            }
-                            // Decode HTML entities nếu text bị escape (ví dụ &lt; thành <)
-                            // Nếu text đã là HTML thuần thì không cần decode
+                            let arr = raw.split(delim);
+                            let id = arr[0];
+                            let text = arr[1];
+                            let isImportant = arr[2];
                             let decodedText = text;
                             if (typeof decodeHtmlEntities !== 'undefined') {
                                 decodedText = decodeHtmlEntities(text);
                             } else if (text.indexOf('&lt;') !== -1 || text.indexOf('&gt;') !== -1 || text.indexOf('&amp;') !== -1) {
-                                // Nếu có HTML entities thì decode
                                 decodedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
                             }
-                            // Chuẩn hóa &nbsp; và ký tự non-breaking (U+00A0) thành space thường để xuống dòng đúng chỗ (tránh ngắt giữa từ tiếng Việt)
                             decodedText = (decodedText || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
                             const isEditing = window.app && window.app.currentEditingNoteId === id;
-                            // Render HTML từ Quill editor (đã được sanitize khi lưu vào DB)
-                            // Thêm class ql-editor để styling đúng với Quill
                             return `
-                                <div class="confirmation-note-item mb-1 ${isEditing ? 'editing-note' : ''}" ${id ? `data-note-id="${id}"` : ''}>
+                                <div class="confirmation-note-item mb-1 ${isEditing ? 'editing-note' : ''} ${isImportant == 1 ? 'important-note' : ''}" ${id ? `data-note-id="${id}"` : ''}>
                                     <div class="note-text small ql-editor">${decodedText || '-'}</div>
                                     <span class="note-actions d-none ms-1">
                                         <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
@@ -1000,7 +1034,75 @@ var projectTable;
                         }).join('');
                         $(td).html(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
                     },
-                    title: '<span data-i18n="確認必要メモ">確認必要メモ</span>',
+                    title: '<span>CAILYメモ</span>',
+                    orderable: false
+                },
+                { 
+                    data: 'confirmation_notes_guis',
+                    width: '250px',
+                    className: 'confirmation-notes-column',
+                    render: function(data, type, row) {
+                        if (type !== 'display') {
+                            return data || '';
+                        }
+                        // Return empty string, HTML will be set in createdCell
+                        return '';
+                    },
+                    createdCell: function(td, cellData, rowData, row, col) {
+                        $(td).attr('data-notes-type', 'guis');
+                        // Set HTML trực tiếp để đảm bảo HTML được render đúng cách
+                        if (!cellData || cellData === '') {
+                            $(td).html(`<div class="empty-notes-cell" data-project-id="${rowData.id}">
+                                        <span class="text-muted empty-notes-text">-</span>
+                                        <span class="add-note-icon d-none" title="メモを追加" style="cursor: pointer;">
+                                            <i class="fa fa-pencil-alt text-primary"></i>
+                                        </span>
+                                    </div>`);
+                            return;
+                        }
+                        // Định dạng data: "noteId_:_content_|_noteId_:_content_|_..."
+                        const notes = cellData.split('_|_').filter(note => note.trim() !== '');
+                        if (notes.length === 0) {
+                            $(td).html(`<div class="empty-notes-cell" data-project-id="${rowData.id}">
+                                        <span class="text-muted empty-notes-text">-</span>
+                                        <span class="add-note-icon d-none" title="メモを追加" style="cursor: pointer;">
+                                            <i class="fa fa-pencil-alt text-primary"></i>
+                                        </span>
+                                    </div>`);
+                            return;
+                        }
+                        const html = notes.map(note => {
+                            const raw = note.trim();
+                            const delim = '_:_';
+                            let arr = raw.split(delim);
+                            let id = arr[0];
+                            let text = arr[1];
+                            let isImportant = arr[2];
+                            let decodedText = text;
+                            if (typeof decodeHtmlEntities !== 'undefined') {
+                                decodedText = decodeHtmlEntities(text);
+                            } else if (text.indexOf('&lt;') !== -1 || text.indexOf('&gt;') !== -1 || text.indexOf('&amp;') !== -1) {
+                                decodedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+                            }
+                            decodedText = (decodedText || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
+                            const isEditing = window.app && window.app.currentEditingNoteId === id;
+                            return `
+                                <div class="confirmation-note-item mb-1 ${isEditing ? 'editing-note' : ''} ${isImportant == 1 ? 'important-note' : ''}" ${id ? `data-note-id="${id}"` : ''}>
+                                    <div class="note-text small ql-editor">${decodedText || '-'}</div>
+                                    <span class="note-actions d-none ms-1">
+                                        <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
+                                            <i class="fa fa-pencil-alt"></i>
+                                        </span>
+                                        <span class="note-delete-icon text-danger" title="メモを削除" style="cursor: pointer;">
+                                            <i class="fa fa-trash"></i>
+                                        </span>
+                                    </span>
+                                </div>
+                            `;
+                        }).join('');
+                        $(td).html(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
+                    },
+                    title: '<span>GUISメモ</span>',
                     orderable: false
                 },
                 {
@@ -1021,9 +1123,10 @@ var projectTable;
                 },
                 {
                     data: 'progress',
+                    width: '50px',
                     render: function(data) {
                         const color = data === 100 ? 'success' : 'primary';
-                        return `<div class="progress" style="width: 100px;">
+                        return `<div class="progress" style="width: 50px;">
                                     <div class="progress-bar bg-${color}" role="progressbar" 
                                             style="width: ${data}%" aria-valuenow="${data}" 
                                             aria-valuemin="0" aria-valuemax="100">
@@ -1093,6 +1196,7 @@ var projectTable;
                 },
                 {
                     data: 'teams',
+                    width: '60px',
                     orderable: false,
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -1101,7 +1205,9 @@ var projectTable;
                         const ids = typeof data === 'string' ? data.split(',').map(item => item.trim()).filter(item => item) : [String(data)];
                         if (ids.length === 0) return '<span class="text-muted">-</span>';
                         const labels = ids.map(function(id) { return teamIdToName[id] || id; });
-                        return labels.map(function(label) { return '<span class="badge bg-label-secondary me-1">' + label + '</span>'; }).join('');
+                        return labels.map(function(label) {
+                            label = label.replace(/CL意匠/g, 'CL_').replace(/G意匠/g, 'G_');
+                            return '<span class="badge bg-label-secondary me-1">' + label + '</span>'; }).join('');
                     },
                     title: '<span data-i18n="チーム">チーム</span>'
                 },
@@ -1157,13 +1263,13 @@ var projectTable;
                     title: '<span data-i18n="工事番号">工事番号</span>'
                 },
                 { 
-                    width: '40px',
+                    width: '60px',
                     data: 'parent_branch_name',
                     render: function(data, type, row) {
                         if (!data || data === '') {
                             return '<span class="text-muted">-</span>';
                         }
-                        return `<span class="text-nowrap small">${data}</span>`;
+                        return `<span class="small">${data}</span>`;
                     },
                     title: '<span data-i18n="支店名">支店名</span>'
                 },
@@ -1173,7 +1279,7 @@ var projectTable;
                     className: 'project-name-cell',
                     render: function(data, type, row) {
                         return `<div class="d-flex align-items-start justify-content-start flex-column project-hover-tasks-trigger" data-project-id="${row.id}">
-                                    <a href="detail.php?id=${row.id}" class="text-decoration-none small">${escapeHtmlForNote(data || '')}</a>
+                                    <a href="detail.php?id=${row.id}" class="text-decoration-none small" style="font-weight: bold;">${escapeHtmlForNote(data || '')}</a>
                                 </div>`;
                     },
                     title: '<span data-i18n="お施主様名">お施主様名</span>'
@@ -1221,13 +1327,16 @@ var projectTable;
                     title: '<span data-i18n="種類2">種類2</span>',
                     visible: false
                 },
-                { data: 'start_date', title: '<span data-i18n="開始日">開始日</span>', render: function(data, type, row) {
+                { 
+                    data: 'start_date',
+                    width: '80px',
+                    title: '<span data-i18n="開始日">開始日</span>', render: function(data, type, row) {
                     if(data) {
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
                         var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, '開始日') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
-                        return '<span class="text-muted small text-nowrap"' + attrs + '>' + moment(data).format('M月D日 H:mm') + '</span>';
+                        return '<span class="text-muted small"' + attrs + '>' + formatDateTimeWithLineBreak(data) + '</span>';
                     } else {
                         return '-';
                     }
@@ -1257,11 +1366,11 @@ var projectTable;
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
                         var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, 'CAILY納期') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
-                        const dateStr = moment(data).format('M月D日 H:mm');
+                        const dateStr = formatDateTimeWithLineBreak(data);
 
                         if (isDelivered) {
                             return '<div class="d-flex flex-column">' +
-                                '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
+                                '<span class="text-muted small"' + attrs + '>' + dateStr + '</span>' +
                                 statusBadge +
                             '</div>';
                         }
@@ -1273,17 +1382,17 @@ var projectTable;
                                 ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('期限を超過しています') : '期限を超過しています')
                                 : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
                             return '<div class="d-flex flex-column">' +
-                                        '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
-                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1" ' +
-                                             'title="' + titleText.replace(/"/g, '&quot;') + '" ' +
-                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
+                                        '<span class="text-muted small"' + attrs + '>' + dateStr + '</span>' +
+                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1 time-remaining-badge" ' +
+                                             'title="' + (timeRemaining.fullText ? timeRemaining.fullText.replace(/"/g, '&quot;') : titleText.replace(/"/g, '&quot;')) + '" ' +
+                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
                                              timeRemaining.text +
                                         '</span>' +
                                         statusBadge +
                                     '</div>';
                         } else {
                             return '<div class="d-flex flex-column">' +
-                                '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>' +
+                                '<span class="small text-muted"' + attrs + '>' + dateStr + '</span>' +
                                 statusBadge +
                             '</div>';
                         }
@@ -1317,11 +1426,11 @@ var projectTable;
                         var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, 'GUIS納期') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
                         const timeRemaining = getTimeRemaining(data, row.status);
-                        const dateStr = moment(data).format('M月D日 H:mm');
+                        const dateStr = formatDateTimeWithLineBreak(data);
 
                         if (isDelivered) {
                             return '<div class="d-flex flex-column">' +
-                                '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
+                                '<span class="text-muted small"' + attrs + '>' + dateStr + '</span>' +
                                 statusBadge +
                             '</div>';
                         }
@@ -1331,17 +1440,17 @@ var projectTable;
                                 ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('期限を超過しています') : '期限を超過しています')
                                 : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
                             return '<div class="d-flex flex-column">' +
-                                        '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
-                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1" ' +
-                                             'title="' + titleText.replace(/"/g, '&quot;') + '" ' +
-                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
+                                        '<span class="text-muted small"' + attrs + '>' + dateStr + '</span>' +
+                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1 time-remaining-badge" ' +
+                                             'title="' + (timeRemaining.fullText ? timeRemaining.fullText.replace(/"/g, '&quot;') : titleText.replace(/"/g, '&quot;')) + '" ' +
+                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
                                              timeRemaining.text +
                                         '</span>' +
                                         statusBadge +
                                     '</div>';
                         } else {
                             return '<div class="d-flex flex-column">' +
-                                '<span class="text-nowrap small text-muted"' + attrs + '>' + dateStr + '</span>' +
+                                '<span class="small text-muted"' + attrs + '>' + dateStr + '</span>' +
                                 statusBadge +
                             '</div>';
                         }
@@ -1356,7 +1465,7 @@ var projectTable;
                         var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, '終了日') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
                         const timeRemaining = getTimeRemaining(data, row.status);
-                        const dateStr = moment(data).format('M月D日 H:mm');
+                        const dateStr = formatDateTimeWithLineBreak(data);
                         
                         if (timeRemaining) {
                             const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
@@ -1364,15 +1473,15 @@ var projectTable;
                                 ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('期限を超過しています') : '期限を超過しています')
                                 : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
                             return '<div class="d-flex flex-column">' +
-                                        '<span class="text-muted small text-nowrap"' + attrs + '>' + dateStr + '</span>' +
-                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1" ' +
-                                             'title="' + titleText.replace(/"/g, '&quot;') + '" ' +
-                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' +
+                                        '<span class="text-muted small"' + attrs + '>' + dateStr + '</span>' +
+                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1 time-remaining-badge" ' +
+                                             'title="' + (timeRemaining.fullText ? timeRemaining.fullText.replace(/"/g, '&quot;') : titleText.replace(/"/g, '&quot;')) + '" ' +
+                                             'style="font-size: 0.7rem; padding: 0.2rem 0.4rem; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
                                              timeRemaining.text +
                                         '</span>' +
                                     '</div>';
                         } else {
-                            return '<span class="text-nowrap text-muted small"' + attrs + '>' + dateStr + '</span>';
+                            return '<span class="text-muted small"' + attrs + '>' + dateStr + '</span>';
                         }
                     } else {
                         return '-';
@@ -1519,6 +1628,50 @@ var projectTable;
                 }
             }
             
+        });
+        
+        // Sau mỗi lần vẽ bảng: thêm note snippet vào ô cột có display_column trùng (dưới cùng ô, >40 ký tự thì cắt + tooltip)
+        projectTable.on('draw.dt', function() {
+            var customDefs = customFieldColumnDefinitions || [];
+            var noteColumnConfigs = []; // { colIndex, displayColumnKey }
+            (NOTE_DISPLAY_COLUMNS || []).forEach(function(c) {
+                var idx = getDataTableColumnIndexByKey(c.key, customDefs);
+                if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: c.key });
+            });
+            customDefs.forEach(function(c) {
+                var idx = getDataTableColumnIndexByKey(c.key, customDefs);
+                if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: 'custom:' + (c.label || '').trim() });
+            });
+            projectTable.rows({ search: 'applied' }).every(function(rowIdx) {
+                var rowData = this.data();
+                var notesByCol = rowData.notes_by_display_column || {};
+                noteColumnConfigs.forEach(function(cfg) {
+                    var notes = notesByCol[cfg.displayColumnKey];
+                    if (!notes || !notes.length) return;
+                    var node = projectTable.cell(rowIdx, cfg.colIndex).node();
+                    if (!node) return;
+                    var $cell = $(node);
+                    $cell.find('.cell-note-snippets').remove();
+                    var parts = [];
+                    notes.forEach(function(n) {
+                        var content = n.content || '';
+                        var decodedHtml = decodeHtmlForNote(content);
+                        decodedHtml = (decodedHtml || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
+                        var sn = noteSnippetText(content, 40);
+                        var tooltipAttrs = '';
+                        if (sn.full && sn.full.length > 40) {
+                            tooltipAttrs = ' data-bs-toggle="tooltip" data-bs-title="' + escapeHtmlForNote(sn.full) + '"';
+                        }
+                        var isImportant = n.is_important == 1;
+                        parts.push(
+                            '<div class="confirmation-note-item mb-1 cell-note-snippet-item ' + (isImportant ? 'important-note' : '') + '" data-note-id="' + (n.id || '') + '" data-project-id="' + (rowData.id || '') + '" style="cursor:pointer"' + tooltipAttrs + '>' +
+                                '<div class="note-text small ql-editor" style="max-height:2.5em;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-clamp:2;">' + (decodedHtml || '-') + '</div>' +
+                            '</div>'
+                        );
+                    });
+                    $cell.append('<div class="cell-note-snippets">' + parts.join('') + '</div>');
+                });
+            });
         });
         
         // Apply column visibility after table initialization (base + custom columns; custom default hidden)
@@ -1774,11 +1927,11 @@ var projectTable;
             window.addEventListener('scroll', fixedScrollHeadUpdate, true);
             window.addEventListener('resize', fixedScrollHeadUpdate);
         }
-        // Khởi tạo Bootstrap tooltip cho ô giờ (data-time) mỗi khi DataTable vẽ lại + cập nhật context chat cho AI
+        // Khởi tạo Bootstrap tooltip cho mọi ô có data-bs-toggle="tooltip" (ô giờ data-time, ô text/textarea có data-bs-title, ...) mỗi khi DataTable vẽ lại
         $('#projectTable').on('draw.dt', function() {
             var table = document.getElementById('projectTable');
             if (!table || !window.bootstrap || !bootstrap.Tooltip) return;
-            var triggers = table.querySelectorAll('[data-bs-toggle="tooltip"][data-time]');
+            var triggers = table.querySelectorAll('[data-bs-toggle="tooltip"]');
             triggers.forEach(function(el) {
                 var t = bootstrap.Tooltip.getInstance(el);
                 if (t) t.dispose();
@@ -1918,30 +2071,19 @@ var projectTable;
         });
 
         // ----- 確認必要メモ: hover pencil & context menu -----
-        // Custom context menu for adding confirmation notes
+        // Custom context menu for adding confirmation notes (legacy: per note column, hiện chỉ để tránh lỗi khi hide/click)
         const $noteContextMenu = $('<div id="confirmationNoteContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
         $noteContextMenu.append('<button class="dropdown-item" type="button" id="addConfirmationNoteBtn"><i class="fa fa-plus me-1"></i>メモを追加</button>');
         $('body').append($noteContextMenu);
 
-        let contextMenuProjectId = null;
-
-        $('#projectTable tbody').on('contextmenu', 'td.confirmation-notes-column', function(e) {
-            e.preventDefault();
-            if (!projectTable) return;
-            const rowData = projectTable.row($(this).closest('tr')).data();
-            if (!rowData) return;
-            contextMenuProjectId = rowData.id;
-            $noteContextMenu
-                .css({ top: e.pageY + 'px', left: e.pageX + 'px' })
-                .show();
-        });
-
         // ----- Context menu "案件を編集" + "Thêm vào todo" (gộp chung, ẩn/hiện Thêm vào todo theo ô có data-todo-title) -----
         const $rowContextMenu = $('<div id="projectRowContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="quickEditProjectRowBtn"><i class="fa fa-pencil-alt me-1"></i><span data-i18n="案件を編集">案件を編集</span></button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="addNoteFromRowBtn"><i class="fa fa-sticky-note me-1"></i>メモを追加</button>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="addToTodoFromRowBtn" style="display:none;"><i class="fas fa-list-check me-1"></i><span data-i18n="追加Todo">追加Todo</span></button>');
         $('body').append($rowContextMenu);
         let contextMenuRowProjectId = null;
+        let contextMenuRowColumnKey = '';
         let contextMenuIsManagerOnly = false;
         let contextMenuTodoEl = null;
 
@@ -1957,8 +2099,22 @@ var projectTable;
             return false;
         }
 
+        function getColumnKeyByDataTableIndex(dtIndex, customDefs) {
+            customDefs = customDefs || customFieldColumnDefinitions || [];
+            for (var i = 0; i < COLUMN_DEFINITIONS.length; i++) {
+                var k = COLUMN_DEFINITIONS[i].key;
+                var idx = getDataTableColumnIndexByKey(k, customDefs);
+                if (idx === dtIndex) return k;
+            }
+            for (var j = 0; j < customDefs.length; j++) {
+                var ck = customDefs[j].key;
+                var idx2 = getDataTableColumnIndexByKey(ck, customDefs);
+                if (idx2 === dtIndex) return ck;
+            }
+            return '';
+        }
+
         $('#projectTable tbody').on('contextmenu', 'tr', function(e) {
-            if ($(e.target).closest('td.confirmation-notes-column').length) return;
             if (!window.app) return;
             if (!projectTable) return;
             const rowData = projectTable.row($(this)).data();
@@ -1966,8 +2122,19 @@ var projectTable;
             var canFullEdit = window.app.canManageProject();
             var isManagerOfProject = isCurrentUserManagerOfProject(rowData);
             var canShowEdit = canFullEdit || isManagerOfProject;
-            contextMenuTodoEl = $(e.target).closest('td').find('[data-todo-title]')[0] || null;
-            if (!canShowEdit && !contextMenuTodoEl) return;
+            const $td = $(e.target).closest('td');
+            contextMenuTodoEl = $td.find('[data-todo-title]')[0] || null;
+            // Xác định cột để set display_column cho note
+            var dtIndex = null;
+            try {
+                var cellIdx = projectTable.cell($td).index();
+                if (cellIdx && typeof cellIdx.column === 'number') {
+                    dtIndex = cellIdx.column;
+                }
+            } catch (err) {}
+            contextMenuRowColumnKey = dtIndex !== null ? getColumnKeyByDataTableIndex(dtIndex, customFieldColumnDefinitions) : '';
+            var hasNoteColumn = !!contextMenuRowColumnKey;
+            if (!canShowEdit && !contextMenuTodoEl && !hasNoteColumn) return;
             e.preventDefault();
             contextMenuRowProjectId = rowData.id;
             contextMenuIsManagerOnly = !canFullEdit && isManagerOfProject;
@@ -1976,11 +2143,8 @@ var projectTable;
             } else {
                 $('#quickEditProjectRowBtn').hide();
             }
-            if (contextMenuTodoEl) {
-                $('#addToTodoFromRowBtn').show();
-            } else {
-                $('#addToTodoFromRowBtn').hide();
-            }
+            $('#addNoteFromRowBtn').toggle(hasNoteColumn);
+            $('#addToTodoFromRowBtn').toggle(!!contextMenuTodoEl);
             $rowContextMenu
                 .css({ top: e.pageY + 'px', left: e.pageX + 'px' })
                 .show();
@@ -2003,6 +2167,28 @@ var projectTable;
                 window.openAddToTodoModalFromContext(contextMenuTodoEl);
             }
             contextMenuTodoEl = null;
+        });
+
+        $rowContextMenu.on('click', '#addNoteFromRowBtn', function(ev) {
+            ev.stopPropagation();
+            $rowContextMenu.hide();
+            if (!contextMenuRowProjectId || !window.app || !app.openNoteModalFromList) return;
+            var noteType = 0;
+            if (contextMenuRowColumnKey === 'confirmation_notes_caily') noteType = 1;
+            if (contextMenuRowColumnKey === 'confirmation_notes_guis') noteType = 2;
+            var displayKey = '';
+            // Chỉ set display_column cho các cột hiển thị note (NOTE_DISPLAY_COLUMNS + custom)
+            if (NOTE_DISPLAY_COLUMNS.some(function(c){ return c.key === contextMenuRowColumnKey; })) {
+                displayKey = contextMenuRowColumnKey;
+            } else if (contextMenuRowColumnKey && contextMenuRowColumnKey.indexOf('custom_') === 0) {
+                // Tìm label cho custom field theo key
+                var label = '';
+                (customFieldColumnDefinitions || []).forEach(function(c){
+                    if (!label && c.key === contextMenuRowColumnKey) label = c.label || '';
+                });
+                if (label) displayKey = 'custom:' + label.trim();
+            }
+            app.openNoteModalFromList(contextMenuRowProjectId, null, noteType, displayKey);
         });
 
         // Quick Edit Tagify instances (destroy on each open, re-init after load)
@@ -2497,7 +2683,7 @@ var projectTable;
             e.stopPropagation();
             $noteContextMenu.hide();
             if (contextMenuProjectId && window.app && app.openNoteModalFromList) {
-                app.openNoteModalFromList(contextMenuProjectId, null);
+                app.openNoteModalFromList(contextMenuProjectId, null, contextMenuNoteType);
             }
         });
 
@@ -2520,9 +2706,11 @@ var projectTable;
         // Click add note icon to create new note
         $('#projectTable tbody').on('click', '.empty-notes-cell .add-note-icon', function(e) {
             e.stopPropagation();
-            const projectId = $(this).closest('.empty-notes-cell').data('project-id');
+            const $cell = $(this).closest('.empty-notes-cell');
+            const projectId = $cell.data('project-id');
+            const noteType = $cell.closest('td').data('notes-type') === 'guis' ? 2 : 1;
             if (projectId && window.app && app.openNoteModalFromList) {
-                app.openNoteModalFromList(projectId, null);
+                app.openNoteModalFromList(projectId, null, noteType);
             }
         });
 
@@ -3011,110 +3199,52 @@ var projectTable;
         const now = moment.tz('Asia/Tokyo');
         const end = moment.tz(endDate, 'Asia/Tokyo');
         
-        // Kiểm tra ngôn ngữ hiện tại
         const isVietnamese = typeof i18next !== 'undefined' && i18next.isInitialized && i18next.language === 'vi';
-        
-        // Lấy các nhãn đã dịch
+        const overdueLabel = translateText('超過');
         const dayLabel = translateText('日');
         const hourLabel = translateText('時間');
         const minuteLabel = translateText('分');
-        const overdueLabel = translateText('超過');
-        
-        // Hàm helper để format số và đơn vị với khoảng cách cho tiếng Việt
-        const formatUnit = (value, label, isOverdue = false) => {
-            if (isVietnamese) {
-                return `${value} ${label} ${isOverdue ? overdueLabel : ''}`;
-            } else {
-                return `${value}${label}${isOverdue ? overdueLabel : ''}`;
-            }
-        };
+        // Short format for badge (max ~70px): d/h/m + 超
+        const d = 'd', h = 'h', m = 'm';
+        const 超 = '超';
         
         if (end.isBefore(now)) {
-            // Đã quá hạn
             const diff = now.diff(end);
             const days = Math.floor(diff / (1000 * 60 * 60 * 24));
             const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            
-            let text = '';
-            
+            let text = '', fullText = '';
             if (days > 0) {
-                if (isVietnamese) {
-                    text = `${days} ${dayLabel}`;
-                    if (hours > 0) {
-                        text += ` ${hours} ${hourLabel}`;
-                    }
-                    text += ` ${overdueLabel}`;
-                } else {
-                    text = `${days}${dayLabel}`;
-                    if (hours > 0) {
-                        text += `${hours}時`;
-                    }
-                    text += `${overdueLabel}`;
-                }
+                text = days + d + (hours > 0 ? ' ' + hours + h : '') + ' ' + 超;
+                fullText = isVietnamese ? (days + ' ' + dayLabel + (hours > 0 ? ' ' + hours + ' ' + hourLabel : '') + ' ' + overdueLabel) : (days + '日' + (hours > 0 ? hours + '時' : '') + overdueLabel);
             } else if (hours > 0) {
-                if (isVietnamese) {
-                    text = `${hours} ${hourLabel} ${overdueLabel}`;
-                } else {
-                    text = `${hours}時${overdueLabel}`;
-                }
+                text = hours + h + ' ' + 超;
+                fullText = isVietnamese ? (hours + ' ' + hourLabel + ' ' + overdueLabel) : (hours + '時' + overdueLabel);
             } else {
-                if (isVietnamese) {
-                    text = `${minutes} ${minuteLabel} ${overdueLabel}`;
-                } else {
-                    text = `${minutes}分${overdueLabel}`;
-                }
+                text = minutes + m + ' ' + 超;
+                fullText = isVietnamese ? (minutes + ' ' + minuteLabel + ' ' + overdueLabel) : (minutes + '分' + overdueLabel);
             }
-            
-            return {
-                text: text,
-                class: 'bg-danger',
-                isOverdue: true
-            };
+            return { text: text, fullText: fullText, class: 'bg-danger', isOverdue: true };
         } else {
-            // Còn thời gian
             const diff = end.diff(now);
             const days = Math.floor(diff / (1000 * 60 * 60 * 24));
             const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            
-            let text = '+';
+            let text = '+', fullText = '+';
             let class_name = 'bg-label-info';
-            
             if (days > 0) {
-                if (isVietnamese) {
-                    text += `${days} ${dayLabel}`;
-                    if (hours > 0) {
-                        text += ` ${hours} ${hourLabel}`;
-                    }
-                } else {
-                    text += `${days}${dayLabel}`;
-                    if (hours > 0) {
-                        text += `${hours}時`;
-                    }
-                }
-                class_name = 'bg-label-info';
+                text += days + d + (hours > 0 ? ' ' + hours + h : '');
+                fullText = isVietnamese ? ('+' + days + ' ' + dayLabel + (hours > 0 ? ' ' + hours + ' ' + hourLabel : '')) : ('+' + days + '日' + (hours > 0 ? hours + '時' : ''));
             } else if (hours > 0) {
-                if (isVietnamese) {
-                    text += `${hours} ${hourLabel}`;
-                } else {
-                    text += `${hours}時`;
-                }
+                text += hours + h;
+                fullText = isVietnamese ? ('+' + hours + ' ' + hourLabel) : ('+' + hours + '時');
                 class_name = hours <= 24 ? 'bg-label-warning' : 'bg-label-info';
             } else {
-                if (isVietnamese) {
-                    text += `${minutes} ${minuteLabel}`;
-                } else {
-                    text += `${minutes}分`;
-                }
+                text += minutes + m;
+                fullText = isVietnamese ? ('+' + minutes + ' ' + minuteLabel) : ('+' + minutes + '分');
                 class_name = 'bg-label-warning';
             }
-            
-            return {
-                text: text,
-                class: class_name,
-                isOverdue: false
-            };
+            return { text: text, fullText: fullText, class: class_name, isOverdue: false };
         }
     }
 
@@ -3242,6 +3372,7 @@ var projectTable;
                     content: '',
                     is_important: false,
                     needs_confirmation: false,
+                    display_column: '',
                     user_id: null
                 },
                 currentNoteProjectId: null,
@@ -3264,6 +3395,30 @@ var projectTable;
                 return `create.php?department_id=${this.selectedDepartment.id}`;
                }
                return `create.php`;
+            },
+            /** Options cho select 表示列: NOTE_DISPLAY_COLUMNS (giống detail) + custom fields, loại trùng tên khác suffix 状況 */
+            noteDisplayColumnOptions() {
+                function normLabel(t) { return (t || '').replace(/状況$/, ''); }
+                const list = (typeof NOTE_DISPLAY_COLUMNS !== 'undefined' ? NOTE_DISPLAY_COLUMNS : []).map(function(c) {
+                    return { value: c.key, text: c.label };
+                });
+                const seen = {};
+                const seenNorm = {};
+                list.forEach(function(o) {
+                    seen[o.value] = true;
+                    seenNorm[normLabel(o.text)] = true;
+                });
+                const customDefs = (typeof customFieldColumnDefinitions !== 'undefined' && customFieldColumnDefinitions) ? customFieldColumnDefinitions : [];
+                customDefs.forEach(function(c) {
+                    var val = 'custom:' + (c.label || '').trim();
+                    var n = normLabel(c.label);
+                    if (val !== 'custom:' && !seen[val] && !seenNorm[n]) {
+                        seen[val] = true;
+                        seenNorm[n] = true;
+                        list.push({ value: val, text: (c.label || '').trim() });
+                    }
+                });
+                return list;
             }
         },
         mounted() {
@@ -3732,6 +3887,8 @@ var projectTable;
                 this.showNoteModal = true;
                 this.isNoteEditMode = true;
                 this.currentEditingNoteId = noteId; // Track which note is being edited
+                this.destroyQuillNoteEditor();
+                this.quillNoteContent = '';
                 
                 // Refresh table to show highlight
                 if (projectTable) {
@@ -3744,7 +3901,8 @@ var projectTable;
                     title: '',
                     content: '',
                     is_important: false,
-                    needs_confirmation: true,
+                    needs_confirmation: 0,
+                    display_column: '',
                     user_id: null
                 };
                 this.loadNotesForProject(projectId).then(() => {
@@ -3755,7 +3913,8 @@ var projectTable;
                             title: match.title,
                             content: decodeHtmlForNote(match.content),
                             is_important: match.is_important == 1,
-                            needs_confirmation: match.needs_confirmation == 1,
+                            needs_confirmation: Number(match.needs_confirmation) || 0,
+                            display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : '',
                             user_id: match.user_id
                         };
                     }
@@ -3764,35 +3923,44 @@ var projectTable;
                     });
                 });
             },
-            openNoteModalFromList(projectId, noteContent = null) {
+            openNoteModalFromList(projectId, noteContent = null, noteType = 0, displayColumnKey = '') {
                 this.currentNoteProjectId = projectId;
                 this.showNoteModal = true;
                 this.isNoteEditMode = true;
                 this.currentEditingNoteId = null; // No specific note ID for fallback mode
-                // Reset editing note
+                this.destroyQuillNoteEditor();
+                this.quillNoteContent = '';
+                // noteType: 1 = CAILYメモ, 2 = GUISメモ. Nếu noteType = 0, set mặc định theo branch hiện tại (NOTE_DEFAULT_TYPE)
+                if (!noteType && typeof window !== 'undefined' && typeof window.NOTE_DEFAULT_TYPE !== 'undefined') {
+                    var def = parseInt(window.NOTE_DEFAULT_TYPE, 10);
+                    if (!isNaN(def)) noteType = def;
+                }
                 this.editingNote = {
                     id: null,
                     title: '',
                     content: '',
                     is_important: false,
-                    needs_confirmation: true,
+                    needs_confirmation: noteType || 0,
+                    display_column: displayColumnKey || '',
                     user_id: null
                 };
                 this.loadNotesForProject(projectId).then(() => {
                     if (noteContent) {
                         const trimmed = noteContent.trim();
-                        const match = this.notes.find(n => (n.content || '').trim() === trimmed && n.needs_confirmation == 1);
+                        const match = this.notes.find(n => (n.content || '').trim() === trimmed && (n.needs_confirmation == 1 || n.needs_confirmation == 2));
                         if (match) {
                             this.editingNote = {
                                 id: match.id,
                                 title: match.title,
                                 content: decodeHtmlForNote(match.content),
                                 is_important: match.is_important == 1,
-                                needs_confirmation: match.needs_confirmation == 1,
+                                needs_confirmation: Number(match.needs_confirmation) || 0,
+                                display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : (displayColumnKey || ''),
                                 user_id: match.user_id
                             };
                         } else {
                             this.editingNote.content = decodeHtmlForNote(noteContent);
+                            this.editingNote.needs_confirmation = noteType || 0;
                         }
                     }
                     this.$nextTick(() => {
@@ -3816,10 +3984,17 @@ var projectTable;
                     title: '',
                     content: '',
                     is_important: false,
-                    needs_confirmation: false,
+                    needs_confirmation: 0,
+                    display_column: '',
                     user_id: null
                 };
                 this.quillNoteContent = '';
+            },
+            getNoteDisplayColumnLabel(value) {
+                if (!value) return '';
+                const opts = this.noteDisplayColumnOptions || [];
+                const o = opts.find(function(x) { return x.value === value; });
+                return o ? o.text : value;
             },
             initQuillNoteEditor() {
                 if (this.quillNoteInstance || !this.isNoteEditMode || !this.showNoteModal) return;
@@ -3864,6 +4039,13 @@ var projectTable;
                         this.quillNoteInstance = null;
                     } catch (e) {}
                 }
+                // Clear Quill DOM content to avoid reusing old HTML when creating new note
+                try {
+                    const el = document.getElementById('quill_note_content');
+                    if (el) {
+                        el.innerHTML = '';
+                    }
+                } catch (e) {}
                 this.quillNoteContent = '';
             },
             async saveNote() {
@@ -3881,7 +4063,8 @@ var projectTable;
                     formData.append('title', title);
                     formData.append('content', rawContent);
                     formData.append('is_important', this.editingNote.is_important ? 1 : 0);
-                    formData.append('needs_confirmation', this.editingNote.needs_confirmation ? 1 : 0);
+                    formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
+                    formData.append('display_column', this.editingNote.display_column || '');
                     
                     let response;
                     if (this.editingNote.id) {
@@ -3903,6 +4086,27 @@ var projectTable;
                 } catch (error) {
                     console.error('Error saving note:', error);
                     showMessage('メモの保存に失敗しました', true);
+                }
+            },
+            async deleteCurrentNote() {
+                if (!this.editingNote || !this.editingNote.id) return;
+                if (!confirm('このメモを削除しますか？')) return;
+                try {
+                    const formData = new FormData();
+                    formData.append('id', this.editingNote.id);
+                    const response = await axios.post('/api/index.php?model=project&method=deleteNote', formData);
+                    if (response.data && response.data.status === 'success') {
+                        showMessage('メモが削除されました');
+                        this.closeNoteModal();
+                        if (projectTable) {
+                            projectTable.ajax.reload(null, false);
+                        }
+                    } else {
+                        showMessage('メモの削除に失敗しました', true);
+                    }
+                } catch (error) {
+                    console.error('Error deleting note:', error);
+                    showMessage('メモの削除に失敗しました', true);
                 }
             },
             canEditNote(note) {

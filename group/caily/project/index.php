@@ -2,6 +2,19 @@
 
 require_once('../application/loader.php');
 $view->heading('案件一覧');
+// Default note type by branch: CAILY branch -> CAILYメモ(1), otherwise GUISメモ(2)
+$noteDefaultType = 2;
+try {
+    require_once('../application/model/branch.php');
+    $branchModel = new Branch();
+    $branch = $branchModel->get_user_branch_name();
+    if ($branch && isset($branch['name']) && $branch['name'] === 'CAILY') {
+        $noteDefaultType = 1;
+    }
+} catch (Exception $e) {
+    // fallback giữ nguyên GUISメモ
+}
+echo '<script>window.NOTE_DEFAULT_TYPE = ' . (int)$noteDefaultType . ';</script>';
 if($_SESSION['show_project'] == 0){
     echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
     exit;
@@ -430,10 +443,16 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                         <div class="mb-3" v-if="editingNote.needs_confirmation">
-                            <label class="form-label"><span data-i18n="確認必要">確認必要</span></label>
+                            <label class="form-label"><span>区分</span></label>
                             <div>
-                                <span class="badge bg-warning">確認必要</span>
+                                <span class="badge bg-primary" v-if="String(editingNote.needs_confirmation) === '1'">CAILYメモ</span>
+                                <span class="badge bg-dark" v-else-if="String(editingNote.needs_confirmation) === '2'">GUISメモ</span>
+                                <span class="badge bg-primary" v-else>確認必要</span>
                             </div>
+                        </div>
+                        <div class="mb-3" v-if="editingNote.display_column">
+                            <label class="form-label"><span>表示列</span></label>
+                            <div>{{ getNoteDisplayColumnLabel(editingNote.display_column) }}</div>
                         </div>
                     </div>
                     <!-- Edit mode -->
@@ -454,27 +473,40 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                         <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" v-model="editingNote.needs_confirmation" id="needsConfirmation">
-                                <label class="form-check-label" for="needsConfirmation">
-                                    <span data-i18n="確認必要">確認必要</span>
-                                </label>
+                            <label class="form-label d-block"><span>区分</span></label>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" :value="1" v-model="editingNote.needs_confirmation" id="needsConfirmationCaily">
+                                <label class="form-check-label" for="needsConfirmationCaily">CAILYメモ</label>
                             </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" :value="2" v-model="editingNote.needs_confirmation" id="needsConfirmationGuis">
+                                <label class="form-check-label" for="needsConfirmationGuis">GUISメモ</label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label"><span>表示列</span></label>
+                            <select class="form-select" v-model="editingNote.display_column">
+                                <option value="">— 選択 —</option>
+                                <option v-for="opt in noteDisplayColumnOptions" :key="opt.value" :value="opt.value">{{ opt.text }}</option>
+                            </select>
                         </div>
                     </form>
                 </div>
-                <div class="modal-footer">
-                    <template v-if="editingNote.id && !isNoteEditMode">
-                        <button class="btn btn-primary" @click="isNoteEditMode = true; $nextTick(() => initQuillNoteEditor())"><i class="fa fa-pencil-alt me-2"></i> <span data-i18n="編集">編集</span></button>
-                        <button class="btn btn-secondary" @click="closeNoteModal"><span data-i18n="閉じる">閉じる</span></button>
-                    </template>
-                    <template v-else>
-                        <button class="btn btn-secondary" @click="closeNoteModal"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
-                        <button class="btn btn-primary" @click="saveNote" :disabled="!((quillNoteContent && quillNoteContent.trim()) || (editingNote.content && editingNote.content.trim()))">
-                            <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
-                        </button>
-                    </template>
-                </div>
+                    <div class="modal-footer">
+                        <template v-if="editingNote.id && !isNoteEditMode">
+                            <button class="btn btn-primary" @click="isNoteEditMode = true; $nextTick(() => initQuillNoteEditor())"><i class="fa fa-pencil-alt me-2"></i> <span data-i18n="編集">編集</span></button>
+                            <button class="btn btn-secondary" @click="closeNoteModal"><span data-i18n="閉じる">閉じる</span></button>
+                        </template>
+                        <template v-else>
+                            <button class="btn btn-danger me-auto" v-if="editingNote.id" @click="deleteCurrentNote">
+                                <i class="fa fa-trash me-2"></i> <span data-i18n="削除">削除</span>
+                            </button>
+                            <button class="btn btn-secondary" @click="closeNoteModal"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
+                            <button class="btn btn-primary" @click="saveNote" :disabled="!((quillNoteContent && quillNoteContent.trim()) || (editingNote.content && editingNote.content.trim()))">
+                                <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
+                            </button>
+                        </template>
+                    </div>
             </div>
         </div>
     </div>
@@ -605,8 +637,8 @@ $view->footing();
 }
 /* Ensure proper spacing in end date column */
 #projectTable td {
-    vertical-align: middle;
-    padding: 0.4rem;
+    vertical-align: baseline;
+    padding: 0.2rem;
     border: 1px solid #aaa;
     
 }
@@ -617,12 +649,16 @@ $view->footing();
 
 /* Cột CAILY納期: nền xanh lá nhạt */
 #projectTable td.caily-nouki-column {
-    background-color: rgba(25, 135, 84, 0.15);
+    background-color: rgba(25, 135, 84, 0.25);
 }
 
 /* Cột 終了日: nền đen nhạt (xám nhạt) */
 #projectTable td.end-date-column {
-    background-color: rgba(0, 0, 0, 0.06);
+    background-color: rgba(255, 0, 0, 0.15);
+}
+
+#projectTable > :not(caption) > * > *{
+    color: #333!important;
 }
 
 /* Kadai Queue Container */
@@ -755,13 +791,23 @@ $view->footing();
 }
 
 /* Style for each confirmation note item */
-#projectTable td.confirmation-notes-column .mb-1 {
+#projectTable .confirmation-note-item {
     background-color: #fff9e6;
     padding: 4px 4px;
     margin-bottom: 6px !important;
     border-radius: 4px;
 }
+#projectTable .confirmation-note-item p {
+    margin-bottom: 0!important;
+}
 
+#projectTable .confirmation-note-item p + p{
+    margin-top: 1em!important;
+}
+
+#projectTable .confirmation-note-item.important-note {
+    border: 1px solid #dc3545;
+}
 
 /* Layout for confirmation note content & action icons */
 #projectTable td.confirmation-notes-column .confirmation-note-item {
@@ -866,6 +912,14 @@ $view->footing();
 }
 #projectTable tbody tr.table-row-status-secondary:hover, #projectTable tbody tr.table-row-status-info:hover, #projectTable tbody tr.table-row-status-primary:hover, #projectTable tbody tr.table-row-status-success:hover, #projectTable tbody tr.table-row-status-warning:hover, #projectTable tbody tr.table-row-status-danger:hover{
     opacity: 1!important;
+}
+#projectFilterBox .card-body{
+    padding-left: 0.5rem!important;
+    padding-right: 0.5rem!important;
+}
+#projectTableCard .card-body{
+    padding-left: 0.5rem!important;
+    padding-right: 0.5rem!important;
 }
 
 /* Active indicator dot for status filter buttons */

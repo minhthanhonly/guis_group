@@ -1,5 +1,30 @@
 const { createApp } = Vue;
 
+// Cột danh sách project (trùng với COLUMN_DEFINITIONS trong project-list.js) + custom_fields bổ sung ở computed
+var NOTE_DISPLAY_COLUMNS = [
+    { key: 'status', label: '案件状況' },
+    { key: 'progress', label: '進捗率' },
+    { key: 'tantou', label: '担当' },
+    { key: 'manager', label: '管理' },
+    { key: 'teams', label: 'チーム' },
+    { key: 'members', label: 'メンバー' },
+    { key: 'parent_construction_number', label: '工事番号' },
+    { key: 'parent_branch_name', label: '支店名' },
+    { key: 'name', label: 'お施主様名' },
+    { key: 'parent_scale', label: '規模' },
+    { key: 'parent_type1', label: '種類1' },
+    { key: 'parent_type2', label: '種類2' },
+    { key: 'start_date', label: '開始日' },
+    { key: 'caily_nouki', label: 'CAILY納期' },
+    { key: 'guis_nouki', label: 'GUIS納期' },
+    { key: 'end_date', label: '終了日' },
+    { key: 'project_order_type', label: '受注形態' },
+    { key: 'priority', label: '優先度' },
+    { key: 'amount', label: '総額' },
+    { key: 'customer_info', label: '顧客情報' },
+    { key: 'parent_guis_receiver', label: 'GUIS 受付者' }
+];
+
 const vueApp = createApp({
     data() {
         return {
@@ -95,6 +120,7 @@ const vueApp = createApp({
                 content: '',
                 is_important: false,
                 needs_confirmation: false,
+                display_column: '',
                 user_id: null
             },
             quillNoteInstance: null,
@@ -147,6 +173,36 @@ const vueApp = createApp({
             // Return all custom field sets for the department
             if (!this.project || !this.project.department_id) return [];
             return this.departmentCustomFieldSets || [];
+        },
+        /** Options cho select "表示列" (display_column): cột danh sách project + custom fields. Loại trùng tên khác suffix 状況 */
+        noteDisplayColumnOptions() {
+            function normLabel(t) { return (t || '').replace(/状況$/, ''); }
+            const list = (typeof NOTE_DISPLAY_COLUMNS !== 'undefined' ? NOTE_DISPLAY_COLUMNS : []).map(function(c) {
+                return { value: c.key, text: c.label };
+            });
+            const seen = {};
+            const seenNorm = {};
+            list.forEach(function(o) {
+                seen[o.value] = true;
+                seenNorm[normLabel(o.text)] = true;
+            });
+            (this.allDepartmentCustomFieldSets || []).forEach(function(set) {
+                if (set.fields && Array.isArray(set.fields)) {
+                    set.fields.forEach(function(f) {
+                        if (f && f.label && f.label.trim()) {
+                            var label = f.label.trim();
+                            var val = 'custom:' + label;
+                            var n = normLabel(label);
+                            if (!seen[val] && !seenNorm[n]) {
+                                seen[val] = true;
+                                seenNorm[n] = true;
+                                list.push({ value: val, text: label });
+                            }
+                        }
+                    });
+                }
+            });
+            return list;
         },
         canViewProject() {
             // Administrator can always view
@@ -1809,17 +1865,21 @@ const vueApp = createApp({
                     title: note.title,
                     content: note.content ? this.decodeHtmlEntities(note.content) : '',
                     is_important: note.is_important == 1,
-                    needs_confirmation: note.needs_confirmation == 1,
+                    needs_confirmation: Number(note.needs_confirmation) || 0,
+                    display_column: (note.display_column != null && note.display_column !== undefined) ? String(note.display_column) : '',
                     user_id: note.user_id
                 };
             } else {
                 // Create new note
+                var defaultType = (typeof window !== 'undefined' && typeof window.NOTE_DEFAULT_TYPE !== 'undefined') ? parseInt(window.NOTE_DEFAULT_TYPE, 10) : 0;
+                if (isNaN(defaultType)) defaultType = 0;
                 this.editingNote = {
                     id: null,
                     title: '',
                     content: '',
                     is_important: false,
-                    needs_confirmation: false,
+                    needs_confirmation: defaultType,
+                    display_column: '',
                     user_id: null
                 };
             }
@@ -1840,10 +1900,17 @@ const vueApp = createApp({
                 title: '',
                 content: '',
                 is_important: false,
-                needs_confirmation: false,
+                needs_confirmation: 0,
+                display_column: '',
                 user_id: null
             };
             this.quillNoteContent = '';
+        },
+        getNoteDisplayColumnLabel(value) {
+            if (!value) return '';
+            var opts = this.noteDisplayColumnOptions || [];
+            var o = opts.find(function(x) { return x.value === value; });
+            return o ? o.text : value;
         },
         async saveNote() {
             // Lấy nội dung từ Quill editor nếu có, nếu không dùng editingNote.content
@@ -1865,7 +1932,8 @@ const vueApp = createApp({
                 formData.append('title', title);
                 formData.append('content', rawContent);
                 formData.append('is_important', this.editingNote.is_important ? 1 : 0);
-                formData.append('needs_confirmation', this.editingNote.needs_confirmation ? 1 : 0);
+                formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
+                formData.append('display_column', this.editingNote.display_column || '');
                 
                 let response;
                 if (this.editingNote.id) {

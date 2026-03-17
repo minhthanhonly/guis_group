@@ -140,6 +140,22 @@ $view->heading('メンバー一覧');
             <label class="form-label" for="add-user-type">編集設定</label>
             <div id="add-user-permit"></div>
           </div>
+          <div class="mb-4 form-control-validation">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="add-user-show-project" name="show_project" value="1">
+              <label class="form-check-label" for="add-user-show-project">
+                <span data-i18n="案件関連を表示">案件関連を表示</span>
+              </label>
+            </div>
+          </div>
+          <div class="mb-4 form-control-validation">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="add-user-can-approve-request" name="can_approve_request" value="1">
+              <label class="form-check-label" for="add-user-can-approve-request">
+                <span data-i18n="申請関係の承認を許可します">申請関係の承認を許可します</span>
+              </label>
+            </div>
+          </div>
           <button type="submit" class="btn btn-primary me-3 data-submit">追加</button>
           <button type="reset" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
         </form>

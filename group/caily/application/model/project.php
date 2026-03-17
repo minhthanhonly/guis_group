@@ -341,10 +341,14 @@ class Project extends ApplicationModel {
              FROM " . DB_PREFIX . "project_members pm 
              LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
              WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
-           (SELECT GROUP_CONCAT(CONCAT(n.id, '_:_', n.content) SEPARATOR '_|_') 
+           (SELECT GROUP_CONCAT(CONCAT(n.id, '_:_', n.content, '_:_', n.is_important) SEPARATOR '_|_') 
              FROM " . DB_PREFIX . "project_notes n 
              WHERE n.project_id = p.id AND n.needs_confirmation = 1 
-             ORDER BY n.is_important DESC, n.created_at DESC) as confirmation_notes
+             ORDER BY n.is_important DESC, n.created_at DESC) as confirmation_notes_caily,
+           (SELECT GROUP_CONCAT(CONCAT(n.id, '_:_', n.content, '_:_', n.is_important) SEPARATOR '_|_') 
+             FROM " . DB_PREFIX . "project_notes n 
+             WHERE n.project_id = p.id AND n.needs_confirmation = 2 
+             ORDER BY n.is_important DESC, n.created_at DESC) as confirmation_notes_guis
            
             FROM {$this->table} p
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
@@ -371,6 +375,32 @@ class Project extends ApplicationModel {
                 $project['quotation_status'] = '未発行';
             }
         }
+        unset($project);
+
+        // Notes by display_column for each project (để hiển thị note dưới ô cột tương ứng)
+        $projectIds = array_filter(array_column($data, 'id'));
+        $notesByProject = [];
+        if (!empty($projectIds)) {
+            $idsList = implode(',', array_map('intval', $projectIds));
+            $notesTable = DB_PREFIX . 'project_notes';
+            $notesRows = $this->fetchAll(
+                "SELECT project_id, display_column, id, content, is_important FROM {$notesTable} " .
+                "WHERE project_id IN ({$idsList}) AND display_column IS NOT NULL AND TRIM(display_column) != '' " .
+                "ORDER BY is_important DESC, created_at DESC"
+            );
+            foreach ($notesRows as $nr) {
+                $pid = (int) $nr['project_id'];
+                $col = trim((string) ($nr['display_column'] ?? ''));
+                if ($col === '') continue;
+                if (!isset($notesByProject[$pid])) $notesByProject[$pid] = [];
+                if (!isset($notesByProject[$pid][$col])) $notesByProject[$pid][$col] = [];
+                $notesByProject[$pid][$col][] = ['id' => $nr['id'], 'content' => $nr['content'] ?? '', 'is_important' => $nr['is_important'] ?? 0];
+            }
+        }
+        foreach ($data as &$project) {
+            $project['notes_by_display_column'] = isset($notesByProject[$project['id']]) ? $notesByProject[$project['id']] : [];
+        }
+        unset($project);
 
         return array(
             'draw' => $draw,

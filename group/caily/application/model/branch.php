@@ -23,6 +23,19 @@ class Branch extends ApplicationModel {
         $this->connect();
     }
 
+    function get_user_branch_name() {
+        $query = sprintf(
+            "SELECT b.name
+            FROM {$this->table} b
+            JOIN %suser u ON b.id = u.branch_id
+            WHERE u.userid = '%s'",
+            DB_PREFIX,
+            $_SESSION['userid']
+        );
+        return $this->fetchOne($query);
+    }
+
+
     function list() {
         $query = sprintf(
             "SELECT c.*,

@@ -2,6 +2,20 @@
 require_once('../application/loader.php');
 $view->heading('案件詳細');
 
+// Default note type by branch: CAILY branch -> CAILYメモ(1), otherwise GUISメモ(2)
+$noteDefaultType = 2;
+try {
+    require_once('../application/model/branch.php');
+    $branchModel = new Branch();
+    $branch = $branchModel->get_user_branch_name();
+    if ($branch && isset($branch['name']) && $branch['name'] === 'CAILY') {
+        $noteDefaultType = 1;
+    }
+} catch (Exception $e) {
+    // fallback giữ nguyên GUISメモ
+}
+echo '<script>window.NOTE_DEFAULT_TYPE = ' . (int)$noteDefaultType . ';</script>';
+
 // Get project ID from URL
 $project_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 if (!$project_id) {
@@ -707,7 +721,9 @@ if($_SESSION['show_project'] == 0){
                                         </small>
                                         <div class="ms-2">
                                             <i v-if="note.is_important == 1" class="fa fa-exclamation-circle text-danger me-2"></i>
-                                            <span v-if="note.needs_confirmation == 1" class="badge bg-warning">確認必要</span>
+                                            <span v-if="note.needs_confirmation == 1" class="badge bg-primary me-1">CAILYメモ</span>
+                                            <span v-else-if="note.needs_confirmation == 2" class="badge bg-dark me-1">GUISメモ</span>
+                                            <span v-if="note.display_column" class="badge bg-secondary">関連項目: {{ getNoteDisplayColumnLabel(note.display_column) }}</span>
                                         </div>
                                     </div>
                                     <div v-if="note.content" class="text-muted small ql-editor" style="word-break: break-word;" v-html="decodeNoteHtml(note.content)"></div>
@@ -875,12 +891,17 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                             </div>
                             <div class="mb-3" v-if="editingNote.needs_confirmation">
-                                <label class="form-label"><span data-i18n="確認必要">確認必要</span></label>
+                                <label class="form-label"><span>区分</span></label>
                                 <div>
-                                    <span class="badge bg-warning">確認必要</span>
+                                    <span class="badge bg-primary" v-if="String(editingNote.needs_confirmation) === '1'">CAILYメモ</span>
+                                    <span class="badge bg-dark" v-else-if="String(editingNote.needs_confirmation) === '2'">GUISメモ</span>
+                                    <span class="badge bg-primary" v-else>確認必要</span>
                                 </div>
                             </div>
-                           
+                            <div class="mb-3" v-if="editingNote.display_column">
+                                <label class="form-label"><span>表示列</span></label>
+                                <div>{{ getNoteDisplayColumnLabel(editingNote.display_column) }}</div>
+                            </div>
                         </div>
                         <!-- Edit mode -->
                         <form v-else @submit.prevent="saveNote">
@@ -900,12 +921,26 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" v-model="editingNote.needs_confirmation" id="needsConfirmation">
-                                    <label class="form-check-label" for="needsConfirmation">
-                                        <span data-i18n="確認必要">確認必要</span>
+                                <label class="form-label d-block"><span>区分</span></label>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" :value="1" v-model="editingNote.needs_confirmation" id="needsConfirmationCaily">
+                                    <label class="form-check-label" for="needsConfirmationCaily">
+                                        CAILYメモ
                                     </label>
                                 </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" :value="2" v-model="editingNote.needs_confirmation" id="needsConfirmationGuis">
+                                    <label class="form-check-label" for="needsConfirmationGuis">
+                                        GUISメモ
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><span>表示列</span></label>
+                                <select class="form-select" v-model="editingNote.display_column">
+                                    <option value="">— 選択 —</option>
+                                    <option v-for="opt in noteDisplayColumnOptions" :key="opt.value" :value="opt.value">{{ opt.text }}</option>
+                                </select>
                             </div>
                         </form>
                     </div>

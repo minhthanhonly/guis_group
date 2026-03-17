@@ -2936,6 +2936,15 @@ createApp({
                 this.editChildProjectQuillInstance.on('text-change', () => {
                     this.editChildProjectQuillContent = this.editChildProjectQuillInstance.getSemanticHTML();
                 });
+
+                // Prevent Enter from bubbling to the form so it doesn't trigger submit or move focus
+                const editQuillRoot = this.editChildProjectQuillInstance.root;
+                if (editQuillRoot) {
+                    this._editChildProjectQuillEnterHandler = (e) => {
+                        if (e.key === 'Enter') e.stopPropagation();
+                    };
+                    editQuillRoot.addEventListener('keydown', this._editChildProjectQuillEnterHandler);
+                }
                 
                 console.log('New Quill editor initialized successfully');
             } catch (error) {
@@ -2947,6 +2956,11 @@ createApp({
 
         destroyEditChildProjectQuill() {
             try {
+                // Remove Enter key listener before destroying
+                if (this.editChildProjectQuillInstance && this.editChildProjectQuillInstance.root && this._editChildProjectQuillEnterHandler) {
+                    this.editChildProjectQuillInstance.root.removeEventListener('keydown', this._editChildProjectQuillEnterHandler);
+                    this._editChildProjectQuillEnterHandler = null;
+                }
                 // Destroy Quill instance if it exists
                 if (this.editChildProjectQuillInstance) {
                     this.editChildProjectQuillInstance.setText('');
@@ -3066,12 +3080,19 @@ createApp({
                 // Set initial content (empty for create modal)
                 this.createChildProjectQuillContent = '';
                 
-                // Update content when text changes
+                // Update only internal content on text-change to avoid Vue re-render (which causes focus loss when 受注形態 has value)
                 this.createChildProjectQuillInstance.on('text-change', () => {
                     this.createChildProjectQuillContent = this.createChildProjectQuillInstance.getSemanticHTML();
-                    // Also update the Vue model
-                    this.newChildProject.description = this.createChildProjectQuillContent;
                 });
+
+                // Prevent Enter from bubbling to the form so it doesn't trigger submit or move focus to 受注形態
+                const quillRoot = this.createChildProjectQuillInstance.root;
+                if (quillRoot) {
+                    this._createChildProjectQuillEnterHandler = (e) => {
+                        if (e.key === 'Enter') e.stopPropagation();
+                    };
+                    quillRoot.addEventListener('keydown', this._createChildProjectQuillEnterHandler);
+                }
                 
                 console.log('New Create Quill editor initialized successfully');
             } catch (error) {
@@ -3083,6 +3104,11 @@ createApp({
 
         destroyCreateChildProjectQuill() {
             try {
+                // Remove Enter key listener before destroying
+                if (this.createChildProjectQuillInstance && this.createChildProjectQuillInstance.root && this._createChildProjectQuillEnterHandler) {
+                    this.createChildProjectQuillInstance.root.removeEventListener('keydown', this._createChildProjectQuillEnterHandler);
+                    this._createChildProjectQuillEnterHandler = null;
+                }
                 // Destroy Quill instance if it exists
                 if (this.createChildProjectQuillInstance) {
                     this.createChildProjectQuillInstance.setText('');
