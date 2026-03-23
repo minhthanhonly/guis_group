@@ -6,9 +6,12 @@ export default {
   data() {
     return {
       formData: {
-        attachment: '',
-        attachment_original: '',
+        // 交通費精算書ファイルは廃止、領収書明細のみ
         receipts: [],
+        // 明細行
+        lines: [],
+        // 合計金額
+        total_amount: 0,
         note: '',
         approver_user_id: ''
       },
@@ -26,110 +29,127 @@ export default {
   },
   created() {
     if (this.defaultData && Object.keys(this.defaultData).length > 0) {
-      const raw = Object.assign({
-        attachment: '',
-        attachment_original: '',
+      // defaultData からの deep clone を作成して、親データと分離する
+      const base = Object.assign({
         receipts: [],
+        lines: [],
+        total_amount: 0,
         note: '',
         approver_user_id: ''
       }, this.defaultData);
+      const raw = JSON.parse(JSON.stringify(base));
       raw.receipts = Array.isArray(raw.receipts) ? raw.receipts : [];
+      raw.lines = Array.isArray(raw.lines) ? raw.lines : [];
+      raw.lines = raw.lines.map(line => ({
+        ...line,
+        date: this.normalizeDateValue(line && line.date)
+      }));
+      raw.total_amount = this.computeTotalAmount(raw.lines);
       this.formData = raw;
       this.originalData = JSON.parse(JSON.stringify(this.formData));
     }
   },
   mounted() {
     this.loadApprovers();
+    this.ensureAtLeastOneLine();
   },
   watch: {
     defaultData: {
       handler(newVal) {
         if (newVal && Object.keys(newVal).length > 0) {
-          const raw = Object.assign({
-            attachment: '',
-            attachment_original: '',
+          const base = Object.assign({
             receipts: [],
+            lines: [],
+            total_amount: 0,
             note: '',
             approver_user_id: ''
           }, newVal);
+          const raw = JSON.parse(JSON.stringify(base));
           raw.receipts = Array.isArray(raw.receipts) ? raw.receipts : [];
+          raw.lines = Array.isArray(raw.lines) ? raw.lines : [];
+          raw.lines = raw.lines.map(line => ({
+            ...line,
+            date: this.normalizeDateValue(line && line.date)
+          }));
+          raw.total_amount = this.computeTotalAmount(raw.lines);
           this.formData = raw;
           this.originalData = JSON.parse(JSON.stringify(this.formData));
         }
       },
       immediate: true,
-      deep: true
+      deep: false
     }
   },
   computed: {
     isDirty() {
+      // 編集モードのときだけ、元データと現在の formData（明細行を含む）を比較して判定
       if (this.mode !== 'edit') return true;
       if (!this.originalData) return false;
       return JSON.stringify(this.formData) !== JSON.stringify(this.originalData);
     }
   },
   methods: {
+    normalizeDateValue(value) {
+      if (value === null || value === undefined) return '';
+      const str = String(value).trim();
+      if (!str) return '';
+      const m = str.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+      if (!m) return '';
+      return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    },
+    computeTotalAmount(lines) {
+      if (!Array.isArray(lines)) return 0;
+      return lines.reduce((sum, line) => {
+        const v = line && line.amount != null ? Number(line.amount) : 0;
+        return isNaN(v) ? sum : sum + v;
+      }, 0);
+    },
+    ensureAtLeastOneLine() {
+      if (!Array.isArray(this.formData.lines)) this.formData.lines = [];
+      if (this.formData.lines.length === 0) {
+        this.addLine();
+      }
+    },
+    addLine() {
+      if (!Array.isArray(this.formData.lines)) this.formData.lines = [];
+      this.formData.lines.push({
+        date: '',
+        route: '',
+        from: '',
+        to: '',
+        amount: '',
+        way: '片道',
+        note: ''
+      });
+    },
+    removeLine(index) {
+      if (!Array.isArray(this.formData.lines)) return;
+      this.formData.lines.splice(index, 1);
+      this.formData.total_amount = this.computeTotalAmount(this.formData.lines);
+    },
+    onLineAmountChange() {
+      this.formData.total_amount = this.computeTotalAmount(this.formData.lines);
+    },
     async loadApprovers() {
+      // すでに読み込み済みなら API を呼ばない
+      if (Array.isArray(this.approvers) && this.approvers.length > 0) return;
+      // グローバルキャッシュがあればそれを使う
+      if (typeof window !== 'undefined' && Array.isArray(window._travelExpenseApproversCache) && window._travelExpenseApproversCache.length > 0) {
+        this.approvers = window._travelExpenseApproversCache;
+        return;
+      }
       try {
         const res = await axios.get('/api/index.php?model=member&method=list_request_approvers');
-        this.approvers = Array.isArray(res.data) ? res.data : [];
+        const list = Array.isArray(res.data) ? res.data : [];
+        this.approvers = list;
+        if (typeof window !== 'undefined') {
+          window._travelExpenseApproversCache = list;
+        }
       } catch (e) {
         this.approvers = [];
       }
     },
-    onFileSelect(event) {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      if (file.size > 20 * 1024 * 1024) {
-        if (typeof showMessage === 'function') showMessage('ファイルサイズは20MB以下にしてください。', true);
-        event.target.value = '';
-        return;
-      }
-      this.uploadFile(file);
-      event.target.value = '';
-    },
-    async uploadFile(file) {
-      this.uploading = true;
-      this.uploadProgress = 0;
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const xhr = new XMLHttpRequest();
-        const url = '/api/index.php?model=request&method=uploadFormFile';
-        const result = await new Promise((resolve, reject) => {
-          xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable) this.uploadProgress = Math.round((e.loaded / e.total) * 100);
-          });
-          xhr.addEventListener('load', () => {
-            try {
-              const res = JSON.parse(xhr.responseText);
-              resolve(res);
-            } catch (e) {
-              resolve({ success: false, error: 'Invalid response' });
-            }
-          });
-          xhr.addEventListener('error', () => reject(new Error('Network error')));
-          xhr.open('POST', url);
-          xhr.send(formData);
-        });
-        if (result && result.success) {
-          this.formData.attachment = result.filename;
-          this.formData.attachment_original = result.original_name || file.name;
-          this.validateField('attachment');
-        } else {
-          if (typeof showMessage === 'function') showMessage(result && result.error ? result.error : 'アップロードに失敗しました。', true);
-        }
-      } catch (e) {
-        if (typeof showMessage === 'function') showMessage('アップロードに失敗しました。', true);
-      }
-      this.uploading = false;
-      this.uploadProgress = 0;
-    },
-    clearFile() {
-      this.formData.attachment = '';
-      this.formData.attachment_original = '';
-      this.validateField('attachment');
-    },
+    // 交通費精算書ファイル用の onFileSelect/uploadFile/clearFile は廃止
     async onReceiptsSelect(event) {
       const files = event.target.files ? Array.from(event.target.files) : [];
       event.target.value = '';
@@ -192,10 +212,6 @@ export default {
     validate() {
       this.errors = {};
       let valid = true;
-      if (!this.formData.attachment || !String(this.formData.attachment).trim()) {
-        this.errors.attachment = '交通費精算書のファイルをアップロードしてください。';
-        valid = false;
-      }
       if (!this.formData.approver_user_id) {
         this.errors.approver_user_id = '承認者を選択してください。';
         valid = false;
@@ -204,10 +220,7 @@ export default {
     },
     validateField(field) {
       const err = { ...this.errors };
-      if (field === 'attachment') {
-        if (!this.formData.attachment || !String(this.formData.attachment).trim()) err.attachment = '交通費精算書のファイルをアップロードしてください。';
-        else { delete err.attachment; }
-      } else if (field === 'approver_user_id') {
+      if (field === 'approver_user_id') {
         if (!this.formData.approver_user_id) err.approver_user_id = '承認者を選択してください。';
         else { delete err.approver_user_id; }
       }
@@ -217,6 +230,8 @@ export default {
       if (!this.validate()) return;
       this.submitting = true;
       try {
+        // 再計算してから送信
+        this.formData.total_amount = this.computeTotalAmount(this.formData.lines || []);
         const payloadBase = {
           data: this.formData,
           approver_user_id: this.formData.approver_user_id || ''
@@ -267,27 +282,6 @@ export default {
       <div class="modal-body">
         <form @submit.prevent="submit('pending')">
           <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">交通費精算書 <span class="text-danger">*</span></label>
-            <div class="col-sm-9">
-              <div v-if="!formData.attachment" class="d-flex flex-column gap-2">
-                <input type="file" class="form-control" :ref="fileInputRef" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" @change="onFileSelect" :disabled="uploading">
-                <div v-if="uploading" class="progress" style="height: 6px;">
-                  <div class="progress-bar" role="progressbar" :style="{ width: uploadProgress + '%' }"></div>
-                </div>
-              </div>
-              <div v-else class="d-flex align-items-center gap-2 flex-wrap">
-                <a v-if="mode==='edit' && defaultData && defaultData.id" :href="downloadUrl()" target="_blank" class="btn btn-sm btn-outline-primary">
-                  <i class="fa fa-download me-1"></i>{{ formData.attachment_original || formData.attachment }}
-                </a>
-                <span v-else class="me-2">{{ formData.attachment_original || formData.attachment }}</span>
-                <button type="button" class="btn btn-sm btn-outline-danger" @click="clearFile">削除</button>
-              </div>
-              <div class="text-danger small mt-1" v-if="errors.attachment">{{ errors.attachment }}</div>
-              <small v-if="mode==='add'" class="text-muted">20MB以下。</small>
-              <small v-if="mode==='add'" class="text-muted">この<a href="https://kanri.guis.co.jp/storage/view.php?id=616" target="_blank">フォーム</a>をダウンロードして、記載してください。</small>
-            </div>
-          </div>
-          <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">請求書・領収書等</label>
             <div class="col-sm-9">
               <input type="file" class="form-control mb-2" :ref="receiptsInputRef" accept=".pdf,.jpg,.jpeg,.png,.gif" multiple @change="onReceiptsSelect" :disabled="uploadingReceipts">
@@ -302,6 +296,74 @@ export default {
                 </li>
               </ul>
               <small v-if="mode==='add'" class="text-muted">画像・PDF。複数可。各20MB以下。</small>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">明細</label>
+            <div class="col-sm-12">
+              <table class="table table-sm align-middle mb-2 detail-table">
+                <thead>
+                  <tr>
+                    <th style="width: 90px;">日付</th>
+                    <th>路線</th>
+                    <th style="width: 80px;">乗車駅</th>
+                    <th style="width: 80px;">下車駅</th>
+                    <th style="width: 130px;">往復/片道</th>
+                    <th style="width: 110px;">金額</th>
+                    <th>備考</th>
+                    <th style="width: 40px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(line, idx) in formData.lines" :key="idx">
+                    <td>
+                      <input type="date" class="form-control form-control-sm" v-model="line.date">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.route">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.from">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.to">
+                    </td>
+                     <td>
+                      <div class="btn-group btn-group-sm" role="group">
+                        <button type="button"
+                                class="btn"
+                                :class="line.way === '往復' ? 'btn-primary' : 'btn-outline-secondary'"
+                                @click="line.way = '往復'">往復</button>
+                        <button type="button"
+                                class="btn"
+                                :class="line.way === '片道' ? 'btn-primary' : 'btn-outline-secondary'"
+                                @click="line.way = '片道'">片道</button>
+                      </div>
+                    </td>
+                    <td>
+                      <input type="number" min="0" class="form-control form-control-sm text-end"
+                             v-model.number="line.amount"
+                             @change="onLineAmountChange"
+                             @blur="onLineAmountChange">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.note">
+                    </td>
+                    <td class="text-center">
+                      <button type="button" class="btn btn-sm btn-outline-danger"
+                              @click="removeLine(idx)"><i class="fa fa-trash"></i></button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="d-flex justify-content-between align-items-center">
+                <button type="button" class="btn btn-sm btn-outline-primary" @click="addLine">
+                  <i class="fa fa-plus me-1"></i> 行を追加
+                </button>
+                <div class="fw-bold">
+                  合計: ¥{{ (formData.total_amount || 0).toLocaleString() }}
+                </div>
+              </div>
             </div>
           </div>
           <div class="mb-3 row">

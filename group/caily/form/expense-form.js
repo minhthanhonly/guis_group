@@ -6,9 +6,15 @@ export default {
   data() {
     return {
       formData: {
-        attachment: '',
-        attachment_original: '',
         receipts: [],
+        // 明細行（カスタムセット）
+        lines: [],
+        // 小計（税抜）
+        subtotal_amount: 0,
+        // 小計（消費税）
+        subtotal_tax: 0,
+        // 合計（税込）
+        total_with_tax: 0,
         note: '',
         approver_user_id: ''
       },
@@ -19,46 +25,71 @@ export default {
       uploadingReceipts: false,
       uploadProgress: 0,
       approvers: [],
-      fileInputRef: 'expenseFileInput',
       receiptsInputRef: 'expenseReceiptsInput',
       originalData: null
     };
   },
   created() {
     if (this.defaultData && Object.keys(this.defaultData).length > 0) {
-      const raw = Object.assign({
-        attachment: '',
-        attachment_original: '',
+      // defaultData から deep clone を作成して、親データと分離する
+      const base = Object.assign({
         receipts: [],
+        lines: [],
+        subtotal_amount: 0,
+        subtotal_tax: 0,
+        total_with_tax: 0,
         note: '',
         approver_user_id: ''
       }, this.defaultData);
+      const raw = JSON.parse(JSON.stringify(base));
       raw.receipts = Array.isArray(raw.receipts) ? raw.receipts : [];
+      raw.lines = Array.isArray(raw.lines) ? raw.lines : [];
+      raw.lines = raw.lines.map(line => ({
+        ...line,
+        date: this.normalizeDateValue(line && line.date)
+      }));
+      const totals = this.computeTotals(raw.lines);
+      raw.subtotal_amount = totals.subtotal_amount;
+      raw.subtotal_tax = totals.subtotal_tax;
+      raw.total_with_tax = totals.total_with_tax;
       this.formData = raw;
       this.originalData = JSON.parse(JSON.stringify(this.formData));
     }
   },
   mounted() {
     this.loadApprovers();
+    this.ensureAtLeastOneLine();
   },
   watch: {
     defaultData: {
       handler(newVal) {
         if (newVal && Object.keys(newVal).length > 0) {
-          const raw = Object.assign({
-            attachment: '',
-            attachment_original: '',
+          const base = Object.assign({
             receipts: [],
+            lines: [],
+            subtotal_amount: 0,
+            subtotal_tax: 0,
+            total_with_tax: 0,
             note: '',
             approver_user_id: ''
           }, newVal);
+          const raw = JSON.parse(JSON.stringify(base));
           raw.receipts = Array.isArray(raw.receipts) ? raw.receipts : [];
+          raw.lines = Array.isArray(raw.lines) ? raw.lines : [];
+          raw.lines = raw.lines.map(line => ({
+            ...line,
+            date: this.normalizeDateValue(line && line.date)
+          }));
+          const totals = this.computeTotals(raw.lines);
+          raw.subtotal_amount = totals.subtotal_amount;
+          raw.subtotal_tax = totals.subtotal_tax;
+          raw.total_with_tax = totals.total_with_tax;
           this.formData = raw;
           this.originalData = JSON.parse(JSON.stringify(this.formData));
         }
       },
       immediate: true,
-      deep: true
+      deep: false
     }
   },
   computed: {
@@ -69,6 +100,59 @@ export default {
     }
   },
   methods: {
+    normalizeDateValue(value) {
+      if (value === null || value === undefined) return '';
+      const str = String(value).trim();
+      if (!str) return '';
+      const m = str.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+      if (!m) return '';
+      return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    },
+    computeTotals(lines) {
+      const result = { subtotal_amount: 0, subtotal_tax: 0, total_with_tax: 0 };
+      if (!Array.isArray(lines)) return result;
+      lines.forEach(line => {
+        if (!line) return;
+        const na = line.amount != null ? Number(line.amount) : 0;
+        const nt = line.tax != null ? Number(line.tax) : 0;
+        if (!isNaN(na)) result.subtotal_amount += na;
+        if (!isNaN(nt)) result.subtotal_tax += nt;
+      });
+      result.total_with_tax = result.subtotal_amount + result.subtotal_tax;
+      return result;
+    },
+    ensureAtLeastOneLine() {
+      if (!Array.isArray(this.formData.lines)) this.formData.lines = [];
+      if (this.formData.lines.length === 0) {
+        this.addLine();
+      }
+    },
+    addLine() {
+      if (!Array.isArray(this.formData.lines)) this.formData.lines = [];
+      this.formData.lines.push({
+        date: '',
+        content: '',
+        payee: '',
+        amount: '',
+        tax: '',
+        reduced_tax: '', // 軽減税率: 任意の文字列/フラグ
+        note: ''
+      });
+    },
+    removeLine(index) {
+      if (!Array.isArray(this.formData.lines)) return;
+      this.formData.lines.splice(index, 1);
+      const totals = this.computeTotals(this.formData.lines);
+      this.formData.subtotal_amount = totals.subtotal_amount;
+      this.formData.subtotal_tax = totals.subtotal_tax;
+      this.formData.total_with_tax = totals.total_with_tax;
+    },
+    onLineAmountOrTaxChange() {
+      const totals = this.computeTotals(this.formData.lines);
+      this.formData.subtotal_amount = totals.subtotal_amount;
+      this.formData.subtotal_tax = totals.subtotal_tax;
+      this.formData.total_with_tax = totals.total_with_tax;
+    },
     async loadApprovers() {
       try {
         const res = await axios.get('/api/index.php?model=member&method=list_request_approvers');
@@ -76,59 +160,6 @@ export default {
       } catch (e) {
         this.approvers = [];
       }
-    },
-    onFileSelect(event) {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      if (file.size > 20 * 1024 * 1024) {
-        if (typeof showMessage === 'function') showMessage('ファイルサイズは20MB以下にしてください。', true);
-        event.target.value = '';
-        return;
-      }
-      this.uploadFile(file);
-      event.target.value = '';
-    },
-    async uploadFile(file) {
-      this.uploading = true;
-      this.uploadProgress = 0;
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const xhr = new XMLHttpRequest();
-        const url = '/api/index.php?model=request&method=uploadFormFile';
-        const result = await new Promise((resolve, reject) => {
-          xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable) this.uploadProgress = Math.round((e.loaded / e.total) * 100);
-          });
-          xhr.addEventListener('load', () => {
-            try {
-              const res = JSON.parse(xhr.responseText);
-              resolve(res);
-            } catch (e) {
-              resolve({ success: false, error: 'Invalid response' });
-            }
-          });
-          xhr.addEventListener('error', () => reject(new Error('Network error')));
-          xhr.open('POST', url);
-          xhr.send(formData);
-        });
-        if (result && result.success) {
-          this.formData.attachment = result.filename;
-          this.formData.attachment_original = result.original_name || file.name;
-          this.validateField('attachment');
-        } else {
-          if (typeof showMessage === 'function') showMessage(result && result.error ? result.error : 'アップロードに失敗しました。', true);
-        }
-      } catch (e) {
-        if (typeof showMessage === 'function') showMessage('アップロードに失敗しました。', true);
-      }
-      this.uploading = false;
-      this.uploadProgress = 0;
-    },
-    clearFile() {
-      this.formData.attachment = '';
-      this.formData.attachment_original = '';
-      this.validateField('attachment');
     },
     async onReceiptsSelect(event) {
       const files = event.target.files ? Array.from(event.target.files) : [];
@@ -192,10 +223,6 @@ export default {
     validate() {
       this.errors = {};
       let valid = true;
-      if (!this.formData.attachment || !String(this.formData.attachment).trim()) {
-        this.errors.attachment = '経費精算書のファイルをアップロードしてください。';
-        valid = false;
-      }
       if (!this.formData.approver_user_id) {
         this.errors.approver_user_id = '承認者を選択してください。';
         valid = false;
@@ -204,10 +231,7 @@ export default {
     },
     validateField(field) {
       const err = { ...this.errors };
-      if (field === 'attachment') {
-        if (!this.formData.attachment || !String(this.formData.attachment).trim()) err.attachment = '経費精算書のファイルをアップロードしてください。';
-        else { delete err.attachment; }
-      } else if (field === 'approver_user_id') {
+      if (field === 'approver_user_id') {
         if (!this.formData.approver_user_id) err.approver_user_id = '承認者を選択してください。';
         else { delete err.approver_user_id; }
       }
@@ -217,6 +241,11 @@ export default {
       if (!this.validate()) return;
       this.submitting = true;
       try {
+        // 再計算してから送信
+        const totals = this.computeTotals(this.formData.lines || []);
+        this.formData.subtotal_amount = totals.subtotal_amount;
+        this.formData.subtotal_tax = totals.subtotal_tax;
+        this.formData.total_with_tax = totals.total_with_tax;
         const payloadBase = {
           data: this.formData,
           approver_user_id: this.formData.approver_user_id || ''
@@ -244,12 +273,6 @@ export default {
     },
     close() {
       this.$emit('close');
-    },
-    downloadUrl() {
-      if (!this.formData.attachment) return '#';
-      const requestId = this.mode === 'edit' && this.defaultData && this.defaultData.id ? this.defaultData.id : '';
-      if (!requestId) return '#';
-      return 'download.php?file=' + encodeURIComponent(this.formData.attachment) + '&request_id=' + encodeURIComponent(requestId);
     }
   },
   template: `
@@ -267,27 +290,6 @@ export default {
       <div class="modal-body">
         <form @submit.prevent="submit('pending')">
           <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">経費精算書 <span class="text-danger">*</span></label>
-            <div class="col-sm-9">
-              <div v-if="!formData.attachment" class="d-flex flex-column gap-2">
-                <input type="file" class="form-control" :ref="fileInputRef" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" @change="onFileSelect" :disabled="uploading">
-                <div v-if="uploading" class="progress" style="height: 6px;">
-                  <div class="progress-bar" role="progressbar" :style="{ width: uploadProgress + '%' }"></div>
-                </div>
-              </div>
-              <div v-else class="d-flex align-items-center gap-2 flex-wrap">
-                <a v-if="mode==='edit' && defaultData && defaultData.id" :href="downloadUrl()" target="_blank" class="btn btn-sm btn-outline-primary">
-                  <i class="fa fa-download me-1"></i>{{ formData.attachment_original || formData.attachment }}
-                </a>
-                <span v-else class="me-2">{{ formData.attachment_original || formData.attachment }}</span>
-                <button type="button" class="btn btn-sm btn-outline-danger" @click="clearFile">削除</button>
-              </div>
-              <div class="text-danger small mt-1" v-if="errors.attachment">{{ errors.attachment }}</div>
-              <small v-if="mode==='add'" class="text-muted">20MB以下。</small>
-              <small v-if="mode==='add'" class="text-muted">この<a href="https://kanri.guis.co.jp/storage/view.php?id=615" target="_blank">フォーム</a>をダウンロードして、記載してください。</small>
-            </div>
-          </div>
-          <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">請求書・領収書等</label>
             <div class="col-sm-9">
               <input type="file" class="form-control mb-2" :ref="receiptsInputRef" accept=".pdf,.jpg,.jpeg,.png,.gif" multiple @change="onReceiptsSelect" :disabled="uploadingReceipts">
@@ -302,6 +304,85 @@ export default {
                 </li>
               </ul>
               <small class="text-muted">画像・PDF。複数可。各20MB以下。</small>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">明細</label>
+            <div class="col-sm-12">
+              <table class="table table-sm align-middle mb-2 detail-table">
+                <thead>
+                  <tr>
+                    <th style="width: 90px;">日付</th>
+                    <th>内容</th>
+                    <th style="width: 120px;">支払先</th>
+                    <th style="width: 110px;">金額（税抜）</th>
+                    <th style="width: 110px;">消費税</th>
+                    <th style="width: 110px;">軽減税率</th>
+                    <th>備考</th>
+                    <th style="width: 40px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(line, idx) in formData.lines" :key="idx">
+                    <td>
+                      <input type="date" class="form-control form-control-sm" v-model="line.date">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.content">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.payee">
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        class="form-control form-control-sm text-end"
+                        v-model.number="line.amount"
+                        @change="onLineAmountOrTaxChange"
+                        @blur="onLineAmountOrTaxChange"
+                      >
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        class="form-control form-control-sm text-end"
+                        v-model.number="line.tax"
+                        @change="onLineAmountOrTaxChange"
+                        @blur="onLineAmountOrTaxChange"
+                      >
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.reduced_tax">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.note">
+                    </td>
+                    <td class="text-center">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline-danger"
+                        @click="removeLine(idx)"
+                      >
+                        <i class="fa fa-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <button type="button" class="btn btn-sm btn-outline-primary" @click="addLine">
+                    <i class="fa fa-plus me-1"></i> 行を追加
+                  </button>
+                </div>
+                <div class="text-end">
+                  <div>小計（金額（税抜））: ¥{{ (formData.subtotal_amount || 0).toLocaleString() }}</div>
+                  <div>小計（消費税）: ¥{{ (formData.subtotal_tax || 0).toLocaleString() }}</div>
+                  <div class="fw-bold">合計（税込）: ¥{{ (formData.total_with_tax || 0).toLocaleString() }}</div>
+                </div>
+              </div>
             </div>
           </div>
           <div class="mb-3 row">
@@ -333,6 +414,7 @@ export default {
       <div class="text-muted small" v-if="mode==='add'">
           <ul>
             <li>在宅勤務者が経費を立て替えた場合の清算時に提出してください。</li>
+            <li>立替の場合は毎月20日までに提出してください。立替分の振込は給与支払日に合算して清算します。</li>
             <li>交通費以外は領収証も必ず添付してください。</li>
             <li>経費精算書、領収証原本（交通費以外）を総務課が受領した時点の勤怠締めにあわせて給与と合算して振込清算とします。</li>
           </ul>

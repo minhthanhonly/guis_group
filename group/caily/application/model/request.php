@@ -85,14 +85,6 @@ class Request extends ApplicationModel {
             $ctype = trim($data['correction_type'] ?? '');
             if ($ctype === '' || !in_array($ctype, ['出社', '退社'], true)) $errors[] = '区分を選択してください。';
             if (empty(trim($data['reason'] ?? ''))) $errors[] = '事由を入力してください。';
-        } elseif ($type == 'travel_expense') {
-            if (empty(trim($data['attachment'] ?? ''))) $errors[] = '交通費精算書のファイルをアップロードしてください。';
-        } elseif ($type == 'expense') {
-            if (empty(trim($data['attachment'] ?? ''))) $errors[] = '経費精算書のファイルをアップロードしてください。';
-        } elseif ($type == 'trip_expense') {
-            if (empty(trim($data['attachment'] ?? ''))) $errors[] = '出張旅費精算書のファイルをアップロードしてください。';
-        } elseif ($type == 'commuting_allowance') {
-            if (empty(trim($data['attachment'] ?? ''))) $errors[] = '通勤手当申請書のファイルをアップロードしてください。';
         } elseif ($type == 'purchase') {
             $allowed = ['備品', '事務用品', 'ソフトウェア', 'その他'];
             if (empty(trim($data['category'] ?? '')) || !in_array(trim($data['category']), $allowed, true)) {
@@ -256,7 +248,15 @@ class Request extends ApplicationModel {
             $where[] = "user_id = '" . $this->quote($_GET['user_id']) . "'";
         }
         if (!empty($_GET['status'])) {
-            $where[] = "status = '" . $this->quote($_GET['status']) . "'";
+            $statusesParam = trim((string)$_GET['status']);
+            $statuses = array_values(array_filter(array_map('trim', explode(',', $statusesParam))));
+            if (count($statuses) === 1) {
+                $where[] = "status = '" . $this->quote($statuses[0]) . "'";
+            } else if (count($statuses) > 1) {
+                // status を "pending,draft" のように複数指定できるようにする
+                $in = "'" . implode("','", array_map([$this, 'quote'], $statuses)) . "'";
+                $where[] = "status IN ($in)";
+            }
         }
         // Keyword search (tìm trong JSON data – ví dụ reason, note, và realname người đăng ký)
         if (!empty($_GET['keyword'])) {
@@ -450,7 +450,9 @@ class Request extends ApplicationModel {
             $update['approved_at'] = date('Y-m-d H:i:s');
             // 承認時: add_to_calendar ならカレンダーに追加し schedule_id を保存
             if (!empty($currentRequest['add_to_calendar']) && in_array($currentRequest['type'], ['leave', 'outing', 'trip', 'holiday_work'], true)) {
+               
                 $scheduleId = $this->createScheduleFromRequest($id);
+                error_log("approved scheduleId: " . $scheduleId);
                 if ($scheduleId) {
                     $update['schedule_id'] = $scheduleId;
                 }
@@ -469,8 +471,7 @@ class Request extends ApplicationModel {
             $this->sendRequestStatusNotification($id, $currentRequest['type'], $status, $currentRequest['user_id'], $user, $status);
         }
         if ($result && $status === 'pending') {
-            $approverUserId = !empty($_POST['approver_user_id']) ? $_POST['approver_user_id'] : null;
-
+            $approverUserId =  $currentRequest['approver_user_id'] ?? null;
             if($_SESSION['userid'] == $currentRequest['user_id']) {
                 $this->sendRequestCreatedNotification($currentRequest['id'], $currentRequest['type'], $_SESSION['userid'], $approverUserId);
             } else{
@@ -713,15 +714,28 @@ class Request extends ApplicationModel {
             $title = $realname;
             $start = $data['start_datetime'] ?? '';
             $end = $data['end_datetime'] ?? '';
+            // 休暇届は現在 yyyy-mm-dd（時刻なし）で保存されるため、
+            // 旧データの datetime 形式（yyyy-mm-ddTHH:ii）も後方互換で扱う
             if (preg_match('/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/', $start, $m)) {
                 $schedule_date = $m[1];
                 $schedule_time = $m[2] . ':00';
                 if (strlen($schedule_time) === 7) $schedule_time = $m[2] . ':00';
+            } elseif (preg_match('/^\d{4}-\d{2}-\d{2}/', $start)) {
+                $schedule_date = substr($start, 0, 10);
             }
             if (preg_match('/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/', $end, $m)) {
                 $schedule_date_end = $m[1];
                 $schedule_endtime = $m[2] . ':00';
                 if (strlen($schedule_endtime) === 7) $schedule_endtime = $m[2] . ':00';
+            } elseif (preg_match('/^\d{4}-\d{2}-\d{2}/', $end)) {
+                $schedule_date_end = substr($end, 0, 10);
+            }
+            // フォールバック: request.start_date / end_date があれば利用
+            if (!$schedule_date && !empty($requestRow['start_date'])) {
+                $schedule_date = $requestRow['start_date'];
+            }
+            if (!$schedule_date_end && !empty($requestRow['end_date'])) {
+                $schedule_date_end = $requestRow['end_date'];
             }
             if (!$schedule_time) $schedule_time = '00:00:00';
             if (!$schedule_endtime) $schedule_endtime = '23:59:00';
@@ -730,7 +744,7 @@ class Request extends ApplicationModel {
                 $schedule_date_end = $requestRow['end_date'] ?? '';
                 $schedule_date_end = date('Y-m-d', strtotime($schedule_date_end . ' +1 day'));
                 $schedule_allday = 1;
-                $title .= '　休み';
+                $title .= '　全休';
                 $schedule_time = '00:00';
                 $schedule_endtime = '00:00';
             } else {
@@ -1413,10 +1427,173 @@ class Request extends ApplicationModel {
             if (!empty($data['correction_type'])) $lines[] = $fmt('区分', $data['correction_type']);
             if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
-        } elseif (in_array($type, ['travel_expense', 'expense', 'trip_expense', 'commuting_allowance'], true)) {
-            if (!empty($data['attachment_original'])) $lines[] = $fmt('添付ファイル', $data['attachment_original']);
-            elseif (!empty($data['attachment'])) $lines[] = $fmt('添付ファイル', $data['attachment']);
+        } elseif ($type === 'travel_expense') {
+            // 交通費精算書: 明細行と合計金額をメールに出力
+            if (!empty($data['lines']) && is_array($data['lines'])) {
+                $idx = 1;
+                foreach ($data['lines'] as $line) {
+                    if (!is_array($line)) continue;
+                    $rowParts = [];
+                    if (!empty($line['date'])) {
+                        $rowParts[] = '日付: ' . $line['date'];
+                    }
+                    if (!empty($line['route'])) {
+                        $rowParts[] = '路線: ' . $line['route'];
+                    }
+                    if (!empty($line['from']) || !empty($line['to'])) {
+                        $rowParts[] = '区間: ' . ($line['from'] ?? '') . ' → ' . ($line['to'] ?? '');
+                    }
+                    if (isset($line['amount']) && $line['amount'] !== '') {
+                        $rowParts[] = '金額: ' . $line['amount'] . '円';
+                    }
+                    if (!empty($line['way'])) {
+                        $rowParts[] = '往復/片道: ' . $line['way'];
+                    }
+                    if (!empty($line['note'])) {
+                        $rowParts[] = '備考: ' . $line['note'];
+                    }
+                    if (!empty($rowParts)) {
+                        $lines[] = '明細' . $idx . ': ' . implode(' / ', $rowParts);
+                        $idx++;
+                    }
+                }
+            }
+            if (isset($data['total_amount']) && $data['total_amount'] !== '') {
+                $lines[] = $fmt('合計金額', $data['total_amount'] . '円');
+            }
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($type === 'expense') {
+            // 経費精算書: 明細行と小計・合計をメールに出力
+            if (!empty($data['lines']) && is_array($data['lines'])) {
+                $idx = 1;
+                foreach ($data['lines'] as $line) {
+                    if (!is_array($line)) continue;
+                    $rowParts = [];
+                    if (!empty($line['date'])) {
+                        $rowParts[] = '日付: ' . $line['date'];
+                    }
+                    if (!empty($line['content'])) {
+                        $rowParts[] = '内容: ' . $line['content'];
+                    }
+                    if (!empty($line['payee'])) {
+                        $rowParts[] = '支払先: ' . $line['payee'];
+                    }
+                    if (isset($line['amount']) && $line['amount'] !== '') {
+                        $rowParts[] = '金額（税抜）: ' . $line['amount'] . '円';
+                    }
+                    if (isset($line['tax']) && $line['tax'] !== '') {
+                        $rowParts[] = '消費税: ' . $line['tax'] . '円';
+                    }
+                    if (!empty($line['reduced_tax'])) {
+                        $rowParts[] = '軽減税率: ' . $line['reduced_tax'];
+                    }
+                    if (!empty($line['note'])) {
+                        $rowParts[] = '備考: ' . $line['note'];
+                    }
+                    if (!empty($rowParts)) {
+                        $lines[] = '明細' . $idx . ': ' . implode(' / ', $rowParts);
+                        $idx++;
+                    }
+                }
+            }
+            if (isset($data['subtotal_amount']) && $data['subtotal_amount'] !== '') {
+                $lines[] = $fmt('小計（金額（税抜））', $data['subtotal_amount'] . '円');
+            }
+            if (isset($data['subtotal_tax']) && $data['subtotal_tax'] !== '') {
+                $lines[] = $fmt('小計（消費税）', $data['subtotal_tax'] . '円');
+            }
+            if (isset($data['total_with_tax']) && $data['total_with_tax'] !== '') {
+                $lines[] = $fmt('合計（税込）', $data['total_with_tax'] . '円');
+            }
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($type === 'trip_expense') {
+            // 出張旅費精算書: 画面フィールドと同等にメール本文を組み立てる
+            if (!empty($data['destination'])) $lines[] = $fmt('出張先', $data['destination']);
+            if (!empty($data['start_date'])) $lines[] = $fmt('期間（開始）', $data['start_date']);
+            if (!empty($data['end_date'])) $lines[] = $fmt('期間（終了）', $data['end_date']);
+            if (!empty($data['settlement_date'])) $lines[] = $fmt('精算日', $data['settlement_date']);
+            if (!empty($data['trip_type'])) $lines[] = $fmt('国内/海外', $data['trip_type']);
+
+            if (isset($data['per_diem']) && $data['per_diem'] !== '') $lines[] = $fmt('日当', $data['per_diem'] . '円');
+            if (isset($data['trip_days']) && $data['trip_days'] !== '') $lines[] = $fmt('日間', $data['trip_days']);
+            if (isset($data['trip_allowance']) && $data['trip_allowance'] !== '') $lines[] = $fmt('出張手当', $data['trip_allowance'] . '円');
+
+            if (isset($data['advance_amount']) && $data['advance_amount'] !== '') $lines[] = $fmt('仮払金', $data['advance_amount'] . '円');
+            if (isset($data['line_total']) && $data['line_total'] !== '') $lines[] = $fmt('明細合計', $data['line_total'] . '円');
+            if (isset($data['net_total']) && $data['net_total'] !== '') $lines[] = $fmt('仮払金差引合計', $data['net_total'] . '円');
+            if (isset($data['final_amount']) && $data['final_amount'] !== '') $lines[] = $fmt('精算額', $data['final_amount'] . '円');
+
+            if (!empty($data['receipts']) && is_array($data['receipts'])) {
+                $names = array_map(function ($a) {
+                    return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+                }, $data['receipts']);
+                $names = array_filter($names);
+                if (count($names)) {
+                    $lines[] = $fmt('請求書・領収書等', implode('、', $names));
+                }
+            }
+
+            if (!empty($data['lines']) && is_array($data['lines'])) {
+                $idx = 1;
+                foreach ($data['lines'] as $line) {
+                    if (!is_array($line)) continue;
+                    $rowParts = [];
+                    if (!empty($line['date'])) $rowParts[] = '日付: ' . $line['date'];
+                    if (!empty($line['item'])) $rowParts[] = '項目: ' . $line['item'];
+                    if (isset($line['transportation']) && $line['transportation'] !== '') $rowParts[] = '交通費: ' . $line['transportation'] . '円';
+                    if (isset($line['accommodation']) && $line['accommodation'] !== '') $rowParts[] = '宿泊費: ' . $line['accommodation'] . '円';
+                    if (isset($line['entertainment']) && $line['entertainment'] !== '') $rowParts[] = '交際費: ' . $line['entertainment'] . '円';
+                    if (isset($line['meal']) && $line['meal'] !== '') $rowParts[] = '食費: ' . $line['meal'] . '円';
+                    if (isset($line['other']) && $line['other'] !== '') $rowParts[] = 'その他: ' . $line['other'] . '円';
+                    if (isset($line['total']) && $line['total'] !== '') $rowParts[] = '合計: ' . $line['total'] . '円';
+                    if (!empty($line['note'])) $rowParts[] = '備考: ' . $line['note'];
+                    if (!empty($rowParts)) {
+                        $lines[] = '明細' . $idx . ': ' . implode(' / ', $rowParts);
+                        $idx++;
+                    }
+                }
+            }
+
+            if (!empty($data['note'])) $lines[] = $fmt('備考', $data['note']);
+        } elseif ($type === 'commuting_allowance') {
+            // 通勤手当申請書: 画面フィールドと同等にメール本文を組み立てる
+            if (!empty($data['application_type'])) $lines[] = $fmt('申請区分', $data['application_type']);
+            if (!empty($data['address'])) $lines[] = $fmt('住所', $data['address']);
+            if (!empty($data['nearest_station'])) $lines[] = $fmt('最寄駅', $data['nearest_station']);
+            if (!empty($data['effective_from'])) $lines[] = $fmt('適用開始日', $data['effective_from']);
+
+            if (isset($data['total_amount']) && $data['total_amount'] !== '') $lines[] = $fmt('合計片道運賃', $data['total_amount'] . '円');
+            if (isset($data['one_month_commuter_pass']) && $data['one_month_commuter_pass'] !== '') $lines[] = $fmt('１か月定期代', $data['one_month_commuter_pass'] . '円');
+
+            if (!empty($data['receipts']) && is_array($data['receipts'])) {
+                $names = array_map(function ($a) {
+                    return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+                }, $data['receipts']);
+                $names = array_filter($names);
+                if (count($names)) {
+                    $lines[] = $fmt('請求書・領収書等', implode('、', $names));
+                }
+            }
+
+            if (!empty($data['lines']) && is_array($data['lines'])) {
+                $idx = 1;
+                foreach ($data['lines'] as $line) {
+                    if (!is_array($line)) continue;
+                    $rowParts = [];
+                    if (!empty($line['railway_company'])) $rowParts[] = '鉄道会社名: ' . $line['railway_company'];
+                    if (!empty($line['line_name'])) $rowParts[] = '路線名: ' . $line['line_name'];
+                    if (!empty($line['section_from']) || !empty($line['section_to'])) {
+                        $rowParts[] = '利用区間: ' . ($line['section_from'] ?? '') . ' → ' . ($line['section_to'] ?? '');
+                    }
+                    if (isset($line['one_way_fare']) && $line['one_way_fare'] !== '') $rowParts[] = '片道運賃: ' . $line['one_way_fare'] . '円';
+                    if (!empty($rowParts)) {
+                        $lines[] = '明細' . $idx . ': ' . implode(' / ', $rowParts);
+                        $idx++;
+                    }
+                }
+            }
+
+            if (!empty($data['note'])) $lines[] = $fmt('備考', $data['note']);
         } elseif ($type === 'purchase') {
             if (!empty($data['category'])) $lines[] = $fmt('購入区分', $data['category']);
             if (!empty($data['item_name'])) $lines[] = $fmt('品名', $data['item_name']);
@@ -1509,10 +1686,171 @@ class Request extends ApplicationModel {
             if (!empty($data['correction_type'])) $lines[] = $fmt('区分', $data['correction_type']);
             if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
-        } elseif (in_array($requestType, ['travel_expense', 'expense', 'trip_expense', 'commuting_allowance'], true)) {
-            if (!empty($data['attachment_original'])) $lines[] = $fmt('添付ファイル', $data['attachment_original']);
-            elseif (!empty($data['attachment'])) $lines[] = $fmt('添付ファイル', $data['attachment']);
+        } elseif ($requestType === 'travel_expense') {
+            if (!empty($data['lines']) && is_array($data['lines'])) {
+                $idx = 1;
+                foreach ($data['lines'] as $line) {
+                    if (!is_array($line)) continue;
+                    $rowParts = [];
+                    if (!empty($line['date'])) {
+                        $rowParts[] = '日付: ' . $line['date'];
+                    }
+                    if (!empty($line['route'])) {
+                        $rowParts[] = '路線: ' . $line['route'];
+                    }
+                    if (!empty($line['from']) || !empty($line['to'])) {
+                        $rowParts[] = '区間: ' . ($line['from'] ?? '') . ' → ' . ($line['to'] ?? '');
+                    }
+                    if (isset($line['amount']) && $line['amount'] !== '') {
+                        $rowParts[] = '金額: ' . $line['amount'] . '円';
+                    }
+                    if (!empty($line['way'])) {
+                        $rowParts[] = '往復/片道: ' . $line['way'];
+                    }
+                    if (!empty($line['note'])) {
+                        $rowParts[] = '備考: ' . $line['note'];
+                    }
+                    if (!empty($rowParts)) {
+                        $lines[] = '明細' . $idx . ': ' . implode(' / ', $rowParts);
+                        $idx++;
+                    }
+                }
+            }
+            if (isset($data['total_amount']) && $data['total_amount'] !== '') {
+                $lines[] = $fmt('合計金額', $data['total_amount'] . '円');
+            }
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($requestType === 'expense') {
+            if (!empty($data['lines']) && is_array($data['lines'])) {
+                $idx = 1;
+                foreach ($data['lines'] as $line) {
+                    if (!is_array($line)) continue;
+                    $rowParts = [];
+                    if (!empty($line['date'])) {
+                        $rowParts[] = '日付: ' . $line['date'];
+                    }
+                    if (!empty($line['content'])) {
+                        $rowParts[] = '内容: ' . $line['content'];
+                    }
+                    if (!empty($line['payee'])) {
+                        $rowParts[] = '支払先: ' . $line['payee'];
+                    }
+                    if (isset($line['amount']) && $line['amount'] !== '') {
+                        $rowParts[] = '金額（税抜）: ' . $line['amount'] . '円';
+                    }
+                    if (isset($line['tax']) && $line['tax'] !== '') {
+                        $rowParts[] = '消費税: ' . $line['tax'] . '円';
+                    }
+                    if (!empty($line['reduced_tax'])) {
+                        $rowParts[] = '軽減税率: ' . $line['reduced_tax'];
+                    }
+                    if (!empty($line['note'])) {
+                        $rowParts[] = '備考: ' . $line['note'];
+                    }
+                    if (!empty($rowParts)) {
+                        $lines[] = '明細' . $idx . ': ' . implode(' / ', $rowParts);
+                        $idx++;
+                    }
+                }
+            }
+            if (isset($data['subtotal_amount']) && $data['subtotal_amount'] !== '') {
+                $lines[] = $fmt('小計（金額（税抜））', $data['subtotal_amount'] . '円');
+            }
+            if (isset($data['subtotal_tax']) && $data['subtotal_tax'] !== '') {
+                $lines[] = $fmt('小計（消費税）', $data['subtotal_tax'] . '円');
+            }
+            if (isset($data['total_with_tax']) && $data['total_with_tax'] !== '') {
+                $lines[] = $fmt('合計（税込）', $data['total_with_tax'] . '円');
+            }
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($requestType === 'trip_expense') {
+            // 出張旅費精算書（削除メール用フォーマット）
+            if (!empty($data['destination'])) $lines[] = $fmt('出張先', $data['destination']);
+            if (!empty($data['start_date'])) $lines[] = $fmt('期間（開始）', $data['start_date']);
+            if (!empty($data['end_date'])) $lines[] = $fmt('期間（終了）', $data['end_date']);
+            if (!empty($data['settlement_date'])) $lines[] = $fmt('精算日', $data['settlement_date']);
+            if (!empty($data['trip_type'])) $lines[] = $fmt('国内/海外', $data['trip_type']);
+
+            if (isset($data['per_diem']) && $data['per_diem'] !== '') $lines[] = $fmt('日当', $data['per_diem'] . '円');
+            if (isset($data['trip_days']) && $data['trip_days'] !== '') $lines[] = $fmt('日間', $data['trip_days']);
+            if (isset($data['trip_allowance']) && $data['trip_allowance'] !== '') $lines[] = $fmt('出張手当', $data['trip_allowance'] . '円');
+
+            if (isset($data['advance_amount']) && $data['advance_amount'] !== '') $lines[] = $fmt('仮払金', $data['advance_amount'] . '円');
+            if (isset($data['line_total']) && $data['line_total'] !== '') $lines[] = $fmt('明細合計', $data['line_total'] . '円');
+            if (isset($data['net_total']) && $data['net_total'] !== '') $lines[] = $fmt('仮払金差引合計', $data['net_total'] . '円');
+            if (isset($data['final_amount']) && $data['final_amount'] !== '') $lines[] = $fmt('精算額', $data['final_amount'] . '円');
+
+            if (!empty($data['receipts']) && is_array($data['receipts'])) {
+                $names = array_map(function ($a) {
+                    return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+                }, $data['receipts']);
+                $names = array_filter($names);
+                if (count($names)) {
+                    $lines[] = $fmt('請求書・領収書等', implode('、', $names));
+                }
+            }
+
+            if (!empty($data['lines']) && is_array($data['lines'])) {
+                $idx = 1;
+                foreach ($data['lines'] as $line) {
+                    if (!is_array($line)) continue;
+                    $rowParts = [];
+                    if (!empty($line['date'])) $rowParts[] = '日付: ' . $line['date'];
+                    if (!empty($line['item'])) $rowParts[] = '項目: ' . $line['item'];
+                    if (isset($line['transportation']) && $line['transportation'] !== '') $rowParts[] = '交通費: ' . $line['transportation'] . '円';
+                    if (isset($line['accommodation']) && $line['accommodation'] !== '') $rowParts[] = '宿泊費: ' . $line['accommodation'] . '円';
+                    if (isset($line['entertainment']) && $line['entertainment'] !== '') $rowParts[] = '交際費: ' . $line['entertainment'] . '円';
+                    if (isset($line['meal']) && $line['meal'] !== '') $rowParts[] = '食費: ' . $line['meal'] . '円';
+                    if (isset($line['other']) && $line['other'] !== '') $rowParts[] = 'その他: ' . $line['other'] . '円';
+                    if (isset($line['total']) && $line['total'] !== '') $rowParts[] = '合計: ' . $line['total'] . '円';
+                    if (!empty($line['note'])) $rowParts[] = '備考: ' . $line['note'];
+                    if (!empty($rowParts)) {
+                        $lines[] = '明細' . $idx . ': ' . implode(' / ', $rowParts);
+                        $idx++;
+                    }
+                }
+            }
+
+            if (!empty($data['note'])) $lines[] = $fmt('備考', $data['note']);
+        } elseif ($requestType === 'commuting_allowance') {
+            // 通勤手当申請書（削除メール用フォーマット）
+            if (!empty($data['application_type'])) $lines[] = $fmt('申請区分', $data['application_type']);
+            if (!empty($data['address'])) $lines[] = $fmt('住所', $data['address']);
+            if (!empty($data['nearest_station'])) $lines[] = $fmt('最寄駅', $data['nearest_station']);
+            if (!empty($data['effective_from'])) $lines[] = $fmt('適用開始日', $data['effective_from']);
+
+            if (isset($data['total_amount']) && $data['total_amount'] !== '') $lines[] = $fmt('合計片道運賃', $data['total_amount'] . '円');
+            if (isset($data['one_month_commuter_pass']) && $data['one_month_commuter_pass'] !== '') $lines[] = $fmt('１か月定期代', $data['one_month_commuter_pass'] . '円');
+
+            if (!empty($data['receipts']) && is_array($data['receipts'])) {
+                $names = array_map(function ($a) {
+                    return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+                }, $data['receipts']);
+                $names = array_filter($names);
+                if (count($names)) {
+                    $lines[] = $fmt('請求書・領収書等', implode('、', $names));
+                }
+            }
+
+            if (!empty($data['lines']) && is_array($data['lines'])) {
+                $idx = 1;
+                foreach ($data['lines'] as $line) {
+                    if (!is_array($line)) continue;
+                    $rowParts = [];
+                    if (!empty($line['railway_company'])) $rowParts[] = '鉄道会社名: ' . $line['railway_company'];
+                    if (!empty($line['line_name'])) $rowParts[] = '路線名: ' . $line['line_name'];
+                    if (!empty($line['section_from']) || !empty($line['section_to'])) {
+                        $rowParts[] = '利用区間: ' . ($line['section_from'] ?? '') . ' → ' . ($line['section_to'] ?? '');
+                    }
+                    if (isset($line['one_way_fare']) && $line['one_way_fare'] !== '') $rowParts[] = '片道運賃: ' . $line['one_way_fare'] . '円';
+                    if (!empty($rowParts)) {
+                        $lines[] = '明細' . $idx . ': ' . implode(' / ', $rowParts);
+                        $idx++;
+                    }
+                }
+            }
+
+            if (!empty($data['note'])) $lines[] = $fmt('備考', $data['note']);
         } elseif ($requestType === 'purchase') {
             if (!empty($data['category'])) $lines[] = $fmt('購入区分', $data['category']);
             if (!empty($data['item_name'])) $lines[] = $fmt('品名', $data['item_name']);
@@ -1621,8 +1959,37 @@ class Request extends ApplicationModel {
             $addDiff('区分', 'correction_type');
             $addDiff('事由', 'reason');
             $addDiff('注記', 'note');
-        } elseif (in_array($requestType, ['travel_expense', 'expense', 'trip_expense', 'commuting_allowance'], true)) {
-            $addDiff('添付ファイル', 'attachment_original');
+        } elseif ($requestType === 'travel_expense') {
+            // 明細行の差分は項目ごとに見るとノイズが多いので、ここでは合計金額と備考のみを差分表示
+            $addDiff('合計金額', 'total_amount');
+            $addDiff('備考', 'note');
+        } elseif ($requestType === 'expense') {
+            // 経費精算書も明細行が多くなるため、小計・合計と備考のみを差分表示
+            $addDiff('小計（金額（税抜））', 'subtotal_amount');
+            $addDiff('小計（消費税）', 'subtotal_tax');
+            $addDiff('合計（税込）', 'total_with_tax');
+            $addDiff('備考', 'note');
+        } elseif ($requestType === 'trip_expense') {
+            $addDiff('出張先', 'destination');
+            $addDiff('期間（開始）', 'start_date');
+            $addDiff('期間（終了）', 'end_date');
+            $addDiff('精算日', 'settlement_date');
+            $addDiff('国内/海外', 'trip_type');
+            $addDiff('日当', 'per_diem');
+            $addDiff('日間', 'trip_days');
+            $addDiff('出張手当', 'trip_allowance');
+            $addDiff('仮払金', 'advance_amount');
+            $addDiff('明細合計', 'line_total');
+            $addDiff('仮払金差引合計', 'net_total');
+            $addDiff('精算額', 'final_amount');
+            $addDiff('備考', 'note');
+        } elseif ($requestType === 'commuting_allowance') {
+            $addDiff('申請区分', 'application_type');
+            $addDiff('住所', 'address');
+            $addDiff('最寄駅', 'nearest_station');
+            $addDiff('適用開始日', 'effective_from');
+            $addDiff('１か月定期代', 'one_month_commuter_pass');
+            $addDiff('合計片道運賃', 'total_amount');
             $addDiff('備考', 'note');
         } elseif ($requestType === 'purchase') {
             $addDiff('購入区分', 'category');

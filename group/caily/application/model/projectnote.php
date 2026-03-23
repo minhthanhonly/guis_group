@@ -72,11 +72,31 @@ class ProjectNote extends ApplicationModel {
                 $result = $this->fetchOne($query);
                 $isManager = ($result && $result['count'] > 0);
             }
+
+
+            // Check if user is department manager of the note's project
+            $isDepartmentManager = false;
+            if (!$isCreator && !$isManager) {
+                $project = $this->fetchOne(
+                    "SELECT department_id FROM " . DB_PREFIX . "projects WHERE id = " . intval($note['project_id'])
+                );
+                if ($project && !empty($project['department_id'])) {
+                    $departmentCheck = $this->fetchOne(
+                        "SELECT project_manager FROM " . DB_PREFIX . "user_department ud " .
+                        "WHERE ud.department_id = " . intval($project['department_id']) . " " .
+                        "AND ud.userid = '" . $currentUserId . "' LIMIT 1"
+                    );
+                    if ($departmentCheck && isset($departmentCheck['project_manager'])) {
+                        $isDepartmentManager = ($departmentCheck['project_manager'] == 1);
+                    }
+                }
+            }
             
-            // Only allow editing if user is creator or manager
-            if ((!$isCreator && !$isManager)) {
+            // Only allow deletion if user is creator, project manager, department manager, or administrator
+            if (!$isCreator && !$isManager && !$isDepartmentManager) {
                 return ['status' => 'error', 'error' => 'Permission denied'];
             }
+            
         }
         
         $data = array(

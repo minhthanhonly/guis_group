@@ -82,6 +82,13 @@
             <option value="rejected">却下</option>
           </select>
         </div>
+        <div class="col-md-3">
+          <label class="col-form-label col-form-label-sm d-block">&nbsp;</label>
+          <div class="form-check form-check-sm mt-2">
+            <input class="form-check-input" type="checkbox" id="showDraftsCheckbox" v-model="showDrafts" @change="onFilterChange">
+            <label class="form-check-label" for="showDraftsCheckbox">下書きも表示</label>
+          </div>
+        </div>
       </div>
       <div v-if="!loading && requests.length === 0" class="text-muted text-center py-5">まだ申請がありません。</div>
       <div v-else-if="!loading" class="table-responsive">
@@ -109,6 +116,15 @@
               <th v-if="currentTab === 'it_support'">区分</th>
               <th v-if="currentTab === 'it_support'">件名</th>
               <th v-if="currentTab === 'it_support'">緊急度</th>
+              <th v-if="currentTab === 'trip_expense'">期間</th>
+              <th v-if="currentTab === 'trip_expense'">出張先</th>
+              <th v-if="currentTab === 'trip_expense'">精算額</th>
+              <th v-if="currentTab === 'travel_expense'">合計金額</th>
+              <th v-if="currentTab === 'expense'">合計金額（税込）</th>
+              <th v-if="currentTab === 'commuting_allowance'">申請区分</th>
+              <th v-if="currentTab === 'commuting_allowance'">適用開始日</th>
+              <th v-if="currentTab === 'commuting_allowance'">合計片道運賃</th>
+              <th v-if="currentTab === 'commuting_allowance'">１か月定期代</th>
               <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">事由</th>
               <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">注記</th>
               <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">指定承認者</th>
@@ -129,7 +145,7 @@
             <tr v-for="req in requests" :key="req.id">
               <td>{{ req.user_realname || '-' }}</td>
               <td v-if="currentTab === 'leave'">
-                {{ formatDate(req.data?.start_datetime) }} ~ {{ formatDate(req.data?.end_datetime) }}
+                {{ formatDateOnly(req.data?.start_datetime) }} ~ {{ formatDateOnly(req.data?.end_datetime) }}
               </td>
               <td v-if="currentTab === 'leave'">
                 <span v-if="req.data?.days" class="badge bg-primary">{{ req.data.days }}</span>
@@ -153,6 +169,56 @@
               <td v-if="currentTab === 'purchase'">{{ req.data?.category || '-' }}</td>
               <td v-if="currentTab === 'purchase'">{{ req.data?.item_name || '-' }}</td>
               <td v-if="currentTab === 'purchase'">{{ req.data?.quantity != null && req.data?.quantity !== '' ? req.data.quantity : '-' }}</td>
+              <td v-if="currentTab === 'travel_expense'">
+                <span v-if="req.data && (req.data.total_amount != null)">
+                  ¥{{ Number(req.data.total_amount || 0).toLocaleString() }}
+                </span>
+                <span v-else>-</span>
+              </td>
+              <td v-if="currentTab === 'expense'">
+                <span v-if="req.data && (req.data.total_with_tax != null)">
+                  ¥{{ Number(req.data.total_with_tax || 0).toLocaleString() }}
+                </span>
+                <span v-else>-</span>
+              </td>
+              <td v-if="currentTab === 'commuting_allowance'">
+                {{ req.data?.application_type || '-' }}
+              </td>
+              <td v-if="currentTab === 'commuting_allowance'">
+                <span v-if="req.data && req.data.effective_from">
+                  {{ formatDate(req.data.effective_from) }}
+                </span>
+                <span v-else>-</span>
+              </td>
+              <td v-if="currentTab === 'commuting_allowance'">
+                <span v-if="req.data && (req.data.total_amount != null && req.data.total_amount !== '')">
+                  ¥{{ Number(req.data.total_amount || 0).toLocaleString() }}
+                </span>
+                <span v-else>-</span>
+              </td>
+              <td v-if="currentTab === 'commuting_allowance'">
+                <span v-if="req.data && (req.data.one_month_commuter_pass != null && req.data.one_month_commuter_pass !== '')">
+                  ¥{{ Number(req.data.one_month_commuter_pass || 0).toLocaleString() }}
+                </span>
+                <span v-else>-</span>
+              </td>
+              <td v-if="currentTab === 'trip_expense'">
+                <span v-if="req.data && (req.data.start_date || req.data.end_date)">
+                  {{ req.data.start_date ? formatDate(req.data.start_date) : '-' }}
+                  ~
+                  {{ req.data.end_date ? formatDate(req.data.end_date) : '-' }}
+                </span>
+                <span v-else>-</span>
+              </td>
+              <td v-if="currentTab === 'trip_expense'">
+                {{ req.data?.destination || '-' }}
+              </td>
+              <td v-if="currentTab === 'trip_expense'">
+                <span v-if="req.data && (req.data.final_amount != null)">
+                  ¥{{ Number(req.data.final_amount || 0).toLocaleString() }}
+                </span>
+                <span v-else>-</span>
+              </td>
               <td v-if="currentTab === 'it_support'">{{ req.data?.category || '-' }}</td>
               <td v-if="currentTab === 'it_support'">{{ req.data?.subject || '-' }}</td>
               <td v-if="currentTab === 'it_support'">{{ req.data?.priority || '-' }}</td>
@@ -197,7 +263,7 @@
   </div>
   <!-- Modal đăng ký mới -->
   <div class="modal fade" id="formModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog" :class="modalDialogClass">
       <div class="modal-content">
         <component :is="currentFormComponent" @submitted="onFormSubmitted" @close="closeForm"></component>
       </div>
@@ -215,6 +281,13 @@
 #requestTableCard .table thead th { padding: 0.5rem; }
 #requestTableCard .table tbody tr:hover { outline: 2px solid var(--bs-primary); outline-offset: -2px; }
 .form-tab-dropdown-menu { max-height: 70vh; overflow-y: auto; }
+.modal-xl {
+  --bs-modal-width: 1140px;
+}
+.detail-table td,
+.detail-table th{
+ padding: 0.25rem;
+}
 </style>
 <?php $view->footing(); ?>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
@@ -256,7 +329,8 @@ createApp({
       currentFormComponent: null,
       keyword: '',
       searchDebounceTimer: null,
-      statusFilter: '',
+      statusFilter: 'pending',
+      showDrafts: true,
       monthFilter: '', // YYYY-MM, period 21/(M-1)～20/M
       formMonthPicker: null, // flatpickr instance
       page: 1,
@@ -278,6 +352,13 @@ createApp({
     currentTabLabel() {
       const t = this.tabs.find(x => x.type === this.currentTab);
       return t ? t.label : '申請種別';
+    },
+    modalDialogClass() {
+      // travel_expense 用フォームは内容が多いため、モーダルを大きくする
+      if (this.currentTab === 'travel_expense' || this.currentTab === 'expense' || this.currentTab === 'trip_expense' || this.currentTab === 'commuting_allowance') {
+        return 'modal-xl';
+      }
+      return 'modal-lg';
     },
     pageStart() {
       if (this.total === 0) return 0;
@@ -313,6 +394,18 @@ createApp({
       const youbi = ['日','月','火','水','木','金','土'];
       const wd = youbi[d.getDay()];
       return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}(${wd}) `;
+    },
+    formatDateOnly(dateStr) {
+      if (!dateStr) return '';
+      let str = dateStr;
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(str)) {
+        str += ':00';
+      }
+      const d = new Date(str);
+      if (isNaN(d)) return dateStr;
+      const youbi = ['日','月','火','水','木','金','土'];
+      const wd = youbi[d.getDay()];
+      return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}(${wd})`;
     },
     async updatePendingCountForTab(type) {
       try {
@@ -451,7 +544,16 @@ createApp({
           params.append('keyword', this.keyword.trim());
         }
         if (this.statusFilter) {
-          params.append('status', this.statusFilter);
+          if (this.showDrafts && this.statusFilter !== 'draft') {
+            params.append('status', this.statusFilter + ',draft');
+          } else {
+            params.append('status', this.statusFilter);
+          }
+        } else {
+          // 「状態: すべて」のとき、下書きを含める/除外する
+          if (!this.showDrafts) {
+            params.append('status', 'pending,approved,rejected');
+          }
         }
         if (this.monthFilter && /^\d{4}-\d{2}$/.test(this.monthFilter)) {
           const [y, m] = this.monthFilter.split('-').map(Number);
@@ -643,7 +745,13 @@ createApp({
       if (req.type === 'travel_expense') return req.data?.attachment_original || req.data?.attachment || '';
       if (req.type === 'expense') return req.data?.attachment_original || req.data?.attachment || '';
       if (req.type === 'trip_expense') return req.data?.attachment_original || req.data?.attachment || '';
-      if (req.type === 'commuting_allowance') return req.data?.attachment_original || req.data?.attachment || '';
+      if (req.type === 'commuting_allowance') {
+        const d = req.data || {};
+        const appType = d.application_type ? `申請区分: ${d.application_type}` : '';
+        const total = d.total_amount != null && d.total_amount !== '' ? `合計片道運賃: ¥${Number(d.total_amount || 0).toLocaleString()}` : '';
+        const pass = d.one_month_commuter_pass != null && d.one_month_commuter_pass !== '' ? `１か月定期代: ¥${Number(d.one_month_commuter_pass || 0).toLocaleString()}` : '';
+        return [appType, total, pass].filter(Boolean).join(' / ') || '';
+      }
       return '';
     },
     statusLabel(status) {

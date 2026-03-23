@@ -6,8 +6,19 @@ export default {
   data() {
     return {
       formData: {
-        attachment: '',
-        attachment_original: '',
+        destination: '',
+        start_date: '',
+        end_date: '',
+        settlement_date: '',
+        trip_type: '国内',
+        per_diem: 3000,
+        trip_days: '',
+        trip_allowance: 0,
+        advance_amount: '',
+        lines: [],
+        line_total: 0,
+        net_total: 0,
+        final_amount: 0,
         receipts: [],
         note: '',
         approver_user_id: ''
@@ -27,12 +38,18 @@ export default {
   created() {
     if (this.defaultData && Object.keys(this.defaultData).length > 0) {
       const raw = Object.assign({
-        attachment: '',
-        attachment_original: '',
+        destination: '',
+        start_date: '',
+        end_date: '',
+        settlement_date: '',
+        trip_type: '国内',
         receipts: [],
         note: '',
         approver_user_id: ''
       }, this.defaultData);
+      raw.start_date = this.normalizeDateValue(raw.start_date);
+      raw.end_date = this.normalizeDateValue(raw.end_date);
+      raw.settlement_date = this.normalizeDateValue(raw.settlement_date);
       raw.receipts = Array.isArray(raw.receipts) ? raw.receipts : [];
       this.formData = raw;
       this.originalData = JSON.parse(JSON.stringify(this.formData));
@@ -46,18 +63,76 @@ export default {
       handler(newVal) {
         if (newVal && Object.keys(newVal).length > 0) {
           const raw = Object.assign({
-            attachment: '',
-            attachment_original: '',
+            destination: '',
+            start_date: '',
+            end_date: '',
+            settlement_date: '',
+            trip_type: '国内',
+            per_diem: 3000,
+            trip_days: '',
+            trip_allowance: 0,
+            advance_amount: '',
+            lines: [],
+            line_total: 0,
+            net_total: 0,
+            final_amount: 0,
             receipts: [],
             note: '',
             approver_user_id: ''
           }, newVal);
+          raw.start_date = this.normalizeDateValue(raw.start_date);
+          raw.end_date = this.normalizeDateValue(raw.end_date);
+          raw.settlement_date = this.normalizeDateValue(raw.settlement_date);
           raw.receipts = Array.isArray(raw.receipts) ? raw.receipts : [];
           this.formData = raw;
           this.originalData = JSON.parse(JSON.stringify(this.formData));
         }
       },
       immediate: true,
+      deep: true
+    },
+    'formData.start_date'() {
+      this.updateTripDays();
+      // 日付が変更されたタイミングでも期間の妥当性をチェック
+      this.validateDates();
+    },
+    'formData.end_date'() {
+      this.updateTripDays();
+      // 終了日選択後に即時バリデーション
+      this.validateDates();
+    },
+    'formData.per_diem'() {
+      const per = Number(this.formData.per_diem || 0);
+      const d = Number(this.formData.trip_days || 0);
+      this.formData.trip_allowance =
+        this.formData.trip_type === '海外' && !isNaN(per) && !isNaN(d) ? per * d : 0;
+      this.updateTotalsFromLines();
+    },
+    'formData.trip_days'() {
+      const per = Number(this.formData.per_diem || 0);
+      const d = Number(this.formData.trip_days || 0);
+      this.formData.trip_allowance =
+        this.formData.trip_type === '海外' && !isNaN(per) && !isNaN(d) ? per * d : 0;
+      this.updateTotalsFromLines();
+    },
+    'formData.trip_type'() {
+      // 国内の場合は出張手当を 0 にする
+      const per = Number(this.formData.per_diem || 0);
+      const d = Number(this.formData.trip_days || 0);
+      if (this.formData.trip_type === '海外' && !isNaN(per) && !isNaN(d)) {
+        this.formData.trip_allowance = per * d;
+      } else {
+        this.formData.trip_allowance = 0;
+      }
+      this.updateTotalsFromLines();
+    },
+    'formData.advance_amount'() {
+      this.updateTotalsFromLines();
+    },
+    'formData.lines': {
+      handler() {
+        this.updateTotalsFromLines();
+      },
       deep: true
     }
   },
@@ -69,6 +144,100 @@ export default {
     }
   },
   methods: {
+    normalizeDateValue(value) {
+      if (value === null || value === undefined) return '';
+      const str = String(value).trim();
+      if (!str) return '';
+      const m = str.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+      if (!m) return '';
+      return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    },
+    computeLineSum(line) {
+      if (!line || typeof line !== 'object') return 0;
+      const keys = ['transportation', 'accommodation', 'entertainment', 'meal', 'other'];
+      return keys.reduce((sum, k) => {
+        const v = Number(line[k] || 0);
+        return isNaN(v) ? sum : sum + v;
+      }, 0);
+    },
+    updateTotalsFromLines() {
+      if (!Array.isArray(this.formData.lines)) {
+        this.formData.lines = [];
+      }
+      // 各行の合計を更新
+      this.formData.lines.forEach(line => {
+        if (!line) return;
+        const s = this.computeLineSum(line);
+        line.total = s;
+      });
+      // 全行の合計
+      const totalLines = this.formData.lines.reduce((sum, line) => {
+        const v = Number(line && line.total != null ? line.total : 0);
+        return isNaN(v) ? sum : sum + v;
+      }, 0);
+      this.formData.line_total = totalLines;
+      const adv = Number(this.formData.advance_amount || 0);
+      const net = totalLines - (isNaN(adv) ? 0 : adv);
+      this.formData.net_total = net;
+      const allowance = Number(this.formData.trip_allowance || 0);
+      this.formData.final_amount = net + (isNaN(allowance) ? 0 : allowance);
+    },
+    updateTripDays() {
+      if (!this.formData.start_date || !this.formData.end_date) {
+        this.formData.trip_days = '';
+        this.formData.trip_allowance = 0;
+        this.updateTotalsFromLines();
+        return;
+      }
+      const start = new Date(this.formData.start_date);
+      const end = new Date(this.formData.end_date);
+      if (isNaN(start) || isNaN(end) || end < start) {
+        this.formData.trip_days = '';
+        this.formData.trip_allowance = 0;
+        this.updateTotalsFromLines();
+        return;
+      }
+      // 開始日と終了日を含めた日数（土日も含む）
+      const diffMs = end.getTime() - start.getTime();
+      const days = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+      this.formData.trip_days = days > 0 ? String(days) : '';
+      const per = Number(this.formData.per_diem || 0);
+      const d = Number(this.formData.trip_days || 0);
+      this.formData.trip_allowance =
+        this.formData.trip_type === '海外' && !isNaN(per) && !isNaN(d) ? per * d : 0;
+      this.updateTotalsFromLines();
+    },
+    onPerDiemBlur() {
+      const v = Number(this.formData.per_diem || 0);
+      this.formData.per_diem = isNaN(v) || v < 0 ? 0 : v;
+      this.updateTripDays();
+    },
+    validateDates() {
+      const err = { ...this.errors };
+      let valid = true;
+      if (!this.formData.start_date) {
+        err.start_date = '開始日を入力してください。';
+        valid = false;
+      } else {
+        delete err.start_date;
+      }
+      if (!this.formData.end_date) {
+        err.end_date = '終了日を入力してください。';
+        valid = false;
+      } else {
+        delete err.end_date;
+      }
+      if (this.formData.start_date && this.formData.end_date) {
+        const s = new Date(this.formData.start_date);
+        const e = new Date(this.formData.end_date);
+        if (!isNaN(s) && !isNaN(e) && e < s) {
+          err.end_date = '終了日は開始日以降にしてください。';
+          valid = false;
+        }
+      }
+      this.errors = err;
+      return valid;
+    },
     async loadApprovers() {
       try {
         const res = await axios.get('/api/index.php?model=member&method=list_request_approvers');
@@ -76,59 +245,6 @@ export default {
       } catch (e) {
         this.approvers = [];
       }
-    },
-    onFileSelect(event) {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      if (file.size > 20 * 1024 * 1024) {
-        if (typeof showMessage === 'function') showMessage('ファイルサイズは20MB以下にしてください。', true);
-        event.target.value = '';
-        return;
-      }
-      this.uploadFile(file);
-      event.target.value = '';
-    },
-    async uploadFile(file) {
-      this.uploading = true;
-      this.uploadProgress = 0;
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const xhr = new XMLHttpRequest();
-        const url = '/api/index.php?model=request&method=uploadFormFile';
-        const result = await new Promise((resolve, reject) => {
-          xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable) this.uploadProgress = Math.round((e.loaded / e.total) * 100);
-          });
-          xhr.addEventListener('load', () => {
-            try {
-              const res = JSON.parse(xhr.responseText);
-              resolve(res);
-            } catch (e) {
-              resolve({ success: false, error: 'Invalid response' });
-            }
-          });
-          xhr.addEventListener('error', () => reject(new Error('Network error')));
-          xhr.open('POST', url);
-          xhr.send(formData);
-        });
-        if (result && result.success) {
-          this.formData.attachment = result.filename;
-          this.formData.attachment_original = result.original_name || file.name;
-          this.validateField('attachment');
-        } else {
-          if (typeof showMessage === 'function') showMessage(result && result.error ? result.error : 'アップロードに失敗しました。', true);
-        }
-      } catch (e) {
-        if (typeof showMessage === 'function') showMessage('アップロードに失敗しました。', true);
-      }
-      this.uploading = false;
-      this.uploadProgress = 0;
-    },
-    clearFile() {
-      this.formData.attachment = '';
-      this.formData.attachment_original = '';
-      this.validateField('attachment');
     },
     async onReceiptsSelect(event) {
       const files = event.target.files ? Array.from(event.target.files) : [];
@@ -192,8 +308,13 @@ export default {
     validate() {
       this.errors = {};
       let valid = true;
-      if (!this.formData.attachment || !String(this.formData.attachment).trim()) {
-        this.errors.attachment = '出張旅費精算書のファイルをアップロードしてください。';
+      // 出張先
+      if (!this.formData.destination || !String(this.formData.destination).trim()) {
+        this.errors.destination = '出張先を入力してください。';
+        valid = false;
+      }
+      // 期間
+      if (!this.validateDates()) {
         valid = false;
       }
       if (!this.formData.approver_user_id) {
@@ -204,9 +325,16 @@ export default {
     },
     validateField(field) {
       const err = { ...this.errors };
-      if (field === 'attachment') {
-        if (!this.formData.attachment || !String(this.formData.attachment).trim()) err.attachment = '出張旅費精算書のファイルをアップロードしてください。';
-        else { delete err.attachment; }
+      if (field === 'destination') {
+        if (!this.formData.destination || !String(this.formData.destination).trim()) err.destination = '出張先を入力してください。';
+        else { delete err.destination; }
+      } else if (field === 'start_date' || field === 'end_date') {
+        // 個別フィールド更新後に期間全体の妥当性をチェック
+        this.validateDates();
+        return;
+      } else if (field === 'settlement_date') {
+        // 任意項目: エラーは常にクリア
+        delete err.settlement_date;
       } else if (field === 'approver_user_id') {
         if (!this.formData.approver_user_id) err.approver_user_id = '承認者を選択してください。';
         else { delete err.approver_user_id; }
@@ -244,12 +372,6 @@ export default {
     },
     close() {
       this.$emit('close');
-    },
-    downloadUrl() {
-      if (!this.formData.attachment) return '#';
-      const requestId = this.mode === 'edit' && this.defaultData && this.defaultData.id ? this.defaultData.id : '';
-      if (!requestId) return '#';
-      return 'download.php?file=' + encodeURIComponent(this.formData.attachment) + '&request_id=' + encodeURIComponent(requestId);
     }
   },
   template: `
@@ -267,24 +389,166 @@ export default {
       <div class="modal-body">
         <form @submit.prevent="submit('pending')">
           <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">出張旅費精算書 <span class="text-danger">*</span></label>
+            <label class="col-sm-3 col-form-label">出張先 <span class="text-danger">*</span></label>
             <div class="col-sm-9">
-              <div v-if="!formData.attachment" class="d-flex flex-column gap-2">
-                <input type="file" class="form-control" :ref="fileInputRef" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" @change="onFileSelect" :disabled="uploading">
-                <div v-if="uploading" class="progress" style="height: 6px;">
-                  <div class="progress-bar" role="progressbar" :style="{ width: uploadProgress + '%' }"></div>
+              <input type="text" class="form-control" v-model="formData.destination" @blur="validateField('destination')">
+              <div class="text-danger small" v-if="errors.destination">{{ errors.destination }}</div>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">国内/海外</label>
+            <div class="col-sm-9">
+              <div role="group">
+                <input type="radio" id="trip-expense-type-domestic" autocomplete="off" value="国内" v-model="formData.trip_type">
+                <label class="ms-2" for="trip-expense-type-domestic">国内</label> &nbsp;
+                <input type="radio" id="trip-expense-type-overseas" autocomplete="off" value="海外" v-model="formData.trip_type">
+                <label class="ms-2" for="trip-expense-type-overseas">海外</label>
+              </div>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">期間 <span class="text-danger">*</span></label>
+            <div class="col-sm-4">
+              <input type="date" class="form-control" v-model="formData.start_date" @blur="validateField('start_date')">
+              <div class="text-danger small" v-if="errors.start_date">{{ errors.start_date }}</div>
+            </div>
+            <div class="col-sm-1 text-center">〜</div>
+            <div class="col-sm-4">
+              <input type="date" class="form-control" v-model="formData.end_date" @blur="validateField('end_date')">
+              <div class="text-danger small" v-if="errors.end_date">{{ errors.end_date }}</div>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">精算日</label>
+            <div class="col-sm-4">
+              <input type="date" class="form-control" v-model="formData.settlement_date" @blur="validateField('settlement_date')">
+              <div class="text-danger small" v-if="errors.settlement_date">{{ errors.settlement_date }}</div>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">仮払金</label>
+            <div class="col-sm-4">
+              <div class="input-group input-group-sm">
+                <input
+                  type="number"
+                  min="0"
+                  class="form-control text-end"
+                  v-model.number="formData.advance_amount"
+                >
+                <span class="input-group-text">円</span>
+              </div>
+            </div>
+          </div>
+          <div class="mb-3 row" v-if="formData.trip_type === '海外'">
+            <label class="col-sm-3 col-form-label">日当・出張手当</label>
+            <div class="col-sm-9">
+              <div class="row g-2 align-items-center mb-1">
+                <div class="col-auto">
+                  <label class="col-form-label col-form-label-sm">日当</label>
+                </div>
+                <div class="col-3">
+                  <input type="number" step="100" min="0" class="form-control form-control-sm text-end"
+                         v-model.number="formData.per_diem"
+                         @blur="onPerDiemBlur">
+                </div>
+                <div class="col-auto">
+                  <span class="small">円</span>
                 </div>
               </div>
-              <div v-else class="d-flex align-items-center gap-2 flex-wrap">
-                <a v-if="mode==='edit' && defaultData && defaultData.id" :href="downloadUrl()" target="_blank" class="btn btn-sm btn-outline-primary">
-                  <i class="fa fa-download me-1"></i>{{ formData.attachment_original || formData.attachment }}
-                </a>
-                <span v-else class="me-2">{{ formData.attachment_original || formData.attachment }}</span>
-                <button type="button" class="btn btn-sm btn-outline-danger" @click="clearFile">削除</button>
+              <div class="row g-2 align-items-center mb-1">
+                <div class="col-auto">
+                  <label class="col-form-label col-form-label-sm">日間</label>
+                </div>
+                <div class="col-3">
+                  <input type="number" step="1" min="0" class="form-control form-control-sm text-end" v-model.number="formData.trip_days">
+                </div>
               </div>
-              <div class="text-danger small mt-1" v-if="errors.attachment">{{ errors.attachment }}</div>
-              <small v-if="mode==='add'" class="text-muted">20MB以下。</small>
-              <small v-if="mode==='add'" class="text-muted">この<a href="https://kanri.guis.co.jp/storage/view.php?id=614" target="_blank">フォーム</a>をダウンロードして、記載してください。</small>
+              <div class="row g-2 align-items-center">
+                <div class="col-auto">
+                  <label class="col-form-label col-form-label-sm">出張手当:</label>
+                </div>
+                <div class="col-4">
+                  <div class="form-control-plaintext">
+                    ¥{{ (formData.trip_allowance || 0).toLocaleString() }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">明細</label>
+            <div class="col-sm-12">
+              <table class="table table-sm align-middle mb-2 detail-table">
+                <thead>
+                  <tr>
+                    <th style="width: 110px;">日付</th>
+                    <th>項目</th>
+                    <th style="width: 110px;">交通費</th>
+                    <th style="width: 110px;">宿泊費</th>
+                    <th style="width: 110px;">交際費</th>
+                    <th style="width: 110px;">食費</th>
+                    <th style="width: 110px;">その他</th>
+                    <th style="width: 120px;">合計</th>
+                    <th>備考</th>
+                    <th style="width: 40px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(line, idx) in formData.lines" :key="idx">
+                    <td>
+                      <input type="date" class="form-control form-control-sm" v-model="line.date">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.item">
+                    </td>
+                    <td>
+                      <input type="number" min="0" class="form-control form-control-sm text-end"
+                             v-model.number="line.transportation">
+                    </td>
+                    <td>
+                      <input type="number" min="0" class="form-control form-control-sm text-end"
+                             v-model.number="line.accommodation">
+                    </td>
+                    <td>
+                      <input type="number" min="0" class="form-control form-control-sm text-end"
+                             v-model.number="line.entertainment">
+                    </td>
+                    <td>
+                      <input type="number" min="0" class="form-control form-control-sm text-end"
+                             v-model.number="line.meal">
+                    </td>
+                    <td>
+                      <input type="number" min="0" class="form-control form-control-sm text-end"
+                             v-model.number="line.other">
+                    </td>
+                    <td class="text-end">
+                      ¥{{ Number(line.total || 0).toLocaleString() }}
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.note">
+                    </td>
+                    <td class="text-center">
+                      <button type="button" class="btn btn-sm btn-outline-danger"
+                              @click="formData.lines.splice(idx, 1)">
+                        <i class="fa fa-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <button type="button" class="btn btn-sm btn-outline-primary"
+                          @click="formData.lines.push({ date: '', item: '', transportation: 0, accommodation: 0, entertainment: 0, meal: 0, other: 0, total: 0, note: '' })">
+                    <i class="fa fa-plus me-1"></i> 行を追加
+                  </button>
+                </div>
+                <div class="text-end">
+                  <div>明細合計: ¥{{ Number(formData.line_total || 0).toLocaleString() }}</div>
+                  <div>仮払金差引合計: ¥{{ Number(formData.net_total || 0).toLocaleString() }}</div>
+                  <div class="fw-bold">精算額: ¥{{ Number(formData.final_amount || 0).toLocaleString() }}</div>
+                </div>
+              </div>
             </div>
           </div>
           <div class="mb-3 row">

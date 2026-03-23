@@ -101,41 +101,35 @@ export default {
       if (startEl) {
         if (startEl._flatpickr) startEl._flatpickr.destroy();
         startEl._flatpickr = flatpickr(startEl, {
-          enableTime: true,
-          dateFormat: 'Y-m-d H:i',
-          time_24hr: true,
+          enableTime: false,
+          dateFormat: 'Y-m-d',
           locale: typeof flatpickr !== 'undefined' && flatpickr.l10ns ? flatpickr.l10ns.ja : undefined,
-          defaultHour: 9,
-          defaultMinute: 0,
           onChange: (selectedDates, dateStr) => {
-            this.formData.start_datetime = dateStr ? dateStr.replace(' ', 'T') : '';
+            this.formData.start_datetime = dateStr || '';
             this.updateDaysByDateRange();
             this.validateField('start_datetime');
           }
         });
         if (this.formData.start_datetime) {
-          const v = this.formData.start_datetime.replace('T', ' ');
-          startEl._flatpickr.setDate(v, false, 'Y-m-d H:i');
+          const v = this.formData.start_datetime.replace('T', ' ').slice(0, 10);
+          startEl._flatpickr.setDate(v, false, 'Y-m-d');
         }
       }
       if (endEl) {
         if (endEl._flatpickr) endEl._flatpickr.destroy();
         endEl._flatpickr = flatpickr(endEl, {
-          enableTime: true,
-          dateFormat: 'Y-m-d H:i',
-          time_24hr: true,
+          enableTime: false,
+          dateFormat: 'Y-m-d',
           locale: typeof flatpickr !== 'undefined' && flatpickr.l10ns ? flatpickr.l10ns.ja : undefined,
-          defaultHour: 18,
-          defaultMinute: 0,
           onChange: (selectedDates, dateStr) => {
-            this.formData.end_datetime = dateStr ? dateStr.replace(' ', 'T') : '';
+            this.formData.end_datetime = dateStr || '';
             this.updateDaysByDateRange();
             this.validateField('end_datetime');
           }
         });
         if (this.formData.end_datetime) {
-          const v = this.formData.end_datetime.replace('T', ' ');
-          endEl._flatpickr.setDate(v, false, 'Y-m-d H:i');
+          const v = this.formData.end_datetime.replace('T', ' ').slice(0, 10);
+          endEl._flatpickr.setDate(v, false, 'Y-m-d');
         }
       }
     },
@@ -293,7 +287,7 @@ export default {
                 type="text"
                 id="leave-start-datetime"
                 class="form-control"
-                :value="formData.start_datetime ? formData.start_datetime.replace('T', ' ').slice(0, 16) : ''"
+                :value="formData.start_datetime ? formData.start_datetime.replace(/-/g, '/').slice(0, 10) : ''"
                 readonly
               >
               <div class="text-danger small" v-if="errors.start_datetime">{{ errors.start_datetime }}</div>
@@ -304,7 +298,7 @@ export default {
                 type="text"
                 id="leave-end-datetime"
                 class="form-control"
-                :value="formData.end_datetime ? formData.end_datetime.replace('T', ' ').slice(0, 16) : ''"
+                :value="formData.end_datetime ? formData.end_datetime.replace(/-/g, '/').slice(0, 10) : ''"
                 readonly
               >
               <div class="text-danger small" v-if="errors.end_datetime">{{ errors.end_datetime }}</div>

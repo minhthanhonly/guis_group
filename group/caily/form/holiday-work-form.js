@@ -32,6 +32,7 @@ export default {
         add_to_calendar: false,
         approver_user_id: ''
       }, this.defaultData);
+      this.formData.date = this.normalizeDateValue(this.formData.date);
       this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
       this.originalData = JSON.parse(JSON.stringify(this.formData));
     }
@@ -56,6 +57,7 @@ export default {
             add_to_calendar: false,
             approver_user_id: ''
           }, newVal);
+          this.formData.date = this.normalizeDateValue(this.formData.date);
           this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
           this.originalData = JSON.parse(JSON.stringify(this.formData));
         }
@@ -94,6 +96,14 @@ export default {
     }
   },
   methods: {
+    normalizeDateValue(value) {
+      if (value === null || value === undefined) return '';
+      const str = String(value).trim();
+      if (!str) return '';
+      const m = str.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+      if (!m) return '';
+      return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    },
     normalizeAddToCalendar(value) {
       if (value === true) return true;
       if (value === false || value === null || value === undefined) return false;

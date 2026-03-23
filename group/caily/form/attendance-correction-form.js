@@ -31,6 +31,7 @@ export default {
         note: '',
         approver_user_id: ''
       }, this.defaultData);
+      raw.date = this.normalizeDateValue(raw.date);
       raw.correction_type = this.typeOptions.includes(raw.correction_type) ? raw.correction_type : '';
       this.formData = raw;
       this.originalData = JSON.parse(JSON.stringify(this.formData));
@@ -52,6 +53,7 @@ export default {
             note: '',
             approver_user_id: ''
           }, newVal);
+          raw.date = this.normalizeDateValue(raw.date);
           raw.correction_type = this.typeOptions.includes(raw.correction_type) ? raw.correction_type : '';
           this.formData = raw;
           this.originalData = JSON.parse(JSON.stringify(this.formData));
@@ -83,6 +85,14 @@ export default {
     }
   },
   methods: {
+    normalizeDateValue(value) {
+      if (value === null || value === undefined) return '';
+      const str = String(value).trim();
+      if (!str) return '';
+      const m = str.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+      if (!m) return '';
+      return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    },
     setTime(hour, minute) {
       const h = Number(hour);
       const m = Number(minute);

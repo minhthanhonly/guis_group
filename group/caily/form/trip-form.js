@@ -34,6 +34,8 @@ export default {
         add_to_calendar: false,
         approver_user_id: ''
       }, this.defaultData);
+      this.formData.start_datetime = this.normalizeDateValue(this.formData.start_datetime);
+      this.formData.end_datetime = this.normalizeDateValue(this.formData.end_datetime);
       this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
       this.originalData = JSON.parse(JSON.stringify(this.formData));
     }
@@ -55,6 +57,8 @@ export default {
             add_to_calendar: false,
             approver_user_id: ''
           }, newVal);
+          this.formData.start_datetime = this.normalizeDateValue(this.formData.start_datetime);
+          this.formData.end_datetime = this.normalizeDateValue(this.formData.end_datetime);
           this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
           this.originalData = JSON.parse(JSON.stringify(this.formData));
         }
@@ -77,6 +81,14 @@ export default {
     }
   },
   methods: {
+    normalizeDateValue(value) {
+      if (value === null || value === undefined) return '';
+      const str = String(value).trim();
+      if (!str) return '';
+      const m = str.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+      if (!m) return '';
+      return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    },
     normalizeAddToCalendar(value) {
       if (value === true) return true;
       if (value === false || value === null || value === undefined) return false;
@@ -99,14 +111,12 @@ export default {
       const start = new Date(startStr);
       const end = new Date(endStr);
       if (isNaN(start) || isNaN(end) || end < start) return;
-      let workDays = 0;
-      const cur = new Date(start.getTime());
-      while (cur <= end) {
-        const day = cur.getDay();
-        if (day !== 0 && day !== 6) workDays += 1;
-        cur.setDate(cur.getDate() + 1);
-      }
-      this.formData.days = workDays > 0 ? String(workDays) : '';
+      // 日間は土日を含む暦日数（開始日・終了日を含む）
+      const s = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      const e = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      const diffMs = e.getTime() - s.getTime();
+      const days = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+      this.formData.days = days > 0 ? String(days) : '';
     },
     validate() {
       this.errors = {};

@@ -6,9 +6,15 @@ export default {
   data() {
     return {
       formData: {
-        attachment: '',
-        attachment_original: '',
+        application_type: '新規',
+        address: '',
+        nearest_station: '',
+        effective_from: '',
+        one_month_commuter_pass: '',
+        // 通勤経路明細
+        lines: [],
         receipts: [],
+        total_amount: 0,
         note: '',
         approver_user_id: ''
       },
@@ -27,32 +33,47 @@ export default {
   created() {
     if (this.defaultData && Object.keys(this.defaultData).length > 0) {
       const raw = Object.assign({
-        attachment: '',
-        attachment_original: '',
+        application_type: '新規',
+        address: '',
+        nearest_station: '',
+        effective_from: '',
+        one_month_commuter_pass: '',
+        lines: [],
         receipts: [],
+        total_amount: 0,
         note: '',
         approver_user_id: ''
       }, this.defaultData);
+      raw.effective_from = this.normalizeDateValue(raw.effective_from);
       raw.receipts = Array.isArray(raw.receipts) ? raw.receipts : [];
+      raw.lines = Array.isArray(raw.lines) ? raw.lines : [];
       this.formData = raw;
       this.originalData = JSON.parse(JSON.stringify(this.formData));
     }
   },
   mounted() {
     this.loadApprovers();
+    this.ensureAtLeastOneLine();
   },
   watch: {
     defaultData: {
       handler(newVal) {
         if (newVal && Object.keys(newVal).length > 0) {
           const raw = Object.assign({
-            attachment: '',
-            attachment_original: '',
+            application_type: '新規',
+            address: '',
+            nearest_station: '',
+            effective_from: '',
+            one_month_commuter_pass: '',
+            lines: [],
             receipts: [],
+            total_amount: 0,
             note: '',
             approver_user_id: ''
           }, newVal);
+          raw.effective_from = this.normalizeDateValue(raw.effective_from);
           raw.receipts = Array.isArray(raw.receipts) ? raw.receipts : [];
+          raw.lines = Array.isArray(raw.lines) ? raw.lines : [];
           this.formData = raw;
           this.originalData = JSON.parse(JSON.stringify(this.formData));
         }
@@ -69,6 +90,46 @@ export default {
     }
   },
   methods: {
+    normalizeDateValue(value) {
+      if (value === null || value === undefined) return '';
+      const str = String(value).trim();
+      if (!str) return '';
+      const m = str.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+      if (!m) return '';
+      return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    },
+    computeTotalAmount(lines) {
+      if (!Array.isArray(lines)) return 0;
+      return lines.reduce((sum, line) => {
+        const v = line && line.one_way_fare != null ? Number(line.one_way_fare) : 0;
+        return isNaN(v) ? sum : sum + v;
+      }, 0);
+    },
+    ensureAtLeastOneLine() {
+      if (!Array.isArray(this.formData.lines)) this.formData.lines = [];
+      if (this.formData.lines.length === 0) {
+        this.addLine();
+      }
+    },
+    addLine() {
+      if (!Array.isArray(this.formData.lines)) this.formData.lines = [];
+      this.formData.lines.push({
+        railway_company: '',
+        line_name: '',
+        section_from: '',
+        section_to: '',
+        one_way_fare: ''
+      });
+      this.formData.total_amount = this.computeTotalAmount(this.formData.lines);
+    },
+    removeLine(index) {
+      if (!Array.isArray(this.formData.lines)) return;
+      this.formData.lines.splice(index, 1);
+      this.formData.total_amount = this.computeTotalAmount(this.formData.lines);
+    },
+    onLineFareChange() {
+      this.formData.total_amount = this.computeTotalAmount(this.formData.lines);
+    },
     async loadApprovers() {
       try {
         const res = await axios.get('/api/index.php?model=member&method=list_request_approvers');
@@ -192,8 +253,16 @@ export default {
     validate() {
       this.errors = {};
       let valid = true;
-      if (!this.formData.attachment || !String(this.formData.attachment).trim()) {
-        this.errors.attachment = '通勤手当申請書のファイルをアップロードしてください。';
+      if (!this.formData.address || !String(this.formData.address).trim()) {
+        this.errors.address = '住所を入力してください。';
+        valid = false;
+      }
+      if (!this.formData.nearest_station || !String(this.formData.nearest_station).trim()) {
+        this.errors.nearest_station = '最寄駅を入力してください。';
+        valid = false;
+      }
+      if (!this.formData.effective_from || !String(this.formData.effective_from).trim()) {
+        this.errors.effective_from = '適用開始日を選択してください。';
         valid = false;
       }
       if (!this.formData.approver_user_id) {
@@ -204,9 +273,15 @@ export default {
     },
     validateField(field) {
       const err = { ...this.errors };
-      if (field === 'attachment') {
-        if (!this.formData.attachment || !String(this.formData.attachment).trim()) err.attachment = '通勤手当申請書のファイルをアップロードしてください。';
-        else { delete err.attachment; }
+      if (field === 'address') {
+        if (!this.formData.address || !String(this.formData.address).trim()) err.address = '住所を入力してください。';
+        else delete err.address;
+      } else if (field === 'nearest_station') {
+        if (!this.formData.nearest_station || !String(this.formData.nearest_station).trim()) err.nearest_station = '最寄駅を入力してください。';
+        else delete err.nearest_station;
+      } else if (field === 'effective_from') {
+        if (!this.formData.effective_from || !String(this.formData.effective_from).trim()) err.effective_from = '適用開始日を選択してください。';
+        else delete err.effective_from;
       } else if (field === 'approver_user_id') {
         if (!this.formData.approver_user_id) err.approver_user_id = '承認者を選択してください。';
         else { delete err.approver_user_id; }
@@ -267,27 +342,118 @@ export default {
       <div class="modal-body">
         <form @submit.prevent="submit('pending')">
           <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">通勤手当申請書 <span class="text-danger">*</span></label>
-            <div class="col-sm-9">
-              <div v-if="!formData.attachment" class="d-flex flex-column gap-2">
-                <input type="file" class="form-control" :ref="fileInputRef" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" @change="onFileSelect" :disabled="uploading">
-                <div v-if="uploading" class="progress" style="height: 6px;">
-                  <div class="progress-bar" role="progressbar" :style="{ width: uploadProgress + '%' }"></div>
-                </div>
+            <label class="col-sm-3 col-form-label">申請区分</label>
+            <div class="col-sm-9 d-flex align-items-center flex-wrap gap-3">
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="application_type_new" value="新規" v-model="formData.application_type">
+                <label class="form-check-label" for="application_type_new">新規</label>
               </div>
-              <div v-else class="d-flex align-items-center gap-2 flex-wrap">
-                <a v-if="mode==='edit' && defaultData && defaultData.id" :href="downloadUrl()" target="_blank" class="btn btn-sm btn-outline-primary">
-                  <i class="fa fa-download me-1"></i>{{ formData.attachment_original || formData.attachment }}
-                </a>
-                <span v-else class="me-2">{{ formData.attachment_original || formData.attachment }}</span>
-                <button type="button" class="btn btn-sm btn-outline-danger" @click="clearFile">削除</button>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="application_type_route" value="経路変更" v-model="formData.application_type">
+                <label class="form-check-label" for="application_type_route">経路変更</label>
               </div>
-              <div class="text-danger small mt-1" v-if="errors.attachment">{{ errors.attachment }}</div>
-              <small v-if="mode==='add'" class="text-muted">20MB以下。</small>
-              <small v-if="mode==='add'" class="text-muted">この<a href="https://kanri.guis.co.jp/storage/view.php?id=613" target="_blank">フォーム</a>をダウンロードして、記載してください。</small>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="application_type_fare" value="運賃改定" v-model="formData.application_type">
+                <label class="form-check-label" for="application_type_fare">運賃改定</label>
+              </div>
             </div>
           </div>
           <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">住所</label>
+            <div class="col-sm-9">
+              <input type="text" class="form-control" v-model="formData.address" @change="validateField('address')" @blur="validateField('address')">
+              <div class="text-danger small mt-1" v-if="errors.address">{{ errors.address }}</div>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">最寄駅</label>
+            <div class="col-sm-9">
+              <input type="text" class="form-control" v-model="formData.nearest_station" @change="validateField('nearest_station')" @blur="validateField('nearest_station')">
+              <div class="text-danger small mt-1" v-if="errors.nearest_station">{{ errors.nearest_station }}</div>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">適用開始日</label>
+            <div class="col-sm-9">
+              <input type="date" class="form-control" v-model="formData.effective_from" @change="validateField('effective_from')" @blur="validateField('effective_from')">
+              <div class="text-danger small mt-1" v-if="errors.effective_from">{{ errors.effective_from }}</div>
+            </div>
+          </div>
+          
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">通勤交通費内訳</label>
+            <div class="col-sm-12">
+              <table class="table table-sm align-middle mb-2 detail-table">
+                <thead>
+                  <tr>
+                    <th style="width: 140px;">鉄道会社名</th>
+                    <th style="width: 140px;">路線名</th>
+                    <th style="width: 120px;">利用区間(乗車駅)</th>
+                    <th style="width: 120px;">利用区間(降車駅)</th>
+                    <th style="width: 140px;">片道運賃</th>
+                    <th style="width: 40px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(line, idx) in formData.lines" :key="idx">
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.railway_company">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.line_name">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.section_from" placeholder="乗車駅">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm" v-model="line.section_to" placeholder="降車駅">
+                    </td>
+                    <td>
+                      <input type="number" min="0" class="form-control form-control-sm text-end"
+                             v-model.number="line.one_way_fare"
+                             @change="onLineFareChange"
+                             @blur="onLineFareChange">
+                    </td>
+                    <td class="text-center">
+                      <button type="button" class="btn btn-sm btn-outline-danger"
+                              @click="removeLine(idx)"><i class="fa fa-trash"></i></button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="d-flex justify-content-between align-items-center">
+                <button type="button" class="btn btn-sm btn-outline-primary" @click="addLine">
+                  <i class="fa fa-plus me-1"></i> 行を追加
+                </button>
+                <div class="fw-bold">
+                  合計片道運賃: ¥{{ (formData.total_amount || 0).toLocaleString() }}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">１か月定期代<span class="text-muted ms-1">※月給制のみ</span></label>
+            <div class="col-sm-9">
+              <div class="input-group">
+                <span class="input-group-text">¥</span>
+                <input
+                  type="number"
+                  min="0"
+                  class="form-control"
+                  v-model.number="formData.one_month_commuter_pass"
+                  placeholder="１か月分の定期代">
+              </div>
+            </div>
+
+            <div class="text-muted small mt-4" v-if="mode==='add'">
+              ※支給方法
+              <ul>
+                <li>月給制の場合：1か月の定期代を支給</li>
+                <li>時給制の場合：往復運賃×出勤日数分を支給」と追記してください。</li>
+              </ul>
+            </div>
+          </div>
+          <!--<div class="mb-3 row">
             <label class="col-sm-3 col-form-label">請求書・領収書等</label>
             <div class="col-sm-9">
               <input type="file" class="form-control mb-2" :ref="receiptsInputRef" accept=".pdf,.jpg,.jpeg,.png,.gif" multiple @change="onReceiptsSelect" :disabled="uploadingReceipts">
@@ -302,8 +468,10 @@ export default {
                 </li>
               </ul>
               <small class="text-muted">画像・PDF。複数可。各20MB以下。</small>
+
             </div>
-          </div>
+          </div>-->
+          
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">備考</label>
             <div class="col-sm-9">

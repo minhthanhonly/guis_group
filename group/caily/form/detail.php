@@ -183,7 +183,7 @@
   <!-- Modal sửa -->
   <div v-if="showEditModal">
     <div class="modal fade show" tabindex="-1" style="display:block; background:rgba(0,0,0,0.3);">
-      <div class="modal-dialog modal-lg">
+      <div class="modal-dialog" :class="request && request.type === 'travel_expense' || request.type === 'expense' || request.type === 'trip_expense' || request.type === 'commuting_allowance' ? 'modal-xl' : 'modal-lg'">
         <div class="modal-content">
           <leave-form
             v-if="request.type === 'leave' && editForm && Object.keys(editForm).length > 0"
@@ -229,14 +229,14 @@
           ></attendance-correction-form>
           <travel-expense-form
             v-else-if="request.type === 'travel_expense' && editForm && Object.keys(editForm).length > 0"
-            :key="'edit-travel-expense-' + editFormKey + '-' + JSON.stringify(editForm)"
+            :key="'edit-travel-expense-' + editFormKey"
             v-bind="{ defaultData: editForm, mode: 'edit' }"
             @submitted="onEditSubmitted"
             @close="closeEditModal"
           ></travel-expense-form>
           <expense-form
             v-else-if="request.type === 'expense' && editForm && Object.keys(editForm).length > 0"
-            :key="'edit-expense-' + editFormKey + '-' + JSON.stringify(editForm)"
+            :key="'edit-expense-' + editFormKey"
             v-bind="{ defaultData: editForm, mode: 'edit' }"
             @submitted="onEditSubmitted"
             @close="closeEditModal"
@@ -274,6 +274,21 @@
     </div>
   </div>
 </div>
+<style>
+.modal-xl {
+  --bs-modal-width: 1140px;
+}
+.detail-table{
+  border: 2px solid #dee2e6;
+  margin-top: 1rem;
+  margin-left: 1rem;
+  margin-right:  1rem;
+}
+.detail-table td,
+.detail-table th{
+ padding: 0.25rem;
+}
+</style>
 <?php $view->footing(); ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
@@ -465,13 +480,23 @@ createApp({
       const id = new URLSearchParams(window.location.search).get('id');
       try {
         const res = await axios.get('/api/index.php?model=request&method=get&id=' + id);
-        if (res.data && res.data.error) {
-          this.errorMessage = Array.isArray(res.data.error) ? res.data.error.join('、') : res.data.error;
+        const payload = res ? res.data : null;
+        if (Array.isArray(payload) && payload.length === 0) {
+          // API trả về mảng rỗng -> không tìm thấy đơn đăng ký
+          this.errorMessage = '該当する申請が見つかりません。';
+          this.request = {};
+        } else if (payload && payload.error) {
+          this.errorMessage = Array.isArray(payload.error) ? payload.error.join('、') : payload.error;
+          this.request = {};
+        } else if (Array.isArray(payload)) {
+          // Trường hợp hiếm: API trả về mảng có phần tử, lấy phần tử đầu tiên
+          this.request = payload[0] || {};
         } else {
-          this.request = res.data;
+          this.request = payload || {};
         }
       } catch (e) {
         this.errorMessage = 'データ取得に失敗しました。';
+        this.request = {};
       }
       this.loading = false;
     },
@@ -571,7 +596,15 @@ createApp({
       if (!this.canEdit) {
         return;
       }
-      const data = { ...this.request.data, id: this.request.id, approver_user_id: this.request.approver_user_id || '', add_to_calendar: this.request.add_to_calendar || false };
+      // 深いコピーを行い、detail 表示用の this.request.data と編集用データを分離する
+      const baseData = this.request && this.request.data
+        ? JSON.parse(JSON.stringify(this.request.data))
+        : {};
+      const data = Object.assign(baseData, {
+        id: this.request.id,
+        approver_user_id: this.request.approver_user_id || '',
+        add_to_calendar: this.request.add_to_calendar || false
+      });
       // 外出申請書: chuẩn hóa dữ liệu cũ (datetime) sang date + start_time + end_time
       if (this.request.type === 'outing' && data.datetime && !data.date) {
         data.date = data.datetime.slice(0, 10);
