@@ -29,7 +29,7 @@ class Request extends ApplicationModel {
             if (empty($data['start_datetime'])) $errors[] = '開始日時を入力してください。';
             if (empty($data['end_datetime'])) $errors[] = '終了日時を入力してください。';
             if (!empty($data['start_datetime']) && !empty($data['end_datetime'])) {
-                if (strtotime($data['start_datetime']) >= strtotime($data['end_datetime'])) {
+                if (strtotime($data['start_datetime']) > strtotime($data['end_datetime'])) {
                     $errors[] = '終了日時は開始日時より後にしてください。';
                 }
             }
@@ -50,7 +50,7 @@ class Request extends ApplicationModel {
         } elseif ($type == 'trip') {
             if (empty($data['start_datetime'])) $errors[] = '開始日時を入力してください。';
             if (empty($data['end_datetime'])) $errors[] = '終了日時を入力してください。';
-            if (!empty($data['start_datetime']) && !empty($data['end_datetime']) && strtotime($data['start_datetime']) >= strtotime($data['end_datetime'])) {
+            if (!empty($data['start_datetime']) && !empty($data['end_datetime']) && strtotime($data['start_datetime']) > strtotime($data['end_datetime'])) {
                 $errors[] = '終了日時は開始日時より後にしてください。';
             }
             if (empty($data['days']) || !is_numeric($data['days']) || floatval($data['days']) <= 0) $errors[] = '日間は0より大きい値を入力してください。';
@@ -356,6 +356,25 @@ class Request extends ApplicationModel {
         ];
     }
 
+    // Danh sách user cho filter ở màn hình申請一覧 (chỉ admin hoặc user có quyền duyệt)
+    function list_filter_users() {
+        $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
+        $isApprover = false;
+        if (!empty($_SESSION['userid'])) {
+            $u = $this->fetchOne("SELECT can_approve_request FROM " . DB_PREFIX . "user WHERE userid = '" . $this->quote($_SESSION['userid']) . "'");
+            $isApprover = !empty($u['can_approve_request']);
+        }
+        if (!$isAdmin && !$isApprover) {
+            return [];
+        }
+
+        $query = "SELECT userid, realname FROM " . DB_PREFIX . "user "
+            . "WHERE (is_suspend IS NULL OR is_suspend = 0) "
+            . "AND user_group IN (1,4) "
+            . "ORDER BY id ASC";
+        return $this->fetchAll($query);
+    }
+
     // Thêm comment
     function add_comment() {
         if (empty($_SESSION['userid'])) {
@@ -450,9 +469,7 @@ class Request extends ApplicationModel {
             $update['approved_at'] = date('Y-m-d H:i:s');
             // 承認時: add_to_calendar ならカレンダーに追加し schedule_id を保存
             if (!empty($currentRequest['add_to_calendar']) && in_array($currentRequest['type'], ['leave', 'outing', 'trip', 'holiday_work'], true)) {
-               
                 $scheduleId = $this->createScheduleFromRequest($id);
-                error_log("approved scheduleId: " . $scheduleId);
                 if ($scheduleId) {
                     $update['schedule_id'] = $scheduleId;
                 }
@@ -740,10 +757,10 @@ class Request extends ApplicationModel {
             if (!$schedule_time) $schedule_time = '00:00:00';
             if (!$schedule_endtime) $schedule_endtime = '23:59:00';
             $paidType = isset($data['paid_type']) ? trim($data['paid_type']) : '';
+            $schedule_allday = 1;
             if ($paidType === '全休') {
                 $schedule_date_end = $requestRow['end_date'] ?? '';
                 $schedule_date_end = date('Y-m-d', strtotime($schedule_date_end . ' +1 day'));
-                $schedule_allday = 1;
                 $title .= '　全休';
                 $schedule_time = '00:00';
                 $schedule_endtime = '00:00';

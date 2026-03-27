@@ -423,10 +423,11 @@ if($_SESSION['show_project'] == 0){
                                         type="range"
                                         min="0"
                                         max="100"
+                                        step="5"
                                         v-model="project.progress"
                                         @change="updateProgress"
                                         class="form-range"
-                                        :class="{'prevent-click': !canEditProject}"
+                                        :class="{'prevent-click': !canUpdateProgress}"
                                     >
                                     <div class="progress-value-label text-center">
                                         {{ project.progress }}%

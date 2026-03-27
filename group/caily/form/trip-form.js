@@ -132,7 +132,7 @@ export default {
       if (this.formData.start_datetime && this.formData.end_datetime) {
         const start = new Date(this.formData.start_datetime);
         const end = new Date(this.formData.end_datetime);
-        if (start >= end) {
+        if (start > end) {
           this.errors.end_datetime = '終了日時は開始日時より後にしてください。';
           valid = false;
         }
@@ -162,7 +162,7 @@ export default {
         else { delete err.start_datetime; }
       } else if (field === 'end_datetime') {
         if (!this.formData.end_datetime) err.end_datetime = '終了日時を入力してください。';
-        else if (this.formData.start_datetime && this.formData.end_datetime && new Date(this.formData.start_datetime) >= new Date(this.formData.end_datetime)) err.end_datetime = '終了日時は開始日時より後にしてください。';
+        else if (this.formData.start_datetime && this.formData.end_datetime && new Date(this.formData.start_datetime) > new Date(this.formData.end_datetime)) err.end_datetime = '終了日時は開始日時より後にしてください。';
         else { delete err.end_datetime; }
       } else if (field === 'days') {
         if (!this.formData.days || isNaN(this.formData.days) || Number(this.formData.days) <= 0) err.days = '日間は0より大きい値を入力してください。';

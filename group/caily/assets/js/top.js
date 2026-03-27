@@ -196,6 +196,21 @@ document.addEventListener('DOMContentLoaded', async function () {
         },
         
         eventDidMount: function(info) {
+            if ((info.view.type === 'listWeek' || info.view.type === 'listMonth') && info.event.allDay) {
+                const eventTitle = String(info.event.title || '');
+                let allDayLabel = '';
+                if (eventTitle.includes('午前休')) {
+                    allDayLabel = '午前休';
+                } else if (eventTitle.includes('午後休')) {
+                    allDayLabel = '午後休';
+                }
+                if (allDayLabel) {
+                    const timeEl = info.el.querySelector('.fc-list-event-time');
+                    if (timeEl) {
+                        timeEl.textContent = allDayLabel;
+                    }
+                }
+            }
             if (info.event.extendedProps.public_level == 1) {
                 const badge = document.createElement('span');
                 badge.className = 'badge badge-pill bg-label-warning me-1';

@@ -264,6 +264,9 @@ const vueApp = createApp({
         canEditProject() {
             return this.permission.can_manage_project || (this.permission.is_member && this.permission.rule && this.permission.rule.project_edit == 1);
         },
+        canUpdateProgress() {
+            return this.permission.is_member;
+        },
         canAddProject() {
             return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_add == 1);
         },

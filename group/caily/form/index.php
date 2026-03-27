@@ -64,6 +64,15 @@
             <button v-if="monthFilter" type="button" class="btn btn-outline-secondary btn-sm" @click="clearMonthFilter" title="フィルターを解除">×</button>
           </div>
         </div>
+        <div class="col-md-3" v-if="canUseUserFilter">
+          <label class="col-form-label col-form-label-sm d-block">&nbsp;</label>
+          <select class="form-select form-select-sm" v-model="userFilter" @change="onFilterChange">
+            <option value="">ユーザー: すべて</option>
+            <option v-for="u in userFilterOptions" :key="u.userid" :value="u.userid">
+              {{ u.realname || u.userid }}
+            </option>
+          </select>
+        </div>
         <div class="col-md-4">
           <label class="col-form-label col-form-label-sm d-block">&nbsp;</label>
           <div class="input-group input-group-sm">
@@ -82,6 +91,7 @@
             <option value="rejected">却下</option>
           </select>
         </div>
+       
         <div class="col-md-3">
           <label class="col-form-label col-form-label-sm d-block">&nbsp;</label>
           <div class="form-check form-check-sm mt-2">
@@ -330,6 +340,7 @@ createApp({
       keyword: '',
       searchDebounceTimer: null,
       statusFilter: 'pending',
+      userFilter: '',
       showDrafts: true,
       monthFilter: '', // YYYY-MM, period 21/(M-1)～20/M
       formMonthPicker: null, // flatpickr instance
@@ -342,6 +353,7 @@ createApp({
       pendingCounts: {},
       currentUserId: (typeof USER_ID !== 'undefined') ? USER_ID : '',
       currentUserRole: (typeof USER_ROLE !== 'undefined') ? USER_ROLE : '',
+      userFilterOptions: [],
       actionLoading: false,
       navUseDropdown: false,
       navBreakpoint: 1200,
@@ -380,9 +392,26 @@ createApp({
         pages.push(i);
       }
       return pages;
+    },
+    canUseUserFilter() {
+      return this.currentUserRole === 'administrator' || this.userFilterOptions.length > 0;
     }
   },
   methods: {
+    async loadUserFilterOptions() {
+      try {
+        const res = await axios.get('/api/index.php?model=request&method=list_filter_users');
+        const list = Array.isArray(res.data) ? res.data : [];
+        this.userFilterOptions = list
+          .filter(u => u && u.userid)
+          .map(u => ({ userid: String(u.userid), realname: u.realname || '' }));
+      } catch (e) {
+        this.userFilterOptions = [];
+      }
+      if (!this.canUseUserFilter) {
+        this.userFilter = '';
+      }
+    },
     formatDate(dateStr) {
       if (!dateStr) return '';
       let str = dateStr;
@@ -542,6 +571,9 @@ createApp({
         });
         if (this.keyword && this.keyword.trim() !== '') {
           params.append('keyword', this.keyword.trim());
+        }
+        if (this.canUseUserFilter && this.userFilter) {
+          params.append('user_id', this.userFilter);
         }
         if (this.statusFilter) {
           if (this.showDrafts && this.statusFilter !== 'draft') {
@@ -833,6 +865,7 @@ createApp({
       }
     }
     this.updateTabUrl(this.currentTab);
+    this.loadUserFilterOptions();
     this.fetchRequests();
     this.tabs.forEach(tab => {
       this.updatePendingCountForTab(tab.type);

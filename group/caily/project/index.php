@@ -657,9 +657,19 @@ $view->footing();
     background-color: rgba(255, 0, 0, 0.15);
 }
 
-#projectTable > :not(caption) > * > *{
+[data-bs-theme="dark"] #projectTable > :not(caption) > * > *,
+[data-bs-theme="dark"] .bg-label-secondary{
+    color: #eee!important;
+}
+[data-bs-theme="dark"] #projectTable_wrapper thead th{
+   background-color: #333!important;
+   color: #eee!important;
+}
+[data-bs-theme="dark"] .confirmation-note-item,
+[data-bs-theme="light"] #projectTable > :not(caption) > * > *{
     color: #333!important;
 }
+
 
 /* Kadai Queue Container */
 .kadai-queue-container {
