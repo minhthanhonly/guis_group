@@ -35,6 +35,7 @@
 
 <script>
   window.currentUserId = <?= json_encode($_SESSION['id'] ?? 0) ?>;
+  window.currentUserName = <?= json_encode($_SESSION['userid'] ?? '') ?>;
 </script>
 
 <script src="<?=$root?>assets/js/todo-modal.js?v=<?=CACHE_VERSION?>"></script>

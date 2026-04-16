@@ -25,6 +25,8 @@ class NotificationAPI {
                 return $this->createNotification();
             case 'get_notifications':
                 return $this->getNotifications();
+            case 'export_notifications':
+                return $this->exportNotifications();
             case 'mark_read':
                 return $this->markRead();
             case 'mark_read_multi':
@@ -142,6 +144,85 @@ class NotificationAPI {
         $list = $this->notificationModel->fetchAll($sql);
         return ['notifications' => $list];
     }
+
+    /**
+     * Xuất danh sách thông báo dạng JSON.
+     * Query: user_id (bắt buộc nếu không có session), limit (default 500, max 5000), offset (default 0),
+     * category = all | project | soumu (khớp tab UI: event bắt đầu form hoặc other → 総務),
+     * download=1 để tải file .json
+     */
+    private function exportNotifications() {
+        $user_id = $_GET['user_id'] ?? $_POST['user_id'] ?? '';
+        if (empty($user_id) && !empty($_SESSION['userid'])) {
+            $user_id = $_SESSION['userid'];
+        }
+        if (empty($user_id)) {
+            return ['error' => 'Missing user_id'];
+        }
+
+        $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 500;
+        if ($limit < 1) {
+            $limit = 1;
+        }
+        if ($limit > 5000) {
+            $limit = 5000;
+        }
+        $offset = isset($_GET['offset']) ? intval($_GET['offset']) : 0;
+        if ($offset < 0) {
+            $offset = 0;
+        }
+        $category = isset($_GET['category']) ? strtolower(trim($_GET['category'])) : 'all';
+        if (!in_array($category, ['all', 'project', 'soumu'], true)) {
+            $category = 'all';
+        }
+
+        $catSql = '';
+        if ($category === 'soumu') {
+            $catSql = " AND (COALESCE(n.event,'') LIKE 'form%' OR COALESCE(n.event,'') LIKE 'other%') ";
+        } elseif ($category === 'project') {
+            $catSql = " AND NOT (COALESCE(n.event,'') LIKE 'form%' OR COALESCE(n.event,'') LIKE 'other%') ";
+        }
+
+        $uidEsc = $this->notificationModel->quote($user_id);
+
+        $countSql = "SELECT COUNT(*) AS cnt FROM notification_user nu 
+                INNER JOIN notification n ON nu.notification_id = n.id 
+                WHERE nu.user_id = '" . $uidEsc . "' " . $catSql;
+        $countRow = $this->notificationModel->fetchOne($countSql);
+        $total = isset($countRow['cnt']) ? (int) $countRow['cnt'] : 0;
+
+        $sql = "SELECT n.*, nu.is_read, nu.read_at 
+                FROM notification_user nu 
+                INNER JOIN notification n ON nu.notification_id = n.id 
+                WHERE nu.user_id = '" . $uidEsc . "' " . $catSql . "
+                ORDER BY n.created_at DESC 
+                LIMIT $limit OFFSET $offset";
+
+        $list = $this->notificationModel->fetchAll($sql);
+        $out = [];
+        foreach ($list as $row) {
+            $ev = isset($row['event']) ? (string) $row['event'] : '';
+            $tab = (strpos($ev, 'form') === 0 || strpos($ev, 'other') === 0) ? 'soumu' : 'project';
+            $dataRaw = $row['data'] ?? null;
+            $dataParsed = null;
+            if ($dataRaw !== null && $dataRaw !== '') {
+                $decoded = json_decode($dataRaw, true);
+                $dataParsed = (json_last_error() === JSON_ERROR_NONE) ? $decoded : $dataRaw;
+            }
+            $row['category'] = $tab;
+            $row['data_parsed'] = $dataParsed;
+            $out[] = $row;
+        }
+
+        return [
+            'success' => true,
+            'total' => $total,
+            'limit' => $limit,
+            'offset' => $offset,
+            'category' => $category,
+            'notifications' => $out,
+        ];
+    }
     
     private function markRead() {
         $user_id = $_POST['user_id'] ?? '';
@@ -213,8 +294,12 @@ class NotificationAPI {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET') {
     $api = new NotificationAPI();
     $result = $api->handleRequest();
-    
-    header('Content-Type: application/json');
-    echo json_encode($result);
+
+    if (isset($result['error']) && $result['error'] === 'Unauthorized') {
+        http_response_code(401);
+    }
+
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($result, JSON_UNESCAPED_UNICODE);
 }
 ?> 

@@ -57,6 +57,7 @@ export default {
   },
   mounted() {
     this.loadApprovers();
+    this.ensureAtLeastOneLine();
   },
   watch: {
     defaultData: {
@@ -84,6 +85,10 @@ export default {
           raw.end_date = this.normalizeDateValue(raw.end_date);
           raw.settlement_date = this.normalizeDateValue(raw.settlement_date);
           raw.receipts = Array.isArray(raw.receipts) ? raw.receipts : [];
+          raw.lines = Array.isArray(raw.lines) ? raw.lines : [];
+          if (raw.lines.length === 0) {
+            raw.lines.push(this.createEmptyLine());
+          }
           this.formData = raw;
           this.originalData = JSON.parse(JSON.stringify(this.formData));
         }
@@ -144,6 +149,29 @@ export default {
     }
   },
   methods: {
+    createEmptyLine() {
+      return {
+        date: '',
+        item: '',
+        transportation: 0,
+        accommodation: 0,
+        entertainment: 0,
+        meal: 0,
+        other: 0,
+        total: 0,
+        note: ''
+      };
+    },
+    ensureAtLeastOneLine() {
+      if (!Array.isArray(this.formData.lines)) this.formData.lines = [];
+      if (this.formData.lines.length === 0) {
+        this.formData.lines.push(this.createEmptyLine());
+      }
+    },
+    addLine() {
+      if (!Array.isArray(this.formData.lines)) this.formData.lines = [];
+      this.formData.lines.push(this.createEmptyLine());
+    },
     normalizeDateValue(value) {
       if (value === null || value === undefined) return '';
       const str = String(value).trim();
@@ -539,7 +567,7 @@ export default {
               <div class="d-flex justify-content-between align-items-center">
                 <div>
                   <button type="button" class="btn btn-sm btn-outline-primary"
-                          @click="formData.lines.push({ date: '', item: '', transportation: 0, accommodation: 0, entertainment: 0, meal: 0, other: 0, total: 0, note: '' })">
+                          @click="addLine">
                     <i class="fa fa-plus me-1"></i> 行を追加
                   </button>
                 </div>

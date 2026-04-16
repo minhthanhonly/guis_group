@@ -174,7 +174,7 @@ export default {
         </div>
       </div>
       <div class="modal-header">
-        <h5 class="modal-title">{{ modalTitle }}</h5>
+        <h5 class="modal-title">{{ modalTitle }} <span class="text-muted small">※1点あたり1万円以上の購入は申請が必要です。</span></h5>
         <button type="button" class="btn-close" @click="close"></button>
       </div>
       <div class="modal-body">

@@ -467,9 +467,12 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div v-else class="d-flex flex-column">
                                     <input type="text" class="form-control" :value="formatDateTime(project.caily_nouki)" :data-time="project.caily_nouki || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' CAILY納期'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.caily_nouki)" readonly>
-                                    <div class="form-check mt-1">
+                                    <div class="form-check mt-1" v-if="canEditProject">
                                         <input class="form-check-input" type="checkbox" id="caily_nouki_status_view" v-model="project.caily_nouki_status" true-value="納品済み" false-value="" @change="quickUpdateNoukiStatus('caily')">
                                         <label class="form-check-label" for="caily_nouki_status_view"><span data-i18n="納品済み">納品済み</span></label>
+                                    </div>
+                                    <div class="mt-1" v-else>
+                                        <span class="badge bg-success">{{ project.caily_nouki_status || '-' }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -492,9 +495,12 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div v-else class="d-flex flex-column">
                                     <input type="text" class="form-control" :value="formatDateTime(project.guis_nouki)" :data-time="project.guis_nouki || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' GUIS納期'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)" readonly>
-                                    <div class="form-check mt-1">
+                                    <div class="form-check mt-1" v-if="canEditProject">
                                         <input class="form-check-input" type="checkbox" id="guis_nouki_status_view" v-model="project.guis_nouki_status" true-value="納品済み" false-value="" @change="quickUpdateNoukiStatus('guis')">
                                         <label class="form-check-label" for="guis_nouki_status_view"><span data-i18n="納品済み">納品済み</span></label>
+                                    </div>
+                                    <div class="mt-1" v-else>
+                                        <span class="badge bg-secondary">{{ project.guis_nouki_status || '未納品' }}</span>
                                     </div>
                                 </div>
                             </div>

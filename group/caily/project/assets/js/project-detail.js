@@ -1401,7 +1401,7 @@ const vueApp = createApp({
                             time_24hr: true,
                             allowInput: true,
                             locale: "ja",
-                            defaultHour: 18,
+                            defaultHour: 19,
                             defaultMinute: 0,
                             onChange: (selectedDates, dateStr) => {
                                 this.customFields[idx].value = dateStr;

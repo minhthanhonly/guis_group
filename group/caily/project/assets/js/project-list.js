@@ -2380,7 +2380,7 @@ var projectTable;
                         $wrap.find('.quickEditCustomDatetime').each(function() {
                             var $el = $(this);
                             if ($el.data('flatpickr')) $el.data('flatpickr').destroy();
-                            $el.flatpickr(Object.assign({}, fpCommon, { defaultHour: 9, defaultMinute: 0 }));
+                            $el.flatpickr(Object.assign({}, fpCommon, { defaultHour: 19, defaultMinute: 0 }));
                         });
                     }
                 }).catch(function(err) { 

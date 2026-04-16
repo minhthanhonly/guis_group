@@ -458,14 +458,18 @@
                     </li>
                   </ul>
                 </li>
-
+                <style>
+                  #notification_list{
+                    right: 0;
+                  }
+                </style>
                 <!-- Notification -->
                 <li class="nav-item dropdown-notifications navbar-dropdown dropdown me-3 me-xl-2">
                   <a
-                    class="nav-link dropdown-toggle hide-arrow btn btn-icon btn-text-secondary rounded-pill"
+                    id="open_electron_window_trigger"
+                    class="nav-link hide-arrow btn btn-icon btn-text-secondary rounded-pill"
                     href="javascript:void(0);"
-                    data-bs-toggle="dropdown"
-                    data-bs-auto-close="outside"
+                    role="button"
                     aria-expanded="false">
                     <span class="position-relative">
                       <i class="icon-base ti tabler-bell icon-22px text-heading"></i>

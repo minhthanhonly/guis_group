@@ -224,7 +224,7 @@ export default {
         </div>
       </div>
       <div class="modal-header">
-        <h5 class="modal-title">{{ modalTitle }}</h5>
+        <h5 class="modal-title">{{ modalTitle }} <span class="text-muted small">※ITサポートは必須ではありません。事前に分かっている内容がある場合のみ申請してください。</span></h5>
         <button type="button" class="btn-close" @click="close"></button>
       </div>
       <div class="modal-body">

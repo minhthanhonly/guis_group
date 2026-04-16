@@ -11,6 +11,20 @@ class NotificationManager {
         this.originalTitle = document.title;
         this.flashInterval = null;
         this.isFlashing = false;
+        this.bridgeHealthUrl = 'http://127.0.0.1:34567/health';
+        this.bridgeShowUrlCandidates = [
+            'http://127.0.0.1:34567/window/show',
+            'http://127.0.0.1:34567/show-window',
+            'http://127.0.0.1:34567/focus-window'
+        ];
+        this.bridgeNotifyUrl = 'http://127.0.0.1:34567/get_notify';
+        this.bridgeStatus = {
+            ok: false,
+            checkedAt: 0
+        };
+        this.autoRefreshMs = 30000;
+        this.autoRefreshTimer = null;
+        this.isSyncingLatest = false;
         this.init();
     }
     
@@ -44,6 +58,7 @@ class NotificationManager {
             await this.syncLatestNotification();
             this.renderNotificationList();
             this.listenLastNotificationId();
+            this.startAutoRefreshNotifications();
             this.setupMarkAll();
             
             // Thông báo đã sẵn sàng
@@ -51,10 +66,19 @@ class NotificationManager {
             
             // Setup page visibility listener để dừng flash khi user quay lại tab
             this.setupPageVisibilityListener();
+            this.setupElectronWindowTrigger();
             
         } catch (error) {
             console.error('Failed to initialize Firebase Notification Manager:', error);
         }
+    }
+
+    startAutoRefreshNotifications() {
+        if (!this.userId || this.autoRefreshTimer) return;
+        this.autoRefreshTimer = setInterval(async () => {
+            await this.syncLatestNotification();
+            this.renderNotificationList();
+        }, this.autoRefreshMs);
     }
     
     setupPageVisibilityListener() {
@@ -68,6 +92,180 @@ class NotificationManager {
         // Dừng flash khi window được focus
         window.addEventListener('focus', () => {
             this.stopFlashingTitle();
+        });
+    }
+
+    async isNotificationBridgeOpen() {
+        const now = Date.now();
+        // Cache ngắn để tránh gọi health endpoint quá dày.
+        if ((now - this.bridgeStatus.checkedAt) < 5000) {
+            return this.bridgeStatus.ok === true;
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 1500);
+        try {
+            const response = await fetch(this.bridgeHealthUrl, {
+                method: 'GET',
+                signal: controller.signal
+            });
+            if (!response.ok) {
+                this.bridgeStatus = { ok: false, checkedAt: now };
+                return false;
+            }
+            const body = await response.json();
+            const isOk = !!(body && body.ok === true);
+            this.bridgeStatus = { ok: isOk, checkedAt: now };
+            return isOk;
+        } catch (e) {
+            this.bridgeStatus = { ok: false, checkedAt: now };
+            return false;
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
+    async callBridgeAction(url, method) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 1200);
+        try {
+            const options = {
+                method,
+                signal: controller.signal
+            };
+            if (method === 'POST') {
+                options.headers = { 'Content-Type': 'application/json' };
+                options.body = JSON.stringify({ action: 'show-window' });
+            }
+
+            const response = await fetch(url, options);
+            console.log(response);
+            if (!response.ok) return false;
+            if (response.status === 204) return true;
+
+            const text = await response.text();
+            console.log(text);
+            if (!text) return true;
+            try {
+                const body = JSON.parse(text);
+                console.log(body);
+                return body.ok !== false;
+            } catch (e) {
+                return true;
+            }
+        } catch (e) {
+            return false;
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
+    async requestElectronShowWindow() {
+        for (const url of this.bridgeShowUrlCandidates) {
+            const postOk = await this.callBridgeAction(url, 'POST');
+            if (postOk) return true;
+            const getOk = await this.callBridgeAction(url, 'GET');
+            if (getOk) return true;
+        }
+        return false;
+    }
+
+    async notifyBridgeNewNotification() {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 1200);
+        try {
+            const postRes = await fetch(this.bridgeNotifyUrl, {
+                method: 'POST',
+                signal: controller.signal
+            });
+            if (postRes.ok) return true;
+        } catch (e) {
+            // ignore and fallback to GET
+        } finally {
+            clearTimeout(timeout);
+        }
+
+        try {
+            const getRes = await fetch(this.bridgeNotifyUrl, {
+                method: 'GET'
+            });
+            return getRes.ok;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    setupElectronWindowTrigger() {
+        const trigger = document.getElementById('open_electron_window_trigger');
+        const menu = document.getElementById('notification_list');
+        const dropdownRoot = trigger ? trigger.closest('.dropdown') : null;
+        if (!trigger || !menu || !dropdownRoot) return;
+
+        const openDropdown = () => {
+            menu.classList.add('show');
+            dropdownRoot.classList.add('show');
+            trigger.setAttribute('aria-expanded', 'true');
+        };
+        const closeDropdown = () => {
+            menu.classList.remove('show');
+            dropdownRoot.classList.remove('show');
+            trigger.setAttribute('aria-expanded', 'false');
+        };
+        const toggleDropdown = () => {
+            if (menu.classList.contains('show')) {
+                closeDropdown();
+            } else {
+                openDropdown();
+            }
+        };
+
+        document.addEventListener('click', (event) => {
+            if (!dropdownRoot.contains(event.target)) {
+                closeDropdown();
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeDropdown();
+            }
+        });
+
+        trigger.addEventListener('click', async (event) => {
+            // Chặn bubbling mặc định; dropdown được toggle thủ công để tránh mở đồng thời với app.
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === 'function') {
+                event.stopImmediatePropagation();
+            }
+
+            const now = Date.now();
+            const hasFreshBridgeStatus = (now - this.bridgeStatus.checkedAt) < 5000;
+
+            // Không có trạng thái bridge mới -> mở dropdown ngay để không bị delay.
+            if (!hasFreshBridgeStatus) {
+                toggleDropdown();
+
+                // Thử show app ở background để lần click sau phản hồi nhanh hơn.
+                this.requestElectronShowWindow().then((shown) => {
+                    if (shown) {
+                        closeDropdown();
+                    }
+                });
+                return;
+            }
+
+            if (!this.bridgeStatus.ok) {
+                toggleDropdown();
+                return;
+            }
+
+            const shown = await this.requestElectronShowWindow();
+            if (shown) {
+                closeDropdown();
+            } else {
+                // Bridge có thể đang chạy nhưng chưa hỗ trợ endpoint show/focus -> fallback mở dropdown.
+                toggleDropdown();
+            }
         });
     }
     
@@ -417,6 +615,8 @@ class NotificationManager {
 
     async syncLatestNotification() {
         if (!this.userId) return;
+        if (this.isSyncingLatest) return;
+        this.isSyncingLatest = true;
         // Lấy 20 notification mới nhất từ API khi load trang
         try {
             const response = await fetch(`/api/NotificationAPI.php?method=get_notifications&user_id=${encodeURIComponent(this.userId)}&limit=20`, {
@@ -432,6 +632,8 @@ class NotificationManager {
         } catch (e) {
             this.notifications = [];
             this.updateNotificationCount();
+        } finally {
+            this.isSyncingLatest = false;
         }
     }
 
@@ -446,11 +648,18 @@ class NotificationManager {
                     this.notifications.unshift(notif);
                     this.updateNotificationCount();
                     this.renderNotificationList();
-                    this.showWindowsNotification(notif);
+                    this.notifyBridgeNewNotification(notif);
+
+                    const bridgeOpen = await this.isNotificationBridgeOpen();
+                    if (!bridgeOpen) {
+                        this.showWindowsNotification(notif);
+                    }
                     this.showToastNotification(notif);
                     // Flash window title để thu hút sự chú ý (theo ngôn ngữ hiện tại)
-                    const localized = this.getLocalizedText(notif);
-                    this.startFlashingTitle(localized.title || '新しい通知');
+                    if (!bridgeOpen) {
+                        const localized = this.getLocalizedText(notif);
+                        this.startFlashingTitle(localized.title || '新しい通知');
+                    }
                 }
             }
         });
@@ -730,6 +939,10 @@ class NotificationManager {
         ref.onDisconnect().remove();
         // Đảm bảo xóa khi unload trang (trường hợp onDisconnect không kịp)
         window.addEventListener('beforeunload', () => {
+            if (this.autoRefreshTimer) {
+                clearInterval(this.autoRefreshTimer);
+                this.autoRefreshTimer = null;
+            }
             ref.remove();
         });
     }

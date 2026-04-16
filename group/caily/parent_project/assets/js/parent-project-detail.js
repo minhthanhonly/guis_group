@@ -2375,7 +2375,7 @@ createApp({
             if (typeof flatpickr !== 'undefined' && inputs.length) {
                 inputs.forEach(el => {
                     if (el._flatpickr) el._flatpickr.destroy();
-                    el._flatpickr = flatpickr(el, Object.assign({}, fpCommon, { defaultHour: 9, defaultMinute: 0 }));
+                    el._flatpickr = flatpickr(el, Object.assign({}, fpCommon, { defaultHour: 19, defaultMinute: 0 }));
                 });
             }
         },
