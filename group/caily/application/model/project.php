@@ -1891,20 +1891,48 @@ class Project extends ApplicationModel {
             $oldStr = is_scalar($oldVal) ? (string)$oldVal : json_encode($oldVal);
             $newStr = is_scalar($newVal) ? (string)$newVal : json_encode($newVal);
             
-            // custom_fields: so sánh theo từng key JSON, chỉ ghi log key nào thay đổi; chỉ lưu tên trường + giá trị mới (không lưu JSON)
+            // custom_fields: so sánh theo label ổn định để tránh lệch khi thứ tự mảng thay đổi
             if ($key === 'custom_fields') {
                 $oldArr = is_string($oldVal) ? (json_decode($oldVal, true) ?: []) : (is_array($oldVal) ? $oldVal : []);
                 $newArr = is_string($newVal) ? (json_decode($newVal, true) ?: []) : (is_array($newVal) ? $newVal : []);
-                $allKeys = array_unique(array_merge(array_keys($oldArr), array_keys($newArr)));
-                foreach ($allKeys as $fieldKey) {
-                    $o = array_key_exists($fieldKey, $oldArr) ? $oldArr[$fieldKey] : null;
-                    $n = array_key_exists($fieldKey, $newArr) ? $newArr[$fieldKey] : null;
+
+                $oldByLabel = [];
+                foreach ($oldArr as $idx => $item) {
+                    $label = '';
+                    if (is_array($item) && isset($item['label'])) {
+                        $label = trim((string)$item['label']);
+                    }
+                    if ($label === '') {
+                        $label = '__index_' . (string)$idx;
+                    }
+                    $oldByLabel[$label] = $item;
+                }
+
+                $newByLabel = [];
+                foreach ($newArr as $idx => $item) {
+                    $label = '';
+                    if (is_array($item) && isset($item['label'])) {
+                        $label = trim((string)$item['label']);
+                    }
+                    if ($label === '') {
+                        $label = '__index_' . (string)$idx;
+                    }
+                    $newByLabel[$label] = $item;
+                }
+
+                $allLabels = array_unique(array_merge(array_keys($oldByLabel), array_keys($newByLabel)));
+                foreach ($allLabels as $fieldLabel) {
+                    $o = array_key_exists($fieldLabel, $oldByLabel) ? $oldByLabel[$fieldLabel] : null;
+                    $n = array_key_exists($fieldLabel, $newByLabel) ? $newByLabel[$fieldLabel] : null;
                     $oStr = $o === null ? '' : (is_scalar($o) ? (string)$o : json_encode($o));
                     $nStr = $n === null ? '' : (is_scalar($n) ? (string)$n : json_encode($n));
                     $oldDisplay = $this->customFieldValueToDisplay($o);
                     $newDisplay = $this->customFieldValueToDisplay($n);
                     if ($oldDisplay !== $newDisplay) {
                         $labelDisplay = (is_array($n) && isset($n['label'])) ? trim((string)$n['label']) : ((is_array($o) && isset($o['label'])) ? trim((string)$o['label']) : '');
+                        if ($labelDisplay === '' && strpos($fieldLabel, '__index_') !== 0) {
+                            $labelDisplay = $fieldLabel;
+                        }
                         $note = $labelDisplay . 'を変更';
                         $this->logProjectAction($project_id, 'updated', $note . $aiLabel, $oldDisplay ? $oldDisplay : 'null', $newDisplay ? $newDisplay : 'null');
                     }
@@ -3570,6 +3598,7 @@ class Project extends ApplicationModel {
             'message' => $messageJa,
             'project_id' => $projectId,
             'user_ids' => $allUserIds,
+            'is_important' => 1,
             'data' => [
                 'project_name' => $projectName,
                 'action' => 'created',
@@ -3651,6 +3680,8 @@ class Project extends ApplicationModel {
         
         $newStatusLabelJa = $statusLabelsJa[$newStatus] ?? $newStatus;
         $newStatusLabelVi = $statusLabelsVi[$newStatus] ?? $newStatus;
+
+        $isImportant = in_array($newStatus, ['completed', 'cancelled', 'deleted', 'in_progress', 'paused']) ? 1 : 0;
         
         $titleJa = '#'.$projectId.': ステータスが変更されました';
         $messageJa = sprintf('%sが案件「%s」のステータスを「%s」に変更しました', $this->getUserRealname(), $projectName, $newStatusLabelJa);
@@ -3663,6 +3694,7 @@ class Project extends ApplicationModel {
             'message' => $messageJa,
             'project_id' => $projectId,
             'user_ids' => $memberIds,
+            'is_important' => $isImportant,
             'data' => [
                 'project_name' => $projectName,
                 'project_number' => $projectNumber,
@@ -3709,6 +3741,7 @@ class Project extends ApplicationModel {
             'message' => $messageJa,
             'project_id' => $projectId,
             'user_ids' => $memberIds,
+            'is_important' => $role === 'manager' ? 1 : 0,
             'data' => [
                 'project_name' => $projectName,
                 'avatar' => $this->getUserImage(),
