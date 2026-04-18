@@ -3598,7 +3598,6 @@ class Project extends ApplicationModel {
             'message' => $messageJa,
             'project_id' => $projectId,
             'user_ids' => $allUserIds,
-            'is_important' => 1,
             'data' => [
                 'project_name' => $projectName,
                 'action' => 'created',
@@ -3609,6 +3608,7 @@ class Project extends ApplicationModel {
                 'message_ja' => $messageJa,
                 'title_vi' => $titleVi,
                 'message_vi' => $messageVi,
+                'is_important' => 1,
             ],
             'type' => 'project'
         ];
@@ -3694,7 +3694,6 @@ class Project extends ApplicationModel {
             'message' => $messageJa,
             'project_id' => $projectId,
             'user_ids' => $memberIds,
-            'is_important' => $isImportant,
             'data' => [
                 'project_name' => $projectName,
                 'project_number' => $projectNumber,
@@ -3705,6 +3704,7 @@ class Project extends ApplicationModel {
                 'message_ja' => $messageJa,
                 'title_vi' => $titleVi,
                 'message_vi' => $messageVi,
+                'is_important' => $isImportant,
             ],
             'type' => 'project',
             'priority' => $newStatus === 'completed' ? 'high' : 'normal'
@@ -3741,7 +3741,6 @@ class Project extends ApplicationModel {
             'message' => $messageJa,
             'project_id' => $projectId,
             'user_ids' => $memberIds,
-            'is_important' => $role === 'manager' ? 1 : 0,
             'data' => [
                 'project_name' => $projectName,
                 'avatar' => $this->getUserImage(),
@@ -3753,6 +3752,7 @@ class Project extends ApplicationModel {
                 'message_ja' => $messageJa,
                 'title_vi' => $titleVi,
                 'message_vi' => $messageVi,
+                'is_important' => $role === 'manager' ? 1 : 0,
             ],
             'type' => 'project'
         ];

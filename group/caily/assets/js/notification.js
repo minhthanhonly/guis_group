@@ -240,7 +240,6 @@ class NotificationManager {
 
             const now = Date.now();
             const hasFreshBridgeStatus = (now - this.bridgeStatus.checkedAt) < 5000;
-
             // Không có trạng thái bridge mới -> mở dropdown ngay để không bị delay.
             if (!hasFreshBridgeStatus) {
                 toggleDropdown();
