@@ -32,7 +32,7 @@ class Team extends ApplicationModel {
 			LEFT JOIN " . DB_PREFIX . "departments d ON t.department_id = d.id
 			LEFT JOIN " . DB_PREFIX . "team_members tm ON t.id = tm.team_id
 			LEFT JOIN " . DB_PREFIX . "user u ON tm.user_id = u.id
-			WHERE t.is_active = 1
+			WHERE t.is_active = 1 AND (u.is_suspend = 0 OR u.is_suspend IS NULL OR u.is_suspend = '')
 			GROUP BY t.id
 			ORDER BY t.id ASC"
 		);
@@ -144,7 +144,7 @@ class Team extends ApplicationModel {
 				"SELECT tm.*, u.realname as user_name
 				FROM " . DB_PREFIX . "team_members tm
 				LEFT JOIN " . DB_PREFIX . "user u ON tm.user_id = u.id
-				WHERE tm.team_id = %d",
+				WHERE tm.team_id = %d AND (u.is_suspend = 0 OR u.is_suspend IS NULL OR u.is_suspend = '')",
 				intval($id)
 			);
 			$team['members'] = $this->fetchAll($query);

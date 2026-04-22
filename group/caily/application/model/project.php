@@ -1805,6 +1805,23 @@ class Project extends ApplicationModel {
         }
         if ($result) {
             $this->logProjectUpdateByField($id, $data, $old, $nullDatetimeFields);
+            $departmentId = isset($data['department_id']) ? intval($data['department_id']) : intval($old['department_id'] ?? 0);
+            $projectName = isset($data['name']) ? $data['name'] : ($old['name'] ?? '');
+
+            // Use userid (string) consistently for notification recipients.
+            $department_managers = $departmentId > 0 ? $this->getDepartmentManagers($departmentId) : [];
+            $project_managers = $this->getMembers(['project_id' => $id, 'role' => 'manager']);
+            $project_managers_ids = array_column($project_managers, 'userid');
+
+            $managerIds = array_merge($project_managers_ids, $department_managers);
+            $managerIds = array_unique($managerIds);
+         
+            if (isset($data['caily_nouki_status']) && $data['caily_nouki_status'] !== $old['caily_nouki_status'] && $data['caily_nouki_status'] == '納品済み') {
+               $this->notifyProjectCailyNouhinUpdated($id, $projectName, $this->getUserRealname(), $data['caily_nouki_status'], $managerIds);
+            }
+            if (isset($data['guis_nouki_status']) && $data['guis_nouki_status'] !== $old['guis_nouki_status'] && $data['guis_nouki_status'] == '納品済み') {
+                $this->notifyProjectGuisNoukiUpdated($id, $projectName, $this->getUserRealname(), $data['guis_nouki_status'], $managerIds);
+            }
             return ['status' => 'success', 'message' => 'Project updated successfully'];
         } else {
             return ['status' => 'error', 'message' => 'Update failed'];
@@ -3646,6 +3663,70 @@ class Project extends ApplicationModel {
         
         return $this->sendProjectNotification($params);
     }
+
+    /**
+     * Hàm tiện ích để gửi thông báo khi cập nhật dự án
+     */
+    function notifyProjectCailyNouhinUpdated($projectId, $projectName, $updatedBy,  $cailyNoukiStatus, $recipientIds = []) {
+        // Title / message đa ngôn ngữ
+        $titleJa = '#'.$projectId.': 案件「'.$projectName.'」 CAILY納品済み';
+        $messageJa = sprintf('%sがCAILY納品状況を「%s」に更新しました', $updatedBy, $cailyNoukiStatus);
+        $titleVi =  '#'.$projectId.': Dự án「'.$projectName.'」 CAILY Đã giao';
+        $messageVi = sprintf('%s đã cập nhật trạng thái giao hàng CAILY thành「%s」', $updatedBy, $cailyNoukiStatus);
+        
+        $params = [
+            'event' => 'project_caily_nouki_updated',
+            'title' => $titleJa,
+            'message' => $messageJa,
+            'project_id' => $projectId,
+            'user_ids' => $recipientIds,
+            'data' => [
+                'project_name' => $projectName,
+                'action' => 'updated',
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
+                'is_important' => 1,
+                'avatar' => $this->getUserImage(),
+                'url' => "/project/detail.php?id=$projectId",
+            ],
+            'type' => 'project',
+        ];
+        
+        return $this->sendProjectNotification($params);
+    }
+
+    function notifyProjectGuisNoukiUpdated($projectId, $projectName, $updatedBy,  $guisNoukiStatus, $recipientIds = []) {
+        // Title / message đa ngôn ngữ
+        $titleJa = '#'.$projectId.': 案件「'.$projectName.'」 GUIS納品済み';
+        $messageJa = sprintf('%sがGUIS納品状況を「%s」に更新しました', $updatedBy, $guisNoukiStatus);
+        $titleVi =  '#'.$projectId.': Dự án「'.$projectName.'」 GUIS Đã giao';
+        $messageVi = sprintf('%s đã cập nhật trạng thái giao hàng GUIS thành「%s」', $updatedBy, $guisNoukiStatus);
+        
+        $params = [
+            'event' => 'project_guis_nouki_updated',
+            'title' => $titleJa,
+            'message' => $messageJa,
+            'project_id' => $projectId,
+            'user_ids' => $recipientIds,
+            'data' => [
+                'project_name' => $projectName,
+                'action' => 'updated',
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
+                'is_important' => 1,
+                'avatar' => $this->getUserImage(),
+                'url' => "/project/detail.php?id=$projectId",
+            ],
+            'type' => 'project',
+        ];
+        
+        return $this->sendProjectNotification($params);
+    }
+    
     
     /**
      * Hàm tiện ích để gửi thông báo khi thay đổi trạng thái dự án

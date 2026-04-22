@@ -1563,11 +1563,13 @@ const vueApp = createApp({
                     if (typeof showMessage === 'function') {
                         showMessage('納期状況の更新に失敗しました。', true);
                     }
+                } else{
+                    showMessage('納期状況を更新しました。');
                 }
+
             } catch (e) {
                 this.project.caily_nouki_status = prevCaily;
                 this.project.guis_nouki_status = prevGuis;
-                console.error('Error updating nouki status quickly:', e);
                 if (typeof showMessage === 'function') {
                     showMessage('納期状況の更新に失敗しました。', true);
                 }

@@ -120,13 +120,13 @@
             }
             ?>
              
-            <li class="menu-item <?php if($directory == 'form') echo 'active open'; ?>">
+            <!--<li class="menu-item <?php if($directory == 'form') echo 'active open'; ?>">
               <a href="<?=$root?>form/index.php" class="menu-link">
                 <i class="menu-icon icon-base fa fa-file-alt"></i>
                 <div data-i18n="申請・承認">申請・承認</div>
                 <?php if ($form_pending_badge > 0) { ?><span class="badge badge_number text-bg-danger rounded-pill ms-auto"><?= $form_pending_badge ?></span><?php } ?>
               </a>
-            </li>
+            </li> -->
               <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
                 <a href="<?=$root?>schedule/" class="menu-link">
                   <i class="menu-icon icon-base ti tabler-calendar-event"></i>

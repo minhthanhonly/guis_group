@@ -520,18 +520,21 @@ class NotificationManager {
             items.forEach((n) => {
                 const { title, message, data } = this.getLocalizedText(n);
                 const li = document.createElement('li');
+                let data_parsed = n.data ? (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) : {};
                 li.className = `list-group-item list-group-item-action dropdown-notifications-item${n.is_read == 1 ? ' marked-as-read' : ''}`;
                 li.innerHTML = `
                     <div class="d-flex">
-                        <div class="flex-shrink-0 me-3">
-                            <div class="avatar">
+                        <div class="flex-shrink-0 me-3 justify-content-between">
+                            <div class="avatar mb-1">
                                 <img src="${data.avatar || '/assets/img/avatars/1.png'}" alt class="rounded-circle" />
                             </div>
+                            <span class="badge bg-warning" style="font-size: 10px;">${data_parsed.is_important == 1 ? '重要' : ''}</span>
                         </div>
                         <div class="flex-grow-1">
                             <h6 class="mb-1">${this.escapeHtml(title)}</h6>
                             <small class="mb-1 d-block text-body">${this.escapeHtml(message)}</small>
                             <small class="text-body-secondary">${n.created_at ? n.created_at : ''}</small>
+                           
                         </div>
                         <div class="flex-shrink-0 dropdown-notifications-actions">
                             <a href="javascript:void(0)" class="dropdown-notifications-read"
