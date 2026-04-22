@@ -282,6 +282,7 @@
     "請求書": "Hóa đơn",
     "円": "JPY",
     "メモを追加": "Thêm ghi chú",
+    "工事番号を編集": "Sửa mã công trình",
     "最初のメモを追加": "Thêm ghi chú đầu tiên",
     "メモがありません": "Không có ghi chú",
     "案件に参加": "Tham gia dự án",
@@ -496,5 +497,6 @@
     "設備 納期": "Kỳ hạn thiết bị",
     "先行納品図面": "Bản vẽ giao trước",
     "開始日・終了日未設定": "Chưa có lịch trình",
-    "案件名、工事番号、支店名などで検索...": "Tìm kiếm theo tên dự án, mã công trình, chi nhánh..."
+    "案件名、工事番号、支店名などで検索...": "Tìm kiếm theo tên dự án, mã công trình, chi nhánh...",
+    "未割り当て": "Chưa phân công"
   }

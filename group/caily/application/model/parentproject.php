@@ -297,6 +297,83 @@ class ParentProject extends ApplicationModel {
     }
 
     /**
+     * Update parent project's construction_number from project list context.
+     * Permission: administrator, project manager of the child project, or department project_manager.
+     * Input: project_id, construction_number
+     */
+    function updateConstructionNumberByProject($params = null) {
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : (isset($params['project_id']) ? intval($params['project_id']) : 0);
+        $construction_number = isset($_POST['construction_number']) ? trim((string)$_POST['construction_number']) : (isset($params['construction_number']) ? trim((string)$params['construction_number']) : '');
+
+        if ($project_id <= 0) {
+            return ['status' => 'error', 'message' => 'project_id is required'];
+        }
+
+        $project = $this->fetchOne(
+            sprintf(
+                "SELECT id, parent_project_id, department_id FROM " . DB_PREFIX . "projects WHERE id = %d LIMIT 1",
+                $project_id
+            )
+        );
+        if (!$project) {
+            return ['status' => 'error', 'message' => 'プロジェクトが見つかりません'];
+        }
+
+        $parent_project_id = isset($project['parent_project_id']) ? intval($project['parent_project_id']) : 0;
+        if ($parent_project_id <= 0) {
+            return ['status' => 'error', 'message' => '親案件が設定されていません'];
+        }
+
+        // Reuse existing project permission rule:
+        // administrator OR project manager OR department project_manager.
+        require_once(DIR_MODEL . 'project.php');
+        $projectModel = new Project();
+        $canEdit = $projectModel->canUserEditProject($project_id);
+        $projectModel->close();
+        if (!$canEdit) {
+            return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
+        }
+
+        $oldParent = $this->fetchOne(
+            sprintf(
+                "SELECT id, construction_number FROM " . DB_PREFIX . "parent_projects WHERE id = %d LIMIT 1",
+                $parent_project_id
+            )
+        );
+        if (!$oldParent) {
+            return ['status' => 'error', 'message' => '親案件が見つかりません'];
+        }
+
+        $oldValue = isset($oldParent['construction_number']) ? (string)$oldParent['construction_number'] : '';
+        if ($oldValue === $construction_number) {
+            return [
+                'status' => 'success',
+                'message' => '工事番号を更新しました',
+                'parent_project_id' => $parent_project_id,
+                'construction_number' => $construction_number
+            ];
+        }
+
+        $updateData = [
+            'construction_number' => $construction_number,
+            'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : '',
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+        $result = $this->query_update($updateData, ['id' => $parent_project_id]);
+        if (!$result) {
+            return ['status' => 'error', 'message' => '工事番号の更新に失敗しました'];
+        }
+
+        $this->logParentProjectAction($parent_project_id, 'updated', '工事番号を変更', $oldValue, $construction_number);
+        return [
+            'status' => 'success',
+            'message' => '工事番号を更新しました',
+            'parent_project_id' => $parent_project_id,
+            'construction_number' => $construction_number
+        ];
+    }
+
+    /**
      * Parse request_date to datetime Y-m-d H:i:s (GMT+9 / Asia/Tokyo). Empty/invalid returns null.
      * Supports: "Mon Jun 30 22:00:00 GMT+07:00 2025" (JS Date string → convert to JST),
      * "2025/07/09" (Y/m/d), "7/9" (m/d), "07/09/2025" (m/d/Y).

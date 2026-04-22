@@ -264,6 +264,35 @@ if($_SESSION['show_project'] == 0){
         </div>
     </div>
 
+    <!-- Edit Parent Construction Number Modal -->
+    <div class="modal fade" id="editParentConstructionNumberModal" tabindex="-1" aria-labelledby="editParentConstructionNumberModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editParentConstructionNumberModalLabel">
+                        <span data-i18n="工事番号を編集">工事番号を編集</span>
+                        <span class="badge bg-label-primary ms-2" id="editParentConstructionProjectIdBadge"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editParentConstructionProjectId">
+                    <div class="mb-3">
+                        <label class="form-label" for="editParentConstructionNumberInput"><span data-i18n="工事番号">工事番号</span></label>
+                        <input type="text" class="form-control" id="editParentConstructionNumberInput" autocomplete="off" placeholder="工事番号を入力">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
+                    <button type="button" class="btn btn-primary" id="editParentConstructionSaveBtn">
+                        <span class="spinner-border spinner-border-sm d-none" id="editParentConstructionSaveSpinner"></span>
+                        <span data-i18n="更新">更新</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Quick Edit Project Modal (案件を編集) -->
     <div class="modal fade" id="quickEditProjectModal" tabindex="-1" aria-labelledby="quickEditProjectModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
         <div class="modal-dialog modal-lg">

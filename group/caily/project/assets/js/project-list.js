@@ -135,6 +135,141 @@ var projectTable;
             .replace(/&amp;/g, '&')
             .replace(/&nbsp;/g, ' ');
     }
+
+    function isVietnameseLocale() {
+        if (typeof i18next === 'undefined' || !i18next.isInitialized) return false;
+        return String(i18next.language || '').toLowerCase().indexOf('vi') === 0;
+    }
+
+    function getBranchRomaji(branchName) {
+        // Branch name -> romaji mapping for Vietnamese locale display.
+        var branchRomajiMap = {
+            '和歌山': 'WAKAYAMA',
+            '青梅': 'AOMEI',
+            '足立': 'ADACHI',
+            '厚木': 'ASTUGI',
+            '尼崎': 'AMAGASAKI',
+            '安城': 'ANZOU',
+            '池田': 'IKEDA',
+            '板橋': 'ITABASHI',
+            '市川': 'ICHIKAWA',
+            '一宮': 'ICHINOMIYA',
+            '宇都宮': 'USTUNOMIYA',
+            '江戸川': 'EDOGAWA',
+            '大阪': 'OSAKA',
+            '大阪りんくう': 'OSAKARINKU',
+            '岡崎': 'OKAZAKI',
+            '小田原': 'ODAWARA',
+            '柏': 'KASHIWA',
+            '春日井': 'KASUGAI',
+            '春日部': 'KASUKABE',
+            '鎌倉': 'KAMAKURA',
+            '刈谷': 'KARIYA',
+            '川口': 'KAWAGUCHI',
+            '川崎': 'KAWASAKI',
+            '川崎西': 'KAWASAKINISHI',
+            '川崎東': 'KAWASAKIHIGASHI',
+            '岐阜東': 'GIFUHIGASHI',
+            '京都': 'KYOTO',
+            '京都西': 'KYOTONISHI',
+            '京都東': 'KYOTOHIGASHI',
+            '京都山科': 'KYOTOYAMASHINA',
+            '桑名': 'KUWANA',
+            '江東': 'KOUTOU',
+            '神戸': 'KOBE',
+            '国分寺': 'KOKUBUNJI',
+            '埼玉南': 'SAITAMAMINAMI',
+            '堺': 'SAKAI',
+            '相模原': 'SAGAMIHARA',
+            '三宮': 'SANNOMIYA',
+            '滋賀': 'SHIGA',
+            '静岡': 'SHIZUOKA',
+            '静岡東': 'SHIZUOKAHIGASI',
+            '品川': 'SHINAGAWA',
+            '杉並': 'SUGINAMI',
+            '墨田': 'SUMIDA',
+            '世田谷': 'SETAGAYA',
+            '仙台南': 'SENDAIMINAMI',
+            '高崎': 'TAKASAKI',
+            '多治見': 'TAJIMI',
+            '立川': 'TACHIKAWA',
+            '多摩': 'TAMA',
+            '千葉': 'CHIBA',
+            '千葉北': 'CHIBAKITA',
+            '千葉南': 'CHIBAMINAMI',
+            '東京大田': 'TOKYOOOTA',
+            '東京北': 'TOKYOKITA',
+            '所沢': 'TOKOROZAWA',
+            '富山': 'TOYAMA',
+            '豊川': 'TOYOKAWA',
+            '豊田': 'TOYOTA',
+            '豊橋': 'TOYOHASHI',
+            '長崎': 'NAGASAKI',
+            '名古屋北': 'NAGOYAKITA',
+            '名古屋港': 'NAGOYAMINATO',
+            '名古屋天白': 'NAGOYATENPAKU',
+            '名古屋西': 'NAGOYANISHI',
+            '名古屋東': 'NAGOYAHIGASHI',
+            '名古屋南': 'NAGOYAMINAMI',
+            '奈良南': 'NARAMINAMI',
+            '成田': 'NARITA',
+            '新潟': 'NIIGATA',
+            '新潟西': 'NIIGATANISHI',
+            '練馬': 'NERYMA',
+            '練馬西': 'NERIMANISHI',
+            '八王子': 'HACHIOJI',
+            '八戸': 'HACHINOHE',
+            '浜松': 'HAMAMASTU',
+            '東大阪': 'HIGASHIOSAKA',
+            '東京太田': 'HIGASITOKYOOTA',
+            '姫路': 'HIMEJI',
+            '枚方': 'HIRAKATA',
+            '枚方南': 'HIRAKATAMINAMI',
+            '平塚': 'HIRATUKA',
+            '福島': 'FUKUSHIMA',
+            '福島南': 'FUKUSHIMAMINAMI',
+            '富士': 'FUJI',
+            '藤沢': 'FUJISAWA',
+            '船橋': 'FUNAHASHI',
+            '町田': 'MACHIDA',
+            '松江': 'MATSUE',
+            '松戸': 'MATSUDO',
+            '松山': 'MASTUYAMA',
+            '三鷹': 'MITAKA',
+            '水戸': 'MITO',
+            '南大阪': 'MINAMIOSAKA',
+            '目黒': 'MEKURO',
+            '守谷': 'MORIYA',
+            '大和': 'YAMATO',
+            '横浜': 'YOKOHAMA',
+            '横浜東': 'YOKOHAMAHIGASI',
+            '横浜南': 'YOKOHAMAMINAMI',
+            '四日市': 'YOKAICHI',
+            '流通開発神戸': 'RYUTUKAIHATUKOBE',
+            '流通開発静岡': 'RYUTUKAIHATUSHIZUOKA',
+            '徳山': 'TOKUYAMA',
+            '仙台': 'SENDAI',
+            '仙台南': 'SENDAIMINAMI',
+            '仙台西': 'SENDAINISHI',
+            '仙台東': 'SENDAIHIGASHI',
+            '仙台北': 'SENDAIKITA',
+            '流通開発大阪': 'RYUTUKAIHATU OSAKA',
+            '流通開発東京': 'RYUTUKAIHATU TOKYO',
+            '流通開発札幌': 'RYUTUKAIHATU SAPPORO',
+            '流通開発仙台': 'RYUTUKAIHATU SENDAI',
+        };
+        return branchRomajiMap[String(branchName || '').trim()] || '';
+    }
+
+    function formatBranchNameForDisplay(branchName) {
+        var raw = String(branchName || '').trim();
+        if (!raw) return '';
+        if (!isVietnameseLocale()) return raw;
+        if (/\([A-Za-z0-9\-\s]+\)$/.test(raw)) return raw;
+        var romaji = getBranchRomaji(raw);
+        return romaji ? (raw + '<br>' + romaji) : raw;
+    }
+
     /** Giải mã HTML (giống cột CAILYメモ), strip thẻ, rồi cắt còn maxLen ký tự cho snippet note. */
     function noteSnippetText(content, maxLen) {
         if (content == null) return { short: '', full: '' };
@@ -1200,10 +1335,10 @@ var projectTable;
                     orderable: false,
                     render: function(data, type, row) {
                         if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
+                            return '<span class="badge bg-danger" data-i18n="未割り当て">'+translateText("未割り当て")+'</span>';
                         }
                         const ids = typeof data === 'string' ? data.split(',').map(item => item.trim()).filter(item => item) : [String(data)];
-                        if (ids.length === 0) return '<span class="text-muted">-</span>';
+                        if (ids.length === 0) return '<span class="badge bg-danger" data-i18n="未割り当て">'+translateText("未割り当て")+'</span>';
                         const labels = ids.map(function(id) { return teamIdToName[id] || id; });
                         return labels.map(function(label) {
                             label = label.replace(/CL意匠/g, 'CL_').replace(/G意匠/g, 'G_');
@@ -1269,7 +1404,8 @@ var projectTable;
                         if (!data || data === '') {
                             return '<span class="text-muted">-</span>';
                         }
-                        return `<span class="small">${data}</span>`;
+                        const displayBranchName = formatBranchNameForDisplay(data);
+                        return `<span class="small">${displayBranchName}</span>`;
                     },
                     title: '<span data-i18n="支店名">支店名</span>'
                 },
@@ -2073,19 +2209,21 @@ var projectTable;
         // ----- 確認必要メモ: hover pencil & context menu -----
         // Custom context menu for adding confirmation notes (legacy: per note column, hiện chỉ để tránh lỗi khi hide/click)
         const $noteContextMenu = $('<div id="confirmationNoteContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
-        $noteContextMenu.append('<button class="dropdown-item" type="button" id="addConfirmationNoteBtn"><i class="fa fa-plus me-1"></i>メモを追加</button>');
+        $noteContextMenu.append('<button class="dropdown-item" type="button" id="addConfirmationNoteBtn"><i class="fa fa-plus me-1"></i><span data-i18n="メモを追加">メモを追加</span></button>');
         $('body').append($noteContextMenu);
 
         // ----- Context menu "案件を編集" + "Thêm vào todo" (gộp chung, ẩn/hiện Thêm vào todo theo ô có data-todo-title) -----
         const $rowContextMenu = $('<div id="projectRowContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="quickEditProjectRowBtn"><i class="fa fa-pencil-alt me-1"></i><span data-i18n="案件を編集">案件を編集</span></button>');
-        $rowContextMenu.append('<button class="dropdown-item" type="button" id="addNoteFromRowBtn"><i class="fa fa-sticky-note me-1"></i>メモを追加</button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="editParentConstructionNumberRowBtn"><i class="fa fa-hashtag me-1"></i><span data-i18n="工事番号を編集">工事番号を編集</span></button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="addNoteFromRowBtn"><i class="fa fa-sticky-note me-1"></i><span data-i18n="メモを追加">メモを追加</span></button>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="addToTodoFromRowBtn" style="display:none;"><i class="fas fa-list-check me-1"></i><span data-i18n="追加Todo">追加Todo</span></button>');
         $('body').append($rowContextMenu);
         let contextMenuRowProjectId = null;
         let contextMenuRowColumnKey = '';
         let contextMenuIsManagerOnly = false;
         let contextMenuTodoEl = null;
+        let contextMenuRowData = null;
 
         function isCurrentUserManagerOfProject(rowData) {
             if (typeof USER_AUTH_ID === 'undefined' || !USER_AUTH_ID || !rowData || !rowData.manager_id) return false;
@@ -2124,6 +2262,7 @@ var projectTable;
             var canShowEdit = canFullEdit || isManagerOfProject;
             const $td = $(e.target).closest('td');
             contextMenuTodoEl = $td.find('[data-todo-title]')[0] || null;
+            contextMenuRowData = rowData;
             // Xác định cột để set display_column cho note
             var dtIndex = null;
             try {
@@ -2134,7 +2273,9 @@ var projectTable;
             } catch (err) {}
             contextMenuRowColumnKey = dtIndex !== null ? getColumnKeyByDataTableIndex(dtIndex, customFieldColumnDefinitions) : '';
             var hasNoteColumn = !!contextMenuRowColumnKey;
-            if (!canShowEdit && !contextMenuTodoEl && !hasNoteColumn) return;
+            var hasParentProject = !!(rowData.parent_project_id && parseInt(rowData.parent_project_id, 10) > 0);
+            var canEditParentConstruction = canShowEdit && hasParentProject;
+            if (!canShowEdit && !canEditParentConstruction && !contextMenuTodoEl && !hasNoteColumn) return;
             e.preventDefault();
             contextMenuRowProjectId = rowData.id;
             contextMenuIsManagerOnly = !canFullEdit && isManagerOfProject;
@@ -2143,6 +2284,7 @@ var projectTable;
             } else {
                 $('#quickEditProjectRowBtn').hide();
             }
+            $('#editParentConstructionNumberRowBtn').toggle(canEditParentConstruction);
             $('#addNoteFromRowBtn').toggle(hasNoteColumn);
             $('#addToTodoFromRowBtn').toggle(!!contextMenuTodoEl);
             $rowContextMenu
@@ -2158,6 +2300,13 @@ var projectTable;
             $rowContextMenu.hide();
             if (contextMenuRowProjectId && typeof window.openQuickEditProjectModal === 'function') {
                 window.openQuickEditProjectModal(contextMenuRowProjectId, contextMenuIsManagerOnly);
+            }
+        });
+        $rowContextMenu.on('click', '#editParentConstructionNumberRowBtn', function(ev) {
+            ev.stopPropagation();
+            $rowContextMenu.hide();
+            if (contextMenuRowData && typeof window.openEditParentConstructionNumberModal === 'function') {
+                window.openEditParentConstructionNumberModal(contextMenuRowData);
             }
         });
         $rowContextMenu.on('click', '#addToTodoFromRowBtn', function(ev) {
@@ -2190,6 +2339,73 @@ var projectTable;
             }
             app.openNoteModalFromList(contextMenuRowProjectId, null, noteType, displayKey);
         });
+
+        // ----- Edit parent construction number -----
+        const editParentConstructionModalEl = document.getElementById('editParentConstructionNumberModal');
+        const editParentConstructionProjectIdInput = document.getElementById('editParentConstructionProjectId');
+        const editParentConstructionNumberInput = document.getElementById('editParentConstructionNumberInput');
+        const editParentConstructionProjectIdBadge = document.getElementById('editParentConstructionProjectIdBadge');
+        const editParentConstructionSaveBtn = document.getElementById('editParentConstructionSaveBtn');
+        const editParentConstructionSaveSpinner = document.getElementById('editParentConstructionSaveSpinner');
+
+        window.openEditParentConstructionNumberModal = function(rowData) {
+            if (!rowData || !editParentConstructionModalEl) return;
+            var projectId = rowData.id ? String(rowData.id) : '';
+            var parentProjectId = rowData.parent_project_id ? String(rowData.parent_project_id) : '';
+            if (!parentProjectId) {
+                showMessage('親案件が設定されていません。', true);
+                return;
+            }
+            if (editParentConstructionProjectIdInput) editParentConstructionProjectIdInput.value = projectId;
+            if (editParentConstructionNumberInput) editParentConstructionNumberInput.value = rowData.parent_construction_number || '';
+            if (editParentConstructionProjectIdBadge) editParentConstructionProjectIdBadge.textContent = '#' + projectId;
+            bootstrap.Modal.getOrCreateInstance(editParentConstructionModalEl).show();
+            setTimeout(function() {
+                if (editParentConstructionNumberInput && typeof editParentConstructionNumberInput.focus === 'function') {
+                    editParentConstructionNumberInput.focus();
+                }
+            }, 120);
+        };
+
+        if (editParentConstructionSaveBtn) {
+            editParentConstructionSaveBtn.addEventListener('click', async function() {
+                var projectId = editParentConstructionProjectIdInput ? String(editParentConstructionProjectIdInput.value || '').trim() : '';
+                var constructionNumber = editParentConstructionNumberInput ? String(editParentConstructionNumberInput.value || '').trim() : '';
+                if (!projectId) return;
+
+                editParentConstructionSaveBtn.disabled = true;
+                if (editParentConstructionSaveSpinner) editParentConstructionSaveSpinner.classList.remove('d-none');
+                try {
+                    var formData = new FormData();
+                    formData.append('project_id', projectId);
+                    formData.append('construction_number', constructionNumber);
+                    var response = await axios.post('/api/index.php?model=parentproject&method=updateConstructionNumberByProject', formData);
+                    if (!response || !response.data || response.data.status !== 'success') {
+                        var failMsg = (response && response.data && (response.data.message || response.data.error))
+                            ? (response.data.message || response.data.error)
+                            : '工事番号の更新に失敗しました。';
+                        showMessage(failMsg, true);
+                        return;
+                    }
+                    showMessage(response.data.message || '工事番号を更新しました。', false);
+                    if (editParentConstructionModalEl) {
+                        bootstrap.Modal.getOrCreateInstance(editParentConstructionModalEl).hide();
+                    }
+                    if (projectTable) {
+                        projectTable.ajax.reload(null, false);
+                    }
+                } catch (err) {
+                    console.error('Update parent construction number error:', err);
+                    var msg = (err && err.response && err.response.data && (err.response.data.message || err.response.data.error))
+                        ? (err.response.data.message || err.response.data.error)
+                        : '工事番号の更新に失敗しました。';
+                    showMessage(msg, true);
+                } finally {
+                    editParentConstructionSaveBtn.disabled = false;
+                    if (editParentConstructionSaveSpinner) editParentConstructionSaveSpinner.classList.add('d-none');
+                }
+            });
+        }
 
         // Quick Edit Tagify instances (destroy on each open, re-init after load)
         let quickEditTeamTagify = null, quickEditManagerTagify = null, quickEditMembersTagify = null;
