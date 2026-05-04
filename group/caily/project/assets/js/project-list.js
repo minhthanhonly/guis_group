@@ -53,6 +53,85 @@ var projectTable;
     const FILTER_STORAGE_KEY = 'projectListFilters';
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment';
     const COLUMN_VISIBILITY_KEY = 'projectListColumnVisibility';
+    const COLUMN_ORDER_STORAGE_KEY = 'projectListColumnOrder';
+
+    function getProjectColumnOrderStorageKey(departmentId) {
+        return COLUMN_ORDER_STORAGE_KEY + '_' + (departmentId != null ? String(departmentId) : '0');
+    }
+
+    /** Merge saved column key order with current table keys (append missing keys in default order). */
+    function mergeColumnKeyOrder(savedKeys, defaultKeys) {
+        var def = defaultKeys || [];
+        var saved = Array.isArray(savedKeys) ? savedKeys : [];
+        var seen = Object.create(null);
+        var out = [];
+        var i;
+        for (i = 0; i < saved.length; i++) {
+            var k = saved[i];
+            if (!k || seen[k]) continue;
+            if (def.indexOf(k) === -1) continue;
+            seen[k] = true;
+            out.push(k);
+        }
+        for (i = 0; i < def.length; i++) {
+            var dk = def[i];
+            if (!seen[dk]) {
+                seen[dk] = true;
+                out.push(dk);
+            }
+        }
+        return out;
+    }
+
+    function loadProjectColumnOrder(departmentId) {
+        try {
+            var raw = localStorage.getItem(getProjectColumnOrderStorageKey(departmentId));
+            if (!raw) return null;
+            var parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function saveProjectColumnOrder(departmentId, keys) {
+        try {
+            localStorage.setItem(getProjectColumnOrderStorageKey(departmentId), JSON.stringify(keys || []));
+        } catch (e) { /* ignore */ }
+    }
+
+    /** Thứ tự key cột mặc định (khớp fixed + custom + tail): trước CAILY納期 → custom → từ CAILY納期 trở đi. */
+    function getDefaultProjectColumnKeys(customColDefs) {
+        var customDefs = customColDefs || [];
+        var before = [];
+        var after = [];
+        var pastCaily = false;
+        var i;
+        for (i = 0; i < COLUMN_DEFINITIONS.length; i++) {
+            var ck = COLUMN_DEFINITIONS[i].key;
+            if (ck === 'caily_nouki') pastCaily = true;
+            if (!pastCaily) before.push(ck);
+            else after.push(ck);
+        }
+        var keys = before.concat(customDefs.map(function(c) { return c.key; })).concat(after);
+        return keys;
+    }
+
+    function getMergedProjectColumnKeys(customColDefs, departmentId) {
+        return mergeColumnKeyOrder(loadProjectColumnOrder(departmentId), getDefaultProjectColumnKeys(customColDefs));
+    }
+
+    /** Dropdown 列の表示 — cùng thứ tự với cột bảng (sau merge localStorage). */
+    function buildAvailableColumnsList(customColDefs, departmentId, columnVisibility) {
+        var vis = columnVisibility || {};
+        var labelMap = {};
+        COLUMN_DEFINITIONS.forEach(function(c) { labelMap[c.key] = c.label; });
+        (customColDefs || []).forEach(function(c) { labelMap[c.key] = c.label; });
+        var keys = getMergedProjectColumnKeys(customColDefs, departmentId);
+        return keys.map(function(k) {
+            return { key: k, label: labelMap[k] || k, visible: vis[k] !== false };
+        });
+    }
 
     // Cột dùng cho note 表示列 (giống project-detail.js, bỏ is_favorite, ID, CAILYメモ, GUISメモ)
     const NOTE_DISPLAY_COLUMNS = [
@@ -297,23 +376,19 @@ var projectTable;
         return visibility;
     }
     
-    // Tính index cột trong DataTable theo key (xử lý lệch index do chèn custom columns)
+    // Index cột trong DataTable theo columns.name (ổn định khi ColReorder đổi thứ tự)
     function getDataTableColumnIndexByKey(columnKey, customColDefs) {
-        const customDefs = customColDefs || customFieldColumnDefinitions || [];
-        const baseDef = COLUMN_DEFINITIONS.find(col => col.key === columnKey);
-        if (baseDef) {
-            const baseIdx = baseDef.index;
-            // Các cột base sau vị trí chèn custom sẽ bị đẩy sang phải theo số lượng custom
-            if (baseIdx >= BASE_CUSTOM_START_INDEX) {
-                return baseIdx + customDefs.length;
-            }
-            return baseIdx;
+        var dt = projectTable;
+        if (!dt || typeof $.fn.DataTable === 'undefined' || !$.fn.DataTable.isDataTable('#projectTable')) {
+            return null;
         }
-        const customIndex = customDefs.findIndex(col => col.key === columnKey);
-        if (customIndex !== -1) {
-            return BASE_CUSTOM_START_INDEX + customIndex;
+        try {
+            var col = dt.column(columnKey + ':name');
+            var idx = col.index();
+            return typeof idx === 'number' ? idx : null;
+        } catch (e) {
+            return null;
         }
-        return null;
     }
 
     function applyColumnVisibility(table, visibility, customColDefs) {
@@ -815,9 +890,9 @@ var projectTable;
         // Refresh dropdown 列の表示: chỉ còn cột cơ bản, bỏ hết custom field của department cũ
         if (typeof app !== 'undefined' && app) {
             var baseVis = loadColumnVisibilityFromLocalStorage([]);
-            app.availableColumns = COLUMN_DEFINITIONS.map(function(col) {
-                return { key: col.key, label: col.label, visible: baseVis[col.key] !== false };
-            });
+            var depId = app.selectedDepartment && app.selectedDepartment.id;
+            app.availableColumns = buildAvailableColumnsList([], depId, baseVis);
+            scheduleColumnVisibilityMenuI18n();
         }
     }
 
@@ -921,6 +996,7 @@ var projectTable;
                 var fieldType = f.type;
                 var fieldOptions = f.options || '';
                 customColumnConfigs.push({
+                    name: key,
                     data: null,
                     render: function(data, type, row) {
                         var val = getCustomFieldValueFromRow(row, fieldLabel);
@@ -968,71 +1044,9 @@ var projectTable;
             console.warn('Failed to load custom fields for list', e);
         }
 
-        projectTable = $('#projectTable').DataTable({
-            serverSide: true,
-            processing: true,
-            ajax: {
-                url: '/api/index.php',
-                type: 'GET',
-                data: function(d) {
-                    // Thu thập filter từ form
-                    const filterStartMonth = $('#filterStartMonth').val();
-                    const filterEndMonth = $('#filterEndMonth').val();
-                    const filterPriority = $('#filterPriority').val();
-                    const filterProgress = $('#filterProgress').val();
-                    const filterTimeLeft = $('#filterTimeLeft').val();
-                    const filterToday = $('#filterToday').val();
-                    const filterProjectOrderType = $('#filterProjectOrderType').val();
-                    const filterTeam = $('#filterTeam').val();
-                    const filterTantou = $('#filterTantou').val();
-                    const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
-                    const filterKeyword = $('#filterKeyword').val();
-                    const filterProjectId = $('#filterProjectId').val();
-                    const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
-                    const myProjects = $('#filterMyProjects').is(':checked') ? 1 : 0;
-                    const favoritesOnly = $('#filterFavoritesOnly').is(':checked') ? 1 : 0;
-                    return {
-                        model: 'project',
-                        method: 'list',
-                        department_id: app.selectedDepartment?.id,
-                        status: app.selectedStatus?.key,
-                        draw: d.draw,
-                        start: d.start,
-                        length: d.length,
-                        search: d.search.value,
-                        order_column: d.order && d.order[0] && d.columns[d.order[0].column]?.data || 'created_at',
-                        order_dir: d.order && d.order[0] ? d.order[0].dir : 'desc',
-                        filterStartMonth,
-                        filterEndMonth,
-                        filterPriority,
-                        filterProgress,
-                        filterTimeLeft,
-                        filterToday,
-                        filterProjectOrderType,
-                        filterTeam,
-                        filterTantou,
-                        filterNoDates,
-                        my_projects: myProjects,
-                        filterKeyword,
-                        filterProjectId,
-                        showInactive,
-                        favorites_only: favoritesOnly
-                    };
-                },
-                dataSrc: function(response) {
-                    return response.data || [];
-                }
-            },
-            paging: true,
-            info: true,
-            searching: false,
-            
-            dom: '<"row"<"col"l><"col text-end"p>>rti',
-            scrollX: true,
-            autoWidth: false,
-            //scrollY: Math.round(window.innerHeight * 0.8) + 'px',
-            columns: [
+        var fixedColumnConfigs = [
                 { 
+                    name: 'is_favorite',
                     data: 'is_favorite',
                     render: function(data, type, row) {
                         if (type === 'sort' || type === 'type') {
@@ -1094,6 +1108,7 @@ var projectTable;
                     width: '70px'
                 },
                 { 
+                    name: 'id',
                     data: 'id',
                     className: 'project-id-cell',
                     render: function(data, type, row) {
@@ -1105,6 +1120,7 @@ var projectTable;
                     width: '40px'
                 },
                 { 
+                    name: 'confirmation_notes_caily',
                     data: 'confirmation_notes_caily',
                     width: '250px',
                     className: 'confirmation-notes-column',
@@ -1173,6 +1189,7 @@ var projectTable;
                     orderable: false
                 },
                 { 
+                    name: 'confirmation_notes_guis',
                     data: 'confirmation_notes_guis',
                     width: '250px',
                     className: 'confirmation-notes-column',
@@ -1241,6 +1258,7 @@ var projectTable;
                     orderable: false
                 },
                 {
+                    name: 'status',
                     data: 'status',
                     render: function(data, type, row) {
                         // Return original data value for sorting
@@ -1257,6 +1275,7 @@ var projectTable;
                     width: '60px',
                 },
                 {
+                    name: 'progress',
                     data: 'progress',
                     width: '50px',
                     render: function(data) {
@@ -1272,6 +1291,7 @@ var projectTable;
                     title: '<span data-i18n="進捗率">進捗率</span>'
                 },
                 { 
+                    name: 'tantou',
                     data: 'tantou',
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -1290,6 +1310,7 @@ var projectTable;
                     visible: false
                 },
                 {
+                    name: 'manager',
                     data: 'manager_id',
                     orderable: false,
                     render: function(data) {
@@ -1330,6 +1351,7 @@ var projectTable;
                     title: '<span data-i18n="管理">管理</span>'
                 },
                 {
+                    name: 'teams',
                     data: 'teams',
                     width: '60px',
                     orderable: false,
@@ -1347,6 +1369,7 @@ var projectTable;
                     title: '<span data-i18n="チーム">チーム</span>'
                 },
                 {
+                    name: 'members',
                     data: 'assignment_id',
                     orderable: false,
                     render: function(data) {
@@ -1387,6 +1410,7 @@ var projectTable;
                     title: '<span data-i18n="メンバー">メンバー</span>'
                 },
                 { 
+                    name: 'parent_construction_number',
                     width: '60px',
                     data: 'parent_construction_number',
                     render: function(data, type, row) {
@@ -1398,6 +1422,7 @@ var projectTable;
                     title: '<span data-i18n="工事番号">工事番号</span>'
                 },
                 { 
+                    name: 'parent_branch_name',
                     width: '60px',
                     data: 'parent_branch_name',
                     render: function(data, type, row) {
@@ -1410,6 +1435,7 @@ var projectTable;
                     title: '<span data-i18n="支店名">支店名</span>'
                 },
                 { 
+                    name: 'name',
                     data: 'name',
                     width: '150px',
                     className: 'project-name-cell',
@@ -1421,6 +1447,7 @@ var projectTable;
                     title: '<span data-i18n="お施主様名">お施主様名</span>'
                 },
                 { 
+                    name: 'parent_scale',
                     data: 'parent_scale',
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -1432,6 +1459,7 @@ var projectTable;
                     visible: false
                 },
                 { 
+                    name: 'parent_type1',
                     data: 'parent_type1',
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -1448,6 +1476,7 @@ var projectTable;
                     visible: false
                 },
                 { 
+                    name: 'project_order_type',
                     data: 'project_order_type',
                     render: function(data, type, row) {
                         const getOrderTypeBadgeClass = function(orderType) {
@@ -1501,6 +1530,7 @@ var projectTable;
                     title: '<span data-i18n="受注形態">受注形態</span>'
                 },
                 { 
+                    name: 'parent_type2',
                     data: 'parent_type2',
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -1517,6 +1547,7 @@ var projectTable;
                     visible: false
                 },
                 { 
+                    name: 'start_date',
                     data: 'start_date',
                     width: '80px',
                     title: '<span data-i18n="開始日">開始日</span>', render: function(data, type, row) {
@@ -1530,8 +1561,10 @@ var projectTable;
                         return '-';
                     }
                 }},
-            ].concat(customColumnConfigs).concat([
+        ];
+        var tailColumnConfigs = [
                 {
+                    name: 'caily_nouki',
                     data: 'caily_nouki',
                     render: function(data, type, row) {
                         // Luôn tính statusBadge trước (từ row), kể cả khi caily_nouki rỗng → vẫn hiện 納品済み
@@ -1591,6 +1624,7 @@ var projectTable;
                     visible: false
                 },
                 {
+                    name: 'guis_nouki',
                     data: 'guis_nouki',
                     render: function(data, type, row) {
                         // Luôn tính statusBadge trước (từ row), kể cả khi guis_nouki rỗng → vẫn hiện 納品済み
@@ -1647,7 +1681,7 @@ var projectTable;
                     title: buildI18nHeaderTitle('GUIS納期'),
                     visible: false
                 },
-                { data: 'end_date', title: buildI18nHeaderTitle('終了日'), render: function(data, type, row) {
+                { name: 'end_date', data: 'end_date', title: buildI18nHeaderTitle('終了日'), render: function(data, type, row) {
                     if(data) {
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -1677,6 +1711,7 @@ var projectTable;
                     }
                 }, className: 'end-date-column'},
                 {
+                    name: 'priority',
                     data: 'priority',
                     render: function(data, type, row) {
                         // Return original data value for sorting
@@ -1690,6 +1725,7 @@ var projectTable;
                     title: '<span data-i18n="優先度">優先度</span>'
                 },
                 {
+                    name: 'amount',
                     data: 'amount',
                     render: function(data, type, row) {
                         if (type === 'sort' || type === 'type') {
@@ -1702,6 +1738,7 @@ var projectTable;
                     title: '<span data-i18n="総額">総額</span>'
                 },
                 { 
+                    name: 'customer_info',
                     data: 'name',
                     width: '100px',
                     render: function(data, type, row) {
@@ -1715,6 +1752,7 @@ var projectTable;
                     title: '<span data-i18n="顧客情報">顧客情報</span>'
                 },
                 { 
+                    name: 'parent_guis_receiver',
                     data: 'parent_guis_receiver',
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -1725,8 +1763,84 @@ var projectTable;
                     title: '<span data-i18n="GUIS 受付者">GUIS 受付者</span>',
                     visible: false
                 }
-            ]),
-            order: [[getDataTableColumnIndexByKey('end_date', customFieldColumnDefinitions), 'asc']],
+        ];
+        var defaultColumnKeys = fixedColumnConfigs.map(function(c) { return c.name; }).concat(customColumnConfigs.map(function(c) { return c.name; })).concat(tailColumnConfigs.map(function(c) { return c.name; }));
+        var depIdForColumnOrder = app.selectedDepartment && app.selectedDepartment.id;
+        var mergedColumnKeys = mergeColumnKeyOrder(loadProjectColumnOrder(depIdForColumnOrder), defaultColumnKeys);
+        var projectColumnRegistry = {};
+        fixedColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
+        customColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
+        tailColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
+        var orderedColumns = mergedColumnKeys.map(function(k) { return projectColumnRegistry[k]; }).filter(Boolean);
+        var endDateSortIndex = mergedColumnKeys.indexOf('end_date');
+        if (endDateSortIndex < 0) endDateSortIndex = 0;
+
+        projectTable = $('#projectTable').DataTable({
+            serverSide: true,
+            processing: true,
+            ajax: {
+                url: '/api/index.php',
+                type: 'GET',
+                data: function(d) {
+                    // Thu thập filter từ form
+                    const filterStartMonth = $('#filterStartMonth').val();
+                    const filterEndMonth = $('#filterEndMonth').val();
+                    const filterPriority = $('#filterPriority').val();
+                    const filterProgress = $('#filterProgress').val();
+                    const filterTimeLeft = $('#filterTimeLeft').val();
+                    const filterToday = $('#filterToday').val();
+                    const filterProjectOrderType = $('#filterProjectOrderType').val();
+                    const filterTeam = $('#filterTeam').val();
+                    const filterTantou = $('#filterTantou').val();
+                    const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
+                    const filterKeyword = $('#filterKeyword').val();
+                    const filterProjectId = $('#filterProjectId').val();
+                    const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
+                    const myProjects = $('#filterMyProjects').is(':checked') ? 1 : 0;
+                    const favoritesOnly = $('#filterFavoritesOnly').is(':checked') ? 1 : 0;
+                    return {
+                        model: 'project',
+                        method: 'list',
+                        department_id: app.selectedDepartment?.id,
+                        status: app.selectedStatus?.key,
+                        draw: d.draw,
+                        start: d.start,
+                        length: d.length,
+                        search: d.search.value,
+                        order_column: d.order && d.order[0] && d.columns[d.order[0].column]?.data || 'created_at',
+                        order_dir: d.order && d.order[0] ? d.order[0].dir : 'desc',
+                        filterStartMonth,
+                        filterEndMonth,
+                        filterPriority,
+                        filterProgress,
+                        filterTimeLeft,
+                        filterToday,
+                        filterProjectOrderType,
+                        filterTeam,
+                        filterTantou,
+                        filterNoDates,
+                        my_projects: myProjects,
+                        filterKeyword,
+                        filterProjectId,
+                        showInactive,
+                        favorites_only: favoritesOnly
+                    };
+                },
+                dataSrc: function(response) {
+                    return response.data || [];
+                }
+            },
+            paging: true,
+            info: true,
+            searching: false,
+            
+            dom: '<"row"<"col"l><"col text-end"p>>rti',
+            scrollX: true,
+            autoWidth: false,
+            //scrollY: Math.round(window.innerHeight * 0.8) + 'px',
+            columns: orderedColumns,
+            colReorder: true,
+            order: [[endDateSortIndex, 'asc']],
            
             pageLength: 50,
             ordering: true,
@@ -1759,6 +1873,24 @@ var projectTable;
                 applyI18nToProjectTableUI();
             }
             
+        });
+
+        $('#projectTable').off('columns-reordered.dt').on('columns-reordered.dt', function() {
+            if (!projectTable) return;
+            var keys = [];
+            var cnt = projectTable.columns().count();
+            for (var ci = 0; ci < cnt; ci++) {
+                try {
+                    var colApi = projectTable.column(ci);
+                    var nm = typeof colApi.name === 'function' ? colApi.name() : '';
+                    if (!nm && projectTable.settings && projectTable.settings()[0] && projectTable.settings()[0].aoColumns) {
+                        nm = projectTable.settings()[0].aoColumns[ci] && projectTable.settings()[0].aoColumns[ci].name;
+                    }
+                    if (nm) keys.push(nm);
+                } catch (errCol) { /* skip */ }
+            }
+            saveProjectColumnOrder(app.selectedDepartment && app.selectedDepartment.id, keys);
+            projectTable.columns.adjust();
         });
         
         // Sau mỗi lần vẽ bảng: thêm note snippet vào ô cột có display_column trùng (dưới cùng ô, >40 ký tự thì cắt + tooltip)
@@ -1810,11 +1942,9 @@ var projectTable;
         var columnVisibility = loadColumnVisibilityFromLocalStorage(customFieldColumnDefinitions);
         applyColumnVisibility(projectTable, columnVisibility, customFieldColumnDefinitions);
         if (app) {
-            app.availableColumns = COLUMN_DEFINITIONS.map(function(col) {
-                return { key: col.key, label: col.label, visible: columnVisibility[col.key] !== false };
-            }).concat(customFieldColumnDefinitions.map(function(col) {
-                return { key: col.key, label: col.label, visible: columnVisibility[col.key] !== false };
-            }));
+            var depIdAc = app.selectedDepartment && app.selectedDepartment.id;
+            app.availableColumns = buildAvailableColumnsList(customFieldColumnDefinitions, depIdAc, columnVisibility);
+            scheduleColumnVisibilityMenuI18n();
         }
         if (typeof i18next !== 'undefined' && typeof i18next.on === 'function' && !window.__projectListLanguageBound) {
             window.__projectListLanguageBound = true;
@@ -2240,18 +2370,18 @@ var projectTable;
         }
 
         function getColumnKeyByDataTableIndex(dtIndex, customDefs) {
-            customDefs = customDefs || customFieldColumnDefinitions || [];
-            for (var i = 0; i < COLUMN_DEFINITIONS.length; i++) {
-                var k = COLUMN_DEFINITIONS[i].key;
-                var idx = getDataTableColumnIndexByKey(k, customDefs);
-                if (idx === dtIndex) return k;
+            if (!projectTable || dtIndex === null || dtIndex === undefined) return '';
+            try {
+                var colApi = projectTable.column(dtIndex);
+                var nm = typeof colApi.name === 'function' ? colApi.name() : '';
+                if (!nm && projectTable.settings && projectTable.settings()[0] && projectTable.settings()[0].aoColumns) {
+                    var ac = projectTable.settings()[0].aoColumns[dtIndex];
+                    nm = (ac && ac.name) ? ac.name : '';
+                }
+                return nm || '';
+            } catch (e) {
+                return '';
             }
-            for (var j = 0; j < customDefs.length; j++) {
-                var ck = customDefs[j].key;
-                var idx2 = getDataTableColumnIndexByKey(ck, customDefs);
-                if (idx2 === dtIndex) return ck;
-            }
-            return '';
         }
 
         $('#projectTable tbody').on('contextmenu', 'tr', function(e) {
@@ -3413,6 +3543,19 @@ var projectTable;
         if (tableWrapper) window.applyDataI18n(tableWrapper);
         var tableEl = document.getElementById('projectTable');
         if (tableEl) window.applyDataI18n(tableEl);
+        var colVisMenu = document.getElementById('columnVisibilityMenu');
+        if (colVisMenu) window.applyDataI18n(colVisMenu);
+    }
+
+    /** Sau khi Vue cập nhật danh sách 列の表示 — áp dịch data-i18n cho nhãn cột */
+    function scheduleColumnVisibilityMenuI18n() {
+        if (typeof window === 'undefined' || !window.app || typeof window.app.$nextTick !== 'function') {
+            applyI18nToProjectTableUI();
+            return;
+        }
+        window.app.$nextTick(function() {
+            applyI18nToProjectTableUI();
+        });
     }
 
     /** Build data-todo-title and data-todo-link for context menu "Thêm vào todo" */
@@ -3613,12 +3756,8 @@ var projectTable;
                 // Kadai queue properties
                 kadaiProjects: [],
                 isKadaiQueueExpanded: false,
-                // Column visibility
-                availableColumns: COLUMN_DEFINITIONS.map(col => ({
-                    key: col.key,
-                    label: col.label,
-                    visible: true
-                }))
+                // Column visibility (thứ tự đồng bộ với bảng sau khi merge COLUMN_ORDER)
+                availableColumns: buildAvailableColumnsList([], null, loadColumnVisibilityFromLocalStorage([]))
             }
         },
         computed: {
@@ -3672,13 +3811,13 @@ var projectTable;
                 }
             }
             
-            // Load column visibility
+            // Load column visibility (thứ tự giống bảng khi đã chọn department / có save order)
             const columnVisibility = loadColumnVisibilityFromLocalStorage();
-            this.availableColumns = COLUMN_DEFINITIONS.map(col => ({
-                key: col.key,
-                label: col.label,
-                visible: columnVisibility[col.key] !== false
-            }));
+            const depIdMount = this.selectedDepartment && this.selectedDepartment.id;
+            this.availableColumns = buildAvailableColumnsList([], depIdMount, columnVisibility);
+            this.$nextTick(() => {
+                applyI18nToProjectTableUI();
+            });
             
             this.loadDepartments();
             // Không load dự án ngay lập tức, chỉ load khi có department được chọn

@@ -184,7 +184,7 @@ if($_SESSION['show_project'] == 0){
                                         :checked="column.visible"
                                         @change="toggleColumnVisibility(column.key, $event)">
                                     <label class="form-check-label" :for="'col-' + column.key" style="cursor: pointer;">
-                                        {{ column.label }}
+                                        <span :data-i18n="column.label">{{ column.label }}</span>
                                     </label>
                                 </div>
                             </li>
@@ -220,7 +220,8 @@ if($_SESSION['show_project'] == 0){
             <!-- Active Filters Display -->
             <div id="activeFilters" class="mb-2"></div>
             <p class="small text-muted mb-2" id="projectTableScrollHint">
-                <i class="fa fa-info-circle me-1"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
+                <i class="fa fa-info-circle me-1 text-info"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
+                <i class="ms-4 fa fa-info-circle me-1 text-info"></i><span data-i18n="列見出しをドラッグして表示順を変更できます。">列見出しをドラッグして表示順を変更できます。</span>
             </p>
             <table id="projectTable" class="table table-striped">
                 
@@ -1030,10 +1031,13 @@ $view->footing();
 }
 </style>
 
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/tagify/tagify.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css?v=<?=CACHE_VERSION?>" />
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
+<script src="<?=ROOT?>assets/vendor/libs/datatables-colreorder/dataTables.colReorder.min.js"></script>
+<script src="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.js"></script>
 <!-- Chat page context: AI can use current project list data -->
 <script>
 window.__chatPageContext = window.__chatPageContext || {};
