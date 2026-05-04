@@ -484,11 +484,23 @@ $view->footing();
                         return;
                     }
                     try {
-                        await axios.post('/api/index.php?model=customer&method=delete_customer&id=' + customer.id);
-                        this.loadCustomers();
+                        const response = await axios.post('/api/index.php?model=customer&method=delete_customer&id=' + customer.id);
+                        if (response.data && response.data.status === 'success') {
+                            showMessage('担当者を削除しました。');
+                            this.loadCustomers();
+                            return;
+                        }
+
+                        const message = response.data && response.data.message_code
+                            ? response.data.message_code
+                            : '担当者の削除に失敗しました。';
+                        showMessage(message, true);
                     } catch (error) {
                         console.error('Error deleting customer:', error);
-                        showMessage('担当者の削除に失敗しました。', true);
+                        const message = error.response && error.response.data && error.response.data.message_code
+                            ? error.response.data.message_code
+                            : '担当者の削除に失敗しました。';
+                        showMessage(message, true);
                     }
                 },
                 async saveCustomer() {

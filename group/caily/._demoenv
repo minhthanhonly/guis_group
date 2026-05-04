@@ -1,4 +1,4 @@
-GEMINI_API_KEY=AIzaSyBTalyoNviONallmxwJ2Nz-6hcyUgCXXvM
+GEMINI_API_KEY=AIzaSyA27XTn_8be5G95ws-rLFVhEO_JhWmXUbs
 GEMINI_MODEL=gemini-2.5-flash
 
 
@@ -10,7 +10,6 @@ PUSHER_KEY=01505bf7ba906e611f58
 PUSHER_CLUSTER=ap1
 PUSHER_USE_TLS=true 
 
-
 FIREBASE_API_KEY=AIzaSyB8Z-iEw72A9Y1wxtxG_GI7UcYETW4f32Y
 FIREBASE_AUTH_DOMAIN=guis-group.firebaseapp.com
 FIREBASE_PROJECT_ID=guis-group
@@ -18,6 +17,7 @@ FIREBASE_STORAGE_BUCKET=guis-group.firebasestorage.app
 FIREBASE_MESSAGING_SENDER_ID=136076356926
 FIREBASE_APP_ID=1:136076356926:web:0865ac13f67b3988d2506f
 FIREBASE_DATABASE_URL=https://guis-group-default-rtdb.asia-southeast1.firebasedatabase.app/
+
 
 MAIL_FROM=no-reply@guis.co.jp
 MAIL_FROM_NAME=GUISシステム

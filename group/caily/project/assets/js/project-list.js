@@ -67,12 +67,12 @@ var projectTable;
         { key: 'name', label: 'お施主様名' },
         { key: 'parent_scale', label: '規模' },
         { key: 'parent_type1', label: '種類1' },
+        { key: 'project_order_type', label: '受注形態' },
         { key: 'parent_type2', label: '種類2' },
         { key: 'start_date', label: '開始日' },
         { key: 'caily_nouki', label: 'CAILY納期' },
         { key: 'guis_nouki', label: 'GUIS納期' },
         { key: 'end_date', label: '終了日' },
-        { key: 'project_order_type', label: '受注形態' },
         { key: 'priority', label: '優先度' },
         { key: 'amount', label: '総額' },
         { key: 'customer_info', label: '顧客情報' },
@@ -96,19 +96,19 @@ var projectTable;
         { key: 'name', label: 'お施主様名', index: 12, defaultVisible: true },
         { key: 'parent_scale', label: '規模', index: 13, defaultVisible: false },
         { key: 'parent_type1', label: '種類1', index: 14, defaultVisible: false },
-        { key: 'parent_type2', label: '種類2', index: 15, defaultVisible: false },
-        { key: 'start_date', label: '開始日', index: 16, defaultVisible: true },
-        { key: 'caily_nouki', label: 'CAILY納期', index: 17, defaultVisible: true },
-        { key: 'guis_nouki', label: 'GUIS納期', index: 18, defaultVisible: false },
-        { key: 'end_date', label: '終了日', index: 19, defaultVisible: true },
-        { key: 'project_order_type', label: '受注形態', index: 20, defaultVisible: true },
+        { key: 'project_order_type', label: '受注形態', index: 15, defaultVisible: true },
+        { key: 'parent_type2', label: '種類2', index: 16, defaultVisible: false },
+        { key: 'start_date', label: '開始日', index: 17, defaultVisible: true },
+        { key: 'caily_nouki', label: 'CAILY納期', index: 18, defaultVisible: true },
+        { key: 'guis_nouki', label: 'GUIS納期', index: 19, defaultVisible: false },
+        { key: 'end_date', label: '終了日', index: 20, defaultVisible: true },
         { key: 'priority', label: '優先度', index: 21, defaultVisible: true },
         { key: 'amount', label: '総額', index: 22, defaultVisible: false },
         { key: 'customer_info', label: '顧客情報', index: 23, defaultVisible: true },
         { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 24, defaultVisible: false }
     ];
     // Số cột base trước khi chèn các cột custom (bắt đầu từ CAILY納期)
-    const BASE_CUSTOM_START_INDEX = COLUMN_DEFINITIONS.find(col => col.key === 'caily_nouki').index; // 16
+    const BASE_CUSTOM_START_INDEX = COLUMN_DEFINITIONS.find(col => col.key === 'caily_nouki').index;
     
     function escapeHtmlForNote(s) {
         if (s == null || s === '') return '';
@@ -939,7 +939,7 @@ var projectTable;
                         });
                         return parts.join('');
                     },
-                    title: fieldLabel,
+                    title: buildI18nHeaderTitle(fieldLabel),
                     orderable: false,
                     visible: true,
                     width: '80px'
@@ -1169,7 +1169,7 @@ var projectTable;
                         }).join('');
                         $(td).html(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
                     },
-                    title: '<span>CAILYメモ</span>',
+                    title: buildI18nHeaderTitle('CAILYメモ'),
                     orderable: false
                 },
                 { 
@@ -1237,7 +1237,7 @@ var projectTable;
                         }).join('');
                         $(td).html(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
                     },
-                    title: '<span>GUISメモ</span>',
+                    title: buildI18nHeaderTitle('GUISメモ'),
                     orderable: false
                 },
                 {
@@ -1448,6 +1448,59 @@ var projectTable;
                     visible: false
                 },
                 { 
+                    data: 'project_order_type',
+                    render: function(data, type, row) {
+                        const getOrderTypeBadgeClass = function(orderType) {
+                            const t = String(orderType).trim().toLowerCase();
+                            switch (t) {
+                                case '修正':
+                                    return 'bg-warning';
+                                case '新規':
+                                    return 'bg-primary';
+                                default:
+                                    return 'bg-info';
+                            }
+                        };
+
+                        let items = [];
+                        if (!data || data === '') {
+                            items = [];
+                        } else if (typeof data === 'string') {
+                            const splitItems = data.split(',').map(item => item.trim()).filter(item => item);
+                            if (splitItems.length > 0) {
+                                items = splitItems;
+                            } else {
+                                try {
+                                    const decoded = decodeHtmlEntities(data);
+                                    const arr = JSON.parse(decoded);
+                                    if (Array.isArray(arr)) {
+                                        items = arr.map(item => String(item).trim()).filter(item => item);
+                                    }
+                                } catch (e) {
+                                    const one = String(data).trim();
+                                    if (one) items = [one];
+                                }
+                            }
+                        } else if (Array.isArray(data)) {
+                            items = data.map(item => String(item).trim()).filter(item => item);
+                        }
+
+                        if (type === 'sort' || type === 'type') {
+                            return items.join(', ') || '';
+                        }
+                        if (items.length === 0) {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        return '<div class="d-flex flex-column gap-1 align-items-start">' +
+                            items.map(item => {
+                                const badgeClass = getOrderTypeBadgeClass(item);
+                                return `<span class="badge ${badgeClass} small">${item}</span>`;
+                            }).join('') +
+                            '</div>';
+                    },
+                    title: '<span data-i18n="受注形態">受注形態</span>'
+                },
+                { 
                     data: 'parent_type2',
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -1533,7 +1586,7 @@ var projectTable;
                             '</div>';
                         }
                     },
-                    title: '<span data-i18n="CAILY納期">CAILY納期</span>',
+                    title: buildI18nHeaderTitle('CAILY納期'),
                     className: 'caily-nouki-column',
                     visible: false
                 },
@@ -1591,10 +1644,10 @@ var projectTable;
                             '</div>';
                         }
                     },
-                    title: '<span data-i18n="GUIS納期">GUIS納期</span>',
+                    title: buildI18nHeaderTitle('GUIS納期'),
                     visible: false
                 },
-                { data: 'end_date', title: '<span data-i18n="終了日">終了日</span>', render: function(data, type, row) {
+                { data: 'end_date', title: buildI18nHeaderTitle('終了日'), render: function(data, type, row) {
                     if(data) {
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -1623,65 +1676,6 @@ var projectTable;
                         return '-';
                     }
                 }, className: 'end-date-column'},
-                { 
-                    data: 'project_order_type',
-                    render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
-                        }
-                        
-                        // Helper function to get badge class
-                        const getOrderTypeBadgeClass = function(orderType) {
-                            const type = orderType.trim().toLowerCase();
-                            switch (type) {
-                                case '修正':
-                                    return 'bg-warning'; // Yellow for edit
-                                case '新規':
-                                    return 'bg-primary'; // Blue for new
-                                default:
-                                    return 'bg-info'; // Gray for unknown types
-                            }
-                        };
-                        
-                        // Handle comma-separated string
-                        if (typeof data === 'string') {
-                            const items = data.split(',').map(item => item.trim()).filter(item => item);
-                            if (items.length > 0) {
-                                return items.map(item => {
-                                    const badgeClass = getOrderTypeBadgeClass(item);
-                                    return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
-                                }).join('');
-                            }
-                        }
-                        
-                        // Handle array format
-                        if (Array.isArray(data)) {
-                            return data.map(item => {
-                                const badgeClass = getOrderTypeBadgeClass(item);
-                                return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
-                            }).join('');
-                        }
-                        
-                        // Try to parse JSON if it's a string
-                        try {
-                            const decoded = decodeHtmlEntities(data);
-                            const arr = JSON.parse(decoded);
-                            if (Array.isArray(arr)) {
-                                return arr.map(item => {
-                                    const badgeClass = getOrderTypeBadgeClass(item);
-                                    return `<span class="badge ${badgeClass} small me-1">${item}</span>`;
-                                }).join('');
-                            }
-                        } catch (e) {
-                            // If parsing fails, treat as single item
-                            const badgeClass = getOrderTypeBadgeClass(data);
-                            return `<span class="badge ${badgeClass}">${data}</span>`;
-                        }
-                        
-                        return '<span class="text-muted">-</span>';
-                    },
-                    title: '<span data-i18n="受注形態">受注形態</span>'
-                },
                 {
                     data: 'priority',
                     render: function(data, type, row) {
@@ -1691,7 +1685,7 @@ var projectTable;
                         }
                         // Return HTML for display
                         const priority = priorities.find(priority => priority.key === data);
-                        return `<span class="badge bg-${priority?.color || 'secondary'}">${priority?.name || data}</span>`;
+                        return `<span class="badge bg-${priority?.color || 'secondary'}">${translateText(priority?.name || data)}</span>`;
                     },
                     title: '<span data-i18n="優先度">優先度</span>'
                 },
@@ -1762,6 +1756,7 @@ var projectTable;
                 if (tableEl && typeof applyStickyScrollHead === 'function') {
                     applyStickyScrollHead(tableEl);
                 }
+                applyI18nToProjectTableUI();
             }
             
         });
@@ -1808,6 +1803,7 @@ var projectTable;
                     $cell.append('<div class="cell-note-snippets">' + parts.join('') + '</div>');
                 });
             });
+            applyI18nToProjectTableUI();
         });
         
         // Apply column visibility after table initialization (base + custom columns; custom default hidden)
@@ -1819,6 +1815,12 @@ var projectTable;
             }).concat(customFieldColumnDefinitions.map(function(col) {
                 return { key: col.key, label: col.label, visible: columnVisibility[col.key] !== false };
             }));
+        }
+        if (typeof i18next !== 'undefined' && typeof i18next.on === 'function' && !window.__projectListLanguageBound) {
+            window.__projectListLanguageBound = true;
+            i18next.on('languageChanged', function() {
+                applyI18nToProjectTableUI();
+            });
         }
         
         } catch (error) {
@@ -3397,6 +3399,20 @@ var projectTable;
             return i18next.t(key) || key;
         }
         return key;
+    }
+
+    function buildI18nHeaderTitle(key) {
+        var k = String(key || '').trim();
+        if (!k) return '';
+        return '<span data-i18n="' + k + '">' + translateText(k) + '</span>';
+    }
+
+    function applyI18nToProjectTableUI() {
+        if (typeof window.applyDataI18n !== 'function') return;
+        var tableWrapper = document.getElementById('projectTable_wrapper');
+        if (tableWrapper) window.applyDataI18n(tableWrapper);
+        var tableEl = document.getElementById('projectTable');
+        if (tableEl) window.applyDataI18n(tableEl);
     }
 
     /** Build data-todo-title and data-todo-link for context menu "Thêm vào todo" */

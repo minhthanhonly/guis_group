@@ -16,6 +16,7 @@ class Customer extends ApplicationModel {
             'position' => array(),
             'tel' => array(),
             'fax' => array(),
+            'phone' => array(),
             'email' => array(),
             'zip' => array(),
             'address1' => array(),
@@ -410,6 +411,7 @@ class Customer extends ApplicationModel {
                 'position' => $_POST['position'],
                 'tel' => $_POST['tel'],
                 'fax' => $_POST['fax'],
+                'phone' => isset($_POST['phone']) ? $_POST['phone'] : '',
                 'email' => $_POST['email'],
                 'zip' => $_POST['zip'],
                 'address1' => $_POST['address1'],
@@ -456,6 +458,7 @@ class Customer extends ApplicationModel {
                 'position' => $_POST['position'],
                 'tel' => $_POST['tel'],
                 'fax' => $_POST['fax'],
+                'phone' => isset($_POST['phone']) ? $_POST['phone'] : '',
                 'email' => $_POST['email'],
                 'zip' => $_POST['zip'],
                 'address1' => $_POST['address1'],
@@ -490,15 +493,18 @@ class Customer extends ApplicationModel {
         );
         try {
             $id = $_GET['id'];
-            // Check if customer is in use
+            // Check if customer is referenced by parent projects (order projects)
             $query = sprintf(
-                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "projects WHERE customer_id = %d",
+                "SELECT COUNT(*) as count 
+                FROM " . DB_PREFIX . "parent_projects 
+                WHERE customer_id = %d 
+                AND (status IS NULL OR status != 'deleted')",
                 intval($id)
             );
             $result = $this->fetchOne($query);
             
             if ($result['count'] > 0) {
-                throw new Exception('使用中のため削除できません。');
+                throw new Exception('この顧客は案件で使用中のため削除できません。');
             }
             $result = $this->query_delete(['id' => $id]);
             if ($result) {
