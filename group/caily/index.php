@@ -107,7 +107,7 @@ if (!empty($_SESSION['userid'])) {
       </div>
     </div>
     <div v-else class="row g-6 mt-1">
-    <div class="col-md-12 col-lg-6" :class="canApprove ? 'col-xl-6' : 'col-xl-12'">
+    <div class="col-md-12 col-lg-6 col-xl-6">
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between align-items-center py-3">
           <h5 class="card-title mb-0">最近の申請</h5>

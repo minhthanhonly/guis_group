@@ -319,12 +319,13 @@ import purchaseForm from './purchase-form.js?v=<?=CACHE_VERSION?>';
 import itSupportDetail from './it-support-detail.js?v=<?=CACHE_VERSION?>';
 import itSupportForm from './it-support-form.js?v=<?=CACHE_VERSION?>';
 import { approverMultiselectMixin } from './approver-multiselect.js?v=<?=CACHE_VERSION?>';
+import approverSelect from './approver-select.js?v=<?=CACHE_VERSION?>';
 const { createApp } = Vue;
 const CURRENT_USER_ID = USER_ID || '';
 const CURRENT_USER_ROLE = USER_ROLE || '';
 
 
-createApp({
+const app = createApp({
   mixins: [approverMultiselectMixin],
   data() {
     return {
@@ -678,5 +679,7 @@ createApp({
     'it-support-form': itSupportForm,
     'default-detail': {props:['data'], template:'<div>内容: {{ data }}</div>'}
   }
-}).mount('#app');
+});
+app.component('approver-select', approverSelect);
+app.mount('#app');
 </script> 

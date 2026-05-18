@@ -137,11 +137,13 @@ export default {
       this.formData.total_amount = this.computeTotalAmount(this.formData.lines);
     },
     async loadApprovers() {
-      // すでに読み込み済みなら API を呼ばない
-      if (Array.isArray(this.approvers) && this.approvers.length > 0) return;
-      // グローバルキャッシュがあればそれを使う
+      if (Array.isArray(this.approvers) && this.approvers.length > 0) {
+        this.refreshApproverSelect();
+        return;
+      }
       if (typeof window !== 'undefined' && Array.isArray(window._travelExpenseApproversCache) && window._travelExpenseApproversCache.length > 0) {
         this.approvers = window._travelExpenseApproversCache;
+        this.refreshApproverSelect();
         return;
       }
       try {
@@ -154,6 +156,7 @@ export default {
       } catch (e) {
         this.approvers = [];
       }
+      this.refreshApproverSelect();
     },
     // 交通費精算書ファイル用の onFileSelect/uploadFile/clearFile は廃止
     async onReceiptsSelect(event) {
@@ -382,13 +385,16 @@ export default {
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">承認者(指定) <span class="text-danger">*</span></label>
             <div class="col-sm-9">
-              <select v-if="mode !== 'print'" class="form-select" multiple size="6" v-model="formData.approver_user_ids" @change="validateField('approver_user_ids')" @blur="validateField('approver_user_ids')">
-                <option v-for="user in approvers" :key="user.userid" :value="user.userid">
-                  {{ formatUserDisplayName(user) }} ({{ user.userid }})
-                </option>
-              </select>
+              <approver-select
+                v-if="mode !== 'print'"
+                ref="approverSelectRef"
+                :options="approvers"
+                :model-value="formData.approver_user_ids"
+                @update:model-value="setApproverUserIds"
+                @change="onApproverUserIdsChange"
+                @blur="onApproverUserIdsBlur"
+              ></approver-select>
               <span v-else class="request-print-text">{{ formatApproverUserIdsLabel(formData.approver_user_ids) }}</span>
-              <div class="form-text text-muted" v-if="mode !== 'print'">Ctrl / Cmd を押しながらクリックで複数選択</div>
               <div class="text-danger small" v-if="errors.approver_user_ids">{{ errors.approver_user_ids }}</div>
             </div>
           </div>

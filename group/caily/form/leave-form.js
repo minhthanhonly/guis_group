@@ -139,14 +139,6 @@ export default {
         }
       }
     },
-    async loadApprovers() {
-      try {
-        const res = await axios.get('/api/index.php?model=member&method=list_request_approvers');
-        this.approvers = Array.isArray(res.data) ? res.data : [];
-      } catch (e) {
-        this.approvers = [];
-      }
-    },
     updateDaysByDateRange() {
       const startStr = this.formData.start_datetime;
       const endStr = this.formData.end_datetime;
@@ -388,13 +380,16 @@ export default {
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">承認者(指定) <span class="text-danger">*</span></label>
             <div class="col-sm-9">
-              <select v-if="mode !== 'print'" class="form-select" multiple size="6" v-model="formData.approver_user_ids" @change="validateField('approver_user_ids')" @blur="validateField('approver_user_ids')">
-                <option v-for="user in approvers" :key="user.userid" :value="user.userid">
-                  {{ formatUserDisplayName(user) }} ({{ user.userid }})
-                </option>
-              </select>
+              <approver-select
+                v-if="mode !== 'print'"
+                ref="approverSelectRef"
+                :options="approvers"
+                :model-value="formData.approver_user_ids"
+                @update:model-value="setApproverUserIds"
+                @change="onApproverUserIdsChange"
+                @blur="onApproverUserIdsBlur"
+              ></approver-select>
               <span v-else class="request-print-text">{{ formatApproverUserIdsLabel(formData.approver_user_ids) }}</span>
-              <div class="form-text text-muted" v-if="mode !== 'print'">Ctrl / Cmd を押しながらクリックで複数選択</div>
               <div class="text-danger small" v-if="errors.approver_user_ids">{{ errors.approver_user_ids }}</div>
             </div>
           </div>

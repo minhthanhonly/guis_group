@@ -585,6 +585,7 @@
 <script type="module">
 import { formatUserDisplayName } from '/assets/js/user-display-name.js';
 import { approverMultiselectMixin } from './approver-multiselect.js';
+import approverSelect from './approver-select.js?v=<?=CACHE_VERSION?>';
 import leaveForm from './leave-form.js?v=<?=CACHE_VERSION?>';
 import outingForm from './outing-form.js?v=<?=CACHE_VERSION?>';
 import tripForm from './trip-form.js?v=<?=CACHE_VERSION?>';
@@ -598,7 +599,7 @@ import commutingAllowanceForm from './commuting-allowance-form.js?v=<?=CACHE_VER
 import purchaseForm from './purchase-form.js?v=<?=CACHE_VERSION?>';
 import itSupportForm from './it-support-form.js?v=<?=CACHE_VERSION?>';
 const { createApp, defineAsyncComponent } = Vue;
-createApp({
+const app = createApp({
   mixins: [approverMultiselectMixin],
   data() {
     return {
@@ -1270,5 +1271,7 @@ createApp({
     'purchase-form': purchaseForm,
     'it-support-form': itSupportForm,
   }
-}).mount('#app');
+});
+app.component('approver-select', approverSelect);
+app.mount('#app');
 </script> 
