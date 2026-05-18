@@ -180,7 +180,7 @@ export default {
         valid = false;
       }
       if (!this.formData.approver_user_id) {
-        this.errors.approver_user_id = '承認者を選択してください。';
+        this.errors.approver_user_id = '承認者(指定)を選択してください。';
         valid = false;
       }
       return valid;
@@ -191,7 +191,7 @@ export default {
         if (!this.formData.reason || !String(this.formData.reason).trim()) err.reason = '事由・用途を入力してください。';
         else { delete err.reason; }
       } else if (field === 'approver_user_id') {
-        if (!this.formData.approver_user_id) err.approver_user_id = '承認者を選択してください。';
+        if (!this.formData.approver_user_id) err.approver_user_id = '承認者(指定)を選択してください。';
         else { delete err.approver_user_id; }
       }
       this.errors = err;
@@ -242,7 +242,7 @@ export default {
         <button type="button" class="btn-close" @click="close"></button>
       </div>
       <div class="modal-body">
-        <form @submit.prevent="submit('pending')">
+        <form @submit.prevent="submit('pending')"><fieldset :disabled="mode === 'print'">
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">購入品目 <span class="text-danger">*</span></label>
             <div class="col-sm-12">
@@ -297,7 +297,7 @@ export default {
                 <button type="button" class="btn btn-sm btn-outline-primary" @click="addLine">
                   <i class="fa fa-plus me-1"></i> 行を追加
                 </button>
-                <div class="fw-bold">
+                <div class="fw-bold text-end flex-grow-1">
                   合計金額: ¥{{ formatAmount(formData.total_amount) }}
                 </div>
               </div>
@@ -305,7 +305,7 @@ export default {
             </div>
           </div>
           <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">承認者 <span class="text-danger">*</span></label>
+            <label class="col-sm-3 col-form-label">承認者(指定) <span class="text-danger">*</span></label>
             <div class="col-sm-9">
               <select class="form-select" v-model="formData.approver_user_id" @change="validateField('approver_user_id')" @blur="validateField('approver_user_id')">
                 <option value="">指定なし</option>
@@ -329,6 +329,7 @@ export default {
               <textarea class="form-control" v-model="formData.note" rows="2"></textarea>
             </div>
           </div>
+        </fieldset>
         </form>
       </div>
       <div class="modal-footer">

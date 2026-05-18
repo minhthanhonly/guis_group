@@ -167,7 +167,7 @@ class Request extends ApplicationModel {
             // 承認者は必須
             if (empty($_POST['approver_user_id'])) {
                 http_response_code(400);
-                echo json_encode(['error' => '承認者を選択してください。']);
+                echo json_encode(['error' => '承認者(指定)を選択してください。']);
                 exit;
             }
         }
@@ -324,7 +324,7 @@ class Request extends ApplicationModel {
         $whereSql = count($where) ? ('WHERE ' . implode(' AND ', $where)) : '';
 
         // Sắp xếp
-        $allowedSort = ['id', 'created_at', 'status', 'start_date', 'end_date'];
+        $allowedSort = ['id', 'created_at', 'status', 'start_date', 'end_date', 'approved_at'];
         $sort_by = isset($_GET['sort_by']) && in_array($_GET['sort_by'], $allowedSort, true) ? $_GET['sort_by'] : 'created_at';
         $sort_dir = (isset($_GET['sort_dir']) && strtolower($_GET['sort_dir']) === 'asc') ? 'ASC' : 'DESC';
         $orderSql = "ORDER BY {$sort_by} {$sort_dir}";
@@ -633,7 +633,7 @@ class Request extends ApplicationModel {
                 : (isset($row['approver_user_id']) ? $row['approver_user_id'] : '');
             if (empty($newApprover)) {
                 http_response_code(400);
-                echo json_encode(['error' => '承認者を選択してください。']);
+                echo json_encode(['error' => '承認者(指定)を選択してください。']);
                 exit;
             }
         }

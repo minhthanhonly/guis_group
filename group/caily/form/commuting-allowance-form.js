@@ -1,6 +1,8 @@
 import { formatUserDisplayName } from '/assets/js/user-display-name.js';
+import { printFormatMixin } from './print-format.js';
 
 export default {
+  mixins: [printFormatMixin],
   props: {
     defaultData: { type: Object, default: () => ({}) },
     mode: { type: String, default: 'add' }
@@ -89,6 +91,11 @@ export default {
       if (this.mode !== 'edit') return true;
       if (!this.originalData) return false;
       return JSON.stringify(this.formData) !== JSON.stringify(this.originalData);
+    },
+    oneMonthCommuterPassDisplay() {
+      const v = this.formData.one_month_commuter_pass;
+      if (v === null || v === undefined || v === '') return '-';
+      return '¥' + Number(v).toLocaleString('ja-JP');
     }
   },
   methods: {
@@ -269,7 +276,7 @@ export default {
         valid = false;
       }
       if (!this.formData.approver_user_id) {
-        this.errors.approver_user_id = '承認者を選択してください。';
+        this.errors.approver_user_id = '承認者(指定)を選択してください。';
         valid = false;
       }
       return valid;
@@ -286,7 +293,7 @@ export default {
         if (!this.formData.effective_from || !String(this.formData.effective_from).trim()) err.effective_from = '適用開始日を選択してください。';
         else delete err.effective_from;
       } else if (field === 'approver_user_id') {
-        if (!this.formData.approver_user_id) err.approver_user_id = '承認者を選択してください。';
+        if (!this.formData.approver_user_id) err.approver_user_id = '承認者(指定)を選択してください。';
         else { delete err.approver_user_id; }
       }
       this.errors = err;
@@ -343,7 +350,7 @@ export default {
         <button type="button" class="btn-close" @click="close"></button>
       </div>
       <div class="modal-body">
-        <form @submit.prevent="submit('pending')">
+        <form @submit.prevent="submit('pending')"><fieldset :disabled="mode === 'print'">
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">申請区分</label>
             <div class="col-sm-9 d-flex align-items-center flex-wrap gap-3">
@@ -377,7 +384,10 @@ export default {
           </div>
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">適用開始日</label>
-            <div class="col-sm-9">
+            <div class="col-sm-9" v-if="mode === 'print'">
+              <span class="request-print-text">{{ formData.effective_from ? printDate(formData.effective_from) : '-' }}</span>
+            </div>
+            <div class="col-sm-9" v-else>
               <input type="date" class="form-control" v-model="formData.effective_from" @change="validateField('effective_from')" @blur="validateField('effective_from')">
               <div class="text-danger small mt-1" v-if="errors.effective_from">{{ errors.effective_from }}</div>
             </div>
@@ -428,7 +438,7 @@ export default {
                 <button type="button" class="btn btn-sm btn-outline-primary" @click="addLine">
                   <i class="fa fa-plus me-1"></i> 行を追加
                 </button>
-                <div class="fw-bold">
+                <div class="fw-bold text-end flex-grow-1">
                   合計片道運賃: ¥{{ (formData.total_amount || 0).toLocaleString() }}
                 </div>
               </div>
@@ -436,7 +446,10 @@ export default {
           </div>
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">１か月定期代<span class="text-muted ms-1">※月給制のみ</span></label>
-            <div class="col-sm-9">
+            <div class="col-sm-9" v-if="mode === 'print'">
+              <span class="request-print-text">{{ oneMonthCommuterPassDisplay }}</span>
+            </div>
+            <div class="col-sm-9" v-else>
               <div class="input-group">
                 <span class="input-group-text">¥</span>
                 <input
@@ -482,7 +495,7 @@ export default {
             </div>
           </div>
           <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">承認者 <span class="text-danger">*</span></label>
+            <label class="col-sm-3 col-form-label">承認者(指定) <span class="text-danger">*</span></label>
             <div class="col-sm-9">
               <select class="form-select" v-model="formData.approver_user_id" @change="validateField('approver_user_id')" @blur="validateField('approver_user_id')">
                 <option value="">指定なし</option>
@@ -493,6 +506,7 @@ export default {
               <div class="text-danger small" v-if="errors.approver_user_id">{{ errors.approver_user_id }}</div>
             </div>
           </div>
+        </fieldset>
         </form>
       </div>
       <div class="modal-footer">

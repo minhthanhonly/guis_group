@@ -135,9 +135,13 @@
               <th v-if="currentTab === 'commuting_allowance'">１か月定期代</th>
               <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">事由</th>
               <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">注記</th>
-              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">指定承認者</th>
+              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">承認者(指定)</th>
               <th>コメント数</th>
               <th>承認者</th>
+              <th class="user-select-none" style="cursor:pointer;" @click="changeSort('approved_at')">
+                承認日時
+                <i class="fa fa-fw" :class="sortIcon('approved_at')"></i>
+              </th>
               <th class="user-select-none" style="cursor:pointer;" @click="changeSort('status')">
                 状態
                 <i class="fa fa-fw" :class="sortIcon('status')"></i>
@@ -240,7 +244,8 @@
               <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">{{ req.data?.note || '-' }}</td>
               <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">{{ req.approver_user_realname || req.approver_user_id || '-' }}</td>
               <td>{{ req.comment_count }}</td>
-              <td>{{ req.approver_realname || '-' }}</td>
+              <td>{{ req.status === 'approved' && req.approver_realname ? req.approver_realname : '-' }}</td>
+              <td>{{ req.status === 'approved' && req.approved_at ? formatDateTime(req.approved_at) : '-' }}</td>
               <td>
                 <span :class="['badge', statusBadgeClass(req.status)]">
                   <i :class="statusIcon(req.status)" class="me-1"></i>{{ statusLabel(req.status) }}
@@ -249,6 +254,9 @@
               <td>{{ formatDateTime(req.created_at) }}</td>
               <td>
                 <a :href="'detail.php?id=' + req.id" class="btn btn-sm btn-outline-info me-1">詳細</a>
+                <button type="button" class="btn btn-sm btn-outline-secondary me-1" @click="openPrint(req)" title="印刷">
+                  <i class="fa fa-print"></i> 印刷
+                </button>
                 <button v-if="canDelete(req)" type="button" class="btn btn-sm btn-outline-danger" @click="deleteRequest(req)" title="削除">削除</button>
               </td>
             </tr>
@@ -283,6 +291,33 @@
       </div>
     </div>
   </div>
+  <!-- 印刷用（編集モーダルと同じフォーム構成） -->
+  <div v-if="printTarget" id="printArea" class="request-print-area">
+    <div class="request-print-sheet">
+      <div class="request-print-meta mb-3 pb-2 border-bottom">
+        <h4 class="mb-2">{{ printTypeLabel(printTarget) }}</h4>
+        <div class="row g-1 small">
+          <div class="col-sm-6"><strong>申請者:</strong> {{ printTarget.user_realname || printTarget.user_id }} ({{ printTarget.user_id }})</div>
+          <div class="col-sm-6"><strong>申請日:</strong> {{ formatDateTime(printTarget.created_at) }}</div>
+          <div class="col-sm-6"><strong>状態:</strong> {{ statusLabel(printTarget.status) }}</div>
+          <div class="col-sm-6" v-if="printTarget.status === 'approved' && printTarget.approver_realname">
+            <strong>承認者:</strong> {{ printTarget.approver_realname }}
+          </div>
+          <div class="col-sm-6" v-if="printTarget.status === 'approved' && printTarget.approved_at">
+            <strong>承認日時:</strong> {{ formatDateTime(printTarget.approved_at) }}
+          </div>
+        </div>
+      </div>
+      <component
+        v-if="printFormComponent"
+        :is="printFormComponent"
+        class="request-print-form"
+        :default-data="printFormData"
+        mode="print"
+        @close="finishPrint"
+      ></component>
+    </div>
+  </div>
 </div>
 <style>
   .table th {
@@ -301,6 +336,199 @@
 .detail-table td,
 .detail-table th{
  padding: 0.25rem;
+}
+.request-print-area {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1140px;
+  max-width: 100%;
+  background: none;
+  z-index: -1;
+}
+.request-print-sheet,
+#printArea {
+  background: none !important;
+}
+.request-print-form .modal-header,
+.request-print-form .modal-footer,
+.request-print-form > .position-relative > .position-absolute,
+.request-print-form .text-muted.small,
+.request-print-form .request-print-hide,
+.request-print-form .text-danger,
+.request-print-form button,
+.request-print-form .btn,
+.request-print-form .btn-close {
+  display: none !important;
+}
+.request-print-form .modal-body {
+  padding: 0;
+  background: none !important;
+}
+.request-print-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  background: none !important;
+}
+.request-print-form .request-print-meta {
+  border-bottom: 1px solid #333;
+  background: none !important;
+}
+.request-print-form .mb-3.row {
+  border-bottom: 1px solid #333;
+  padding-top: 0.35rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0 !important;
+  background: none !important;
+}
+.request-print-form .form-control,
+.request-print-form .form-select,
+.request-print-form textarea.form-control {
+  border: none !important;
+  padding-left: 0 !important;
+  margin: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  line-height: 1.5;
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  opacity: 1 !important;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 0 !important;
+}
+.request-print-form .form-select {
+  background-image: none !important;
+}
+.request-print-form .form-check-input {
+  display: none !important;
+}
+.request-print-form .form-check-inline:has(.form-check-input:not(:checked)) {
+  display: none !important;
+}
+.request-print-form .form-check {
+  padding-left: 0;
+  margin-bottom: 0;
+}
+.request-print-form .form-check-label {
+  padding-left: 0;
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  opacity: 1 !important;
+}
+.request-print-form fieldset:disabled .form-check-label,
+.request-print-form fieldset[disabled] .form-check-label {
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  opacity: 1 !important;
+}
+.request-print-form fieldset:disabled .form-check,
+.request-print-form fieldset[disabled] .form-check {
+  opacity: 1 !important;
+}
+.request-print-form fieldset:disabled .form-check-input ~ .form-check-label,
+.request-print-form fieldset[disabled] .form-check-input ~ .form-check-label,
+.request-print-form fieldset:disabled .form-check-input:disabled ~ .form-check-label,
+.request-print-form fieldset[disabled] .form-check-input:disabled ~ .form-check-label {
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  opacity: 1 !important;
+}
+.request-print-form .detail-table th:last-child,
+.request-print-form .detail-table td:last-child {
+  display: none !important;
+}
+.request-print-form .detail-table .form-control,
+.request-print-form .detail-table .form-select {
+  width: 100%;
+}
+.request-print-form .col-form-label {
+  font-weight: 600;
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  opacity: 1 !important;
+}
+.request-print-meta,
+.request-print-meta * {
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  opacity: 1 !important;
+}
+.request-print-form .request-print-text {
+  display: inline-block;
+  line-height: 1.5;
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  opacity: 1 !important;
+}
+/* fieldset[disabled] makes Bootstrap gray out all values — force black for print */
+.request-print-form fieldset:disabled,
+.request-print-form fieldset[disabled] {
+  color: #000 !important;
+  opacity: 1 !important;
+}
+.request-print-form fieldset:disabled .request-print-text,
+.request-print-form fieldset[disabled] .request-print-text,
+.request-print-form fieldset:disabled .form-control,
+.request-print-form fieldset[disabled] .form-control,
+.request-print-form fieldset:disabled .form-control-plaintext,
+.request-print-form fieldset[disabled] .form-control-plaintext,
+.request-print-form fieldset:disabled textarea.form-control,
+.request-print-form fieldset[disabled] textarea.form-control,
+.request-print-form fieldset:disabled .col-sm-9,
+.request-print-form fieldset[disabled] .col-sm-9,
+.request-print-form fieldset:disabled .col-sm-4,
+.request-print-form fieldset[disabled] .col-sm-4,
+.request-print-form fieldset:disabled .col-auto,
+.request-print-form fieldset[disabled] .col-auto,
+.request-print-form fieldset:disabled td,
+.request-print-form fieldset[disabled] td,
+.request-print-form fieldset:disabled th,
+.request-print-form fieldset[disabled] th {
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  opacity: 1 !important;
+}
+@media print {
+  body,
+  body * {
+    visibility: hidden;
+    background: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #printArea,
+  #printArea * {
+    visibility: visible;
+    background: none !important;
+  }
+  #printArea {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    z-index: 99999;
+    background: none !important;
+  }
+  .request-print-area,
+  .request-print-sheet {
+    position: static;
+    left: auto;
+    background: none !important;
+  }
+  #printArea,
+  #printArea .request-print-meta,
+  #printArea .request-print-meta *,
+  #printArea .request-print-form fieldset,
+  #printArea .request-print-form fieldset * {
+    color: #000 !important;
+    -webkit-text-fill-color: #000 !important;
+    opacity: 1 !important;
+  }
 }
 </style>
 <?php $view->footing(); ?>
@@ -365,9 +593,19 @@ createApp({
       navUseDropdown: false,
       navBreakpoint: 1200,
       _resizeHandler: null,
+      printTarget: null,
+      printFormComponent: null,
     }
   },
   computed: {
+    printFormData() {
+      if (!this.printTarget) return {};
+      const d = this.printTarget.data || {};
+      return Object.assign({}, d, {
+        id: this.printTarget.id,
+        approver_user_id: this.printTarget.approver_user_id || d.approver_user_id || ''
+      });
+    },
     visibleTabs() {
       return this.tabs.filter(tab => !this.hiddenTabTypes.includes(tab.type));
     },
@@ -744,6 +982,45 @@ createApp({
         default: return '-';
       }
     },
+    printTypeLabel(req) {
+      const t = this.tabs.find(x => x.type === (req && req.type));
+      return t ? t.label : (req && req.type ? req.type : '');
+    },
+    resolveFormComponentByType(type) {
+      const map = {
+        leave: leaveForm,
+        outing: outingForm,
+        trip: tripForm,
+        holiday_work: holidayWorkForm,
+        overtime: overtimeForm,
+        attendance_correction: attendanceCorrectionForm,
+        travel_expense: travelExpenseForm,
+        expense: expenseForm,
+        trip_expense: tripExpenseForm,
+        commuting_allowance: commutingAllowanceForm,
+        purchase: purchaseForm,
+        it_support: itSupportForm
+      };
+      return map[type] || null;
+    },
+    openPrint(req) {
+      const component = this.resolveFormComponentByType(req.type);
+      if (!component) {
+        if (typeof showMessage === 'function') showMessage('この申請種別は印刷できません。', true);
+        return;
+      }
+      this.printTarget = req;
+      this.printFormComponent = component;
+      this.$nextTick(() => {
+        setTimeout(() => {
+          window.print();
+        }, 350);
+      });
+    },
+    finishPrint() {
+      this.printTarget = null;
+      this.printFormComponent = null;
+    },
     openForm() {
       const current = this.tabs.find(t => t.type === this.currentTab);
       if (current && current.form === 'leave-form') {
@@ -881,6 +1158,7 @@ createApp({
     }
   },
   mounted() {
+    window.addEventListener('afterprint', this.finishPrint);
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
     if (tabParam && this.visibleTabs.some(t => t.type === tabParam)) {
@@ -907,6 +1185,7 @@ createApp({
     });
   },
   beforeUnmount() {
+    window.removeEventListener('afterprint', this.finishPrint);
     if (this._resizeHandler) {
       window.removeEventListener('resize', this._resizeHandler);
     }

@@ -1,6 +1,8 @@
 import { formatUserDisplayName } from '/assets/js/user-display-name.js';
+import { printFormatMixin } from './print-format.js';
 
 export default {
+  mixins: [printFormatMixin],
   props: {
     defaultData: { type: Object, default: () => ({}) },
     mode: { type: String, default: 'add' }
@@ -349,7 +351,7 @@ export default {
         valid = false;
       }
       if (!this.formData.approver_user_id) {
-        this.errors.approver_user_id = '承認者を選択してください。';
+        this.errors.approver_user_id = '承認者(指定)を選択してください。';
         valid = false;
       }
       return valid;
@@ -367,7 +369,7 @@ export default {
         // 任意項目: エラーは常にクリア
         delete err.settlement_date;
       } else if (field === 'approver_user_id') {
-        if (!this.formData.approver_user_id) err.approver_user_id = '承認者を選択してください。';
+        if (!this.formData.approver_user_id) err.approver_user_id = '承認者(指定)を選択してください。';
         else { delete err.approver_user_id; }
       }
       this.errors = err;
@@ -418,7 +420,7 @@ export default {
         <button type="button" class="btn-close" @click="close"></button>
       </div>
       <div class="modal-body">
-        <form @submit.prevent="submit('pending')">
+        <form @submit.prevent="submit('pending')"><fieldset :disabled="mode === 'print'">
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">出張先 <span class="text-danger">*</span></label>
             <div class="col-sm-9">
@@ -437,7 +439,13 @@ export default {
               </div>
             </div>
           </div>
-          <div class="mb-3 row">
+          <div v-if="mode === 'print'" class="mb-3 row">
+            <label class="col-sm-3 col-form-label">期間</label>
+            <div class="col-sm-9">
+              <span class="request-print-text">{{ printPeriod(formData.start_date, formData.end_date) }}</span>
+            </div>
+          </div>
+          <div v-else class="mb-3 row">
             <label class="col-sm-3 col-form-label">期間 <span class="text-danger">*</span></label>
             <div class="col-sm-4">
               <input type="date" class="form-control" v-model="formData.start_date" @blur="validateField('start_date')">
@@ -451,7 +459,10 @@ export default {
           </div>
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">精算日</label>
-            <div class="col-sm-4">
+            <div class="col-sm-9" v-if="mode === 'print'">
+              <span class="request-print-text">{{ formData.settlement_date ? printDate(formData.settlement_date) : '-' }}</span>
+            </div>
+            <div class="col-sm-4" v-else>
               <input type="date" class="form-control" v-model="formData.settlement_date" @blur="validateField('settlement_date')">
               <div class="text-danger small" v-if="errors.settlement_date">{{ errors.settlement_date }}</div>
             </div>
@@ -527,7 +538,8 @@ export default {
                 <tbody>
                   <tr v-for="(line, idx) in formData.lines" :key="idx">
                     <td>
-                      <input type="date" class="form-control form-control-sm" v-model="line.date">
+                      <span v-if="mode === 'print'" class="request-print-text">{{ printDate(line.date) }}</span>
+                      <input v-else type="date" class="form-control form-control-sm" v-model="line.date">
                     </td>
                     <td>
                       <input type="text" class="form-control form-control-sm" v-model="line.item">
@@ -606,7 +618,7 @@ export default {
             </div>
           </div>
           <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">承認者 <span class="text-danger">*</span></label>
+            <label class="col-sm-3 col-form-label">承認者(指定) <span class="text-danger">*</span></label>
             <div class="col-sm-9">
               <select class="form-select" v-model="formData.approver_user_id" @change="validateField('approver_user_id')" @blur="validateField('approver_user_id')">
                 <option value="">指定なし</option>
@@ -617,6 +629,7 @@ export default {
               <div class="text-danger small" v-if="errors.approver_user_id">{{ errors.approver_user_id }}</div>
             </div>
           </div>
+        </fieldset>
         </form>
       </div>
       <div class="modal-footer">
