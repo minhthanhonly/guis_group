@@ -27,6 +27,22 @@ if ($current_hour >= 6 && $current_hour < 12) {
     $welcome_message .= 'こんばんは！';
 }
 }
+
+$can_approve_requests = false;
+$is_request_admin = false;
+if (!empty($_SESSION['userid'])) {
+  $is_request_admin = (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator');
+  if ($is_request_admin) {
+    $can_approve_requests = true;
+  } else {
+    require_once DIR_MODEL . 'request.php';
+    $reqModel = new Request();
+    $reqModel->connect();
+    $u = $reqModel->fetchOne("SELECT can_approve_request FROM " . DB_PREFIX . "user WHERE userid = '" . $reqModel->quote($_SESSION['userid']) . "'");
+    $can_approve_requests = !empty($u['can_approve_request']);
+    $reqModel->close();
+  }
+}
 ?>
 
 <!-- Content -->
@@ -78,11 +94,113 @@ if ($current_hour >= 6 && $current_hour < 12) {
         </div>
       </div>
     </div>
-    <!-- View sales -->
   </div>
- 
-  <div class="row g-6 mt-1">                
+
+  <div id="dashboardRequestsApp" v-cloak>
+    <div v-if="!dashboardReady" class="row g-6 mt-1">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-body text-center text-muted py-5">
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span>読み込み中...
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-else class="row g-6 mt-1">
+    <div class="col-md-12 col-lg-6" :class="canApprove ? 'col-xl-6' : 'col-xl-12'">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center py-3">
+          <h5 class="card-title mb-0">最近の申請</h5>
+          <a class="btn btn-sm btn-primary" href="<?=$root?>form/index.php">もっと見る</a>
+        </div>
+        <div class="card-body pt-0">
+          <div v-if="recentLoading" class="text-center text-muted py-4">
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span>読み込み中...
+          </div>
+          <div v-else-if="recentRequests.length === 0" class="text-muted text-center py-4">まだ申請がありません。</div>
+          <div v-else class="table-responsive">
+            <table class="table table-bordered table-sm mb-0">
+              <thead>
+                <tr>
+                  <th>申請種別</th>
+                  <th class="text-nowrap">申請日</th>
+                  <th>状態</th>
+                  <th>承認者</th>
+                  <th class="text-nowrap">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="req in recentRequests" :key="'recent-' + req.id">
+                  <td class="text-nowrap">{{ typeLabel(req.type) }}</td>
+                  <td class="text-nowrap">{{ formatDateTime(req.created_at) }}</td>
+                  <td>
+                    <span :class="['badge', statusBadgeClass(req.status)]">
+                      <i :class="statusIcon(req.status)" class="me-1"></i>{{ statusLabel(req.status) }}
+                    </span>
+                  </td>
+                  <td>{{ req.status === 'approved' && req.approver_realname ? req.approver_realname : '-' }}</td>
+                  <td>
+                    <a :href="detailUrl(req.id)" class="btn btn-sm btn-outline-info">詳細</a>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="canApprove" class="col-md-12 col-lg-6 col-xl-6">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center py-3">
+          <div>
+            <h5 class="card-title mb-0">承認待ち <span v-if="!pendingLoading" class="text-muted small mb-0 mt-1" v-html="pendingCountMessage"></span></h5>
+            
+          </div>
+          <a class="btn btn-sm btn-primary flex-shrink-0" :href="formIndexPendingUrl">もっと見る</a>
+        </div>
+        <div class="card-body pt-0">
+          <div v-if="pendingLoading" class="text-center text-muted py-4">
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span>読み込み中...
+          </div>
+          <div v-else-if="pendingRequests.length === 0" class="text-muted text-center py-4">承認待ちの申請はありません。</div>
+          <div v-else class="table-responsive">
+            <table class="table table-bordered table-sm mb-0">
+              <thead>
+                <tr>
+                  <th>申請者</th>
+                  <th>申請種別</th>
+                  <th class="text-nowrap">申請日</th>
+                  <th>状態</th>
+                  <th class="text-nowrap">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="req in pendingRequests" :key="'pending-' + req.id">
+                  <td class="text-nowrap">{{ req.user_realname || req.user_id || '-' }}</td>
+                  <td class="text-nowrap">{{ typeLabel(req.type) }}</td>
+                  <td class="text-nowrap">{{ formatDateTime(req.created_at) }}</td>
+                  <td>
+                    <span :class="['badge', statusBadgeClass(req.status)]">
+                      <i :class="statusIcon(req.status)" class="me-1"></i>{{ statusLabel(req.status) }}
+                    </span>
+                  </td>
+                  <td>
+                    <a :href="detailUrl(req.id)" class="btn btn-sm btn-outline-info">詳細</a>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <div class="row g-6 mt-1">
     <!-- Statistics -->
+
     <div class="col-xl-6 col-md-12">
       <div class="card h-100">
         <div class="card-body pb-0 app-calendar-wrapper">
@@ -274,3 +392,9 @@ $view->footing();
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/css/pages/app-calendar.css" />
 <script src="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.js"></script>
 <script src="<?=ROOT?>assets/js/top.js?v=<?=CACHE_VERSION?>"></script>
+<script>
+  window.DASHBOARD_FORM_ROOT = <?= json_encode($root . 'form/') ?>;
+  window.DASHBOARD_CAN_APPROVE = <?= $can_approve_requests ? 'true' : 'false' ?>;
+  window.DASHBOARD_IS_REQUEST_ADMIN = <?= $is_request_admin ? 'true' : 'false' ?>;
+</script>
+<script src="<?=ROOT?>assets/js/dashboard-requests.js?v=<?=CACHE_VERSION?>"></script>

@@ -1,8 +1,9 @@
 import { formatUserDisplayName } from '/assets/js/user-display-name.js';
 import { printFormatMixin } from './print-format.js';
+import { approverMultiselectMixin } from './approver-multiselect.js';
 
 export default {
-  mixins: [printFormatMixin],
+  mixins: [printFormatMixin, approverMultiselectMixin],
   props: {
     defaultData: { type: Object, default: () => ({}) },
     mode: { type: String, default: 'add' }
@@ -19,7 +20,7 @@ export default {
         reason: '',
         note: '',
         add_to_calendar: false,
-        approver_user_id: ''
+        approver_user_ids: []
       },
       errors: {},
       modalTitle: this.mode == 'edit' ? '休暇申請編集' :  '休暇申請' ,
@@ -41,7 +42,7 @@ export default {
         reason: '',
         note: '',
         add_to_calendar: false,
-        approver_user_id: ''
+        approver_user_ids: []
       }, this.defaultData);
       this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
       this.originalData = JSON.parse(JSON.stringify(this.formData));
@@ -66,7 +67,7 @@ export default {
             reason: '',
             note: '',
             add_to_calendar: false,
-            approver_user_id: ''
+            approver_user_ids: []
           }, newVal);
           this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
           this.originalData = JSON.parse(JSON.stringify(this.formData));
@@ -200,8 +201,8 @@ export default {
         this.errors.unpaid_type = '無給休暇の種類を選択してください。';
         valid = false;
       }
-      if (!this.formData.approver_user_id) {
-        this.errors.approver_user_id = '承認者(指定)を選択してください。';
+      if (!this.validateApproverUserIds(this.formData.approver_user_ids)) {
+        this.errors.approver_user_ids = '承認者(指定)を選択してください。';
         valid = false;
       }
       if (!this.formData.reason || !String(this.formData.reason).trim()) {
@@ -231,9 +232,9 @@ export default {
       } else if (field === 'unpaid_type') {
         if (this.formData.leave_type === '無給休暇' && !this.formData.unpaid_type) err.unpaid_type = '無給休暇の種類を選択してください。';
         else { delete err.unpaid_type; }
-      } else if (field === 'approver_user_id') {
-        if (!this.formData.approver_user_id) err.approver_user_id = '承認者(指定)を選択してください。';
-        else { delete err.approver_user_id; }
+      } else if (field === 'approver_user_ids') {
+        if (!this.validateApproverUserIds(this.formData.approver_user_ids)) err.approver_user_ids = '承認者(指定)を選択してください。';
+        else { delete err.approver_user_ids; }
       } else if (field === 'reason') {
         if (!this.formData.reason || !String(this.formData.reason).trim()) err.reason = '事由を入力してください。';
         else { delete err.reason; }
@@ -247,14 +248,14 @@ export default {
         const startDate = this.formData.start_datetime ? this.formData.start_datetime.slice(0, 10) : '';
         const endDate = this.formData.end_datetime ? this.formData.end_datetime.slice(0, 10) : '';
         if (this.mode === 'edit') {
-          const payload = { id: this.defaultData.id, data: this.formData, start_date: startDate, end_date: endDate, approver_user_id: this.formData.approver_user_id || '' };
+          const payload = { id: this.defaultData.id, data: this.formData, start_date: startDate, end_date: endDate, approver_user_id: this.encodeApproverUserIds(this.formData.approver_user_ids) };
           await axios.post('/api/index.php?model=request&method=edit', payload, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
           });
           this.$emit('submitted', this.formData);
           this.close();
         } else {
-          const payload = { type: 'leave', data: this.formData, status, start_date: startDate, end_date: endDate, approver_user_id: this.formData.approver_user_id || '' };
+          const payload = { type: 'leave', data: this.formData, status, start_date: startDate, end_date: endDate, approver_user_id: this.encodeApproverUserIds(this.formData.approver_user_ids) };
           await axios.post('/api/index.php?model=request&method=add', payload, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
           });
@@ -387,13 +388,14 @@ export default {
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">承認者(指定) <span class="text-danger">*</span></label>
             <div class="col-sm-9">
-              <select class="form-select" v-model="formData.approver_user_id" @change="validateField('approver_user_id')" @blur="validateField('approver_user_id')">
-                <option value="">指定なし</option>
+              <select v-if="mode !== 'print'" class="form-select" multiple size="6" v-model="formData.approver_user_ids" @change="validateField('approver_user_ids')" @blur="validateField('approver_user_ids')">
                 <option v-for="user in approvers" :key="user.userid" :value="user.userid">
                   {{ formatUserDisplayName(user) }} ({{ user.userid }})
                 </option>
               </select>
-              <div class="text-danger small" v-if="errors.approver_user_id">{{ errors.approver_user_id }}</div>
+              <span v-else class="request-print-text">{{ formatApproverUserIdsLabel(formData.approver_user_ids) }}</span>
+              <div class="form-text text-muted" v-if="mode !== 'print'">Ctrl / Cmd を押しながらクリックで複数選択</div>
+              <div class="text-danger small" v-if="errors.approver_user_ids">{{ errors.approver_user_ids }}</div>
             </div>
           </div>
           <div class="mb-3 row">

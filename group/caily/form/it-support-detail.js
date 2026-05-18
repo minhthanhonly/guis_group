@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   props: {
     data: { type: Object, required: true },
     requestId: { type: [Number, String], default: null }
@@ -56,7 +56,7 @@ export default {
           <th>注記</th>
           <td class="text-break" style="white-space: pre-wrap;">{{ data.note }}</td>
         </tr>
-        <tr v-if="data.approver_user_id">
+        <tr v-if="$root.request.approver_user_realname">
           <th>承認者(指定)</th>
           <td>{{ $root.request.approver_user_realname }}</td>
         </tr>

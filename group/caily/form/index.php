@@ -33,7 +33,7 @@
           </ul>
         </div>
         <div class="d-flex gap-2">
-          <button class="btn btn-primary text-nowrap" @click="openForm">
+          <button v-if="currentTab !== 'all'" class="btn btn-primary text-nowrap" @click="openForm">
             <i class="fa fa-plus me-1"></i>新規申請
           </button>
         </div>
@@ -101,7 +101,55 @@
         </div>
       </div>
       <div v-if="!loading && requests.length === 0" class="text-muted text-center py-5">まだ申請がありません。</div>
+      <div v-else-if="!loading && currentTab === 'all'" class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>申請者</th>
+              <th>申請種別</th>
+              <th class="user-select-none" style="cursor:pointer;" @click="changeSort('created_at')">
+                申請日
+                <i class="fa fa-fw" :class="sortIcon('created_at')"></i>
+              </th>
+              <th>注記</th>
+              <th>承認者(指定)</th>
+              <th>コメント数</th>
+              <th>承認者</th>
+              <th class="user-select-none" style="cursor:pointer;" @click="changeSort('approved_at')">
+                承認日時
+                <i class="fa fa-fw" :class="sortIcon('approved_at')"></i>
+              </th>
+              <th class="user-select-none" style="cursor:pointer;" @click="changeSort('status')">
+                状態
+                <i class="fa fa-fw" :class="sortIcon('status')"></i>
+              </th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="req in requests" :key="req.id">
+              <td>{{ req.user_realname || req.user_id || '-' }}</td>
+              <td class="text-nowrap">{{ requestTypeLabel(req) }}</td>
+              <td class="text-nowrap">{{ formatDateTime(req.created_at) }}</td>
+              <td>{{ req.data?.note || '-' }}</td>
+              <td>{{ req.approver_user_realname || req.approver_user_id || '-' }}</td>
+              <td>{{ req.comment_count }}</td>
+              <td>{{ req.status === 'approved' && req.approver_realname ? req.approver_realname : '-' }}</td>
+              <td>{{ req.status === 'approved' && req.approved_at ? formatDateTime(req.approved_at) : '-' }}</td>
+              <td>
+                <span :class="['badge', statusBadgeClass(req.status)]">
+                  <i :class="statusIcon(req.status)" class="me-1"></i>{{ statusLabel(req.status) }}
+                </span>
+              </td>
+              <td>
+                <a :href="'detail.php?id=' + req.id" class="btn btn-sm btn-outline-info">詳細</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <div v-else-if="!loading" class="table-responsive">
+
         <table class="table table-hover mb-0">
           <thead>
             <tr>
@@ -536,6 +584,7 @@
 <script src="/assets/js/axios.min.js?v=<?=CACHE_VERSION?>"></script>
 <script type="module">
 import { formatUserDisplayName } from '/assets/js/user-display-name.js';
+import { approverMultiselectMixin } from './approver-multiselect.js';
 import leaveForm from './leave-form.js?v=<?=CACHE_VERSION?>';
 import outingForm from './outing-form.js?v=<?=CACHE_VERSION?>';
 import tripForm from './trip-form.js?v=<?=CACHE_VERSION?>';
@@ -550,9 +599,11 @@ import purchaseForm from './purchase-form.js?v=<?=CACHE_VERSION?>';
 import itSupportForm from './it-support-form.js?v=<?=CACHE_VERSION?>';
 const { createApp, defineAsyncComponent } = Vue;
 createApp({
+  mixins: [approverMultiselectMixin],
   data() {
     return {
       tabs: [
+        {type: 'all', label: 'すべて'},
         {type: 'leave', label: '休暇届', form: 'leave-form'},
         {type: 'outing', label: '外出申請書', form: 'outing-form'},
         {type: 'trip', label: '出張申請書', form: 'trip-form'},
@@ -574,7 +625,7 @@ createApp({
       currentFormComponent: null,
       keyword: '',
       searchDebounceTimer: null,
-      statusFilter: '',
+      statusFilter: 'pending',
       userFilter: '',
       showDrafts: true,
       monthFilter: '', // YYYY-MM, period 21/(M-1)～20/M
@@ -603,7 +654,7 @@ createApp({
       const d = this.printTarget.data || {};
       return Object.assign({}, d, {
         id: this.printTarget.id,
-        approver_user_id: this.printTarget.approver_user_id || d.approver_user_id || ''
+        approver_user_ids: this.normalizeApproverUserIds(this.printTarget.approver_user_id || d.approver_user_id || d.approver_user_ids || [])
       });
     },
     visibleTabs() {
@@ -694,11 +745,13 @@ createApp({
     async updatePendingCountForTab(type) {
       try {
         const params = new URLSearchParams({
-          type,
           status: 'pending',
           page: 1,
           per_page: 1
         });
+        if (type !== 'all') {
+          params.append('type', type);
+        }
         if (this.monthFilter && /^\d{4}-\d{2}$/.test(this.monthFilter)) {
           const [y, m] = this.monthFilter.split('-').map(Number);
           const fromDate = m === 1 ? `${y - 1}-12-21` : `${y}-${String(m - 1).padStart(2, '0')}-21`;
@@ -828,12 +881,14 @@ createApp({
       this.loading = true;
       try {
         const params = new URLSearchParams({
-          type: this.currentTab,
           page: this.page,
           per_page: this.perPage,
           sort_by: this.sortBy,
           sort_dir: this.sortDir
         });
+        if (this.currentTab !== 'all') {
+          params.append('type', this.currentTab);
+        }
         if (this.keyword && this.keyword.trim() !== '') {
           params.append('keyword', this.keyword.trim());
         }
@@ -986,6 +1041,9 @@ createApp({
       const t = this.tabs.find(x => x.type === (req && req.type));
       return t ? t.label : (req && req.type ? req.type : '');
     },
+    requestTypeLabel(req) {
+      return this.printTypeLabel(req) || '-';
+    },
     resolveFormComponentByType(type) {
       const map = {
         leave: leaveForm,
@@ -1127,7 +1185,7 @@ createApp({
     canDelete(req) {
       if (!req || !req.id) return false;
       const isAdmin = this.currentUserRole === 'administrator';
-      const isApprover = req.approver_user_id && req.approver_user_id === this.currentUserId;
+      const isApprover = this.userIsDesignatedApprover(req.approver_user_id, this.currentUserId);
       const isApplicant = req.user_id === this.currentUserId;
       if (isAdmin || isApprover) return true;
       if (isApplicant && (req.status === 'draft' || req.status === 'pending')) return true;
@@ -1160,6 +1218,10 @@ createApp({
   mounted() {
     window.addEventListener('afterprint', this.finishPrint);
     const params = new URLSearchParams(window.location.search);
+    const statusParam = params.get('status');
+    if (statusParam && ['pending', 'approved', 'rejected', 'draft'].includes(statusParam)) {
+      this.statusFilter = statusParam;
+    }
     const tabParam = params.get('tab');
     if (tabParam && this.visibleTabs.some(t => t.type === tabParam)) {
       this.currentTab = tabParam;

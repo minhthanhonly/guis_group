@@ -318,12 +318,14 @@ import purchaseDetail from './purchase-detail.js?v=<?=CACHE_VERSION?>';
 import purchaseForm from './purchase-form.js?v=<?=CACHE_VERSION?>';
 import itSupportDetail from './it-support-detail.js?v=<?=CACHE_VERSION?>';
 import itSupportForm from './it-support-form.js?v=<?=CACHE_VERSION?>';
+import { approverMultiselectMixin } from './approver-multiselect.js?v=<?=CACHE_VERSION?>';
 const { createApp } = Vue;
 const CURRENT_USER_ID = USER_ID || '';
 const CURRENT_USER_ROLE = USER_ROLE || '';
 
 
 createApp({
+  mixins: [approverMultiselectMixin],
   data() {
     return {
       request: {},
@@ -355,15 +357,13 @@ createApp({
     },
     canUpdateStatus() {
       const isAdmin = CURRENT_USER_ROLE === 'administrator';
-      const isDesignatedApprover = this.request
-        && this.request.approver_user_id
-        && this.request.approver_user_id === CURRENT_USER_ID;
+      const isDesignatedApprover = this.request && this.userIsDesignatedApprover(this.request.approver_user_id, CURRENT_USER_ID);
       return isAdmin || isDesignatedApprover;
     },
     canDelete() {
       if (!this.request || !this.request.id) return false;
       const isAdmin = CURRENT_USER_ROLE === 'administrator';
-      const isDesignatedApprover = this.request.approver_user_id && this.request.approver_user_id === CURRENT_USER_ID;
+      const isDesignatedApprover = this.request && this.userIsDesignatedApprover(this.request.approver_user_id, CURRENT_USER_ID);
       const isApplicant = this.request.user_id === CURRENT_USER_ID;
       if (isAdmin || isDesignatedApprover) return true;
       if (isApplicant && (this.request.status === 'draft' || this.request.status === 'pending')) return true;
@@ -602,7 +602,7 @@ createApp({
         : {};
       const data = Object.assign(baseData, {
         id: this.request.id,
-        approver_user_id: this.request.approver_user_id || '',
+        approver_user_ids: this.normalizeApproverUserIds(this.request.approver_user_id),
         add_to_calendar: this.request.add_to_calendar || false
       });
       // 外出申請書: chuẩn hóa dữ liệu cũ (datetime) sang date + start_time + end_time

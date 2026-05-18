@@ -22,6 +22,78 @@ class Request extends ApplicationModel {
         $this->connect();
     }
 
+    /** @return string[] */
+    private function parseApproverUserIds($value) {
+        if ($value === null || $value === '') {
+            return array();
+        }
+        if (is_array($value)) {
+            $ids = array();
+            foreach ($value as $v) {
+                $v = trim((string)$v);
+                if ($v !== '') {
+                    $ids[] = $v;
+                }
+            }
+            return array_values(array_unique($ids));
+        }
+        $str = trim((string)$value);
+        if ($str === '') {
+            return array();
+        }
+        if ($str[0] === '[') {
+            $decoded = json_decode($str, true);
+            if (is_array($decoded)) {
+                return $this->parseApproverUserIds($decoded);
+            }
+        }
+        return array($str);
+    }
+
+    private function encodeApproverUserIds($value) {
+        $ids = $this->parseApproverUserIds($value);
+        if (empty($ids)) {
+            return null;
+        }
+        return json_encode($ids, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function userIsDesignatedApprover($approverUserIdField, $userid) {
+        if (empty($userid)) {
+            return false;
+        }
+        return in_array($userid, $this->parseApproverUserIds($approverUserIdField), true);
+    }
+
+    private function approverUserIdsFromPost($postKey = 'approver_user_id') {
+        if (!array_key_exists($postKey, $_POST)) {
+            return null;
+        }
+        return $this->encodeApproverUserIds($_POST[$postKey]);
+    }
+
+    private function appendDesignatedApproversToTargetIds(array &$targetUserIds, $approverUserIdField) {
+        foreach ($this->parseApproverUserIds($approverUserIdField) as $uid) {
+            if ($uid !== '' && !in_array($uid, $targetUserIds, true)) {
+                $targetUserIds[] = $uid;
+            }
+        }
+    }
+
+    private function enrichApproverUserDisplay(array &$row, $user_map) {
+        $ids = $this->parseApproverUserIds(isset($row['approver_user_id']) ? $row['approver_user_id'] : '');
+        $row['approver_user_ids'] = $ids;
+        $names = array();
+        foreach ($ids as $uid) {
+            if (!empty($user_map[$uid])) {
+                $names[] = is_array($user_map[$uid]) ? $user_map[$uid]['realname'] : $user_map[$uid];
+            } else {
+                $names[] = $uid;
+            }
+        }
+        $row['approver_user_realname'] = implode('、', $names);
+    }
+
     // Validate dữ liệu đầu vào cho từng loại đơn
     function validate_request($type, $data) {
         $errors = array();
@@ -164,8 +236,8 @@ class Request extends ApplicationModel {
                 echo json_encode(['error' => $errors]);
                 exit;
             }
-            // 承認者は必須
-            if (empty($_POST['approver_user_id'])) {
+            // 承認者(指定)は必須（複数可）
+            if (empty($this->parseApproverUserIds(isset($_POST['approver_user_id']) ? $_POST['approver_user_id'] : ''))) {
                 http_response_code(400);
                 echo json_encode(['error' => '承認者(指定)を選択してください。']);
                 exit;
@@ -225,7 +297,7 @@ class Request extends ApplicationModel {
             'type' => $type,
             'data' => json_encode($data, JSON_UNESCAPED_UNICODE),
             'status' => $status,
-            'approver_user_id' => !empty($_POST['approver_user_id']) ? $_POST['approver_user_id'] : null,
+            'approver_user_id' => $this->approverUserIdsFromPost('approver_user_id'),
             'add_to_calendar' => $addToCalendar,
             'history' => json_encode([
                 [
@@ -353,7 +425,11 @@ class Request extends ApplicationModel {
             $row['comment_count'] = is_array($row['comments']) ? count($row['comments']) : 0;
             if (!empty($row['user_id'])) $user_ids[$row['user_id']] = true;
             if (!empty($row['approver_id'])) $user_ids[$row['approver_id']] = true;
-            if (!empty($row['approver_user_id'])) $user_ids[$row['approver_user_id']] = true;
+            foreach ($this->parseApproverUserIds(isset($row['approver_user_id']) ? $row['approver_user_id'] : '') as $uid) {
+                if ($uid !== '') {
+                    $user_ids[$uid] = true;
+                }
+            }
         }
         unset($row);
 
@@ -368,7 +444,7 @@ class Request extends ApplicationModel {
         foreach ($rows as &$row) {
             $row['user_realname'] = isset($user_map[$row['user_id']]) ? $user_map[$row['user_id']] : ($row['user_id'] ?? '');
             $row['approver_realname'] = !empty($row['approver_id']) && isset($user_map[$row['approver_id']]) ? $user_map[$row['approver_id']] : '';
-            $row['approver_user_realname'] = !empty($row['approver_user_id']) && isset($user_map[$row['approver_user_id']]) ? $user_map[$row['approver_user_id']] : ($row['approver_user_id'] ?? '');
+            $this->enrichApproverUserDisplay($row, $user_map);
         }
         unset($row);
 
@@ -471,7 +547,7 @@ class Request extends ApplicationModel {
 
         // Only administrator or designated approver can update status
         $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
-        $isDesignatedApprover = !empty($currentRequest['approver_user_id']) && $currentRequest['approver_user_id'] === $_SESSION['userid'];
+        $isDesignatedApprover = $this->userIsDesignatedApprover($currentRequest['approver_user_id'], $_SESSION['userid']);
         if (!$isAdmin && !$isDesignatedApprover && $status !== 'pending') {
             http_response_code(403);
             echo json_encode(['error' => '状態を変更する権限がありません。']);
@@ -545,7 +621,11 @@ class Request extends ApplicationModel {
             // Thêm user_id của người đăng ký
             if (!empty($row['user_id'])) $user_ids[] = $row['user_id'];
             // Thêm user chỉ định duyệt (approver_user_id) nếu có
-            if (!empty($row['approver_user_id'])) $user_ids[] = $row['approver_user_id'];
+            foreach ($this->parseApproverUserIds(isset($row['approver_user_id']) ? $row['approver_user_id'] : '') as $uid) {
+                if ($uid !== '') {
+                    $user_ids[] = $uid;
+                }
+            }
             $user_ids = array_unique($user_ids);
             if (count($user_ids)) {
                 $in = "'" . implode("','", array_map([$this, 'quote'], $user_ids)) . "'";
@@ -577,10 +657,11 @@ class Request extends ApplicationModel {
                     $row['realname'] = $user_map[$row['user_id']]['realname'];
                     $row['user_image'] = $user_map[$row['user_id']]['user_image'];
                 }
-                // Gán realname cho người chỉ định duyệt (approver_user_id)
-                if (!empty($row['approver_user_id']) && !empty($user_map[$row['approver_user_id']])) {
-                    $row['approver_user_realname'] = $user_map[$row['approver_user_id']]['realname'];
+                $user_map_flat = array();
+                foreach ($user_map as $uid => $info) {
+                    $user_map_flat[$uid] = is_array($info) ? $info['realname'] : $info;
                 }
+                $this->enrichApproverUserDisplay($row, $user_map_flat);
             }
         }
         return $row;
@@ -628,10 +709,10 @@ class Request extends ApplicationModel {
                 exit;
             }
             // 承認者は必須（現在の値または送信された値）
-            $newApprover = array_key_exists('approver_user_id', $_POST)
+            $newApproverRaw = array_key_exists('approver_user_id', $_POST)
                 ? (isset($_POST['approver_user_id']) ? $_POST['approver_user_id'] : '')
                 : (isset($row['approver_user_id']) ? $row['approver_user_id'] : '');
-            if (empty($newApprover)) {
+            if (empty($this->parseApproverUserIds($newApproverRaw))) {
                 http_response_code(400);
                 echo json_encode(['error' => '承認者(指定)を選択してください。']);
                 exit;
@@ -704,7 +785,7 @@ class Request extends ApplicationModel {
         }
         // Cập nhật người chỉ định duyệt nếu có (cho phép clear về null)
         if (array_key_exists('approver_user_id', $_POST)) {
-            $update['approver_user_id'] = $_POST['approver_user_id'] !== '' ? $_POST['approver_user_id'] : null;
+            $update['approver_user_id'] = $this->approverUserIdsFromPost('approver_user_id');
         }
         if ($start_date !== null) $update['start_date'] = $start_date;
         if ($end_date !== null) $update['end_date'] = $end_date;
@@ -890,10 +971,8 @@ class Request extends ApplicationModel {
             require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
             $targetUserIds = [];
-            if (!empty($approverUserId)) {
-                // Chỉ gửi cho người được chỉ định duyệt nếu có
-                $targetUserIds = [$approverUserId];
-            } else {
+            $targetUserIds = $this->parseApproverUserIds($approverUserId);
+            if (empty($targetUserIds)) {
                 // Nếu không chỉ định, fallback gửi cho admin như hiện tại
                 $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
                 $targetUserIds = array_map(function($a){return $a['userid'];}, $admins);
@@ -940,8 +1019,9 @@ class Request extends ApplicationModel {
             // Ưu tiên gửi cho người được chỉ định duyệt, fallback về admin nếu không có
             $targetUserIds = [];
             $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
-            if ($req && !empty($req['approver_user_id'])) {
-                $targetUserIds = [$req['approver_user_id']];
+            $designated = $req ? $this->parseApproverUserIds($req['approver_user_id']) : array();
+            if (!empty($designated)) {
+                $this->appendDesignatedApproversToTargetIds($targetUserIds, $req['approver_user_id']);
             } else {
                 $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
                 foreach ($admins as $a) {
@@ -1014,10 +1094,9 @@ class Request extends ApplicationModel {
             }
             // Gửi thêm cho người chỉ định duyệt (hoặc admin nếu không có)
             $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
-            if ($req && !empty($req['approver_user_id'])) {
-                if (!in_array($req['approver_user_id'], $targetUserIds, true)) {
-                    $targetUserIds[] = $req['approver_user_id'];
-                }
+            $designated = $req ? $this->parseApproverUserIds($req['approver_user_id']) : array();
+            if (!empty($designated)) {
+                $this->appendDesignatedApproversToTargetIds($targetUserIds, $req['approver_user_id']);
             } else {
                 $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
                 foreach ($admins as $a) {
@@ -1076,10 +1155,9 @@ class Request extends ApplicationModel {
                 $targetUserIds[] = $userId;
             }
             $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
-            if ($req && !empty($req['approver_user_id'])) {
-                if (!in_array($req['approver_user_id'], $targetUserIds, true)) {
-                    $targetUserIds[] = $req['approver_user_id'];
-                }
+            $designated = $req ? $this->parseApproverUserIds($req['approver_user_id']) : array();
+            if (!empty($designated)) {
+                $this->appendDesignatedApproversToTargetIds($targetUserIds, $req['approver_user_id']);
             } else {
                 $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
                 foreach ($admins as $a) {
@@ -1145,10 +1223,9 @@ class Request extends ApplicationModel {
             $targetUserIds[] = $applicantUserId;
         }
         $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
-        if ($req && !empty($req['approver_user_id'])) {
-            if (!in_array($req['approver_user_id'], $targetUserIds, true)) {
-                $targetUserIds[] = $req['approver_user_id'];
-            }
+        $designated = $req ? $this->parseApproverUserIds($req['approver_user_id']) : array();
+        if (!empty($designated)) {
+            $this->appendDesignatedApproversToTargetIds($targetUserIds, $req['approver_user_id']);
         } else {
             $admins = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
             foreach ($admins as $a) {
@@ -1233,7 +1310,7 @@ class Request extends ApplicationModel {
             exit;
         }
         $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
-        $isApprover = !empty($row['approver_user_id']) && $row['approver_user_id'] === $_SESSION['userid'];
+        $isApprover = $this->userIsDesignatedApprover($row['approver_user_id'], $_SESSION['userid']);
         $isApplicant = $row['user_id'] === $_SESSION['userid'];
 
         $canDelete = false;
@@ -1264,9 +1341,9 @@ class Request extends ApplicationModel {
             $this->deleteScheduleForRequest((int) $row['schedule_id']);
         }
 
-        if ($wasPending && $isApplicant && !empty($approverUserId)) {
+        if ($wasPending && $isApplicant && !empty($this->parseApproverUserIds($approverUserId))) {
             $currentUserid = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
-            if ($currentUserid !== $approverUserId) {
+            if (!$this->userIsDesignatedApprover($approverUserId, $currentUserid)) {
                 $this->sendRequestDeletedNotification($id, $requestType, $applicantUserId, $approverUserId, isset($row['data']) ? $row['data'] : null);
             }
         }
@@ -1298,12 +1375,14 @@ class Request extends ApplicationModel {
                     'url' => '/form/index.php'
                 ],
                 'request_id' => $requestId,
-                'user_ids' => [$approverUserId]
+                'user_ids' => $this->parseApproverUserIds($approverUserId)
             ];
             $notiService->create($payload);
 
-            // Email notification to approver about deleted pending request (pass data because row already deleted)
-            $this->sendRequestDeletedEmail($requestId, $requestType, $approverUserId, $applicantUserId, $requestDataJson);
+            // Email notification to designated approvers about deleted pending request
+            foreach ($this->parseApproverUserIds($approverUserId) as $uid) {
+                $this->sendRequestDeletedEmail($requestId, $requestType, $uid, $applicantUserId, $requestDataJson);
+            }
         } catch (Exception $e) {
             error_log('Failed to send request deleted notification: ' . $e->getMessage());
         }
@@ -2116,7 +2195,8 @@ class Request extends ApplicationModel {
     }
 
     private function sendRequestCreatedEmail($requestId, $requestType, $applicantUserId, $approverUserId, $subject, $applicantName) {
-        if (empty($approverUserId)) {
+        $approverIds = $this->parseApproverUserIds($approverUserId);
+        if (empty($approverIds)) {
             return;
         }
         $url = $this->getBaseUrl() . '/form/detail.php?id=' . intval($requestId);
@@ -2127,7 +2207,9 @@ class Request extends ApplicationModel {
               . ($detail ? $detail . "\n\n" : '')
               . "詳細: " . $url . "\n"
               . $footText;
-        $this->sendEmailToUser($approverUserId, $subject, $body);
+        foreach ($approverIds as $uid) {
+            $this->sendEmailToUser($uid, $subject, $body);
+        }
     }
 
     private function sendRequestStatusEmail($requestId, $requestType, $status, $userId, $applicantName) {
@@ -2189,8 +2271,9 @@ class Request extends ApplicationModel {
         // Lấy người chỉ định duyệt, nếu không có thì lấy admin
         $targetUserIds = [];
         $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
-        if ($req && !empty($req['approver_user_id'])) {
-            $targetUserIds = [$req['approver_user_id']];
+        $designated = $req ? $this->parseApproverUserIds($req['approver_user_id']) : array();
+        if (!empty($designated)) {
+            $targetUserIds = $designated;
         } else {
             $admins = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
             $targetUserIds = array_map(function($a){ return $a['userid']; }, $admins);
