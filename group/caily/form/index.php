@@ -8,7 +8,7 @@
       <div class="collapse navbar-collapse justify-content-start" id="formNavbarContent">
         <!-- Inline tabs (khi đủ chiều ngang) -->
         <ul v-show="!navUseDropdown" ref="navTabsEl" class="navbar-nav me-auto mb-2 mb-lg-0 flex-wrap">
-          <li class="nav-item" v-for="tab in tabs" :key="tab.type" :class="{ 'active bg-primary text-white rounded-3': currentTab === tab.type }">
+          <li class="nav-item" v-for="tab in visibleTabs" :key="tab.type" :class="{ 'active bg-primary text-white rounded-3': currentTab === tab.type }">
             <a href="#" class="nav-link d-flex align-items-center text-nowrap" @click.prevent="selectTab(tab.type)">
               <span>{{ tab.label }}</span>
               <span v-if="pendingCounts[tab.type] > 0" class="badge rounded-pill bg-warning text-dark ms-2">
@@ -24,7 +24,7 @@
             <span v-if="pendingCounts[currentTab] > 0" class="badge rounded-pill bg-warning text-dark ms-2">{{ pendingCounts[currentTab] }}</span>
           </button>
           <ul class="dropdown-menu dropdown-menu-dark form-tab-dropdown-menu" aria-labelledby="formTabDropdown">
-            <li v-for="tab in tabs" :key="tab.type">
+            <li v-for="tab in visibleTabs" :key="tab.type">
               <a class="dropdown-item d-flex align-items-center justify-content-between" href="#" @click.prevent="selectTab(tab.type); closeTabDropdown()" :class="{ 'active': currentTab === tab.type }">
                 <span>{{ tab.label }}</span>
                 <span v-if="pendingCounts[tab.type] > 0" class="badge rounded-pill bg-warning text-dark">{{ pendingCounts[tab.type] }}</span>
@@ -69,7 +69,7 @@
           <select class="form-select form-select-sm" v-model="userFilter" @change="onFilterChange">
             <option value="">ユーザー: すべて</option>
             <option v-for="u in userFilterOptions" :key="u.userid" :value="u.userid">
-              {{ u.realname || u.userid }}
+              {{ formatUserDisplayName(u) }}
             </option>
           </select>
         </div>
@@ -120,9 +120,7 @@
               <th v-if="currentTab === 'overtime'">用途</th>
               <th v-if="currentTab === 'attendance_correction'">日時</th>
               <th v-if="currentTab === 'attendance_correction'">区分</th>
-              <th v-if="currentTab === 'purchase'">購入区分</th>
-              <th v-if="currentTab === 'purchase'">品名</th>
-              <th v-if="currentTab === 'purchase'">数量</th>
+              <th v-if="currentTab === 'purchase'">合計金額</th>
               <th v-if="currentTab === 'it_support'">区分</th>
               <th v-if="currentTab === 'it_support'">件名</th>
               <th v-if="currentTab === 'it_support'">緊急度</th>
@@ -176,9 +174,15 @@
               <td v-if="currentTab === 'overtime'">{{ formatOvertimePurpose(req.data?.purpose) }}</td>
               <td v-if="currentTab === 'attendance_correction'">{{ formatAttendanceCorrectionDateTime(req) }}</td>
               <td v-if="currentTab === 'attendance_correction'">{{ req.data?.correction_type || '-' }}</td>
-              <td v-if="currentTab === 'purchase'">{{ req.data?.category || '-' }}</td>
-              <td v-if="currentTab === 'purchase'">{{ req.data?.item_name || '-' }}</td>
-              <td v-if="currentTab === 'purchase'">{{ req.data?.quantity != null && req.data?.quantity !== '' ? req.data.quantity : '-' }}</td>
+              <td v-if="currentTab === 'purchase'">
+                <span v-if="req.data && (req.data.total_amount != null && req.data.total_amount !== '')">
+                  ¥{{ Number(req.data.total_amount || 0).toLocaleString() }}
+                </span>
+                <span v-else-if="req.data && req.data.estimated_price != null && req.data.estimated_price !== ''">
+                  ¥{{ Number(req.data.estimated_price || 0).toLocaleString() }}
+                </span>
+                <span v-else>-</span>
+              </td>
               <td v-if="currentTab === 'travel_expense'">
                 <span v-if="req.data && (req.data.total_amount != null)">
                   ¥{{ Number(req.data.total_amount || 0).toLocaleString() }}
@@ -303,6 +307,7 @@
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="/assets/js/axios.min.js?v=<?=CACHE_VERSION?>"></script>
 <script type="module">
+import { formatUserDisplayName } from '/assets/js/user-display-name.js';
 import leaveForm from './leave-form.js?v=<?=CACHE_VERSION?>';
 import outingForm from './outing-form.js?v=<?=CACHE_VERSION?>';
 import tripForm from './trip-form.js?v=<?=CACHE_VERSION?>';
@@ -330,16 +335,18 @@ createApp({
         {type: 'expense', label: '経費精算書', form: 'expense-form'},
         {type: 'trip_expense', label: '出張旅費精算書', form: 'trip-expense-form'},
         {type: 'commuting_allowance', label: '通勤手当申請書', form: 'commuting-allowance-form'},
-        {type: 'purchase', label: '購入申請', form: 'purchase-form'},
+        {type: 'purchase', label: '備品購入依頼書', form: 'purchase-form'},
         {type: 'it_support', label: 'ITサポート', form: 'it-support-form'},
       ],
+      // 一時非表示（表示する場合は hiddenTabTypes から削除）
+      hiddenTabTypes: ['travel_expense', 'expense', 'trip_expense'],
       currentTab: 'leave',
       requests: [],
       loading: false,
       currentFormComponent: null,
       keyword: '',
       searchDebounceTimer: null,
-      statusFilter: 'pending',
+      statusFilter: '',
       userFilter: '',
       showDrafts: true,
       monthFilter: '', // YYYY-MM, period 21/(M-1)～20/M
@@ -361,13 +368,16 @@ createApp({
     }
   },
   computed: {
+    visibleTabs() {
+      return this.tabs.filter(tab => !this.hiddenTabTypes.includes(tab.type));
+    },
     currentTabLabel() {
-      const t = this.tabs.find(x => x.type === this.currentTab);
+      const t = this.visibleTabs.find(x => x.type === this.currentTab);
       return t ? t.label : '申請種別';
     },
     modalDialogClass() {
       // travel_expense 用フォームは内容が多いため、モーダルを大きくする
-      if (this.currentTab === 'travel_expense' || this.currentTab === 'expense' || this.currentTab === 'trip_expense' || this.currentTab === 'commuting_allowance') {
+      if (this.currentTab === 'travel_expense' || this.currentTab === 'expense' || this.currentTab === 'trip_expense' || this.currentTab === 'commuting_allowance' || this.currentTab === 'purchase') {
         return 'modal-xl';
       }
       return 'modal-lg';
@@ -398,13 +408,20 @@ createApp({
     }
   },
   methods: {
+    formatUserDisplayName,
     async loadUserFilterOptions() {
       try {
         const res = await axios.get('/api/index.php?model=request&method=list_filter_users');
         const list = Array.isArray(res.data) ? res.data : [];
         this.userFilterOptions = list
           .filter(u => u && u.userid)
-          .map(u => ({ userid: String(u.userid), realname: u.realname || '' }));
+          .map(u => ({
+            userid: String(u.userid),
+            realname: u.realname || '',
+            lastname: u.lastname,
+            firstname: u.firstname,
+            lastname_after_married: u.lastname_after_married
+          }));
       } catch (e) {
         this.userFilterOptions = [];
       }
@@ -502,7 +519,17 @@ createApp({
         const youbi = ['日','月','火','水','木','金','土'];
         const wd = youbi[dateObj.getDay()];
         const datePart = `${dateObj.getFullYear()}/${(dateObj.getMonth()+1).toString().padStart(2,'0')}/${dateObj.getDate().toString().padStart(2,'0')}(${wd})`;
-        if (d.start_time && d.end_time) return datePart + ' ' + d.start_time + '~' + d.end_time;
+        if (d.start_time && d.end_time) {
+          const breakLabels = { '0.5': '0.5h', '1': '1h', '1.5': '1.5h', '2': '2h', '2.5': '2.5h', '3': '3h', '3.5': '3.5h', '4': '4h' };
+          const minuteToHour = { 30: '0.5h', 60: '1h', 90: '1.5h', 120: '2h', 150: '2.5h', 180: '3h', 210: '3.5h', 240: '4h' };
+          let breakLabel = '';
+          if (d.break_time !== undefined && d.break_time !== null && d.break_time !== '') {
+            const bt = String(d.break_time);
+            breakLabel = breakLabels[bt] || minuteToHour[bt] || `${bt}h`;
+          }
+          const breakPart = breakLabel ? `（休憩${breakLabel}）` : '';
+          return datePart + ' ' + d.start_time + '~' + d.end_time + breakPart;
+        }
         return datePart;
       }
       if (d.datetime) return this.formatDateTime(d.datetime);
@@ -856,12 +883,14 @@ createApp({
   mounted() {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam && this.tabs.some(t => t.type === tabParam)) {
+    if (tabParam && this.visibleTabs.some(t => t.type === tabParam)) {
       this.currentTab = tabParam;
     } else {
       const saved = localStorage.getItem('form_index_current_tab');
-      if (saved && this.tabs.some(t => t.type === saved)) {
+      if (saved && this.visibleTabs.some(t => t.type === saved)) {
         this.currentTab = saved;
+      } else if (!this.visibleTabs.some(t => t.type === this.currentTab)) {
+        this.currentTab = this.visibleTabs[0] ? this.visibleTabs[0].type : 'leave';
       }
     }
     this.updateTabUrl(this.currentTab);

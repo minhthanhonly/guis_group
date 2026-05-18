@@ -114,6 +114,29 @@ class Helper {
 	}
 
 	/**
+	 * 一覧・申請・タイムカード用。結婚後の姓がある場合は realname を使わず「姓(結婚後の姓)  名」。
+	 * @param array $row userid, realname, lastname, firstname, lastname_after_married など
+	 */
+	public static function userDisplayName($row) {
+		if (!is_array($row)) {
+			return '';
+		}
+		$married = isset($row['lastname_after_married']) ? trim((string) $row['lastname_after_married']) : '';
+		if ($married !== '') {
+			$ln = isset($row['lastname']) ? trim((string) $row['lastname']) : '';
+			$fn = isset($row['firstname']) ? trim((string) $row['firstname']) : '';
+			return $ln.'('.$married.')'.($fn !== '' ? '  '.$fn : '');
+		}
+		if (isset($row['realname']) && trim((string) $row['realname']) !== '') {
+			return trim((string) $row['realname']);
+		}
+		if (isset($row['userid'])) {
+			return (string) $row['userid'];
+		}
+		return '';
+	}
+
+	/**
 	 * Phase 5.2 – Log AI-triggered write operations for audit.
 	 * Call when a write (project/task/member/customer) succeeds and was triggered from the AI flow (request has ai_action=1).
 	 */

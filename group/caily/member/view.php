@@ -70,6 +70,18 @@ $view->heading('メンバー詳細');
 							<span><?=$hash['data']['userid']?></span>
 						  </li>
 						  <li class="mb-2">
+							<span class="h6"><span data-i18n="姓">姓</span>:</span>
+							<span><?=isset($hash['data']['lastname']) ? htmlspecialchars($hash['data']['lastname'], ENT_QUOTES, 'UTF-8') : ''?></span>
+						  </li>
+						  <li class="mb-2">
+							<span class="h6"><span data-i18n="名">名</span>:</span>
+							<span><?=isset($hash['data']['firstname']) ? htmlspecialchars($hash['data']['firstname'], ENT_QUOTES, 'UTF-8') : ''?></span>
+						  </li>
+						  <li class="mb-2">
+							<span class="h6"><span data-i18n="結婚後の姓">結婚後の姓</span>:</span>
+							<span><?=isset($hash['data']['lastname_after_married']) && $hash['data']['lastname_after_married'] !== '' ? htmlspecialchars($hash['data']['lastname_after_married'], ENT_QUOTES, 'UTF-8') : '<span class="text-muted">未登録</span>'?></span>
+						  </li>
+						  <li class="mb-2">
 							<span class="h6"><span data-i18n="メールアドレス">メールアドレス</span>:</span>
 							<span><?=$hash['data']['user_email']?></span>
 						  </li>

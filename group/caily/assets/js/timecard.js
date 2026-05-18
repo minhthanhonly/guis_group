@@ -30,9 +30,30 @@ function updateAnalytics(data) {
   work_days.innerHTML = `${data.work_days} / ${data.total_days}`;
 }
 
+function escapeHtmlTimecard(s) {
+  if (s == null || s === '') return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** 結婚後の姓がある場合は「姓(結婚後の姓)  名」。無い場合は realname。 */
+function formatTimecardUserLabel(user) {
+  if (!user) return '';
+  const married = (user.lastname_after_married != null ? String(user.lastname_after_married) : '').trim();
+  if (married) {
+    const ln = (user.lastname != null ? String(user.lastname) : '').trim();
+    const fn = (user.firstname != null ? String(user.firstname) : '').trim();
+    return ln + '(' + married + ')' + (fn ? '  ' + fn : '');
+  }
+  return user.realname ? String(user.realname) : (user.userid || '');
+}
+
 function findUsername(userid) {
   const user = USER_LIST.find(user => user.userid === userid);
-  return user ? user.realname : userid;
+  return user ? formatTimecardUserLabel(user) : userid;
 }
 
 async function get_timecard(user, year, month) {
@@ -52,7 +73,9 @@ async function get_timecard(user, year, month) {
     timcard_type.innerHTML = response.data.config.config_name;
   }
   if (timecard_title && response.data.owner) {
-    timecard_title.innerHTML = response.data.owner.realname;
+    const o = response.data.owner;
+    const title = o.display_name || formatTimecardUserLabel(o) || o.realname || '';
+    timecard_title.textContent = title;
   }
   // check if the response is successful
   if (response.status !== 200 || !response.data || !response.data.list) {
@@ -177,9 +200,9 @@ async function fetchUser(group_id) {
   USER_LIST.forEach(user => {
     if (group_id == user.user_group) {
       if (currentUser === user.userid) {
-        slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}" selected>${user.realname}</option>`;
+        slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}" selected>${escapeHtmlTimecard(formatTimecardUserLabel(user))}</option>`;
       } else {
-        slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}">${user.realname}</option>`;
+        slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}">${escapeHtmlTimecard(formatTimecardUserLabel(user))}</option>`;
       }
     }
   });

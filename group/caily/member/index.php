@@ -39,6 +39,7 @@ $view->heading('メンバー一覧');
 					<tr>
 						<th></th>
 						<th>ユーザー</th>
+						<th>結婚後の姓</th>
 						<th>制限</th>
 						<th>グループ</th>
 						<th>従業員の種類</th>
@@ -81,6 +82,12 @@ $view->heading('メンバー一覧');
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="add-user-firstname">名</label>
               <input type="text" class="form-control" id="add-user-firstname" placeholder="" name="firstname"/>
+            </div>
+          </div>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-lastname-after-married">結婚後の姓</label>
+              <input type="text" class="form-control" id="add-user-lastname-after-married" placeholder="" name="lastname_after_married"/>
             </div>
           </div>
           <div class="form-group row">
@@ -190,6 +197,12 @@ $view->heading('メンバー一覧');
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="edit-user-firstname">名</label>
               <input type="text" class="form-control" id="edit-user-firstname" placeholder="" name="firstname"/>
+            </div>
+          </div>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-lastname-after-married">結婚後の姓</label>
+              <input type="text" class="form-control" id="edit-user-lastname-after-married" placeholder="" name="lastname_after_married"/>
             </div>
           </div>
           <div class="form-group row">

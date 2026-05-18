@@ -59,7 +59,7 @@ $view->heading('個人設定');
 
 					</div>
 					<div class="card-body pt-4">
-						<form id="formAccountSettings" method="GET" onsubmit="return false"
+						<div id="formAccountSettings"
 							class="fv-plugins-bootstrap5 fv-plugins-framework" novalidate="novalidate">
 							<input type="hidden" name="reset_image" id="reset_image" value="0">
 							<div class="row gy-4 gx-6 mb-6">
@@ -75,6 +75,14 @@ $view->heading('個人設定');
 									<label for="firstname" class="form-label"><span data-i18n="名">名</span></label>
 									<input class="form-control" type="text" id="firstname" name="firstname"
 										value="<?=$hash['data']['firstname']?>">
+									<div
+										class="fv-plugins-message-container fv-plugins-message-container--enabled invalid-feedback">
+									</div>
+								</div>
+								<div class="col-md-6 form-control-validation fv-plugins-icon-container">
+									<label for="lastname_after_married" class="form-label"><span data-i18n="結婚後の姓">結婚後の姓</span></label>
+									<input class="form-control" type="text" id="lastname_after_married" name="lastname_after_married"
+										value="<?=isset($hash['data']['lastname_after_married']) ? htmlspecialchars($hash['data']['lastname_after_married'], ENT_QUOTES, 'UTF-8') : ''?>">
 									<div
 										class="fv-plugins-message-container fv-plugins-message-container--enabled invalid-feedback">
 									</div>
@@ -137,7 +145,7 @@ $view->heading('個人設定');
 							</div>
 							<?php } ?>
 
-						</form>
+						</div>
 					</div>
 					<!-- /Account -->
 				</div>

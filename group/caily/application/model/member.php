@@ -11,6 +11,7 @@ class Member extends ApplicationModel {
 		'user_group'=>array('except'=>array('search')),
 		'user_groupname'=>array('except'=>array('search')),
 		'lastname'=>array('姓', 'notnull', 'length:100'),
+		'lastname_after_married'=>array('結婚後の姓', 'length:100'),
 		'firstname'=>array('名', 'length:100'),
 		'realname'=>array('名前', 'length:100'),
 		'user_ruby'=>array('かな', 'length:100'),
@@ -142,7 +143,7 @@ class Member extends ApplicationModel {
 
 	function get_member() {
 		$config = new Config($this->handler);
-		$query = "SELECT groupware_user.id as `id`, `userid`, `realname`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend`, branch_id, `show_project`, `can_approve_request`, groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
+		$query = "SELECT groupware_user.id as `id`, `userid`, `realname`, `lastname`, `firstname`, `lastname_after_married`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend`, branch_id, `show_project`, `can_approve_request`, groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
 		$hash['list'] = $this->fetchAll($query);
 		$hash['group'] = $this->findGroup();
 
@@ -166,7 +167,7 @@ class Member extends ApplicationModel {
 
 	function list_request_approvers() {
 		// Danh sách user có quyền duyệt đơn (can_approve_request = 1, không bị suspend)
-		$query = "SELECT userid, realname FROM ".DB_PREFIX."user WHERE (is_suspend IS NULL OR is_suspend = 0) AND can_approve_request = 1 ORDER BY id ASC";
+		$query = "SELECT userid, realname, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE (is_suspend IS NULL OR is_suspend = 0) AND can_approve_request = 1 ORDER BY id ASC";
 		return $this->fetchAll($query);
 	}
 

@@ -86,14 +86,41 @@ class Request extends ApplicationModel {
             if ($ctype === '' || !in_array($ctype, ['出社', '退社'], true)) $errors[] = '区分を選択してください。';
             if (empty(trim($data['reason'] ?? ''))) $errors[] = '事由を入力してください。';
         } elseif ($type == 'purchase') {
-            $allowed = ['備品', '事務用品', 'ソフトウェア', 'その他'];
-            if (empty(trim($data['category'] ?? '')) || !in_array(trim($data['category']), $allowed, true)) {
-                $errors[] = '購入区分を選択してください。';
-            }
-            if (empty(trim($data['item_name'] ?? ''))) $errors[] = '品名を入力してください。';
-            $q = isset($data['quantity']) ? $data['quantity'] : '';
-            if ($q === '' || !preg_match('/^\d+$/', (string) $q) || (int) $q < 1) {
-                $errors[] = '数量は1以上の整数を入力してください。';
+            $lines = isset($data['lines']) && is_array($data['lines']) ? $data['lines'] : [];
+            if (count($lines) === 0) {
+                $errors[] = '購入品目を1件以上入力してください。';
+            } else {
+                foreach ($lines as $idx => $line) {
+                    if (!is_array($line)) continue;
+                    $row = (int) $idx + 1;
+                    if (empty(trim($line['manufacturer'] ?? ''))) {
+                        $errors[] = "明細{$row}行目: メーカーを入力してください。";
+                        break;
+                    }
+                    if (empty(trim($line['product_code'] ?? ''))) {
+                        $errors[] = "明細{$row}行目: 商品コードを入力してください。";
+                        break;
+                    }
+                    if (empty(trim($line['product_name'] ?? ''))) {
+                        $errors[] = "明細{$row}行目: 商品名を入力してください。";
+                        break;
+                    }
+                    $q = isset($line['quantity']) ? $line['quantity'] : '';
+                    if ($q === '' || !preg_match('/^\d+$/', (string) $q) || (int) $q < 1) {
+                        $errors[] = "明細{$row}行目: 数量は1以上の整数を入力してください。";
+                        break;
+                    }
+                    $p = isset($line['unit_price']) ? $line['unit_price'] : '';
+                    if ($p === '' || !is_numeric($p) || (float) $p < 0) {
+                        $errors[] = "明細{$row}行目: 単価を入力してください。";
+                        break;
+                    }
+                    $a = isset($line['amount_with_tax']) ? $line['amount_with_tax'] : '';
+                    if ($a === '' || !is_numeric($a) || (float) $a < 0) {
+                        $errors[] = "明細{$row}行目: 金額（税込み）を入力してください。";
+                        break;
+                    }
+                }
             }
             if (empty(trim($data['reason'] ?? ''))) $errors[] = '事由・用途を入力してください。';
         } elseif ($type == 'it_support') {
@@ -267,7 +294,7 @@ class Request extends ApplicationModel {
                 $cond = "(data LIKE '" . $like . "'";
                 // Tìm user_id theo realname để cho phép search theo tên người đăng ký
                 $userLike = $this->quote($kw);
-                $users = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE realname LIKE '" . $userLike . "'");
+                $users = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE realname LIKE '" . $userLike . "' OR lastname LIKE '" . $userLike . "' OR firstname LIKE '" . $userLike . "' OR lastname_after_married LIKE '" . $userLike . "'");
                 if ($users && count($users)) {
                     $ids = array();
                     foreach ($users as $u) {
@@ -333,9 +360,9 @@ class Request extends ApplicationModel {
         $user_map = array();
         if (count($user_ids)) {
             $in = "'" . implode("','", array_map([$this, 'quote'], array_keys($user_ids))) . "'";
-            $users = $this->fetchAll("SELECT userid, realname FROM " . DB_PREFIX . "user WHERE userid IN ($in)");
+            $users = $this->fetchAll("SELECT userid, realname, lastname, firstname, lastname_after_married FROM " . DB_PREFIX . "user WHERE userid IN ($in)");
             foreach ($users as $u) {
-                $user_map[$u['userid']] = $u['realname'];
+                $user_map[$u['userid']] = Helper::userDisplayName($u);
             }
         }
         foreach ($rows as &$row) {
@@ -368,7 +395,7 @@ class Request extends ApplicationModel {
             return [];
         }
 
-        $query = "SELECT userid, realname FROM " . DB_PREFIX . "user "
+        $query = "SELECT userid, realname, lastname, firstname, lastname_after_married FROM " . DB_PREFIX . "user "
             . "WHERE (is_suspend IS NULL OR is_suspend = 0) "
             . "AND user_group IN (1,4) "
             . "ORDER BY id ASC";
@@ -522,10 +549,10 @@ class Request extends ApplicationModel {
             $user_ids = array_unique($user_ids);
             if (count($user_ids)) {
                 $in = "'" . implode("','", array_map([$this, 'quote'], $user_ids)) . "'";
-                $users = $this->fetchAll("SELECT userid, realname, user_image FROM ".DB_PREFIX."user WHERE userid IN ($in)");
+                $users = $this->fetchAll("SELECT userid, realname, lastname, firstname, lastname_after_married, user_image FROM ".DB_PREFIX."user WHERE userid IN ($in)");
                 $user_map = array();
                 foreach ($users as $u) {
-                    $user_map[$u['userid']] = array('realname' => $u['realname'], 'user_image' => $u['user_image']);
+                    $user_map[$u['userid']] = array('realname' => Helper::userDisplayName($u), 'user_image' => $u['user_image']);
                 }
                 // Gán realname, user_image vào history
                 if (is_array($row['history'])) {
@@ -1359,6 +1386,16 @@ class Request extends ApplicationModel {
         return $row && !empty($row['realname']) ? $row['realname'] : $userid;
     }
 
+    private function formatHolidayWorkBreakTime($bt) {
+        $bt = trim((string)$bt);
+        if ($bt === '') return '';
+        $labels = ['0.5' => '0.5h', '1' => '1h', '1.5' => '1.5h', '2' => '2h', '2.5' => '2.5h', '3' => '3h', '3.5' => '3.5h', '4' => '4h'];
+        if (isset($labels[$bt])) return $labels[$bt];
+        $minuteToHour = [30 => '0.5h', 60 => '1h', 90 => '1.5h', 120 => '2h', 150 => '2.5h', 180 => '3h', 210 => '3.5h', 240 => '4h'];
+        if (ctype_digit($bt) && isset($minuteToHour[(int)$bt])) return $minuteToHour[(int)$bt];
+        return $bt . 'h';
+    }
+
     /**
      * Format request data as plain text for email body (chi tiết nội dung đơn).
      * @param int $requestId
@@ -1425,6 +1462,9 @@ class Request extends ApplicationModel {
         } elseif ($type === 'holiday_work') {
             if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
             if (!empty($data['start_time'])) $lines[] = $fmt('開始時刻', $data['start_time']);
+            if (isset($data['break_time']) && $data['break_time'] !== '') {
+                $lines[] = $fmt('休憩時間', $this->formatHolidayWorkBreakTime($data['break_time']));
+            }
             if (!empty($data['end_time'])) $lines[] = $fmt('終了時刻', $data['end_time']);
             if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
@@ -1612,12 +1652,26 @@ class Request extends ApplicationModel {
 
             if (!empty($data['note'])) $lines[] = $fmt('備考', $data['note']);
         } elseif ($type === 'purchase') {
-            if (!empty($data['category'])) $lines[] = $fmt('購入区分', $data['category']);
-            if (!empty($data['item_name'])) $lines[] = $fmt('品名', $data['item_name']);
-            if (!empty($data['product_link'])) $lines[] = $fmt('商品リンク', $data['product_link']);
-            if (isset($data['quantity']) && $data['quantity'] !== '') $lines[] = $fmt('数量', $data['quantity']);
-            if (isset($data['estimated_price']) && $data['estimated_price'] !== '') $lines[] = $fmt('見積金額（円）', $data['estimated_price']);
-            if (!empty($data['item_list'])) $lines[] = $fmt('購入品目詳細', $data['item_list']);
+            if (!empty($data['lines']) && is_array($data['lines'])) {
+                $idx = 1;
+                foreach ($data['lines'] as $line) {
+                    if (!is_array($line)) continue;
+                    $rowParts = [];
+                    if (!empty($line['manufacturer'])) $rowParts[] = 'メーカー: ' . $line['manufacturer'];
+                    if (!empty($line['product_code'])) $rowParts[] = '商品コード: ' . $line['product_code'];
+                    if (!empty($line['product_name'])) $rowParts[] = '商品名: ' . $line['product_name'];
+                    if (isset($line['quantity']) && $line['quantity'] !== '') $rowParts[] = '数量: ' . $line['quantity'];
+                    if (isset($line['unit_price']) && $line['unit_price'] !== '') $rowParts[] = '単価: ' . $line['unit_price'] . '円';
+                    if (isset($line['amount_with_tax']) && $line['amount_with_tax'] !== '') $rowParts[] = '金額（税込み）: ' . $line['amount_with_tax'] . '円';
+                    if (!empty($rowParts)) {
+                        $lines[] = '明細' . $idx . ': ' . implode(' / ', $rowParts);
+                        $idx++;
+                    }
+                }
+            }
+            if (isset($data['total_amount']) && $data['total_amount'] !== '') {
+                $lines[] = $fmt('合計金額', $data['total_amount'] . '円');
+            }
             if (!empty($data['reason'])) $lines[] = $fmt('事由・用途', $data['reason']);
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
         } elseif ($type === 'it_support') {
@@ -1684,6 +1738,9 @@ class Request extends ApplicationModel {
         } elseif ($requestType === 'holiday_work') {
             if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
             if (!empty($data['start_time'])) $lines[] = $fmt('開始時刻', $data['start_time']);
+            if (isset($data['break_time']) && $data['break_time'] !== '') {
+                $lines[] = $fmt('休憩時間', $this->formatHolidayWorkBreakTime($data['break_time']));
+            }
             if (!empty($data['end_time'])) $lines[] = $fmt('終了時刻', $data['end_time']);
             if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
@@ -1869,12 +1926,26 @@ class Request extends ApplicationModel {
 
             if (!empty($data['note'])) $lines[] = $fmt('備考', $data['note']);
         } elseif ($requestType === 'purchase') {
-            if (!empty($data['category'])) $lines[] = $fmt('購入区分', $data['category']);
-            if (!empty($data['item_name'])) $lines[] = $fmt('品名', $data['item_name']);
-            if (!empty($data['product_link'])) $lines[] = $fmt('商品リンク', $data['product_link']);
-            if (isset($data['quantity']) && $data['quantity'] !== '') $lines[] = $fmt('数量', $data['quantity']);
-            if (isset($data['estimated_price']) && $data['estimated_price'] !== '') $lines[] = $fmt('見積金額（円）', $data['estimated_price']);
-            if (!empty($data['item_list'])) $lines[] = $fmt('購入品目詳細', $data['item_list']);
+            if (!empty($data['lines']) && is_array($data['lines'])) {
+                $idx = 1;
+                foreach ($data['lines'] as $line) {
+                    if (!is_array($line)) continue;
+                    $rowParts = [];
+                    if (!empty($line['manufacturer'])) $rowParts[] = 'メーカー: ' . $line['manufacturer'];
+                    if (!empty($line['product_code'])) $rowParts[] = '商品コード: ' . $line['product_code'];
+                    if (!empty($line['product_name'])) $rowParts[] = '商品名: ' . $line['product_name'];
+                    if (isset($line['quantity']) && $line['quantity'] !== '') $rowParts[] = '数量: ' . $line['quantity'];
+                    if (isset($line['unit_price']) && $line['unit_price'] !== '') $rowParts[] = '単価: ' . $line['unit_price'] . '円';
+                    if (isset($line['amount_with_tax']) && $line['amount_with_tax'] !== '') $rowParts[] = '金額（税込み）: ' . $line['amount_with_tax'] . '円';
+                    if (!empty($rowParts)) {
+                        $lines[] = '明細' . $idx . ': ' . implode(' / ', $rowParts);
+                        $idx++;
+                    }
+                }
+            }
+            if (isset($data['total_amount']) && $data['total_amount'] !== '') {
+                $lines[] = $fmt('合計金額', $data['total_amount'] . '円');
+            }
             if (!empty($data['reason'])) $lines[] = $fmt('事由・用途', $data['reason']);
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
         } elseif ($requestType === 'it_support') {
@@ -1961,6 +2032,7 @@ class Request extends ApplicationModel {
         } elseif ($requestType === 'holiday_work') {
             $addDiff('日付', 'date');
             $addDiff('開始時刻', 'start_time');
+            $addDiff('休憩時間', 'break_time');
             $addDiff('終了時刻', 'end_time');
             $addDiff('事由', 'reason');
             $addDiff('注記', 'note');
@@ -2009,12 +2081,7 @@ class Request extends ApplicationModel {
             $addDiff('合計片道運賃', 'total_amount');
             $addDiff('備考', 'note');
         } elseif ($requestType === 'purchase') {
-            $addDiff('購入区分', 'category');
-            $addDiff('品名', 'item_name');
-            $addDiff('商品リンク', 'product_link');
-            $addDiff('数量', 'quantity');
-            $addDiff('見積金額（円）', 'estimated_price');
-            $addDiff('購入品目詳細', 'item_list');
+            $addDiff('合計金額', 'total_amount');
             $addDiff('事由・用途', 'reason');
             $addDiff('注記', 'note');
         } elseif ($requestType === 'it_support') {

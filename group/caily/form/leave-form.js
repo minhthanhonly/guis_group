@@ -1,3 +1,5 @@
+import { formatUserDisplayName } from '/assets/js/user-display-name.js';
+
 export default {
   props: {
     defaultData: { type: Object, default: () => ({}) },
@@ -86,6 +88,7 @@ export default {
     }
   },
   methods: {
+    formatUserDisplayName,
     normalizeAddToCalendar(value) {
       if (value === true) return true;
       if (value === false || value === null || value === undefined) return false;
@@ -347,21 +350,27 @@ export default {
           <div class="mb-3 row" v-if="formData.leave_type === 'unpaid' || formData.leave_type === '無給休暇'">
             <label class="col-sm-3 col-form-label">無給休暇 <span class="text-danger">*</span></label>
             <div class="col-sm-9">
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="congratulatory" value="慶弔休暇" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
-                <label class="form-check-label" for="congratulatory">慶弔休暇</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="menstrual" value="生理休暇" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
-                <label class="form-check-label" for="menstrual">生理休暇</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="child_nursing" value="子の看護休暇" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
-                <label class="form-check-label" for="child_nursing">子の看護休暇</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="child_nursing_other" value="その他" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
-                <label class="form-check-label" for="child_nursing_other">その他</label>
+              <div class="mb-2">
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" id="absence" value="欠勤" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
+                  <label class="form-check-label" for="absence">欠勤</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" id="congratulatory" value="慶弔休暇" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
+                  <label class="form-check-label" for="congratulatory">慶弔休暇</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" id="menstrual" value="生理休暇" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
+                  <label class="form-check-label" for="menstrual">生理休暇</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" id="child_nursing" value="子の看護等休暇" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
+                  <label class="form-check-label" for="child_nursing">子の看護等休暇</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" id="unpaid_other" value="その他" v-model="formData.unpaid_type" @change="validateField('unpaid_type')">
+                  <label class="form-check-label" for="unpaid_other">その他</label>
+                </div>
               </div>
               <div class="text-danger small" v-if="errors.unpaid_type">{{ errors.unpaid_type }}</div>
             </div>
@@ -373,7 +382,7 @@ export default {
               <select class="form-select" v-model="formData.approver_user_id" @change="validateField('approver_user_id')" @blur="validateField('approver_user_id')">
                 <option value="">指定なし</option>
                 <option v-for="user in approvers" :key="user.userid" :value="user.userid">
-                  {{ user.realname }} ({{ user.userid }})
+                  {{ formatUserDisplayName(user) }} ({{ user.userid }})
                 </option>
               </select>
               <div class="text-danger small" v-if="errors.approver_user_id">{{ errors.approver_user_id }}</div>
@@ -412,7 +421,7 @@ export default {
        <div class="text-muted small" v-if="mode==='add'">
           <ul>
             <li>1週間前までに提出して下さい。</li>
-            <li>有給休暇以外に無給休暇※（慶弔休暇、生理休暇、子の看護休暇）を取得する場合も休暇届で申請してください。<br>※無給休暇とは・・給与計算上は欠勤と同じ扱いになるため休んだ日数について欠勤控除が発生します。</li>
+            <li>有給休暇以外に無給休暇※（欠勤、慶弔休暇、生理休暇、子の看護等休暇、その他）を取得する場合も休暇届で申請してください。<br>※無給休暇とは・・給与計算上は欠勤と同じ扱いになるため休んだ日数について欠勤控除が発生します。</li>
           </ul>
         </div>
     </div>

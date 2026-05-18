@@ -55,6 +55,17 @@ class Timecard extends ApplicationModel {
 		return $holidays;
 	}
 
+	/**
+	 * タイムカード用表示名（共通ロジックは Helper::userDisplayName）。
+	 */
+	function timecardUserDisplayName($row) {
+		return Helper::userDisplayName($row);
+	}
+
+	function timecardCsvEscapeCell($value) {
+		return str_replace('"', '""', (string) $value);
+	}
+
 	
 	function saveHolidays($holidays){
 		// $filename = DIR_MODEL . "holidays.txt";
@@ -1248,7 +1259,11 @@ class Timecard extends ApplicationModel {
 		
 		$list = $this->fetchAll($query);
 		if (is_array($list) && count($list) > 0) {
+			$ownerRow = $this->fetchOne("SELECT userid, realname, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE userid = '".$this->quote($member)."'");
+			$displayName = $this->timecardUserDisplayName(is_array($ownerRow) ? $ownerRow : array('realname' => $member));
+
 			$csv = $yr.'年'.$mt.'月'."\n";
+			$csv .= '"氏名","'.$this->timecardCsvEscapeCell($displayName).'"'."\n";
 			$csv .= '"日付","出社","退社","勤務時間","時間外","休日出勤","備考"'."\n";
 
 			$week = array('日', '月', '火', '水', '木', '金', '土');
@@ -1329,11 +1344,11 @@ class Timecard extends ApplicationModel {
 		$end->modify('-1 day'); // Subtract one day to get the correct end date
 
 
-		$data = $this->fetchAll("SELECT userid, realname FROM ".DB_PREFIX."user WHERE user_group = ".intval($_GET['group'])." ORDER BY user_order,id");
+		$data = $this->fetchAll("SELECT userid, realname, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE user_group = ".intval($_GET['group'])." ORDER BY user_order,id");
 		$hash['user'] = array();
 		if (is_array($data) && count($data) > 0) {
 			foreach ($data as $row) {
-				$hash['user'][$row['userid']] = $row['realname'];
+				$hash['user'][$row['userid']] = $this->timecardUserDisplayName($row);
 			}
 			$user = implode("','", array_keys($hash['user']));
 			$field = implode(',', $this->schematize());
@@ -1362,20 +1377,29 @@ class Timecard extends ApplicationModel {
 			if($owner != $_SESSION['userid']){
 				$this->authorize('administrator', 'manager');
 			}
-			$result = $this->fetchOne("SELECT userid, realname, user_group FROM ".DB_PREFIX."user WHERE userid = '".$this->quote($owner)."'");
+			$result = $this->fetchOne("SELECT userid, realname, user_group, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE userid = '".$this->quote($owner)."'");
 			if (count($result) <= 0) {
 				$this->died('選択されたユーザーは存在しません。');
 			}
 		} else {
-			$result['userid'] = $_SESSION['userid'];
-			$result['realname'] = $_SESSION['realname'];
-			$result['user_group'] = $_SESSION['group'];
+			$result = $this->fetchOne("SELECT userid, realname, user_group, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE userid = '".$this->quote($_SESSION['userid'])."'");
+			if (!is_array($result) || count($result) <= 0) {
+				$result = array(
+					'userid' => $_SESSION['userid'],
+					'realname' => $_SESSION['realname'],
+					'user_group' => $_SESSION['group'],
+					'lastname' => '',
+					'firstname' => '',
+					'lastname_after_married' => ''
+				);
+			}
 		}
-		$data = $this->fetchAll("SELECT userid, realname FROM ".DB_PREFIX."user WHERE user_group = ".intval($result['user_group'])." ORDER BY user_order,id");
+		$result['display_name'] = $this->timecardUserDisplayName($result);
+		$data = $this->fetchAll("SELECT userid, realname, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE user_group = ".intval($result['user_group'])." ORDER BY user_order,id");
 		$user = array();
 		if (is_array($data) && count($data) > 0) {
 			foreach ($data as $row) {
-				$user[$row['userid']] = $row['realname'];
+				$user[$row['userid']] = $this->timecardUserDisplayName($row);
 			}
 		}
 		return array('owner'=>$result, 'user'=>$user);
@@ -1387,20 +1411,29 @@ class Timecard extends ApplicationModel {
 			if($owner != $_SESSION['userid']){
 				$this->authorizeApi('administrator', 'manager');
 			}
-			$result = $this->fetchOne("SELECT userid, realname, user_group FROM ".DB_PREFIX."user WHERE userid = '".$this->quote($owner)."'");
+			$result = $this->fetchOne("SELECT userid, realname, user_group, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE userid = '".$this->quote($owner)."'");
 			if (count($result) <= 0) {
 				$this->diedApi('選択されたユーザーは存在しません。');
 			}
 		} else {
-			$result['userid'] = $_SESSION['userid'];
-			$result['realname'] = $_SESSION['realname'];
-			$result['user_group'] = $_SESSION['group'];
+			$result = $this->fetchOne("SELECT userid, realname, user_group, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE userid = '".$this->quote($_SESSION['userid'])."'");
+			if (!is_array($result) || count($result) <= 0) {
+				$result = array(
+					'userid' => $_SESSION['userid'],
+					'realname' => $_SESSION['realname'],
+					'user_group' => $_SESSION['group'],
+					'lastname' => '',
+					'firstname' => '',
+					'lastname_after_married' => ''
+				);
+			}
 		}
-		$data = $this->fetchAll("SELECT userid, realname FROM ".DB_PREFIX."user WHERE user_group = ".intval($result['user_group'])." ORDER BY user_order,id");
+		$result['display_name'] = $this->timecardUserDisplayName($result);
+		$data = $this->fetchAll("SELECT userid, realname, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE user_group = ".intval($result['user_group'])." ORDER BY user_order,id");
 		$user = array();
 		if (is_array($data) && count($data) > 0) {
 			foreach ($data as $row) {
-				$user[$row['userid']] = $row['realname'];
+				$user[$row['userid']] = $this->timecardUserDisplayName($row);
 			}
 		}
 		return array('owner'=>$result, 'user'=>$user);

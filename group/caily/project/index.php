@@ -673,6 +673,13 @@ $view->footing();
     
 }
 
+/* ColReorder: hover tiêu đề cột — cursor move để biết có thể đổi thứ tự */
+#projectTable thead th,
+#projectTable_wrapper thead th,
+div.dt-scroll-head thead th {
+    cursor: move;
+}
+
 .table thead tr th {
     padding: 0.4rem!important;
 }

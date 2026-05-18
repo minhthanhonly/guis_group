@@ -206,6 +206,10 @@ if($_SESSION['show_project'] == 0){
                     <input class="form-check-input" type="checkbox" id="toggleTaskText" checked>
                     <label class="form-check-label small" for="toggleTaskText">案件名を表示</label>
                 </div>
+                <div class="form-check ms-2">
+                    <input class="form-check-input" type="checkbox" id="toggleTaskTree">
+                    <label class="form-check-label small" for="toggleTaskTree">CAILY納期などを表示</label>
+                </div>
             </div>
             <div class="mt-2 d-flex gap-2 align-items-center justify-content-between">
               <div class="d-flex flex-wrap align-items-center gap-2">

@@ -96,15 +96,15 @@ function generateGroupList(){
 
 
     roleListElement.addEventListener('change', (e) => {
-        dt_user.column(2).search(e.target.value).draw();
+        dt_user.column(3).search(e.target.value).draw();
     });
 
     groupListElement.addEventListener('change', (e) => {
       if(e.target.value == ''){
-        dt_user.column(3).search('').draw();
+        dt_user.column(4).search('').draw();
       } else{
         var text = e.target.options[e.target.selectedIndex].text;
-        dt_user.column(3).search(text).draw();
+        dt_user.column(4).search(text).draw();
       }
     });
 
@@ -169,7 +169,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-printer me-1"></i>印刷</span>`,
           className: 'dropdown-item',
           exportOptions: {
-              columns: [1,2,3,4,5],
+              columns: [1,2,3,4,5,6],
               format: {
               body: function (inner, coldex, rowdex) {
                   if (inner.length <= 0) return inner;
@@ -221,7 +221,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-text me-1"></i>Csv</span>`,
           className: 'dropdown-item',
           exportOptions: {
-              columns: [1,2,3,4,5],
+              columns: [1,2,3,4,5,6],
               format: {
               body: function (inner, coldex, rowdex) {
                   if (inner.length <= 0) return inner;
@@ -258,7 +258,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           text: `<span class="d-flex align-items-center"><i class="icon-base ti tabler-file-spreadsheet me-1"></i>Excel</span>`,
           className: 'dropdown-item',
           exportOptions: {
-              columns: [1,2,3,4,5],
+              columns: [1,2,3,4,5,6],
               format: {
               body: function (inner, coldex, rowdex) {
                   if (inner.length <= 0) return inner;
@@ -332,7 +332,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
           text: `<i class="icon-base ti tabler-copy me-1"></i>コピー`,
           className: 'dropdown-item',
           exportOptions: {
-              columns: [1,2,3,4,5,6],
+              columns: [1,2,3,4,5,6,7],
               format: {
               body: function (inner, coldex, rowdex) {
                   if (inner.length <= 0) return inner;
@@ -387,6 +387,11 @@ document.addEventListener('DOMContentLoaded', async function (e) {
         columns: [
             { data: 'id' },
             { data: 'realname' },
+            {
+              data: 'lastname_after_married',
+              title: '結婚後の姓',
+              defaultContent: ''
+            },
             { data: 'authority' },
             { data: 'group_name' },
             { 
@@ -474,6 +479,16 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             {
             targets: 2,
             render: function (data, type, full, meta) {
+                var v = full['lastname_after_married'];
+                if (v == null || v === '') {
+                  return '<span class="text-muted">—</span>';
+                }
+                return '<span class="text-heading">' + String(v).replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
+            }
+            },
+            {
+            targets: 3,
+            render: function (data, type, full, meta) {
                 var role = full['authority'];
                 var roleBadgeObj = {
                 member: '<i class="icon-base ti tabler-user icon-md text-primary me-2"></i>',
@@ -491,7 +506,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             },
             {
               // Group
-              targets: 3,
+              targets: 4,
               render: function (data, type, full, meta) {
                   const plan = full['group_name'];
 
@@ -500,7 +515,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             },
             {
               // Branch
-              targets: 4,
+              targets: 5,
               render: function (data, type, full, meta) {
                 const branch = branchList.find(branch => branch.id == data)?.name || '';
                 return branch;
@@ -508,7 +523,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             },
             {
               // Department
-              targets: 5,
+              targets: 6,
               render: function (data, type, full, meta) {
                 const departmentL = data.map(department => {
                   const departmentName = departmentList.find(d => d.id == department)?.name || '';
@@ -519,7 +534,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             },
             {
               // User Status
-              targets: 7,
+              targets: 8,
               render: function (data, type, full, meta) {
                   const status = full['is_suspend'];
                   if(status == 1){
@@ -532,7 +547,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             ...(user_role == 'administrator' ? [
               {
                 // Show Project column (only for administrator)
-                targets: 8,
+                targets: 9,
                 className: 'show-project-column',
                 render: function (data, type, full, meta) {
                     const showProject = full['show_project'];
@@ -545,7 +560,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
               },
               {
                 // Approve request permission column (only for administrator)
-                targets: 9,
+                targets: 10,
                 className: 'approve-request-column',
                 render: function (data, type, full, meta) {
                     const canApprove = full['can_approve_request'];
@@ -694,6 +709,10 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             document.getElementById('edit-user-userName').value = userinfo.userid;
             document.getElementById('edit-user-lastname').value = userinfo.lastname;
             document.getElementById('edit-user-firstname').value = userinfo.firstname;
+            const editLastnameAfterMarried = document.getElementById('edit-user-lastname-after-married');
+            if (editLastnameAfterMarried) {
+              editLastnameAfterMarried.value = userinfo.lastname_after_married != null ? userinfo.lastname_after_married : '';
+            }
             document.getElementById('edit-user-email').value = userinfo.user_email;
             document.getElementById('edit-user-contact').value = userinfo.user_phone;
             $('#edit-user-role').val(userinfo.authority).trigger('change');

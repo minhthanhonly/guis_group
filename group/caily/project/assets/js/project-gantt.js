@@ -101,6 +101,7 @@ $(document).ready(function() {
             showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
             myProjects: $('#filterMyProjects').is(':checked') ? 1 : 0,
             showTaskText: $('#toggleTaskText').is(':checked') ? 1 : 0,
+            showTaskTree: $('#toggleTaskTree').is(':checked') ? 1 : 0,
             useCailyEndDate: $('#useCailyEndDate').is(':checked') ? 1 : 0,
             useGuisEndDate: $('#useGuisEndDate').is(':checked') ? 1 : 0,
             useShowCailyStruct: $('#useShowCailyStruct').is(':checked') ? 1 : 0,
@@ -152,6 +153,7 @@ $(document).ready(function() {
         if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
         if (filters.myProjects !== undefined) $('#filterMyProjects').prop('checked', filters.myProjects == 1);
         if (filters.showTaskText !== undefined) $('#toggleTaskText').prop('checked', filters.showTaskText == 1);
+        if (filters.showTaskTree !== undefined) $('#toggleTaskTree').prop('checked', filters.showTaskTree == 1);
         if (filters.useCailyEndDate !== undefined) $('#useCailyEndDate').prop('checked', filters.useCailyEndDate == 1);
         if (filters.useGuisEndDate !== undefined) $('#useGuisEndDate').prop('checked', filters.useGuisEndDate == 1);
         if (filters.useShowCailyStruct !== undefined) $('#useShowCailyStruct').prop('checked', filters.useShowCailyStruct == 1);
@@ -184,6 +186,7 @@ $(document).ready(function() {
             showInactive: filters.showInactive == 1,
             myProjects: filters.myProjects == 1,
             showTaskText: filters.showTaskText == 1,
+            showTaskTree: filters.showTaskTree == 1,
             statusKey: filters.statusKey || '',
             department_id: filters.department_id || null
         };
@@ -215,6 +218,7 @@ $(document).ready(function() {
         setOrDelete('filterProjectId', filters.filterProjectId);
         setOrDelete('status', filters.statusKey);
         setOrDelete('showTaskText', filters.showTaskText ? 1 : '');
+        setOrDelete('showTaskTree', filters.showTaskTree ? 1 : '');
         setOrDelete('useCailyEndDate', filters.useCailyEndDate ? 1 : '');
         setOrDelete('useGuisEndDate', filters.useGuisEndDate ? 1 : '');
         setOrDelete('useShowCailyStruct', filters.useShowCailyStruct ? 1 : '');
@@ -355,6 +359,7 @@ $(document).ready(function() {
         if (params.has('filterProjectId')) merged.filterProjectId = params.get('filterProjectId') || '';
         if (params.has('status')) merged.statusKey = params.get('status') || '';
         if (params.has('showTaskText')) merged.showTaskText = getBool('showTaskText');
+        if (params.has('showTaskTree')) merged.showTaskTree = getBool('showTaskTree');
         if (params.has('useCailyEndDate')) merged.useCailyEndDate = getBool('useCailyEndDate');
         if (params.has('useGuisEndDate')) merged.useGuisEndDate = getBool('useGuisEndDate');
         if (params.has('useShowCailyStruct')) merged.useShowCailyStruct = getBool('useShowCailyStruct');
@@ -385,6 +390,21 @@ $(document).ready(function() {
 
     // Trạng thái hiển thị task text trên bar (task.text)
     window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
+    // Trạng thái mở/đóng toàn bộ tree subtask
+    window.ganttTreeOpen = $('#toggleTaskTree').is(':checked');
+
+    function applyTreeToggleState() {
+        if (!gantt || typeof gantt.eachTask !== 'function') return;
+        const shouldOpen = !!window.ganttTreeOpen;
+        gantt.batchUpdate(function() {
+            gantt.eachTask(function(task) {
+                if (!gantt.hasChild(task.id)) return;
+                if (shouldOpen) gantt.open(task.id);
+                else gantt.close(task.id);
+            });
+        });
+        gantt.render();
+    }
 
     renderActiveFilters();
     // Dùng event delegation để đảm bảo binding kể cả khi DOM thay đổi
@@ -402,6 +422,12 @@ $(document).ready(function() {
         saveFiltersToLocalStorage();
         window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
         if (gantt) gantt.render();
+        renderActiveFilters();
+    });
+    $(document).on('change', '#toggleTaskTree', function() {
+        saveFiltersToLocalStorage();
+        window.ganttTreeOpen = $('#toggleTaskTree').is(':checked');
+        applyTreeToggleState();
         renderActiveFilters();
     });
     // Checkbox ẩn/hiện milestone CAILY納期・GUIS納期・構造データ送付 (độc lập)
@@ -898,7 +924,7 @@ $(document).ready(function() {
                         end_date: endDate,
                         progress: project.progress / 100,
                         parent: 0,
-                        open: true,
+                        open: !!window.ganttTreeOpen,
                         priority: project.priority || 'medium',
                         status: project.status || 'draft',
                         manager: manager_names.join(', ') || '-',
@@ -965,7 +991,7 @@ $(document).ready(function() {
                             end_date: new Date(cailyEnd.getTime()),
                             type: 'milestone',
                             parent: project.id,
-                            open: true,
+                            open: !!window.ganttTreeOpen,
                             duration: 0
                         });
                         links.push({ id: linkId(SLOT_CAILY_NOUKI), source: project.id, target: subId(SLOT_CAILY_NOUKI), type: 0 });
@@ -982,7 +1008,7 @@ $(document).ready(function() {
                             end_date: new Date(guisEnd.getTime()),
                             type: 'milestone',
                             parent: project.id,
-                            open: true,
+                            open: !!window.ganttTreeOpen,
                             duration: 0
                         });
                         links.push({ id: linkId(SLOT_GUIS_NOUKI), source: project.id, target: subId(SLOT_GUIS_NOUKI), type: 0 });
@@ -1050,7 +1076,7 @@ $(document).ready(function() {
                             end_date: new Date(cailyStructDate.getTime()),
                             type: 'milestone',
                             parent: project.id,
-                            open: true,
+                            open: !!window.ganttTreeOpen,
                             duration: 0
                         });
                         links.push({ id: linkId(SLOT_CAILY_STRUCT), source: project.id, target: subId(SLOT_CAILY_STRUCT), type: 0 });
@@ -1067,7 +1093,7 @@ $(document).ready(function() {
                             end_date: new Date(guisStructDate.getTime()),
                             type: 'milestone',
                             parent: project.id,
-                            open: true,
+                            open: !!window.ganttTreeOpen,
                             duration: 0
                         });
                         links.push({ id: linkId(SLOT_GUIS_STRUCT), source: project.id, target: subId(SLOT_GUIS_STRUCT), type: 0 });
@@ -1084,7 +1110,7 @@ $(document).ready(function() {
                             end_date: new Date(equipmentDate.getTime()),
                             type: 'milestone',
                             parent: project.id,
-                            open: true,
+                            open: !!window.ganttTreeOpen,
                             duration: 0
                         });
                         links.push({ id: linkId(SLOT_EQUIPMENT), source: project.id, target: subId(SLOT_EQUIPMENT), type: 0 });
@@ -1543,7 +1569,7 @@ $(document).ready(function() {
                 
                 gantt.config.row_height = 30;
 	            gantt.config.grid_resize = true;
-                gantt.config.open_tree_initially = true;
+                gantt.config.open_tree_initially = !!window.ganttTreeOpen;
                 gantt.config.show_tasks_outside_timescale = true;
                 gantt.config.initial_scroll = true;
               
@@ -2125,6 +2151,7 @@ $(document).ready(function() {
                    this.addGanttStyles();
                     // // Initialize Gantt
                     gantt.init("gantt_container");
+                    applyTreeToggleState();
                     this.ganttInitialized = true;
                     // Zoom extension: Ctrl + wheel để zoom in/out (levels = 月 / 週 / 日)
                     if (gantt.ext && gantt.ext.zoom && typeof gantt.ext.zoom.init === 'function') {
@@ -2322,6 +2349,7 @@ $(document).ready(function() {
     }
     // Đồng bộ lại biến global hiển thị task text
     window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
+    window.ganttTreeOpen = $('#toggleTaskTree').is(':checked');
     // Sau khi mọi thứ đã sync, render badge và cập nhật URL để phản ánh filter hiện tại
     renderActiveFilters();
     if (typeof saveFiltersToLocalStorage === 'function') {

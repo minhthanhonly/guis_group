@@ -1,3 +1,5 @@
+import { formatUserDisplayName } from '/assets/js/user-display-name.js';
+
 export default {
   props: {
     defaultData: { type: Object, default: () => ({}) },
@@ -99,6 +101,7 @@ export default {
     }
   },
   methods: {
+    formatUserDisplayName,
     normalizeDateValue(value) {
       if (value === null || value === undefined) return '';
       const str = String(value).trim();
@@ -285,7 +288,7 @@ export default {
               <select class="form-select" v-model="formData.approver_user_id" @change="validateField('approver_user_id')" @blur="validateField('approver_user_id')">
                 <option value="">指定なし</option>
                 <option v-for="user in approvers" :key="user.userid" :value="user.userid">
-                  {{ user.realname }} ({{ user.userid }})
+                  {{ formatUserDisplayName(user) }} ({{ user.userid }})
                 </option>
               </select>
               <div class="text-danger small" v-if="errors.approver_user_id">{{ errors.approver_user_id }}</div>

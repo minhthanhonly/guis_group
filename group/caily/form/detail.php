@@ -183,7 +183,7 @@
   <!-- Modal sửa -->
   <div v-if="showEditModal">
     <div class="modal fade show" tabindex="-1" style="display:block; background:rgba(0,0,0,0.3);">
-      <div class="modal-dialog" :class="request && request.type === 'travel_expense' || request.type === 'expense' || request.type === 'trip_expense' || request.type === 'commuting_allowance' ? 'modal-xl' : 'modal-lg'">
+      <div class="modal-dialog" :class="request && request.type === 'travel_expense' || request.type === 'expense' || request.type === 'trip_expense' || request.type === 'commuting_allowance' || request.type === 'purchase' ? 'modal-xl' : 'modal-lg'">
         <div class="modal-content">
           <leave-form
             v-if="request.type === 'leave' && editForm && Object.keys(editForm).length > 0"

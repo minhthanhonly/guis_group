@@ -1,3 +1,5 @@
+import { formatUserDisplayName } from '/assets/js/user-display-name.js';
+
 export default {
   props: {
     defaultData: { type: Object, default: () => ({}) },
@@ -5,9 +7,20 @@ export default {
   },
   data() {
     return {
+      breakTimeOptions: [
+        { value: '0.5', label: '0.5h' },
+        { value: '1', label: '1h' },
+        { value: '1.5', label: '1.5h' },
+        { value: '2', label: '2h' },
+        { value: '2.5', label: '2.5h' },
+        { value: '3', label: '3h' },
+        { value: '3.5', label: '3.5h' },
+        { value: '4', label: '4h' }
+      ],
       formData: {
         date: '',
         start_time: '',
+        break_time: '',
         end_time: '',
         reason: '',
         note: '',
@@ -26,12 +39,14 @@ export default {
       this.formData = Object.assign({
         date: '',
         start_time: '',
+        break_time: '',
         end_time: '',
         reason: '',
         note: '',
         add_to_calendar: false,
         approver_user_id: ''
       }, this.defaultData);
+      this.formData.break_time = this.normalizeBreakTime(this.formData.break_time);
       this.formData.date = this.normalizeDateValue(this.formData.date);
       this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
       this.originalData = JSON.parse(JSON.stringify(this.formData));
@@ -51,12 +66,14 @@ export default {
           this.formData = Object.assign({
             date: '',
             start_time: '',
+            break_time: '',
             end_time: '',
             reason: '',
             note: '',
             add_to_calendar: false,
             approver_user_id: ''
           }, newVal);
+          this.formData.break_time = this.normalizeBreakTime(this.formData.break_time);
           this.formData.date = this.normalizeDateValue(this.formData.date);
           this.formData.add_to_calendar = this.normalizeAddToCalendar(this.formData.add_to_calendar);
           this.originalData = JSON.parse(JSON.stringify(this.formData));
@@ -96,6 +113,7 @@ export default {
     }
   },
   methods: {
+    formatUserDisplayName,
     normalizeDateValue(value) {
       if (value === null || value === undefined) return '';
       const str = String(value).trim();
@@ -103,6 +121,26 @@ export default {
       const m = str.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
       if (!m) return '';
       return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    },
+    normalizeBreakTime(value) {
+      if (value === null || value === undefined || value === '') return '';
+      const str = String(value).trim();
+      const allowed = this.breakTimeOptions.map(o => o.value);
+      if (allowed.includes(str)) return str;
+      const minuteToHour = { 30: '0.5', 60: '1', 90: '1.5', 120: '2', 150: '2.5', 180: '3', 210: '3.5', 240: '4' };
+      if (/^\d+$/.test(str) && minuteToHour[str]) return minuteToHour[str];
+      const hm = str.match(/^(\d+):(\d{2})$/);
+      if (hm) {
+        const minutes = parseInt(hm[1], 10) * 60 + parseInt(hm[2], 10);
+        if (minuteToHour[minutes]) return minuteToHour[minutes];
+      }
+      return '';
+    },
+    breakTimeLabel(value) {
+      const v = this.normalizeBreakTime(value);
+      if (v === '') return '';
+      const opt = this.breakTimeOptions.find(o => o.value === v);
+      return opt ? opt.label : `${v}h`;
     },
     normalizeAddToCalendar(value) {
       if (value === true) return true;
@@ -249,6 +287,15 @@ export default {
             </div>
           </div>
           <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">休憩時間</label>
+            <div class="col-sm-9">
+              <select class="form-select" style="width: auto; min-width: 8rem;" v-model="formData.break_time">
+                <option value="">選択してください</option>
+                <option v-for="opt in breakTimeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">終了時刻 <span class="text-danger">*</span></label>
             <div class="col-sm-9 d-flex align-items-center gap-2 flex-wrap">
               <select class="form-select" style="width: auto; min-width: 4.5rem;" :value="endTimeHour" @change="setEndTime($event.target.value, endTimeMinute); validateField('end_time')" @blur="validateField('end_time')">
@@ -281,7 +328,7 @@ export default {
               <select class="form-select" v-model="formData.approver_user_id" @change="validateField('approver_user_id')" @blur="validateField('approver_user_id')">
                 <option value="">指定なし</option>
                 <option v-for="user in approvers" :key="user.userid" :value="user.userid">
-                  {{ user.realname }} ({{ user.userid }})
+                  {{ formatUserDisplayName(user) }} ({{ user.userid }})
                 </option>
               </select>
               <div class="text-danger small" v-if="errors.approver_user_id">{{ errors.approver_user_id }}</div>

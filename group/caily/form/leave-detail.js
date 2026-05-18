@@ -11,11 +11,13 @@ export default {
     },
     unpaidTypeLabel() {
       switch(this.data.unpaid_type) {
+        case '欠勤': return '欠勤';
         case '慶弔休暇': return '慶弔休暇';
         case '生理休暇': return '生理休暇';
-        case '子の看護休暇': return '子の看護休暇';
+        case '子の看護等休暇': return '子の看護等休暇';
+        case '子の看護休暇': return '子の看護等休暇';
         case 'その他': return 'その他';
-        default: return '';
+        default: return this.data.unpaid_type || '';
       }
     },
     leaveTypeLabel() {

@@ -1,43 +1,75 @@
 export default {
   props: { data: { type: Object, required: true } },
   computed: {
-    categoryLabel() {
-      return this.data.category || '';
+    displayLines() {
+      if (Array.isArray(this.data.lines) && this.data.lines.length) {
+        return this.data.lines.filter(line => line && (
+          line.manufacturer || line.product_code || line.product_name
+          || (line.quantity !== '' && line.quantity != null)
+          || (line.unit_price !== '' && line.unit_price != null)
+          || (line.amount_with_tax !== '' && line.amount_with_tax != null)
+        ));
+      }
+      if (this.data.item_name || this.data.category) {
+        return [{
+          manufacturer: '',
+          product_code: '',
+          product_name: this.data.item_name || '',
+          quantity: this.data.quantity,
+          unit_price: this.data.estimated_price,
+          amount_with_tax: ''
+        }];
+      }
+      return [];
     },
-    estimatedPriceDisplay() {
-      const v = this.data.estimated_price;
-      if (v === null || v === undefined || v === '') return '';
-      const n = Number(v);
-      if (isNaN(n)) return String(v);
-      return n.toLocaleString('ja-JP') + ' 円';
+    totalAmountDisplay() {
+      if (this.data.total_amount != null && this.data.total_amount !== '') {
+        return Number(this.data.total_amount).toLocaleString('ja-JP');
+      }
+      const sum = this.displayLines.reduce((s, line) => s + (Number(line.amount_with_tax) || 0), 0);
+      return sum.toLocaleString('ja-JP');
+    }
+  },
+  methods: {
+    formatAmount(value) {
+      const n = Number(value);
+      if (isNaN(n)) return '-';
+      return '¥' + n.toLocaleString('ja-JP');
     }
   },
   template: `
     <table class="table">
       <tbody>
-        <tr v-if="data.category">
-          <th>購入区分</th>
-          <td>{{ categoryLabel }}</td>
+        <tr v-if="displayLines.length">
+          <th>購入品目</th>
+          <td class="p-0">
+            <table class="table table-sm mb-0">
+              <thead>
+                <tr>
+                  <th>メーカー</th>
+                  <th>商品コード</th>
+                  <th>商品名</th>
+                  <th class="text-end">数量</th>
+                  <th class="text-end">単価</th>
+                  <th class="text-end">金額（税込み）</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(line, idx) in displayLines" :key="idx">
+                  <td>{{ line.manufacturer || '-' }}</td>
+                  <td>{{ line.product_code || '-' }}</td>
+                  <td>{{ line.product_name || '-' }}</td>
+                  <td class="text-end">{{ line.quantity != null && line.quantity !== '' ? line.quantity : '-' }}</td>
+                  <td class="text-end">{{ line.unit_price != null && line.unit_price !== '' ? formatAmount(line.unit_price) : '-' }}</td>
+                  <td class="text-end">{{ formatAmount(line.amount_with_tax) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
         </tr>
-        <tr v-if="data.item_name">
-          <th>品名</th>
-          <td>{{ data.item_name }}</td>
-        </tr>
-        <tr v-if="data.product_link">
-          <th>商品リンク</th>
-          <td><a :href="data.product_link" target="_blank" rel="noopener noreferrer" class="text-break">{{ data.product_link }}</a></td>
-        </tr>
-        <tr v-if="data.quantity != null && data.quantity !== ''">
-          <th>数量</th>
-          <td>{{ data.quantity }}</td>
-        </tr>
-        <tr v-if="data.estimated_price != null && data.estimated_price !== ''">
-          <th>見積金額</th>
-          <td>{{ estimatedPriceDisplay }}</td>
-        </tr>
-        <tr v-if="data.item_list">
-          <th>購入品目詳細</th>
-          <td class="text-break" style="white-space: pre-wrap;">{{ data.item_list }}</td>
+        <tr v-if="displayLines.length || data.total_amount != null">
+          <th>合計金額</th>
+          <td class="fw-bold">¥{{ totalAmountDisplay }}</td>
         </tr>
         <tr v-if="data.reason">
           <th>事由・用途</th>
