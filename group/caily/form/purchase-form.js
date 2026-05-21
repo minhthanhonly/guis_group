@@ -84,26 +84,47 @@ export default {
         product_name: line.product_name || '',
         quantity: line.quantity !== undefined && line.quantity !== null ? line.quantity : '',
         unit_price: line.unit_price !== undefined && line.unit_price !== null ? line.unit_price : '',
-        amount_with_tax: line.amount_with_tax !== undefined && line.amount_with_tax !== null && line.amount_with_tax !== ''
+        amount_with_tax: this.computeLineAmount({
+          quantity: line.quantity !== undefined && line.quantity !== null ? line.quantity : '',
+          unit_price: line.unit_price !== undefined && line.unit_price !== null ? line.unit_price : ''
+        }) || (line.amount_with_tax !== undefined && line.amount_with_tax !== null && line.amount_with_tax !== ''
           ? line.amount_with_tax
-          : ''
+          : '')
       })) : [];
       if (data.lines.length === 0 && (data.item_name || data.category)) {
+        const quantity = data.quantity !== undefined && data.quantity !== null ? data.quantity : '';
+        const unitPrice = data.estimated_price !== undefined && data.estimated_price !== null ? data.estimated_price : '';
         data.lines.push({
           manufacturer: '',
           product_code: '',
           product_name: data.item_name || '',
-          quantity: data.quantity !== undefined && data.quantity !== null ? data.quantity : '',
-          unit_price: data.estimated_price !== undefined && data.estimated_price !== null ? data.estimated_price : '',
-          amount_with_tax: ''
+          quantity,
+          unit_price: unitPrice,
+          amount_with_tax: this.computeLineAmount({ quantity, unit_price: unitPrice })
         });
       }
       data.total_amount = this.computeTotalAmount(data.lines);
       return data;
     },
+    computeLineAmount(line) {
+      const q = Number(line.quantity);
+      const p = Number(line.unit_price);
+      if (isNaN(q) || isNaN(p) || q < 1 || p < 0) return '';
+      return q * p;
+    },
     computeTotalAmount(lines) {
       if (!Array.isArray(lines)) return 0;
       return lines.reduce((sum, line) => sum + (Number(line.amount_with_tax) || 0), 0);
+    },
+    updateLineAmount(index) {
+      const line = this.formData.lines[index];
+      if (!line) return;
+      line.amount_with_tax = this.computeLineAmount(line);
+      this.updateTotalAmount();
+    },
+    updateAllLineAmounts() {
+      if (!Array.isArray(this.formData.lines)) return;
+      this.formData.lines.forEach((line, index) => this.updateLineAmount(index));
     },
     updateTotalAmount() {
       this.formData.total_amount = this.computeTotalAmount(this.formData.lines);
@@ -129,10 +150,7 @@ export default {
     },
     validateLine(line, rowNum) {
       if (!String(line.manufacturer || '').trim()) {
-        return `明細${rowNum}行目: メーカーを入力してください。`;
-      }
-      if (!String(line.product_code || '').trim()) {
-        return `明細${rowNum}行目: 商品コードを入力してください。`;
+        return `明細${rowNum}行目: メーカー（販売店）を入力してください。`;
       }
       if (!String(line.product_name || '').trim()) {
         return `明細${rowNum}行目: 商品名を入力してください。`;
@@ -143,8 +161,9 @@ export default {
       }
       const p = line.unit_price;
       if (p === '' || p === null || p === undefined || isNaN(Number(p)) || Number(p) < 0) {
-        return `明細${rowNum}行目: 単価を入力してください。`;
+        return `明細${rowNum}行目: 単価（税込み）を入力してください。`;
       }
+      line.amount_with_tax = this.computeLineAmount(line);
       const a = line.amount_with_tax;
       if (a === '' || a === null || a === undefined || isNaN(Number(a)) || Number(a) < 0) {
         return `明細${rowNum}行目: 金額（税込み）を入力してください。`;
@@ -154,7 +173,7 @@ export default {
     validate() {
       this.errors = {};
       let valid = true;
-      this.updateTotalAmount();
+      this.updateAllLineAmounts();
       const lines = this.formData.lines || [];
       if (lines.length === 0) {
         this.errors.lines = '購入品目を1件以上入力してください。';
@@ -244,11 +263,11 @@ export default {
                 <table class="table table-sm align-middle mb-2">
                   <thead>
                     <tr>
-                      <th style="min-width: 100px;">メーカー <span class="text-danger">*</span></th>
-                      <th style="min-width: 100px;">商品コード <span class="text-danger">*</span></th>
+                      <th style="min-width: 100px;">メーカー（販売店） <span class="text-danger">*</span></th>
+                      <th style="min-width: 100px;">商品コード</th>
                       <th style="min-width: 140px;">商品名 <span class="text-danger">*</span></th>
                       <th style="min-width: 70px;">数量 <span class="text-danger">*</span></th>
-                      <th style="min-width: 90px;">単価 <span class="text-danger">*</span></th>
+                      <th style="min-width: 90px;">単価（税込み） <span class="text-danger">*</span></th>
                       <th style="min-width: 110px;">金額（税込み） <span class="text-danger">*</span></th>
                       <th style="width: 40px;"></th>
                     </tr>
@@ -266,17 +285,20 @@ export default {
                       </td>
                       <td>
                         <input type="number" min="1" step="1" class="form-control form-control-sm text-end"
-                               v-model.number="line.quantity">
+                               v-model.number="line.quantity"
+                               @input="updateLineAmount(idx)"
+                               @change="updateLineAmount(idx)">
                       </td>
                       <td>
                         <input type="number" min="0" step="1" class="form-control form-control-sm text-end"
-                               v-model.number="line.unit_price">
+                               v-model.number="line.unit_price"
+                               @input="updateLineAmount(idx)"
+                               @change="updateLineAmount(idx)">
                       </td>
                       <td>
                         <input type="number" min="0" step="1" class="form-control form-control-sm text-end"
                                v-model.number="line.amount_with_tax"
-                               @input="updateTotalAmount"
-                               @change="updateTotalAmount">
+                               readonly tabindex="-1">
                       </td>
                       <td class="text-center">
                         <button type="button" class="btn btn-sm btn-outline-danger" @click="removeLine(idx)">

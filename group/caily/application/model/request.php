@@ -166,11 +166,7 @@ class Request extends ApplicationModel {
                     if (!is_array($line)) continue;
                     $row = (int) $idx + 1;
                     if (empty(trim($line['manufacturer'] ?? ''))) {
-                        $errors[] = "明細{$row}行目: メーカーを入力してください。";
-                        break;
-                    }
-                    if (empty(trim($line['product_code'] ?? ''))) {
-                        $errors[] = "明細{$row}行目: 商品コードを入力してください。";
+                        $errors[] = "明細{$row}行目: メーカー（販売店）を入力してください。";
                         break;
                     }
                     if (empty(trim($line['product_name'] ?? ''))) {
@@ -184,7 +180,7 @@ class Request extends ApplicationModel {
                     }
                     $p = isset($line['unit_price']) ? $line['unit_price'] : '';
                     if ($p === '' || !is_numeric($p) || (float) $p < 0) {
-                        $errors[] = "明細{$row}行目: 単価を入力してください。";
+                        $errors[] = "明細{$row}行目: 単価（税込み）を入力してください。";
                         break;
                     }
                     $a = isset($line['amount_with_tax']) ? $line['amount_with_tax'] : '';

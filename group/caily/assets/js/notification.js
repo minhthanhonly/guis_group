@@ -396,7 +396,7 @@ class NotificationManager {
             const result = await response.json();
             if (result.notifications && result.notifications.length > 0) {
                 // Tìm đúng notification_id
-                return result.notifications.find(n => n.id == notification_id) || result.notifications[0];
+                return result.notifications.find(n => n.id == notification_id);
             }
         } catch (e) {
             console.error('Failed to fetch notification detail', e);
