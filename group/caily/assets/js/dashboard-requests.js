@@ -4,6 +4,8 @@
   const canApprove = !!window.DASHBOARD_CAN_APPROVE;
   const isRequestAdmin = !!window.DASHBOARD_IS_REQUEST_ADMIN;
 
+  const currentUserId = typeof USER_ID !== 'undefined' ? USER_ID : '';
+
   const typeLabels = {
     leave: '休暇届',
     outing: '外出申請書',
@@ -18,27 +20,6 @@
     purchase: '備品購入依頼書',
     it_support: 'ITサポート',
   };
-
-  function normalizeApproverUserIds(value) {
-    if (Array.isArray(value)) {
-      return value.map((v) => String(v).trim()).filter(Boolean);
-    }
-    if (value === null || value === undefined) return [];
-    const str = String(value).trim();
-    if (!str) return [];
-    if (str[0] === '[') {
-      try {
-        const parsed = JSON.parse(str);
-        if (Array.isArray(parsed)) return normalizeApproverUserIds(parsed);
-      } catch (e) { /* legacy single id */ }
-    }
-    return [str];
-  }
-
-  function userIsDesignatedApprover(approverField, userId) {
-    if (!userId) return false;
-    return normalizeApproverUserIds(approverField).includes(userId);
-  }
 
   createApp({
     data() {
@@ -80,7 +61,7 @@
         this.recentLoading = true;
         try {
           const params = new URLSearchParams({
-            user_id: typeof USER_ID !== 'undefined' ? USER_ID : '',
+            user_id: currentUserId,
             per_page: '5',
             page: '1',
             sort_by: 'created_at',
@@ -101,10 +82,9 @@
       async fetchPendingApprovals() {
         this.pendingLoading = true;
         try {
-          const userId = typeof USER_ID !== 'undefined' ? USER_ID : '';
           const params = new URLSearchParams({
-            status: 'pending',
-            per_page: this.isRequestAdmin ? '5' : '200',
+            approval_queue: '1',
+            per_page: '5',
             page: '1',
             sort_by: 'created_at',
             sort_dir: 'desc',
@@ -117,18 +97,12 @@
           } else {
             rows = Array.isArray(body.data) ? body.data : [];
           }
-          let filtered = rows;
-          if (!this.isRequestAdmin) {
-            filtered = rows.filter((req) =>
-              userIsDesignatedApprover(req.approver_user_id, userId)
-            );
-          }
-          if (this.isRequestAdmin && body && body.pagination && typeof body.pagination.total !== 'undefined') {
+          if (body && body.pagination && typeof body.pagination.total !== 'undefined') {
             this.pendingTotalCount = body.pagination.total;
           } else {
-            this.pendingTotalCount = filtered.length;
+            this.pendingTotalCount = rows.length;
           }
-          this.pendingRequests = filtered.slice(0, 5);
+          this.pendingRequests = rows;
         } catch {
           this.pendingRequests = [];
           this.pendingTotalCount = 0;

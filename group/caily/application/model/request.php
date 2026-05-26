@@ -65,6 +65,30 @@ class Request extends ApplicationModel {
         return in_array($userid, $this->parseApproverUserIds($approverUserIdField), true);
     }
 
+    /** SQL: đơn của user hoặc đơn user được chỉ định duyệt (approver_user_id). */
+    private function sqlVisibleRequestsForUser($userid) {
+        $uid = $this->quote($userid);
+        $jsonLike = $this->quote('%"' . $userid . '"%');
+        return "(user_id = '" . $uid . "' OR approver_user_id = '" . $uid . "'"
+            . " OR (approver_user_id IS NOT NULL AND approver_user_id != '' AND approver_user_id LIKE '" . $jsonLike . "'))";
+    }
+
+    /** SQL: đơn pending mà user được chỉ định duyệt (không gồm đơn tự đăng ký chờ người khác duyệt). */
+    private function sqlDesignatedApproverOnly($userid) {
+        $uid = $this->quote($userid);
+        $jsonLike = $this->quote('%"' . $userid . '"%');
+        return "(approver_user_id = '" . $uid . "'"
+            . " OR (approver_user_id IS NOT NULL AND approver_user_id != '' AND approver_user_id LIKE '" . $jsonLike . "'))";
+    }
+
+    private function currentUserCanApproveRequests() {
+        if (empty($_SESSION['userid'])) {
+            return false;
+        }
+        $u = $this->fetchOne("SELECT can_approve_request FROM " . DB_PREFIX . "user WHERE userid = '" . $this->quote($_SESSION['userid']) . "'");
+        return !empty($u['can_approve_request']);
+    }
+
     private function approverUserIdsFromPost($postKey = 'approver_user_id') {
         if (!array_key_exists($postKey, $_POST)) {
             return null;
@@ -325,22 +349,44 @@ class Request extends ApplicationModel {
     }
 
     // Lấy danh sách đơn (có thể lọc theo type, user, status), hỗ trợ phân trang & sắp xếp
-    // Mặc định chỉ hiển thị đơn của user đang đăng nhập. Chỉ administrator hoặc user có quyền duyệt (can_approve_request) mới xem tất cả.
+    // administrator: tất cả đơn; can_approve_request: đơn của mình + đơn được chỉ định duyệt; user thường: chỉ đơn của mình.
     function list() {
         $where = [];
         if (!empty($_GET['type'])) {
             $where[] = "type = '" . $this->quote($_GET['type']) . "'";
         }
         $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
-        $isApprover = false;
-        if (!empty($_SESSION['userid'])) {
-            $u = $this->fetchOne("SELECT can_approve_request FROM " . DB_PREFIX . "user WHERE userid = '" . $this->quote($_SESSION['userid']) . "'");
-            $isApprover = !empty($u['can_approve_request']);
+        $isApprover = !$isAdmin && $this->currentUserCanApproveRequests();
+        $currentUserid = $_SESSION['userid'] ?? '';
+        $approvalQueue = !empty($_GET['approval_queue']);
+        if ($approvalQueue) {
+            $where[] = "status = 'pending'";
+            if ($isAdmin) {
+                if (!empty($_GET['user_id'])) {
+                    $where[] = "user_id = '" . $this->quote($_GET['user_id']) . "'";
+                }
+            } elseif ($isApprover) {
+                $where[] = $this->sqlDesignatedApproverOnly($currentUserid);
+                if (!empty($_GET['user_id'])) {
+                    $where[] = "user_id = '" . $this->quote($_GET['user_id']) . "'";
+                }
+            } else {
+                $where[] = '1=0';
+            }
+        } elseif ($isAdmin) {
+            if (!empty($_GET['user_id'])) {
+                $where[] = "user_id = '" . $this->quote($_GET['user_id']) . "'";
+            }
+        } elseif ($isApprover) {
+            $where[] = $this->sqlVisibleRequestsForUser($currentUserid);
+            if (!empty($_GET['user_id'])) {
+                $where[] = "user_id = '" . $this->quote($_GET['user_id']) . "'";
+            }
+        } else {
+            $where[] = "user_id = '" . $this->quote($currentUserid) . "'";
         }
-        if (!$isAdmin && !$isApprover) {
-            $where[] = "user_id = '" . $this->quote($_SESSION['userid'] ?? '') . "'";
-        } elseif (!empty($_GET['user_id'])) {
-            $where[] = "user_id = '" . $this->quote($_GET['user_id']) . "'";
+        if ($isAdmin && !empty($_GET['assigned_approver'])) {
+            $where[] = $this->sqlDesignatedApproverOnly($currentUserid);
         }
         if (!empty($_GET['status'])) {
             $statusesParam = trim((string)$_GET['status']);
@@ -455,21 +501,61 @@ class Request extends ApplicationModel {
         ];
     }
 
-    // Danh sách user cho filter ở màn hình申請一覧 (chỉ admin hoặc user có quyền duyệt)
+    // Số đơn pending hiển thị badge menu (admin: tất cả; approver: được chỉ định duyệt; user thường: đơn của mình)
+    function countPendingBadge() {
+        if (empty($_SESSION['userid'])) {
+            return 0;
+        }
+        $userid = $_SESSION['userid'];
+        $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
+        $where = array("status = 'pending'");
+        if ($isAdmin) {
+            // tất cả đơn pending
+        } elseif ($this->currentUserCanApproveRequests()) {
+            $where[] = $this->sqlDesignatedApproverOnly($userid);
+        } else {
+            $where[] = "user_id = '" . $this->quote($userid) . "'";
+        }
+        $whereSql = 'WHERE ' . implode(' AND ', $where);
+        $row = $this->fetchOne("SELECT COUNT(*) AS cnt FROM {$this->table} $whereSql");
+        return $row ? (int)$row['cnt'] : 0;
+    }
+
+    // Danh sách user cho filter ở màn hình申請一覧 (admin: tất cả; approver: user có đơn trong phạm vi xem)
     function list_filter_users() {
         $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
-        $isApprover = false;
-        if (!empty($_SESSION['userid'])) {
-            $u = $this->fetchOne("SELECT can_approve_request FROM " . DB_PREFIX . "user WHERE userid = '" . $this->quote($_SESSION['userid']) . "'");
-            $isApprover = !empty($u['can_approve_request']);
-        }
+        $isApprover = !$isAdmin && $this->currentUserCanApproveRequests();
         if (!$isAdmin && !$isApprover) {
             return [];
         }
 
+        if ($isAdmin) {
+            $query = "SELECT userid, realname, lastname, firstname, lastname_after_married FROM " . DB_PREFIX . "user "
+                . "WHERE (is_suspend IS NULL OR is_suspend = 0) "
+                . "AND user_group IN (1,4) "
+                . "ORDER BY id ASC";
+            return $this->fetchAll($query);
+        }
+
+        $currentUserid = $_SESSION['userid'] ?? '';
+        $visibleSql = $this->sqlVisibleRequestsForUser($currentUserid);
+        $applicants = $this->fetchAll("SELECT DISTINCT user_id FROM {$this->table} WHERE {$visibleSql} AND user_id IS NOT NULL AND user_id != ''");
+        $userIds = array($currentUserid);
+        if ($applicants) {
+            foreach ($applicants as $row) {
+                if (!empty($row['user_id'])) {
+                    $userIds[] = $row['user_id'];
+                }
+            }
+        }
+        $userIds = array_values(array_unique($userIds));
+        if (empty($userIds)) {
+            return [];
+        }
+        $in = "'" . implode("','", array_map([$this, 'quote'], $userIds)) . "'";
         $query = "SELECT userid, realname, lastname, firstname, lastname_after_married FROM " . DB_PREFIX . "user "
-            . "WHERE (is_suspend IS NULL OR is_suspend = 0) "
-            . "AND user_group IN (1,4) "
+            . "WHERE userid IN ($in) "
+            . "AND (is_suspend IS NULL OR is_suspend = 0) "
             . "ORDER BY id ASC";
         return $this->fetchAll($query);
     }
@@ -603,6 +689,15 @@ class Request extends ApplicationModel {
         $id = intval($_GET['id']);
         $row = $this->fetchOne("SELECT * FROM {$this->table} WHERE id = $id");
         if ($row) {
+            $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
+            if (!$isAdmin) {
+                $userid = $_SESSION['userid'] ?? '';
+                $isOwner = ($row['user_id'] === $userid);
+                $isDesignated = $this->userIsDesignatedApprover($row['approver_user_id'], $userid);
+                if (!$isOwner && !$isDesignated) {
+                    return null;
+                }
+            }
             $row['data'] = json_decode($row['data'], true);
             $row['history'] = json_decode($row['history'], true);
             $row['comments'] = json_decode($row['comments'], true);
@@ -1422,6 +1517,7 @@ class Request extends ApplicationModel {
     }
 
     // Helper: enqueue email vào bảng email_queue để worker xử lý, tránh chặn API
+    // $subject phải là UTF-8 thuần (không MIME-encode); worker/PHPMailer sẽ encode khi gửi.
     private function sendEmailToUser($userId, $subject, $body) {
         if (empty($userId)) {
             return;

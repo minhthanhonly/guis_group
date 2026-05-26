@@ -92,11 +92,17 @@
           </select>
         </div>
        
-        <div class="col-md-3">
+        <div class="col-md-auto">
           <label class="col-form-label col-form-label-sm d-block">&nbsp;</label>
-          <div class="form-check form-check-sm mt-2">
-            <input class="form-check-input" type="checkbox" id="showDraftsCheckbox" v-model="showDrafts" @change="onFilterChange">
-            <label class="form-check-label" for="showDraftsCheckbox">下書きも表示</label>
+          <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
+            <div class="form-check form-check-sm mb-0">
+              <input class="form-check-input" type="checkbox" id="showDraftsCheckbox" v-model="showDrafts" @change="onFilterChange">
+              <label class="form-check-label" for="showDraftsCheckbox">下書きも表示</label>
+            </div>
+            <div v-if="currentUserRole === 'administrator'" class="form-check form-check-sm mb-0">
+              <input class="form-check-input" type="checkbox" id="filterAssignedApproverCheckbox" v-model="filterAssignedApprover" @change="onFilterChange">
+              <label class="form-check-label text-nowrap" for="filterAssignedApproverCheckbox">承認者(指定)が自分</label>
+            </div>
           </div>
         </div>
       </div>
@@ -629,6 +635,7 @@ const app = createApp({
       statusFilter: 'pending',
       userFilter: '',
       showDrafts: true,
+      filterAssignedApprover: false,
       monthFilter: '', // YYYY-MM, period 21/(M-1)～20/M
       formMonthPicker: null, // flatpickr instance
       page: 1,
@@ -914,6 +921,9 @@ const app = createApp({
           const toDate = `${y}-${String(m).padStart(2, '0')}-20`;
           params.append('from_date', fromDate);
           params.append('to_date', toDate);
+        }
+        if (this.currentUserRole === 'administrator' && this.filterAssignedApprover) {
+          params.append('assigned_approver', '1');
         }
         const res = await axios.get('/api/index.php?model=request&method=list&' + params.toString());
         const body = res.data;

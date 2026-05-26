@@ -100,22 +100,10 @@
             <?php
             $form_pending_badge = 0;
             if (!empty($_SESSION['userid'])) {
-              $is_admin = (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator');
-              $is_approver = false;
               require_once DIR_MODEL.'request.php';
               $reqModel = new Request();
               $reqModel->connect();
-              if (!$is_admin) {
-                $u = $reqModel->fetchOne("SELECT can_approve_request FROM " . DB_PREFIX . "user WHERE userid = '" . $reqModel->quote($_SESSION['userid']) . "'");
-                $is_approver = !empty($u['can_approve_request']);
-              }
-              if ($is_admin || $is_approver) {
-                $row = $reqModel->fetchOne("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "requests WHERE status = 'pending'");
-                $form_pending_badge = $row ? (int)$row['cnt'] : 0;
-              } else{
-                $row = $reqModel->fetchOne("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "requests WHERE status = 'pending' AND user_id = '" . $reqModel->quote($_SESSION['userid']) . "'");
-                $form_pending_badge = $row ? (int)$row['cnt'] : 0;
-              }
+              $form_pending_badge = $reqModel->countPendingBadge();
               $reqModel->close();
             }
             ?>

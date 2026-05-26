@@ -1,5 +1,5 @@
 <?php require_once('../application/loader.php'); $view->heading('申請詳細'); ?>
-<div id="app" v-cloak>
+<div id="app" class="container-fluid" v-cloak>
   <div v-if="loading" class="text-center py-4"><span class="spinner-border"></span></div>
   <div v-else class="position-relative">
     <div v-if="actionLoading" class="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center bg-white bg-opacity-75" style="z-index: 9999;">
