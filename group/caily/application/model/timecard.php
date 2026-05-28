@@ -2,6 +2,31 @@
 
 class Timecard extends ApplicationModel {
 	var $holidays = array();
+	private function isSoumuUser() {
+		if (!empty($_SESSION['is_soumu']) && (string)$_SESSION['is_soumu'] === '1') {
+			return true;
+		}
+		if (empty($_SESSION['userid'])) {
+			return false;
+		}
+		$row = $this->fetchOne("SELECT is_soumu FROM " . DB_PREFIX . "user WHERE userid = '" . $this->quote($_SESSION['userid']) . "'");
+		return !empty($row['is_soumu']) && (string)$row['is_soumu'] === '1';
+	}
+
+	private function authorizeTimecardManage() {
+		if ($this->isSoumuUser()) {
+			return true;
+		}
+		return $this->authorize('administrator', 'manager');
+	}
+
+	private function authorizeTimecardManageApi() {
+		if ($this->isSoumuUser()) {
+			return true;
+		}
+		return $this->authorizeApi('administrator', 'manager');
+	}
+
 	function __construct() {
 		$this->table = DB_PREFIX.'timecard';
 		$this->schema = array(
@@ -76,7 +101,7 @@ class Timecard extends ApplicationModel {
 	}
 
 	function holiday() {
-		$this->authorize('administrator', 'manager');
+		$this->authorizeTimecardManage();
 		$hash['empty'] = '';
 	}
 
@@ -146,7 +171,7 @@ class Timecard extends ApplicationModel {
 
 	/*API*/
 	function get_holiday(){
-		$this->authorizeApi('administrator', 'manager');
+		$this->authorizeTimecardManageApi();
 		$startDate = $_GET['start_date'];
 		$endDate = $_GET['end_date'];
 		if(!$startDate && !$endDate){
@@ -160,7 +185,7 @@ class Timecard extends ApplicationModel {
 
 	/*API*/
 	function get_lastest_holiday(){
-		$this->authorizeApi('administrator', 'manager');
+		$this->authorizeTimecardManageApi();
 		$query = "SELECT * FROM groupware_holiday ORDER BY date DESC LIMIT 1";
 		$hash['list'] = $this->fetchAll($query);
 		return $hash;
@@ -168,7 +193,7 @@ class Timecard extends ApplicationModel {
 
 	/*API*/
 	function add_holiday_list(){
-		$this->authorizeApi('administrator', 'manager');
+		$this->authorizeTimecardManageApi();
 		$json = file_get_contents('php://input');
 		$holidayList = json_decode($json, true);
 		$holidayList = $holidayList['holidayList'];
@@ -193,7 +218,7 @@ class Timecard extends ApplicationModel {
 
 	/*API*/
 	function add_holiday() {
-		$this->authorizeApi('administrator', 'manager');
+		$this->authorizeTimecardManageApi();
 		$date = $_POST['date'];
 		$holiday = $_POST['name'];
 		$date = date('Y-m-d', strtotime($date));
@@ -216,7 +241,7 @@ class Timecard extends ApplicationModel {
 
 	/*API*/
 	function delete_holiday() {
-		$this->authorizeApi('administrator', 'manager');
+		$this->authorizeTimecardManageApi();
 		$id = $_POST['id'];
 		if(!$id){
 			$hash['status'] = 'error';
@@ -238,7 +263,7 @@ class Timecard extends ApplicationModel {
 
 	/*API*/
 	function edit_holiday() {
-		$this->authorizeApi('administrator', 'manager');
+		$this->authorizeTimecardManageApi();
 		$date_old = $_POST['date_old'];
 		$id = $_POST['id'];
 		if(!$id){
@@ -277,7 +302,7 @@ class Timecard extends ApplicationModel {
 
 
 	function delete_timecard() {
-		$this->authorizeApi('administrator', 'manager');
+		$this->authorizeTimecardManageApi();
 		$id = $_POST['id'];
 		if(!$id){
 			$hash['status'] = 'error';
@@ -488,7 +513,7 @@ class Timecard extends ApplicationModel {
 	}
 
 	function getStatistic(){
-		$this->authorizeApi('administrator', 'manager');
+		$this->authorizeTimecardManageApi();
 		$scope = $_GET['scope'];
 		$time = date('Y-m-d');
 		$duration = isset($_GET['duration']) ? $_GET['duration'] : '6';
@@ -1181,7 +1206,7 @@ class Timecard extends ApplicationModel {
 	
 
 	function config() {
-		$this->authorize('administrator', 'manager');
+		$this->authorizeTimecardManage();
 		$config = new Config($this->handler);
 		$type = 'timecard';
 		if($_GET['type']){
@@ -1215,7 +1240,7 @@ class Timecard extends ApplicationModel {
 	}
 
 	function add_config() {
-		$this->authorize('administrator', 'manager');
+		$this->authorizeTimecardManage();
 		$config = new Config($this->handler);
 		$hash['type_id'] = "timecard" . date('YmdHis');
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -1327,7 +1352,7 @@ class Timecard extends ApplicationModel {
 	}
 
 	function group() {
-		$this->authorize('administrator', 'manager');
+		$this->authorizeTimecardManage();
 		if ($_GET['group'] <= 0) {
 			$_GET['group'] = $_SESSION['group'];
 		}
@@ -1375,7 +1400,7 @@ class Timecard extends ApplicationModel {
 	function findOwner($owner) {
 		if (strlen($owner) > 0) {
 			if($owner != $_SESSION['userid']){
-				$this->authorize('administrator', 'manager');
+				$this->authorizeTimecardManage();
 			}
 			$result = $this->fetchOne("SELECT userid, realname, user_group, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE userid = '".$this->quote($owner)."'");
 			if (count($result) <= 0) {
@@ -1409,7 +1434,7 @@ class Timecard extends ApplicationModel {
 	function findOwnerApi($owner) {
 		if (strlen($owner) > 0) {
 			if($owner != $_SESSION['userid']){
-				$this->authorizeApi('administrator', 'manager');
+				$this->authorizeTimecardManageApi();
 			}
 			$result = $this->fetchOne("SELECT userid, realname, user_group, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE userid = '".$this->quote($owner)."'");
 			if (count($result) <= 0) {

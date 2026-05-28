@@ -418,6 +418,11 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                 data: 'can_approve_request',
                 title: '申請承認を許可',
                 className: 'approve-request-column'
+              },
+              {
+                data: 'is_soumu',
+                title: '総務管理',
+                className: 'soumu-column'
               }
             ] : []),
             { data: 'action',
@@ -565,6 +570,19 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                 render: function (data, type, full, meta) {
                     const canApprove = full['can_approve_request'];
                     if(canApprove == 1 || canApprove === '1'){
+                        return '<span class="badge bg-label-success">許可</span>';
+                    }else{
+                        return '<span class="badge bg-label-secondary">不可</span>';
+                    }
+                }
+              },
+              {
+                // Soumu management permission column (only for administrator)
+                targets: 11,
+                className: 'soumu-column',
+                render: function (data, type, full, meta) {
+                    const isSoumu = full['is_soumu'];
+                    if(isSoumu == 1 || isSoumu === '1'){
                         return '<span class="badge bg-label-success">許可</span>';
                     }else{
                         return '<span class="badge bg-label-secondary">不可</span>';
@@ -744,6 +762,10 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             const canApproveRequestCheckbox = document.getElementById('edit-user-can-approve-request');
             if (canApproveRequestCheckbox) {
               canApproveRequestCheckbox.checked = userinfo.can_approve_request == 1 || userinfo.can_approve_request === '1';
+            }
+            const isSoumuCheckbox = document.getElementById('edit-user-is-soumu');
+            if (isSoumuCheckbox) {
+              isSoumuCheckbox.checked = userinfo.is_soumu == 1 || userinfo.is_soumu === '1';
             }
 
             const editModal = new bootstrap.Modal(document.getElementById('modalEditUser'));
@@ -990,6 +1012,14 @@ document.addEventListener('DOMContentLoaded', async function (e) {
         approveRequestHeader.style.display = '';
       } else {
         approveRequestHeader.style.display = 'none';
+      }
+    }
+    const soumuHeader = document.querySelector('.soumu-column');
+    if (soumuHeader) {
+      if (user_role == 'administrator') {
+        soumuHeader.style.display = '';
+      } else {
+        soumuHeader.style.display = 'none';
       }
     }
     

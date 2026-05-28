@@ -89,6 +89,17 @@ class Request extends ApplicationModel {
         return !empty($u['can_approve_request']);
     }
 
+    private function currentUserIsSoumu() {
+        if (empty($_SESSION['userid'])) {
+            return false;
+        }
+        if (!empty($_SESSION['is_soumu']) && (string)$_SESSION['is_soumu'] === '1') {
+            return true;
+        }
+        $u = $this->fetchOne("SELECT is_soumu FROM " . DB_PREFIX . "user WHERE userid = '" . $this->quote($_SESSION['userid']) . "'");
+        return !empty($u['is_soumu']) && (string)$u['is_soumu'] === '1';
+    }
+
     private function approverUserIdsFromPost($postKey = 'approver_user_id') {
         if (!array_key_exists($postKey, $_POST)) {
             return null;
@@ -102,6 +113,20 @@ class Request extends ApplicationModel {
                 $targetUserIds[] = $uid;
             }
         }
+    }
+
+    /** @return string[] active soumu user ids */
+    private function getActiveSoumuUserIds() {
+        $rows = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE is_soumu = 1 AND (is_suspend IS NULL OR is_suspend = 0)");
+        $ids = array();
+        if (is_array($rows)) {
+            foreach ($rows as $r) {
+                if (!empty($r['userid']) && !in_array($r['userid'], $ids, true)) {
+                    $ids[] = $r['userid'];
+                }
+            }
+        }
+        return $ids;
     }
 
     private function enrichApproverUserDisplay(array &$row, $user_map) {
@@ -356,12 +381,18 @@ class Request extends ApplicationModel {
             $where[] = "type = '" . $this->quote($_GET['type']) . "'";
         }
         $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
-        $isApprover = !$isAdmin && $this->currentUserCanApproveRequests();
+        $isSoumu = $this->currentUserIsSoumu();
+        $canViewAll = $isAdmin || $isSoumu;
+        $isApprover = !$canViewAll && $this->currentUserCanApproveRequests();
         $currentUserid = $_SESSION['userid'] ?? '';
         $approvalQueue = !empty($_GET['approval_queue']);
         if ($approvalQueue) {
-            $where[] = "status = 'pending'";
-            if ($isAdmin) {
+            if ($canViewAll) {
+                $where[] = "status IN ('pending', 'approved')";
+            } else {
+                $where[] = "status = 'pending'";
+            }
+            if ($canViewAll) {
                 if (!empty($_GET['user_id'])) {
                     $where[] = "user_id = '" . $this->quote($_GET['user_id']) . "'";
                 }
@@ -373,7 +404,7 @@ class Request extends ApplicationModel {
             } else {
                 $where[] = '1=0';
             }
-        } elseif ($isAdmin) {
+        } elseif ($canViewAll) {
             if (!empty($_GET['user_id'])) {
                 $where[] = "user_id = '" . $this->quote($_GET['user_id']) . "'";
             }
@@ -385,7 +416,7 @@ class Request extends ApplicationModel {
         } else {
             $where[] = "user_id = '" . $this->quote($currentUserid) . "'";
         }
-        if ($isAdmin && !empty($_GET['assigned_approver'])) {
+        if ($canViewAll && !empty($_GET['assigned_approver'])) {
             $where[] = $this->sqlDesignatedApproverOnly($currentUserid);
         }
         if (!empty($_GET['status'])) {
@@ -438,7 +469,7 @@ class Request extends ApplicationModel {
         $whereSql = count($where) ? ('WHERE ' . implode(' AND ', $where)) : '';
 
         // Sắp xếp
-        $allowedSort = ['id', 'created_at', 'status', 'start_date', 'end_date', 'approved_at'];
+        $allowedSort = ['id', 'created_at', 'status', 'start_date', 'end_date', 'approved_at', 'completed_at'];
         $sort_by = isset($_GET['sort_by']) && in_array($_GET['sort_by'], $allowedSort, true) ? $_GET['sort_by'] : 'created_at';
         $sort_dir = (isset($_GET['sort_dir']) && strtolower($_GET['sort_dir']) === 'asc') ? 'ASC' : 'DESC';
         $orderSql = "ORDER BY {$sort_by} {$sort_dir}";
@@ -467,6 +498,7 @@ class Request extends ApplicationModel {
             $row['comment_count'] = is_array($row['comments']) ? count($row['comments']) : 0;
             if (!empty($row['user_id'])) $user_ids[$row['user_id']] = true;
             if (!empty($row['approver_id'])) $user_ids[$row['approver_id']] = true;
+            if (!empty($row['completed_userid'])) $user_ids[$row['completed_userid']] = true;
             foreach ($this->parseApproverUserIds(isset($row['approver_user_id']) ? $row['approver_user_id'] : '') as $uid) {
                 if ($uid !== '') {
                     $user_ids[$uid] = true;
@@ -486,6 +518,7 @@ class Request extends ApplicationModel {
         foreach ($rows as &$row) {
             $row['user_realname'] = isset($user_map[$row['user_id']]) ? $user_map[$row['user_id']] : ($row['user_id'] ?? '');
             $row['approver_realname'] = !empty($row['approver_id']) && isset($user_map[$row['approver_id']]) ? $user_map[$row['approver_id']] : '';
+            $row['completed_realname'] = !empty($row['completed_userid']) && isset($user_map[$row['completed_userid']]) ? $user_map[$row['completed_userid']] : '';
             $this->enrichApproverUserDisplay($row, $user_map);
         }
         unset($row);
@@ -501,16 +534,24 @@ class Request extends ApplicationModel {
         ];
     }
 
-    // Số đơn pending hiển thị badge menu (admin: tất cả; approver: được chỉ định duyệt; user thường: đơn của mình)
+    // Số đơn cần xử lý hiển thị badge menu
+    // admin/総務: pending + 承認済（総務対応待ち）; approver: pending được chỉ định; user thường: đơn pending của mình
     function countPendingBadge() {
         if (empty($_SESSION['userid'])) {
             return 0;
         }
         $userid = $_SESSION['userid'];
         $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
-        $where = array("status = 'pending'");
-        if ($isAdmin) {
-            // tất cả đơn pending
+        $isSoumu = $this->currentUserIsSoumu();
+        $canViewAll = $isAdmin || $isSoumu;
+        $where = [];
+        if ($canViewAll) {
+            $where[] = "status IN ('pending', 'approved')";
+        } else {
+            $where[] = "status = 'pending'";
+        }
+        if ($canViewAll) {
+            // tất cả đơn trong phạm vi trên
         } elseif ($this->currentUserCanApproveRequests()) {
             $where[] = $this->sqlDesignatedApproverOnly($userid);
         } else {
@@ -524,12 +565,14 @@ class Request extends ApplicationModel {
     // Danh sách user cho filter ở màn hình申請一覧 (admin: tất cả; approver: user có đơn trong phạm vi xem)
     function list_filter_users() {
         $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
-        $isApprover = !$isAdmin && $this->currentUserCanApproveRequests();
-        if (!$isAdmin && !$isApprover) {
+        $isSoumu = $this->currentUserIsSoumu();
+        $canViewAll = $isAdmin || $isSoumu;
+        $isApprover = !$canViewAll && $this->currentUserCanApproveRequests();
+        if (!$canViewAll && !$isApprover) {
             return [];
         }
 
-        if ($isAdmin) {
+        if ($canViewAll) {
             $query = "SELECT userid, realname, lastname, firstname, lastname_after_married FROM " . DB_PREFIX . "user "
                 . "WHERE (is_suspend IS NULL OR is_suspend = 0) "
                 . "AND user_group IN (1,4) "
@@ -629,8 +672,40 @@ class Request extends ApplicationModel {
 
         // Only administrator or designated approver can update status
         $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
+        $isSoumu = false;
+        if (!empty($_SESSION['is_soumu']) && (string)$_SESSION['is_soumu'] === '1') {
+            $isSoumu = true;
+        } else {
+            $currentUserId = isset($_SESSION['userid']) ? $this->quote($_SESSION['userid']) : '';
+            if ($currentUserId !== '') {
+                $soumuRow = $this->fetchOne("SELECT is_soumu FROM " . DB_PREFIX . "user WHERE userid = '" . $currentUserId . "' LIMIT 1");
+                if (!empty($soumuRow['is_soumu']) && (string)$soumuRow['is_soumu'] === '1') {
+                    $isSoumu = true;
+                }
+            }
+        }
         $isDesignatedApprover = $this->userIsDesignatedApprover($currentRequest['approver_user_id'], $_SESSION['userid']);
-        if (!$isAdmin && !$isDesignatedApprover && $status !== 'pending') {
+        if ($currentRequest['status'] === 'completed') {
+            if (!$isAdmin && !$isSoumu) {
+                http_response_code(403);
+                echo json_encode(['error' => '処理完了後は状態を変更する権限がありません。']);
+                exit;
+            }
+        }
+
+        if ($status === 'completed') {
+            if (!$isAdmin && !$isSoumu) {
+                http_response_code(403);
+                echo json_encode(['error' => '処理完了にする権限がありません。']);
+                exit;
+            }
+            if (!in_array($currentRequest['status'], ['approved', 'rejected'], true)) {
+                http_response_code(400);
+                echo json_encode(['error' => '承認済または却下の申請のみ処理完了にできます。']);
+                exit;
+            }
+        }
+        if (!$isAdmin && !$isSoumu && !$isDesignatedApprover && $status !== 'pending') {
             http_response_code(403);
             echo json_encode(['error' => '状態を変更する権限がありません。']);
             exit;
@@ -649,6 +724,7 @@ class Request extends ApplicationModel {
             'history' => json_encode($history, JSON_UNESCAPED_UNICODE),
             'updated_at' => date('Y-m-d H:i:s')
         ];
+        $clearCompletedInfo = false;
         if ($status === 'approved') {
             $update['approver_id'] = $user;
             $update['approved_at'] = date('Y-m-d H:i:s');
@@ -660,10 +736,19 @@ class Request extends ApplicationModel {
                 }
             }
         }
+        if ($status === 'completed') {
+            $update['completed_userid'] = $user;
+            $update['completed_at'] = date('Y-m-d H:i:s');
+        } elseif (in_array($status, ['pending', 'approved', 'rejected', 'draft'], true)) {
+            $clearCompletedInfo = true;
+        }
         if (($status === 'rejected' || $status === 'pending' || $status === 'draft') && !empty($currentRequest['schedule_id'])) {
             $this->deleteScheduleForRequest((int) $currentRequest['schedule_id']);
         }
         $result = $this->query_update($update, ['id' => $id]);
+        if ($result && $clearCompletedInfo) {
+            $this->query("UPDATE {$this->table} SET completed_userid = NULL, completed_at = NULL WHERE id = " . intval($id));
+        }
         if ($result && $status === 'rejected' && !empty($currentRequest['schedule_id'])) {
             $this->query("UPDATE {$this->table} SET schedule_id = NULL WHERE id = " . intval($id));
         }
@@ -689,8 +774,9 @@ class Request extends ApplicationModel {
         $id = intval($_GET['id']);
         $row = $this->fetchOne("SELECT * FROM {$this->table} WHERE id = $id");
         if ($row) {
-            $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
-            if (!$isAdmin) {
+        $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
+        $isSoumu = $this->currentUserIsSoumu();
+        if (!$isAdmin && !$isSoumu) {
                 $userid = $_SESSION['userid'] ?? '';
                 $isOwner = ($row['user_id'] === $userid);
                 $isDesignated = $this->userIsDesignatedApprover($row['approver_user_id'], $userid);
@@ -711,6 +797,8 @@ class Request extends ApplicationModel {
             }
             // Thêm user_id của người đăng ký
             if (!empty($row['user_id'])) $user_ids[] = $row['user_id'];
+            // Thêm user đã処理完了
+            if (!empty($row['completed_userid'])) $user_ids[] = $row['completed_userid'];
             // Thêm user chỉ định duyệt (approver_user_id) nếu có
             foreach ($this->parseApproverUserIds(isset($row['approver_user_id']) ? $row['approver_user_id'] : '') as $uid) {
                 if ($uid !== '') {
@@ -747,6 +835,11 @@ class Request extends ApplicationModel {
                 if (!empty($row['user_id']) && !empty($user_map[$row['user_id']])) {
                     $row['realname'] = $user_map[$row['user_id']]['realname'];
                     $row['user_image'] = $user_map[$row['user_id']]['user_image'];
+                }
+                if (!empty($row['completed_userid']) && !empty($user_map[$row['completed_userid']])) {
+                    $row['completed_realname'] = $user_map[$row['completed_userid']]['realname'];
+                } else {
+                    $row['completed_realname'] = '';
                 }
                 $user_map_flat = array();
                 foreach ($user_map as $uid => $info) {
@@ -1196,6 +1289,14 @@ class Request extends ApplicationModel {
                     }
                 }
             }
+            // 承認時は総務(is_soumu=1)にもデフォルトで通知
+            if ($status === 'approved') {
+                foreach ($this->getActiveSoumuUserIds() as $soumuId) {
+                    if (!in_array($soumuId, $targetUserIds, true)) {
+                        $targetUserIds[] = $soumuId;
+                    }
+                }
+            }
             if (!empty($targetUserIds)) {
                 // Loại trừ user hiện tại khỏi danh sách notify
                 if (!empty($_SESSION['userid'])) {
@@ -1227,6 +1328,23 @@ class Request extends ApplicationModel {
 
             // Email notification to applicant about status change
             $this->sendRequestStatusEmail($requestId, $requestType, $status, $userId, $applicantName);
+            // 承認時は総務(is_soumu=1)にもデフォルトでメール送信
+            if ($status === 'approved') {
+                $soumuUserIds = $this->getActiveSoumuUserIds();
+                if (!empty($_SESSION['userid'])) {
+                    $currentUserId = $_SESSION['userid'];
+                    $soumuUserIds = array_values(array_filter($soumuUserIds, function($id) use ($currentUserId) {
+                        return $id !== $currentUserId;
+                    }));
+                }
+                foreach ($soumuUserIds as $sid) {
+                    if ($sid === $userId) {
+                        // applicant already receives status email above
+                        continue;
+                    }
+                    $this->sendRequestStatusEmail($requestId, $requestType, $status, $sid, $applicantName);
+                }
+            }
         } catch (Exception $e) {
             error_log('Failed to send request status notification: ' . $e->getMessage());
         }
@@ -1380,7 +1498,7 @@ class Request extends ApplicationModel {
      * Xóa đơn.
      * - Người đăng ký: chỉ được xóa khi status = draft hoặc pending.
      * - Khi người đăng ký xóa đơn pending: gửi thông báo cho người chỉ định duyệt.
-     * - Người chỉ định duyệt hoặc administrator: được xóa bất kể status.
+     * - Administrator: được xóa bất kể status（承認者・総務は不可）.
      */
     function delete_request() {
         if (empty($_SESSION['userid'])) {
@@ -1401,11 +1519,10 @@ class Request extends ApplicationModel {
             exit;
         }
         $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
-        $isApprover = $this->userIsDesignatedApprover($row['approver_user_id'], $_SESSION['userid']);
         $isApplicant = $row['user_id'] === $_SESSION['userid'];
 
         $canDelete = false;
-        if ($isAdmin || $isApprover) {
+        if ($isAdmin) {
             $canDelete = true;
         } elseif ($isApplicant && in_array($row['status'], ['draft', 'pending'], true)) {
             $canDelete = true;

@@ -30,16 +30,20 @@ if ($current_hour >= 6 && $current_hour < 12) {
 
 $can_approve_requests = false;
 $is_request_admin = false;
+$is_soumu_user = !empty($_SESSION['is_soumu']) && (string)$_SESSION['is_soumu'] === '1';
 if (!empty($_SESSION['userid'])) {
-  $is_request_admin = (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator');
+  $is_request_admin = (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') || $is_soumu_user;
   if ($is_request_admin) {
     $can_approve_requests = true;
   } else {
     require_once DIR_MODEL . 'request.php';
     $reqModel = new Request();
     $reqModel->connect();
-    $u = $reqModel->fetchOne("SELECT can_approve_request FROM " . DB_PREFIX . "user WHERE userid = '" . $reqModel->quote($_SESSION['userid']) . "'");
-    $can_approve_requests = !empty($u['can_approve_request']);
+    $u = $reqModel->fetchOne("SELECT can_approve_request, is_soumu FROM " . DB_PREFIX . "user WHERE userid = '" . $reqModel->quote($_SESSION['userid']) . "'");
+    $can_approve_requests = !empty($u['can_approve_request']) || (!empty($u['is_soumu']) && (string)$u['is_soumu'] === '1');
+    if (!$is_request_admin && !empty($u['is_soumu']) && (string)$u['is_soumu'] === '1') {
+      $is_request_admin = true;
+    }
     $reqModel->close();
   }
 }
@@ -241,7 +245,7 @@ if (!empty($_SESSION['userid'])) {
     <?php } ?>
   </div>
  
- <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') { ?>
+ <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager' || $is_soumu_user) { ?>
   <div class="row g-6 mt-1">
     <div class="col-md-12 col-lg-12 col-xl-12">
       <div class="card">
@@ -256,7 +260,7 @@ if (!empty($_SESSION['userid'])) {
               }
               ?>
             </select>
-            <?php if($_SESSION['authority'] == 'administrator') { ?>
+            <?php if($_SESSION['authority'] == 'administrator' || $is_soumu_user) { ?>
               <button class="btn btn-primary text-nowrap flex-shrink-0" id="generate-statistic">更新</button>
             <?php } ?>
           </div>

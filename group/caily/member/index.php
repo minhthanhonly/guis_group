@@ -42,10 +42,15 @@ $view->heading('メンバー一覧');
 						<th>結婚後の姓</th>
 						<th>制限</th>
 						<th>グループ</th>
+						<th>支店</th>
+						<th>部署</th>
 						<th>従業員の種類</th>
 						<th>ステータス</th>
+						<?php if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') { ?>
 						<th class="show-project-column" style="display: none;">案件表示</th>
 						<th class="approve-request-column" style="display: none;">申請承認を許可</th>
+						<th class="soumu-column" style="display: none;">総務管理</th>
+						<?php } ?>
 						<th>アクション</th>
 					</tr>
 				</thead>
@@ -163,6 +168,14 @@ $view->heading('メンバー一覧');
               </label>
             </div>
           </div>
+          <div class="mb-4 form-control-validation">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="add-user-is-soumu" name="is_soumu" value="1">
+              <label class="form-check-label" for="add-user-is-soumu">
+                <span data-i18n="総務管理を許可します">総務管理を許可します</span>
+              </label>
+            </div>
+          </div>
           <button type="submit" class="btn btn-primary me-3 data-submit">追加</button>
           <button type="reset" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
         </form>
@@ -275,6 +288,14 @@ $view->heading('メンバー一覧');
               <input class="form-check-input" type="checkbox" id="edit-user-can-approve-request" name="can_approve_request" value="1">
               <label class="form-check-label" for="edit-user-can-approve-request">
                 <span data-i18n="申請関係の承認を許可します">申請関係の承認を許可します</span>
+              </label>
+            </div>
+          </div>
+          <div class="mb-4 form-control-validation">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="edit-user-is-soumu" name="is_soumu" value="1">
+              <label class="form-check-label" for="edit-user-is-soumu">
+                <span data-i18n="総務管理を許可します">総務管理を許可します</span>
               </label>
             </div>
           </div>

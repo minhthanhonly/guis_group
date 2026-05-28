@@ -87,8 +87,9 @@
           <select class="form-select form-select-sm" v-model="statusFilter" @change="onFilterChange">
             <option value="">状態: すべて</option>
             <option value="pending">申請中</option>
-            <option value="approved">承認済み</option>
+            <option value="approved">承認済（総務対応待ち）</option>
             <option value="rejected">却下</option>
+            <option value="completed">処理完了</option>
           </select>
         </div>
        
@@ -99,7 +100,7 @@
               <input class="form-check-input" type="checkbox" id="showDraftsCheckbox" v-model="showDrafts" @change="onFilterChange">
               <label class="form-check-label" for="showDraftsCheckbox">下書きも表示</label>
             </div>
-            <div v-if="currentUserRole === 'administrator'" class="form-check form-check-sm mb-0">
+            <div v-if="currentUserRole === 'administrator' || currentUserIsSoumu" class="form-check form-check-sm mb-0">
               <input class="form-check-input" type="checkbox" id="filterAssignedApproverCheckbox" v-model="filterAssignedApprover" @change="onFilterChange">
               <label class="form-check-label text-nowrap" for="filterAssignedApproverCheckbox">承認者(指定)が自分</label>
             </div>
@@ -146,6 +147,9 @@
                 <span :class="['badge', statusBadgeClass(req.status)]">
                   <i :class="statusIcon(req.status)" class="me-1"></i>{{ statusLabel(req.status) }}
                 </span>
+                <div v-if="req.status === 'completed' && (req.completed_realname || req.completed_userid || req.completed_at)" class="small text-muted mt-1">
+                  {{ req.completed_realname || req.completed_userid || '-' }} / {{ req.completed_at ? formatDateTime(req.completed_at) : '-' }}
+                </div>
               </td>
               <td>
                 <a :href="'detail.php?id=' + req.id" class="btn btn-sm btn-outline-info">詳細</a>
@@ -304,6 +308,9 @@
                 <span :class="['badge', statusBadgeClass(req.status)]">
                   <i :class="statusIcon(req.status)" class="me-1"></i>{{ statusLabel(req.status) }}
                 </span>
+                <div v-if="req.status === 'completed' && (req.completed_realname || req.completed_userid || req.completed_at)" class="small text-muted mt-1">
+                  {{ req.completed_realname || req.completed_userid || '-' }} / {{ req.completed_at ? formatDateTime(req.completed_at) : '-' }}
+                </div>
               </td>
               <td>{{ formatDateTime(req.created_at) }}</td>
               <td>
@@ -359,6 +366,12 @@
           </div>
           <div class="col-sm-6" v-if="printTarget.status === 'approved' && printTarget.approved_at">
             <strong>承認日時:</strong> {{ formatDateTime(printTarget.approved_at) }}
+          </div>
+          <div class="col-sm-6" v-if="printTarget.status === 'completed' && (printTarget.completed_realname || printTarget.completed_userid)">
+            <strong>処理完了者:</strong> {{ printTarget.completed_realname || printTarget.completed_userid }}
+          </div>
+          <div class="col-sm-6" v-if="printTarget.status === 'completed' && printTarget.completed_at">
+            <strong>処理完了日時:</strong> {{ formatDateTime(printTarget.completed_at) }}
           </div>
         </div>
       </div>
@@ -632,7 +645,7 @@ const app = createApp({
       currentFormComponent: null,
       keyword: '',
       searchDebounceTimer: null,
-      statusFilter: 'pending',
+      statusFilter: '',
       userFilter: '',
       showDrafts: true,
       filterAssignedApprover: false,
@@ -647,6 +660,7 @@ const app = createApp({
       pendingCounts: {},
       currentUserId: (typeof USER_ID !== 'undefined') ? USER_ID : '',
       currentUserRole: (typeof USER_ROLE !== 'undefined') ? USER_ROLE : '',
+      currentUserIsSoumu: (typeof USER_IS_SOUMU !== 'undefined') ? String(USER_IS_SOUMU) === '1' : false,
       userFilterOptions: [],
       actionLoading: false,
       navUseDropdown: false,
@@ -752,8 +766,11 @@ const app = createApp({
     },
     async updatePendingCountForTab(type) {
       try {
+        const statusParam = (this.currentUserRole === 'administrator' || this.currentUserIsSoumu)
+          ? 'pending,approved'
+          : 'pending';
         const params = new URLSearchParams({
-          status: 'pending',
+          status: statusParam,
           page: 1,
           per_page: 1
         });
@@ -912,7 +929,7 @@ const app = createApp({
         } else {
           // 「状態: すべて」のとき、下書きを含める/除外する
           if (!this.showDrafts) {
-            params.append('status', 'pending,approved,rejected');
+            params.append('status', 'pending,approved,rejected,completed');
           }
         }
         if (this.monthFilter && /^\d{4}-\d{2}$/.test(this.monthFilter)) {
@@ -922,7 +939,7 @@ const app = createApp({
           params.append('from_date', fromDate);
           params.append('to_date', toDate);
         }
-        if (this.currentUserRole === 'administrator' && this.filterAssignedApprover) {
+        if ((this.currentUserRole === 'administrator' || this.currentUserIsSoumu) && this.filterAssignedApprover) {
           params.append('assigned_approver', '1');
         }
         const res = await axios.get('/api/index.php?model=request&method=list&' + params.toString());
@@ -1162,8 +1179,9 @@ const app = createApp({
     statusLabel(status) {
       switch(status) {
         case 'pending': return '申請中';
-        case 'approved': return '承認済み';
+        case 'approved': return '承認済（総務対応待ち）';
         case 'rejected': return '却下';
+        case 'completed': return '処理完了';
         case 'draft': return '下書き';
         default: return status;
       }
@@ -1173,6 +1191,7 @@ const app = createApp({
         case 'pending': return 'bi bi-hourglass-split';
         case 'approved': return 'bi bi-check-circle';
         case 'rejected': return 'bi bi-x-circle';
+        case 'completed': return 'bi bi-check2-all';
         case 'draft': return 'bi bi-pencil-square';
         default: return 'bi bi-question-circle';
       }
@@ -1182,6 +1201,7 @@ const app = createApp({
         case 'pending': return 'bg-primary';
         case 'approved': return 'bg-success';
         case 'rejected': return 'bg-danger';
+        case 'completed': return 'bg-info';
         case 'draft': return 'bg-light';
         default: return 'bg-light text-dark';
       }
@@ -1190,15 +1210,15 @@ const app = createApp({
       return {
         'text-white': status === 'pending',
         'text-success': status === 'approved',
-        'text-danger': status === 'rejected'
+        'text-danger': status === 'rejected',
+        'text-info': status === 'completed'
       };
     },
     canDelete(req) {
       if (!req || !req.id) return false;
       const isAdmin = this.currentUserRole === 'administrator';
-      const isApprover = this.userIsDesignatedApprover(req.approver_user_id, this.currentUserId);
       const isApplicant = req.user_id === this.currentUserId;
-      if (isAdmin || isApprover) return true;
+      if (isAdmin) return true;
       if (isApplicant && (req.status === 'draft' || req.status === 'pending')) return true;
       return false;
     },
@@ -1230,7 +1250,7 @@ const app = createApp({
     window.addEventListener('afterprint', this.finishPrint);
     const params = new URLSearchParams(window.location.search);
     const statusParam = params.get('status');
-    if (statusParam && ['pending', 'approved', 'rejected', 'draft'].includes(statusParam)) {
+    if (statusParam && ['pending', 'approved', 'rejected', 'completed', 'draft'].includes(statusParam)) {
       this.statusFilter = statusParam;
     }
     const tabParam = params.get('tab');

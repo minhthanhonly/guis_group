@@ -34,6 +34,7 @@ class Member extends ApplicationModel {
 		'branch_id'=>array('支店', 'numeric', 'length:10'),
 		'show_project'=>array('案件関連を表示', 'numeric', 'length:1'),
 		'can_approve_request'=>array('申請関係の承認を許可します', 'numeric', 'length:1'),
+		'is_soumu'=>array('総務管理を許可します', 'numeric', 'length:1'),
 		);
 		
 	}
@@ -143,7 +144,7 @@ class Member extends ApplicationModel {
 
 	function get_member() {
 		$config = new Config($this->handler);
-		$query = "SELECT groupware_user.id as `id`, `userid`, `realname`, `lastname`, `firstname`, `lastname_after_married`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend`, branch_id, `show_project`, `can_approve_request`, groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
+		$query = "SELECT groupware_user.id as `id`, `userid`, `realname`, `lastname`, `firstname`, `lastname_after_married`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend`, branch_id, `show_project`, `can_approve_request`, `is_soumu`, groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
 		$hash['list'] = $this->fetchAll($query);
 		$hash['group'] = $this->findGroup();
 
@@ -200,6 +201,12 @@ class Member extends ApplicationModel {
 			} else {
 				$this->post['can_approve_request'] = 1;
 			}
+			// Handle is_soumu checkbox: if not set in POST, set to 0
+			if (!isset($_POST['is_soumu']) || $_POST['is_soumu'] != '1') {
+				$this->post['is_soumu'] = 0;
+			} else {
+				$this->post['is_soumu'] = 1;
+			}
 			$this->insertPost();
 			if($_POST['department_id']){
 				$this->updateDepartment($_POST['userid'], $_POST['department_id']);
@@ -255,6 +262,12 @@ class Member extends ApplicationModel {
 				$this->post['can_approve_request'] = 0;
 			} else {
 				$this->post['can_approve_request'] = 1;
+			}
+			// Handle is_soumu checkbox: if not set in POST, set to 0
+			if (!isset($_POST['is_soumu']) || $_POST['is_soumu'] != '1') {
+				$this->post['is_soumu'] = 0;
+			} else {
+				$this->post['is_soumu'] = 1;
 			}
 
 			$this->updatePost();

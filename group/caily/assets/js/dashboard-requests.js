@@ -131,8 +131,9 @@
       statusLabel(status) {
         switch (status) {
           case 'pending': return '申請中';
-          case 'approved': return '承認済み';
+          case 'approved': return '承認済（総務対応待ち）';
           case 'rejected': return '却下';
+          case 'completed': return '処理完了';
           case 'draft': return '下書き';
           default: return status || '-';
         }
@@ -142,6 +143,7 @@
           case 'pending': return 'fa fa-hourglass-half';
           case 'approved': return 'fa fa-check-circle';
           case 'rejected': return 'fa fa-times-circle';
+          case 'completed': return 'fa fa-check-double';
           case 'draft': return 'fa fa-pencil';
           default: return 'fa fa-question-circle';
         }
@@ -151,6 +153,7 @@
           case 'pending': return 'bg-primary';
           case 'approved': return 'bg-success';
           case 'rejected': return 'bg-danger';
+          case 'completed': return 'bg-info';
           case 'draft': return 'bg-light text-dark';
           default: return 'bg-light text-dark';
         }

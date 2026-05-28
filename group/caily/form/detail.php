@@ -85,6 +85,7 @@
             <template v-if="canSubmitDraft">
               <button class="btn btn-primary btn-sm ms-2" @click="submitDraft"><i class="bi bi-send"></i> 申請</button>
             </template>
+            <button v-if="canMarkCompleted" type="button" class="btn btn-info btn-sm ms-2" @click="markCompleted"><i class="bi bi-check2-all"></i> 処理完了にする</button>
             <button v-if="canEdit" class="btn btn-outline-secondary btn-sm ms-2" @click="openEditModal"><i class="bi bi-pencil-square"></i> 編集</button>
             <button v-if="canDelete" type="button" class="btn btn-outline-danger btn-sm ms-2" @click="confirmDelete"><i class="bi bi-trash"></i> 削除</button>
           </div>
@@ -92,6 +93,9 @@
             <span v-if="decisionInfo.status === 'approved'">承認者:</span>
             <span v-else>却下者:</span>
             {{ decisionInfo.name }} ({{ decisionInfo.user }}) / {{ formatDate(decisionInfo.time) }}
+          </div>
+          <div class="mt-1 small text-muted" v-if="completedInfo">
+            処理完了者: {{ completedInfo.name }} ({{ completedInfo.user }}) / {{ formatDate(completedInfo.time) }}
           </div>
         </div>
         <div class="mb-3">
@@ -323,6 +327,7 @@ import approverSelect from './approver-select.js?v=<?=CACHE_VERSION?>';
 const { createApp } = Vue;
 const CURRENT_USER_ID = USER_ID || '';
 const CURRENT_USER_ROLE = USER_ROLE || '';
+const CURRENT_USER_IS_SOUMU = (typeof USER_IS_SOUMU !== 'undefined') && String(USER_IS_SOUMU) === '1';
 
 
 const app = createApp({
@@ -354,19 +359,27 @@ const app = createApp({
     canEdit() {
       return this.request && 
              (this.request.user_id === CURRENT_USER_ID || CURRENT_USER_ROLE === 'administrator') &&
-             this.request.status !== 'approved';
+             !['approved', 'rejected', 'completed'].includes(this.request.status);
+    },
+    canMarkCompleted() {
+      return this.request &&
+             (CURRENT_USER_ROLE === 'administrator' || CURRENT_USER_IS_SOUMU) &&
+             ['approved', 'rejected'].includes(this.request.status);
     },
     canUpdateStatus() {
       const isAdmin = CURRENT_USER_ROLE === 'administrator';
+      const isSoumu = CURRENT_USER_IS_SOUMU;
+      if (this.request && this.request.status === 'completed') {
+        return isAdmin || isSoumu;
+      }
       const isDesignatedApprover = this.request && this.userIsDesignatedApprover(this.request.approver_user_id, CURRENT_USER_ID);
       return isAdmin || isDesignatedApprover;
     },
     canDelete() {
       if (!this.request || !this.request.id) return false;
       const isAdmin = CURRENT_USER_ROLE === 'administrator';
-      const isDesignatedApprover = this.request && this.userIsDesignatedApprover(this.request.approver_user_id, CURRENT_USER_ID);
       const isApplicant = this.request.user_id === CURRENT_USER_ID;
-      if (isAdmin || isDesignatedApprover) return true;
+      if (isAdmin) return true;
       if (isApplicant && (this.request.status === 'draft' || this.request.status === 'pending')) return true;
       return false;
     },
@@ -402,16 +415,33 @@ const app = createApp({
     },
     decisionInfo() {
       if (!this.request || !this.request.status) return null;
-      if (!['approved', 'rejected'].includes(this.request.status)) return null;
       const history = this.sortedHistory;
       if (!history || !history.length) return null;
-      const target = history.find(h => h.action === this.request.status);
+      let decisionStatus = this.request.status;
+      if (decisionStatus === 'completed') {
+        const lastDecision = history.find(h => h.action === 'approved' || h.action === 'rejected');
+        if (!lastDecision) return null;
+        decisionStatus = lastDecision.action;
+      }
+      if (!['approved', 'rejected'].includes(decisionStatus)) return null;
+      const target = history.find(h => h.action === decisionStatus);
       if (!target) return null;
       return {
-        status: this.request.status,
+        status: decisionStatus,
         user: target.user,
         name: target.realname || target.user,
         time: target.time
+      };
+    },
+    completedInfo() {
+      if (!this.request || this.request.status !== 'completed') return null;
+      const name = this.request.completed_realname || this.request.completed_userid || '';
+      const time = this.request.completed_at || '';
+      if (!name && !time) return null;
+      return {
+        user: this.request.completed_userid || '',
+        name: name || '-',
+        time: time
       };
     },
     showEditModal() {
@@ -438,6 +468,7 @@ const app = createApp({
         case 'pending': return 'bg-primary';
         case 'approved': return 'bg-success';
         case 'rejected': return 'bg-danger';
+        case 'completed': return 'bg-info';
         case 'draft': return 'bg-light';
         default: return 'bg-light text-dark';
       }
@@ -447,6 +478,7 @@ const app = createApp({
         case 'pending': return 'btn-primary';
         case 'approved': return 'btn-success';
         case 'rejected': return 'btn-danger';
+        case 'completed': return 'btn-info';
         case 'draft': return 'btn-light text-dark';
         default: return 'btn-secondary';
       }
@@ -456,6 +488,7 @@ const app = createApp({
         case 'pending': return 'bi bi-hourglass-split';
         case 'approved': return 'bi bi-check-circle';
         case 'rejected': return 'bi bi-x-circle';
+        case 'completed': return 'bi bi-check2-all';
         case 'draft': return 'bi bi-pencil-square';
         default: return 'bi bi-question-circle';
       }
@@ -465,6 +498,7 @@ const app = createApp({
         case 'created': return 'bi bi-pencil-square';
         case 'approved': return 'bi bi-check-circle text-success';
         case 'rejected': return 'bi bi-x-circle text-danger';
+        case 'completed': return 'bi bi-check2-all text-info';
         case 'draft': return 'bi bi-pencil text-warning';
         default: return 'bi bi-clock-history';
       }
@@ -501,8 +535,13 @@ const app = createApp({
       }
       this.loading = false;
     },
+    async markCompleted() {
+      if (!this.canMarkCompleted) return;
+      if (!confirm('この申請を処理完了にしますか？')) return;
+      await this.updateStatus('completed');
+    },
     async updateStatus(newStatus) {
-      if (!['pending','approved','rejected'].includes(newStatus)) return;
+      if (!['pending','approved','rejected','completed'].includes(newStatus)) return;
       this.errorMessage = '';
       this.actionLoading = true;
       try {
@@ -559,8 +598,9 @@ const app = createApp({
     statusLabel(status) {
       switch(status) {
         case 'pending': return '申請中';
-        case 'approved': return '承認済み';
+        case 'approved': return '承認済（総務対応待ち）';
         case 'rejected': return '却下';
+        case 'completed': return '処理完了';
         case 'draft': return '下書き';
         default: return status;
       }
@@ -571,6 +611,7 @@ const app = createApp({
         case 'created': return '申請';
         case 'approved': return '承認';
         case 'rejected': return '却下';
+        case 'completed': return '処理完了';
         case 'draft': return '下書き';
         case 'edited': return '編集';
         default: return action;

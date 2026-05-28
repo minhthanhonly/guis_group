@@ -75,7 +75,7 @@ class Authority
 				}
 				if ($postuserid != '' && count($error) <= 0) {
 					$connection = new Connection;
-					$query = sprintf("SELECT id,userid,password,firstname,lastname,realname,user_group,authority,user_image,show_project FROM %suser WHERE userid = '%s'", DB_PREFIX, $connection->quote($postuserid));
+					$query = sprintf("SELECT id,userid,password,firstname,lastname,realname,user_group,authority,user_image,show_project,is_soumu FROM %suser WHERE userid = '%s'", DB_PREFIX, $connection->quote($postuserid));
 					$data = $connection->fetchOne($query);
 					$connection->close();
 					if (count($data) > 0 && $data['userid'] === $postuserid && $data['password'] === $password) {
@@ -128,6 +128,7 @@ class Authority
 			$_SESSION['user_image'] = $data['user_image'];
 			$_SESSION['user_groupname'] = $data['user_groupname'];
 			$_SESSION['show_project'] = $data['show_project'];
+			$_SESSION['is_soumu'] = isset($data['is_soumu']) ? $data['is_soumu'] : 0;
 			
 			if (isset($_SESSION['referer'])) {
 				header('Location: ' . $_SESSION['referer']);
@@ -176,6 +177,7 @@ class Authority
 				$_SESSION['user_image'] = $data['user_image'];
 				$_SESSION['user_groupname'] = $data['user_groupname'];
 				$_SESSION['show_project'] = $data['show_project'];
+				$_SESSION['is_soumu'] = isset($data['is_soumu']) ? $data['is_soumu'] : 0;
 
 				return true;
 			}

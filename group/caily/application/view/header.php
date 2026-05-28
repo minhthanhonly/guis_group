@@ -68,6 +68,7 @@ if(isset($_SESSION['userid'])) {
     const USER_NAME = '<?= isset($_SESSION['realname']) ? $_SESSION['realname'] : '' ?>';
     const USER_IMAGE = '<?= isset($_SESSION['user_image']) ? $_SESSION['user_image'] : '' ?>';
     const USER_GROUP = '<?= isset($_SESSION['group']) ? $_SESSION['group'] : '' ?>';
+    const USER_IS_SOUMU = <?= (!empty($_SESSION['is_soumu']) && (string)$_SESSION['is_soumu'] === '1') ? '1' : '0' ?>;
     <?php 
         echo 'const USER_ROLE = "'.$_SESSION['authority'].'";'; 
     ?>

@@ -16,6 +16,10 @@ var user_role = 'member';
 if (typeof USER_ROLE !== 'undefined') {
   user_role = USER_ROLE;
 }
+var user_is_soumu = false;
+if (typeof USER_IS_SOUMU !== 'undefined') {
+  user_is_soumu = String(USER_IS_SOUMU) === '1';
+}
 var holidayList = [];
 
 function updateAnalytics(data) {
@@ -857,7 +861,7 @@ document.addEventListener('DOMContentLoaded', function () {
               <div class="d-flex align-items-center justify-content-start">
                 <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="btn btn-text-secondary rounded-pill waves-effect btn-icon item-view"><i class="icon-base ti tabler-eye me-0 me-sm-1"></i></a>
                 <a href="javascript:;" data-date="${full['timecard_date']}" data-userid="${full['owner']}" class="btn btn-text-secondary rounded-pill waves-effect btn-icon item-note"><i class="icon-base ti tabler-edit me-0 me-sm-1"></i></a>
-                ${user_role != 'member' ? `<a href="javascript:;" class="btn btn-text-secondary rounded-pill waves-effect btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
+                ${(user_role != 'member' || user_is_soumu) ? `<a href="javascript:;" class="btn btn-text-secondary rounded-pill waves-effect btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
                     <i class="icon-base ti tabler-dots-vertical icon-22px"></i>
                   </a>
                   <div class="dropdown-menu dropdown-menu-end m-0">

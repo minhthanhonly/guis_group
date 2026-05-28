@@ -62,7 +62,7 @@ $view->heading('タイムカード');
             id="timecard_type" class="badge bg-label-info fs-6"></small></h4>
       </div>
       <div class="col-md-6 justify-content-center row">
-        <?php if ($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') { ?>
+        <?php if ($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager' || (!empty($_SESSION['is_soumu']) && (string)$_SESSION['is_soumu'] === '1')) { ?>
           <div class="col-md-4">
             <label for="selectpickerGroup" class="col-md-2 col-form-label">グループ</label>
             <div class="col-md-10">
@@ -98,7 +98,7 @@ $view->heading('タイムカード');
           <span><i class="icon-base ti tabler-file-spreadsheet me-0 me-sm-1 icon-16px"></i><span
               class="d-none d-sm-inline-block">CSV出力</span></span>
         </a>
-        <?php if ($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager') { ?>
+        <?php if ($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager' || (!empty($_SESSION['is_soumu']) && (string)$_SESSION['is_soumu'] === '1')) { ?>
         <a href="/timecard/group.php" class="btn btn-info rounded-2 waves-effect waves-light">
           <span><i class="icon-base ti tabler-chart-pie me-0 me-sm-1 icon-16px"></i><span
               class="d-none d-sm-inline-block">時間合計</span></span>
