@@ -104,6 +104,10 @@
               <input class="form-check-input" type="checkbox" id="filterAssignedApproverCheckbox" v-model="filterAssignedApprover" @change="onFilterChange">
               <label class="form-check-label text-nowrap" for="filterAssignedApproverCheckbox">承認者(指定)が自分</label>
             </div>
+            <div class="form-check form-check-sm mb-0">
+              <input class="form-check-input" type="checkbox" id="filterUnreadCommentCheckbox" v-model="unreadCommentOnly" @change="onFilterChange">
+              <label class="form-check-label text-nowrap" for="filterUnreadCommentCheckbox">コメント未読のみ</label>
+            </div>
           </div>
         </div>
       </div>
@@ -118,7 +122,7 @@
                 申請日
                 <i class="fa fa-fw" :class="sortIcon('created_at')"></i>
               </th>
-              <th>注記</th>
+              <th class="note-col">注記</th>
               <th>承認者(指定)</th>
               <th>コメント数</th>
               <th>承認者</th>
@@ -138,9 +142,12 @@
               <td>{{ req.user_realname || req.user_id || '-' }}</td>
               <td class="text-nowrap">{{ requestTypeLabel(req) }}</td>
               <td class="text-nowrap">{{ formatDateTime(req.created_at) }}</td>
-              <td>{{ req.data?.note || '-' }}</td>
+              <td class="note-col" :title="req.data?.note || '-'">{{ req.data?.note || '-' }}</td>
               <td>{{ req.approver_user_realname || req.approver_user_id || '-' }}</td>
-              <td>{{ req.comment_count }}</td>
+              <td>
+                {{ req.comment_count }}
+                <span v-if="Number(req.comment_count || 0) > 0 && Number(req.unread_comment || 0) > 0" class="badge bg-danger ms-1">未読</span>
+              </td>
               <td>{{ req.status === 'approved' && req.approver_realname ? req.approver_realname : '-' }}</td>
               <td>{{ req.status === 'approved' && req.approved_at ? formatDateTime(req.approved_at) : '-' }}</td>
               <td>
@@ -192,7 +199,7 @@
               <th v-if="currentTab === 'commuting_allowance'">合計片道運賃</th>
               <th v-if="currentTab === 'commuting_allowance'">１か月定期代</th>
               <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">事由</th>
-              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">注記</th>
+              <th class="note-col" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">注記</th>
               <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">承認者(指定)</th>
               <th>コメント数</th>
               <th>承認者</th>
@@ -215,7 +222,7 @@
             <tr v-for="req in requests" :key="req.id">
               <td>{{ req.user_realname || '-' }}</td>
               <td v-if="currentTab === 'leave'">
-                {{ formatDateOnly(req.data?.start_datetime) }} ~ {{ formatDateOnly(req.data?.end_datetime) }}
+                {{ formatPeriod(req.data?.start_datetime, req.data?.end_datetime, true) }}
               </td>
               <td v-if="currentTab === 'leave'">
                 <span v-if="req.data?.days" class="badge bg-primary">{{ req.data.days }}</span>
@@ -225,7 +232,7 @@
               <td v-if="currentTab === 'leave'">{{ paidTypeLabel(req) }}</td>
               <td v-if="currentTab === 'outing'">{{ formatOutingDateTime(req) }}</td>
               <td v-if="currentTab === 'outing'">{{ req.data?.destination || '-' }}</td>
-              <td v-if="currentTab === 'trip'">{{ formatDate(req.data?.start_datetime) }} ~ {{ formatDate(req.data?.end_datetime) }}</td>
+              <td v-if="currentTab === 'trip'">{{ formatPeriod(req.data?.start_datetime, req.data?.end_datetime, false) }}</td>
               <td v-if="currentTab === 'trip'">
                 <span v-if="req.data?.days" class="badge bg-primary">{{ req.data.days }}</span>
                 <span v-else>-</span>
@@ -280,9 +287,7 @@
               </td>
               <td v-if="currentTab === 'trip_expense'">
                 <span v-if="req.data && (req.data.start_date || req.data.end_date)">
-                  {{ req.data.start_date ? formatDate(req.data.start_date) : '-' }}
-                  ~
-                  {{ req.data.end_date ? formatDate(req.data.end_date) : '-' }}
+                  {{ formatPeriod(req.data.start_date, req.data.end_date, false) }}
                 </span>
                 <span v-else>-</span>
               </td>
@@ -299,9 +304,12 @@
               <td v-if="currentTab === 'it_support'">{{ req.data?.subject || '-' }}</td>
               <td v-if="currentTab === 'it_support'">{{ req.data?.priority || '-' }}</td>
               <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">{{(req.data?.reason || '-') }}</td>
-              <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">{{ req.data?.note || '-' }}</td>
+              <td class="note-col" :title="req.data?.note || '-'" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">{{ req.data?.note || '-' }}</td>
               <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">{{ req.approver_user_realname || req.approver_user_id || '-' }}</td>
-              <td>{{ req.comment_count }}</td>
+              <td>
+                {{ req.comment_count }}
+                <span v-if="Number(req.comment_count || 0) > 0 && Number(req.unread_comment || 0) > 0" class="badge bg-danger ms-1">未読</span>
+              </td>
               <td>{{ req.status === 'approved' && req.approver_realname ? req.approver_realname : '-' }}</td>
               <td>{{ req.status === 'approved' && req.approved_at ? formatDateTime(req.approved_at) : '-' }}</td>
               <td>
@@ -396,6 +404,13 @@
 #requestTableCard .table td { vertical-align: middle; padding: 0.5rem; }
 #requestTableCard .table thead th { padding: 0.5rem; }
 #requestTableCard .table tbody tr:hover { outline: 2px solid var(--bs-primary); outline-offset: -2px; }
+.note-col {
+  max-width: 150px;
+  width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .form-tab-dropdown-menu { max-height: 70vh; overflow-y: auto; }
 .modal-xl {
   --bs-modal-width: 1140px;
@@ -658,14 +673,17 @@ const app = createApp({
       sortBy: 'created_at',
       sortDir: 'desc',
       pendingCounts: {},
+      unreadCommentCounts: {},
       currentUserId: (typeof USER_ID !== 'undefined') ? USER_ID : '',
       currentUserRole: (typeof USER_ROLE !== 'undefined') ? USER_ROLE : '',
       currentUserIsSoumu: (typeof USER_IS_SOUMU !== 'undefined') ? String(USER_IS_SOUMU) === '1' : false,
       userFilterOptions: [],
       actionLoading: false,
+      unreadCommentOnly: false,
       navUseDropdown: false,
       navBreakpoint: 1200,
       _resizeHandler: null,
+      autoRefreshTimer: null,
       printTarget: null,
       printFormComponent: null,
     }
@@ -764,6 +782,30 @@ const app = createApp({
       const wd = youbi[d.getDay()];
       return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}(${wd})`;
     },
+    normalizeDateKey(dateStr) {
+      if (!dateStr) return '';
+      const s = String(dateStr);
+      const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (m) return m[1];
+      const d = new Date(s);
+      if (isNaN(d)) return s;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    },
+    formatPeriod(startDate, endDate, dateOnly = false) {
+      const hasStart = !!startDate;
+      const hasEnd = !!endDate;
+      if (!hasStart && !hasEnd) return '-';
+      const fmt = dateOnly ? this.formatDateOnly : this.formatDate;
+      if (hasStart && hasEnd) {
+        const startKey = this.normalizeDateKey(startDate);
+        const endKey = this.normalizeDateKey(endDate);
+        if (startKey && endKey && startKey === endKey) {
+          return fmt(startDate);
+        }
+        return `${fmt(startDate)} ~ ${fmt(endDate)}`;
+      }
+      return hasStart ? fmt(startDate) : fmt(endDate);
+    },
     async updatePendingCountForTab(type) {
       try {
         const statusParam = (this.currentUserRole === 'administrator' || this.currentUserIsSoumu)
@@ -793,6 +835,36 @@ const app = createApp({
           count = body.pagination.total;
         }
         this.pendingCounts = { ...this.pendingCounts, [type]: count };
+      } catch {
+        // ignore
+      }
+    },
+    async updateUnreadCommentCountForTab(type) {
+      try {
+        const params = new URLSearchParams({
+          unread_comment: '1',
+          page: 1,
+          per_page: 1
+        });
+        if (type !== 'all') {
+          params.append('type', type);
+        }
+        if (this.monthFilter && /^\d{4}-\d{2}$/.test(this.monthFilter)) {
+          const [y, m] = this.monthFilter.split('-').map(Number);
+          const fromDate = m === 1 ? `${y - 1}-12-21` : `${y}-${String(m - 1).padStart(2, '0')}-21`;
+          const toDate = `${y}-${String(m).padStart(2, '0')}-20`;
+          params.append('from_date', fromDate);
+          params.append('to_date', toDate);
+        }
+        const res = await axios.get('/api/index.php?model=request&method=list&' + params.toString());
+        const body = res.data;
+        let count = 0;
+        if (Array.isArray(body)) {
+          count = body.length;
+        } else if (body && body.pagination && typeof body.pagination.total !== 'undefined') {
+          count = body.pagination.total;
+        }
+        this.unreadCommentCounts = { ...this.unreadCommentCounts, [type]: count };
       } catch {
         // ignore
       }
@@ -942,6 +1014,9 @@ const app = createApp({
         if ((this.currentUserRole === 'administrator' || this.currentUserIsSoumu) && this.filterAssignedApprover) {
           params.append('assigned_approver', '1');
         }
+        if (this.unreadCommentOnly) {
+          params.append('unread_comment', '1');
+        }
         const res = await axios.get('/api/index.php?model=request&method=list&' + params.toString());
         const body = res.data;
         if (Array.isArray(body)) {
@@ -964,6 +1039,7 @@ const app = createApp({
       this.loading = false;
       // Cập nhật badge pending cho tab hiện tại
       this.updatePendingCountForTab(this.currentTab);
+      this.updateUnreadCommentCountForTab(this.currentTab);
     },
     onSearch() {
       this.page = 1;
@@ -1269,10 +1345,16 @@ const app = createApp({
     this.fetchRequests();
     this.tabs.forEach(tab => {
       this.updatePendingCountForTab(tab.type);
+      this.updateUnreadCommentCountForTab(tab.type);
     });
     this.checkNavMode();
     this._resizeHandler = () => this.checkNavMode();
     window.addEventListener('resize', this._resizeHandler);
+    this.autoRefreshTimer = setInterval(() => {
+      if (!this.loading && !this.actionLoading) {
+        this.fetchRequests();
+      }
+    }, 5 * 60 * 1000);
     this.$nextTick(() => {
       this.initFormMonthPicker();
     });
@@ -1285,6 +1367,10 @@ const app = createApp({
     if (this.formMonthPicker) {
       this.formMonthPicker.destroy();
       this.formMonthPicker = null;
+    }
+    if (this.autoRefreshTimer) {
+      clearInterval(this.autoRefreshTimer);
+      this.autoRefreshTimer = null;
     }
   },
   components: {

@@ -128,6 +128,7 @@ if (!empty($_SESSION['userid'])) {
                 <tr>
                   <th>申請種別</th>
                   <th class="text-nowrap">申請日</th>
+                  <th>コメント</th>
                   <th>状態</th>
                   <th>承認者</th>
                   <th class="text-nowrap">操作</th>
@@ -137,6 +138,10 @@ if (!empty($_SESSION['userid'])) {
                 <tr v-for="req in recentRequests" :key="'recent-' + req.id">
                   <td class="text-nowrap">{{ typeLabel(req.type) }}</td>
                   <td class="text-nowrap">{{ formatDateTime(req.created_at) }}</td>
+                  <td class="text-nowrap">
+                    {{ Number(req.comment_count || 0) }}
+                    <span v-if="Number(req.comment_count || 0) > 0 && Number(req.unread_comment || 0) > 0" class="badge bg-danger ms-1">未読</span>
+                  </td>
                   <td>
                     <span :class="['badge', statusBadgeClass(req.status)]">
                       <i :class="statusIcon(req.status)" class="me-1"></i>{{ statusLabel(req.status) }}

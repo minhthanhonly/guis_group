@@ -99,11 +99,13 @@
 
             <?php
             $form_pending_badge = 0;
+            $form_unread_comment_badge = 0;
             if (!empty($_SESSION['userid'])) {
               require_once DIR_MODEL.'request.php';
               $reqModel = new Request();
               $reqModel->connect();
               $form_pending_badge = $reqModel->countPendingBadge();
+              $form_unread_comment_badge = $reqModel->countUnreadCommentBadge();
               $reqModel->close();
             }
             ?>
@@ -112,7 +114,8 @@
               <a href="<?=$root?>form/index.php" class="menu-link">
                 <i class="menu-icon icon-base fa fa-file-alt"></i>
                 <div data-i18n="申請・承認">申請・承認</div>
-                <?php if ($form_pending_badge > 0) { ?><span class="badge badge_number text-bg-danger rounded-pill ms-auto"><?= $form_pending_badge ?></span><?php } ?>
+                <?php if ($form_pending_badge > 0) { ?><span class="badge badge_number bg-warning text-dark rounded-pill ms-auto"><?= $form_pending_badge ?></span><?php } ?>
+                <span id="form-unread-comment-badge" class="badge badge_number bg-danger rounded-pill ms-1<?= ($form_unread_comment_badge > 0 ? '' : ' d-none') ?>"><?= intval($form_unread_comment_badge) ?></span>
               </a>
             </li>
               <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">

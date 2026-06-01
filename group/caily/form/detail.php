@@ -100,9 +100,18 @@
         </div>
         <div class="mb-3">
           <strong>コメント:</strong>
-          <div v-if="canComment" class="input-group mb-2">
-            <input v-model="newComment" class="form-control form-control-sm" placeholder="コメントを入力">
-            <button class="btn btn-primary btn-sm" @click="addComment"><i class="bi bi-plus-circle"></i> コメント追加</button>
+          <div v-if="canComment" class="mb-2">
+            <div class="mb-2">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <label class="form-label form-label-sm mb-0">通知先</label>
+                <button type="button" class="btn btn-outline-secondary btn-xs py-0 px-2" style="font-size:0.75rem;" @click="clearAllRecipients">全解除</button>
+              </div>
+              <select ref="commentRecipientSelect" class="form-select form-select-sm" multiple></select>
+            </div>
+            <div class="input-group">
+              <input v-model="newComment" class="form-control form-control-sm" placeholder="コメントを入力">
+              <button class="btn btn-primary btn-sm" @click="addComment"><i class="bi bi-plus-circle"></i> コメント追加</button>
+            </div>
           </div>
           <ul class="list-group mb-2">
             <li v-for="c in sortedComments" :key="c.date" class="list-group-item">
@@ -125,7 +134,10 @@
                   </div>
                 </div>
                 <div class="flex-grow-1 d-flex align-items-center">
-                  <span>{{ c.message }}</span>
+                  <div>
+                    <span>{{ c.message }}</span>
+                    <div class="small text-muted mt-1">通知先: <span v-html="commentRecipientText(c)"></span></div>
+                  </div>
                 </div>
               </div>
             </li>
@@ -292,6 +304,9 @@
 .detail-table th{
  padding: 0.25rem;
 }
+.select2-container--default .select2-results > .select2-results__options{
+  max-height: 300px;
+}
 </style>
 <?php $view->footing(); ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -338,6 +353,7 @@ const app = createApp({
       loading: true,
       actionLoading: false,
       newComment: '',
+      selectedCommentRecipients: [],
       errorMessage: '',
       editForm: null,
       editFormKey: 0,
@@ -347,11 +363,36 @@ const app = createApp({
     }
   },
   computed: {
+    commentRecipientOptions() {
+      const list = Array.isArray(this.request?.comment_recipient_candidates)
+        ? this.request.comment_recipient_candidates
+        : [];
+      return list
+        .filter(x => x && x.userid)
+        .map(x => ({ id: String(x.userid), text: x.realname || x.userid }));
+    },
+    commentDefaultRecipientIds() {
+      const ids = Array.isArray(this.request?.comment_default_recipient_ids)
+        ? this.request.comment_default_recipient_ids.map(String)
+        : [];
+      // fallback: nếu backend không có, lấy toàn bộ options
+      if (ids.length === 0) {
+        return this.commentRecipientOptions.map(o => o.id);
+      }
+      // chỉ giữ lại id nằm trong danh sách options
+      const optionIds = this.commentRecipientOptions.map(o => o.id);
+      return ids.filter(id => optionIds.includes(id));
+    },
     canApprove() {
       return ['pending', 'approved', 'rejected'].includes(this.request.status) && CURRENT_USER_ROLE === 'administrator';
     },
     canComment() {
-      return this.request.user_id === CURRENT_USER_ID || CURRENT_USER_ROLE === 'administrator';
+      if (!this.request || !this.request.id) return false;
+      const isAdmin = CURRENT_USER_ROLE === 'administrator';
+      const isSoumu = CURRENT_USER_IS_SOUMU;
+      const isOwner = this.request.user_id === CURRENT_USER_ID;
+      const isApprover = this.userIsDesignatedApprover(this.request.approver_user_id, CURRENT_USER_ID);
+      return isAdmin || isSoumu || isOwner || isApprover;
     },
     canSubmitDraft() {
       return this.request.status === 'draft' && this.request.user_id === CURRENT_USER_ID;
@@ -463,6 +504,54 @@ const app = createApp({
       return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ` +
         `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
     },
+    selectAllRecipients() {
+      const all = this.commentRecipientOptions.map(o => o.id);
+      this.selectedCommentRecipients = all;
+      const el = this.$refs.commentRecipientSelect;
+      if (el && typeof $ !== 'undefined' && typeof $(el).select2 === 'function') {
+        $(el).val(all).trigger('change');
+      }
+    },
+    clearAllRecipients() {
+      this.selectedCommentRecipients = [];
+      const el = this.$refs.commentRecipientSelect;
+      if (el && typeof $ !== 'undefined' && typeof $(el).select2 === 'function') {
+        $(el).val([]).trigger('change');
+      }
+    },
+    commentRecipientText(comment) {
+      if (!comment) return '-';
+      const states = Array.isArray(comment.recipient_read_states) ? comment.recipient_read_states : [];
+      if (states.length > 0) {
+        return states
+          .map(s => {
+            const name = this.escapeHtml(s.name || s.user_id || '-');
+            const isRead = Number(s.is_read || 0) > 0;
+            const icon = isRead
+              ? '<i class="fa fa-eye text-success ms-1"></i>'
+              : '<i class="fa fa-eye-slash text-danger ms-1"></i>';
+            return `${name}${icon}`;
+          })
+          .join('、');
+      }
+      const names = Array.isArray(comment.recipient_realnames) ? comment.recipient_realnames.filter(Boolean) : [];
+      if (names.length > 0) {
+        return names.map(n => this.escapeHtml(n)).join('、');
+      }
+      const ids = Array.isArray(comment.recipient_user_ids) ? comment.recipient_user_ids.filter(Boolean) : [];
+      if (ids.length > 0) {
+        return ids.map(n => this.escapeHtml(n)).join('、');
+      }
+      return this.escapeHtml('全員(旧コメント)');
+    },
+    escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    },
     statusBadgeClass(status) {
       switch(status) {
         case 'pending': return 'bg-primary';
@@ -529,11 +618,73 @@ const app = createApp({
         } else {
           this.request = payload || {};
         }
+        this.selectedCommentRecipients = this.commentDefaultRecipientIds.slice();
       } catch (e) {
         this.errorMessage = 'データ取得に失敗しました。';
         this.request = {};
+        this.selectedCommentRecipients = [];
       }
       this.loading = false;
+      this.$nextTick(() => this.initCommentRecipientSelect());
+      this.refreshLayoutUnreadCommentBadge();
+    },
+    async refreshLayoutUnreadCommentBadge() {
+      const badgeEl = document.getElementById('form-unread-comment-badge');
+      if (!badgeEl) return;
+      try {
+        const res = await axios.get('/api/index.php?model=request&method=countUnreadCommentBadge');
+        let count = Number(res?.data);
+        if (!Number.isFinite(count)) {
+          count = Number(res?.data?.count || 0);
+        }
+        if (!Number.isFinite(count) || count < 0) count = 0;
+        badgeEl.textContent = String(count);
+        if (count > 0) {
+          badgeEl.classList.remove('d-none');
+        } else {
+          badgeEl.classList.add('d-none');
+        }
+      } catch (e) {
+        // ignore refresh error
+      }
+    },
+    initCommentRecipientSelect(retry = 0) {
+      const el = this.$refs.commentRecipientSelect;
+      if (!el) {
+        if (retry < 20) {
+          setTimeout(() => this.initCommentRecipientSelect(retry + 1), 150);
+        }
+        return;
+      }
+      if (typeof $ === 'undefined' || typeof $(el).select2 !== 'function') {
+        if (retry < 20) {
+          setTimeout(() => this.initCommentRecipientSelect(retry + 1), 150);
+        }
+        return;
+      }
+      const $el = $(el);
+      const options = this.commentRecipientOptions || [];
+      el.innerHTML = options
+        .map(o => `<option value="${String(o.id).replace(/"/g, '&quot;')}">${String(o.text)}</option>`)
+        .join('');
+      if ($el.data('select2')) {
+        $el.off('change.commentRecipients');
+        $el.select2('destroy');
+      }
+      $el.select2({
+        width: '100%',
+        placeholder: '通知先を選択',
+        closeOnSelect: false
+      });
+      const selected = (Array.isArray(this.selectedCommentRecipients) && this.selectedCommentRecipients.length > 0)
+        ? this.selectedCommentRecipients
+        : this.commentDefaultRecipientIds;
+      this.selectedCommentRecipients = selected;
+      $el.val(selected).trigger('change');
+      $el.on('change.commentRecipients', () => {
+        const value = $el.val();
+        this.selectedCommentRecipients = Array.isArray(value) ? value.map(String) : [];
+      });
     },
     async markCompleted() {
       if (!this.canMarkCompleted) return;
@@ -580,9 +731,17 @@ const app = createApp({
     async addComment() {
       this.errorMessage = '';
       if (!this.newComment) return;
+      if (!Array.isArray(this.selectedCommentRecipients) || this.selectedCommentRecipients.length === 0) {
+        this.errorMessage = 'コメント受信者を選択してください。';
+        return;
+      }
       this.actionLoading = true;
       try {
-        const res = await axios.post('/api/index.php?model=request&method=add_comment', {id: this.request.id, message: this.newComment}, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+        const res = await axios.post('/api/index.php?model=request&method=add_comment', {
+          id: this.request.id,
+          message: this.newComment,
+          recipient_user_ids: JSON.stringify(this.selectedCommentRecipients)
+        }, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
         if (res.data && res.data.error) {
           this.errorMessage = Array.isArray(res.data.error) ? res.data.error.join('、') : res.data.error;
         } else {
@@ -692,6 +851,13 @@ const app = createApp({
   },
   mounted() {
     this.fetchDetail();
+  },
+  beforeUnmount() {
+    const el = this.$refs.commentRecipientSelect;
+    if (el && typeof $ !== 'undefined' && typeof $(el).select2 === 'function' && $(el).data('select2')) {
+      $(el).off('change.commentRecipients');
+      $(el).select2('destroy');
+    }
   },
   components: {
     'leave-detail': leaveDetail,

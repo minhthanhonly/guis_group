@@ -50,6 +50,34 @@ class Request extends ApplicationModel {
         return array($str);
     }
 
+    /** @return string[] */
+    private function parseUserIdArray($value) {
+        if ($value === null || $value === '') {
+            return array();
+        }
+        if (is_array($value)) {
+            $ids = array();
+            foreach ($value as $v) {
+                $v = trim((string)$v);
+                if ($v !== '' && !in_array($v, $ids, true)) {
+                    $ids[] = $v;
+                }
+            }
+            return $ids;
+        }
+        $str = trim((string)$value);
+        if ($str === '') {
+            return array();
+        }
+        if ($str[0] === '[') {
+            $decoded = json_decode($str, true);
+            if (is_array($decoded)) {
+                return $this->parseUserIdArray($decoded);
+            }
+        }
+        return array($str);
+    }
+
     private function encodeApproverUserIds($value) {
         $ids = $this->parseApproverUserIds($value);
         if (empty($ids)) {
@@ -115,6 +143,36 @@ class Request extends ApplicationModel {
         }
     }
 
+    /** @return string[] candidate recipients for request comments */
+    private function getCommentRecipientCandidateIds($requestRow, $excludeUserId = '') {
+        $ids = array();
+        if (is_array($requestRow)) {
+            if (!empty($requestRow['user_id'])) {
+                $ids[] = (string)$requestRow['user_id'];
+            }
+        }
+        $approverRows = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE (can_approve_request = 1 OR authority = 'administrator') AND (is_suspend IS NULL OR is_suspend = 0)");
+        if (is_array($approverRows)) {
+            foreach ($approverRows as $a) {
+                if (!empty($a['userid']) && !in_array($a['userid'], $ids, true)) {
+                    $ids[] = $a['userid'];
+                }
+            }
+        }
+        foreach ($this->getActiveSoumuUserIds() as $sid) {
+            if (!in_array($sid, $ids, true)) {
+                $ids[] = $sid;
+            }
+        }
+        $excludeUserId = trim((string)$excludeUserId);
+        if ($excludeUserId !== '') {
+            $ids = array_values(array_filter($ids, function($uid) use ($excludeUserId) {
+                return (string)$uid !== $excludeUserId;
+            }));
+        }
+        return array_values(array_unique($ids));
+    }
+
     /** @return string[] active soumu user ids */
     private function getActiveSoumuUserIds() {
         $rows = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE is_soumu = 1 AND (is_suspend IS NULL OR is_suspend = 0)");
@@ -127,6 +185,185 @@ class Request extends ApplicationModel {
             }
         }
         return $ids;
+    }
+
+    private function commentReadTable() {
+        return DB_PREFIX . 'request_comment_reads';
+    }
+
+    private function ensureCommentReadTable() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $t = $this->commentReadTable();
+        $sql = "CREATE TABLE IF NOT EXISTS {$t} ("
+            . "id INT AUTO_INCREMENT PRIMARY KEY,"
+            . "request_id INT NOT NULL,"
+            . "user_id VARCHAR(255) NOT NULL,"
+            . "last_seen_comment_at DATETIME NULL,"
+            . "created_at DATETIME NOT NULL,"
+            . "updated_at DATETIME NOT NULL,"
+            . "UNIQUE KEY uq_request_user (request_id, user_id),"
+            . "KEY idx_user_request (user_id, request_id)"
+            . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $this->query($sql);
+        $ensured = true;
+    }
+
+    private function normalizeTimestamp($value) {
+        if (empty($value)) {
+            return null;
+        }
+        $ts = strtotime((string)$value);
+        if ($ts === false) {
+            return null;
+        }
+        return date('Y-m-d H:i:s', $ts);
+    }
+
+    private function commentTargetsUser($comment, $userId) {
+        if (empty($userId) || !is_array($comment)) {
+            return false;
+        }
+        $targets = $this->parseUserIdArray($comment['recipient_user_ids'] ?? array());
+        if (empty($targets)) {
+            // Legacy comments without explicit recipients are treated as broadcast.
+            return true;
+        }
+        return in_array((string)$userId, $targets, true);
+    }
+
+    private function latestOtherCommentAt($comments, $userId) {
+        if (!is_array($comments) || empty($comments)) {
+            return null;
+        }
+        $latestTs = null;
+        foreach ($comments as $c) {
+            if (!is_array($c)) continue;
+            if (!empty($userId) && isset($c['user_id']) && (string)$c['user_id'] === (string)$userId) {
+                continue;
+            }
+            if (!$this->commentTargetsUser($c, $userId)) {
+                continue;
+            }
+            if (empty($c['date'])) continue;
+            $ts = strtotime((string)$c['date']);
+            if ($ts === false) continue;
+            if ($latestTs === null || $ts > $latestTs) {
+                $latestTs = $ts;
+            }
+        }
+        return $latestTs ? date('Y-m-d H:i:s', $latestTs) : null;
+    }
+
+    private function hasUnreadCommentForUser($comments, $userId, $lastSeenAt) {
+        $latestOtherCommentAt = $this->latestOtherCommentAt($comments, $userId);
+        if (empty($latestOtherCommentAt)) {
+            return false;
+        }
+        $latestTs = strtotime($latestOtherCommentAt);
+        if ($latestTs === false) {
+            return false;
+        }
+        $seenTs = $lastSeenAt ? strtotime((string)$lastSeenAt) : false;
+        if ($seenTs === false) {
+            return true;
+        }
+        return $latestTs > $seenTs;
+    }
+
+    private function getCommentReadMap(array $requestIds, $userId) {
+        $map = array();
+        if (empty($requestIds) || empty($userId)) {
+            return $map;
+        }
+        $this->ensureCommentReadTable();
+        $ids = array();
+        foreach ($requestIds as $rid) {
+            $ids[] = intval($rid);
+        }
+        $ids = array_values(array_unique(array_filter($ids, function($v) { return $v > 0; })));
+        if (empty($ids)) {
+            return $map;
+        }
+        $in = implode(',', $ids);
+        $t = $this->commentReadTable();
+        $uid = $this->quote((string)$userId);
+        $rows = $this->fetchAll("SELECT request_id, last_seen_comment_at FROM {$t} WHERE user_id = '{$uid}' AND request_id IN ({$in})");
+        if (is_array($rows)) {
+            foreach ($rows as $r) {
+                $rid = isset($r['request_id']) ? intval($r['request_id']) : 0;
+                if ($rid > 0) {
+                    $map[$rid] = $this->normalizeTimestamp($r['last_seen_comment_at'] ?? null);
+                }
+            }
+        }
+        return $map;
+    }
+
+    private function getCommentReadMapByUsers($requestId, array $userIds) {
+        $map = array();
+        $requestId = intval($requestId);
+        if ($requestId <= 0 || empty($userIds)) {
+            return $map;
+        }
+        $this->ensureCommentReadTable();
+        $clean = array();
+        foreach ($userIds as $uid) {
+            $uid = trim((string)$uid);
+            if ($uid !== '' && !in_array($uid, $clean, true)) {
+                $clean[] = $uid;
+            }
+        }
+        if (empty($clean)) {
+            return $map;
+        }
+        $in = "'" . implode("','", array_map([$this, 'quote'], $clean)) . "'";
+        $t = $this->commentReadTable();
+        $rows = $this->fetchAll("SELECT user_id, last_seen_comment_at FROM {$t} WHERE request_id = " . $requestId . " AND user_id IN ({$in})");
+        if (is_array($rows)) {
+            foreach ($rows as $r) {
+                $uid = isset($r['user_id']) ? (string)$r['user_id'] : '';
+                if ($uid !== '') {
+                    $map[$uid] = $this->normalizeTimestamp($r['last_seen_comment_at'] ?? null);
+                }
+            }
+        }
+        return $map;
+    }
+
+    private function markCommentsRead($requestId, $userId, $seenAt = null) {
+        $requestId = intval($requestId);
+        if ($requestId <= 0 || empty($userId)) {
+            return;
+        }
+        $this->ensureCommentReadTable();
+        $seenAtNorm = $this->normalizeTimestamp($seenAt ?: date('Y-m-d H:i:s'));
+        $now = date('Y-m-d H:i:s');
+        $t = $this->commentReadTable();
+        $uid = $this->quote((string)$userId);
+        $seenSql = $seenAtNorm ? "'" . $this->quote($seenAtNorm) . "'" : "NULL";
+        $nowSql = "'" . $this->quote($now) . "'";
+        $sql = "INSERT INTO {$t} (request_id, user_id, last_seen_comment_at, created_at, updated_at) VALUES ("
+            . intval($requestId) . ", '" . $uid . "', " . $seenSql . ", " . $nowSql . ", " . $nowSql . ") "
+            . "ON DUPLICATE KEY UPDATE last_seen_comment_at = VALUES(last_seen_comment_at), updated_at = VALUES(updated_at)";
+        $this->query($sql);
+    }
+
+    private function markRequestNotificationsAsRead($requestId, $userId) {
+        $requestId = intval($requestId);
+        if ($requestId <= 0 || empty($userId)) {
+            return;
+        }
+        $uid = $this->quote((string)$userId);
+        $sql = "UPDATE notification_user nu "
+            . "INNER JOIN notification n ON n.id = nu.notification_id "
+            . "SET nu.is_read = 1, nu.read_at = NOW() "
+            . "WHERE nu.user_id = '" . $uid . "' "
+            . "AND nu.is_read = 0 "
+            . "AND n.request_id = " . $requestId;
+        $this->query($sql);
     }
 
     private function enrichApproverUserDisplay(array &$row, $user_map) {
@@ -482,20 +719,28 @@ class Request extends ApplicationModel {
         if ($perPage > 200) $perPage = 200;
         $offset = ($page - 1) * $perPage;
 
+        $filterUnreadComment = !empty($_GET['unread_comment']);
         $countRow = $this->fetchOne("SELECT COUNT(*) AS cnt FROM {$this->table} $whereSql");
         $total = $countRow ? intval($countRow['cnt']) : 0;
         $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 0;
 
-        $query = "SELECT * FROM {$this->table} $whereSql $orderSql LIMIT {$perPage} OFFSET {$offset}";
-        $rows = $this->fetchAll($query);
+        if ($filterUnreadComment) {
+            $query = "SELECT * FROM {$this->table} $whereSql $orderSql";
+            $rows = $this->fetchAll($query);
+        } else {
+            $query = "SELECT * FROM {$this->table} $whereSql $orderSql LIMIT {$perPage} OFFSET {$offset}";
+            $rows = $this->fetchAll($query);
+        }
 
         // Parse JSON fields and collect user ids for name lookup
         $user_ids = array();
+        $requestIds = array();
         foreach ($rows as &$row) {
             $row['data'] = json_decode($row['data'], true);
             $row['history'] = json_decode($row['history'], true);
             $row['comments'] = json_decode($row['comments'], true);
             $row['comment_count'] = is_array($row['comments']) ? count($row['comments']) : 0;
+            $requestIds[] = intval($row['id']);
             if (!empty($row['user_id'])) $user_ids[$row['user_id']] = true;
             if (!empty($row['approver_id'])) $user_ids[$row['approver_id']] = true;
             if (!empty($row['completed_userid'])) $user_ids[$row['completed_userid']] = true;
@@ -522,6 +767,26 @@ class Request extends ApplicationModel {
             $this->enrichApproverUserDisplay($row, $user_map);
         }
         unset($row);
+
+        $readMap = $this->getCommentReadMap($requestIds, $currentUserid);
+        foreach ($rows as &$row) {
+            $lastSeen = isset($readMap[intval($row['id'])]) ? $readMap[intval($row['id'])] : null;
+            $row['unread_comment'] = $this->hasUnreadCommentForUser($row['comments'], $currentUserid, $lastSeen) ? 1 : 0;
+        }
+        unset($row);
+
+        if ($filterUnreadComment) {
+            $rows = array_values(array_filter($rows, function($r) {
+                return !empty($r['unread_comment']);
+            }));
+            $total = count($rows);
+            $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 0;
+            if ($offset >= $total && $total > 0) {
+                $page = $totalPages;
+                $offset = ($page - 1) * $perPage;
+            }
+            $rows = array_slice($rows, $offset, $perPage);
+        }
 
         return [
             'data' => $rows,
@@ -560,6 +825,48 @@ class Request extends ApplicationModel {
         $whereSql = 'WHERE ' . implode(' AND ', $where);
         $row = $this->fetchOne("SELECT COUNT(*) AS cnt FROM {$this->table} $whereSql");
         return $row ? (int)$row['cnt'] : 0;
+    }
+
+    // Số đơn có comment chưa đọc hiển thị badge menu
+    function countUnreadCommentBadge() {
+        if (empty($_SESSION['userid'])) {
+            return 0;
+        }
+        $userid = $_SESSION['userid'];
+        $isAdmin = !empty($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
+        $isSoumu = $this->currentUserIsSoumu();
+        $canViewAll = $isAdmin || $isSoumu;
+        $where = array("comments IS NOT NULL", "comments != ''");
+        if ($canViewAll) {
+            // xem toàn bộ
+        } elseif ($this->currentUserCanApproveRequests()) {
+            $where[] = $this->sqlVisibleRequestsForUser($userid);
+        } else {
+            $where[] = "user_id = '" . $this->quote($userid) . "'";
+        }
+        $whereSql = 'WHERE ' . implode(' AND ', $where);
+        $rows = $this->fetchAll("SELECT id, comments FROM {$this->table} {$whereSql}");
+        if (!is_array($rows) || empty($rows)) {
+            return 0;
+        }
+        $requestIds = array();
+        foreach ($rows as $r) {
+            if (!empty($r['id'])) {
+                $requestIds[] = intval($r['id']);
+            }
+        }
+        $readMap = $this->getCommentReadMap($requestIds, $userid);
+        $count = 0;
+        foreach ($rows as $r) {
+            $requestId = isset($r['id']) ? intval($r['id']) : 0;
+            if ($requestId <= 0) continue;
+            $comments = !empty($r['comments']) ? json_decode($r['comments'], true) : array();
+            $lastSeen = isset($readMap[$requestId]) ? $readMap[$requestId] : null;
+            if ($this->hasUnreadCommentForUser($comments, $userid, $lastSeen)) {
+                $count++;
+            }
+        }
+        return $count;
     }
 
     // Danh sách user cho filter ở màn hình申請一覧 (admin: tất cả; approver: user có đơn trong phạm vi xem)
@@ -621,19 +928,51 @@ class Request extends ApplicationModel {
             exit;
         }
         $id = intval($_POST['id']);
+        $row = $this->fetchOne("SELECT comments, type, user_id, approver_user_id FROM {$this->table} WHERE id = $id");
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['error' => '申請が見つかりません。']);
+            exit;
+        }
+        $candidateIds = $this->getCommentRecipientCandidateIds($row, $_SESSION['userid']);
+        $recipientIds = $this->parseUserIdArray($_POST['recipient_user_ids'] ?? array());
+        $recipientIds = array_values(array_filter(array_unique($recipientIds), function($uid) use ($candidateIds) {
+            return in_array($uid, $candidateIds, true);
+        }));
+        if (empty($recipientIds)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'コメント受信者を選択してください。']);
+            exit;
+        }
         $comment = [
             'user_id' => $_SESSION['userid'],
             'message' => $_POST['message'],
-            'date' => date('Y-m-d H:i:s')
+            'date' => date('Y-m-d H:i:s'),
+            'recipient_user_ids' => $recipientIds
         ];
-        $row = $this->fetchOne("SELECT comments, type, user_id FROM {$this->table} WHERE id = $id");
         $comments = $row && $row['comments'] ? json_decode($row['comments'], true) : [];
         $comments[] = $comment;
-        $result = $this->query_update(['comments' => json_encode($comments, JSON_UNESCAPED_UNICODE)], ['id' => $id]);
+        $updateData = ['comments' => json_encode($comments, JSON_UNESCAPED_UNICODE)];
+
+        // Nếu recipient nào chưa nằm trong approver_user_id thì tự động thêm vào
+        $currentApprovers = $this->parseApproverUserIds($row['approver_user_id'] ?? '');
+        $newApprovers = $currentApprovers;
+        $applicantUserId = $row['user_id'] ?? '';
+        foreach ($recipientIds as $rid) {
+            if (!in_array($rid, $newApprovers, true) && $rid !== $applicantUserId) {
+                $newApprovers[] = $rid;
+            }
+        }
+        if (count($newApprovers) !== count($currentApprovers)) {
+            $updateData['approver_user_id'] = json_encode(array_values($newApprovers), JSON_UNESCAPED_UNICODE);
+        }
+
+        $result = $this->query_update($updateData, ['id' => $id]);
         
         // Send Pusher notification for comment added
         if ($result && $row) {
-            $this->sendRequestCommentNotification($id, $row['type'], $row['user_id'], $_SESSION['userid']);
+            $this->markCommentsRead($id, $_SESSION['userid'], $comment['date']);
+            $this->sendRequestCommentNotification($id, $row['type'], $row['user_id'], $_SESSION['userid'], $recipientIds);
         }
         
         return $result;
@@ -784,16 +1123,28 @@ class Request extends ApplicationModel {
                     return null;
                 }
             }
+            if (!empty($_SESSION['userid'])) {
+                $this->markRequestNotificationsAsRead($id, $_SESSION['userid']);
+            }
             $row['data'] = json_decode($row['data'], true);
             $row['history'] = json_decode($row['history'], true);
             $row['comments'] = json_decode($row['comments'], true);
+            $latestOtherCommentAt = $this->latestOtherCommentAt($row['comments'], $_SESSION['userid'] ?? '');
+            if (!empty($latestOtherCommentAt) && !empty($_SESSION['userid'])) {
+                $this->markCommentsRead($id, $_SESSION['userid'], $latestOtherCommentAt);
+            }
             // Lấy danh sách user_id xuất hiện trong history và comments
             $user_ids = array();
             if (is_array($row['history'])) {
                 foreach ($row['history'] as $h) if (!empty($h['user'])) $user_ids[] = $h['user'];
             }
             if (is_array($row['comments'])) {
-                foreach ($row['comments'] as $c) if (!empty($c['user_id'])) $user_ids[] = $c['user_id'];
+                foreach ($row['comments'] as $c) {
+                    if (!empty($c['user_id'])) $user_ids[] = $c['user_id'];
+                    foreach ($this->parseUserIdArray($c['recipient_user_ids'] ?? array()) as $rid) {
+                        if ($rid !== '') $user_ids[] = $rid;
+                    }
+                }
             }
             // Thêm user_id của người đăng ký
             if (!empty($row['user_id'])) $user_ids[] = $row['user_id'];
@@ -829,6 +1180,15 @@ class Request extends ApplicationModel {
                             $c['realname'] = $user_map[$c['user_id']]['realname'];
                             $c['user_image'] = $user_map[$c['user_id']]['user_image'];
                         }
+                        $recipientNames = array();
+                        foreach ($this->parseUserIdArray($c['recipient_user_ids'] ?? array()) as $rid) {
+                            if (!empty($user_map[$rid]['realname'])) {
+                                $recipientNames[] = $user_map[$rid]['realname'];
+                            } else {
+                                $recipientNames[] = $rid;
+                            }
+                        }
+                        $c['recipient_realnames'] = array_values(array_unique($recipientNames));
                     }
                 }
                 // Gán realname, user_image cho người đăng ký
@@ -846,7 +1206,65 @@ class Request extends ApplicationModel {
                     $user_map_flat[$uid] = is_array($info) ? $info['realname'] : $info;
                 }
                 $this->enrichApproverUserDisplay($row, $user_map_flat);
+
+                $recipientIdsForRead = array();
+                if (is_array($row['comments'])) {
+                    foreach ($row['comments'] as $c) {
+                        foreach ($this->parseUserIdArray($c['recipient_user_ids'] ?? array()) as $rid) {
+                            if ($rid !== '' && !in_array($rid, $recipientIdsForRead, true)) {
+                                $recipientIdsForRead[] = $rid;
+                            }
+                        }
+                    }
+                }
+                $recipientReadMap = $this->getCommentReadMapByUsers($id, $recipientIdsForRead);
+                if (is_array($row['comments'])) {
+                    foreach ($row['comments'] as &$c) {
+                        $recipientStates = array();
+                        $commentTs = !empty($c['date']) ? strtotime((string)$c['date']) : false;
+                        foreach ($this->parseUserIdArray($c['recipient_user_ids'] ?? array()) as $rid) {
+                            $readAt = $recipientReadMap[$rid] ?? null;
+                            $readTs = $readAt ? strtotime((string)$readAt) : false;
+                            $isRead = ($commentTs !== false && $readTs !== false && $readTs >= $commentTs);
+                            $recipientStates[] = array(
+                                'user_id' => $rid,
+                                'name' => !empty($user_map[$rid]['realname']) ? $user_map[$rid]['realname'] : $rid,
+                                'is_read' => $isRead ? 1 : 0
+                            );
+                        }
+                        $c['recipient_read_states'] = $recipientStates;
+                    }
+                    unset($c);
+                }
             }
+
+            $excludeUserId = $_SESSION['userid'] ?? '';
+            $candidateIds = $this->getCommentRecipientCandidateIds($row, $excludeUserId);
+            $row['comment_recipient_candidates'] = array();
+            if (!empty($candidateIds)) {
+                $in = "'" . implode("','", array_map([$this, 'quote'], $candidateIds)) . "'";
+                $candidateRows = $this->fetchAll("SELECT userid, realname, lastname, firstname, lastname_after_married FROM " . DB_PREFIX . "user WHERE userid IN ($in) AND (is_suspend IS NULL OR is_suspend = 0)");
+                if (is_array($candidateRows)) {
+                    foreach ($candidateRows as $u) {
+                        if (empty($u['userid'])) continue;
+                        $row['comment_recipient_candidates'][] = array(
+                            'userid' => (string)$u['userid'],
+                            'realname' => Helper::userDisplayName($u)
+                        );
+                    }
+                }
+            }
+            // Default selected: chủ đơn + người chỉ định duyệt (loại trừ user hiện tại)
+            $defaultIds = array();
+            if (!empty($row['user_id']) && (string)$row['user_id'] !== (string)$excludeUserId) {
+                $defaultIds[] = (string)$row['user_id'];
+            }
+            foreach ($this->parseApproverUserIds($row['approver_user_id'] ?? '') as $uid) {
+                if ($uid !== '' && (string)$uid !== (string)$excludeUserId && !in_array($uid, $defaultIds, true)) {
+                    $defaultIds[] = $uid;
+                }
+            }
+            $row['comment_default_recipient_ids'] = $defaultIds;
         }
         return $row;
     }
@@ -1350,36 +1768,18 @@ class Request extends ApplicationModel {
         }
     }
 
-    private function sendRequestCommentNotification($requestId, $requestType, $userId, $commentUserId) {
+    private function sendRequestCommentNotification($requestId, $requestType, $userId, $commentUserId, array $recipientUserIds = array()) {
         try {
             require_once(DIR_MODEL . 'NotificationService.php');
             $notiService = new NotificationService();
             // 日本語ラベル（例: leave -> 休暇届）
             $typeLabel = $this->getRequestTypeLabel($requestType);
-        
-            // Gửi cho người chỉ định duyệt (hoặc admin nếu không có)
-            $targetUserIds = [];
-            // Gửi cho chủ đơn nếu người comment khác chủ đơn
-            if ($userId !== $commentUserId) {
-                $targetUserIds[] = $userId;
-            }
-            $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
-            $designated = $req ? $this->parseApproverUserIds($req['approver_user_id']) : array();
-            if (!empty($designated)) {
-                $this->appendDesignatedApproversToTargetIds($targetUserIds, $req['approver_user_id']);
-            } else {
-                $admins = $this->fetchAll("SELECT userid FROM ".DB_PREFIX."user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
-                foreach ($admins as $a) {
-                    if (!empty($a['userid']) && !in_array($a['userid'], $targetUserIds, true)) {
-                        $targetUserIds[] = $a['userid'];
-                    }
-                }
-            }
+            $targetUserIds = array_values(array_unique($this->parseUserIdArray($recipientUserIds)));
             if (!empty($targetUserIds)) {
                 // Loại trừ user hiện tại khỏi danh sách notify
                 if (!empty($_SESSION['userid'])) {
                     $currentUserId = $_SESSION['userid'];
-                    $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($currentUserId, $userId) {
+                    $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($currentUserId) {
                         return $id !== $currentUserId;
                     }));
                 }
@@ -1401,9 +1801,8 @@ class Request extends ApplicationModel {
                     'user_ids' => $targetUserIds
                 ];
                 $notiService->create($payload_admin);
+                $this->sendRequestCommentEmail($requestId, $requestType, $userId, $commentUserId, $message, $targetUserIds);
             }
-
-            $this->sendRequestCommentEmail($requestId, $requestType, $userId, $commentUserId, $message);
         } catch (Exception $e) {
             error_log('Failed to send request comment notification: ' . $e->getMessage());
         }
@@ -1415,7 +1814,7 @@ class Request extends ApplicationModel {
      * - Subject: [người thao tác] が[申請者]の[種別]にコメントしました
      * - Body: hiển thị 申請者, nội dung comment (nếu lấy được) và link chi tiết.
      */
-    private function sendRequestCommentEmail($requestId, $requestType, $userId, $commentUserId, $message) {
+    private function sendRequestCommentEmail($requestId, $requestType, $userId, $commentUserId, $message, array $targetUserIds = array()) {
         // Lấy thông tin đơn để biết người đăng ký và comment cuối
         $row = $this->fetchOne("SELECT user_id, comments FROM {$this->table} WHERE id = " . intval($requestId));
         if (!$row) {
@@ -1425,24 +1824,7 @@ class Request extends ApplicationModel {
         if (empty($applicantUserId)) {
             return;
         }
-
-        // Tập người nhận: chủ đơn + approver/admin (tương tự notification)
-        $targetUserIds = [];
-        if ($applicantUserId !== $commentUserId) {
-            $targetUserIds[] = $applicantUserId;
-        }
-        $req = $this->fetchOne("SELECT approver_user_id FROM {$this->table} WHERE id = " . intval($requestId));
-        $designated = $req ? $this->parseApproverUserIds($req['approver_user_id']) : array();
-        if (!empty($designated)) {
-            $this->appendDesignatedApproversToTargetIds($targetUserIds, $req['approver_user_id']);
-        } else {
-            $admins = $this->fetchAll("SELECT userid FROM " . DB_PREFIX . "user WHERE authority = 'administrator' AND (is_suspend IS NULL OR is_suspend = 0)");
-            foreach ($admins as $a) {
-                if (!empty($a['userid']) && !in_array($a['userid'], $targetUserIds, true)) {
-                    $targetUserIds[] = $a['userid'];
-                }
-            }
-        }
+        $targetUserIds = array_values(array_unique($this->parseUserIdArray($targetUserIds)));
         // Loại trừ người comment khỏi danh sách nhận
         if (!empty($targetUserIds)) {
             $targetUserIds = array_values(array_filter($targetUserIds, function($id) use ($commentUserId) {
