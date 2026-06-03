@@ -148,8 +148,8 @@
                 {{ req.comment_count }}
                 <span v-if="Number(req.comment_count || 0) > 0 && Number(req.unread_comment || 0) > 0" class="badge bg-danger ms-1">未読</span>
               </td>
-              <td>{{ req.status === 'approved' && req.approver_realname ? req.approver_realname : '-' }}</td>
-              <td>{{ req.status === 'approved' && req.approved_at ? formatDateTime(req.approved_at) : '-' }}</td>
+              <td>{{ req.approver_realname || '-' }}</td>
+              <td>{{ req.approved_at ? formatDateTime(req.approved_at) : '-' }}</td>
               <td>
                 <span :class="['badge', statusBadgeClass(req.status)]">
                   <i :class="statusIcon(req.status)" class="me-1"></i>{{ statusLabel(req.status) }}
@@ -310,8 +310,8 @@
                 {{ req.comment_count }}
                 <span v-if="Number(req.comment_count || 0) > 0 && Number(req.unread_comment || 0) > 0" class="badge bg-danger ms-1">未読</span>
               </td>
-              <td>{{ req.status === 'approved' && req.approver_realname ? req.approver_realname : '-' }}</td>
-              <td>{{ req.status === 'approved' && req.approved_at ? formatDateTime(req.approved_at) : '-' }}</td>
+              <td>{{ req.approver_realname || '-' }}</td>
+              <td>{{ req.approved_at ? formatDateTime(req.approved_at) : '-' }}</td>
               <td>
                 <span :class="['badge', statusBadgeClass(req.status)]">
                   <i :class="statusIcon(req.status)" class="me-1"></i>{{ statusLabel(req.status) }}
@@ -369,10 +369,10 @@
           <div class="col-sm-6"><strong>申請者:</strong> {{ printTarget.user_realname || printTarget.user_id }} ({{ printTarget.user_id }})</div>
           <div class="col-sm-6"><strong>申請日:</strong> {{ formatDateTime(printTarget.created_at) }}</div>
           <div class="col-sm-6"><strong>状態:</strong> {{ statusLabel(printTarget.status) }}</div>
-          <div class="col-sm-6" v-if="printTarget.status === 'approved' && printTarget.approver_realname">
+          <div class="col-sm-6" v-if="printTarget.approver_realname">
             <strong>承認者:</strong> {{ printTarget.approver_realname }}
           </div>
-          <div class="col-sm-6" v-if="printTarget.status === 'approved' && printTarget.approved_at">
+          <div class="col-sm-6" v-if="printTarget.approved_at">
             <strong>承認日時:</strong> {{ formatDateTime(printTarget.approved_at) }}
           </div>
           <div class="col-sm-6" v-if="printTarget.status === 'completed' && (printTarget.completed_realname || printTarget.completed_userid)">

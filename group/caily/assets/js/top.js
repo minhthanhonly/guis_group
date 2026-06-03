@@ -290,9 +290,231 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     function modifySchedulePageButton() {
         const schedulePageButton = document.querySelector('.fc-schedulePage-button');
+        if (!schedulePageButton) {
+            return;
+        }
         schedulePageButton.classList.remove('fc-button-primary');
         schedulePageButton.classList.remove('fc-button');
         schedulePageButton.classList.add('btn', 'btn-primary', 'btn-sm');
+    }
+
+    // 休暇スケジュール（groupware 外部 API: get_dayoff_all_api）
+    const dayoffCalendarEl = document.getElementById('dayoff-calendar');
+    const DAYOFF_API_URL = (typeof window.DAYOFF_API_URL !== 'undefined' && window.DAYOFF_API_URL)
+        ? window.DAYOFF_API_URL
+        : 'https://group.caily.com.vn/api/index.php?type=get_dayoff_all_api';
+    if (dayoffCalendarEl) {
+        let dayoffListCache = null;
+        let dayoffUserDisplayMap = {};
+
+        /** GUIS: userid (from groupware API) → realname + team_name */
+        function getDayoffUserDisplayTitle(userid) {
+            const key = userid || '';
+            const info = dayoffUserDisplayMap[key];
+            if (!info) {
+                return key;
+            }
+            const name = (info.realname && String(info.realname).trim()) ? info.realname : key;
+            const teamName = info.team_name && String(info.team_name).trim();
+            return teamName ? (name + '（' + teamName + '）') : name;
+        }
+
+        async function resolveDayoffUserDisplaysFromGuis(dayoffList) {
+            const userids = [];
+            (dayoffList || []).forEach(function (item) {
+                const uid = item.userid;
+                if (uid && userids.indexOf(uid) === -1) {
+                    userids.push(uid);
+                }
+            });
+            if (!userids.length) {
+                dayoffUserDisplayMap = {};
+                return dayoffUserDisplayMap;
+            }
+            try {
+                const response = await axios.get(
+                    '/api/index.php?model=user&method=resolveDisplayByUserids&userids=' + encodeURIComponent(userids.join(','))
+                );
+                if (response.status === 200 && response.data && response.data.map) {
+                    dayoffUserDisplayMap = response.data.map;
+                    return dayoffUserDisplayMap;
+                }
+            } catch (e) {
+                console.warn('resolveDisplayByUserids', e);
+            }
+            dayoffUserDisplayMap = {};
+            return dayoffUserDisplayMap;
+        }
+
+        function isDayoffAllDay(item) {
+            return /^true$/i.test(String(item.allday || ''));
+        }
+
+        function dayoffEventOverlapsRange(eventStart, eventEnd, rangeStart, rangeEnd) {
+            return eventStart.isBefore(rangeEnd) && eventEnd.isAfter(rangeStart);
+        }
+
+        /** API times are Vietnam (UTC+7); display in Japan (Asia/Tokyo). */
+        function convertVnDateTimeToJapan(dateStr, timeStr) {
+            const time = timeStr || '00:00';
+            let jp;
+            if (typeof moment.tz === 'function') {
+                jp = moment.tz(dateStr + ' ' + time, 'YYYY-MM-DD HH:mm', 'Asia/Ho_Chi_Minh').tz('Asia/Tokyo');
+            } else {
+                jp = moment(dateStr + ' ' + time, 'YYYY-MM-DD HH:mm').add(2, 'hours');
+            }
+            return {
+                date: jp.format('YYYY-MM-DD'),
+                time: jp.format('HH:mm'),
+                iso: jp.format('YYYY-MM-DDTHH:mm:ss')
+            };
+        }
+
+        function mapDayoffItemToEvent(item) {
+            const isAllDay = isDayoffAllDay(item);
+            const isOwn = String(item.userid || '') === String(typeof USER_ID !== 'undefined' ? USER_ID : '');
+            const title = getDayoffUserDisplayTitle(item.userid);
+
+            if (isAllDay) {
+                const endExclusive = moment(item.date_end, 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD');
+                return {
+                    id: 'dayoff-' + item.id,
+                    title: title,
+                    start: item.date_start,
+                    end: endExclusive,
+                    allDay: true,
+                    extendedProps: {
+                        isOwn: isOwn,
+                        calendar: '勤怠'
+                    }
+                };
+            }
+
+            const vnTimeStart = (item.time_start && item.time_start !== '00:00') ? item.time_start : '00:00';
+            const vnTimeEnd = (item.time_end && item.time_end !== '00:00') ? item.time_end : '23:59';
+            const startJp = convertVnDateTimeToJapan(item.date_start || '', vnTimeStart);
+            const endJp = convertVnDateTimeToJapan(item.date_end || item.date_start || '', vnTimeEnd);
+            return {
+                id: 'dayoff-' + item.id,
+                title: title,
+                start: startJp.iso,
+                end: endJp.iso,
+                allDay: false,
+                extendedProps: {
+                    isOwn: isOwn,
+                    calendar: '勤怠',
+                    timeLabel: startJp.time + ' - ' + endJp.time
+                }
+            };
+        }
+
+        function filterDayoffEventsForRange(list, rangeStart, rangeEnd) {
+            const rangeStartM = moment(rangeStart);
+            const rangeEndM = moment(rangeEnd);
+            const events = [];
+
+            (list || []).forEach(function (item) {
+                if (String(item.status) !== '1') {
+                    return;
+                }
+                const event = mapDayoffItemToEvent(item);
+                const eventStart = moment(event.start);
+                const eventEnd = event.allDay
+                    ? moment(event.end)
+                    : moment(event.end);
+                if (dayoffEventOverlapsRange(eventStart, eventEnd, rangeStartM, rangeEndM)) {
+                    events.push(event);
+                }
+            });
+
+            return events;
+        }
+
+        async function getDayoffList() {
+            if (dayoffListCache) {
+                return dayoffListCache;
+            }
+            const response = await axios.get(DAYOFF_API_URL, { withCredentials: true });
+            if (response.status !== 200 || !response.data || !response.data.success) {
+                if (response.data) {
+                    handleErrors(response.data);
+                }
+                return [];
+            }
+            dayoffListCache = response.data.list || [];
+            await resolveDayoffUserDisplaysFromGuis(dayoffListCache);
+            return dayoffListCache;
+        }
+
+        async function fetchDayoffEvents(info, successCallback) {
+            const list = await getDayoffList();
+            successCallback(filterDayoffEventsForRange(list, info.start, info.end));
+        }
+
+        const dayoffCalendar = new Calendar(dayoffCalendarEl, {
+            locale: 'ja',
+            initialView: 'listWeek',
+            events: fetchDayoffEvents,
+            plugins: [listPlugin],
+            editable: false,
+            dragScroll: true,
+            dayMaxEvents: 4,
+            firstDay: 1,
+            headerToolbar: {
+                start: 'title',
+                end: 'prev,next'
+            },
+            titleFormat: function (date) {
+                if (date.start && date.end) {
+                    const start = moment(date.start).format('M月D日');
+                    const end = moment(date.end).subtract(1, 'days').format('M月D日');
+                    return 'CAILY休暇: ' + start + ' ～ ' + end;
+                }
+                if (date.date) {
+                    return 'CAILY休暇: ' + moment(date.date).format('YYYY年M月D日');
+                }
+                if (date.start) {
+                    return 'CAILY休暇: ' + moment(date.start).format('YYYY年M月');
+                }
+                return '';
+            },
+            allDayText: '全休',
+            noEventsText: '休暇予定がありません',
+            buttonText: {
+                today: '今日',
+                month: '月',
+                week: '週',
+                day: '日'
+            },
+            direction: direction,
+            initialDate: new Date(),
+            showNonCurrentDates: false,
+            height: '400px',
+            eventClassNames: function ({ event: calendarEvent }) {
+                const calendarType = calendarEvent.extendedProps.calendar || '勤怠';
+                const colorName = calendarColors[calendarType] || calendarColors['勤怠'];
+                return ['bg-label-' + colorName];
+            },
+            eventDidMount: function (info) {
+                if (info.view.type !== 'listWeek' && info.view.type !== 'listMonth') {
+                    return;
+                }
+                const timeEl = info.el.querySelector('.fc-list-event-time');
+                if (!timeEl) {
+                    return;
+                }
+                if (info.event.allDay) {
+                    timeEl.textContent = '全休';
+                } else {
+                    const timeLabel = info.event.extendedProps.timeLabel;
+                    if (timeLabel) {
+                        timeEl.textContent = timeLabel;
+                    }
+                }
+            }
+        });
+
+        dayoffCalendar.render();
     }
 
 

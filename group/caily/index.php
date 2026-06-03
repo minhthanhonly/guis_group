@@ -208,17 +208,24 @@ if (!empty($_SESSION['userid'])) {
   </div>
 
   <div class="row g-6 mt-1">
-    <!-- Statistics -->
-
     <div class="col-xl-6 col-md-12">
       <div class="card h-100">
-        <div class="card-body pb-0 app-calendar-wrapper">
+        <div class="card-body pb-2 app-calendar-wrapper">
           <div id="calendar"></div>
         </div>
       </div>
     </div>
-    <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
     <div class="col-xl-6 col-md-12">
+      <div class="card h-100">
+        <div class="card-body pb-2 app-calendar-wrapper">
+          <div id="dayoff-calendar"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
+  <div class="row g-6 mt-1">
+    <div class="col-xl-12 col-md-12">
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between">
           <h5 class="card-title mb-0">お知らせ</h5>
@@ -247,8 +254,8 @@ if (!empty($_SESSION['userid'])) {
         </div>
       </div>
     </div>
-    <?php } ?>
   </div>
+  <?php } ?>
  
  <?php if($_SESSION['authority'] == 'administrator' || $_SESSION['authority'] == 'manager' || $is_soumu_user) { ?>
   <div class="row g-6 mt-1">
@@ -400,6 +407,9 @@ $view->footing();
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/css/pages/app-calendar.css" />
 <script src="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.js"></script>
+<script>
+  window.DAYOFF_API_URL = 'https://group.caily.com.vn/api/index.php?type=get_dayoff_all_api&debug=1';
+</script>
 <script src="<?=ROOT?>assets/js/top.js?v=<?=CACHE_VERSION?>"></script>
 <script>
   window.DASHBOARD_FORM_ROOT = <?= json_encode($root . 'form/') ?>;

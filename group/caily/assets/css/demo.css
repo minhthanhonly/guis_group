@@ -382,8 +382,20 @@ td.fc-day-sat{
 	color: #fff!important;
 }
 
-#calendar .fc-view-harness{
-	min-block-size: 0px!important;
+/* Dashboard top: listWeek calendars (fixed height, internal scroll) */
+.app-calendar-wrapper #calendar .fc-view-harness,
+.app-calendar-wrapper #dayoff-calendar .fc-view-harness {
+	min-block-size: 0 !important;
+	margin-inline: 0 !important;
+	overflow: hidden;
+}
+.app-calendar-wrapper #calendar .fc-scroller,
+.app-calendar-wrapper #dayoff-calendar .fc-scroller,
+.app-calendar-wrapper #calendar .fc-list-view,
+.app-calendar-wrapper #dayoff-calendar .fc-list-view {
+	overflow-y: auto !important;
+	overflow-x: hidden;
+	-webkit-overflow-scrolling: touch;
 }
 #calendar.schedule-calendar .fc-view-harness{
 	min-block-size: 800px!important;

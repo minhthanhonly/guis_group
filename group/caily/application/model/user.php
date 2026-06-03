@@ -359,6 +359,56 @@ class User extends ApplicationModel {
 		}
 	}
 
+	/**
+	 * Resolve GUIS display labels for groupware dayoff API userids.
+	 * GET userids: comma-separated userid strings (same as groupware_dayoff.userid).
+	 */
+	function resolveDisplayByUserids() {
+		$useridsStr = isset($_GET['userids']) ? trim($_GET['userids']) : '';
+		if ($useridsStr === '') {
+			return array('success' => true, 'map' => array());
+		}
+		$parts = array_filter(array_map('trim', explode(',', $useridsStr)));
+		$quoted = array();
+		foreach ($parts as $uid) {
+			if ($uid !== '') {
+				$quoted[] = "'" . $this->quote($uid) . "'";
+			}
+		}
+		if (empty($quoted)) {
+			return array('success' => true, 'map' => array());
+		}
+		$inList = implode(',', $quoted);
+		$query = "SELECT u.userid, u.realname, t.name AS team_name
+			FROM " . $this->table . " u
+			LEFT JOIN " . DB_PREFIX . "team_members tm ON tm.user_id = u.id
+			LEFT JOIN " . DB_PREFIX . "team t ON tm.team_id = t.id AND t.is_active = 1
+			WHERE u.userid IN (" . $inList . ")
+			ORDER BY u.userid ASC, t.name ASC";
+		$rows = $this->fetchAll($query);
+		$byUserid = array();
+		foreach ($rows as $row) {
+			$uid = $row['userid'];
+			if (!isset($byUserid[$uid])) {
+				$byUserid[$uid] = array(
+					'realname' => $row['realname'],
+					'teams' => array(),
+				);
+			}
+			if (!empty($row['team_name']) && !in_array($row['team_name'], $byUserid[$uid]['teams'], true)) {
+				$byUserid[$uid]['teams'][] = $row['team_name'];
+			}
+		}
+		$map = array();
+		foreach ($byUserid as $userid => $data) {
+			$map[$userid] = array(
+				'realname' => $data['realname'],
+				'team_name' => implode('、', $data['teams']),
+			);
+		}
+		return array('success' => true, 'map' => $map);
+	}
+
 }
 
 ?>
