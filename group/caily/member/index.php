@@ -46,6 +46,7 @@ $view->heading('メンバー一覧');
 						<th>部署</th>
 						<th>従業員の種類</th>
 						<th>ステータス</th>
+						<th>退職日</th>
 						<?php if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') { ?>
 						<th class="show-project-column" style="display: none;">案件表示</th>
 						<th class="approve-request-column" style="display: none;">申請承認を許可</th>
@@ -269,6 +270,13 @@ $view->heading('メンバー一覧');
               <label class="form-label" for="edit-user-department">部署</label>
               <select id="edit-user-department" class="form-select select2" name="department_id[]" multiple>
               </select>
+            </div>
+          </div>
+          <div class="form-group row">
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-quite-date">退職日</label>
+              <input type="text" class="form-control" id="edit-user-quite-date" name="quite_date" placeholder="YYYY-MM-DD HH:mm" autocomplete="off" />
+              <small class="text-muted">退職者へ変更時は自動設定されます。空欄で保存するとクリアされます。</small>
             </div>
           </div>
           <div class="mb-4 form-control-validation">

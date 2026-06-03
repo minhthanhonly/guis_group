@@ -198,7 +198,7 @@
               <th v-if="currentTab === 'commuting_allowance'">適用開始日</th>
               <th v-if="currentTab === 'commuting_allowance'">合計片道運賃</th>
               <th v-if="currentTab === 'commuting_allowance'">１か月定期代</th>
-              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">事由</th>
+              <th class="reason-col" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">事由</th>
               <th class="note-col" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">注記</th>
               <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">承認者(指定)</th>
               <th>コメント数</th>
@@ -303,7 +303,7 @@
               <td v-if="currentTab === 'it_support'">{{ req.data?.category || '-' }}</td>
               <td v-if="currentTab === 'it_support'">{{ req.data?.subject || '-' }}</td>
               <td v-if="currentTab === 'it_support'">{{ req.data?.priority || '-' }}</td>
-              <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">{{(req.data?.reason || '-') }}</td>
+              <td class="reason-col" :title="req.data?.reason || '-'" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">{{ req.data?.reason || '-' }}</td>
               <td class="note-col" :title="req.data?.note || '-'" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">{{ req.data?.note || '-' }}</td>
               <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">{{ req.approver_user_realname || req.approver_user_id || '-' }}</td>
               <td>
@@ -407,6 +407,13 @@
 .note-col {
   max-width: 150px;
   width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reason-col {
+  max-width: 250px;
+  width: 250px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

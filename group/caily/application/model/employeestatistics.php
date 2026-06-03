@@ -38,6 +38,52 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
+     * Fiscal year end Y = Jul (Y-1) .. Jun (Y). Resolve from fiscal_year, selected_month (YYYY-MM), or today.
+     */
+    private function resolveFiscalEndYear() {
+        if (isset($_GET['fiscal_year'])) {
+            $y = intval($_GET['fiscal_year']);
+            if ($y >= 2000 && $y <= 2100) {
+                return $y;
+            }
+        }
+        if (isset($_GET['year'])) {
+            $y = intval($_GET['year']);
+            if ($y >= 2000 && $y <= 2100) {
+                return $y;
+            }
+        }
+        if (!empty($_GET['selected_month']) && preg_match('/^(\d{4})-(\d{2})$/', $_GET['selected_month'], $m)) {
+            $cal = intval($m[1]);
+            $mo = intval($m[2]);
+            return ($mo >= 7) ? ($cal + 1) : $cal;
+        }
+        $mo = intval(date('n'));
+        $y = intval(date('Y'));
+        return ($mo >= 7) ? ($y + 1) : $y;
+    }
+
+    private function getFiscalYearStartDate($fiscalEndYear = null) {
+        if ($fiscalEndYear === null) {
+            $fiscalEndYear = $this->resolveFiscalEndYear();
+        }
+        return sprintf('%d-07-01', intval($fiscalEndYear) - 1);
+    }
+
+    /**
+     * Active employees for stats: exclude 退職者 with no quite_date, or quite_date before fiscal year start.
+     */
+    private function getActiveEmployeeStatsSql($userAlias = 'u') {
+        $fiscalStart = $this->getFiscalYearStartDate();
+        $a = preg_replace('/[^a-zA-Z0-9_]/', '', $userAlias) ?: 'u';
+        $retire = RETIRE_GROUP;
+        return "(
+            (({$a}.quite_date IS NULL) AND {$a}.user_group <> '" . $this->quote($retire) . "')
+            OR ({$a}.quite_date >= '" . $this->quote($fiscalStart) . "')
+        )";
+    }
+
+    /**
      * Calculate and save statistics for a period
      */
     function calculateStatistics() {
@@ -331,10 +377,11 @@ class Employeestatistics extends ApplicationModel {
                 COUNT(*) as count,
                 COALESCE(SUM(price), 0) as total_revenue
             FROM " . DB_PREFIX . "project_drawings
-            WHERE created_by LIKE '%%%s%%'
+            WHERE (FIND_IN_SET('%s', created_by) > 0 OR created_by = '%s')
             AND DATE(created_at) BETWEEN '%s' AND '%s'
             AND price IS NOT NULL
             AND status = 'approved'",
+            $this->quote($user_id),
             $this->quote($user_id),
             $this->quote($period_start),
             $this->quote($period_end)
@@ -388,6 +435,7 @@ class Employeestatistics extends ApplicationModel {
                 INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
                 INNER JOIN " . DB_PREFIX . "team t ON tm.team_id = t.id
                 WHERE tm.team_id = %d AND t.is_active = 1
+                AND " . $this->getActiveEmployeeStatsSql('u') . "
                 ORDER BY u.id ASC",
                 intval($team_id)
             );
@@ -403,6 +451,7 @@ class Employeestatistics extends ApplicationModel {
                 FROM " . DB_PREFIX . "user u
                 INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
                 INNER JOIN " . DB_PREFIX . "team t ON tm.team_id = t.id AND t.is_active = 1
+                WHERE " . $this->getActiveEmployeeStatsSql('u') . "
                 ORDER BY u.id ASC, tm.team_id ASC"
             );
         }
@@ -455,13 +504,15 @@ class Employeestatistics extends ApplicationModel {
         if ($user_id) {
             $whereArr[] = sprintf("es.user_id = '%s'", $user_id);
         }
+
+        $whereArr[] = $this->getActiveEmployeeStatsSql('u');
         
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
         
         $query = sprintf(
             "SELECT es.*, u.realname as user_name, t.name as team_name
             FROM {$this->table} es
-            LEFT JOIN " . DB_PREFIX . "user u ON es.user_id = u.userid
+            INNER JOIN " . DB_PREFIX . "user u ON es.user_id = u.userid
             LEFT JOIN " . DB_PREFIX . "team t ON es.team_id = t.id
             %s
             ORDER BY es.period_start DESC, t.name ASC, u.realname ASC",
@@ -580,6 +631,8 @@ class Employeestatistics extends ApplicationModel {
         if ($team_id) {
             $whereArr[] = sprintf("es.team_id = %d", intval($team_id));
         }
+
+        $whereArr[] = $this->getActiveEmployeeStatsSql('u');
         
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
         
@@ -595,6 +648,7 @@ class Employeestatistics extends ApplicationModel {
                 COALESCE(SUM(es.drawing_count), 0) as total_drawing_count,
                 COALESCE(SUM(es.task_count), 0) as total_task_count
             FROM {$this->table} es
+            INNER JOIN " . DB_PREFIX . "user u ON es.user_id = u.userid
             LEFT JOIN " . DB_PREFIX . "team t ON es.team_id = t.id
             %s
             GROUP BY t.id, t.name
@@ -658,38 +712,44 @@ class Employeestatistics extends ApplicationModel {
             return 0;
         };
 
+        $activeUserSql = $this->getActiveEmployeeStatsSql('u');
+
         // 3) Load monthly statistics within the fiscal window (period_type = month)
         $monthlyRows = $this->fetchAll(
             "SELECT 
-                team_id,
-                DATE_FORMAT(period_start, '%Y-%m') AS ym,
-                SUM(revenue) AS revenue,
-                SUM(task_likes) AS likes,
-                SUM(task_dislikes) AS dislikes,
-                SUM(total_drawings_revenue) AS drawings_revenue,
-                SUM(drawing_count) AS drawing_count,
-                SUM(task_count) AS task_count
-             FROM {$this->table}
-             WHERE period_type = 'month'
-               AND period_start >= '" . $this->quote($startDate) . "'
-               AND period_start <= '" . $this->quote($endDate) . "'
-             GROUP BY team_id, ym"
+                es.team_id,
+                DATE_FORMAT(es.period_start, '%Y-%m') AS ym,
+                SUM(es.revenue) AS revenue,
+                SUM(es.task_likes) AS likes,
+                SUM(es.task_dislikes) AS dislikes,
+                SUM(es.total_drawings_revenue) AS drawings_revenue,
+                SUM(es.drawing_count) AS drawing_count,
+                SUM(es.task_count) AS task_count
+             FROM {$this->table} es
+             INNER JOIN " . DB_PREFIX . "user u ON es.user_id = u.userid
+             WHERE es.period_type = 'month'
+               AND es.period_start >= '" . $this->quote($startDate) . "'
+               AND es.period_start <= '" . $this->quote($endDate) . "'
+               AND " . $activeUserSql . "
+             GROUP BY es.team_id, ym"
         );
 
         // 4) Aggregate yearly totals
         $yearRows = $this->fetchAll(
             "SELECT 
-                team_id,
-                SUM(revenue) AS revenue_year,
-                SUM(task_likes) AS total_likes,
-                SUM(task_dislikes) AS total_dislikes,
-                SUM(drawing_count) AS total_drawing_count,
-                SUM(task_count) AS total_task_count
-             FROM {$this->table}
-             WHERE period_type = 'month'
-               AND period_start >= '" . $this->quote($startDate) . "'
-               AND period_start <= '" . $this->quote($endDate) . "'
-             GROUP BY team_id"
+                es.team_id,
+                SUM(es.revenue) AS revenue_year,
+                SUM(es.task_likes) AS total_likes,
+                SUM(es.task_dislikes) AS total_dislikes,
+                SUM(es.drawing_count) AS total_drawing_count,
+                SUM(es.task_count) AS total_task_count
+             FROM {$this->table} es
+             INNER JOIN " . DB_PREFIX . "user u ON es.user_id = u.userid
+             WHERE es.period_type = 'month'
+               AND es.period_start >= '" . $this->quote($startDate) . "'
+               AND es.period_start <= '" . $this->quote($endDate) . "'
+               AND " . $activeUserSql . "
+             GROUP BY es.team_id"
         );
         $yearTotals = [];
         foreach ($yearRows as $row) {

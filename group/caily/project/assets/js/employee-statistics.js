@@ -8,6 +8,23 @@ function getCurrentMonth() {
     return `${year}-${month}`;
 }
 
+function getCurrentFiscalEndYear() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    return month >= 7 ? year + 1 : year;
+}
+
+function fiscalEndYearFromMonth(ym) {
+    if (!ym || !/^\d{4}-\d{2}$/.test(ym)) {
+        return getCurrentFiscalEndYear();
+    }
+    const parts = ym.split('-');
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    return m >= 7 ? y + 1 : y;
+}
+
 createApp({
     data() {
         return {
@@ -252,6 +269,24 @@ createApp({
     },
     
     methods: {
+        getSelectedFiscalEndYear() {
+            if (this.activeTab === 'annual' && this.selectedYear) {
+                return parseInt(this.selectedYear, 10);
+            }
+            if (this.filters.selected_month) {
+                return fiscalEndYearFromMonth(this.filters.selected_month);
+            }
+            return getCurrentFiscalEndYear();
+        },
+
+        appendFiscalFilterParams(params) {
+            params.append('fiscal_year', String(this.getSelectedFiscalEndYear()));
+            if (this.filters.selected_month) {
+                params.append('selected_month', this.filters.selected_month);
+            }
+            return params;
+        },
+
         async loadTeams() {
             try {
                 const response = await axios.get('/api/index.php?model=team&method=list');
@@ -349,6 +384,7 @@ createApp({
                     period_type: 'month',
                     months: 12
                 });
+                this.appendFiscalFilterParams(params);
                 
                 // Handle null team_id (for teams without team_id)
                 if (this.selectedTeamId !== null && this.selectedTeamId !== '') {
@@ -920,6 +956,7 @@ createApp({
                     months: 12,
                     user_id: this.selectedUserId
                 });
+                this.appendFiscalFilterParams(params);
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
                 this.employeeChartData = response.data || [];
@@ -1230,6 +1267,7 @@ createApp({
                     period_type: this.filters.period_type,
                     months: 12 // Load last 12 months
                 });
+                this.appendFiscalFilterParams(params);
                 
                 if (this.filters.team_id) {
                     params.append('team_id', this.filters.team_id);
@@ -1253,6 +1291,7 @@ createApp({
                     period_type: this.filters.period_type,
                     months: 12 // Load last 12 months
                 });
+                this.appendFiscalFilterParams(params);
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
                 this.teamStatistics = response.data || [];
@@ -1274,6 +1313,7 @@ createApp({
                     period_type: this.filters.period_type,
                     months: 12 // Calculate for last 12 months
                 });
+                this.appendFiscalFilterParams(params);
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
                 
@@ -1335,6 +1375,7 @@ createApp({
                     period_type: this.filters.period_type,
                     months: 12
                 });
+                this.appendFiscalFilterParams(params);
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
                 

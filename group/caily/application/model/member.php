@@ -35,8 +35,39 @@ class Member extends ApplicationModel {
 		'show_project'=>array('案件関連を表示', 'numeric', 'length:1'),
 		'can_approve_request'=>array('申請関係の承認を許可します', 'numeric', 'length:1'),
 		'is_soumu'=>array('総務管理を許可します', 'numeric', 'length:1'),
+		'quite_date'=>array('退職日', 'except'=>array('search')),
 		);
 		
+	}
+
+	function connect() {
+		parent::connect();
+		$this->ensureQuiteDateColumn();
+	}
+
+	/**
+	 * Add quite_date (退職日) if missing — column may not exist until migration runs.
+	 */
+	private function ensureQuiteDateColumn() {
+		static $ensured = false;
+		if ($ensured) {
+			return;
+		}
+		$ensured = true;
+		$table = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $this->table);
+		if ($table === '') {
+			return;
+		}
+		$row = $this->fetchOne(
+			"SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+			. "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' AND COLUMN_NAME = 'quite_date'"
+		);
+		if (!empty($row['cnt'])) {
+			return;
+		}
+		$this->query(
+			"ALTER TABLE `{$table}` ADD COLUMN `quite_date` DATETIME NULL DEFAULT NULL COMMENT '退職日'"
+		);
 	}
 	
 	function validate() {
@@ -144,7 +175,7 @@ class Member extends ApplicationModel {
 
 	function get_member() {
 		$config = new Config($this->handler);
-		$query = "SELECT groupware_user.id as `id`, `userid`, `realname`, `lastname`, `firstname`, `lastname_after_married`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend`, branch_id, `show_project`, `can_approve_request`, `is_soumu`, groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
+		$query = "SELECT groupware_user.id as `id`, `userid`, `realname`, `lastname`, `firstname`, `lastname_after_married`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend`, `quite_date`, branch_id, `show_project`, `can_approve_request`, `is_soumu`, groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
 		$hash['list'] = $this->fetchAll($query);
 		$hash['group'] = $this->findGroup();
 
@@ -270,7 +301,35 @@ class Member extends ApplicationModel {
 				$this->post['is_soumu'] = 1;
 			}
 
+			$clearQuiteDate = false;
+			$isRetireGroup = isset($this->post['user_group'])
+				&& (string) $this->post['user_group'] === (string) RETIRE_GROUP;
+			if (array_key_exists('quite_date', $this->post)) {
+				$qd = trim((string) $this->post['quite_date']);
+				if ($qd === '') {
+					if ($isRetireGroup) {
+						$this->post['quite_date'] = date('Y-m-d H:i:s');
+					} else {
+						$clearQuiteDate = true;
+						unset($this->post['quite_date']);
+					}
+				} else {
+					$this->post['quite_date'] = $qd;
+				}
+			} elseif ($isRetireGroup) {
+				$this->post['quite_date'] = date('Y-m-d H:i:s');
+			}
+
 			$this->updatePost();
+
+			if ($clearQuiteDate && !empty($_POST['id'])) {
+				$table = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $this->table);
+				$this->query(sprintf(
+					"UPDATE `%s` SET quite_date = NULL WHERE id = %d",
+					$table,
+					intval($_POST['id'])
+				));
+			}
 
 			if($_POST['department_id']){
 				$this->updateDepartment($_POST['userid'], $_POST['department_id']);
@@ -351,7 +410,7 @@ class Member extends ApplicationModel {
 		$editor = $_SESSION['userid'];
 
 		$query = sprintf(
-			"UPDATE groupware_user SET is_suspend = NULL, editor = '%s', updated = '%s' WHERE id = '%s'",
+			"UPDATE groupware_user SET is_suspend = NULL, quite_date = NULL, editor = '%s', updated = '%s' WHERE id = '%s'",
 			$editor,
 			$date,
 			$id,
@@ -489,7 +548,8 @@ class Member extends ApplicationModel {
 		$editor = $_SESSION['userid'];
 
 		$query = sprintf(
-			"UPDATE groupware_user SET remember_token = NULL, user_group = '". RETIRE_GROUP ."', user_groupname = '". RETIRE_GROUP_NAME ."', is_suspend = '1', editor = '%s', updated = '%s' WHERE id = '%s'",
+			"UPDATE groupware_user SET remember_token = NULL, user_group = '". RETIRE_GROUP ."', user_groupname = '". RETIRE_GROUP_NAME ."', is_suspend = '1', quite_date = '%s', editor = '%s', updated = '%s' WHERE id = '%s'",
+			$this->quote($date),
 			$editor,
 			$date,
 			$id

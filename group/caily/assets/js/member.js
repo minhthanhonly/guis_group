@@ -54,6 +54,59 @@ async function loadDepartments() {
   return departmentList;
 }
 
+function getRetireGroupId() {
+  if (groupList && typeof groupList === 'object') {
+    for (const [id, name] of Object.entries(groupList)) {
+      if (name === '退職者') {
+        return String(id);
+      }
+    }
+  }
+  return '5';
+}
+
+function isQuiteDateInputEmpty(el) {
+  return !el || !String(el.value || '').trim();
+}
+
+function setQuiteDateInputNow(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) {
+    return;
+  }
+  const now = new Date();
+  if (el._flatpickr) {
+    el._flatpickr.setDate(now, true);
+    return;
+  }
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const h = String(now.getHours()).padStart(2, '0');
+  const min = String(now.getMinutes()).padStart(2, '0');
+  el.value = y + '-' + m + '-' + d + ' ' + h + ':' + min;
+}
+
+function applyQuiteDateWhenRetireGroupSelected(groupId, quiteDateInputId) {
+  if (String(groupId) !== getRetireGroupId()) {
+    return;
+  }
+  const quiteDateEl = document.getElementById(quiteDateInputId);
+  if (quiteDateEl && isQuiteDateInputEmpty(quiteDateEl)) {
+    setQuiteDateInputNow(quiteDateInputId);
+  }
+}
+
+function bindEditGroupQuiteDateAutoFill() {
+  const $editGroup = $('#edit-user-group');
+  if (!$editGroup.length) {
+    return;
+  }
+  $editGroup.off('change.quiteDate').on('change.quiteDate', function () {
+    applyQuiteDateWhenRetireGroupSelected($(this).val(), 'edit-user-quite-date');
+  });
+}
+
 function generateGroupList(){
     const groupListElement = document.getElementById('UserGroup');
     const roleListElement = document.getElementById('UserRole');
@@ -98,6 +151,8 @@ function generateGroupList(){
     roleListElement.addEventListener('change', (e) => {
         dt_user.column(3).search(e.target.value).draw();
     });
+
+    bindEditGroupQuiteDateAutoFill();
 
     groupListElement.addEventListener('change', (e) => {
       if(e.target.value == ''){
@@ -408,6 +463,10 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             { data: 'status',
               title: 'ステータス'
             },
+            { data: 'quite_date',
+              title: '退職日',
+              defaultContent: ''
+            },
             ...(user_role == 'administrator' ? [
               {
                 data: 'show_project',
@@ -549,10 +608,29 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                   }
               }
             },
+            {
+              targets: 9,
+              render: function (data, type, full, meta) {
+                const qd = full['quite_date'];
+                if (!qd) {
+                  return '<span class="text-muted">—</span>';
+                }
+                const d = new Date(String(qd).replace(' ', 'T'));
+                if (isNaN(d.getTime())) {
+                  return String(qd).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                }
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const h = String(d.getHours()).padStart(2, '0');
+                const min = String(d.getMinutes()).padStart(2, '0');
+                return y + '/' + m + '/' + day + ' ' + h + ':' + min;
+              }
+            },
             ...(user_role == 'administrator' ? [
               {
                 // Show Project column (only for administrator)
-                targets: 9,
+                targets: 10,
                 className: 'show-project-column',
                 render: function (data, type, full, meta) {
                     const showProject = full['show_project'];
@@ -565,7 +643,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
               },
               {
                 // Approve request permission column (only for administrator)
-                targets: 10,
+                targets: 11,
                 className: 'approve-request-column',
                 render: function (data, type, full, meta) {
                     const canApprove = full['can_approve_request'];
@@ -578,7 +656,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
               },
               {
                 // Soumu management permission column (only for administrator)
-                targets: 11,
+                targets: 12,
                 className: 'soumu-column',
                 render: function (data, type, full, meta) {
                     const isSoumu = full['is_soumu'];
@@ -766,6 +844,29 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             const isSoumuCheckbox = document.getElementById('edit-user-is-soumu');
             if (isSoumuCheckbox) {
               isSoumuCheckbox.checked = userinfo.is_soumu == 1 || userinfo.is_soumu === '1';
+            }
+
+            const quiteDateEl = document.getElementById('edit-user-quite-date');
+            if (quiteDateEl) {
+              if (quiteDateEl._flatpickr) {
+                quiteDateEl._flatpickr.destroy();
+              }
+              if (typeof flatpickr !== 'undefined') {
+                flatpickr(quiteDateEl, {
+                  enableTime: true,
+                  dateFormat: 'Y-m-d H:i',
+                  locale: (typeof flatpickr !== 'undefined' && flatpickr.l10ns && flatpickr.l10ns.ja) ? flatpickr.l10ns.ja : undefined,
+                  allowInput: true
+                });
+                if (userinfo.quite_date) {
+                  quiteDateEl._flatpickr.setDate(userinfo.quite_date, true);
+                } else {
+                  quiteDateEl.value = '';
+                }
+              } else {
+                quiteDateEl.value = userinfo.quite_date || '';
+              }
+              applyQuiteDateWhenRetireGroupSelected(userinfo.user_group, 'edit-user-quite-date');
             }
 
             const editModal = new bootstrap.Modal(document.getElementById('modalEditUser'));
@@ -1030,6 +1131,10 @@ document.addEventListener('DOMContentLoaded', async function (e) {
   $('#modalEditUser').on('hidden.bs.modal', function () {
      //reset form
      document.getElementById('editUserForm').reset();
+     const quiteDateEl = document.getElementById('edit-user-quite-date');
+     if (quiteDateEl && quiteDateEl._flatpickr) {
+       quiteDateEl._flatpickr.destroy();
+     }
      $('#edit-user-department').val('').trigger('change');
      $('#edit-user-role').val('').trigger('change');
      $('#edit-user-branch').val('').trigger('change');
@@ -1106,8 +1211,8 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             message: 'ユーザー名を入力してください'
           },
           stringLength: {
-            min: 4,
-            message: '4文字以上入力してください'
+            min: 2,
+            message: '2文字以上入力してください'
           }
         }
       },
@@ -1250,8 +1355,8 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             message: 'ユーザー名を入力してください'
           },
           stringLength: {
-            min: 4,
-            message: '4文字以上入力してください'
+            min: 2,
+            message: '2文字以上入力してください'
           }
         }
       },
