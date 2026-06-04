@@ -191,14 +191,13 @@ class Task extends ApplicationModel {
         if ($project_id <= 0) {
             return ['status' => 'error', 'message' => 'project_id required'];
         }
-        // Phase 4.2 – Permission check: user can edit task only if they can edit the project
+        if (!$this->canUserAddTask($project_id)) {
+            return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
+        }
         if (!class_exists('Project')) {
             require_once DIR_MODEL . 'project.php';
         }
         $projectModel = new Project();
-        if (!$projectModel->canUserEditProject($project_id)) {
-            return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
-        }
         $dueDate = isset($_POST['due_date']) && trim((string)$_POST['due_date']) !== '' ? $this->normalize_datetime_with_default($_POST['due_date'], '18:00') : null;
         $startDate = isset($_POST['start_date']) && trim((string)$_POST['start_date']) !== '' ? $this->normalize_datetime_with_default($_POST['start_date'], '09:00') : null;
         $data = array(
@@ -1101,14 +1100,32 @@ class Task extends ApplicationModel {
         ];
     }
 
-    function getPermission() {
-        $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
-        $project = null;
-        $project = $this->fetchOne(
-            "SELECT * FROM " . DB_PREFIX . "projects p" .  " WHERE p.id = " . intval($projectId)
-        );
+    /**
+     * Matches task.php UI: can_manage_project || is_member || user_department.task_add.
+     */
+    private function canUserAddTask($projectId) {
+        $perm = $this->resolveProjectTaskPermissions($projectId);
+        if (!$perm) {
+            return false;
+        }
+        if (!empty($perm['can_manage_project']) || !empty($perm['is_member'])) {
+            return true;
+        }
+        $rule = isset($perm['rule']) ? $perm['rule'] : null;
+        return $rule && isset($rule['task_add']) && (int)$rule['task_add'] === 1;
+    }
 
-        if (!$project) return false;
+    private function resolveProjectTaskPermissions($projectId) {
+        $projectId = intval($projectId);
+        if ($projectId <= 0) {
+            return false;
+        }
+        $project = $this->fetchOne(
+            "SELECT * FROM " . DB_PREFIX . "projects p WHERE p.id = " . $projectId
+        );
+        if (!$project) {
+            return false;
+        }
         $departmentCheck = null;
         $currentUserIdNumber = $_SESSION['id'];
         $currentUserId = $_SESSION['userid'];
@@ -1116,12 +1133,11 @@ class Task extends ApplicationModel {
         $isDepartmentManager = false;
         $isProjectManager = false;
         $isMember = false;
-        
-        // If not manager by projects.manager_id, check groupware_project_members
+
         if (!$isAdmin) {
             $memberCheck = $this->fetchOne(
                 "SELECT COUNT(*) as count FROM " . DB_PREFIX . "project_members " .
-                "WHERE project_id = " . intval($projectId) . " " .
+                "WHERE project_id = " . $projectId . " " .
                 "AND user_id = '" . $currentUserIdNumber . "' " .
                 "AND role = 'manager'"
             );
@@ -1130,7 +1146,7 @@ class Task extends ApplicationModel {
         if (!$isAdmin) {
             $memberCheck = $this->fetchOne(
                 "SELECT COUNT(*) as count FROM " . DB_PREFIX . "project_members " .
-                "WHERE project_id = " . intval($projectId) . " " .
+                "WHERE project_id = " . $projectId . " " .
                 "AND user_id = '" . $currentUserIdNumber . "' " .
                 "AND role = 'member'"
             );
@@ -1142,39 +1158,33 @@ class Task extends ApplicationModel {
                 "WHERE ud.department_id = " . intval($project['department_id']) . " " .
                 "AND ud.userid = '" . $currentUserId . "' LIMIT 1"
             );
-
             $isDepartmentManager = ($departmentCheck && $departmentCheck['project_manager'] == 1);
         }
 
         $isTeamLeader = false;
         if (!$isAdmin) {
-            // team_members.user_id is numeric (user.id), not userid string
             $teamLeaderCheck = $this->fetchOne(
                 "SELECT COUNT(*) as count FROM " . DB_PREFIX . "team_members " .
                 "WHERE user_id = " . intval($currentUserIdNumber) . " AND leader = 1"
             );
             $isTeamLeader = ($teamLeaderCheck && $teamLeaderCheck['count'] > 0);
         }
-        
-        // Check if user is project creator
+
         $isCreator = false;
         if (!$isAdmin && isset($project['created_by'])) {
             $isCreator = $project['created_by'] == $currentUserId;
         }
-        
-        // Check if user is in the same department (even if not a member)
+
         $isInDepartment = false;
         if (!$isAdmin && $departmentCheck) {
             $isInDepartment = true;
         }
-        
-        // Fix: Check project_director safely
+
         $isProjectDirector = false;
         if ($departmentCheck && isset($departmentCheck['project_director'])) {
             $isProjectDirector = ($departmentCheck['project_director'] == 1);
         }
 
-       
         return [
             'is_team_leader' => $isTeamLeader,
             'is_member' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector || $isMember || $isCreator,
@@ -1185,6 +1195,11 @@ class Task extends ApplicationModel {
             'is_in_department' => $isInDepartment,
             'rule' => $departmentCheck
         ];
+    }
+
+    function getPermission() {
+        $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
+        return $this->resolveProjectTaskPermissions($projectId);
     }
 
     function updateOrder() {
