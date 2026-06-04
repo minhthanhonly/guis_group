@@ -1,5 +1,16 @@
 <?php
 require_once('../application/loader.php');
+$isCailyBranchUser = false;
+try {
+    require_once('../application/model/branch.php');
+    $branchModel = new Branch();
+    $branch = $branchModel->get_user_branch_name();
+    if ($branch && isset($branch['name']) && $branch['name'] === 'CAILY') {
+        $isCailyBranchUser = true;
+    }
+} catch (Exception $e) {
+    // keep false
+}
 $parent_project_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 if (!$parent_project_id) {
     header('Location: index.php');
@@ -536,9 +547,9 @@ $view->heading('建物詳細');
                                     <th><span data-i18n="管理">管理</span></th>
                                     <th><span>担当</span></th>
                                     <th><span>CAILY納期</span></th>
-                                    <th><span>GUIS納期</span></th>
+                                    <th v-if="!isCailyBranchUser"><span>GUIS納期</span></th>
                                     <th><span data-i18n="開始日">開始日</span></th>
-                                    <th><span data-i18n="期限日">期限日</span></th>
+                                    <th v-if="!isCailyBranchUser"><span data-i18n="期限日">期限日</span></th>
                                     <th><span data-i18n="ステータス">ステータス</span></th>
                                     <th><span data-i18n="進捗">進捗</span></th>
                                     <th><span data-i18n="総額">総額</span></th>
@@ -605,7 +616,7 @@ $view->heading('建物詳細');
                                         <span v-if="project.caily_nouki" :data-time="project.caily_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.caily_nouki)">{{ formatDateTime(project.caily_nouki) }}</span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
-                                    <td>
+                                    <td v-if="!isCailyBranchUser">
                                         <span v-if="project.guis_nouki" :data-time="project.guis_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)">{{ formatDateTime(project.guis_nouki) }}</span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
@@ -613,7 +624,7 @@ $view->heading('建物詳細');
                                         <span v-if="project.start_date" :data-time="project.start_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.start_date)">{{ formatDateTime(project.start_date) }}</span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
-                                    <td>
+                                    <td v-if="!isCailyBranchUser">
                                         <span v-if="project.end_date" :data-time="project.end_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)">{{ formatDateTime(project.end_date) }}</span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
@@ -1081,11 +1092,12 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4" v-if="!isCailyBranchUser">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.end_date"
-                                        id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                        id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        :class="{ 'is-invalid': childProjectValidationErrors.end_date }">
                                     <div v-if="childProjectValidationErrors.end_date" class="invalid-feedback d-block">
                                         {{ childProjectValidationErrors.end_date }}
                                     </div>
@@ -1166,16 +1178,24 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">CAILY納期</label>
+                                    <label class="form-label">CAILY納期 <span v-if="newChildProject.end_date && newChildProject.tantou === 'CAILY'" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.caily_nouki" 
-                                        id="create_caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                        id="create_caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        :class="{ 'is-invalid': childProjectValidationErrors.caily_nouki }">
+                                    <div v-if="childProjectValidationErrors.caily_nouki" class="invalid-feedback d-block">
+                                        {{ childProjectValidationErrors.caily_nouki }}
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4" v-if="!isCailyBranchUser">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">GUIS納期</label>
+                                    <label class="form-label">GUIS納期 <span v-if="newChildProject.end_date && newChildProject.tantou === 'GUIS'" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.guis_nouki" 
-                                        id="create_guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                        id="create_guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        :class="{ 'is-invalid': childProjectValidationErrors.guis_nouki }">
+                                    <div v-if="childProjectValidationErrors.guis_nouki" class="invalid-feedback d-block">
+                                        {{ childProjectValidationErrors.guis_nouki }}
+                                    </div>
                                 </div>
                             </div>
                             
@@ -1291,11 +1311,12 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4" v-if="!isCailyBranchUser">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.end_date"
-                                        id="edit_end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                        id="edit_end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        :class="{ 'is-invalid': editChildProjectValidationErrors.end_date }">
                                     <div v-if="editChildProjectValidationErrors.end_date"
                                         class="invalid-feedback d-block">
                                         {{ editChildProjectValidationErrors.end_date }}
@@ -1373,16 +1394,24 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">CAILY納期</label>
+                                    <label class="form-label">CAILY納期 <span v-if="editingChildProject.end_date && editingChildProject.tantou === 'CAILY'" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.caily_nouki" 
-                                        id="edit_caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                        id="edit_caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        :class="{ 'is-invalid': editChildProjectValidationErrors.caily_nouki }">
+                                    <div v-if="editChildProjectValidationErrors.caily_nouki" class="invalid-feedback d-block">
+                                        {{ editChildProjectValidationErrors.caily_nouki }}
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4" v-if="!isCailyBranchUser">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label">GUIS納期</label>
+                                    <label class="form-label">GUIS納期 <span v-if="editingChildProject.end_date && editingChildProject.tantou === 'GUIS'" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.guis_nouki" 
-                                        id="edit_guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                        id="edit_guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        :class="{ 'is-invalid': editChildProjectValidationErrors.guis_nouki }">
+                                    <div v-if="editChildProjectValidationErrors.guis_nouki" class="invalid-feedback d-block">
+                                        {{ editChildProjectValidationErrors.guis_nouki }}
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -1545,7 +1574,7 @@ $view->heading('建物詳細');
                                                                 <th><span data-i18n="部署">部署</span></th>
                                                                 <th><span data-i18n="受注形態">受注形態</span></th>
                                                                 <th><span data-i18n="開始日">開始日</span></th>
-                                                                <th><span data-i18n="期限日">期限日</span></th>
+                                                                <th v-if="!isCailyBranchUser"><span data-i18n="期限日">期限日</span></th>
                                                                 <th><span data-i18n="現在のステータス">現在のステータス</span></th>
                                                                 <th><span data-i18n="総額">総額</span></th>
                                                             </tr>
@@ -1585,7 +1614,7 @@ $view->heading('建物詳細');
                                                                     <span v-else>-</span>
                                                                 </td>
                                                                 <td>{{ formatDateTime(project.start_date) || '-' }}</td>
-                                                                <td>{{ formatDateTime(project.end_date) || '-' }}</td>
+                                                                <td v-if="!isCailyBranchUser">{{ formatDateTime(project.end_date) || '-' }}</td>
                                                                 <td>
                                                                     <span v-if="project.is_kadai == 1" class="badge bg-warning">
                                                                         承認待ち
@@ -2152,7 +2181,7 @@ $view->heading('建物詳細');
                                                                 <th><span data-i18n="部署">部署</span></th>
                                                                 <th><span data-i18n="受注形態">受注形態</span></th>
                                                                 <th><span data-i18n="開始日">開始日</span></th>
-                                                                <th><span data-i18n="期限日">期限日</span></th>
+                                                                <th v-if="!isCailyBranchUser"><span data-i18n="期限日">期限日</span></th>
                                                                 <th><span data-i18n="現在のステータス">現在のステータス</span></th>
                                                                 <th><span data-i18n="総額">総額</span></th>
                                                             </tr>
@@ -2187,7 +2216,7 @@ $view->heading('建物詳細');
                                                                     <span v-else>-</span>
                                                                 </td>
                                                                 <td>{{ formatDateTime(project.start_date) || '-' }}</td>
-                                                                <td>{{ formatDateTime(project.end_date) || '-' }}</td>
+                                                                <td v-if="!isCailyBranchUser">{{ formatDateTime(project.end_date) || '-' }}</td>
                                                                 <td>
                                                                     <span v-if="project.is_kadai == 1" class="badge bg-warning">
                                                                         承認待ち
@@ -3793,6 +3822,7 @@ $view->footing();
     const CURRENT_USER_ID = '<?php echo $_SESSION['userid'] ?? ''; ?>';
     const CURRENT_USER_NAME = '<?php echo $_SESSION['realname'] ?? $_SESSION['userid'] ?? ''; ?>';
     const IS_PROJECT_MANAGER = <?php echo isset($_SESSION['isProjectManager']) && $_SESSION['isProjectManager'] ? 'true' : 'false'; ?>;
+    window.IS_CAILY_BRANCH_USER = <?php echo $isCailyBranchUser ? 'true' : 'false'; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="https://unpkg.com/@yaireo/tagify"></script>

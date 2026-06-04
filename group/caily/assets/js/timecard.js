@@ -60,6 +60,103 @@ function findUsername(userid) {
   return user ? formatTimecardUserLabel(user) : userid;
 }
 
+function isEmptyTimecardOpen(value) {
+  if (value == null || value === undefined) return true;
+  const s = String(value).trim();
+  return s === '' || s === '00:00';
+}
+
+function getTimecardUrlParams() {
+  if (typeof window === 'undefined') {
+    return { member: '', group: '', month: '' };
+  }
+  const params = new URLSearchParams(window.location.search || '');
+  return {
+    member: (params.get('member') || '').trim(),
+    group: (params.get('group') || '').trim(),
+    month: (params.get('month') || '').trim()
+  };
+}
+
+function updateTimecardUrl() {
+  if (typeof window === 'undefined' || !window.history || !window.history.replaceState) {
+    return;
+  }
+  const params = new URLSearchParams(window.location.search || '');
+  const slUser = document.getElementById('selectpickerUser');
+  const slGroup = document.getElementById('selectpickerGroup');
+  const monthInput = document.getElementById('timecard-month-input');
+
+  function setOrDelete(key, val) {
+    if (val === undefined || val === null || val === '') {
+      params.delete(key);
+    } else {
+      params.set(key, String(val));
+    }
+  }
+
+  let member = typeof USER_ID !== 'undefined' ? USER_ID : '';
+  if (slUser && slUser.value) {
+    member = slUser.value;
+  }
+  setOrDelete('member', member);
+
+  if (slGroup && slGroup.value) {
+    setOrDelete('group', slGroup.value);
+  } else {
+    params.delete('group');
+  }
+
+  const monthVal = monthInput && monthInput.value ? monthInput.value : '';
+  if (monthVal && /^\d{4}-\d{2}$/.test(monthVal)) {
+    setOrDelete('month', monthVal);
+  } else {
+    params.delete('month');
+  }
+
+  const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+  const query = params.toString();
+  const newUrl = query ? `${baseUrl}?${query}` : baseUrl;
+  window.history.replaceState(null, '', newUrl);
+}
+
+/** URLの member から所属グループを補完し、select の data-current-* を設定 */
+async function applyTimecardUrlParamsOnLoad() {
+  const url = getTimecardUrlParams();
+  const slGroup = document.getElementById('selectpickerGroup');
+  const slUser = document.getElementById('selectpickerUser');
+  const monthInput = document.getElementById('timecard-month-input');
+
+  if (url.month && monthInput && /^\d{4}-\d{2}$/.test(url.month)) {
+    monthInput.value = url.month;
+  }
+
+  if (!slGroup && !slUser) {
+    return url;
+  }
+
+  if (USER_LIST.length === 0) {
+    USER_LIST = await get_users();
+  }
+
+  let groupId = url.group;
+  if (url.member) {
+    const found = USER_LIST.find(function (u) { return u.userid === url.member; });
+    if (found && found.user_group) {
+      groupId = String(found.user_group);
+    }
+    if (slUser) {
+      slUser.setAttribute('data-current-user', url.member);
+    }
+  }
+
+  if (groupId && slGroup) {
+    slGroup.setAttribute('data-current-group', groupId);
+  }
+
+  return url;
+}
+
 async function get_timecard(user, year, month) {
   holidayList = [];
   isSameUser = false;
@@ -203,16 +300,17 @@ async function fetchUser(group_id) {
   const currentUser = slUser.getAttribute('data-current-user');
   USER_LIST.forEach(user => {
     if (group_id == user.user_group) {
-      if (currentUser === user.userid) {
-        slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}" selected>${escapeHtmlTimecard(formatTimecardUserLabel(user))}</option>`;
+      if (currentUser == user.userid) {
+        slUser.innerHTML += `<option data-icon="tabler-user" value="${user.userid}" selected>${escapeHtmlTimecard(formatTimecardUserLabel(user))}</option>`;
       } else {
-        slUser.innerHTML += `<option data-icon="icon-base ti tabler-user" value="${user.userid}">${escapeHtmlTimecard(formatTimecardUserLabel(user))}</option>`;
+        slUser.innerHTML += `<option data-icon="tabler-user" value="${user.userid}">${escapeHtmlTimecard(formatTimecardUserLabel(user))}</option>`;
       }
     }
   });
 
   // Reinitialize selectpicker after updating options
   $(slUser).selectpicker();
+  return Promise.resolve();
 }
 
 async function fetchGroup() {
@@ -220,6 +318,11 @@ async function fetchGroup() {
   if (!slGroup) {
     return;
   }
+
+  if ($(slGroup).data('selectpicker')) {
+    $(slGroup).selectpicker('destroy');
+  }
+
   slGroup.innerHTML = '';
   if (GROUP_LIST.length == 0) {
     GROUP_LIST = await get_groups();
@@ -227,17 +330,16 @@ async function fetchGroup() {
   const currentGroup = slGroup.getAttribute('data-current-group');
 
   GROUP_LIST.forEach(group => {
-    if (currentGroup === group.id) {
-      slGroup.innerHTML += `<option data-icon="icon-base ti tabler-users-group" value="${group.id}" selected>${group.group_name}</option>`;
+    if (currentGroup == group.id) {
+      slGroup.innerHTML += `<option data-icon="tabler-users-group" value="${group.id}" selected>${group.group_name}</option>`;
     } else {
-      slGroup.innerHTML += `<option data-icon="icon-base ti tabler-users-group" value="${group.id}">${group.group_name}</option>`;
+      slGroup.innerHTML += `<option data-icon="tabler-users-group" value="${group.id}">${group.group_name}</option>`;
     }
   });
 
-  $(slGroup).selectpicker('refresh');
+  $(slGroup).selectpicker();
 
-  fetchUser(currentGroup);
-
+  return fetchUser(currentGroup);
 }
 
 function decodeHtmlEntities(str) {
@@ -278,13 +380,15 @@ function addEvent() {
   // Add event listener for the selectpicker
   if (slUser) {
     slUser.addEventListener('change', async function () {
-      changeData()
+      slUser.setAttribute('data-current-user', slUser.value);
+      changeData();
     });
   }
   if (slGroup) {
     slGroup.addEventListener('change', async function () {
-      fetchUser(slGroup.value);
-      changeData()
+      slGroup.setAttribute('data-current-group', slGroup.value);
+      await fetchUser(slGroup.value);
+      changeData();
     });
   }
   // Add event listener for the month input
@@ -453,14 +557,12 @@ function addEvent() {
         // Open the modal
         var timecardinfo = response.data.data;
         document.getElementById('modalEditTimecardNoteTitle').innerHTML = '備考';
-        if (timecardinfo.id) {
-          document.getElementById('editTimecardNoteId').value = timecardinfo.id;
-        }
+        document.getElementById('editTimecardNoteId').value = timecardinfo.id ? String(timecardinfo.id) : '';
         document.getElementById('editTimecardNoteDate').value = date;
         document.getElementById('editTimecardNoteUserid').value = userid;
-        if (timecardinfo.timecard_comment) {
-          document.getElementById('editTimecardNoteNote').value = decodeHtmlEntities(timecardinfo.timecard_comment);
-        }
+        document.getElementById('editTimecardNoteNote').value = timecardinfo.timecard_comment
+          ? decodeHtmlEntities(timecardinfo.timecard_comment)
+          : '';
 
         editModalNote.show();
       } else {
@@ -594,12 +696,8 @@ function addEvent() {
       timecard_comment: {
         validators: {
           stringLength: {
-            min: 4,
-            message: '4文字以上入力してください'
-          },
-          regex: {
-            regex: /^[0-9]{2}:[0-9]{2}$/,
-            message: '時間を正しく入力してください'
+            max: 500,
+            message: '500文字以内で入力してください'
           }
         }
       },
@@ -733,6 +831,7 @@ async function changeData() {
   const data = await get_timecard(user, year, month);
   exportButton.href = `csv.php?member=${user}&year=${year}&month=${month}`;
   drawTable(data);
+  updateTimecardUrl();
   hideHourglass();
 }
 
@@ -774,8 +873,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
   const currentMonth = displayYear + '-' + String(displayMonth).padStart(2, '0');
-  // Set the default value to the current month
-  monthInput.value = currentMonth;
+  const urlMonth = getTimecardUrlParams().month;
+  monthInput.value = (urlMonth && /^\d{4}-\d{2}$/.test(urlMonth)) ? urlMonth : currentMonth;
 
   // Set the max attribute to disallow future months
   monthInput.max = currentMonth;
@@ -808,8 +907,8 @@ document.addEventListener('DOMContentLoaded', function () {
           render: function (data, type, full, meta) {
             let today = moment().format('YYYY-MM-DD');
             if (today == full.timecard_date && isSameUser) {
-              if (!data) {
-                return `<button type="button" class="btn btn-primary btn-sm" data-id="${full.id}" data-owner="${full.owner}" data-checkin>出社</button>`;
+              if (isEmptyTimecardOpen(data)) {
+                return `<button type="button" class="btn btn-primary btn-sm" data-id="${full.id || ''}" data-owner="${full.owner}" data-checkin>出社</button>`;
               }
             }
             if (full.timecard_originalopen != '' && full.timecard_originalopen != full.timecard_open) {
@@ -824,7 +923,7 @@ document.addEventListener('DOMContentLoaded', function () {
           render: function (data, type, full, meta) {
             let today = moment().format('YYYY-MM-DD');
             if (today == full.timecard_date && isSameUser) {
-              if (!data && full.timecard_open) {
+              if (isEmptyTimecardOpen(data) && !isEmptyTimecardOpen(full.timecard_open)) {
                 return `<button type="button" class="btn btn-primary btn-sm" data-id="${full.id}" data-owner="${full.owner}" data-open="${full.timecard_open}" data-checkout>退社</button>`;
               }
             }
@@ -907,8 +1006,15 @@ document.addEventListener('DOMContentLoaded', function () {
         emptyTable: 'データがありません',
       }
     });
-    fetchGroup();
-    initTable();
-    addEvent();
+    (async function () {
+      const urlParams = await applyTimecardUrlParamsOnLoad();
+      const slGroup = document.getElementById('selectpickerGroup');
+      const slUser = document.getElementById('selectpickerUser');
+      if (slGroup) {
+        await fetchGroup();
+      }
+      initTable();
+      addEvent();
+    })();
   }
 });

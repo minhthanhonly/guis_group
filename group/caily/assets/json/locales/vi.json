@@ -503,5 +503,21 @@
     "GUISメモ": "GUIS Ghi chú",
     "規模": "Kích thước",
     "GUIS 受付者": "Người nhận kiện",
-    "列見出しをドラッグして表示順を変更できます。": "Kéo tiêu đề cột để đổi thứ tự hiển thị."
+    "列見出しをドラッグして表示順を変更できます。": "Kéo tiêu đề cột để đổi thứ tự hiển thị.",
+    "担当がCAILYの場合、CAILY納期は必須です": "Khi đảm nhận là CAILY, kỳ hạn CAILY là bắt buộc",
+    "担当がGUISの場合、GUIS納期は必須です": "Khi đảm nhận là GUIS, kỳ hạn GUIS là bắt buộc",
+    "GUIS納期はCAILY納期以降である必要があります": "Kỳ hạn GUIS phải từ kỳ hạn CAILY trở đi",
+    "プロジェクトデータを読み込み中です。しばらくお待ちください。": "Đang tải dữ liệu dự án. Vui lòng đợi.",
+    "案件名は必須です。": "Tên dự án là bắt buộc.",
+    "受注形態は必須です。": "Hình thức đặt hàng là bắt buộc.",
+    "担当は必須です。": "Chịu trách nhiệm là bắt buộc.",
+    "開始日の形式が正しくありません。（例: 2025-01-15 09:00）": "Định dạng ngày bắt đầu không hợp lệ. (Ví dụ: 2025-01-15 09:00)",
+    "期限日の形式が正しくありません。（例: 2025-02-28 18:00）": "Định dạng kì hạn không hợp lệ. (Ví dụ: 2025-02-28 18:00)",
+    "CAILY納期の形式が正しくありません。（例: 2025-01-20 18:00）": "Định dạng kỳ hạn CAILY không hợp lệ. (Ví dụ: 2025-01-20 18:00)",
+    "GUIS納期の形式が正しくありません。（例: 2025-01-25 18:00）": "Định dạng kỳ hạn GUIS không hợp lệ. (Ví dụ: 2025-01-25 18:00)",
+    "期限日は開始日より後である必要があります": "Kì hạn phải sau ngày bắt đầu",
+    "進捗率は0〜100の範囲で入力してください。": "Tiến độ phải trong khoảng 0~100.",
+    "プロジェクトを更新しました。": "Đã cập nhật dự án.",
+    "更新に失敗しました。": "Cập nhật thất bại.",
+    "各納期を表示": "Hiển thị các kỳ hạn"
   }

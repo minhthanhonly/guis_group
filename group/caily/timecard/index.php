@@ -56,7 +56,7 @@ $view->heading('タイムカード');
     </div>
 	<!-- Users List Table -->
 	<div class="card" id="option-block">
-		<div class="card-header bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
+		<div class="card-header sticky-element bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
 			<div class="col-md-3">
 				<h4 class="card-title mb-0" d><span id="timecard_title"><?= $_SESSION['realname'] ?></span><br><small
             id="timecard_type" class="badge bg-label-info fs-6"></small></h4>

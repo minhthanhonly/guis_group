@@ -49,6 +49,50 @@ class Project extends ApplicationModel {
         $this->connect();
     }
 
+    /**
+     * ORDER BY expression for project list (computed columns are not p.* fields).
+     */
+    function resolveProjectListOrderExpression($order_column, $user_id) {
+        $order_column = preg_replace('/[^a-z0-9_]/i', '', (string)$order_column);
+        $user_id = intval($user_id);
+
+        if ($order_column === 'is_favorite') {
+            return sprintf(
+                'CASE WHEN EXISTS (SELECT 1 FROM %sproject_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END',
+                DB_PREFIX,
+                $user_id
+            );
+        }
+
+        $parentColumns = array(
+            'parent_construction_number' => 'pp.construction_number',
+            'parent_branch_name' => 'pp.branch_name',
+            'parent_scale' => 'pp.scale',
+            'parent_type1' => 'pp.type1',
+            'parent_type2' => 'pp.type2',
+            'parent_guis_receiver' => 'pp.guis_receiver',
+        );
+        if (isset($parentColumns[$order_column])) {
+            return $parentColumns[$order_column];
+        }
+
+        if ($order_column === 'department_name') {
+            return 'd.name';
+        }
+
+        $projectColumns = array(
+            'id', 'name', 'description', 'priority', 'status', 'start_date', 'end_date',
+            'actual_start_date', 'actual_end_date', 'tantou', 'caily_nouki', 'caily_nouki_status',
+            'guis_nouki', 'guis_nouki_status', 'progress', 'amount', 'project_order_type',
+            'project_number', 'created_at', 'updated_at', 'teams', 'building_size', 'is_kadai',
+        );
+        if (in_array($order_column, $projectColumns, true)) {
+            return 'p.' . $order_column;
+        }
+
+        return 'p.end_date';
+    }
+
     function list() {
         $draw = isset($_GET['draw']) ? intval($_GET['draw']) : 1;
         $start = isset($_GET['start']) ? intval($_GET['start']) : 0;
@@ -283,13 +327,12 @@ class Project extends ApplicationModel {
             ELSE 10 
         END";
         
-        // Ưu tiên sắp xếp theo status trước
+        $order_dir = strtoupper($order_dir) === 'DESC' ? 'DESC' : 'ASC';
+        $orderExpr = $this->resolveProjectListOrderExpression($order_column, $user_id);
         if ($order_column === 'status') {
-            // Nếu đang sắp xếp theo status, chỉ sắp xếp theo status
-            $orderBy = sprintf('ORDER BY %s %s', $statusOrder, $this->escape($order_dir));
+            $orderBy = sprintf('ORDER BY %s %s', $statusOrder, $order_dir);
         } else {
-            // Sắp xếp theo status trước, sau đó mới đến cột chính
-            $orderBy = sprintf('ORDER BY %s ASC, p.%s %s', $statusOrder, $this->escape($order_column), $this->escape($order_dir));
+            $orderBy = sprintf('ORDER BY %s ASC, %s %s', $statusOrder, $orderExpr, $order_dir);
         }
         
         if (isset($_GET['showInactive']) && $_GET['showInactive'] == '1') {

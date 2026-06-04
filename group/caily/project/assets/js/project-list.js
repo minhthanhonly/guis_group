@@ -59,6 +59,48 @@ var projectTable;
         return COLUMN_ORDER_STORAGE_KEY + '_' + (departmentId != null ? String(departmentId) : '0');
     }
 
+    function isCailyBranchUser() {
+        return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+    }
+
+    function parseProjectDateMoment(value) {
+        if (value === undefined || value === null) return null;
+        var s = String(value).trim();
+        if (!s || s === '-') return null;
+        var normalized = s.replace(/\//g, '-');
+        if (typeof moment !== 'undefined') {
+            var formats = ['YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD', 'YYYY-M-D'];
+            var m = typeof moment.tz === 'function'
+                ? moment.tz(normalized, formats, 'Asia/Tokyo')
+                : moment(normalized, formats, true);
+            if (m.isValid()) return m;
+        }
+        var d = new Date(normalized);
+        if (isNaN(d.getTime())) return null;
+        return typeof moment !== 'undefined' ? moment(d) : null;
+    }
+
+    var CAILY_HIDDEN_COLUMN_KEYS = { guis_nouki: true, end_date: true };
+
+    function isColumnHiddenForCailyBranch(columnKey) {
+        return isCailyBranchUser() && !!CAILY_HIDDEN_COLUMN_KEYS[columnKey];
+    }
+
+    function filterColumnKeysForCailyBranch(keys) {
+        if (!isCailyBranchUser()) return keys;
+        return (keys || []).filter(function(k) { return !CAILY_HIDDEN_COLUMN_KEYS[k]; });
+    }
+
+    /** Default DataTable sort column index when end_date is hidden (e.g. CAILY branch). */
+    function getDefaultProjectListSortIndex(mergedColumnKeys) {
+        var preferred = ['end_date', 'caily_nouki', 'start_date', 'created_at', 'id'];
+        for (var i = 0; i < preferred.length; i++) {
+            var idx = mergedColumnKeys.indexOf(preferred[i]);
+            if (idx >= 0) return idx;
+        }
+        return 0;
+    }
+
     /** Merge saved column key order with current table keys (append missing keys in default order). */
     function mergeColumnKeyOrder(savedKeys, defaultKeys) {
         var def = defaultKeys || [];
@@ -114,11 +156,13 @@ var projectTable;
             else after.push(ck);
         }
         var keys = before.concat(customDefs.map(function(c) { return c.key; })).concat(after);
-        return keys;
+        return filterColumnKeysForCailyBranch(keys);
     }
 
     function getMergedProjectColumnKeys(customColDefs, departmentId) {
-        return mergeColumnKeyOrder(loadProjectColumnOrder(departmentId), getDefaultProjectColumnKeys(customColDefs));
+        return filterColumnKeysForCailyBranch(
+            mergeColumnKeyOrder(loadProjectColumnOrder(departmentId), getDefaultProjectColumnKeys(customColDefs))
+        );
     }
 
     /** Dropdown 列の表示 — cùng thứ tự với cột bảng (sau merge localStorage). */
@@ -130,6 +174,8 @@ var projectTable;
         var keys = getMergedProjectColumnKeys(customColDefs, departmentId);
         return keys.map(function(k) {
             return { key: k, label: labelMap[k] || k, visible: vis[k] !== false };
+        }).filter(function(col) {
+            return !isColumnHiddenForCailyBranch(col.key);
         });
     }
 
@@ -166,7 +212,7 @@ var projectTable;
         { key: 'confirmation_notes_guis', label: 'GUISメモ', index: 3, defaultVisible: false },
         { key: 'status', label: '案件状況', index: 4, defaultVisible: true },
         { key: 'progress', label: '進捗率', index: 5, defaultVisible: true },
-        { key: 'tantou', label: '担当', index: 6, defaultVisible: false },
+        { key: 'tantou', label: '担当', index: 6, defaultVisible: true },
         { key: 'manager', label: '管理', index: 7, defaultVisible: false },
         { key: 'teams', label: 'チーム', index: 8, defaultVisible: true },
         { key: 'members', label: 'メンバー', index: 9, defaultVisible: false },
@@ -179,7 +225,7 @@ var projectTable;
         { key: 'parent_type2', label: '種類2', index: 16, defaultVisible: false },
         { key: 'start_date', label: '開始日', index: 17, defaultVisible: true },
         { key: 'caily_nouki', label: 'CAILY納期', index: 18, defaultVisible: true },
-        { key: 'guis_nouki', label: 'GUIS納期', index: 19, defaultVisible: false },
+        { key: 'guis_nouki', label: 'GUIS納期', index: 19, defaultVisible: true },
         { key: 'end_date', label: '終了日', index: 20, defaultVisible: true },
         { key: 'priority', label: '優先度', index: 21, defaultVisible: true },
         { key: 'amount', label: '総額', index: 22, defaultVisible: false },
@@ -368,6 +414,7 @@ var projectTable;
         const saved = JSON.parse(localStorage.getItem(COLUMN_VISIBILITY_KEY) || '{}');
         const visibility = {};
         COLUMN_DEFINITIONS.forEach(col => {
+            if (isColumnHiddenForCailyBranch(col.key)) return;
             visibility[col.key] = saved[col.key] !== undefined ? saved[col.key] : col.defaultVisible;
         });
         (customColDefs || []).forEach(col => {
@@ -397,6 +444,7 @@ var projectTable;
         }
         const customDefs = customColDefs || customFieldColumnDefinitions || [];
         COLUMN_DEFINITIONS.forEach(col => {
+            if (isColumnHiddenForCailyBranch(col.key)) return;
             const isVisible = visibility[col.key] !== false;
             const dtIndex = getDataTableColumnIndexByKey(col.key, customDefs);
             if (dtIndex !== null) {
@@ -1048,6 +1096,7 @@ var projectTable;
                 { 
                     name: 'is_favorite',
                     data: 'is_favorite',
+                    orderable: false,
                     render: function(data, type, row) {
                         if (type === 'sort' || type === 'type') {
                             return data || 0;
@@ -1307,6 +1356,8 @@ var projectTable;
                         }
                     },
                     title: '<span data-i18n="担当">担当</span>',
+                    className: 'tantou-column',
+                    width: '80px',
                     visible: false
                 },
                 {
@@ -1527,7 +1578,9 @@ var projectTable;
                             }).join('') +
                             '</div>';
                     },
-                    title: '<span data-i18n="受注形態">受注形態</span>'
+                    title: '<span data-i18n="受注形態">受注形態</span>',
+                    className: 'project-order-type-column',
+                    width: '100px'
                 },
                 { 
                     name: 'parent_type2',
@@ -1621,6 +1674,7 @@ var projectTable;
                     },
                     title: buildI18nHeaderTitle('CAILY納期'),
                     className: 'caily-nouki-column',
+                    width: '80px',
                     visible: false
                 },
                 {
@@ -1679,6 +1733,8 @@ var projectTable;
                         }
                     },
                     title: buildI18nHeaderTitle('GUIS納期'),
+                    className: 'guis-nouki-column',
+                    width: '80px',
                     visible: false
                 },
                 { name: 'end_date', data: 'end_date', title: buildI18nHeaderTitle('終了日'), render: function(data, type, row) {
@@ -1722,7 +1778,9 @@ var projectTable;
                         const priority = priorities.find(priority => priority.key === data);
                         return `<span class="badge bg-${priority?.color || 'secondary'}">${translateText(priority?.name || data)}</span>`;
                     },
-                    title: '<span data-i18n="優先度">優先度</span>'
+                    title: '<span data-i18n="優先度">優先度</span>',
+                    className: 'priority-column',
+                    width: '80px'
                 },
                 {
                     name: 'amount',
@@ -1764,7 +1822,11 @@ var projectTable;
                     visible: false
                 }
         ];
-        var defaultColumnKeys = fixedColumnConfigs.map(function(c) { return c.name; }).concat(customColumnConfigs.map(function(c) { return c.name; })).concat(tailColumnConfigs.map(function(c) { return c.name; }));
+        var tailForTable = tailColumnConfigs;
+        if (isCailyBranchUser()) {
+            tailForTable = tailColumnConfigs.filter(function(c) { return !CAILY_HIDDEN_COLUMN_KEYS[c.name]; });
+        }
+        var defaultColumnKeys = fixedColumnConfigs.map(function(c) { return c.name; }).concat(customColumnConfigs.map(function(c) { return c.name; })).concat(tailForTable.map(function(c) { return c.name; }));
         var depIdForColumnOrder = app.selectedDepartment && app.selectedDepartment.id;
         var mergedColumnKeys = mergeColumnKeyOrder(loadProjectColumnOrder(depIdForColumnOrder), defaultColumnKeys);
         var projectColumnRegistry = {};
@@ -1772,8 +1834,7 @@ var projectTable;
         customColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
         tailColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
         var orderedColumns = mergedColumnKeys.map(function(k) { return projectColumnRegistry[k]; }).filter(Boolean);
-        var endDateSortIndex = mergedColumnKeys.indexOf('end_date');
-        if (endDateSortIndex < 0) endDateSortIndex = 0;
+        var defaultSortIndex = getDefaultProjectListSortIndex(mergedColumnKeys);
 
         projectTable = $('#projectTable').DataTable({
             serverSide: true,
@@ -1840,7 +1901,7 @@ var projectTable;
             //scrollY: Math.round(window.innerHeight * 0.8) + 'px',
             columns: orderedColumns,
             colReorder: true,
-            order: [[endDateSortIndex, 'asc']],
+            order: [[defaultSortIndex, 'asc']],
            
             pageLength: 50,
             ordering: true,
@@ -1898,6 +1959,7 @@ var projectTable;
             var customDefs = customFieldColumnDefinitions || [];
             var noteColumnConfigs = []; // { colIndex, displayColumnKey }
             (NOTE_DISPLAY_COLUMNS || []).forEach(function(c) {
+                if (isColumnHiddenForCailyBranch(c.key)) return;
                 var idx = getDataTableColumnIndexByKey(c.key, customDefs);
                 if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: c.key });
             });
@@ -2604,11 +2666,13 @@ var projectTable;
                 $('input[name="tantou"]').prop('checked', false);
                 if (p.tantou === 'CAILY') $('#quickEditTantouCaily').prop('checked', true);
                 else if (p.tantou === 'GUIS') $('#quickEditTantouGuis').prop('checked', true);
+                $('#quickEditTantouDisplayText').text(p.tantou || '—');
                 $('#quickEditCailyNouki').val(p.caily_nouki || '');
                 $('#quickEditGuisNouki').val(p.guis_nouki || '');
                 $('#quickEditCailyNoukiStatus').prop('checked', !!(p.caily_nouki_status && String(p.caily_nouki_status).indexOf('納品済み') !== -1));
                 $('#quickEditGuisNoukiStatus').prop('checked', !!(p.guis_nouki_status && String(p.guis_nouki_status).indexOf('納品済み') !== -1));
                 $('#quickEditProgress').val(p.progress != null && p.progress !== '' ? parseInt(p.progress, 10) : 0);
+                updateQuickEditNoukiRequiredIndicators();
 
                 // 説明 (description): Quill editor like parent_project edit child project modal (destroy + DOM cleanup để không sinh nhiều instance)
                 destroyQuickEditQuill();
@@ -2755,14 +2819,24 @@ var projectTable;
                         locale: 'ja',
                         onOpen: makeTimeInputsEditable
                     };
+                    var fpOnChangeNouki = function() { updateQuickEditNoukiRequiredIndicators(); };
                     if ($('#quickEditStartDate').data('flatpickr')) $('#quickEditStartDate').data('flatpickr').destroy();
                     $('#quickEditStartDate').flatpickr(Object.assign({}, fpCommon, { defaultHour: 9, defaultMinute: 0 }));
                     if ($('#quickEditEndDate').data('flatpickr')) $('#quickEditEndDate').data('flatpickr').destroy();
-                    $('#quickEditEndDate').flatpickr(Object.assign({}, fpCommon, { defaultHour: 18, defaultMinute: 0 }));
+                    $('#quickEditEndDate').flatpickr(Object.assign({}, fpCommon, {
+                        defaultHour: 18,
+                        defaultMinute: 0,
+                        onChange: fpOnChangeNouki
+                    }));
                     ['#quickEditCailyNouki', '#quickEditGuisNouki'].forEach(function(sel) {
                         if ($(sel).data('flatpickr')) $(sel).data('flatpickr').destroy();
-                        $(sel).flatpickr(Object.assign({}, fpCommon, { defaultHour: 18, defaultMinute: 0 }));
+                        $(sel).flatpickr(Object.assign({}, fpCommon, {
+                            defaultHour: 18,
+                            defaultMinute: 0,
+                            onChange: fpOnChangeNouki
+                        }));
                     });
+                    updateQuickEditNoukiRequiredIndicators();
                 }
 
                 // Load team list, project members, department users then init Tagify
@@ -2890,11 +2964,106 @@ var projectTable;
             return !isNaN(t);
         }
 
-        $('#quickEditProjectSaveBtnHeader').on('click', function() { $('#quickEditProjectSaveBtn').trigger('click'); });
+        function hasQuickEditDateValue(value) {
+            return !!(value && String(value).trim() !== '');
+        }
 
-        $('#quickEditProjectSaveBtn').on('click', function() {
+        function parseQuickEditDateTime(value) {
+            if (!hasQuickEditDateValue(value)) return null;
+            var normalized = String(value).trim().replace(/\//g, '-');
+            if (typeof moment !== 'undefined') {
+                var m = moment(normalized, ['YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', moment.ISO_8601], true);
+                if (m.isValid()) return m.toDate();
+            }
+            var d = new Date(normalized);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        function syncQuickEditDateFieldsFromPickers() {
+            ['#quickEditStartDate', '#quickEditEndDate', '#quickEditCailyNouki', '#quickEditGuisNouki'].forEach(function(sel) {
+                var $el = $(sel);
+                if (!$el.length) return;
+                var fp = $el.data('flatpickr');
+                if (fp && fp.input) {
+                    $el.val((fp.input.value || '').trim());
+                }
+            });
+        }
+
+        function updateQuickEditNoukiRequiredIndicators() {
+            var showGuisFields = !isCailyBranchUser();
+            var end = ($('#quickEditEndDate').val() || '').trim();
+            var endFilled = showGuisFields && hasQuickEditDateValue(end);
+            var tantou = ($('input[name="tantou"]:checked').val() || '').trim();
+            $('#quickEditCailyNoukiRequired').toggleClass('d-none', !(endFilled && tantou === 'CAILY'));
+            $('#quickEditGuisNoukiRequired').toggleClass('d-none', !(endFilled && tantou === 'GUIS'));
+        }
+
+        function validateQuickEditNoukiFields() {
+            var errors = [];
+            var showGuisFields = !isCailyBranchUser();
+            var tantou = ($('input[name="tantou"]:checked').val() || '').trim();
+            var caily = ($('#quickEditCailyNouki').val() || '').trim();
+            var guis = ($('#quickEditGuisNouki').val() || '').trim();
+            var end = ($('#quickEditEndDate').val() || '').trim();
+            var endFilled = showGuisFields && hasQuickEditDateValue(end);
+
+            if (endFilled) {
+                if (tantou === 'CAILY' && !caily) {
+                    errors.push({ field: 'caily', message: translateText('担当がCAILYの場合、CAILY納期は必須です') });
+                }
+                if (tantou === 'GUIS' && !guis) {
+                    errors.push({ field: 'guis', message: translateText('担当がGUISの場合、GUIS納期は必須です') });
+                }
+            }
+
+            if (hasQuickEditDateValue(caily) && hasQuickEditDateValue(guis)) {
+                var cailyDate = parseQuickEditDateTime(caily);
+                var guisDate = parseQuickEditDateTime(guis);
+                if (cailyDate && guisDate && guisDate < cailyDate) {
+                    var msg = translateText('GUIS納期はCAILY納期以降である必要があります');
+                    if (showGuisFields) {
+                        errors.push({ field: 'guis', message: msg });
+                    } else {
+                        errors.push({ field: 'caily', message: msg });
+                    }
+                }
+            }
+
+            return errors;
+        }
+
+        function revalidateQuickEditNoukiOnChange() {
+            updateQuickEditNoukiRequiredIndicators();
+            var $cailyNouki = $('#quickEditCailyNouki');
+            var $guisNouki = $('#quickEditGuisNouki');
+            $cailyNouki.removeClass('is-invalid');
+            $guisNouki.removeClass('is-invalid');
+            $('#quickEditCailyNoukiError').text('');
+            $('#quickEditGuisNoukiError').text('');
+            var noukiErrors = validateQuickEditNoukiFields();
+            noukiErrors.forEach(function(err) {
+                if (err.field === 'caily') {
+                    $cailyNouki.addClass('is-invalid');
+                    $('#quickEditCailyNoukiError').text(err.message);
+                } else if (err.field === 'guis') {
+                    $guisNouki.addClass('is-invalid');
+                    $('#quickEditGuisNoukiError').text(err.message);
+                }
+            });
+        }
+
+        $(document).off('change.quickeditnouki').on('change.quickeditnouki', '#quickEditProjectForm input[name="tantou"]', revalidateQuickEditNoukiOnChange);
+        $(document).off('change.quickeditnoukidate input.quickeditnoukidate').on('change.quickeditnoukidate input.quickeditnoukidate', '#quickEditEndDate, #quickEditCailyNouki, #quickEditGuisNouki', revalidateQuickEditNoukiOnChange);
+
+        $('#quickEditProjectSaveBtnHeader').off('click.quickedit').on('click.quickedit', function() { $('#quickEditProjectSaveBtn').trigger('click.quickedit'); });
+
+        $('#quickEditProjectSaveBtn').off('click.quickedit').on('click.quickedit', function() {
             const id = $('#quickEditProjectId').val();
-            if (!id) return;
+            if (!id) {
+                if (typeof showMessage === 'function') showMessage(translateText('プロジェクトデータを読み込み中です。しばらくお待ちください。'), true);
+                return;
+            }
             var $name = $('#quickEditName');
             var $orderType = $('#quickEditProjectOrderType');
             var $progress = $('#quickEditProgress');
@@ -2917,46 +3086,69 @@ var projectTable;
             if (!quickEditIsManagerOnly) {
                 if (!$name.val() || $name.val().toString().trim() === '') {
                     $name.addClass('is-invalid');
-                    $('#quickEditNameError').text('案件名は必須です。');
+                    $('#quickEditNameError').text(translateText('案件名は必須です。'));
                     hasError = true;
                 }
                 if (!$orderType.val() || $orderType.val().toString().trim() === '') {
                     $orderType.addClass('is-invalid');
-                    $('#quickEditProjectOrderTypeError').text('受注形態は必須です。');
+                    $('#quickEditProjectOrderTypeError').text(translateText('受注形態は必須です。'));
                     hasError = true;
                 }
                 if (!$('input[name="tantou"]:checked').length) {
                     $tantouWrap.addClass('is-invalid');
-                    $('#quickEditTantouError').text('担当は必須です。');
+                    $('#quickEditTantouError').text(translateText('担当は必須です。'));
                     hasError = true;
                 }
                 if ($startDate.val() && $startDate.val().toString().trim() !== '' && !isValidDateOrDateTime($startDate.val())) {
                     $startDate.addClass('is-invalid');
-                    $('#quickEditStartDateError').text('開始日の形式が正しくありません。（例: 2025-01-15 09:00）');
+                    $('#quickEditStartDateError').text(translateText('開始日の形式が正しくありません。（例: 2025-01-15 09:00）'));
                     hasError = true;
                 }
-                if ($endDate.val() && $endDate.val().toString().trim() !== '' && !isValidDateOrDateTime($endDate.val())) {
+                if (!isCailyBranchUser() && $endDate.val() && $endDate.val().toString().trim() !== '' && !isValidDateOrDateTime($endDate.val())) {
                     $endDate.addClass('is-invalid');
-                    $('#quickEditEndDateError').text('期限日の形式が正しくありません。（例: 2025-02-28 18:00）');
+                    $('#quickEditEndDateError').text(translateText('期限日の形式が正しくありません。（例: 2025-02-28 18:00）'));
                     hasError = true;
                 }
                 if ($cailyNouki.val() && $cailyNouki.val().toString().trim() !== '' && !isValidDateOrDateTime($cailyNouki.val())) {
                     $cailyNouki.addClass('is-invalid');
-                    $('#quickEditCailyNoukiError').text('CAILY納期の形式が正しくありません。（例: 2025-01-20 18:00）');
+                    $('#quickEditCailyNoukiError').text(translateText('CAILY納期の形式が正しくありません。（例: 2025-01-20 18:00）'));
                     hasError = true;
                 }
-                if ($guisNouki.val() && $guisNouki.val().toString().trim() !== '' && !isValidDateOrDateTime($guisNouki.val())) {
+                if ($guisNouki.length && $guisNouki.val() && $guisNouki.val().toString().trim() !== '' && !isValidDateOrDateTime($guisNouki.val())) {
                     $guisNouki.addClass('is-invalid');
-                    $('#quickEditGuisNoukiError').text('GUIS納期の形式が正しくありません。（例: 2025-01-25 18:00）');
+                    $('#quickEditGuisNoukiError').text(translateText('GUIS納期の形式が正しくありません。（例: 2025-01-25 18:00）'));
                     hasError = true;
                 }
+                var startVal = ($startDate.val() || '').trim();
+                var endVal = !isCailyBranchUser() ? ($endDate.val() || '').trim() : '';
+                if (startVal && endVal) {
+                    var startDt = parseQuickEditDateTime(startVal);
+                    var endDt = parseQuickEditDateTime(endVal);
+                    if (startDt && endDt && startDt >= endDt) {
+                        $endDate.addClass('is-invalid');
+                        $('#quickEditEndDateError').text(translateText('期限日は開始日より後である必要があります'));
+                        hasError = true;
+                    }
+                }
+                var noukiErrors = validateQuickEditNoukiFields();
+                noukiErrors.forEach(function(err) {
+                    if (err.field === 'caily') {
+                        $cailyNouki.addClass('is-invalid');
+                        $('#quickEditCailyNoukiError').text(err.message);
+                        hasError = true;
+                    } else if (err.field === 'guis') {
+                        $guisNouki.addClass('is-invalid');
+                        $('#quickEditGuisNoukiError').text(err.message);
+                        hasError = true;
+                    }
+                });
             }
             var progressVal = $progress.val();
-            if (progressVal !== '' && progressVal != null) {
+                if (progressVal !== '' && progressVal != null) {
                 var p = parseInt(progressVal, 10);
                 if (isNaN(p) || p < 0 || p > 100) {
                     $progress.addClass('is-invalid');
-                    $('#quickEditProgressError').text('進捗率は0〜100の範囲で入力してください。');
+                    $('#quickEditProgressError').text(translateText('進捗率は0〜100の範囲で入力してください。'));
                     hasError = true;
                 }
             }
@@ -3011,9 +3203,10 @@ var projectTable;
             axios.post('/api/index.php?model=project&method=update', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(function() {
                 bootstrap.Modal.getInstance(document.getElementById('quickEditProjectModal')).hide();
                 if (projectTable) projectTable.ajax.reload(null, false);
+                if (typeof showMessage === 'function') showMessage(translateText('プロジェクトを更新しました。'));
             }).catch(function(err) {
                 console.error('Quick edit save:', err);
-                if (typeof alert === 'function') alert(err.response && err.response.data && err.response.data.message ? err.response.data.message : '更新に失敗しました。');
+                if (typeof alert === 'function') alert(err.response && err.response.data && err.response.data.message ? err.response.data.message : translateText('更新に失敗しました。'));
             }).finally(function() {
                 $btn.prop('disabled', false);
                 $spinner.addClass('d-none');
@@ -3623,27 +3816,28 @@ var projectTable;
         }
     }
 
-    // Helper function to check if project is overdue (similar to project-gantt.js)
-    function isProjectOverdue(row) {
-        // Skip if no end_date
-        if (!row.end_date) return false;
-        
-        // Skip if status is completed, cancelled, paused, deleted, or draft
+    function getOverdueDeadlineMoment(row) {
+        if (!row) return null;
         const skipStatuses = ['completed', 'cancelled', 'paused', 'deleted'];
-        if (skipStatuses.includes(row.status)) return false;
-        
-        // Check if end_date is before today
-        try {
-            const endDate = new Date(row.end_date);
-            const today = new Date();
-            // Reset time to compare dates only
-            today.setHours(0, 0, 0, 0);
-            endDate.setHours(0, 0, 0, 0);
-            
-            return endDate < today;
-        } catch (e) {
-            return false;
+        if (skipStatuses.includes(row.status)) return null;
+
+        if (isCailyBranchUser()) {
+            if (row.caily_nouki_status && String(row.caily_nouki_status).indexOf('納品済み') !== -1) return null;
+            return parseProjectDateMoment(row.caily_nouki);
         }
+
+        return parseProjectDateMoment(row.end_date);
+    }
+
+    // Helper function to check if project is overdue (期限超過 badge on index list)
+    function isProjectOverdue(row) {
+        const deadline = getOverdueDeadlineMoment(row);
+        if (!deadline || !deadline.isValid()) return false;
+        const now = typeof moment !== 'undefined' && moment.tz
+            ? moment.tz('Asia/Tokyo')
+            : (typeof moment !== 'undefined' ? moment() : null);
+        if (!now || !now.isValid()) return false;
+        return deadline.isBefore(now);
     }
     
     // Helper function to check if project period is undecided (期間未定)
@@ -3761,6 +3955,15 @@ var projectTable;
             }
         },
         computed: {
+            isCailyBranchUser() {
+                return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+            },
+            visibleColumnOptions() {
+                if (!this.isCailyBranchUser) return this.availableColumns || [];
+                return (this.availableColumns || []).filter(function(col) {
+                    return col.key !== 'guis_nouki' && col.key !== 'end_date';
+                });
+            },
             createUrl() {
                if(this.selectedDepartment) {
                 return `create.php?department_id=${this.selectedDepartment.id}`;
@@ -3770,7 +3973,10 @@ var projectTable;
             /** Options cho select 表示列: NOTE_DISPLAY_COLUMNS (giống detail) + custom fields, loại trùng tên khác suffix 状況 */
             noteDisplayColumnOptions() {
                 function normLabel(t) { return (t || '').replace(/状況$/, ''); }
-                const list = (typeof NOTE_DISPLAY_COLUMNS !== 'undefined' ? NOTE_DISPLAY_COLUMNS : []).map(function(c) {
+                const hiddenForCaily = this.isCailyBranchUser ? { guis_nouki: true, end_date: true } : {};
+                const list = (typeof NOTE_DISPLAY_COLUMNS !== 'undefined' ? NOTE_DISPLAY_COLUMNS : [])
+                    .filter(function(c) { return !hiddenForCaily[c.key]; })
+                    .map(function(c) {
                     return { value: c.key, text: c.label };
                 });
                 const seen = {};

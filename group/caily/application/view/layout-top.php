@@ -66,7 +66,7 @@
                   </a>
                 </li>
                 
-                <?php if($_SESSION['isProjectManager']){ ?>
+                <?php if($_SESSION['authority'] == 'administrator'){ ?>
                   <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
                     <a href="<?=$root?>project/custom_fields.php" class="menu-link">
                       <div data-i18n="カスタムフィールド">カスタムフィールド</div>

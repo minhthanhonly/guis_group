@@ -338,34 +338,58 @@ class Timecard extends ApplicationModel {
 		$date = date("Y-m-d H:i:s");
 		$date02 = date("Y-m-d");
 		$hour = date("H:i");
+		$userEsc = $this->quote($userName);
+		$dateEsc = $this->quote($date02);
 
-		//check if user already checkin
-		$query = sprintf("SELECT id FROM %stimecard WHERE timecard_year='%s' and timecard_day='%s' and timecard_month='%s' and owner= '%s'", DB_PREFIX, $thisYear, $thisDay, $thisMonth, $userName);
+		// 備考のみ先に保存された行も含め、当日レコードを timecard_date で特定
+		$query = sprintf(
+			"SELECT id, timecard_open FROM %stimecard WHERE timecard_date = '%s' AND owner = '%s'",
+			DB_PREFIX,
+			$dateEsc,
+			$userEsc
+		);
 		$data = $this->fetchOne($query);
-		$timecard_id = 0;
-		if(count($data) > 0){
-			$timecard_id = $data['id'];
-			if ($timecard_id != 0) {
-				$sql02 = "UPDATE `groupware_timecard` SET timecard_open = '$hour', timecard_originalopen = '$hour' WHERE id = $timecard_id";
-				$this->query($sql02);
-				$hash['status'] = 'success';
-				$hash['message_code'] = '完了しました。';
-			} else{
+		if (!empty($data['id'])) {
+			$timecard_id = (int)$data['id'];
+			$existingOpen = isset($data['timecard_open']) ? trim((string)$data['timecard_open']) : '';
+			if ($existingOpen !== '' && $existingOpen !== '00:00') {
 				$hash['status'] = 'error';
-				$hash['message_code'] = 'エラーが発生しました。';
+				$hash['message_code'] = '既に出社済みです。';
+				return $hash;
 			}
-		} else{
-			$sql = "INSERT INTO `groupware_timecard` (`timecard_year`, `timecard_month`, `timecard_day`, `timecard_date`, `owner`, `created`, `timecard_open` , `timecard_originalopen`) 
-			VALUES ('$thisYear', '$thisMonth', '$thisDay', '$date02' , '$userName', '$date', '$hour', '$hour');";
+			$sql02 = sprintf(
+				"UPDATE %stimecard SET timecard_open = '%s', timecard_originalopen = '%s' WHERE id = %d",
+				DB_PREFIX,
+				$this->quote($hour),
+				$this->quote($hour),
+				$timecard_id
+			);
+			$this->query($sql02);
+			$hash['status'] = 'success';
+			$hash['message_code'] = '完了しました。';
+			$hash['timecard_id'] = $timecard_id;
+			$hash['timecard_open'] = $hour;
+		} else {
+			$sql = sprintf(
+				"INSERT INTO %stimecard (`timecard_year`, `timecard_month`, `timecard_day`, `timecard_date`, `owner`, `created`, `timecard_open`, `timecard_originalopen`) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')",
+				DB_PREFIX,
+				$thisYear,
+				$thisMonth,
+				$thisDay,
+				$dateEsc,
+				$userEsc,
+				$this->quote($date),
+				$this->quote($hour),
+				$this->quote($hour)
+			);
 			$this->query($sql);
-			$timecard_id = $this->insertid();
-			if ($timecard_id != 0) {
+			$timecard_id = (int)$this->insertid();
+			if ($timecard_id !== 0) {
 				$hash['status'] = 'success';
 				$hash['timecard_id'] = $timecard_id;
 				$hash['timecard_open'] = $hour;
 				$hash['message_code'] = '完了しました。';
-			}
-			else{
+			} else {
 				$hash['status'] = 'error';
 				$hash['message_code'] = 'エラーが発生しました。';
 			}

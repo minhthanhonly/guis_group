@@ -161,14 +161,21 @@ createApp({
                 project_number: '',
                 start_date: '',
                 end_date: '',
-                status: ''
+                status: '',
+                tantou: '',
+                caily_nouki: '',
+                guis_nouki: ''
             },
             editChildProjectValidationErrors: {
                 name: '',
                 department_id: '',
                 project_number: '',
                 start_date: '',
-                end_date: ''
+                end_date: '',
+                project_order_type: '',
+                tantou: '',
+                caily_nouki: '',
+                guis_nouki: ''
             },
             creatingChildProject: false,
             updatingChildProject: false,
@@ -450,6 +457,9 @@ createApp({
         }
     },
     computed: {
+        isCailyBranchUser() {
+            return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+        },
         canAddProject() {
             let canAddProject = false;
             if(this.permission && this.permission.length > 0) {
@@ -1783,13 +1793,13 @@ createApp({
             if (this.parentProject && this.parentProject.project_name) {
                 this.newChildProject.name = this.parentProject.project_name;
             }
-            // Set default start_date (9:00) and end_date (18:00) for today
+            // Default start_date only; 期限日・納期は未入力（入力時のみバリデーション）
             const today = new Date();
             const year = today.getFullYear();
             const month = String(today.getMonth() + 1).padStart(2, '0');
             const day = String(today.getDate()).padStart(2, '0');
             this.newChildProject.start_date = `${year}/${month}/${day} 09:00`;
-            this.newChildProject.end_date = `${year}/${month}/${day} 18:00`;
+            this.newChildProject.end_date = '';
             this.loadDepartments();
             
             this.generateChildProjectNumber();
@@ -1856,7 +1866,11 @@ createApp({
                 project_number: '',
                 start_date: '',
                 end_date: '',
-                status: ''
+                status: '',
+                project_order_type: '',
+                tantou: '',
+                caily_nouki: '',
+                guis_nouki: ''
             };
 
             // Destroy existing flatpickr instances if they exist
@@ -2493,65 +2507,33 @@ createApp({
         },
         
         initializeEditChildProjectDatePickers() {
-            // Initialize flatpickr for edit modal date pickers
-            const startPicker = document.getElementById('edit_start_date_picker');
-            const endPicker = document.getElementById('edit_end_date_picker');
-            
-            if (startPicker) {
-                if (startPicker._flatpickr) {
-                    startPicker._flatpickr.destroy();
-                }
-                startPicker._flatpickr = flatpickr(startPicker, {
+            const p = this.editingChildProject;
+            const bindPicker = (id, field) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (el._flatpickr) el._flatpickr.destroy();
+                const opts = {
                     enableTime: true,
                     dateFormat: 'Y/m/d H:i',
-                    locale: 'ja',
-                    time_24hr: true
-                });
-            }
-            
-            if (endPicker) {
-                if (endPicker._flatpickr) {
-                    endPicker._flatpickr.destroy();
-                }
-                endPicker._flatpickr = flatpickr(endPicker, {
-                    enableTime: true,
-                    dateFormat: 'Y/m/d H:i',
-                    locale: 'ja',
-                    time_24hr: true
-                });
-            }
-            
-            // Initialize CAILY納期 date picker
-            const cailyNoukiPicker = document.getElementById('edit_caily_nouki_picker');
-            if (cailyNoukiPicker) {
-                if (cailyNoukiPicker._flatpickr) {
-                    cailyNoukiPicker._flatpickr.destroy();
-                }
-                cailyNoukiPicker._flatpickr = flatpickr(cailyNoukiPicker, {
-                    enableTime: true,
-                    dateFormat: 'Y/m/d H:i',
-                    locale: 'ja',
                     time_24hr: true,
-                    defaultHour: 18,
-                    defaultMinute: 0
-                });
-            }
-            
-            // Initialize GUIS納期 date picker
-            const guisNoukiPicker = document.getElementById('edit_guis_nouki_picker');
-            if (guisNoukiPicker) {
-                if (guisNoukiPicker._flatpickr) {
-                    guisNoukiPicker._flatpickr.destroy();
-                }
-                guisNoukiPicker._flatpickr = flatpickr(guisNoukiPicker, {
-                    enableTime: true,
-                    dateFormat: 'Y/m/d H:i',
                     locale: 'ja',
-                    time_24hr: true,
-                    defaultHour: 18,
-                    defaultMinute: 0
-                });
-            }
+                    allowInput: true,
+                    clickOpens: true,
+                    onChange: (selectedDates, dateStr) => {
+                        p[field] = dateStr || '';
+                    }
+                };
+                if (field === 'caily_nouki' || field === 'guis_nouki') {
+                    opts.defaultHour = 18;
+                    opts.defaultMinute = 0;
+                }
+                if (p[field]) opts.defaultDate = p[field];
+                flatpickr(el, opts);
+            };
+            bindPicker('edit_start_date_picker', 'start_date');
+            bindPicker('edit_end_date_picker', 'end_date');
+            bindPicker('edit_caily_nouki_picker', 'caily_nouki');
+            bindPicker('edit_guis_nouki_picker', 'guis_nouki');
         },
         
         async initializeEditChildProjectTagify() {
@@ -3270,13 +3252,16 @@ createApp({
         },
         
         validateEditChildProjectForm() {
+            this.syncChildProjectDateFieldsFromPickers(true);
             this.editChildProjectValidationErrors = {
                 name: '',
                 department_id: '',
                 start_date: '',
                 end_date: '',
                 project_order_type: '',
-                tantou: ''
+                tantou: '',
+                caily_nouki: '',
+                guis_nouki: ''
             };
             
             let isValid = true;
@@ -3313,11 +3298,16 @@ createApp({
                 this.editChildProjectValidationErrors.tantou = '担当は必須です';
                 isValid = false;
             }
+
+            if (!this.validateChildProjectNoukiFields(this.editingChildProject, this.editChildProjectValidationErrors)) {
+                isValid = false;
+            }
             
             return isValid;
         },
         
         async updateChildProject() {
+            this.syncChildProjectDateFieldsFromPickers(true);
             if (!this.validateEditChildProjectForm()) {
                 return;
             }
@@ -3467,7 +3457,87 @@ createApp({
             }
         },
 
+        hasChildProjectDateValue(value) {
+            return !!(value && String(value).trim() !== '');
+        },
+
+        parseChildProjectDateTime(value) {
+            if (!this.hasChildProjectDateValue(value)) return null;
+            const normalized = String(value).trim().replace(/\//g, '-');
+            if (typeof moment !== 'undefined') {
+                const m = moment(normalized, ['YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', moment.ISO_8601], true);
+                if (m.isValid()) return m.toDate();
+            }
+            const d = new Date(normalized);
+            return isNaN(d.getTime()) ? null : d;
+        },
+
+        /** DOM/flatpickr → model (create・edit modal). */
+        syncChildProjectDateFieldsFromPickers(isEdit) {
+            const project = isEdit ? this.editingChildProject : this.newChildProject;
+            const fieldIds = isEdit ? {
+                start_date: 'edit_start_date_picker',
+                end_date: 'edit_end_date_picker',
+                caily_nouki: 'edit_caily_nouki_picker',
+                guis_nouki: 'edit_guis_nouki_picker'
+            } : {
+                start_date: 'start_date_picker',
+                end_date: 'end_date_picker',
+                caily_nouki: 'create_caily_nouki_picker',
+                guis_nouki: 'create_guis_nouki_picker'
+            };
+            Object.keys(fieldIds).forEach((key) => {
+                const el = document.getElementById(fieldIds[key]);
+                if (!el) return;
+                const fp = el._flatpickr;
+                if (fp && fp.input) {
+                    project[key] = (fp.input.value || '').trim();
+                } else {
+                    project[key] = (el.value || '').trim();
+                }
+            });
+        },
+
+        /** 期限日なし→納期任意。期限日あり（GUIS側のみ期限日表示）→CAILY納期/GUIS納期は担当に応じて必須。両方入力時はGUIS納期≥CAILY納期。 */
+        validateChildProjectNoukiFields(project, errors) {
+            let isValid = true;
+            const tantou = (project.tantou || '').trim();
+            const caily = (project.caily_nouki || '').trim();
+            const guis = (project.guis_nouki || '').trim();
+            const end = (project.end_date || '').trim();
+            const showGuisFields = !this.isCailyBranchUser;
+            const endFilled = showGuisFields && this.hasChildProjectDateValue(end);
+
+            if (endFilled) {
+                if (tantou === 'CAILY' && !caily) {
+                    errors.caily_nouki = '担当がCAILYの場合、CAILY納期は必須です';
+                    isValid = false;
+                }
+
+                if (tantou === 'GUIS' && !guis) {
+                    errors.guis_nouki = '担当がGUISの場合、GUIS納期は必須です';
+                    isValid = false;
+                }
+            }
+
+            if (this.hasChildProjectDateValue(caily) && this.hasChildProjectDateValue(guis)) {
+                const cailyDate = this.parseChildProjectDateTime(caily);
+                const guisDate = this.parseChildProjectDateTime(guis);
+                if (cailyDate && guisDate && guisDate < cailyDate) {
+                    const msg = 'GUIS納期はCAILY納期以降である必要があります';
+                    errors.guis_nouki = msg;
+                    if (!showGuisFields) {
+                        errors.caily_nouki = msg;
+                    }
+                    isValid = false;
+                }
+            }
+
+            return isValid;
+        },
+
         validateChildProjectForm() {
+            this.syncChildProjectDateFieldsFromPickers(false);
             this.childProjectValidationErrors = {
                 name: '',
                 department_id: '',
@@ -3475,7 +3545,9 @@ createApp({
                 end_date: '',
                 project_order_type: '',
                 tantou: '',
-                status: ''
+                status: '',
+                caily_nouki: '',
+                guis_nouki: ''
             };
 
             let isValid = true;
@@ -3518,6 +3590,10 @@ createApp({
             // Validate status (ステータス) is required
             if (!this.newChildProject.status || this.newChildProject.status.trim() === '') {
                 this.childProjectValidationErrors.status = 'ステータスを選択してください';
+                isValid = false;
+            }
+
+            if (!this.validateChildProjectNoukiFields(this.newChildProject, this.childProjectValidationErrors)) {
                 isValid = false;
             }
 

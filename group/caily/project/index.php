@@ -4,12 +4,14 @@ require_once('../application/loader.php');
 $view->heading('案件一覧');
 // Default note type by branch: CAILY branch -> CAILYメモ(1), otherwise GUISメモ(2)
 $noteDefaultType = 2;
+$isCailyBranchUser = false;
 try {
     require_once('../application/model/branch.php');
     $branchModel = new Branch();
     $branch = $branchModel->get_user_branch_name();
     if ($branch && isset($branch['name']) && $branch['name'] === 'CAILY') {
         $noteDefaultType = 1;
+        $isCailyBranchUser = true;
     }
 } catch (Exception $e) {
     // fallback giữ nguyên GUISメモ
@@ -90,8 +92,8 @@ if($_SESSION['show_project'] == 0){
                         <option value="" data-i18n="すべて">すべて</option>
                         <option value="start_today" data-i18n="開始日=本日">開始日=本日</option>
                         <option value="caily_today" data-i18n="CAILY納期=本日">CAILY納期=本日</option>
-                        <option value="guis_today" data-i18n="GUIS納期=本日">GUIS納期=本日</option>
-                        <option value="end_today" data-i18n="終了日=本日">終了日=本日</option>
+                        <option v-if="!isCailyBranchUser" value="guis_today" data-i18n="GUIS納期=本日">GUIS納期=本日</option>
+                        <option v-if="!isCailyBranchUser" value="end_today" data-i18n="終了日=本日">終了日=本日</option>
                     </select>
                     </div>
                     <div class="col-md-3 col-6">
@@ -175,7 +177,7 @@ if($_SESSION['show_project'] == 0){
                             <i class="fa fa-columns me-1"></i><span data-i18n="列の表示">列の表示</span>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="columnVisibilityDropdown" id="columnVisibilityMenu" style="max-height: 400px; overflow-y: auto; min-width: 200px;">
-                            <li v-for="column in availableColumns" :key="column.key" class="dropdown-item-text px-3 py-2">
+                            <li v-for="column in visibleColumnOptions" :key="column.key" class="dropdown-item-text px-3 py-2">
                                 <div class="form-check">
                                     <input class="form-check-input column-visibility-checkbox" 
                                         type="checkbox" 
@@ -334,7 +336,7 @@ if($_SESSION['show_project'] == 0){
                                 <input type="text" class="form-control" name="start_date" id="quickEditStartDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
                                 <div class="invalid-feedback" id="quickEditStartDateError"></div>
                             </div>
-                            <div class="col-md-4 quick-edit-full-only">
+                            <div class="col-md-4 quick-edit-full-only quick-edit-guis-field">
                                 <label class="form-label"><span data-i18n="期限日">期限日</span></label>
                                 <input type="text" class="form-control" name="end_date" id="quickEditEndDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
                                 <div class="invalid-feedback" id="quickEditEndDateError"></div>
@@ -377,10 +379,11 @@ if($_SESSION['show_project'] == 0){
                                         <label class="form-check-label" for="quickEditTantouGuis">GUIS</label>
                                     </div>
                                 </div>
+                                <div id="quickEditTantouDisplayText" class="fw-semibold d-none"></div>
                                 <div class="invalid-feedback" id="quickEditTantouError"></div>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="CAILY納期">CAILY納期</span></label>
+                                <label class="form-label"><span data-i18n="CAILY納期">CAILY納期</span> <span id="quickEditCailyNoukiRequired" class="text-danger d-none">*</span></label>
                                 <div class="d-flex flex-column">
                                     <input type="text" class="form-control" name="caily_nouki" id="quickEditCailyNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
                                     <div class="form-check mt-1">
@@ -390,8 +393,8 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div class="invalid-feedback" id="quickEditCailyNoukiError"></div>
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span></label>
+                            <div class="col-md-4 quick-edit-guis-field">
+                                <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span> <span id="quickEditGuisNoukiRequired" class="text-danger d-none">*</span></label>
                                 <div class="d-flex flex-column">
                                     <input type="text" class="form-control" name="guis_nouki" id="quickEditGuisNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
                                     <div class="form-check mt-1">
@@ -583,7 +586,7 @@ if($_SESSION['show_project'] == 0){
                             <h6 class="mb-1 text-truncate" :title="project.name">{{ project.name }}</h6>
                             <div class="small text-muted">
                                 <span class="me-2" :title="project.department_name">{{ project.department_name }}</span>
-                                <span v-if="project.end_date" class="me-2" :title="'期限: ' + formatDate(project.end_date)">
+                                <span v-if="!isCailyBranchUser && project.end_date" class="me-2" :title="'期限: ' + formatDate(project.end_date)">
                                     <i class="fa fa-calendar me-1"></i>{{ formatDate(project.end_date) }}
                                 </span>
                             </div>
@@ -684,6 +687,47 @@ div.dt-scroll-head thead th {
     padding: 0.4rem!important;
 }
 
+/* Cột 受注形態: giới hạn chiều ngang 100px */
+#projectTable th.project-order-type-column,
+#projectTable td.project-order-type-column,
+#projectTable_wrapper .dt-scroll-head th.project-order-type-column {
+    max-width: 100px;
+    width: 100px;
+    overflow: hidden;
+}
+#projectTable td.project-order-type-column .d-flex {
+    max-width: 100px;
+    overflow: hidden;
+}
+
+/* Cột 担当 / 優先度: giới hạn chiều ngang 80px */
+#projectTable th.tantou-column,
+#projectTable td.tantou-column,
+#projectTable th.priority-column,
+#projectTable td.priority-column,
+#projectTable_wrapper .dt-scroll-head th.tantou-column,
+#projectTable_wrapper .dt-scroll-head th.priority-column {
+    max-width: 80px;
+    width: 80px;
+    overflow: hidden;
+}
+
+/* Cột CAILY納期 / GUIS納期: giới hạn chiều ngang 80px */
+#projectTable th.caily-nouki-column,
+#projectTable td.caily-nouki-column,
+#projectTable th.guis-nouki-column,
+#projectTable td.guis-nouki-column,
+#projectTable_wrapper .dt-scroll-head th.caily-nouki-column,
+#projectTable_wrapper .dt-scroll-head th.guis-nouki-column {
+    max-width: 80px;
+    width: 80px;
+    overflow: hidden;
+}
+#projectTable td.caily-nouki-column .d-flex,
+#projectTable td.guis-nouki-column .d-flex {
+    max-width: 80px;
+    overflow: hidden;
+}
 /* Cột CAILY納期: nền xanh lá nhạt */
 #projectTable td.caily-nouki-column {
     background-color: rgba(25, 135, 84, 0.25);
@@ -1033,8 +1077,18 @@ div.dt-scroll-head thead th {
 #quickEditProjectForm.quick-edit-manager-only-mode .quick-edit-full-only {
     display: none !important;
 }
-#quickEditProjectForm .is-invalid + .invalid-feedback {
+#quickEditProjectForm .is-invalid + .invalid-feedback,
+#quickEditProjectForm .invalid-feedback:not(:empty) {
     display: block;
+}
+body.is-caily-branch-user #quickEditProjectForm .quick-edit-guis-field {
+    display: none !important;
+}
+body.is-caily-branch-user #quickEditProjectForm #quickEditTantouWrap {
+    display: none !important;
+}
+body.is-caily-branch-user #quickEditProjectForm #quickEditTantouDisplayText {
+    display: block !important;
 }
 </style>
 
@@ -1049,5 +1103,9 @@ div.dt-scroll-head thead th {
 <script>
 window.__chatPageContext = window.__chatPageContext || {};
 window.__chatPageContext.page = 'project_list';
+window.IS_CAILY_BRANCH_USER = <?php echo $isCailyBranchUser ? 'true' : 'false'; ?>;
+if (window.IS_CAILY_BRANCH_USER) {
+    document.body.classList.add('is-caily-branch-user');
+}
 </script>
 <script src="assets/js/project-list.js?v=<?=CACHE_VERSION?>"></script>

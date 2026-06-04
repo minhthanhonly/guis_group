@@ -1,5 +1,9 @@
 var gantt;
 var projectData = [];
+
+function isCailyBranchUser() {
+    return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+}
 var statuses = [
     {
         key: 'all',
@@ -103,7 +107,7 @@ $(document).ready(function() {
             showTaskText: $('#toggleTaskText').is(':checked') ? 1 : 0,
             showTaskTree: $('#toggleTaskTree').is(':checked') ? 1 : 0,
             useCailyEndDate: $('#useCailyEndDate').is(':checked') ? 1 : 0,
-            useGuisEndDate: $('#useGuisEndDate').is(':checked') ? 1 : 0,
+            useGuisEndDate: isCailyBranchUser() ? 0 : ($('#useGuisEndDate').is(':checked') ? 1 : 0),
             useShowCailyStruct: $('#useShowCailyStruct').is(':checked') ? 1 : 0,
             useShowGuisStruct: $('#useShowGuisStruct').is(':checked') ? 1 : 0,
             useShowEquipmentNouki: $('#useShowEquipmentNouki').is(':checked') ? 1 : 0,
@@ -155,7 +159,7 @@ $(document).ready(function() {
         if (filters.showTaskText !== undefined) $('#toggleTaskText').prop('checked', filters.showTaskText == 1);
         if (filters.showTaskTree !== undefined) $('#toggleTaskTree').prop('checked', filters.showTaskTree == 1);
         if (filters.useCailyEndDate !== undefined) $('#useCailyEndDate').prop('checked', filters.useCailyEndDate == 1);
-        if (filters.useGuisEndDate !== undefined) $('#useGuisEndDate').prop('checked', filters.useGuisEndDate == 1);
+        if (!isCailyBranchUser() && filters.useGuisEndDate !== undefined) $('#useGuisEndDate').prop('checked', filters.useGuisEndDate == 1);
         if (filters.useShowCailyStruct !== undefined) $('#useShowCailyStruct').prop('checked', filters.useShowCailyStruct == 1);
         if (filters.useShowGuisStruct !== undefined) $('#useShowGuisStruct').prop('checked', filters.useShowGuisStruct == 1);
         if (filters.useShowEquipmentNouki !== undefined) $('#useShowEquipmentNouki').prop('checked', filters.useShowEquipmentNouki == 1);
@@ -851,6 +855,17 @@ $(document).ready(function() {
                 const links = [];
                 
                 projects.forEach((project, index) => {
+                    const parseNoukiToDate = (raw) => {
+                        if (!raw || String(raw).trim() === '' || String(raw).trim() === '-') return null;
+                        let d = null;
+                        if (typeof raw === 'string' && raw.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                            d = this.parseDate(raw + ' 18:00:00');
+                        } else {
+                            d = this.parseDate(raw);
+                        }
+                        return (d && !isNaN(d.getTime())) ? d : null;
+                    };
+
                     // Improved date parsing
                     let startDate, endDate;
                     
@@ -876,7 +891,13 @@ $(document).ready(function() {
                         endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
                     }
 
-                    // Project bar luôn theo project.end_date (không dùng mode caily/guis)
+                    // CAILY branch: thanh dự án kết thúc tại CAILY納期 nếu có giá trị
+                    if (isCailyBranchUser()) {
+                        const cailyNoukiEnd = parseNoukiToDate(project.caily_nouki);
+                        if (cailyNoukiEnd) {
+                            endDate = new Date(cailyNoukiEnd.getTime());
+                        }
+                    }
 
                     // Ensure end date is after start date
                     if (endDate <= startDate) {
@@ -949,23 +970,12 @@ $(document).ready(function() {
                         manager_ids: manager_ids,
                         tantou: project.tantou || '-',
                         caily_nouki: project.caily_nouki || '-',
+                        caily_nouki_status: project.caily_nouki_status || '',
                         guis_nouki: project.guis_nouki || '-',
                         custom_fields: project.custom_fields || ''
                     };
                     
                     tasks.push(task);
-
-                    // Helper: parse nouki string to Date (same logic as end-date mode)
-                    const parseNoukiToDate = (raw) => {
-                        if (!raw || String(raw).trim() === '' || String(raw).trim() === '-') return null;
-                        let d = null;
-                        if (typeof raw === 'string' && raw.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                            d = this.parseDate(raw + ' 18:00:00');
-                        } else {
-                            d = this.parseDate(raw);
-                        }
-                        return (d && !isNaN(d.getTime())) ? d : null;
-                    };
 
                     // Subtask/link ID: một công thức duy nhất để tránh trùng. pid là số nguyên, slot 0-4 cố định.
                     const SUBTASK_ID_BASE = 900000000;
@@ -997,7 +1007,7 @@ $(document).ready(function() {
                         links.push({ id: linkId(SLOT_CAILY_NOUKI), source: project.id, target: subId(SLOT_CAILY_NOUKI), type: 0 });
                     }
                     // Milestone GUIS納期: tantou=GUIS thì hiển thị thêm team name
-                    const showGuisNouki = $('#useGuisEndDate').length && $('#useGuisEndDate').is(':checked');
+                    const showGuisNouki = !isCailyBranchUser() && $('#useGuisEndDate').length && $('#useGuisEndDate').is(':checked');
                     const guisEnd = parseNoukiToDate(project.guis_nouki);
                     if (showGuisNouki && guisEnd) {
                         const guisNoukiText = (project.tantou === 'GUIS' && teamName) ? 'GUIS納期:' + '[' + teamName + ']' : 'GUIS納期';
@@ -1611,30 +1621,37 @@ $(document).ready(function() {
                     ]
                 }
                 
+                function getOverdueDeadlineMoment(obj) {
+                    if (!obj || (obj.parent && obj.parent !== 0)) return null;
+                    const skipStatuses = ['completed', 'cancelled', 'paused', 'deleted'];
+                    if (skipStatuses.includes(obj.status)) return null;
+
+                    if (isCailyBranchUser()) {
+                        const raw = obj.caily_nouki;
+                        if (!raw || String(raw).trim() === '' || String(raw).trim() === '-') return null;
+                        if (obj.caily_nouki_status && String(obj.caily_nouki_status).indexOf('納品済み') !== -1) return null;
+                        const m = typeof moment !== 'undefined' && moment.tz
+                            ? moment.tz(raw, 'Asia/Tokyo')
+                            : (typeof moment !== 'undefined' ? moment(raw) : null);
+                        return m && m.isValid() ? m : null;
+                    }
+
+                    if (!obj.end_date) return null;
+                    const m = typeof moment !== 'undefined' && moment.tz
+                        ? moment.tz(obj.end_date, 'Asia/Tokyo')
+                        : (typeof moment !== 'undefined' ? moment(obj.end_date) : null);
+                    return m && m.isValid() ? m : null;
+                }
+
                 // Helper function to check if project is overdue
                 function isProjectOverdue(obj) {
-                    // Skip subtasks
-                    if (obj.parent && obj.parent !== 0) return false;
-                    
-                    // Skip if no end_date
-                    if (!obj.end_date) return false;
-                    
-                    // Skip if status is completed, cancelled, paused, deleted, or draft
-                    const skipStatuses = ['completed', 'cancelled', 'paused', 'deleted'];
-                    if (skipStatuses.includes(obj.status)) return false;
-                    
-                    // Check if end_date is before today
-                    try {
-                        const endDate = new Date(obj.end_date);
-                        const today = new Date();
-                        // Reset time to compare dates only
-                        today.setHours(0, 0, 0, 0);
-                        endDate.setHours(0, 0, 0, 0);
-                        
-                        return endDate < today;
-                    } catch (e) {
-                        return false;
-                    }
+                    const deadline = getOverdueDeadlineMoment(obj);
+                    if (!deadline) return false;
+                    const now = typeof moment !== 'undefined' && moment.tz
+                        ? moment.tz('Asia/Tokyo')
+                        : (typeof moment !== 'undefined' ? moment() : null);
+                    if (!now || !now.isValid()) return false;
+                    return deadline.clone().startOf('day').isBefore(now.clone().startOf('day'));
                 }
                 
                 // // Customize columns
@@ -1656,7 +1673,7 @@ $(document).ready(function() {
                           if (isOverdue) {
                               cell.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.2;">' +
                                              '<span>' + idText + '</span>' +
-                                             '<span style="background-color:#dc3545;color:#fff;font-size:0.625rem;padding:0.1rem 0.25rem;border-radius:0.25rem;line-height:1; position: relative; top: -5px;">期限超過</span>' +
+                                             '<span style="background-color:#dc3545;color:#fff;font-size:0.625rem;padding:0.1rem 0.25rem;border-radius:0.25rem;line-height:1; position: relative; top: -5px;">' + (typeof i18next !== 'undefined' && i18next.t ? i18next.t('期限超過') : '期限超過') + '</span>' +
                                              '</div>';
                           } else if(task.status == 'paused'){
                               cell.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.2;">' +
@@ -1917,6 +1934,10 @@ $(document).ready(function() {
                         }
                     }
                     
+                    const cailyBranch = isCailyBranchUser();
+                    const deadlineLine = cailyBranch ? '' : `<p class="m-0"><strong>期限日:</strong> ${originalDeadline}</p>`;
+                    const guisNoukiLine = cailyBranch ? '' : `<p class="m-0"><strong>GUIS納期:</strong> ${formatDateStringWithVN(task.guis_nouki)}</p>`;
+
                     return `
                         <div class="gantt-tooltip">
                             <h6>${task.text || 'N/A'}</h6>
@@ -1931,11 +1952,11 @@ $(document).ready(function() {
                             <p class="m-0"><strong>状況:</strong> ${status ? status.name : (task.status || '-')}</p>
                             <p class="m-0"><strong>優先度:</strong> ${priority ? priority.name : (task.priority || '-')}</p>
                             <p class="m-0"><strong>開始日:</strong> ${gantt.templates.tooltip_date_format(start)}</p>
-                            <p class="m-0"><strong>期限日:</strong> ${originalDeadline}</p>
+                            ${deadlineLine}
                             <p class="m-0"><strong>担当:</strong> ${task.tantou || '-'}</p>
                             <p class="m-0"><strong>チーム:</strong> ${task.team_name || '-'}</p>
                             <p class="m-0"><strong>CAILY納期:</strong> ${formatDateStringWithVN(task.caily_nouki)}</p>
-                            <p class="m-0"><strong>GUIS納期:</strong> ${formatDateStringWithVN(task.guis_nouki)}</p>
+                            ${guisNoukiLine}
                             ${formatCustomFieldsForTooltip(task.custom_fields)}
                         </div>
                     `;

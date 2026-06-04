@@ -2,6 +2,17 @@
 
 require_once('../application/loader.php');
 $view->heading('プロジェクトガントチャート');
+$isCailyBranchUser = false;
+try {
+    require_once('../application/model/branch.php');
+    $branchModel = new Branch();
+    $branch = $branchModel->get_user_branch_name();
+    if ($branch && isset($branch['name']) && $branch['name'] === 'CAILY') {
+        $isCailyBranchUser = true;
+    }
+} catch (Exception $e) {
+    // fallback
+}
 if($_SESSION['show_project'] == 0){
     echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
     exit;
@@ -208,7 +219,7 @@ if($_SESSION['show_project'] == 0){
                 </div>
                 <div class="form-check ms-2">
                     <input class="form-check-input" type="checkbox" id="toggleTaskTree">
-                    <label class="form-check-label small" for="toggleTaskTree">CAILY納期などを表示</label>
+                    <label class="form-check-label small" for="toggleTaskTree"><span data-i18n="各納期を表示">各納期を表示</span></label>
                 </div>
             </div>
             <div class="mt-2 d-flex gap-2 align-items-center justify-content-between">
@@ -218,10 +229,12 @@ if($_SESSION['show_project'] == 0){
                       <input class="form-check-input" type="checkbox" id="useCailyEndDate" checked>
                       <label class="form-check-label small" for="useCailyEndDate">CAILY納期を表示</label>
                   </div>
+                  <?php if (!$isCailyBranchUser): ?>
                   <div class="form-check ms-2">
                       <input class="form-check-input" type="checkbox" id="useGuisEndDate" checked>
                       <label class="form-check-label small" for="useGuisEndDate">GUIS納期を表示</label>
                   </div>
+                  <?php endif; ?>
                   <div class="form-check ms-2">
                       <input class="form-check-input" type="checkbox" id="useShowCailyStruct" checked>
                       <label class="form-check-label small" for="useShowCailyStruct">構造データ送付 (CAILY)を表示</label>
@@ -273,4 +286,7 @@ $view->footing();
 <script src="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.js"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
+<script>
+window.IS_CAILY_BRANCH_USER = <?php echo $isCailyBranchUser ? 'true' : 'false'; ?>;
+</script>
 <script src="assets/js/project-gantt.js?v=<?=CACHE_VERSION?>"></script>

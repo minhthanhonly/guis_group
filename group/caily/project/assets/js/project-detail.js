@@ -148,7 +148,10 @@ const vueApp = createApp({
                 company_name: '',
                 customer_id: '',
                 project_number: '',
-                name: ''
+                name: '',
+                end_date: '',
+                caily_nouki: '',
+                guis_nouki: ''
             },
             timeRemainingTimer: null,
             autoRefreshTimer: null,
@@ -156,6 +159,9 @@ const vueApp = createApp({
         }
     },
     computed: {
+        isCailyBranchUser() {
+            return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+        },
         isManager() {
             if(USER_ROLE == `administrator`) return true;
             if (!this.managers) return false;
@@ -177,7 +183,10 @@ const vueApp = createApp({
         /** Options cho select "表示列" (display_column): cột danh sách project + custom fields. Loại trùng tên khác suffix 状況 */
         noteDisplayColumnOptions() {
             function normLabel(t) { return (t || '').replace(/状況$/, ''); }
-            const list = (typeof NOTE_DISPLAY_COLUMNS !== 'undefined' ? NOTE_DISPLAY_COLUMNS : []).map(function(c) {
+            const hiddenForCaily = this.isCailyBranchUser ? { guis_nouki: true, end_date: true } : {};
+            const list = (typeof NOTE_DISPLAY_COLUMNS !== 'undefined' ? NOTE_DISPLAY_COLUMNS : [])
+                .filter(function(c) { return !hiddenForCaily[c.key]; })
+                .map(function(c) {
                 return { value: c.key, text: c.label };
             });
             const seen = {};
@@ -1581,7 +1590,12 @@ const vueApp = createApp({
                 return;
             }
             if (!this.validateProjectForm()) {
-                const msg = this.validationErrors.name || this.validationErrors.project_number || '入力内容を確認してください。';
+                const msg = this.validationErrors.name
+                    || this.validationErrors.caily_nouki
+                    || this.validationErrors.guis_nouki
+                    || this.validationErrors.end_date
+                    || this.validationErrors.project_number
+                    || '入力内容を確認してください。';
                 if (typeof showMessage === 'function') showMessage(msg, true);
                 else if (typeof this.showNotification === 'function') this.showNotification(msg, 'error');
                 return;
@@ -2660,13 +2674,89 @@ const vueApp = createApp({
                 });
             });
         },
+        hasProjectDateValue(value) {
+            return !!(value && String(value).trim() !== '');
+        },
+
+        parseProjectDateTime(value) {
+            if (!this.hasProjectDateValue(value)) return null;
+            const normalized = String(value).trim().replace(/\//g, '-');
+            if (typeof moment !== 'undefined') {
+                const m = moment(normalized, ['YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', moment.ISO_8601], true);
+                if (m.isValid()) return m.toDate();
+            }
+            const d = new Date(normalized);
+            return isNaN(d.getTime()) ? null : d;
+        },
+
+        syncProjectDateFieldsFromPickers() {
+            const fieldIds = {
+                start_date: 'start_date_picker',
+                end_date: 'end_date_picker',
+                caily_nouki: 'caily_nouki_picker',
+                guis_nouki: 'guis_nouki_picker',
+                actual_end_date: 'actual_end_date_picker'
+            };
+            Object.keys(fieldIds).forEach((key) => {
+                const el = document.getElementById(fieldIds[key]);
+                if (!el || !this.project) return;
+                const fp = el._flatpickr;
+                if (fp && fp.input) {
+                    this.project[key] = (fp.input.value || '').trim();
+                } else {
+                    this.project[key] = (el.value || '').trim();
+                }
+            });
+        },
+
+        validateProjectNoukiFields() {
+            const errors = this.validationErrors;
+            let isValid = true;
+            const tantou = (this.project.tantou || '').trim();
+            const caily = (this.project.caily_nouki || '').trim();
+            const guis = (this.project.guis_nouki || '').trim();
+            const end = (this.project.end_date || '').trim();
+            const showGuisFields = !this.isCailyBranchUser;
+            const endFilled = showGuisFields && this.hasProjectDateValue(end);
+
+            if (endFilled) {
+                if (tantou === 'CAILY' && !caily) {
+                    errors.caily_nouki = '担当がCAILYの場合、CAILY納期は必須です';
+                    isValid = false;
+                }
+                if (tantou === 'GUIS' && !guis) {
+                    errors.guis_nouki = '担当がGUISの場合、GUIS納期は必須です';
+                    isValid = false;
+                }
+            }
+
+            if (this.hasProjectDateValue(caily) && this.hasProjectDateValue(guis)) {
+                const cailyDate = this.parseProjectDateTime(caily);
+                const guisDate = this.parseProjectDateTime(guis);
+                if (cailyDate && guisDate && guisDate < cailyDate) {
+                    const msg = 'GUIS納期はCAILY納期以降である必要があります';
+                    errors.guis_nouki = msg;
+                    if (!showGuisFields) {
+                        errors.caily_nouki = msg;
+                    }
+                    isValid = false;
+                }
+            }
+
+            return isValid;
+        },
+
         validateProjectForm() {
+            this.syncProjectDateFieldsFromPickers();
             this.validationErrors = {
-                // category_id: '',
-                // company_name: '',
-                // customer_id: '',
+                category_id: '',
+                company_name: '',
+                customer_id: '',
                 project_number: '',
-                name: ''
+                name: '',
+                end_date: '',
+                caily_nouki: '',
+                guis_nouki: ''
             };
             let valid = true;
             // if (!this.project.category_id) {
@@ -2686,11 +2776,19 @@ const vueApp = createApp({
                 this.validationErrors.name = 'プロジェクト名は必須です';
                 valid = false;
             }
-            // Validate start_date > end_date
-            if (this.project.start_date && this.project.end_date && new Date(this.project.start_date) > new Date(this.project.end_date)) {
-                this.showNotification('開始日は終了日より前にしてください', 'error');
+            if (this.project.start_date && this.project.end_date) {
+                const startDate = this.parseProjectDateTime(this.project.start_date);
+                const endDate = this.parseProjectDateTime(this.project.end_date);
+                if (startDate && endDate && startDate >= endDate) {
+                    this.validationErrors.end_date = '期限日は開始日より後である必要があります';
+                    valid = false;
+                }
+            }
+
+            if (!this.validateProjectNoukiFields()) {
                 valid = false;
             }
+
             return valid;
         },
     },
