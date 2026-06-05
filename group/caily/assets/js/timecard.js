@@ -22,6 +22,59 @@ if (typeof USER_IS_SOUMU !== 'undefined') {
 }
 var holidayList = [];
 
+/** data-bs-title 用（HTML ツールチップ内の &lt;br&gt; はそのまま） */
+function escapeAttrForTooltipHtml(html) {
+  return String(html).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
+function timecardRequestTooltipHtml(item) {
+  const lines = item.tooltip_lines;
+  if (lines && lines.length) {
+    return lines.map(function (line) {
+      return escapeHtmlTimecard(line);
+    }).join('<br>');
+  }
+  return escapeHtmlTimecard(item.display_text || item.summary || item.label || '');
+}
+
+function initTimecardRequestTooltips() {
+  if (typeof bootstrap === 'undefined' || !bootstrap.Tooltip) {
+    return;
+  }
+  document.querySelectorAll('.datatables-timecard .timecard-request-link[data-bs-toggle="tooltip"]').forEach(function (el) {
+    const existing = bootstrap.Tooltip.getInstance(el);
+    if (existing) {
+      existing.dispose();
+    }
+    new bootstrap.Tooltip(el, {
+      html: true,
+      placement: 'auto',
+      trigger: 'hover focus',
+      customClass: 'timecard-request-detail-tooltip',
+      container: 'body'
+    });
+  });
+}
+
+function renderTimecardRequestFormsCell(items) {
+  if (!items || !items.length) {
+    return '';
+  }
+  const lis = items.map(function (item) {
+    const href = '/form/detail.php?id=' + encodeURIComponent(item.id);
+    const text = item.display_text || item.summary || item.label || '';
+    const tipHtml = timecardRequestTooltipHtml(item);
+    return '<li class="timecard-request-item">'
+      + '<a href="' + href + '" class="timecard-request-link small text-body"'
+      + ' data-bs-toggle="tooltip" data-bs-html="true"'
+      + ' data-bs-title="' + escapeAttrForTooltipHtml(tipHtml) + '"'
+      + ' onclick="event.stopPropagation();">'
+      + escapeHtmlTimecard(text)
+      + '</a></li>';
+  }).join('');
+  return '<ul class="list-unstyled mb-0 timecard-request-list">' + lis + '</ul>';
+}
+
 function updateAnalytics(data) {
   const timecard_time = document.getElementById('work_time');
   const timecard_timeover = document.getElementById('over_time');
@@ -183,6 +236,7 @@ async function get_timecard(user, year, month) {
     handleErrors(response.data);
   }
   holidayList = response.data.holidays;
+  const requestsByDate = response.data.requests_by_date || {};
   // loop through the day in that month, check if not exist then add it
   const list = response.data.list;
   isSameUser = response.data.isSameUser;
@@ -218,6 +272,7 @@ async function get_timecard(user, year, month) {
       } else {
         foundItem.timecard_timeholiday = '';
       }
+      foundItem.request_forms = requestsByDate[date] || [];
       days[i] = foundItem;
 
       if (foundItem.timecard_open) {
@@ -251,6 +306,7 @@ async function get_timecard(user, year, month) {
         timecard_timeinterval: '',
         timecard_comment: '',
         timecard_timeholiday: '',
+        request_forms: requestsByDate[date] || [],
         owner: user,
         editor: '',
         created: '',
@@ -350,6 +406,128 @@ function decodeHtmlEntities(str) {
     .replace(/&#039;/g, "'");
 }
 
+let editTimecardOpen = null;
+let editTimecardClose = null;
+
+function getFlatpickrTimeInputs(fp) {
+  if (!fp || !fp.calendarContainer) {
+    return { hour: null, minute: null };
+  }
+  const time = fp.calendarContainer.querySelector('.flatpickr-time');
+  if (!time) {
+    return { hour: null, minute: null };
+  }
+  const inputs = time.querySelectorAll('input');
+  return {
+    hour: inputs[0] || null,
+    minute: inputs[1] || null
+  };
+}
+
+function focusTimecardEditFirstHour() {
+  const hour = getFlatpickrTimeInputs(editTimecardOpen).hour;
+  if (hour) {
+    hour.focus();
+  }
+}
+
+function applyTimecardFlatpickrKeyboard(fp, hourTab, minuteTab) {
+  const inputs = getFlatpickrTimeInputs(fp);
+  if (inputs.hour) {
+    inputs.hour.setAttribute('tabindex', String(hourTab));
+    inputs.hour.setAttribute('inputmode', 'numeric');
+  }
+  if (inputs.minute) {
+    inputs.minute.setAttribute('tabindex', String(minuteTab));
+    inputs.minute.setAttribute('inputmode', 'numeric');
+  }
+  if (fp && fp.calendarContainer) {
+    fp.calendarContainer.querySelectorAll('.arrowUp, .arrowDown').forEach(function (el) {
+      el.setAttribute('tabindex', '-1');
+    });
+  }
+  if (fp && fp.input) {
+    fp.input.setAttribute('tabindex', '-1');
+  }
+}
+
+function applyTimecardEditModalKeyboard() {
+  applyTimecardFlatpickrKeyboard(editTimecardOpen, 1, 2);
+  applyTimecardFlatpickrKeyboard(editTimecardClose, 3, 4);
+  const editModal = document.getElementById('modalEditTimecard');
+  const note = document.getElementById('editTimecardNote');
+  if (note) {
+    note.setAttribute('tabindex', '5');
+  }
+  if (editModal) {
+    const closeBtn = editModal.querySelector('.btn-close');
+    const submitBtn = editModal.querySelector('button[type="submit"]');
+    const cancelBtn = editModal.querySelector('button.btn-secondary[data-bs-dismiss="modal"]');
+    if (closeBtn) {
+      closeBtn.setAttribute('tabindex', '-1');
+    }
+    if (submitBtn) {
+      submitBtn.setAttribute('tabindex', '6');
+    }
+    if (cancelBtn) {
+      cancelBtn.setAttribute('tabindex', '7');
+    }
+  }
+}
+
+function initTimecardEditModalTabNavigation() {
+  const form = document.getElementById('editTimecardForm');
+  if (!form || form.dataset.timecardTabNav) {
+    return;
+  }
+  form.dataset.timecardTabNav = '1';
+  form.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') {
+      return;
+    }
+    const open = getFlatpickrTimeInputs(editTimecardOpen);
+    const close = getFlatpickrTimeInputs(editTimecardClose);
+    const note = document.getElementById('editTimecardNote');
+    if (!e.shiftKey && e.target === open.minute && close.hour) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      close.hour.focus();
+      return;
+    }
+    if (e.shiftKey && e.target === close.hour && open.minute) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      open.minute.focus();
+      return;
+    }
+    if (!e.shiftKey && e.target === close.minute && note) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      note.focus();
+    }
+  }, true);
+}
+
+function initTimecardModalKeyboardFocus() {
+  initTimecardEditModalTabNavigation();
+  const editModal = document.getElementById('modalEditTimecard');
+  if (editModal) {
+    editModal.addEventListener('shown.bs.modal', function () {
+      applyTimecardEditModalKeyboard();
+      requestAnimationFrame(focusTimecardEditFirstHour);
+    });
+  }
+  const noteModal = document.getElementById('modalEditTimecardNote');
+  if (noteModal) {
+    noteModal.addEventListener('shown.bs.modal', function () {
+      const textarea = document.getElementById('editTimecardNoteNote');
+      if (textarea) {
+        textarea.focus();
+      }
+    });
+  }
+}
+
 //add event listener for selectpicker
 function addEvent() {
   const slUser = document.getElementById('selectpickerUser');
@@ -357,7 +535,7 @@ function addEvent() {
   const monthInput = document.getElementById('timecard-month-input');
   const recalc = document.querySelector('[data-recalculation]');
 
-  let editTimecardOpen = flatpickr("#editTimecardOpen", {
+  editTimecardOpen = flatpickr("#editTimecardOpen", {
     dateFormat: "H:i",
     locale: "ja",
     time_24hr: true,
@@ -367,7 +545,7 @@ function addEvent() {
     minuteIncrement: 1,
     defaultHour: 0,
   });
-  let editTimecardClose = flatpickr("#editTimecardClose", {
+  editTimecardClose = flatpickr("#editTimecardClose", {
     dateFormat: "H:i",
     locale: "ja",
     time_24hr: true,
@@ -377,6 +555,7 @@ function addEvent() {
     minuteIncrement: 1,
     defaultHour: 0,
   });
+  applyTimecardEditModalKeyboard();
   // Add event listener for the selectpicker
   if (slUser) {
     slUser.addEventListener('change', async function () {
@@ -398,8 +577,9 @@ function addEvent() {
     });
   }
   const viewModal = new bootstrap.Modal(document.getElementById('modalViewTimecard'));
-  const editModal = new bootstrap.Modal(document.getElementById('modalEditTimecard'));
+  const editModal = new bootstrap.Modal(document.getElementById('modalEditTimecard'), { focus: false });
   const editModalNote = new bootstrap.Modal(document.getElementById('modalEditTimecardNote'));
+  initTimecardModalKeyboardFocus();
   const viewTimecardForm = document.getElementById('viewTimecardForm');
   const editTimecardForm = document.getElementById('editTimecardForm');
   const editTimecardNoteForm = document.getElementById('editTimecardNoteForm');
@@ -535,6 +715,7 @@ function addEvent() {
           document.getElementById('editTimecardNote').value = decodeHtmlEntities(timecardinfo.timecard_comment);
         }
 
+        applyTimecardEditModalKeyboard();
         editModal.show();
       } else {
         showMessage(response.data.message_code, true);
@@ -645,14 +826,6 @@ function addEvent() {
           }
         }
       },
-      timecard_comment: {
-        validators: {
-          stringLength: {
-            min: 4,
-            message: '4文字以上入力してください'
-          }
-        }
-      },
     },
     plugins: {
       trigger: new FormValidation.plugins.Trigger(),
@@ -691,52 +864,28 @@ function addEvent() {
     });
   });
 
-  const fvEditNote = FormValidation.formValidation(editTimecardNoteForm, {
-    fields: {
-      timecard_comment: {
-        validators: {
-          stringLength: {
-            max: 500,
-            message: '500文字以内で入力してください'
-          }
-        }
-      },
-    },
-    plugins: {
-      trigger: new FormValidation.plugins.Trigger(),
-      bootstrap5: new FormValidation.plugins.Bootstrap5({
-        eleValidClass: '',
-        rowSelector: '.form-control-validation'
-      }),
-    },
-  });
-
   editTimecardNoteForm.addEventListener('submit', function (e) {
     e.preventDefault();
-    fvEditNote.validate().then(function (status) {
-      if (status === 'Valid') {
-        displayHourglass();
-        const formData = new FormData(editTimecardNoteForm);
-        axios.post('/api/index.php?model=timecard&method=edit_timecard_note', formData)
-          .then(function (response) {
-            if (response.status === 200 && response.data && response.data.status === 'success') {
-              showMessage('タイムカードの備考を編集しました');
-              changeData();
-            } else {
-              if (response.data.message_code) {
-                showMessage(response.data.message_code, true);
-              } else {
-                showMessage('タイムカードの備考を編集できませんでした', true);
-              }
-            }
-            $('#modalEditTimecardNote').modal('hide');
-          })
-          .catch(function (error) {
-            handleErrors(error);
-            $('#modalEditTimecardNote').modal('hide');
-          });
-      }
-    });
+    displayHourglass();
+    const formData = new FormData(editTimecardNoteForm);
+    axios.post('/api/index.php?model=timecard&method=edit_timecard_note', formData)
+      .then(function (response) {
+        if (response.status === 200 && response.data && response.data.status === 'success') {
+          showMessage('タイムカードの備考を編集しました');
+          changeData();
+        } else {
+          if (response.data.message_code) {
+            showMessage(response.data.message_code, true);
+          } else {
+            showMessage('タイムカードの備考を編集できませんでした', true);
+          }
+        }
+        $('#modalEditTimecardNote').modal('hide');
+      })
+      .catch(function (error) {
+        handleErrors(error);
+        $('#modalEditTimecardNote').modal('hide');
+      });
   });
 
 
@@ -844,6 +993,7 @@ async function initTable() {
 function drawTable(data) {
   if (dt_table) {
     dt_table.clear().rows.add(Object.values(data)).draw();
+    initTimecardRequestTooltips();
   }
 }
 
@@ -895,6 +1045,7 @@ document.addEventListener('DOMContentLoaded', function () {
         { data: 'timecard_timeover', title: '時間外' },
         { data: 'timecard_timeinterval', title: '休憩時間' },
         { data: 'timecard_timeholiday', title: '休日出勤' },
+        { data: 'request_forms', title: '申請' },
         { data: 'timecard_comment', title: '備考' },
         { data: 'id', title: 'ID', visible: false },
         { data: 'owner', title: 'Owner', visible: false },
@@ -973,6 +1124,13 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         {
           targets: 7,
+          orderable: false,
+          render: function (data, type, full, meta) {
+            return renderTimecardRequestFormsCell(data);
+          }
+        },
+        {
+          targets: 8,
           orderable: false,
           render: (data, type, full, meta) => {
             var dayString = full.timecard_date.split('-');

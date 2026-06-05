@@ -35,7 +35,7 @@ class Member extends ApplicationModel {
 		'show_project'=>array('案件関連を表示', 'numeric', 'length:1'),
 		'can_approve_request'=>array('申請関係の承認を許可します', 'numeric', 'length:1'),
 		'is_soumu'=>array('総務管理を許可します', 'numeric', 'length:1'),
-		'quite_date'=>array('退職日', 'except'=>array('search')),
+		'quite_date'=>array('退職日', 'except'=>array('search', 'insert')),
 		);
 		
 	}
@@ -48,6 +48,37 @@ class Member extends ApplicationModel {
 	/**
 	 * Add quite_date (退職日) if missing — column may not exist until migration runs.
 	 */
+	/**
+	 * quite_date: 空文字は INSERT/UPDATE しない（MySQL DATETIME エラー回避）
+	 * @param bool $isUpdate 編集時は退職グループで空の場合に現在日時を設定
+	 * @return bool 編集後に quite_date を NULL にする必要があるか
+	 */
+	private function normalizeQuiteDatePost($isUpdate) {
+		$clearQuiteDate = false;
+		$isRetireGroup = isset($this->post['user_group'])
+			&& (string) $this->post['user_group'] === (string) RETIRE_GROUP;
+		if (!array_key_exists('quite_date', $this->post)) {
+			if ($isUpdate && $isRetireGroup) {
+				$this->post['quite_date'] = date('Y-m-d H:i:s');
+			}
+			return false;
+		}
+		$qd = trim((string) $this->post['quite_date']);
+		if ($qd === '') {
+			if ($isUpdate && $isRetireGroup) {
+				$this->post['quite_date'] = date('Y-m-d H:i:s');
+			} else {
+				unset($this->post['quite_date']);
+				if ($isUpdate) {
+					$clearQuiteDate = true;
+				}
+			}
+		} else {
+			$this->post['quite_date'] = $qd;
+		}
+		return $clearQuiteDate;
+	}
+
 	private function ensureQuiteDateColumn() {
 		static $ensured = false;
 		if ($ensured) {
@@ -238,6 +269,7 @@ class Member extends ApplicationModel {
 			} else {
 				$this->post['is_soumu'] = 1;
 			}
+			$this->normalizeQuiteDatePost(false);
 			$this->insertPost();
 			if($_POST['department_id']){
 				$this->updateDepartment($_POST['userid'], $_POST['department_id']);
@@ -301,24 +333,7 @@ class Member extends ApplicationModel {
 				$this->post['is_soumu'] = 1;
 			}
 
-			$clearQuiteDate = false;
-			$isRetireGroup = isset($this->post['user_group'])
-				&& (string) $this->post['user_group'] === (string) RETIRE_GROUP;
-			if (array_key_exists('quite_date', $this->post)) {
-				$qd = trim((string) $this->post['quite_date']);
-				if ($qd === '') {
-					if ($isRetireGroup) {
-						$this->post['quite_date'] = date('Y-m-d H:i:s');
-					} else {
-						$clearQuiteDate = true;
-						unset($this->post['quite_date']);
-					}
-				} else {
-					$this->post['quite_date'] = $qd;
-				}
-			} elseif ($isRetireGroup) {
-				$this->post['quite_date'] = date('Y-m-d H:i:s');
-			}
+			$clearQuiteDate = $this->normalizeQuiteDatePost(true);
 
 			$this->updatePost();
 

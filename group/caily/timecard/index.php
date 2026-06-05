@@ -181,7 +181,7 @@ $view->heading('タイムカード');
   <div class="modal-dialog modal-simple modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-body">
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる" tabindex="-1"></button>
         <div class="text-center mb-6">
           <h4 class="modal-title" id="modalEditTimecardTitle"></h4>
         </div>
@@ -191,7 +191,7 @@ $view->heading('タイムカード');
           <div class="form-group row">
             <div class="col-md-12 mb-4 form-control-validation">
               <label class="form-label" for="editTimecardDate">日付</label>
-              <input type="text" class="form-control" id="editTimecardDate" placeholder="" name="date" readonly/>
+              <input type="text" class="form-control" id="editTimecardDate" placeholder="" name="date" readonly tabindex="-1" />
             </div>
           </div>
 
@@ -199,13 +199,13 @@ $view->heading('タイムカード');
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="editTimecardOpen">チェックイン</label>
               <div class="input-group timecard-time-input border ps-1 rounded-2">
-                <input type="text" class="form-control timecard-time-input-field d-none" id="editTimecardOpen" placeholder="" name="timecard_open" readonly />
+                <input type="text" class="form-control timecard-time-input-field d-none" id="editTimecardOpen" placeholder="" name="timecard_open" readonly tabindex="-1" />
               </div>
             </div>
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="editTimecardClose">チェックアウト</label>
               <div class="input-group timecard-time-input border ps-1 rounded-2">
-                <input type="text" class="form-control timecard-time-input-field d-none" id="editTimecardClose" placeholder="" name="timecard_close" readonly />
+                <input type="text" class="form-control timecard-time-input-field d-none" id="editTimecardClose" placeholder="" name="timecard_close" readonly tabindex="-1" />
               </div>
             </div>
           </div>
@@ -229,7 +229,7 @@ $view->heading('タイムカード');
   <div class="modal-dialog modal-simple modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-body">
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる" tabindex="-1"></button>
         <div class="text-center mb-6">
           <h4 class="modal-title" id="modalEditTimecardNoteTitle"></h4>
         </div>
@@ -239,7 +239,7 @@ $view->heading('タイムカード');
           <div class="form-group row">
             <div class="col-md-12 mb-4 form-control-validation">
               <label class="form-label" for="editTimecardNoteDate">日付</label>
-              <input type="text" class="form-control" id="editTimecardNoteDate" placeholder="" name="date" readonly/>
+              <input type="text" class="form-control" id="editTimecardNoteDate" placeholder="" name="date" readonly />
             </div>
           </div>
           <div class="form-group row">
@@ -256,6 +256,49 @@ $view->heading('タイムカード');
   </div>
 </div>
 <!-- / Content -->
+<style>
+  #modalEditTimecard .form-control:focus-visible,
+  #modalEditTimecard textarea:focus-visible,
+  #modalEditTimecard .btn:focus-visible,
+  #modalEditTimecard .btn-close:focus-visible,
+  #modalEditTimecardNote .form-control:focus-visible,
+  #modalEditTimecardNote textarea:focus-visible,
+  #modalEditTimecardNote .btn:focus-visible,
+  #modalEditTimecardNote .btn-close:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+  }
+  #modalEditTimecard .flatpickr-time input.flatpickr-hour:focus-visible,
+  #modalEditTimecard .flatpickr-time input.flatpickr-minute:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 1px;
+    box-shadow: none;
+  }
+  .datatables-timecard .timecard-request-list {
+    min-width: 10rem;
+    max-width: 16rem;
+  }
+  .datatables-timecard .timecard-request-item {
+    line-height: 1.4;
+    padding: 0.1rem 0;
+  }
+  .datatables-timecard .timecard-request-item + .timecard-request-item {
+    border-top: 1px dashed rgba(67, 89, 113, 0.2);
+    margin-top: 0.15rem;
+    padding-top: 0.2rem;
+  }
+  .datatables-timecard .timecard-request-link:hover {
+    color: var(--bs-primary) !important;
+    text-decoration: underline !important;
+  }
+  .timecard-request-detail-tooltip .tooltip-inner {
+    max-width: 22rem;
+    text-align: left;
+    white-space: normal;
+    line-height: 1.45;
+    font-size: 0.8125rem;
+  }
+</style>
 <?php
 $view->footing();
 ?>

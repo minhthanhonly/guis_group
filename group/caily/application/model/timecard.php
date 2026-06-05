@@ -88,7 +88,40 @@ class Timecard extends ApplicationModel {
 	}
 
 	function timecardCsvEscapeCell($value) {
-		return str_replace('"', '""', (string) $value);
+		$s = (string) $value;
+		// セル内改行は CSV の行区切りと誤認されるため除去
+		$s = str_replace(array("\r\n", "\r", "\n"), ' ', $s);
+		return str_replace('"', '""', $s);
+	}
+
+	/** CSV 1行（各セルをクォート） */
+	private function timecardCsvFormatRow(array $cells) {
+		$parts = array();
+		foreach ($cells as $cell) {
+			$parts[] = '"' . $this->timecardCsvEscapeCell($cell) . '"';
+		}
+		return implode(',', $parts) . "\n";
+	}
+
+	/** 複数申請の区切り（CSV・画面共通） */
+	private function timecardRequestFormsSeparator() {
+		return '■';
+	}
+
+	/** CSV「申請」列: 各申請の先頭に「■」、申請間は半角スペース */
+	private function timecardCsvRequestsCell($requestsByDate, $date) {
+		if (empty($requestsByDate[$date]) || !is_array($requestsByDate[$date])) {
+			return '';
+		}
+		$sep = $this->timecardRequestFormsSeparator();
+		$parts = array();
+		foreach ($requestsByDate[$date] as $item) {
+			$text = isset($item['display_text']) ? trim((string) $item['display_text']) : '';
+			if ($text !== '') {
+				$parts[] = $sep . $text;
+			}
+		}
+		return implode(' ', $parts);
 	}
 
 	
@@ -161,7 +194,393 @@ class Timecard extends ApplicationModel {
 
 
 		$hash['config'] = $this->getConfigStatusByUser($hash['owner']['userid']);
+		$hash['requests_by_date'] = $this->buildRequestsByDateForTimecard(
+			$hash['owner']['userid'],
+			$start->format('Y-m-d'),
+			$end->format('Y-m-d')
+		);
 		return $hash;
+	}
+
+	/** タイムカード表示用: 勤怠関連申請を日付ごとにまとめる */
+	private function buildRequestsByDateForTimecard($userId, $periodFrom, $periodTo) {
+		$types = array('leave', 'outing', 'trip', 'holiday_work', 'overtime', 'attendance_correction');
+		$typeIn = "'" . implode("','", array_map(array($this, 'quote'), $types)) . "'";
+		// 承認済・処理完了のみ表示（下書き・承認待ち・却下は除外）
+		$statuses = array('approved', 'completed');
+		$statusIn = "'" . implode("','", array_map(array($this, 'quote'), $statuses)) . "'";
+		$uid = $this->quote($userId);
+		$table = DB_PREFIX . 'requests';
+		// end_date が空文字のレコードがあるため、期間判定は PHP で行う（SQL の DATE 比較でエラーになる）
+		$query = "SELECT id, type, status, start_date, end_date, data, created_at,"
+			. " approver_id, approved_at, completed_userid, completed_at FROM {$table}"
+			. " WHERE user_id = '{$uid}' AND type IN ({$typeIn}) AND status IN ({$statusIn})"
+			. " ORDER BY id ASC";
+		$rows = $this->fetchAll($query);
+		$rows = $this->enrichTimecardRequestRowsForTooltip($rows);
+		$byDate = array();
+		if (!is_array($rows)) {
+			return $byDate;
+		}
+		foreach ($rows as $row) {
+			$status = isset($row['status']) ? (string)$row['status'] : '';
+			if ($status !== 'approved' && $status !== 'completed') {
+				continue;
+			}
+			list($start, $end) = $this->resolveRequestPeriodDatesForTimecard($row);
+			if ($start === null || !$this->requestPeriodOverlapsTimecardRange($start, $end, $periodFrom, $periodTo)) {
+				continue;
+			}
+			$cur = new DateTime($start);
+			$endDt = new DateTime($end ?: $start);
+			$item = array(
+				'id' => intval($row['id']),
+				'type' => $row['type'],
+				'label' => $this->requestTypeLabelForTimecard($row['type']),
+				'status' => $row['status'],
+				'status_label' => $this->requestStatusLabelForTimecard($row['status']),
+				'display_text' => $this->requestDisplayTextForTimecard($row),
+				'tooltip_lines' => $this->requestTooltipLinesForTimecard($row),
+			);
+			while ($cur <= $endDt) {
+				$d = $cur->format('Y-m-d');
+				if ($d >= $periodFrom && $d <= $periodTo) {
+					if (!isset($byDate[$d])) {
+						$byDate[$d] = array();
+					}
+					$byDate[$d][] = $item;
+				}
+				$cur->modify('+1 day');
+			}
+		}
+		return $byDate;
+	}
+
+	private function isValidTimecardRequestDate($value) {
+		if ($value === null || $value === '') {
+			return false;
+		}
+		$str = substr((string)$value, 0, 10);
+		return preg_match('/^\d{4}-\d{2}-\d{2}$/', $str) === 1 && $str !== '0000-00-00';
+	}
+
+	private function requestPeriodOverlapsTimecardRange($start, $end, $periodFrom, $periodTo) {
+		if (!$this->isValidTimecardRequestDate($start)) {
+			return false;
+		}
+		if (!$this->isValidTimecardRequestDate($end)) {
+			$end = $start;
+		}
+		return $start <= $periodTo && $end >= $periodFrom;
+	}
+
+	private function resolveRequestPeriodDatesForTimecard($row) {
+		$start = $this->isValidTimecardRequestDate($row['start_date'] ?? null)
+			? substr($row['start_date'], 0, 10) : null;
+		$end = $this->isValidTimecardRequestDate($row['end_date'] ?? null)
+			? substr($row['end_date'], 0, 10) : null;
+		if ($start === null && !empty($row['data'])) {
+			$data = is_string($row['data']) ? json_decode($row['data'], true) : $row['data'];
+			if (is_array($data)) {
+				$type = isset($row['type']) ? $row['type'] : '';
+				if ($type === 'leave') {
+					if (!empty($data['start_datetime'])) {
+						$start = substr($data['start_datetime'], 0, 10);
+					}
+					if (!empty($data['end_datetime'])) {
+						$end = substr($data['end_datetime'], 0, 10);
+					}
+				} elseif (in_array($type, array('outing', 'holiday_work', 'overtime', 'attendance_correction'), true) && !empty($data['date'])) {
+					$start = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+					$end = $start;
+				} elseif ($type === 'trip') {
+					if (!empty($data['start_datetime'])) {
+						$start = substr($data['start_datetime'], 0, 10);
+					}
+					if (!empty($data['end_datetime'])) {
+						$end = substr($data['end_datetime'], 0, 10);
+					}
+				}
+			}
+		}
+		if ($start === null && !empty($row['created_at'])) {
+			$start = substr($row['created_at'], 0, 10);
+		}
+		if ($end === null) {
+			$end = $start;
+		}
+		return array($start, $end);
+	}
+
+	private function requestTypeLabelForTimecard($type) {
+		switch ($type) {
+			case 'leave': return '休暇届';
+			case 'outing': return '外出申請書';
+			case 'trip': return '出張申請書';
+			case 'holiday_work': return '休日勤務申請書';
+			case 'overtime': return '遅刻・早退・時間外勤務';
+			case 'attendance_correction': return '勤怠打刻修正';
+			default: return '申請';
+		}
+	}
+
+	private function requestStatusLabelForTimecard($status) {
+		$map = array(
+			'draft' => '下書き',
+			'pending' => '承認待ち',
+			'approved' => '承認済',
+			'rejected' => '却下',
+			'completed' => '完了',
+		);
+		return isset($map[$status]) ? $map[$status] : (string)$status;
+	}
+
+	private function decodeRequestDataForTimecard($row) {
+		if (empty($row['data'])) {
+			return array();
+		}
+		$decoded = is_string($row['data']) ? json_decode($row['data'], true) : $row['data'];
+		return is_array($decoded) ? $decoded : array();
+	}
+
+	private function formatTimecardRequestTimeRange($start, $end) {
+		$s = trim((string)$start);
+		$e = trim((string)$end);
+		if ($s !== '' && $e !== '') {
+			return $s . '~' . $e;
+		}
+		if ($s !== '') {
+			return $s;
+		}
+		return $e;
+	}
+
+	private function timecardRequestTimeFromData($data, $startKey, $endKey) {
+		$start = isset($data[$startKey]) ? trim((string)$data[$startKey]) : '';
+		$end = isset($data[$endKey]) ? trim((string)$data[$endKey]) : '';
+		if ($start === '' && !empty($data['start_datetime'])) {
+			$start = substr((string)$data['start_datetime'], 11, 5);
+		}
+		if ($end === '' && !empty($data['end_datetime'])) {
+			$end = substr((string)$data['end_datetime'], 11, 5);
+		}
+		return array($start, $end);
+	}
+
+	/** タイムカード「申請」列の1行表示テキスト */
+	private function requestDisplayTextForTimecard($row) {
+		$data = $this->decodeRequestDataForTimecard($row);
+		$type = isset($row['type']) ? $row['type'] : '';
+		switch ($type) {
+			case 'leave':
+				$leaveType = isset($data['leave_type']) ? trim((string)$data['leave_type']) : '';
+				$subType = '';
+				if ($leaveType === '有給休暇' && !empty($data['paid_type'])) {
+					$subType = trim((string)$data['paid_type']);
+				} elseif ($leaveType === '無給休暇' && !empty($data['unpaid_type'])) {
+					$subType = trim((string)$data['unpaid_type']);
+				} elseif (!empty($data['paid_type'])) {
+					$subType = trim((string)$data['paid_type']);
+				} elseif (!empty($data['unpaid_type'])) {
+					$subType = trim((string)$data['unpaid_type']);
+				}
+				if ($subType !== '' && $leaveType !== '') {
+					return $subType . ' (' . $leaveType . ')';
+				}
+				return $subType !== '' ? $subType : $leaveType;
+			case 'outing':
+				list($st, $et) = $this->timecardRequestTimeFromData($data, 'start_time', 'end_time');
+				return '外出: ' . $this->formatTimecardRequestTimeRange($st, $et);
+			case 'trip':
+				return '出張';
+			case 'holiday_work':
+				list($st, $et) = $this->timecardRequestTimeFromData($data, 'start_time', 'end_time');
+				$text = '休日勤務: ' . $this->formatTimecardRequestTimeRange($st, $et);
+				if (!empty($data['break_time'])) {
+					$bt = trim((string)$data['break_time']);
+					$text .= ', 休憩: ' . (preg_match('/h$/i', $bt) ? $bt : $bt . 'h');
+				}
+				return $text;
+			case 'overtime':
+				$purpose = isset($data['purpose']) ? trim((string)$data['purpose']) : '';
+				list($st, $et) = $this->timecardRequestTimeFromData($data, 'start_time', 'end_time');
+				return $purpose . ': ' . $this->formatTimecardRequestTimeRange($st, $et);
+			case 'attendance_correction':
+				$ct = isset($data['correction_type']) ? trim((string)$data['correction_type']) : '';
+				$time = isset($data['time']) ? trim((string)$data['time']) : '';
+				return '打刻修正: ' . $ct . ' : ' . $time;
+			default:
+				return $this->requestTypeLabelForTimecard($type);
+		}
+	}
+
+	private function enrichTimecardRequestRowsForTooltip($rows) {
+		if (!is_array($rows) || !count($rows)) {
+			return $rows;
+		}
+		$user_ids = array();
+		foreach ($rows as $row) {
+			if (!empty($row['approver_id'])) {
+				$user_ids[$row['approver_id']] = true;
+			}
+			if (!empty($row['completed_userid'])) {
+				$user_ids[$row['completed_userid']] = true;
+			}
+		}
+		$user_map = array();
+		if (count($user_ids)) {
+			$in = "'" . implode("','", array_map(array($this, 'quote'), array_keys($user_ids))) . "'";
+			$users = $this->fetchAll(
+				"SELECT userid, realname, lastname, firstname, lastname_after_married FROM " . DB_PREFIX . "user WHERE userid IN ($in)"
+			);
+			if (is_array($users)) {
+				foreach ($users as $u) {
+					if (!empty($u['userid'])) {
+						$user_map[$u['userid']] = Helper::userDisplayName($u);
+					}
+				}
+			}
+		}
+		foreach ($rows as &$row) {
+			$row['approver_realname'] = !empty($row['approver_id']) && isset($user_map[$row['approver_id']])
+				? $user_map[$row['approver_id']] : '';
+			$row['completed_realname'] = !empty($row['completed_userid']) && isset($user_map[$row['completed_userid']])
+				? $user_map[$row['completed_userid']] : '';
+		}
+		unset($row);
+		return $rows;
+	}
+
+	private function formatTimecardRequestDatetime($value) {
+		if ($value === null || $value === '') {
+			return '';
+		}
+		$ts = strtotime((string)$value);
+		if ($ts === false) {
+			return trim((string)$value);
+		}
+		return date('Y/m/d H:i', $ts);
+	}
+
+	private function timecardTooltipLine($label, $value) {
+		if ($value === null || $value === '') {
+			return null;
+		}
+		return $label . ': ' . trim((string)$value);
+	}
+
+	private function appendTimecardRequestWorkflowLines($row, $add) {
+		$approverName = !empty($row['approver_realname'])
+			? $row['approver_realname']
+			: (!empty($row['approver_id']) ? $row['approver_id'] : '');
+		$approvedAt = $this->formatTimecardRequestDatetime($row['approved_at'] ?? '');
+		if ($approverName !== '' || $approvedAt !== '') {
+			$add($this->timecardTooltipLine('承認者', $approverName));
+			$add($this->timecardTooltipLine('承認日時', $approvedAt));
+		}
+		$completedName = !empty($row['completed_realname'])
+			? $row['completed_realname']
+			: (!empty($row['completed_userid']) ? $row['completed_userid'] : '');
+		$completedAt = $this->formatTimecardRequestDatetime($row['completed_at'] ?? '');
+		if ($completedName !== '' || $completedAt !== '') {
+			$add($this->timecardTooltipLine('処理完了者', $completedName));
+			$add($this->timecardTooltipLine('処理完了日時', $completedAt));
+		}
+	}
+
+	private function formatTimecardHolidayWorkBreakTime($bt) {
+		$bt = trim((string)$bt);
+		if ($bt === '') {
+			return '';
+		}
+		$labels = array('0.5' => '0.5h', '1' => '1h', '1.5' => '1.5h', '2' => '2h', '2.5' => '2.5h', '3' => '3h', '3.5' => '3.5h', '4' => '4h');
+		if (isset($labels[$bt])) {
+			return $labels[$bt];
+		}
+		$minuteToHour = array(30 => '0.5h', 60 => '1h', 90 => '1.5h', 120 => '2h', 150 => '2.5h', 180 => '3h', 210 => '3.5h', 240 => '4h');
+		if (ctype_digit($bt) && isset($minuteToHour[(int)$bt])) {
+			return $minuteToHour[(int)$bt];
+		}
+		return $bt . 'h';
+	}
+
+	/** ホバー用ツールチップ（申請詳細） */
+	private function requestTooltipLinesForTimecard($row) {
+		$data = $this->decodeRequestDataForTimecard($row);
+		$type = isset($row['type']) ? $row['type'] : '';
+		$lines = array();
+		$lines[] = $this->requestTypeLabelForTimecard($type);
+		$lines[] = '状態: ' . $this->requestStatusLabelForTimecard($row['status'] ?? '');
+		$lines[] = '申請ID: ' . intval($row['id']);
+
+		$add = function ($line) use (&$lines) {
+			if ($line !== null && $line !== '') {
+				$lines[] = $line;
+			}
+		};
+
+		if ($type === 'leave') {
+			$add($this->timecardTooltipLine('期間（開始）', $data['start_datetime'] ?? ''));
+			$add($this->timecardTooltipLine('期間（終了）', $data['end_datetime'] ?? ''));
+			if (isset($data['days']) && $data['days'] !== '') {
+				$add($this->timecardTooltipLine('日間', $data['days']));
+			}
+			$add($this->timecardTooltipLine('休暇種別', $data['leave_type'] ?? ''));
+			$add($this->timecardTooltipLine('有給休暇', $data['paid_type'] ?? ''));
+			$add($this->timecardTooltipLine('無給休暇', $data['unpaid_type'] ?? ''));
+			$add($this->timecardTooltipLine('事由', $data['reason'] ?? ''));
+			$add($this->timecardTooltipLine('注記', $data['note'] ?? ''));
+		} elseif ($type === 'outing') {
+			$add($this->timecardTooltipLine('日付', $data['date'] ?? ''));
+			list($st, $et) = $this->timecardRequestTimeFromData($data, 'start_time', 'end_time');
+			$add($this->timecardTooltipLine('開始時刻', $st));
+			$add($this->timecardTooltipLine('終了時刻', $et));
+			$add($this->timecardTooltipLine('行先', $data['destination'] ?? ''));
+			$add($this->timecardTooltipLine('事由', $data['reason'] ?? ''));
+			$add($this->timecardTooltipLine('注記', $data['note'] ?? ''));
+		} elseif ($type === 'trip') {
+			$add($this->timecardTooltipLine('期間（開始）', $data['start_datetime'] ?? ''));
+			$add($this->timecardTooltipLine('期間（終了）', $data['end_datetime'] ?? ''));
+			if (isset($data['days']) && $data['days'] !== '') {
+				$add($this->timecardTooltipLine('日間', $data['days']));
+			}
+			$add($this->timecardTooltipLine('行先', $data['destination'] ?? ''));
+			$add($this->timecardTooltipLine('事由', $data['reason'] ?? ''));
+			$add($this->timecardTooltipLine('注記', $data['note'] ?? ''));
+		} elseif ($type === 'holiday_work') {
+			$add($this->timecardTooltipLine('日付', $data['date'] ?? ''));
+			list($st, $et) = $this->timecardRequestTimeFromData($data, 'start_time', 'end_time');
+			$add($this->timecardTooltipLine('開始時刻', $st));
+			if (isset($data['break_time']) && $data['break_time'] !== '') {
+				$add($this->timecardTooltipLine('休憩時間', $this->formatTimecardHolidayWorkBreakTime($data['break_time'])));
+			}
+			$add($this->timecardTooltipLine('終了時刻', $et));
+			$add($this->timecardTooltipLine('事由', $data['reason'] ?? ''));
+			$add($this->timecardTooltipLine('注記', $data['note'] ?? ''));
+		} elseif ($type === 'overtime') {
+			$add($this->timecardTooltipLine('日付', $data['date'] ?? ''));
+			list($st, $et) = $this->timecardRequestTimeFromData($data, 'start_time', 'end_time');
+			$add($this->timecardTooltipLine('開始時刻', $st));
+			$add($this->timecardTooltipLine('終了時刻', $et));
+			if (!empty($data['purpose'])) {
+				$p = is_array($data['purpose']) ? implode('、', $data['purpose']) : $data['purpose'];
+				$add($this->timecardTooltipLine('用途', $p));
+			}
+			$add($this->timecardTooltipLine('事由', $data['reason'] ?? ''));
+			$add($this->timecardTooltipLine('注記', $data['note'] ?? ''));
+		} elseif ($type === 'attendance_correction') {
+			$add($this->timecardTooltipLine('日付', $data['date'] ?? ''));
+			$add($this->timecardTooltipLine('時間', $data['time'] ?? ''));
+			$add($this->timecardTooltipLine('区分', $data['correction_type'] ?? ''));
+			$add($this->timecardTooltipLine('事由', $data['reason'] ?? ''));
+			$add($this->timecardTooltipLine('注記', $data['note'] ?? ''));
+		}
+
+		$this->appendTimecardRequestWorkflowLines($row, $add);
+
+		return array_values(array_filter($lines, function ($l) {
+			return $l !== null && $l !== '';
+		}));
 	}
 
 	function getConfigStatusByUser($userid){
@@ -873,7 +1292,6 @@ class Timecard extends ApplicationModel {
 
 		$hash['data'] = $this->findRecord($hash, $syr, $smt, $sdt);
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-			$this->validator('timecard_comment', '内容', array('length:10000', 'line:100'));
 			$this->post['timecard_open'] = $this->validatetime($_POST['openhour'], $_POST['openminute']);
 			$this->post['timecard_close'] = $this->validatetime($_POST['closehour'], $_POST['closeminute']);
 
@@ -1311,13 +1729,23 @@ class Timecard extends ApplicationModel {
 			$ownerRow = $this->fetchOne("SELECT userid, realname, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE userid = '".$this->quote($member)."'");
 			$displayName = $this->timecardUserDisplayName(is_array($ownerRow) ? $ownerRow : array('realname' => $member));
 
+			$requestsByDate = $this->buildRequestsByDateForTimecard(
+				$member,
+				$start->format('Y-m-d'),
+				$end->format('Y-m-d')
+			);
+
 			$csv = $yr.'年'.$mt.'月'."\n";
 			$csv .= '"氏名","'.$this->timecardCsvEscapeCell($displayName).'"'."\n";
-			$csv .= '"日付","出社","退社","勤務時間","時間外","休日出勤","備考"'."\n";
+			$csv .= '"日付","出社","退社","勤務時間","時間外","休日出勤","申請","備考"'."\n";
 
 			$week = array('日', '月', '火', '水', '木', '金', '土');
+			$data = array();
 			foreach ($list as $row) {
-				$data[$row['timecard_day']] = $row;
+				$dkey = isset($row['timecard_date']) ? substr((string) $row['timecard_date'], 0, 10) : '';
+				if ($dkey !== '') {
+					$data[$dkey] = $row;
+				}
 			}
 			$sum = 0;
 			$sum_over = 0;
@@ -1334,32 +1762,34 @@ class Timecard extends ApplicationModel {
 				$weekday = $dateCurrent->format('w');
 
 				$checkholiday = $this->checkWeekendAndHoliday($date);
-				if (strlen($data[$dt]['timecard_time']) > 0 && $checkholiday) {
-					$array = explode(':', $data[$dt]['timecard_time']);
+				$dayRow = isset($data[$date]) && is_array($data[$date]) ? $data[$date] : array();
+				$tcOpen = isset($dayRow['timecard_open']) ? $dayRow['timecard_open'] : '';
+				$tcClose = isset($dayRow['timecard_close']) ? $dayRow['timecard_close'] : '';
+				$tcTime = isset($dayRow['timecard_time']) ? $dayRow['timecard_time'] : '';
+				$tcOver = isset($dayRow['timecard_timeover']) ? $dayRow['timecard_timeover'] : '';
+				$tcComment = isset($dayRow['timecard_comment']) ? $dayRow['timecard_comment'] : '';
+
+				if (strlen($tcTime) > 0 && $checkholiday) {
+					$array = explode(':', $tcTime);
 					$sum_holiday += intval($array[0]) * 60 + intval($array[1]);
-				} else{
-					$array = explode(':', $data[$dt]['timecard_time']);
+				} elseif (strlen($tcTime) > 0) {
+					$array = explode(':', $tcTime);
 					$sum += intval($array[0]) * 60 + intval($array[1]);
 				}
-				if (strlen($data[$dt]['timecard_timeover']) > 0) {
-					$array = explode(':', $data[$dt]['timecard_timeover']);
+				if (strlen($tcOver) > 0) {
+					$array = explode(':', $tcOver);
 					$sum_over += intval($array[0]) * 60 + intval($array[1]);
 				}
-				$csv .= '"'.$smt.'/'.$dt.' ('.$week[$weekday].')","';
-				$csv .= $data[$dt]['timecard_open'].'","';
-				$csv .= $data[$dt]['timecard_close'].'","';
-				if (!$checkholiday) {
-					$csv .= $data[$dt]['timecard_time'].'","';
-				} else{
-					$csv .= '","';
-				}
-				$csv .= $data[$dt]['timecard_timeover'].'","';
-				if ($checkholiday) {
-					$csv .= $data[$dt]['timecard_time'].'","';
-				} else{
-					$csv .= '","';
-				}
-				$csv .= $data[$dt]['timecard_comment'].'"'."\n";
+				$csv .= $this->timecardCsvFormatRow(array(
+					$smt . '/' . $dt . ' (' . $week[$weekday] . ')',
+					$tcOpen,
+					$tcClose,
+					$checkholiday ? '' : $tcTime,
+					$tcOver,
+					$checkholiday ? $tcTime : '',
+					$this->timecardCsvRequestsCell($requestsByDate, $date),
+					$tcComment,
+				));
 			}
 			$csv .= '"勤務時間合計","'.sprintf('%d:%02d', (($sum - ($sum % 60)) / 60), ($sum % 60)).'"'."\n";
 			$csv .= '"時間外合計","'.sprintf('%d:%02d', (($sum_over - ($sum_over % 60)) / 60), ($sum_over % 60)).'"'."\n";
