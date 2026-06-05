@@ -85,6 +85,9 @@ if($_SESSION['show_project'] == 0){
                                 <span v-if="project && project.department_name" class="badge border border-info bg-transparent text-info ms-2">{{ project.department_name }}</span>
                             </h5>
                             <div>
+                                <button v-if="!isEditMode && project" class="btn btn-outline-secondary btn-sm me-2" @click="copyProjectInfoToClipboard" title="案件情報をコピー">
+                                    <i class="fa fa-copy me-1"></i><span data-i18n="案件情報をコピー">案件情報をコピー</span>
+                                </button>
                                 <!-- Join Project Button -->
                             <button v-if="!isEditMode && canJoinProject" class="btn btn-primary btn-sm me-2" @click="joinProject" title="案件に参加">
                                     <i class="fa fa-user-plus me-1"></i><span data-i18n="案件に参加">案件に参加</span>
@@ -1160,5 +1163,6 @@ window.__chatPageContext = { project_id: PROJECT_ID };
 <script src="<?=ROOT?>assets/js/sw-manager.js"></script>
 <script src="/assets/js/mention.js?v=<?=CACHE_VERSION?>"></script>
 <script src="/assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/project-clipboard.js?v=<?=CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail.js?v=<?=CACHE_VERSION?>"></script>
 

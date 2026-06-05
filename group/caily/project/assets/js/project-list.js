@@ -267,123 +267,8 @@ var projectTable;
     }
 
     function getBranchRomaji(branchName) {
-        // Branch name -> romaji mapping for Vietnamese locale display.
-        var branchRomajiMap = {
-            '和歌山': 'WAKAYAMA',
-            '青梅': 'AOMEI',
-            '足立': 'ADACHI',
-            '厚木': 'ASTUGI',
-            '尼崎': 'AMAGASAKI',
-            '安城': 'ANZOU',
-            '池田': 'IKEDA',
-            '板橋': 'ITABASHI',
-            '市川': 'ICHIKAWA',
-            '一宮': 'ICHINOMIYA',
-            '宇都宮': 'USTUNOMIYA',
-            '江戸川': 'EDOGAWA',
-            '大阪': 'OSAKA',
-            '大阪りんくう': 'OSAKARINKU',
-            '岡崎': 'OKAZAKI',
-            '小田原': 'ODAWARA',
-            '柏': 'KASHIWA',
-            '春日井': 'KASUGAI',
-            '春日部': 'KASUKABE',
-            '鎌倉': 'KAMAKURA',
-            '刈谷': 'KARIYA',
-            '川口': 'KAWAGUCHI',
-            '川崎': 'KAWASAKI',
-            '川崎西': 'KAWASAKINISHI',
-            '川崎東': 'KAWASAKIHIGASHI',
-            '岐阜東': 'GIFUHIGASHI',
-            '京都': 'KYOTO',
-            '京都西': 'KYOTONISHI',
-            '京都東': 'KYOTOHIGASHI',
-            '京都山科': 'KYOTOYAMASHINA',
-            '桑名': 'KUWANA',
-            '江東': 'KOUTOU',
-            '神戸': 'KOBE',
-            '国分寺': 'KOKUBUNJI',
-            '埼玉南': 'SAITAMAMINAMI',
-            '堺': 'SAKAI',
-            '相模原': 'SAGAMIHARA',
-            '三宮': 'SANNOMIYA',
-            '滋賀': 'SHIGA',
-            '静岡': 'SHIZUOKA',
-            '静岡東': 'SHIZUOKAHIGASI',
-            '品川': 'SHINAGAWA',
-            '杉並': 'SUGINAMI',
-            '墨田': 'SUMIDA',
-            '世田谷': 'SETAGAYA',
-            '仙台南': 'SENDAIMINAMI',
-            '高崎': 'TAKASAKI',
-            '多治見': 'TAJIMI',
-            '立川': 'TACHIKAWA',
-            '多摩': 'TAMA',
-            '千葉': 'CHIBA',
-            '千葉北': 'CHIBAKITA',
-            '千葉南': 'CHIBAMINAMI',
-            '東京大田': 'TOKYOOOTA',
-            '東京北': 'TOKYOKITA',
-            '所沢': 'TOKOROZAWA',
-            '富山': 'TOYAMA',
-            '豊川': 'TOYOKAWA',
-            '豊田': 'TOYOTA',
-            '豊橋': 'TOYOHASHI',
-            '長崎': 'NAGASAKI',
-            '名古屋北': 'NAGOYAKITA',
-            '名古屋港': 'NAGOYAMINATO',
-            '名古屋天白': 'NAGOYATENPAKU',
-            '名古屋西': 'NAGOYANISHI',
-            '名古屋東': 'NAGOYAHIGASHI',
-            '名古屋南': 'NAGOYAMINAMI',
-            '奈良南': 'NARAMINAMI',
-            '成田': 'NARITA',
-            '新潟': 'NIIGATA',
-            '新潟西': 'NIIGATANISHI',
-            '練馬': 'NERYMA',
-            '練馬西': 'NERIMANISHI',
-            '八王子': 'HACHIOJI',
-            '八戸': 'HACHINOHE',
-            '浜松': 'HAMAMASTU',
-            '東大阪': 'HIGASHIOSAKA',
-            '東京太田': 'HIGASITOKYOOTA',
-            '姫路': 'HIMEJI',
-            '枚方': 'HIRAKATA',
-            '枚方南': 'HIRAKATAMINAMI',
-            '平塚': 'HIRATUKA',
-            '福島': 'FUKUSHIMA',
-            '福島南': 'FUKUSHIMAMINAMI',
-            '富士': 'FUJI',
-            '藤沢': 'FUJISAWA',
-            '船橋': 'FUNAHASHI',
-            '町田': 'MACHIDA',
-            '松江': 'MATSUE',
-            '松戸': 'MATSUDO',
-            '松山': 'MASTUYAMA',
-            '三鷹': 'MITAKA',
-            '水戸': 'MITO',
-            '南大阪': 'MINAMIOSAKA',
-            '目黒': 'MEKURO',
-            '守谷': 'MORIYA',
-            '大和': 'YAMATO',
-            '横浜': 'YOKOHAMA',
-            '横浜東': 'YOKOHAMAHIGASI',
-            '横浜南': 'YOKOHAMAMINAMI',
-            '四日市': 'YOKAICHI',
-            '流通開発神戸': 'RYUTUKAIHATUKOBE',
-            '流通開発静岡': 'RYUTUKAIHATUSHIZUOKA',
-            '徳山': 'TOKUYAMA',
-            '仙台': 'SENDAI',
-            '仙台南': 'SENDAIMINAMI',
-            '仙台西': 'SENDAINISHI',
-            '仙台東': 'SENDAIHIGASHI',
-            '仙台北': 'SENDAIKITA',
-            '流通開発大阪': 'RYUTUKAIHATU OSAKA',
-            '流通開発東京': 'RYUTUKAIHATU TOKYO',
-            '流通開発札幌': 'RYUTUKAIHATU SAPPORO',
-            '流通開発仙台': 'RYUTUKAIHATU SENDAI',
-        };
-        return branchRomajiMap[String(branchName || '').trim()] || '';
+        return (window.ProjectClipboard && window.ProjectClipboard.getBranchRomaji)
+            ? window.ProjectClipboard.getBranchRomaji(branchName) : '';
     }
 
     function formatBranchNameForDisplay(branchName) {
@@ -1326,16 +1211,29 @@ var projectTable;
                 {
                     name: 'progress',
                     data: 'progress',
-                    width: '50px',
-                    render: function(data) {
-                        const color = data === 100 ? 'success' : 'primary';
+                    width: '56px',
+                    className: 'project-progress-cell',
+                    render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            return data != null ? parseInt(data, 10) : 0;
+                        }
+                        const progress = data != null ? parseInt(data, 10) : 0;
+                        const color = progress === 100 ? 'success' : 'primary';
+                        const completed = parseInt(row.completed_task_count, 10) || 0;
+                        const total = parseInt(row.task_count, 10) || 0;
+                        const taskCountHtml = total > 0
+                            ? `<small class="text-muted d-flex align-items-center gap-1 project-hover-tasks-trigger" data-project-id="${row.id}" style="font-size:0.75rem; cursor: default;">` +
+                              `<i class="fas fa-tasks" style="font-size:0.7rem;"></i>` +
+                              `<span>${completed}/${total}</span></small>`
+                            : '';
                         return `<div class="progress" style="width: 50px;">
                                     <div class="progress-bar bg-${color}" role="progressbar" 
-                                            style="width: ${data}%" aria-valuenow="${data}" 
+                                            style="width: ${progress}%" aria-valuenow="${progress}" 
                                             aria-valuemin="0" aria-valuemax="100">
                                     </div>
                                 </div>
-                                <small class="text-muted">${data}%</small>`;
+                                <small class="text-muted d-block">${progress}%</small>
+                                ${taskCountHtml}`;
                     },
                     title: '<span data-i18n="進捗率">進捗率</span>'
                 },
@@ -2195,7 +2093,7 @@ var projectTable;
                 cancelHide();
                 showPopup(projectId, e.clientX, e.clientY);
             });
-            $('#projectTable').on('mouseleave', '.project-id-cell, .project-name-cell', function() {
+            $('#projectTable').on('mouseleave', '.project-id-cell, .project-name-cell, .project-progress-cell', function() {
                 scheduleHide();
             });
 
@@ -2408,6 +2306,8 @@ var projectTable;
 
         // ----- Context menu "案件を編集" + "Thêm vào todo" (gộp chung, ẩn/hiện Thêm vào todo theo ô có data-todo-title) -----
         const $rowContextMenu = $('<div id="projectRowContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="copyProjectInfoRowBtn"><i class="fa fa-copy me-1"></i><span data-i18n="案件情報をコピー">案件情報をコピー</span></button>');
+        $rowContextMenu.append('<div class="dropdown-divider project-row-context-divider"></div>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="quickEditProjectRowBtn"><i class="fa fa-pencil-alt me-1"></i><span data-i18n="案件を編集">案件を編集</span></button>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="editParentConstructionNumberRowBtn"><i class="fa fa-hashtag me-1"></i><span data-i18n="工事番号を編集">工事番号を編集</span></button>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="addNoteFromRowBtn"><i class="fa fa-sticky-note me-1"></i><span data-i18n="メモを追加">メモを追加</span></button>');
@@ -2469,18 +2369,16 @@ var projectTable;
             var hasNoteColumn = !!contextMenuRowColumnKey;
             var hasParentProject = !!(rowData.parent_project_id && parseInt(rowData.parent_project_id, 10) > 0);
             var canEditParentConstruction = canShowEdit && hasParentProject;
-            if (!canShowEdit && !canEditParentConstruction && !contextMenuTodoEl && !hasNoteColumn) return;
             e.preventDefault();
             contextMenuRowProjectId = rowData.id;
             contextMenuIsManagerOnly = !canFullEdit && isManagerOfProject;
-            if (canShowEdit) {
-                $('#quickEditProjectRowBtn').show();
-            } else {
-                $('#quickEditProjectRowBtn').hide();
-            }
+            $('#copyProjectInfoRowBtn').show();
+            $('#quickEditProjectRowBtn').toggle(canShowEdit);
             $('#editParentConstructionNumberRowBtn').toggle(canEditParentConstruction);
             $('#addNoteFromRowBtn').toggle(hasNoteColumn);
             $('#addToTodoFromRowBtn').toggle(!!contextMenuTodoEl);
+            var hasSecondaryActions = canShowEdit || canEditParentConstruction || hasNoteColumn || !!contextMenuTodoEl;
+            $('.project-row-context-divider').toggle(hasSecondaryActions);
             $rowContextMenu
                 .css({ top: e.pageY + 'px', left: e.pageX + 'px' })
                 .show();
@@ -2488,6 +2386,23 @@ var projectTable;
 
         $(document).on('click', function() {
             $rowContextMenu.hide();
+        });
+        $rowContextMenu.on('click', '#copyProjectInfoRowBtn', async function(ev) {
+            ev.stopPropagation();
+            $rowContextMenu.hide();
+            if (!contextMenuRowData || !window.ProjectClipboard) return;
+            try {
+                var text = window.ProjectClipboard.buildText(contextMenuRowData, teamIdToName);
+                var copied = await window.ProjectClipboard.copy(text);
+                if (!copied) throw new Error('copy failed');
+                if (typeof showMessage === 'function') {
+                    showMessage(typeof translateText === 'function' ? translateText('案件情報をコピーしました') : '案件情報をコピーしました', false);
+                }
+            } catch (err) {
+                if (typeof showMessage === 'function') {
+                    showMessage(typeof translateText === 'function' ? translateText('案件情報のコピーに失敗しました') : '案件情報のコピーに失敗しました', true);
+                }
+            }
         });
         $rowContextMenu.on('click', '#quickEditProjectRowBtn', function(ev) {
             ev.stopPropagation();

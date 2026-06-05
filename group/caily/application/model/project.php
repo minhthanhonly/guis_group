@@ -391,7 +391,9 @@ class Project extends ApplicationModel {
            (SELECT GROUP_CONCAT(CONCAT(n.id, '_:_', n.content, '_:_', n.is_important) SEPARATOR '_|_') 
              FROM " . DB_PREFIX . "project_notes n 
              WHERE n.project_id = p.id AND n.needs_confirmation = 2 
-             ORDER BY n.is_important DESC, n.created_at DESC) as confirmation_notes_guis
+             ORDER BY n.is_important DESC, n.created_at DESC) as confirmation_notes_guis,
+            (SELECT COUNT(*) FROM " . DB_PREFIX . "tasks WHERE project_id = p.id) as task_count,
+            (SELECT COUNT(*) FROM " . DB_PREFIX . "tasks WHERE project_id = p.id AND status = 'completed') as completed_task_count
            
             FROM {$this->table} p
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id

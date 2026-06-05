@@ -1721,6 +1721,28 @@ const vueApp = createApp({
                 showMessage('プロジェクトの承認中にエラーが発生しました。', true);
             }
         },
+        async copyProjectInfoToClipboard() {
+            if (!this.project || !window.ProjectClipboard) return;
+            try {
+                const text = window.ProjectClipboard.buildText(this.project);
+                const copied = await window.ProjectClipboard.copy(text);
+                if (!copied) throw new Error('copy failed');
+                const msg = (typeof translateText === 'function')
+                    ? translateText('案件情報をコピーしました')
+                    : '案件情報をコピーしました';
+                if (typeof showMessage === 'function') {
+                    showMessage(msg, false);
+                }
+            } catch (error) {
+                console.error('Error copying project info:', error);
+                const failMsg = (typeof translateText === 'function')
+                    ? translateText('案件情報のコピーに失敗しました')
+                    : '案件情報のコピーに失敗しました';
+                if (typeof showMessage === 'function') {
+                    showMessage(failMsg, true);
+                }
+            }
+        },
         async joinProject() {
             if (!this.canJoinProject) return;
             

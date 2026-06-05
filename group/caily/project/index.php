@@ -1108,4 +1108,5 @@ if (window.IS_CAILY_BRANCH_USER) {
     document.body.classList.add('is-caily-branch-user');
 }
 </script>
+<script src="assets/js/project-clipboard.js?v=<?=CACHE_VERSION?>"></script>
 <script src="assets/js/project-list.js?v=<?=CACHE_VERSION?>"></script>
