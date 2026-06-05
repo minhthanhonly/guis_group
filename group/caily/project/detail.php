@@ -85,7 +85,7 @@ if($_SESSION['show_project'] == 0){
                                 <span v-if="project && project.department_name" class="badge border border-info bg-transparent text-info ms-2">{{ project.department_name }}</span>
                             </h5>
                             <div>
-                                <button v-if="!isEditMode && project" class="btn btn-outline-secondary btn-sm me-2" @click="copyProjectInfoToClipboard" title="案件情報をコピー">
+                                <button v-if="!isEditMode && project" class="btn btn-outline-info btn-sm me-2" @click="copyProjectInfoToClipboard" title="案件情報をコピー">
                                     <i class="fa fa-copy me-1"></i><span data-i18n="案件情報をコピー">案件情報をコピー</span>
                                 </button>
                                 <!-- Join Project Button -->
