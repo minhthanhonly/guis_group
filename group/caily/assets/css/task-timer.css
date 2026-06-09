@@ -1,0 +1,113 @@
+.global-task-timer-fab {
+    position: fixed;
+    bottom: 10px;
+    right: 50%;
+    transform: translateX(50%);
+    z-index: 9998;
+    max-width: calc(100vw - 170px);
+    min-width: 18rem;
+}
+
+.global-task-timer-widget {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color, rgba(0, 0, 0, 0.1));
+    border-radius: 999px;
+    padding: 0.3rem 0.45rem 0.3rem 0.7rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    min-height: 36px;
+    max-width: 22rem;
+}
+
+.global-task-timer-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    flex-shrink: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.global-task-timer-label {
+    color: var(--bs-success, #28c76f);
+}
+
+#global-task-timer-display {
+    font-size: 0.875rem;
+    letter-spacing: 0.02em;
+}
+
+.global-task-timer-task-link {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 9rem;
+    font-size: 0.8125rem;
+    color: var(--bs-heading-color, #566a7f);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.global-task-timer-task-link:hover {
+    color: var(--bs-primary, #696cff);
+    text-decoration: underline;
+}
+
+.global-task-timer-stop-btn {
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.task-workload-cell {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.25rem;
+}
+
+.task-timer-btn {
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.task-timer-btn--active {
+    animation: task-timer-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes task-timer-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.35);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.15);
+    }
+}
+
+@media (max-width: 575.98px) {
+    .global-task-timer-fab {
+        right: 150px;
+        max-width: calc(100vw - 160px);
+    }
+
+    .global-task-timer-label {
+        display: none;
+    }
+
+    .global-task-timer-task-link {
+        max-width: 5.5rem;
+    }
+}

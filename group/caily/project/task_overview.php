@@ -101,12 +101,16 @@ if($_SESSION['show_project'] == 0){
                                 <tr>
                                     <th><span data-i18n="案件">案件</span></th>
                                     <th><span data-i18n="タスク">タスク</span></th>
+                                    <th><span data-i18n="種別">種別</span></th>
+                                    <th><span data-i18n="図面">図面</span></th>
                                     <th><span data-i18n="担当者">担当者</span></th>
                                     <th><span data-i18n="作成者">作成者</span></th>
                                     <th><span data-i18n="ステータス">ステータス</span></th>
                                     <th><span data-i18n="優先度">優先度</span></th>
                                     <th><span data-i18n="進捗">進捗</span></th>
-                                    <th><span data-i18n="期間">期間</span></th>
+                                    <th><span data-i18n="工数">工数</span></th>
+                                    <th><span data-i18n="メモ">メモ</span></th>
+                                    <th><span data-i18n="期限">期限</span></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -122,6 +126,12 @@ if($_SESSION['show_project'] == 0){
                                             <span class="badge bg-label-secondary me-1">#{{ task.id }}</span>
                                             {{ task.title }}
                                         </a>
+                                    </td>
+                                    <td>
+                                        <span v-if="getTaskKindDisplayValue(task)" class="badge small" :class="getTaskKindBadgeClass(getTaskKindDisplayValue(task))">{{ getTaskKindLabel(getTaskKindDisplayValue(task)) }}</span>
+                                    </td>
+                                    <td>
+                                        <span v-if="shouldShowTaskDrawingCount(task)" class="small">{{ getTaskDrawingCount(task) }}</span>
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center flex-wrap gap-1">
@@ -169,8 +179,13 @@ if($_SESSION['show_project'] == 0){
                                         </div>
                                     </td>
                                     <td>
+                                        <span class="small text-nowrap">{{ formatEstimatedHours(task.estimated_hours) }}</span>
+                                    </td>
+                                    <td>
+                                        <span v-if="getTaskNoteSnippet(task.note)" class="small text-truncate d-inline-block overview-task-note" :title="getTaskNoteSnippet(task.note)">{{ getTaskNoteSnippet(task.note) }}</span>
+                                    </td>
+                                    <td>
                                         <div class="d-flex align-items-center gap-1 flex-wrap small">
-                                            <span class="text-nowrap">{{ formatDate(task.start_date) }} ～ </span>
                                             <span class="text-nowrap" :class="{ 'text-danger fw-bold': isTaskDueExceedsProjectDue(task) }">{{ formatDate(task.due_date) }}</span>
                                             <i v-if="hasPeriodWarning(task)" class="fas fa-exclamation-triangle text-warning ms-1"
                                                data-bs-toggle="tooltip" data-bs-placement="top"
@@ -221,6 +236,13 @@ if($_SESSION['show_project'] == 0){
         </div>
     </div>
 </div>
+
+<style>
+.overview-task-note {
+    max-width: 7rem;
+    vertical-align: bottom;
+}
+</style>
 
 <?php
 $view->footing();

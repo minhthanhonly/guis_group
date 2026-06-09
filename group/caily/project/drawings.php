@@ -34,7 +34,7 @@ if($_SESSION['show_project'] == 0){
                     <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>"><span data-i18n="ガントチャート">ガントチャート</span></a>
                     </li>
                     <li class="nav-item">
-                    <a class="nav-link active text-primary" aria-current="page" href="drawings.php?project_id=<?php echo $project_id; ?>"><span data-i18n="図面">図面</span><span class="badge badge-sm bg-info ms-1 rounded-pill">{{ project?.drawing_count }}</span></a>
+                    <a class="nav-link active text-primary" aria-current="page" href="drawings.php?project_id=<?php echo $project_id; ?>"><span data-i18n="図面">図面</span><span class="badge badge-sm bg-info ms-1 rounded-pill">{{ totalStat?.value ?? 0 }}</span></a>
                     </li>
                     <li class="nav-item">
                     <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>"><span data-i18n="添付ファイル">添付ファイル</span></a>
@@ -43,6 +43,7 @@ if($_SESSION['show_project'] == 0){
                 </div>
             </div>
         </nav>
+        <?php $statusBannerVar = 'project'; require __DIR__ . '/partials/project-status-banner.php'; ?>
 
         <div class="row">
             <!-- Back button -->
@@ -60,21 +61,6 @@ if($_SESSION['show_project'] == 0){
                             <h5 class="card-title mb-0 me-3">
                                 <i class="fa fa-file-alt me-2"></i><span data-i18n="図面ファイル管理">図面ファイル管理</span>
                             </h5>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <div class="col-md-12">
-                                <div class="d-flex gap-2">
-                                    <button class="btn btn-outline-success text-nowrap" :disabled="!canAutoCalculateRemaining" @click="autoCalculateRemainingPrices()" title="残り図面の単価を自動計算">
-                                        <i class="fa fa-calculator me-1"></i><span data-i18n="残り図面の単価を自動計算">残り図面の単価を自動計算</span>
-                                    </button>
-                                    <button class="btn btn-outline-info text-nowrap" data-bs-toggle="modal" data-bs-target="#importModal">
-                                        <i class="fa fa-upload me-1"></i><span data-i18n="インポート">インポート</span>
-                                    </button>
-                                    <button class="btn btn-primary text-nowrap" @click="openAddModal()">
-                                        <i class="fa fa-plus me-1"></i><span data-i18n="追加">追加</span>
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                     </div>
                     <div class="card-body">
@@ -140,12 +126,7 @@ if($_SESSION['show_project'] == 0){
                             <div class="col-md-4">
                                 <select class="form-select" v-model="statusFilter">
                                     <option value="" data-i18n="すべてのステータス">すべてのステータス</option>
-                                    <option value="draft" data-i18n="下書き">下書き</option>
-                                    <option value="review" data-i18n="レビュー中">レビュー中</option>
-                                    <option value="revision" data-i18n="修正中">修正中</option>
-                                    <option value="revised" data-i18n="修正済">修正済</option>
-                                    <option value="approved" data-i18n="承認済み">承認済み</option>
-                                    <option value="rejected" data-i18n="却下">却下</option>
+                                    <option v-for="status in drawingStatuses" :key="status.value" :value="status.value">{{ $t(status.label) }}</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -158,7 +139,7 @@ if($_SESSION['show_project'] == 0){
                         </div>
 
                         <!-- Unassigned drawings warning -->
-                        <div v-if="hasUnassignedDrawings" class="alert alert-warning py-2 mb-4">
+                        <div v-if="canManageDrawingAssignee() && hasUnassignedDrawings" class="alert alert-warning py-2 mb-4">
                             <i class="fa fa-exclamation-triangle me-2"></i>
                             <span data-i18n="未割り当ての図面があります">未割り当ての図面があります</span>
                         </div>
@@ -198,14 +179,14 @@ if($_SESSION['show_project'] == 0){
                                         </th>
                                         <th @click="sortBy('name')" style="cursor: pointer;">
                                             <div class="d-flex align-items-center">
-                                                <span><span data-i18n="ファイル名">ファイル名</span></span>
+                                                <span><span data-i18n="タスク">タスク</span></span>
                                                 <i class="fa ms-1" :class="getSortIcon('name')"></i>
                                             </div>
                                         </th>
-                                        <th @click="sortBy('file_type')" style="cursor: pointer;">
-                                            <div class="d-flex align-items-center">
-                                                <span><span data-i18n="ファイルタイプ">ファイルタイプ</span></span>
-                                                <i class="fa ms-1" :class="getSortIcon('file_type')"></i>
+                                        <th @click="sortBy('drawing_count')" style="cursor: pointer; min-width: 72px;" class="text-center">
+                                            <div class="d-flex align-items-center justify-content-center">
+                                                <span><span data-i18n="図面数">図面数</span></span>
+                                                <i class="fa ms-1" :class="getSortIcon('drawing_count')"></i>
                                             </div>
                                         </th>
                                         <th @click="sortBy('created_by')" style="cursor: pointer;">
@@ -263,11 +244,8 @@ if($_SESSION['show_project'] == 0){
                                                 <i class="fa fa-copy"></i>
                                             </button>
                                         </td>
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                <span class="badge bg-label-primary" v-if="drawing.name && drawing.name.includes('.')">{{ drawing.name.split('.').pop().toUpperCase() }}</span>
-                                                <span v-else class="text-muted">-</span>
-                                            </div>
+                                        <td class="text-center align-middle">
+                                            <span v-if="!isDefaultTaskDrawing(drawing)" class="badge bg-label-info">{{ getDrawingQuantity(drawing) }}</span>
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">
@@ -278,22 +256,12 @@ if($_SESSION['show_project'] == 0){
                                             </div>
                                         </td>
                                         <td>
-                                            <div class="btn-group" style="width: 120px;">
-                                                <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light w-100"
-                                                        :class="getStatusButtonClass(drawing.status)"
-                                                        data-bs-toggle="dropdown" aria-expanded="false">
-                                                    {{ getStatusLabel(drawing.status) }}
-                                                </button>
-                                                <ul class="dropdown-menu">
-                                                    <li v-for="status in drawingStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateStatus(drawing.id, status.value)">
-                                                        {{ $t(status.label) }}
-                                                    </li>
-                                                </ul>
-                                            </div>
+                                            <span class="badge" :class="getStatusBadgeClass(drawing.status)">{{ getStatusLabel(drawing.status) }}</span>
                                         </td>
-                                        <!-- Price input column -->
+                                        <!-- Price column -->
                                         <td>
-                                            <div class="input-group input-group-sm" style="max-width: 140px;">
+                                            <span v-if="isDefaultTaskDrawing(drawing) && drawing.status !== 'completed'" class="text-muted">¥0</span>
+                                            <div v-else-if="canEditDrawingPrice()" class="input-group input-group-sm" style="max-width: 140px;">
                                                 <span class="input-group-text">¥</span>
                                                 <input type="number"
                                                        class="form-control text-end"
@@ -303,16 +271,18 @@ if($_SESSION['show_project'] == 0){
                                                        @click.stop
                                                        @change="updatePrice(drawing)">
                                             </div>
+                                            <span v-else-if="getEffectiveDrawingPrice(drawing) > 0" class="text-nowrap">¥{{ formatNumber(getEffectiveDrawingPrice(drawing)) }}</span>
+                                            <span v-else class="text-muted">—</span>
                                         </td>
                                         <td>
                                             <span class="text-muted small">{{ formatLastEditor(drawing) }}</span>
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
-                                                <button v-if="!isUserAssigned(drawing)" class="btn btn-outline-success" @click="assignDrawing(drawing.id)" title="割り当てる">
+                                                <button v-if="canManageDrawingAssignee() && !isUserAssigned(drawing)" class="btn btn-outline-success" @click="assignDrawing(drawing.id)" title="割り当てる">
                                                     <i class="fa fa-user-plus"></i>
                                                 </button>
-                                                <button v-else class="btn btn-outline-warning" @click="unassignDrawing(drawing.id)" title="割り当て解除">
+                                                <button v-else-if="canManageDrawingAssignee() && isUserAssigned(drawing)" class="btn btn-outline-warning" @click="unassignDrawing(drawing.id)" title="割り当て解除">
                                                     <i class="fa fa-user-minus"></i>
                                                 </button>
                                                 <button class="btn btn-outline-primary" @click="downloadDrawing(drawing)" title="ダウンロード" v-if="drawing.file_path">
@@ -335,15 +305,6 @@ if($_SESSION['show_project'] == 0){
                         <div v-else class="text-center py-5">
                             <i class="fa fa-file-alt fa-3x text-muted mb-3"></i>
                             <h5 class="text-muted"><span data-i18n="図面がありません">図面がありません</span></h5>
-                            <p class="text-muted"><span data-i18n="最初の図面を追加してください">最初の図面を追加してください</span></p>
-                            <div class="d-flex gap-2 justify-content-center">
-                                <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#importModal">
-                                    <i class="fa fa-upload me-1"></i><span data-i18n="インポート">インポート</span>
-                                </button>
-                                <button class="btn btn-primary" @click="openAddModal()">
-                                    <i class="fa fa-plus me-1"></i><span data-i18n="図面追加">図面追加</span>
-                                </button>
-                            </div>
                         </div>
 
 
@@ -365,24 +326,24 @@ if($_SESSION['show_project'] == 0){
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="drawingModalLabel">{{ editingDrawing.id ? $t('ファイル編集') : $t('ファイル追加') }}</h5>
+                        <h5 class="modal-title" id="drawingModalLabel">{{ editingDrawing.id ? $t('タスク編集') : $t('タスク追加') }}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <form @submit.prevent="saveDrawing">
                             <div class="mb-3">
-                                <label class="form-label"><span data-i18n="図面名">図面名</span> <span class="text-danger">*</span></label>
+                                <label class="form-label"><span data-i18n="タスク">タスク</span> <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" v-model="editingDrawing.name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><span data-i18n="図面数">図面数</span></label>
+                                <input type="number" class="form-control" min="1" step="1" v-model.number="editingDrawing.drawing_count" :readonly="!!editingDrawing.task_id" :disabled="!!editingDrawing.task_id">
+                                <small v-if="editingDrawing.task_id" class="text-muted"><span data-i18n="タスクの図面数と連動しています">タスクの図面数と連動しています</span></small>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                 <select class="form-select" v-model="editingDrawing.status">
-                                    <option value="draft" data-i18n="下書き">下書き</option>
-                                    <option value="review" data-i18n="レビュー中">レビュー中</option>
-                                    <option value="revision" data-i18n="修正中">修正中</option>
-                                    <option value="revised" data-i18n="修正済">修正済</option>
-                                    <option value="approved" data-i18n="承認済み">承認済み</option>
-                                    <option value="rejected" data-i18n="却下">却下</option>
+                                    <option v-for="status in drawingStatuses" :key="status.value" :value="status.value">{{ $t(status.label) }}</option>
                                 </select>
                             </div>
                         </form>
@@ -391,82 +352,6 @@ if($_SESSION['show_project'] == 0){
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
                         <button type="button" class="btn btn-primary" @click="saveDrawing">
                             <i class="fa fa-save me-1"></i> <span data-i18n="保存">保存</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Import Modal -->
-        <div class="modal fade" id="importModal" tabindex="-1" aria-labelledby="importModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="importModalLabel"><span data-i18n="図面インポート">図面インポート</span></h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <!-- Drag & Drop Area -->
-                        <div class="mb-4">
-                            <div class="border-2 border-dashed border-primary rounded p-4 text-center" 
-                                 @drop="onDrop" 
-                                 @dragover.prevent 
-                                 @dragenter.prevent
-                                 style="border-style: dashed; min-height: 120px; display: flex; align-items: center; justify-content: center;">
-                                <div>
-                                    <i class="fa fa-cloud-upload fa-3x text-primary mb-2"></i>
-                                    <p class="mb-1"><span data-i18n="図面をここにドラッグ＆ドロップ">図面をここにドラッグ＆ドロップ</span></p>
-                                    <p class="text-muted small"><span data-i18n="または">または</span></p>
-                                    <button class="btn btn-outline-primary btn-sm" @click="$refs.fileInput.click()">
-                                        <span data-i18n="ファイルを選択">ファイルを選択</span>
-                                    </button>
-                                    <input type="file" ref="fileInput" multiple style="display: none;" @change="onFileSelect">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Clipboard Import -->
-                        <div class="mb-4">
-                            <h6><span data-i18n="クリップボードからインポート">クリップボードからインポート</span></h6>
-                            <div class="input-group">
-                                <textarea class="form-control" v-model="clipboardText" 
-                                          placeholder="ファイルパスを1行ずつ入力してください"
-                                          rows="4"></textarea>
-                                <button class="btn btn-outline-secondary" @click="parseClipboardText">
-                                    <i class="fa fa-paste me-1"></i> <span data-i18n="解析">解析</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Import Files List -->
-                        <div v-if="importFiles.length > 0">
-                            <h6><span data-i18n="インポートするファイル">インポートするファイル</span> ({{ importFiles.length }}<span data-i18n="件">件</span>)</h6>
-                            <div class="table-responsive">
-                                <table class="table table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th><span data-i18n="ファイル名">ファイル名</span></th>
-                                            <th><span data-i18n="操作">操作</span></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="(file, index) in importFiles" :key="index">
-                                            <td>{{ file.name }}</td>
-                                            <td>
-                                                <button class="btn btn-outline-danger btn-sm" @click="removeImportFile(index)">
-                                                    <i class="fa fa-times"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
-                        <button type="button" class="btn btn-primary" @click="performImport" :disabled="importFiles.length === 0">
-                            <i class="fa fa-upload me-1"></i> <span data-i18n="インポート">インポート</span> ({{ importFiles.length }})
                         </button>
                     </div>
                 </div>
@@ -486,12 +371,7 @@ if($_SESSION['show_project'] == 0){
                                                 <div class="mb-3">
                             <label class="form-label">新しいステータス</label>
                             <select class="form-select" v-model="bulkStatus">
-                                <option value="draft" data-i18n="下書き">下書き</option>
-                                <option value="review" data-i18n="レビュー中">レビュー中</option>
-                                <option value="revision" data-i18n="修正中">修正中</option>
-                                <option value="revised" data-i18n="修正済">修正済</option>
-                                <option value="approved" data-i18n="承認済み">承認済み</option>
-                                <option value="rejected" data-i18n="却下">却下</option>
+                                <option v-for="status in drawingStatuses" :key="status.value" :value="status.value">{{ $t(status.label) }}</option>
                             </select>
                         </div>
                     </div>
@@ -552,17 +432,11 @@ if($_SESSION['show_project'] == 0){
                     <button class="btn btn-info" @click="bulkCopyNames">
                         <i class="fa fa-copy me-1"></i>{{ $t('名前をコピー') }}
                     </button>
-                    <button class="btn btn-success" @click="bulkAssign">
+                    <button v-if="canManageDrawingAssignee()" class="btn btn-success" @click="bulkAssign">
                         <i class="fa fa-user-plus me-1"></i>{{ $t('一括割り当て') }}
                     </button>
-                    <button class="btn btn-warning" @click="bulkUnassign">
+                    <button v-if="canManageDrawingAssignee()" class="btn btn-warning" @click="bulkUnassign">
                         <i class="fa fa-user-minus me-1"></i>{{ $t('一括解除') }}
-                    </button>
-                    <button class="btn btn-warning" @click="bulkChangeStatus">
-                        <i class="fa fa-edit me-1"></i>{{ $t('ステータス変更') }}
-                    </button>
-                    <button class="btn btn-outline-light" @click="bulkClearPrice" :title="$t('選択した図面の単価をクリア') || '選択した図面の単価をクリア'">
-                        <i class="fa fa-yen-sign me-1"></i>{{ $t('単価をクリア') }}
                     </button>
                     <button class="btn btn-danger" @click="bulkDelete">
                         <i class="fa fa-trash me-1"></i>{{ $t('一括削除') }}

@@ -1,5 +1,20 @@
 const { createApp } = Vue;
 
+const SERVER_TASK_TIMEZONE = 'Asia/Tokyo';
+const VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
+const TASK_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
+const TASK_DATETIME_JA_DISPLAY_FORMAT = 'YYYY年M月D日 HH:mm';
+const TASK_DATE_MOMENT_FORMAT = 'YYYY/M/D';
+const TASK_DATE_JA_DISPLAY_FORMAT = 'YYYY年M月D日';
+const TASK_DATETIME_PARSE_FORMATS = [
+    'YYYY-MM-DD HH:mm:ss',
+    'YYYY-MM-DD HH:mm',
+    'YYYY/M/D HH:mm',
+    'YYYY/MM/DD HH:mm',
+    'YYYY/M/D H:mm',
+    'YYYY/MM/DD H:mm'
+];
+
 createApp({
     data() {
         return {
@@ -529,17 +544,64 @@ createApp({
                 return name.charAt(0).toUpperCase();
             }
         },
+        isVietnameseLocale() {
+            return typeof i18next !== 'undefined'
+                && i18next.isInitialized
+                && String(i18next.language || '').startsWith('vi');
+        },
+        getTaskDisplayTimezone() {
+            return this.isVietnameseLocale() ? VIETNAM_TASK_TIMEZONE : SERVER_TASK_TIMEZONE;
+        },
+        getTaskDateTimeDisplayFormat() {
+            return this.isVietnameseLocale()
+                ? TASK_DATETIME_MOMENT_FORMAT
+                : TASK_DATETIME_JA_DISPLAY_FORMAT;
+        },
+        getTaskDateDisplayFormat() {
+            return this.isVietnameseLocale()
+                ? TASK_DATE_MOMENT_FORMAT
+                : TASK_DATE_JA_DISPLAY_FORMAT;
+        },
+        parseTaskDateTime(date, timezone = SERVER_TASK_TIMEZONE) {
+            if (!date) return null;
+            const raw = String(date).trim();
+            if (!raw || raw === '0000-00-00 00:00:00' || raw === '0000-00-00') return null;
+            if (typeof moment === 'undefined') return null;
+            if (moment.tz) {
+                for (const fmt of TASK_DATETIME_PARSE_FORMATS) {
+                    const parsed = moment.tz(raw, fmt, timezone);
+                    if (parsed.isValid()) return parsed;
+                }
+                const loose = moment.tz(raw, timezone);
+                return loose.isValid() ? loose : null;
+            }
+            const fallback = moment(raw, TASK_DATETIME_PARSE_FORMATS, true);
+            return fallback.isValid() ? fallback : null;
+        },
+        formatTaskDateTimeInDisplayTz(date) {
+            const parsed = this.parseTaskDateTime(date);
+            if (!parsed) return '-';
+            const localized = moment.tz
+                ? parsed.clone().tz(this.getTaskDisplayTimezone())
+                : parsed;
+            return localized.format(this.getTaskDateTimeDisplayFormat());
+        },
+        formatTaskDateInDisplayTz(date) {
+            const parsed = this.parseTaskDateTime(date);
+            if (!parsed) return '-';
+            const localized = moment.tz
+                ? parsed.clone().tz(this.getTaskDisplayTimezone())
+                : parsed;
+            return localized.format(this.getTaskDateDisplayFormat());
+        },
         formatDate(date) {
-            if (!date) return '-';
-            return moment(date).format('Y年M月D日 HH:mm');
+            return this.formatTaskDateTimeInDisplayTz(date);
         },
         formatDate2(date) {
-            if (!date) return '-';
-            return moment(date).format('Y年M月D日');
+            return this.formatTaskDateInDisplayTz(date);
         },
         formatDateTime(date) {
-            if (!date) return '-';
-            return moment(date).format('YYYY/MM/DD HH:mm');
+            return this.formatTaskDateTimeInDisplayTz(date);
         },
         formatPrice(amount) {
             const n = Number(amount) || 0;

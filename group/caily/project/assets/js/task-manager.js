@@ -1,5 +1,30 @@
 const { createApp } = Vue;
 
+const SERVER_TASK_TIMEZONE = 'Asia/Tokyo';
+const VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
+const TASK_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
+const TASK_DATETIME_JA_DISPLAY_FORMAT = 'YYYY年M月D日 HH:mm';
+const TASK_DATETIME_FLATPICKR_FORMAT = 'Y/m/d H:i';
+const TASK_DATETIME_FLATPICKR_JA_ALT_FORMAT = 'Y年n月j日 H:i';
+const TASK_DATETIME_PARSE_FORMATS = [
+    'YYYY-MM-DD HH:mm:ss',
+    'YYYY-MM-DD HH:mm',
+    'YYYY/M/D HH:mm',
+    'YYYY/MM/DD HH:mm',
+    'YYYY/M/D H:mm',
+    'YYYY/MM/DD H:mm'
+];
+
+const DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = [
+    'お客様との連絡・調整・納品対応',
+    '全図面のチェック・確認作業'
+];
+
+const DEFAULT_TASK_KIND_BY_TITLE = {
+    'お客様との連絡・調整・納品対応': '連絡',
+    '全図面のチェック・確認作業': 'チェック'
+};
+
 const TaskApp = createApp({
     components: {
         'comment-component': window.CommentComponent
@@ -36,24 +61,37 @@ const TaskApp = createApp({
                 overdue: 0
             },
             taskPriorities: [
-                { value: 'low', label: '低', color: 'secondary' },
-                { value: 'medium', label: '中', color: 'primary' },
-                { value: 'high', label: '高', color: 'warning' },
-                { value: 'urgent', label: '緊急', color: 'danger' }
+                { value: 'low', label: '低', i18nKey: '低', color: 'secondary' },
+                { value: 'medium', label: '中', i18nKey: '中', color: 'primary' },
+                { value: 'high', label: '高', i18nKey: '高', color: 'warning' },
+                { value: 'urgent', label: '緊急', i18nKey: '緊急', color: 'danger' }
             ],
             taskStatuses: [
-                { value: 'todo', label: '未開始', color: 'secondary' },
-                { value: 'in-progress', label: '進行中', color: 'primary' },
-                { value: 'confirming', label: '確認中', color: 'warning' },
-                { value: 'paused', label: '一時停止', color: 'warning' },
-                { value: 'completed', label: '完了', color: 'success' },
-                { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+                { value: 'todo', label: '未開始', i18nKey: '未開始', color: 'secondary' },
+                { value: 'in-progress', label: '進行中', i18nKey: '進行中', color: 'primary' },
+                { value: 'confirming', label: '確認中', i18nKey: '確認中', color: 'warning' },
+                { value: 'paused', label: '一時停止', i18nKey: '一時停止', color: 'warning' },
+                { value: 'completed', label: '完了', i18nKey: '完了', color: 'success' },
+                { value: 'cancelled', label: 'キャンセル', i18nKey: 'キャンセル', color: 'danger' }
             ],
+            taskKinds: [
+                { value: '新規作成', label: '新規作成', i18nKey: '新規作成', color: 'success' },
+                { value: '修正(エラー)', label: '修正(エラー)', i18nKey: '修正(エラー)', color: 'danger' },
+                { value: '修正(変更)', label: '修正(変更)', i18nKey: '修正(変更)', color: 'warning' },
+                { value: 'チェック', label: 'チェック', i18nKey: 'チェック', color: 'primary' },
+                { value: '連絡', label: '連絡', i18nKey: '連絡', color: 'info' },
+                { value: '検討', label: '検討', i18nKey: '検討', color: 'secondary' },
+                { value: '相談・会議', label: '相談・会議', i18nKey: '相談・会議', color: 'dark' }
+            ],
+            taskKindsWithoutDrawingLink: ['修正(エラー)', 'チェック', '検討', '相談・会議', '連絡'],
             filterStatus: '',
             filterPriority: '',
             filterDueDate: '',
             addingTaskInline: false,
             inlineTasks: [],
+            drawingCountSavingTaskIds: {},
+            estimatedHoursSavingTaskIds: {},
+            taskTimerTogglingTaskIds: {},
             newTaskInline: {
                 title: '',
                 priority: 'medium',
@@ -77,6 +115,8 @@ const TaskApp = createApp({
             taskActivities: [],
             taskLogs: [],
             quillEditor: null,
+            quillEditorInitTimer: null,
+            taskDetailsModalInstance: null,
             // Comment component data
             currentUser: {
                 userid: typeof USER_ID !== 'undefined' ? USER_ID : null,
@@ -121,7 +161,17 @@ const TaskApp = createApp({
             // Sortable instance
             sortableInstance: null,
             // Progress options (0% to 100% with 5% steps)
-            progressOptions: Array.from({ length: 21 }, (_, i) => i * 5)
+            progressOptions: Array.from({ length: 21 }, (_, i) => i * 5),
+            showTaskNoteModal: false,
+            taskNoteModal: {
+                taskId: null,
+                inlineIndex: null,
+                content: '',
+                canEdit: false
+            },
+            quillTaskNoteInstance: null,
+            quillTaskNoteContent: '',
+            quillTaskNoteInitTimer: null
         }
     },
     
@@ -283,6 +333,9 @@ const TaskApp = createApp({
             this.handleUploadError(fileName, error);
         });
 
+        this._onTaskTimerChanged = (event) => this.onTaskTimerChanged(event);
+        document.addEventListener('task-timer-changed', this._onTaskTimerChanged);
+
         window.addEventListener('ai-action-success', (event) => {
             const { action } = event.detail || {};
             const pid = action && (action.id || (action.params && action.params.project_id));
@@ -343,6 +396,20 @@ const TaskApp = createApp({
             }
         };
         document.addEventListener('click', this.linkClickHandler, true); // Use capture phase to intercept before navigation
+
+        this._onI18nLanguageChanged = () => {
+            this.$forceUpdate();
+            this.$nextTick(() => this.initFlatpickr());
+        };
+        if (typeof i18next !== 'undefined' && i18next.on) {
+            i18next.on('languageChanged', this._onI18nLanguageChanged);
+        }
+    },
+
+    beforeUnmount() {
+        if (typeof i18next !== 'undefined' && i18next.off && this._onI18nLanguageChanged) {
+            i18next.off('languageChanged', this._onI18nLanguageChanged);
+        }
     },
     
     updated() {
@@ -368,8 +435,7 @@ const TaskApp = createApp({
         },
 
         showNotification(message, type = 'info') {
-            // Use showMessage function if available, otherwise use alert
-            showMessage(message, type === 'error');
+            this.showMessage(message, type === 'error');
         },
         
         onCommentError(event) {
@@ -381,11 +447,38 @@ const TaskApp = createApp({
         },
         updateTaskField(index, field, value) {
             if (this.inlineTasks[index]) {
+                if (field === 'drawing_count') {
+                    const n = parseInt(value, 10);
+                    if (this.inlineTasks[index].link_to_drawings) {
+                        value = Number.isNaN(n) || n < 1 ? 1 : n;
+                    } else {
+                        value = Number.isNaN(n) || n < 0 ? 0 : n;
+                    }
+                } else if (field === 'link_to_drawings') {
+                    value = !!value;
+                } else if (field === 'estimated_hours') {
+                    const n = parseFloat(value);
+                    value = Number.isNaN(n) || n < 0 ? 0 : Math.round(n * 100) / 100;
+                } else if (field === 'task_kind') {
+                    value = this.normalizeTaskKind(value);
+                }
                 // Use Vue.set to ensure reactivity
                 if (typeof Vue !== 'undefined' && Vue.set) {
                     Vue.set(this.inlineTasks[index], field, value);
                 } else {
                     this.inlineTasks[index][field] = value;
+                }
+                if (field === 'title') {
+                    this.applyDefaultTaskKindForTitle(this.inlineTasks[index]);
+                }
+                if (field === 'task_kind' && !this.isDrawingLinkVisibleForTask(this.inlineTasks[index]) && !this.isDefaultTaskWithAutoDrawingLink(this.inlineTasks[index])) {
+                    if (typeof Vue !== 'undefined' && Vue.set) {
+                        Vue.set(this.inlineTasks[index], 'link_to_drawings', false);
+                        Vue.set(this.inlineTasks[index], 'drawing_count', 0);
+                    } else {
+                        this.inlineTasks[index].link_to_drawings = false;
+                        this.inlineTasks[index].drawing_count = 0;
+                    }
                 }
             }
         },
@@ -432,12 +525,31 @@ const TaskApp = createApp({
                 if(!this.projectInfo.id){
                     this.showMessage('プロジェクト情報の読み込みに失敗しました。', true);
                     setTimeout(() => {
-                        window.location.href = 'index.php';
+               //         window.location.href = 'index.php';
                     }, 1000);
                     return;
                 }
             } catch (error) {
                 console.error('Error loading project info:', error);
+            }
+        },
+
+        async refreshNavbarCounts() {
+            if (!this.projectId) {
+                return;
+            }
+            try {
+                const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
+                if (response.data && response.data.id) {
+                    if (!this.projectInfo || !this.projectInfo.id) {
+                        this.projectInfo = response.data;
+                    } else {
+                        this.projectInfo.task_count = response.data.task_count;
+                        this.projectInfo.drawing_count = response.data.drawing_count;
+                    }
+                }
+            } catch (error) {
+                console.error('Error refreshing navbar counts:', error);
             }
         },
         
@@ -468,6 +580,8 @@ const TaskApp = createApp({
                 this.$nextTick(() => {
                     this.initSortable();
                 });
+
+                await this.refreshNavbarCounts();
                 
                 // Sau khi load tasks, load số comment chưa đọc
                 // await this.loadUnreadComments( );
@@ -623,16 +737,517 @@ const TaskApp = createApp({
         // },
         
         getDefaultStartDateTime() {
-            return moment().format('YYYY/MM/DD') + ' 09:00';
+            if (typeof moment !== 'undefined' && moment.tz) {
+                return moment().tz(this.getTaskDisplayTimezone()).format(TASK_DATETIME_MOMENT_FORMAT);
+            }
+            return moment().format(TASK_DATETIME_MOMENT_FORMAT);
         },
         getDefaultDueDateTime() {
-            return moment().format('YYYY/MM/DD') + ' 18:00';
+            // Server default is 18:00 Asia/Tokyo → 16:00 when display locale is Vietnamese
+            if (typeof moment !== 'undefined' && moment.tz) {
+                const dueTokyo = moment().tz(SERVER_TASK_TIMEZONE).format('YYYY/M/D') + ' 18:00';
+                return this.toTaskDateTimeInputValue(dueTokyo);
+            }
+            const dueHour = this.isVietnameseLocale() ? '16:00' : '18:00';
+            return moment().format('YYYY/M/D') + ' ' + dueHour;
+        },
+        getDefaultTaskKind() {
+            const orderType = (this.projectInfo && this.projectInfo.project_order_type) || '';
+            if (String(orderType).includes('修正')) {
+                return '修正(エラー)';
+            }
+            return '新規作成';
+        },
+        normalizeTaskKind(value) {
+            const v = String(value || '').trim();
+            return v === '新規' ? '新規作成' : v;
+        },
+        getTaskKindLabel(value) {
+            const normalized = this.normalizeTaskKind(value);
+            if (!normalized) return '—';
+            const kind = this.taskKinds.find(k => k.value === normalized);
+            if (!kind) return value || '—';
+            if (typeof this.$t === 'function' && kind.i18nKey) {
+                return this.$t(kind.i18nKey);
+            }
+            return kind.label;
+        },
+        getTaskKindBadgeClass(value) {
+            const normalized = this.normalizeTaskKind(value);
+            if (!normalized) return 'bg-label-secondary';
+            const kind = this.taskKinds.find(k => k.value === normalized);
+            return `bg-label-${kind?.color || 'secondary'}`;
+        },
+        getTaskKindDisplayValue(task) {
+            return this.normalizeTaskKind(task && task.task_kind);
+        },
+        isDefaultTaskWithAutoDrawingLink(task) {
+            if (!task) return false;
+            const title = (task.title || '').trim();
+            return DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.indexOf(title) !== -1;
+        },
+        getDefaultTaskKindForTitle(title) {
+            const normalized = (title || '').trim();
+            return DEFAULT_TASK_KIND_BY_TITLE[normalized] || '';
+        },
+        applyDefaultTaskKindForTitle(task) {
+            if (!task) return;
+            const kind = this.getDefaultTaskKindForTitle(task.title);
+            if (!kind) return;
+            if (typeof Vue !== 'undefined' && Vue.set) {
+                Vue.set(task, 'task_kind', kind);
+            } else {
+                task.task_kind = kind;
+            }
+        },
+        isDrawingLinkVisibleForTask(task) {
+            if (!task) return false;
+            if (this.isDefaultTaskWithAutoDrawingLink(task)) return false;
+            const kind = this.getTaskKindDisplayValue(task);
+            return this.taskKindsWithoutDrawingLink.indexOf(kind) === -1;
+        },
+        formatEstimatedHours(value) {
+            const n = parseFloat(value);
+            if (Number.isNaN(n) || n <= 0) return '—';
+            const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+            return formatted + 'h';
+        },
+        getTaskNoteSnippet(note, maxLen) {
+            if (!note) return '';
+            const decoded = this.decodeHtmlEntities(String(note));
+            const text = decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+            if (!text) return '';
+            const limit = maxLen || 28;
+            return text.length <= limit ? text : text.substring(0, limit) + '…';
+        },
+        canEditTaskNote(task) {
+            if (!task) return false;
+            return this.permission.can_manage_project
+                || (this.permission.rule && this.permission.rule.task_edit == 1 && this.checkAssignee(task));
+        },
+        canEditDrawingLink() {
+            return !!(this.permission && this.permission.can_manage_project);
+        },
+        canEditTaskWorkload(task) {
+            if (!task || !task.id) return false;
+            return this.permission.can_manage_project
+                || (this.permission.rule && this.permission.rule.task_edit == 1 && this.checkAssignee(task));
+        },
+        canTrackTaskTime(task) {
+            if (!task || !task.id) {
+                return false;
+            }
+            if (!this.isAssignedToMe(task) && !this.isTaskTimerActive(task.id)) {
+                return false;
+            }
+            if (this.isTaskTimerActive(task.id)) {
+                return true;
+            }
+            return task.status !== 'completed' && task.status !== 'cancelled';
+        },
+        isTaskTimerActive(taskId) {
+            return !!(window.TaskTimer && window.TaskTimer.isActive(taskId));
+        },
+        isTaskTimerToggling(taskId) {
+            return !!(taskId && this.taskTimerTogglingTaskIds[taskId]);
+        },
+        setTaskTimerToggling(taskId, toggling) {
+            if (!taskId) return;
+            if (toggling) {
+                this.taskTimerTogglingTaskIds = { ...this.taskTimerTogglingTaskIds, [taskId]: true };
+            } else {
+                const next = { ...this.taskTimerTogglingTaskIds };
+                delete next[taskId];
+                this.taskTimerTogglingTaskIds = next;
+            }
+        },
+        async toggleTaskTimer(task) {
+            if (!task || !task.id || !this.canTrackTaskTime(task) || !window.TaskTimer) {
+                return;
+            }
+            if (this.isTaskTimerToggling(task.id)) {
+                return;
+            }
+            this.setTaskTimerToggling(task.id, true);
+            try {
+                if (window.TaskTimer.isActive(task.id)) {
+                    const result = await window.TaskTimer.stop(task.id);
+                    if (result && result.estimated_hours != null) {
+                        this.applyTaskEstimatedHours(task.id, result.estimated_hours);
+                    }
+                } else {
+                    const result = await window.TaskTimer.start(task.id, this.projectId, {
+                        title: task.title,
+                        project_name: this.projectInfo && this.projectInfo.name ? this.projectInfo.name : '',
+                    });
+                    if (result && result.stopped_previous_task) {
+                        this.applyTaskEstimatedHours(
+                            result.stopped_previous_task.task_id,
+                            result.stopped_previous_task.estimated_hours
+                        );
+                    }
+                }
+            } finally {
+                this.setTaskTimerToggling(task.id, false);
+            }
+        },
+        onTaskTimerChanged(event) {
+            const detail = event && event.detail ? event.detail : {};
+            if (detail.stopped && detail.task_id && detail.estimated_hours != null) {
+                this.applyTaskEstimatedHours(detail.task_id, detail.estimated_hours);
+            }
+            this.$forceUpdate();
+        },
+        isEstimatedHoursSaving(taskId) {
+            return !!(taskId && this.estimatedHoursSavingTaskIds[taskId]);
+        },
+        setEstimatedHoursSaving(taskId, saving) {
+            if (!taskId) return;
+            if (saving) {
+                this.estimatedHoursSavingTaskIds = { ...this.estimatedHoursSavingTaskIds, [taskId]: true };
+            } else {
+                const next = { ...this.estimatedHoursSavingTaskIds };
+                delete next[taskId];
+                this.estimatedHoursSavingTaskIds = next;
+            }
+        },
+        applyTaskEstimatedHours(taskId, hours) {
+            const n = parseFloat(hours);
+            if (!taskId || Number.isNaN(n)) {
+                return;
+            }
+            const value = n < 0 ? 0 : Math.round(n * 100) / 100;
+            const canonical = this.tasks.find(t => t.id === taskId);
+            if (canonical) {
+                canonical.estimated_hours = value;
+            }
+        },
+        isTaskLinkedToDrawings(task) {
+            if (!task) return false;
+            if (task._inlineIndex !== undefined && task._inlineIndex !== null) {
+                return task.link_to_drawings === true;
+            }
+            const n = parseInt(task.drawing_count, 10);
+            return !Number.isNaN(n) && n > 0;
+        },
+        resolveDrawingCountForSave(task) {
+            if (!task || task.link_to_drawings === false) {
+                return 0;
+            }
+            if (task._inlineIndex !== undefined && task._inlineIndex !== null && !task.link_to_drawings) {
+                return 0;
+            }
+            const n = parseInt(task.drawing_count, 10);
+            if (task._inlineIndex !== undefined && task._inlineIndex !== null) {
+                return task.link_to_drawings ? (Number.isNaN(n) || n < 1 ? 1 : n) : 0;
+            }
+            return Number.isNaN(n) || n < 1 ? 0 : n;
+        },
+        getDrawingCountForSave(inlineTask) {
+            if (this.canEditDrawingLink()) {
+                return this.resolveDrawingCountForSave(inlineTask);
+            }
+            if (inlineTask && inlineTask.id) {
+                const existing = this.tasks.find(t => t.id == inlineTask.id);
+                if (existing && existing.drawing_count != null) {
+                    return Math.max(0, parseInt(existing.drawing_count, 10) || 0);
+                }
+            }
+            return 0;
+        },
+        onInlineDrawingLinkChange(index, checked) {
+            if (!this.inlineTasks[index]) return;
+            this.updateTaskField(index, 'link_to_drawings', checked);
+            if (checked) {
+                const current = parseInt(this.inlineTasks[index].drawing_count, 10);
+                this.updateTaskField(index, 'drawing_count', !Number.isNaN(current) && current > 0 ? current : 1);
+            } else {
+                this.updateTaskField(index, 'drawing_count', 0);
+            }
+        },
+        isDrawingCountSaving(taskId) {
+            return !!(taskId && this.drawingCountSavingTaskIds[taskId]);
+        },
+        setDrawingCountSaving(taskId, saving) {
+            if (!taskId) return;
+            if (saving) {
+                this.drawingCountSavingTaskIds = { ...this.drawingCountSavingTaskIds, [taskId]: true };
+            } else {
+                const next = { ...this.drawingCountSavingTaskIds };
+                delete next[taskId];
+                this.drawingCountSavingTaskIds = next;
+            }
+        },
+        applyTaskDrawingCount(taskId, drawingCount) {
+            const count = parseInt(drawingCount, 10);
+            if (!taskId || Number.isNaN(count)) {
+                return;
+            }
+            const canonical = this.tasks.find(t => t.id === taskId);
+            if (canonical) {
+                canonical.drawing_count = count;
+            }
+        },
+        async saveTaskEstimatedHours(task, value) {
+            if (!task || !task.id || !this.canEditTaskWorkload(task)) {
+                return;
+            }
+            const n = parseFloat(value);
+            const hours = Number.isNaN(n) || n < 0 ? 0 : Math.round(n * 100) / 100;
+            const canonical = this.tasks.find(t => t.id === task.id);
+            const current = canonical
+                ? parseFloat(canonical.estimated_hours)
+                : parseFloat(task.estimated_hours);
+            const currentHours = Number.isNaN(current) ? 0 : Math.round(current * 100) / 100;
+            if (currentHours === hours) {
+                return;
+            }
+            if (this.isEstimatedHoursSaving(task.id)) {
+                return;
+            }
+            this.setEstimatedHoursSaving(task.id, true);
+            try {
+                const formData = new FormData();
+                formData.append('id', task.id);
+                formData.append('project_id', this.projectId);
+                formData.append('estimated_hours', hours);
+                const response = await axios.post('/api/index.php?model=task&method=updateEstimatedHours', formData);
+                if (response.data && response.data.status === 'success') {
+                    const savedHours = response.data.estimated_hours != null ? response.data.estimated_hours : hours;
+                    this.applyTaskEstimatedHours(task.id, savedHours);
+                } else {
+                    this.showMessage(response.data?.message || '工数の更新に失敗しました', true);
+                }
+            } catch (error) {
+                this.showMessage('工数の更新に失敗しました', true);
+            } finally {
+                this.setEstimatedHoursSaving(task.id, false);
+            }
+        },
+        async saveTaskDrawingCount(task, value) {
+            if (!task || !task.id || !this.canEditDrawingLink() || !this.isTaskLinkedToDrawings(task)) {
+                return;
+            }
+            const n = parseInt(value, 10);
+            const drawingCount = Number.isNaN(n) || n < 1 ? 1 : n;
+            const canonical = this.tasks.find(t => t.id === task.id);
+            const currentCount = parseInt(canonical ? canonical.drawing_count : task.drawing_count, 10);
+            if (currentCount === drawingCount) {
+                return;
+            }
+            if (this.isDrawingCountSaving(task.id)) {
+                return;
+            }
+            this.setDrawingCountSaving(task.id, true);
+            try {
+                const formData = new FormData();
+                formData.append('id', task.id);
+                formData.append('project_id', this.projectId);
+                formData.append('linked', '1');
+                formData.append('drawing_count', drawingCount);
+                const response = await axios.post('/api/index.php?model=task&method=updateDrawingLink', formData);
+                if (response.data && response.data.status === 'success') {
+                    const savedCount = response.data.drawing_count != null ? response.data.drawing_count : drawingCount;
+                    this.applyTaskDrawingCount(task.id, savedCount);
+                    await this.refreshNavbarCounts();
+                } else {
+                    this.showMessage(response.data?.message || '図面の更新に失敗しました', true);
+                }
+            } catch (error) {
+                this.showMessage('図面の更新に失敗しました', true);
+            } finally {
+                this.setDrawingCountSaving(task.id, false);
+            }
+        },
+        async toggleTaskDrawingLink(task, event) {
+            if (!task || !task.id || !this.canEditDrawingLink()) {
+                if (event && event.target) {
+                    event.target.checked = this.isTaskLinkedToDrawings(task);
+                }
+                return;
+            }
+            const linked = !!(event && event.target && event.target.checked);
+            const prevCount = parseInt(task.drawing_count, 10);
+            const drawingCount = linked
+                ? (!Number.isNaN(prevCount) && prevCount > 0 ? prevCount : 1)
+                : 0;
+            try {
+                const formData = new FormData();
+                formData.append('id', task.id);
+                formData.append('project_id', this.projectId);
+                formData.append('linked', linked ? '1' : '0');
+                formData.append('drawing_count', drawingCount);
+                const response = await axios.post('/api/index.php?model=task&method=updateDrawingLink', formData);
+                if (response.data && response.data.status === 'success') {
+                    const savedCount = response.data.drawing_count != null ? response.data.drawing_count : drawingCount;
+                    this.applyTaskDrawingCount(task.id, savedCount);
+                    await this.refreshNavbarCounts();
+                } else {
+                    if (event && event.target) {
+                        event.target.checked = this.isTaskLinkedToDrawings(task);
+                    }
+                    this.showMessage(response.data?.message || '図面の更新に失敗しました', true);
+                }
+            } catch (error) {
+                if (event && event.target) {
+                    event.target.checked = this.isTaskLinkedToDrawings(task);
+                }
+                this.showMessage('図面の更新に失敗しました', true);
+            }
+        },
+        openTaskNoteModal(task) {
+            if (!task) return;
+            const inlineIndex = task._isInlineEdit && task._inlineIndex != null ? task._inlineIndex : null;
+            const taskId = task.id || null;
+            if (!taskId && inlineIndex === null) return;
+            this.destroyQuillTaskNoteEditor();
+            this.showTaskNoteModal = true;
+            this.taskNoteModal = {
+                taskId: taskId,
+                inlineIndex: inlineIndex,
+                content: task.note || '',
+                canEdit: this.canEditTaskNote(task)
+            };
+            this.$nextTick(() => {
+                if (this.taskNoteModal.canEdit) {
+                    this.initQuillTaskNoteEditor();
+                }
+            });
+        },
+        closeTaskNoteModal() {
+            this.showTaskNoteModal = false;
+            this.destroyQuillTaskNoteEditor();
+            this.taskNoteModal = { taskId: null, inlineIndex: null, content: '', canEdit: false };
+            this.quillTaskNoteContent = '';
+        },
+        resetQuillTaskNoteDom() {
+            const el = document.getElementById('quill_task_note_content');
+            if (!el) return;
+            const parent = el.closest('.custom_editor');
+            if (parent) {
+                parent.querySelectorAll('.ql-toolbar').forEach((toolbar) => toolbar.remove());
+            }
+            el.innerHTML = '';
+            el.className = 'custom_editor_content';
+        },
+        initQuillTaskNoteEditor() {
+            if (!this.showTaskNoteModal) return;
+            if (this.quillTaskNoteInitTimer) {
+                clearTimeout(this.quillTaskNoteInitTimer);
+                this.quillTaskNoteInitTimer = null;
+            }
+            this.quillTaskNoteInitTimer = setTimeout(() => {
+                this.quillTaskNoteInitTimer = null;
+                if (!this.showTaskNoteModal || !this.taskNoteModal.canEdit) return;
+                if (this.quillTaskNoteInstance) return;
+                const el = document.getElementById('quill_task_note_content');
+                if (!el || !window.Quill) return;
+                this.resetQuillTaskNoteDom();
+                const toolbarOptions = [
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ color: [] }, { background: [] }],
+                    [{ list: 'ordered' }, { list: 'bullet' }],
+                    [{ header: '1' }, { header: '2' }, 'blockquote'],
+                    ['link', 'clean']
+                ];
+                this.quillTaskNoteInstance = new Quill(el, {
+                    bounds: el,
+                    placeholder: 'メモの詳細を入力してください...',
+                    modules: { toolbar: { container: toolbarOptions } },
+                    theme: 'snow'
+                });
+                if (this.taskNoteModal.content) {
+                    this.quillTaskNoteInstance.root.innerHTML = this.decodeHtmlEntities(this.taskNoteModal.content);
+                }
+                this.quillTaskNoteContent = this.quillTaskNoteInstance.getSemanticHTML();
+                this.quillTaskNoteInstance.on('text-change', () => {
+                    this.quillTaskNoteContent = this.quillTaskNoteInstance.getSemanticHTML();
+                });
+            }, 200);
+        },
+        destroyQuillTaskNoteEditor() {
+            if (this.quillTaskNoteInitTimer) {
+                clearTimeout(this.quillTaskNoteInitTimer);
+                this.quillTaskNoteInitTimer = null;
+            }
+            if (this.quillTaskNoteInstance) {
+                try {
+                    const toolbar = this.quillTaskNoteInstance.getModule('toolbar');
+                    if (toolbar && toolbar.container) {
+                        toolbar.container.remove();
+                    }
+                } catch (e) {}
+                this.quillTaskNoteInstance = null;
+            }
+            this.resetQuillTaskNoteDom();
+            this.quillTaskNoteContent = '';
+        },
+        async saveTaskNote() {
+            const rawContent = (this.quillTaskNoteContent && this.quillTaskNoteContent.trim())
+                || (this.taskNoteModal.content || '').trim();
+            const inlineIndex = this.taskNoteModal.inlineIndex;
+            if (inlineIndex !== null && this.inlineTasks[inlineIndex] && !this.taskNoteModal.taskId) {
+                this.inlineTasks[inlineIndex].note = rawContent;
+                this.showMessage('メモを保存しました（タスク保存時に反映されます）。');
+                this.closeTaskNoteModal();
+                return;
+            }
+            if (!this.taskNoteModal.taskId) return;
+            try {
+                const formData = new FormData();
+                formData.append('id', this.taskNoteModal.taskId);
+                formData.append('project_id', this.projectId);
+                formData.append('note', rawContent);
+                const response = await axios.post('/api/index.php?model=task&method=edit', formData);
+                if (response.data && response.data.status === 'success') {
+                    this.showMessage('メモが保存されました。');
+                    await this.loadTasks();
+                    this.closeTaskNoteModal();
+                } else {
+                    this.showMessage(response.data?.message || 'メモの保存に失敗しました', true);
+                }
+            } catch (error) {
+                console.error('Error saving task note:', error);
+                this.showMessage('メモの保存に失敗しました', true);
+            }
+        },
+        async clearTaskNote() {
+            if (!confirm('メモを削除しますか？')) return;
+            const inlineIndex = this.taskNoteModal.inlineIndex;
+            if (inlineIndex !== null && this.inlineTasks[inlineIndex] && !this.taskNoteModal.taskId) {
+                this.inlineTasks[inlineIndex].note = '';
+                this.showMessage('メモを削除しました。');
+                this.closeTaskNoteModal();
+                return;
+            }
+            if (!this.taskNoteModal.taskId) return;
+            try {
+                const formData = new FormData();
+                formData.append('id', this.taskNoteModal.taskId);
+                formData.append('project_id', this.projectId);
+                formData.append('note', '');
+                const response = await axios.post('/api/index.php?model=task&method=edit', formData);
+                if (response.data && response.data.status === 'success') {
+                    this.showMessage('メモが削除されました。');
+                    await this.loadTasks();
+                    this.closeTaskNoteModal();
+                } else {
+                    this.showMessage(response.data?.message || 'メモの削除に失敗しました', true);
+                }
+            } catch (error) {
+                this.showMessage('メモの削除に失敗しました', true);
+            }
         },
         openNewTaskModal() {
             const newTask = {
                 title: '',
                 priority: 'medium',
                 status: 'todo',
+                task_kind: this.getDefaultTaskKind(),
+                drawing_count: 0,
+                link_to_drawings: false,
+                estimated_hours: 0,
+                note: '',
                 start_date: this.getDefaultStartDateTime(),
                 due_date: this.getDefaultDueDateTime(),
                 progress: 0,
@@ -872,7 +1487,7 @@ const TaskApp = createApp({
             try {
                 const formData = new FormData();
                 formData.append('id', targetTask.id);
-                formData.append('assigned_to', targetTask.assigned_to);
+                formData.append('assigned_to', this.getPrimaryAssigneeId(targetTask));
                 formData.append('project_id', this.projectId);
                 
                 const response = await axios.post(
@@ -918,14 +1533,105 @@ const TaskApp = createApp({
             return this.isDescendant(task.parent_id, potentialAncestorId);
         },
         
+        isVietnameseLocale() {
+            return typeof i18next !== 'undefined'
+                && i18next.isInitialized
+                && String(i18next.language || '').startsWith('vi');
+        },
+
+        getTaskDisplayTimezone() {
+            return this.isVietnameseLocale() ? VIETNAM_TASK_TIMEZONE : SERVER_TASK_TIMEZONE;
+        },
+
+        getTaskDateTimeDisplayFormat() {
+            return this.isVietnameseLocale()
+                ? TASK_DATETIME_MOMENT_FORMAT
+                : TASK_DATETIME_JA_DISPLAY_FORMAT;
+        },
+
+        getFlatpickrLocale() {
+            if (typeof window === 'undefined' || !window.flatpickr || !window.flatpickr.l10ns) {
+                return 'default';
+            }
+            if (this.isVietnameseLocale()) {
+                return window.flatpickr.l10ns.vi || 'default';
+            }
+            return window.flatpickr.l10ns.ja || 'default';
+        },
+
+        getFlatpickrOptions() {
+            const isVi = this.isVietnameseLocale();
+            const options = {
+                enableTime: true,
+                dateFormat: TASK_DATETIME_FLATPICKR_FORMAT,
+                time_24hr: true,
+                allowInput: true,
+                locale: this.getFlatpickrLocale()
+            };
+            if (!isVi) {
+                options.altInput = true;
+                options.altFormat = TASK_DATETIME_FLATPICKR_JA_ALT_FORMAT;
+                options.altInputClass = 'form-control px-1 py-0';
+            }
+            return options;
+        },
+
+        parseTaskDateTime(date, timezone = SERVER_TASK_TIMEZONE) {
+            if (!date) return null;
+            const raw = String(date).trim();
+            if (!raw || raw === '0000-00-00 00:00:00' || raw === '0000-00-00') return null;
+            if (typeof moment === 'undefined') return null;
+
+            if (moment.tz) {
+                for (const fmt of TASK_DATETIME_PARSE_FORMATS) {
+                    const parsed = moment.tz(raw, fmt, timezone);
+                    if (parsed.isValid()) return parsed;
+                }
+                const loose = moment.tz(raw, timezone);
+                return loose.isValid() ? loose : null;
+            }
+
+            const fallback = moment(raw, TASK_DATETIME_PARSE_FORMATS, true);
+            return fallback.isValid() ? fallback : null;
+        },
+
+        parseTaskDateTimeInput(value) {
+            return this.parseTaskDateTime(value, this.getTaskDisplayTimezone());
+        },
+
+        toTaskDateTimeInputValue(date) {
+            const parsed = this.parseTaskDateTime(date);
+            if (!parsed) return '';
+            return parsed.clone().tz(this.getTaskDisplayTimezone()).format(TASK_DATETIME_MOMENT_FORMAT);
+        },
+
+        fromTaskDateTimeInputValue(value) {
+            const raw = String(value || '').trim();
+            if (!raw) return '';
+            const parsed = this.parseTaskDateTimeInput(raw);
+            if (!parsed) return raw;
+            if (moment.tz) {
+                return parsed.clone().tz(SERVER_TASK_TIMEZONE).format(TASK_DATETIME_MOMENT_FORMAT);
+            }
+            return parsed.format(TASK_DATETIME_MOMENT_FORMAT);
+        },
+
+        formatTaskDateTimeInDisplayTz(date) {
+            const parsed = this.parseTaskDateTime(date);
+            if (!parsed) return '-';
+            const localized = moment.tz
+                ? parsed.clone().tz(this.getTaskDisplayTimezone())
+                : parsed;
+            return localized.format(this.getTaskDateTimeDisplayFormat());
+        },
+
         formatDate(date) {
-            if (!date) return '-';
-            return moment(date).format('M月D日 HH:mm');
+            return this.formatTaskDateTimeInDisplayTz(date);
         },
         
         showMessage(message, isError = false) {
-            // Simple alert for now
-            showMessage(message, isError);
+            const text = message ? this.$t(String(message)) : '';
+            showMessage(text, isError);
         },
         
         editTaskInline(task) {
@@ -934,9 +1640,19 @@ const TaskApp = createApp({
                 id: task.id,
                 title: task.title || '',
                 priority: task.priority || 'medium',
-                start_date: task.start_date || '',
-                due_date: task.due_date || '',
-                assignees: task.assigned_to ? task.assigned_to.split(',').filter(id => id.trim()) : [],
+                task_kind: this.normalizeTaskKind(task.task_kind) || this.getDefaultTaskKind(),
+                drawing_count: task.drawing_count != null ? parseInt(task.drawing_count, 10) : 0,
+                link_to_drawings: (task.drawing_count != null ? parseInt(task.drawing_count, 10) : 0) > 0,
+                estimated_hours: task.estimated_hours != null ? parseFloat(task.estimated_hours) : 0,
+                note: task.note || '',
+                start_date: this.toTaskDateTimeInputValue(task.start_date),
+                due_date: this.toTaskDateTimeInputValue(task.due_date),
+                assignees: (() => {
+                    const id = task.assigned_to
+                        ? task.assigned_to.split(',').map(v => v.trim()).filter(Boolean)[0]
+                        : '';
+                    return id ? [id] : [];
+                })(),
                 status: task.status || 'todo',
                 progress: task.progress || 0,
                 created_by: task.created_by != null ? task.created_by : undefined,
@@ -962,6 +1678,7 @@ const TaskApp = createApp({
                 this.showMessage('期限日は必須です。', true);
                 return;
             }
+            this.applyDefaultTaskKindForTitle(inlineTask);
             try {
                 const formData = new FormData();
                 const method = inlineTask.id ? 'edit' : 'add';
@@ -971,12 +1688,18 @@ const TaskApp = createApp({
                 formData.append('project_id', this.projectId);
                 formData.append('title', inlineTask.title);
                 formData.append('priority', inlineTask.priority);
-                formData.append('start_date', inlineTask.start_date);
-                formData.append('due_date', inlineTask.due_date);
-                formData.append('assigned_to', inlineTask.assignees.join(','));
+                formData.append('start_date', inlineTask.id
+                    ? (this.fromTaskDateTimeInputValue(inlineTask.start_date) || '')
+                    : this.fromTaskDateTimeInputValue(this.getDefaultStartDateTime()));
+                formData.append('due_date', this.fromTaskDateTimeInputValue(inlineTask.due_date));
+                formData.append('assigned_to', inlineTask.assignees[0] || '');
                 formData.append('created_by', this.currentUserId);
                 formData.append('status', inlineTask.status);
                 formData.append('progress', inlineTask.progress);
+                formData.append('task_kind', this.getDefaultTaskKindForTitle(inlineTask.title) || inlineTask.task_kind || this.getDefaultTaskKind());
+                formData.append('drawing_count', this.getDrawingCountForSave(inlineTask));
+                formData.append('estimated_hours', inlineTask.estimated_hours != null ? inlineTask.estimated_hours : 0);
+                formData.append('note', inlineTask.note || '');
 
                 // Calculate position for new task
                 if (!inlineTask.id) {
@@ -1015,7 +1738,11 @@ const TaskApp = createApp({
         
         getPriorityLabel(priority) {
             const p = this.taskPriorities.find(p => p.value === priority);
-            return p ? p.label : priority;
+            if (!p) return priority || '—';
+            if (typeof this.$t === 'function' && p.i18nKey) {
+                return this.$t(p.i18nKey);
+            }
+            return p.label;
         },
         
         getPriorityButtonClass(priority) {
@@ -1025,7 +1752,11 @@ const TaskApp = createApp({
         
         getStatusLabel(status) {
             const s = this.taskStatuses.find(s => s.value === status);
-            return s ? s.label : status;
+            if (!s) return status || '—';
+            if (typeof this.$t === 'function' && s.i18nKey) {
+                return this.$t(s.i18nKey);
+            }
+            return s.label;
         },
         
         getStatusButtonClass(status) {
@@ -1105,8 +1836,7 @@ const TaskApp = createApp({
         },
         
         formatDateTime(date) {
-            if (!date) return '-';
-            return moment(date).format('YYYY/MM/DD HH:mm');
+            return this.formatTaskDateTimeInDisplayTz(date);
         },
         
         getAssigneeTooltip(task, userId) {
@@ -1130,7 +1860,16 @@ const TaskApp = createApp({
         },
         /** Return creator info for avatar display (from task API or projectMembers) */
         getCreatorMember(task) {
-            if (!task || task.created_by == null || task.created_by === undefined) return null;
+            if (!task) return null;
+            if (task.created_by === 0 || task.created_by === '0') {
+                return {
+                    userid: 'system',
+                    user_id: 0,
+                    user_name: 'System',
+                    user_image: ''
+                };
+            }
+            if (task.created_by == null || task.created_by === undefined) return null;
             // Prefer API data so creator avatar shows even when not a project member
             if (task.created_by_name != null || task.created_by_user_image != null) {
                 return {
@@ -1148,7 +1887,16 @@ const TaskApp = createApp({
         },
         /** For inline task: prefer task's created_by_name/created_by_user_image if present */
         getCreatorMemberForInlineTask(task) {
-            if (!task || task.created_by == null || task.created_by === undefined) return null;
+            if (!task) return null;
+            if (task.created_by === 0 || task.created_by === '0') {
+                return {
+                    userid: 'system',
+                    user_id: 0,
+                    user_name: 'System',
+                    user_image: ''
+                };
+            }
+            if (task.created_by == null || task.created_by === undefined) return null;
             if (task.created_by_name != null || task.created_by_user_image != null) {
                 return {
                     userid: task.created_by_userid,
@@ -1192,7 +1940,10 @@ const TaskApp = createApp({
             this.assigneeModal.idx = idx;
             // Ensure we have a safe copy of assignees array
             const currentAssignees = this.inlineTasks[idx]?.assignees || [];
-            this.assigneeModal.selected = Array.isArray(currentAssignees) ? [...currentAssignees] : [];
+            const primaryId = Array.isArray(currentAssignees) && currentAssignees.length
+                ? String(currentAssignees[0]).trim()
+                : '';
+            this.assigneeModal.selected = primaryId ? [primaryId] : [];
             
             // Backup current task data to prevent loss
             this.assigneeModal.backupData = { ...this.inlineTasks[idx] };
@@ -1214,11 +1965,11 @@ const TaskApp = createApp({
                 if (this.assigneeModal.backupData) {
                     this.inlineTasks[this.assigneeModal.idx] = {
                         ...this.assigneeModal.backupData,
-                        assignees: [...this.assigneeModal.selected]
+                        assignees: this.assigneeModal.selected.slice(0, 1)
                     };
                 } else {
                     // Update only the assignees property to preserve all other data
-                    this.inlineTasks[this.assigneeModal.idx].assignees = [...this.assigneeModal.selected];
+                    this.inlineTasks[this.assigneeModal.idx].assignees = this.assigneeModal.selected.slice(0, 1);
                 }
                 
                 // Ensure all required fields exist
@@ -1227,12 +1978,20 @@ const TaskApp = createApp({
             this.closeAssigneeModal();
         },
         
+        getPrimaryAssigneeId(task) {
+            if (!task) return '';
+            if (task.assignees && task.assignees.length) {
+                return String(task.assignees[0]).trim();
+            }
+            if (!task.assigned_to) return '';
+            const ids = String(task.assigned_to).split(',').map(id => id.trim()).filter(Boolean);
+            return ids[0] || '';
+        },
         toggleAssignee(userId) {
-            const idx = this.assigneeModal.selected.indexOf(userId);
-            if (idx === -1) {
-                this.assigneeModal.selected.push(userId);
+            if (this.assigneeModal.selected.includes(userId)) {
+                this.assigneeModal.selected = [];
             } else {
-                this.assigneeModal.selected.splice(idx, 1);
+                this.assigneeModal.selected = [userId];
             }
         },
         
@@ -1259,25 +2018,20 @@ const TaskApp = createApp({
         },
         
         initFlatpickr() {
-            if (window.flatpickr) {
-                document.querySelectorAll('.datetimepicker').forEach(el => {
-                    if (el._flatpickr) {
-                        el._flatpickr.destroy();
+            if (!window.flatpickr) return;
+            const flatpickrOptions = this.getFlatpickrOptions();
+            document.querySelectorAll('.datetimepicker').forEach(el => {
+                if (el._flatpickr) {
+                    el._flatpickr.destroy();
+                }
+                window.flatpickr(el, {
+                    ...flatpickrOptions,
+                    onChange: (selectedDates, dateStr) => {
+                        el.value = dateStr;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
                     }
-                    window.flatpickr(el, {
-                        enableTime: true,
-                        dateFormat: 'Y/m/d H:i',
-                        time_24hr: true,
-                        allowInput: true,
-                        onChange: (selectedDates, dateStr) => {
-                            const vueModel = el.getAttribute('v-model');
-                            if (vueModel) {
-                                // Không dùng được, nên sẽ đồng bộ thủ công ở template
-                            }
-                        }
-                    });
                 });
-            }
+            });
         },
         
         initSortable() {
@@ -1607,13 +2361,12 @@ const TaskApp = createApp({
         
         isInlineTaskOverdue(inlineTask) {
             if (!inlineTask.due_date) return false;
-            const due = moment.tz(inlineTask.due_date, 'Asia/Tokyo');
-            if (inlineTask.status === 'completed') {
-                // For inline tasks, we don't have actual_end_date, so just check if due_date is in the past
-                return moment().tz('Asia/Tokyo').isAfter(due, 'minute');
-            } else {
-                return moment().tz('Asia/Tokyo').isAfter(due, 'minute');
-            }
+            const due = this.parseTaskDateTimeInput(inlineTask.due_date);
+            if (!due) return false;
+            const now = moment.tz
+                ? moment().tz(this.getTaskDisplayTimezone())
+                : moment();
+            return now.isAfter(due, 'minute');
         },
         
         initTooltips() {
@@ -1629,6 +2382,23 @@ const TaskApp = createApp({
             }
         },
         
+        formatOverdueDurationText(hours, minutes) {
+            const isVi = this.isVietnameseLocale();
+            const overdueLabel = this.$t('期限切れ');
+            const hourLabel = this.$t('時間');
+            const minuteLabel = this.$t('分');
+            const fmt = (v, l) => (isVi ? `${v} ${l}` : `${v}${l}`);
+            const join = (parts) => (isVi ? parts.filter(Boolean).join(' ') : parts.filter(Boolean).join(''));
+
+            let durationPart = '';
+            if (hours > 0) {
+                durationPart = join([fmt(hours, hourLabel), fmt(minutes, minuteLabel)]);
+            } else {
+                durationPart = fmt(minutes, minuteLabel);
+            }
+            return `${overdueLabel}: ${durationPart}`;
+        },
+
         getOverdueTooltip(task) {
             if (!this.isTaskOverdue(task)) return '';
             
@@ -1645,11 +2415,7 @@ const TaskApp = createApp({
             const hours = Math.floor(duration.asHours());
             const minutes = Math.floor(duration.asMinutes()) % 60;
             
-            if (hours > 0) {
-                return `期限切れ: ${hours}時間${minutes}分`;
-            } else {
-                return `期限切れ: ${minutes}分`;
-            }
+            return this.formatOverdueDurationText(hours, minutes);
         },
         /** True if task due date is after project end date */
         isTaskDueExceedsProjectDue(task) {
@@ -1679,31 +2445,31 @@ const TaskApp = createApp({
         getInlineOverdueTooltip(inlineTask) {
             if (!this.isInlineTaskOverdue(inlineTask)) return '';
             
-            const due = moment.tz(inlineTask.due_date, 'Asia/Tokyo');
-            const now = moment().tz('Asia/Tokyo');
+            const due = this.parseTaskDateTimeInput(inlineTask.due_date);
+            const now = moment.tz
+                ? moment().tz(this.getTaskDisplayTimezone())
+                : moment();
+            if (!due) return '';
             const duration = moment.duration(now.diff(due));
             const hours = Math.floor(duration.asHours());
             const minutes = Math.floor(duration.asMinutes()) % 60;
             
-            if (hours > 0) {
-                return `期限切れ: ${hours}時間${minutes}分`;
-            } else {
-                return `期限切れ: ${minutes}分`;
-            }
+            return this.formatOverdueDurationText(hours, minutes);
         },
         
         openTaskDetails(task) {
+            this.destroyQuillDescriptionEditor();
             this.selectedTask = task;
-            
-            // Show modal
+
             const modalEl = document.getElementById('taskDetailsModal');
-            const modal = new bootstrap.Modal(modalEl);
-            modal.show();
-            
-            // Initialize Quill editor after modal is shown
-            setTimeout(() => {
-                this.initQuillEditor();
-            }, 300);
+            if (!modalEl) return;
+
+            if (!this.taskDetailsModalInstance) {
+                this.taskDetailsModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+            }
+            this.taskDetailsModalInstance.show();
+
+            this.initQuillEditor();
             // Add event listener for tab changes
             this.$nextTick(() => {
                 const taskDetailsModal = modalEl;
@@ -1749,79 +2515,113 @@ const TaskApp = createApp({
             }
         },
         
-        initQuillEditor() {
-            // Wait for DOM to be ready
-            this.$nextTick(() => {
-                const editorElement = document.getElementById('taskDescriptionEditor');
-                if (!editorElement) {
-                    console.error('Editor element not found');
-                    return;
-                }
-                
-                // Destroy existing editor if any
+        resetQuillEditorDom() {
+            const el = document.getElementById('taskDescriptionEditor');
+            if (!el) return;
+
+            const parent = el.parentElement;
+            if (parent) {
+                parent.querySelectorAll('.ql-toolbar').forEach((toolbar) => toolbar.remove());
+                parent.querySelectorAll('.ql-container').forEach((container) => {
+                    if (container !== el) {
+                        container.remove();
+                    }
+                });
+            }
+
+            el.innerHTML = '';
+            el.className = '';
+            el.setAttribute('id', 'taskDescriptionEditor');
+            el.setAttribute('style', 'min-height: 400px;');
+            el.removeAttribute('contenteditable');
+        },
+        destroyQuillDescriptionEditor() {
+            if (this.quillEditorInitTimer) {
+                clearTimeout(this.quillEditorInitTimer);
+                this.quillEditorInitTimer = null;
+            }
+            if (this.quillEditor) {
                 try {
-                    if (this.quillEditor && typeof this.quillEditor.destroy === 'function') {
+                    if (typeof this.quillEditor.setText === 'function') {
+                        this.quillEditor.setText('');
+                    }
+                    if (typeof this.quillEditor.destroy === 'function') {
                         this.quillEditor.destroy();
                     }
                 } catch (error) {
-                    console.warn('Error destroying existing Quill editor:', error);
+                    console.warn('Error destroying Quill editor:', error);
                 }
-                
-                // Clear the container
-                editorElement.innerHTML = '';
-                const toolbarOptions = [
-                    [
-                        { font: [] },
-                        { size: [] }
-                    ],
-                    ['bold', 'italic', 'underline', 'strike'],
-                    [
-                        { color: [] },
-                        { background: [] }
-                    ],
-                    [
-                        { script: 'super' },
-                        { script: 'sub' }
-                    ],
-                    [
-                        { header: '1' },
-                        { header: '2' }, 'blockquote' ],
-                    [
-                        { list: 'ordered' },
-                        { indent: '-1' },
-                        { indent: '+1' }
-                    ],
-                    [{ direction: 'rtl' }, { align: [] }],
-                    ['link', 'image', 'video', 'formula'],
-                    ['clean']
-                ];
-                
-                // Initialize Quill editor
-                this.quillEditor = new Quill('#taskDescriptionEditor', {
-                    theme: 'snow',
-                    placeholder: 'タスクの説明を入力してください...',
-                    modules: {
-                        toolbar: {
-                            container: toolbarOptions,
-                            handlers: {
-                                image: this.imageHandler.bind(this)
+                this.quillEditor = null;
+            }
+            this.resetQuillEditorDom();
+        },
+        initQuillEditor() {
+            if (this.quillEditorInitTimer) {
+                clearTimeout(this.quillEditorInitTimer);
+                this.quillEditorInitTimer = null;
+            }
+
+            this.quillEditorInitTimer = setTimeout(() => {
+                this.quillEditorInitTimer = null;
+                this.$nextTick(() => {
+                    const editorElement = document.getElementById('taskDescriptionEditor');
+                    if (!editorElement || !window.Quill) {
+                        return;
+                    }
+
+                    this.destroyQuillDescriptionEditor();
+
+                    const toolbarOptions = [
+                        [
+                            { font: [] },
+                            { size: [] }
+                        ],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [
+                            { color: [] },
+                            { background: [] }
+                        ],
+                        [
+                            { script: 'super' },
+                            { script: 'sub' }
+                        ],
+                        [
+                            { header: '1' },
+                            { header: '2' }, 'blockquote' ],
+                        [
+                            { list: 'ordered' },
+                            { indent: '-1' },
+                            { indent: '+1' }
+                        ],
+                        [{ direction: 'rtl' }, { align: [] }],
+                        ['link', 'image', 'video', 'formula'],
+                        ['clean']
+                    ];
+
+                    this.quillEditor = new Quill(editorElement, {
+                        bounds: editorElement,
+                        theme: 'snow',
+                        placeholder: 'タスクの説明を入力してください...',
+                        modules: {
+                            toolbar: {
+                                container: toolbarOptions,
+                                handlers: {
+                                    image: this.imageHandler.bind(this)
+                                }
                             }
                         }
+                    });
+
+                    this.quillEditor.on('text-change', () => {
+                        this.addZoomToDescriptionImages();
+                    });
+
+                    if (this.selectedTask && this.selectedTask.description) {
+                        const cleanHtml = this.decodeHtmlEntities(this.selectedTask.description);
+                        this.quillEditor.root.innerHTML = cleanHtml;
                     }
                 });
-
-                // Simple text-change handler without debounce
-                this.quillEditor.on('text-change', () => {
-                    this.addZoomToDescriptionImages();
-                });
-                
-                // Set content if task has description
-                if (this.selectedTask && this.selectedTask.description) {
-                    // Convert HTML to safe format before displaying
-                    const cleanHtml = this.decodeHtmlEntities(this.selectedTask.description);
-                    this.quillEditor.root.innerHTML = cleanHtml;
-                }
-            });
+            }, 200);
         },
         
         addZoomToDescriptionImages() {
@@ -1897,7 +2697,7 @@ const TaskApp = createApp({
                                 }
                             });
                         } else {
-                            this.showMessage('画像のアップロードに失敗しました: ' + (response.error || 'Unknown error'), true);
+                            this.showMessage(this.$t('画像のアップロードに失敗しました') + ': ' + (response.error || 'Unknown error'), true);
                         }
                     } catch (error) {
                         console.error('Error uploading image:', error);
@@ -1907,15 +2707,7 @@ const TaskApp = createApp({
             };
         },
         resetQuillEditor() {
-            try {
-                if (this.quillEditor && typeof this.quillEditor.destroy === 'function') {
-                    this.quillEditor.destroy();
-                }
-            } catch (error) {
-                console.warn('Error destroying Quill editor:', error);
-            } finally {
-                this.quillEditor = null;
-            }
+            this.destroyQuillDescriptionEditor();
             this.selectedTask = null;
             this.taskLogs = [];
         },
@@ -2063,7 +2855,7 @@ const TaskApp = createApp({
             if (progressContainer) {
                 progressContainer.remove();
             }
-            this.showMessage(`アップロードに失敗しました: ${fileName}`, true);
+            this.showMessage(this.$t('アップロードに失敗しました') + ': ' + fileName, true);
         },
         
         // Comment component event handlers
@@ -2381,20 +3173,20 @@ const TaskApp = createApp({
                         acknowledged_at: new Date().toISOString().slice(0, 19).replace('T', ' ')
                     };
                     if (!silent) {
-                        showMessage('タスクを受領しました。', false);
+                        this.showMessage('タスクを受領しました。', false);
                     }
                     if (!silent) {
                         await this.loadTasks();
                     }
                 } else {
                     if (!silent) {
-                        showMessage(response.data?.message || 'エラーが発生しました。', true);
+                        this.showMessage(response.data?.message || 'エラーが発生しました。', true);
                     }
                 }
             } catch (error) {
                 console.error('Error acknowledging task:', error);
                 if (!silent) {
-                    showMessage('エラーが発生しました。', true);
+                    this.showMessage('エラーが発生しました。', true);
                 }
             }
         },
@@ -2415,7 +3207,7 @@ const TaskApp = createApp({
                     
                     if (swal.isConfirmed) {
                         const newAssignees = task.assigned_to.split(',').filter(id => id !== userId.toString());
-                        task.assigned_to = newAssignees.join(',');
+                        task.assigned_to = newAssignees.length ? String(newAssignees[0]).trim() : '';
                         await this.updateTaskAssignee(task);
                     }
                 }

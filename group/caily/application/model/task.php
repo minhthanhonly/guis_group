@@ -11,6 +11,9 @@ class Task extends ApplicationModel {
             'description' => array(),
             'status' => array(),
             'priority' => array(),
+            'task_kind' => array(),
+            'drawing_count' => array('type' => 'int'),
+            'note' => array(),
             'assigned_to' => array('type' => 'int'),
             'created_by' => array('type' => 'int'),
             'created_at' => array('except' => array('search')),
@@ -30,6 +33,286 @@ class Task extends ApplicationModel {
      * Start date → 09:00, due date (期限) → 18:00.
      * Supports Vietnamese d/m format: 10/2 = 2 Feb, 15/2 = 15 Feb (day/month).
      */
+    private function normalize_task_kind($value) {
+        $allowed = array('新規作成', '修正(エラー)', '修正(変更)', 'チェック', '連絡', '検討', '相談・会議');
+        $value = trim((string) $value);
+        if ($value === '新規') {
+            $value = '新規作成';
+        }
+        return in_array($value, $allowed, true) ? $value : '';
+    }
+
+    private function normalize_estimated_hours($value) {
+        if ($value === '' || $value === null) {
+            return 0;
+        }
+        return max(0, round(floatval($value), 2));
+    }
+
+    private function getDrawingModel() {
+        if (!class_exists('Drawing')) {
+            require_once DIR_MODEL . 'drawing.php';
+        }
+        return new Drawing();
+    }
+
+    private function syncTaskDrawingsForTask($taskId, $taskRow = null, $options = array()) {
+        $taskId = intval($taskId);
+        if ($taskId <= 0) {
+            return;
+        }
+        if ($taskRow === null) {
+            $taskRow = $this->getById($taskId);
+        }
+        if (!$taskRow) {
+            return;
+        }
+        $taskRow['id'] = $taskId;
+        $drawingModel = $this->getDrawingModel();
+        $syncOptions = $options;
+        unset($syncOptions['recalc_prices']);
+        $drawingModel->syncFromTask($taskRow, $syncOptions);
+        if (!empty($options['recalc_prices'])) {
+            $projectId = isset($taskRow['project_id']) ? intval($taskRow['project_id']) : 0;
+            if ($projectId > 0) {
+                $drawingModel->autoCalculateAllDrawingPricesForProject($projectId);
+            }
+        }
+    }
+
+    private function getDefaultTaskTitlesWithAutoDrawingLink() {
+        return array(
+            'お客様との連絡・調整・納品対応',
+            '全図面のチェック・確認作業',
+        );
+    }
+
+    private function isDefaultTaskTitleWithAutoDrawingLink($title) {
+        $title = trim((string) $title);
+        return in_array($title, $this->getDefaultTaskTitlesWithAutoDrawingLink(), true);
+    }
+
+    private function getDefaultTaskKindByTitle($title) {
+        $map = array(
+            'お客様との連絡・調整・納品対応' => '連絡',
+            '全図面のチェック・確認作業' => 'チェック',
+        );
+        $title = trim((string) $title);
+        return isset($map[$title]) ? $map[$title] : '';
+    }
+
+    private function applyDefaultTaskKindToData(&$data) {
+        $kind = $this->getDefaultTaskKindByTitle(isset($data['title']) ? $data['title'] : '');
+        if ($kind !== '') {
+            $data['task_kind'] = $kind;
+        }
+    }
+
+    private function applyDefaultTaskDrawingLinkToData(&$data) {
+        $title = isset($data['title']) ? trim((string) $data['title']) : '';
+        if (!$this->isDefaultTaskTitleWithAutoDrawingLink($title)) {
+            return;
+        }
+        $drawingCount = isset($data['drawing_count']) ? max(0, intval($data['drawing_count'])) : 0;
+        if ($drawingCount <= 0) {
+            $data['drawing_count'] = 1;
+        }
+    }
+
+    private function ensureDefaultTaskDrawingLinkOnList(&$task) {
+        if (!$this->isDefaultTaskTitleWithAutoDrawingLink(isset($task['title']) ? $task['title'] : '')) {
+            return;
+        }
+        $drawingCount = isset($task['drawing_count']) ? max(0, intval($task['drawing_count'])) : 0;
+        if ($drawingCount > 0) {
+            return;
+        }
+        $taskId = isset($task['id']) ? intval($task['id']) : 0;
+        if ($taskId <= 0) {
+            return;
+        }
+        $data = array(
+            'drawing_count' => 1,
+            'updated_at' => date('Y-m-d H:i:s'),
+        );
+        $this->query_update($data, array('id' => $taskId));
+        $merged = array_merge($task, $data);
+        $merged['id'] = $taskId;
+        $this->syncTaskDrawingsForTask($taskId, $merged, array('recalc_prices' => true));
+        $task['drawing_count'] = 1;
+    }
+
+    private function taskHasLinkedDrawings($taskRow, $oldRow = null) {
+        $newDrawingCount = isset($taskRow['drawing_count']) ? max(0, intval($taskRow['drawing_count'])) : 0;
+        $oldDrawingCount = ($oldRow && isset($oldRow['drawing_count'])) ? max(0, intval($oldRow['drawing_count'])) : 0;
+        if ($newDrawingCount > 0 || $oldDrawingCount > 0) {
+            return true;
+        }
+        $taskId = isset($taskRow['id']) ? intval($taskRow['id']) : 0;
+        if ($taskId <= 0) {
+            return false;
+        }
+        $drawingModel = $this->getDrawingModel();
+        $count = intval($drawingModel->fetchCount(
+            $drawingModel->table,
+            sprintf('WHERE task_id = %d', $taskId)
+        ));
+        return $count > 0;
+    }
+
+    /**
+     * Recalculate drawing prices only when task is completed, or when leaving completed status.
+     */
+    private function shouldRecalcDrawingPricesForTask($taskRow, $oldRow = null) {
+        if (!$taskRow || !is_array($taskRow)) {
+            return false;
+        }
+
+        if ($this->isDefaultTaskTitleWithAutoDrawingLink(isset($taskRow['title']) ? $taskRow['title'] : '')) {
+            return true;
+        }
+        if ($oldRow && $this->isDefaultTaskTitleWithAutoDrawingLink(isset($oldRow['title']) ? $oldRow['title'] : '')) {
+            return true;
+        }
+
+        if (!$this->taskHasLinkedDrawings($taskRow, $oldRow)) {
+            return false;
+        }
+
+        $status = isset($taskRow['status']) ? (string) $taskRow['status'] : '';
+        $oldStatus = ($oldRow && isset($oldRow['status'])) ? (string) $oldRow['status'] : '';
+
+        if ($oldStatus === 'completed' && $status !== 'completed') {
+            return true;
+        }
+
+        return $status === 'completed';
+    }
+
+    /**
+     * Bootstrap default tasks (and task-linked drawings) for a new child project.
+     */
+    function createDefaultTasksForProject($projectId, $options = array()) {
+        $projectId = intval($projectId);
+        if ($projectId <= 0) {
+            return false;
+        }
+
+        $amount = isset($options['amount']) ? floatval($options['amount']) : 0;
+        $createdBy = isset($options['created_by']) ? intval($options['created_by']) : 0;
+        if ($createdBy <= 0 && isset($_SESSION['user_id'])) {
+            $createdBy = intval($_SESSION['user_id']);
+        }
+
+        $defaults = array(
+            array(
+                'title' => 'お客様との連絡・調整・納品対応',
+                'task_kind' => '連絡',
+                'assigned_to' => $createdBy > 0 ? (string) $createdBy : null,
+                'status' => 'completed',
+                'progress' => 100,
+                'drawing_count' => 1,
+                'position' => 1,
+                'price_pct' => 0.15,
+            ),
+            array(
+                'title' => '全図面のチェック・確認作業',
+                'task_kind' => 'チェック',
+                'assigned_to' => null,
+                'status' => 'todo',
+                'progress' => 0,
+                'drawing_count' => 1,
+                'position' => 2,
+                'price_pct' => 0.20,
+            ),
+        );
+
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        $projectModel = new Project();
+        $drawingModel = $this->getDrawingModel();
+        $now = date('Y-m-d H:i:s');
+
+        foreach ($defaults as $def) {
+            $data = array(
+                'project_id' => $projectId,
+                'parent_id' => null,
+                'title' => $def['title'],
+                'description' => '',
+                'status' => $def['status'],
+                'priority' => 'medium',
+                'task_kind' => isset($def['task_kind']) ? $def['task_kind'] : '',
+                'drawing_count' => $def['drawing_count'],
+                'estimated_hours' => 0,
+                'note' => '',
+                'assigned_to' => $def['assigned_to'],
+                'created_by' => $createdBy > 0 ? $createdBy : null,
+                'progress' => $def['progress'],
+                'position' => $def['position'],
+                'created_at' => $now,
+                'updated_at' => $now,
+            );
+
+            if (!empty($data['assigned_to'])) {
+                $assignedIds = array_filter(array_map('intval', explode(',', (string) $data['assigned_to'])));
+                foreach ($assignedIds as $uid) {
+                    if ($uid > 0) {
+                        $projectModel->addMember($projectId, $uid, null, 'member', true);
+                    }
+                }
+            }
+
+            $taskId = $this->query_insert($data);
+            if (!$taskId) {
+                continue;
+            }
+
+            if (!empty($data['assigned_to'])) {
+                $this->syncTaskAssignees($taskId, $data['assigned_to']);
+            }
+
+            $data['id'] = $taskId;
+            $drawingModel->syncFromTask($data, array('skip_price_recalc' => true));
+
+            if ($amount > 0 && isset($def['price_pct']) && isset($def['status']) && $def['status'] === 'completed') {
+                $price = round($amount * $def['price_pct'], 2);
+                $drawing = $this->fetchOne(sprintf(
+                    "SELECT id FROM %sproject_drawings WHERE task_id = %d ORDER BY id ASC LIMIT 1",
+                    DB_PREFIX,
+                    intval($taskId)
+                ));
+                if ($drawing && !empty($drawing['id'])) {
+                    $drawingModel->query_update(
+                        array('price' => $price, 'updated_at' => date('Y-m-d H:i:s')),
+                        array('id' => intval($drawing['id']))
+                    );
+                }
+            }
+        }
+
+        if ($amount > 0) {
+            $drawingModel->autoCalculateAllDrawingPricesForProject($projectId);
+        }
+
+        return true;
+    }
+
+    private function get_default_task_kind_for_project($project_id) {
+        $project_id = intval($project_id);
+        if ($project_id <= 0) {
+            return '新規作成';
+        }
+        $project = $this->fetchOne(
+            "SELECT project_order_type FROM " . DB_PREFIX . "projects WHERE id = " . $project_id
+        );
+        $orderType = isset($project['project_order_type']) ? (string) $project['project_order_type'] : '';
+        if ($orderType !== '' && mb_strpos($orderType, '修正') !== false) {
+            return '修正(エラー)';
+        }
+        return '新規作成';
+    }
+
     private function normalize_datetime_with_default($value, $defaultTime) {
         $value = trim($value ?? '');
         if ($value === '') {
@@ -170,6 +453,11 @@ class Task extends ApplicationModel {
                 $task['acknowledgements'] = $acknowledgementsMap[$task['id']] ?? [];
             }
         }
+
+        foreach ($tasks as &$task) {
+            $this->ensureDefaultTaskDrawingLinkOnList($task);
+        }
+        unset($task);
         
         return $tasks;
     }
@@ -200,6 +488,20 @@ class Task extends ApplicationModel {
         $projectModel = new Project();
         $dueDate = isset($_POST['due_date']) && trim((string)$_POST['due_date']) !== '' ? $this->normalize_datetime_with_default($_POST['due_date'], '18:00') : null;
         $startDate = isset($_POST['start_date']) && trim((string)$_POST['start_date']) !== '' ? $this->normalize_datetime_with_default($_POST['start_date'], '09:00') : null;
+        $title = isset($_POST['title']) ? trim((string) $_POST['title']) : '';
+        $taskKind = $this->normalize_task_kind(isset($_POST['task_kind']) ? $_POST['task_kind'] : '');
+        if ($taskKind === '') {
+            $taskKind = $this->get_default_task_kind_for_project($project_id);
+        }
+        $defaultKind = $this->getDefaultTaskKindByTitle($title);
+        if ($defaultKind !== '') {
+            $taskKind = $defaultKind;
+        }
+        $drawingCount = isset($_POST['drawing_count']) ? max(0, intval($_POST['drawing_count'])) : 0;
+        if (!$projectModel->canUserEditProject($project_id)) {
+            $drawingCount = 0;
+        }
+        $estimatedHours = $this->normalize_estimated_hours(isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0);
         $data = array(
             'project_id' => $_POST['project_id'],
             'parent_id' => isset($_POST['parent_id']) && $_POST['parent_id'] ? $_POST['parent_id'] : null,
@@ -207,10 +509,13 @@ class Task extends ApplicationModel {
             'description' => isset($_POST['description']) ? $_POST['description'] : '',
             'status' => isset($_POST['status']) ? $_POST['status'] : 'todo',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
+            'task_kind' => $taskKind,
+            'drawing_count' => $drawingCount,
+            'estimated_hours' => $estimatedHours,
+            'note' => isset($_POST['note']) ? (string) $_POST['note'] : '',
             'assigned_to' => isset($_POST['assigned_to']) ? $_POST['assigned_to'] : null,
             'created_by' => isset($_POST['created_by']) ? $_POST['created_by'] : $_SESSION['user_id'],
             // 'category_id' => isset($_POST['category_id']) ? $_POST['category_id'] : null,
-            // 'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0,
             // 'actual_hours' => isset($_POST['actual_hours']) ? $_POST['actual_hours'] : 0,
             'progress' => (isset($_POST['progress']) && $_POST['progress'] !== '' && $_POST['progress'] !== null) ? intval($_POST['progress']) : 0,
             'position' => isset($_POST['position']) ? $_POST['position'] : 0,
@@ -223,6 +528,9 @@ class Task extends ApplicationModel {
         if ($startDate !== null) {
             $data['start_date'] = $startDate;
         }
+
+        $this->applyDefaultTaskKindToData($data);
+        $this->applyDefaultTaskDrawingLinkToData($data);
 
         // Nếu user được phân công chưa là thành viên dự án thì tự động thêm vào dự án (role = member)
         if (!empty($data['assigned_to'])) {
@@ -261,6 +569,13 @@ class Task extends ApplicationModel {
                     $this->notifyTaskCreated($task_id, $data['title'], $data['project_id'], $projectNumber, $projectName, $assignedUserIds);
                 }
             }
+
+            $data['id'] = $task_id;
+            $syncOptions = array();
+            if ($this->shouldRecalcDrawingPricesForTask($data)) {
+                $syncOptions['recalc_prices'] = true;
+            }
+            $this->syncTaskDrawingsForTask($task_id, $data, $syncOptions);
             
             return [
                 'status' => 'success',
@@ -318,14 +633,43 @@ class Task extends ApplicationModel {
         $assignedTo = isset($_POST['assigned_to']) ? $_POST['assigned_to'] : (isset($old['assigned_to']) ? $old['assigned_to'] : null);
         $dueDate = (isset($_POST['due_date']) && trim((string)$_POST['due_date']) !== '') ? $this->normalize_datetime_with_default($_POST['due_date'], '18:00') : null;
         $startDate = (isset($_POST['start_date']) && trim((string)$_POST['start_date']) !== '') ? $this->normalize_datetime_with_default($_POST['start_date'], '09:00') : null;
+        if (array_key_exists('task_kind', $_POST)) {
+            $taskKind = $this->normalize_task_kind($_POST['task_kind']);
+            if ($taskKind === '') {
+                $taskKind = isset($old['task_kind']) && $old['task_kind'] !== '' ? $old['task_kind'] : $this->get_default_task_kind_for_project($project_id);
+            }
+        } else {
+            $taskKind = isset($old['task_kind']) && $old['task_kind'] !== '' ? $old['task_kind'] : $this->get_default_task_kind_for_project($project_id);
+        }
+        $defaultKind = $this->getDefaultTaskKindByTitle($title);
+        if ($defaultKind !== '') {
+            $taskKind = $defaultKind;
+        }
+        if (array_key_exists('drawing_count', $_POST)) {
+            if ($projectModel->canUserEditProject($project_id)) {
+                $drawingCount = max(0, intval($_POST['drawing_count']));
+            } else {
+                $drawingCount = isset($old['drawing_count']) ? max(0, intval($old['drawing_count'])) : 0;
+            }
+        } else {
+            $drawingCount = isset($old['drawing_count']) ? max(0, intval($old['drawing_count'])) : 0;
+        }
+        $estimatedHours = array_key_exists('estimated_hours', $_POST)
+            ? $this->normalize_estimated_hours($_POST['estimated_hours'])
+            : (isset($old['estimated_hours']) ? $this->normalize_estimated_hours($old['estimated_hours']) : 0);
         $data = array(
             'project_id' => $_POST['project_id'],
             'title' => $title,
             'description' => $description,
             'status' => $status,
             'priority' => $priority,
+            'task_kind' => $taskKind,
+            'drawing_count' => $drawingCount,
+            'estimated_hours' => $estimatedHours,
+            'note' => array_key_exists('note', $_POST)
+                ? (string) $_POST['note']
+                : (isset($old['note']) ? (string) $old['note'] : ''),
             'assigned_to' => $assignedTo,
-            'estimated_hours' => isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : (isset($old['estimated_hours']) ? $old['estimated_hours'] : 0),
             'actual_hours' => isset($_POST['actual_hours']) ? $_POST['actual_hours'] : (isset($old['actual_hours']) ? $old['actual_hours'] : 0),
             'updated_at' => date('Y-m-d H:i:s')
         );
@@ -349,6 +693,7 @@ class Task extends ApplicationModel {
         if (isset($_POST['parent_id'])) {
             $data['parent_id'] = ($_POST['parent_id'] !== '' && $_POST['parent_id'] !== null) ? intval($_POST['parent_id']) : (isset($old['parent_id']) ? $old['parent_id'] : null);
         }
+        $this->applyDefaultTaskDrawingLinkToData($data);
         $result = $this->query_update($data, ['id' => $id]);
         
         // if ($result && $task['parent_id']) {
@@ -359,12 +704,16 @@ class Task extends ApplicationModel {
         // }
         if($result){
             // Log các trường thay đổi chính
-            $fields = ['title','description','status','priority','due_date','start_date','progress'];
+            $fields = ['title','description','status','priority','task_kind','drawing_count','estimated_hours','note','due_date','start_date','progress'];
             $labels = [
                 'title' => 'タスク名',
                 'description' => '説明',
                 'status' => 'ステータス',
                 'priority' => '優先度',
+                'task_kind' => '種別',
+                'drawing_count' => '図面数',
+                'estimated_hours' => '工数',
+                'note' => 'メモ',
                 'assigned_to' => '担当者',
                 'due_date' => '期限日',
                 'start_date' => '開始日',
@@ -410,6 +759,22 @@ class Task extends ApplicationModel {
                 // Log even if no notification is sent
                 $this->logTaskAction($id, 'assigned', '担当者変更', $oldAssignedTo, $newAssignedTo);
             }
+
+            $mergedTask = array_merge($old, $data);
+            $mergedTask['id'] = $id;
+            $syncOptions = array();
+            $oldDrawingCount = isset($old['drawing_count']) ? max(0, intval($old['drawing_count'])) : 0;
+            $oldStatus = isset($old['status']) ? (string) $old['status'] : '';
+            $statusChanged = $oldStatus !== (string) $status;
+            $drawingCountChanged = $oldDrawingCount !== $drawingCount;
+            $isDefaultTask = $this->isDefaultTaskTitleWithAutoDrawingLink($mergedTask['title'] ?? '')
+                || $this->isDefaultTaskTitleWithAutoDrawingLink($old['title'] ?? '');
+            if ($isDefaultTask || $drawingCountChanged || $statusChanged) {
+                if ($this->shouldRecalcDrawingPricesForTask($mergedTask, $old)) {
+                    $syncOptions['recalc_prices'] = true;
+                }
+            }
+            $this->syncTaskDrawingsForTask($id, $mergedTask, $syncOptions);
 
             return [
                 'status' => 'success'
@@ -468,9 +833,8 @@ class Task extends ApplicationModel {
                 'message' => 'このタスクにはサブタスクが存在するため、削除できません。'
             ];
         }
-        
+        $this->getDrawingModel()->deleteDrawingsForTask($id, $old);
 
-        
         $result = $this->query_delete(['id' => $id]);
        
         if($result){
@@ -509,6 +873,10 @@ class Task extends ApplicationModel {
 
             $assignedUserIds = $this->convertIdsToUserIds($old['assigned_to']);
             $this->notifyTaskDeleted($id, $old['title'], $projectId, $assignedUserIds);
+
+            if ($this->isDefaultTaskTitleWithAutoDrawingLink($old['title'] ?? '') && $projectId > 0) {
+                $this->getDrawingModel()->autoCalculateAllDrawingPricesForProject($projectId);
+            }
 
             return [
                 'status' => 'success'
@@ -573,15 +941,22 @@ class Task extends ApplicationModel {
 
         $result = $this->query_update($data, ['id' => $id]);
 
-        if ($result) {
-            $this->logTaskAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
-            if ($status === 'completed' && (isset($old['progress']) ? (int)$old['progress'] : 0) != 100) {
-                $this->logTaskAction($id, 'progress_updated', '進捗変更', isset($old['progress']) ? $old['progress'] : 0, 100);
-            }
-            return ['status' => 'success'];
-        } else {
+        if ($result < 0) {
             return ['status' => 'error', 'message' => 'Update failed'];
         }
+
+        $this->logTaskAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
+        if ($status === 'completed' && (isset($old['progress']) ? (int)$old['progress'] : 0) != 100) {
+            $this->logTaskAction($id, 'progress_updated', '進捗変更', isset($old['progress']) ? $old['progress'] : 0, 100);
+        }
+        $mergedTask = array_merge($old, $data);
+        $mergedTask['id'] = $id;
+        $syncOptions = array();
+        if ($this->shouldRecalcDrawingPricesForTask($mergedTask, $old)) {
+            $syncOptions['recalc_prices'] = true;
+        }
+        $this->syncTaskDrawingsForTask($id, $mergedTask, $syncOptions);
+        return ['status' => 'success'];
     }
 
     function updateProgress() {
@@ -605,10 +980,66 @@ class Task extends ApplicationModel {
         
         if ($result) {
             $this->logTaskAction($id, 'progress_updated', '進捗変更', $old['progress'], $progress);
+            $mergedTask = array_merge($old, $data);
+            $mergedTask['id'] = $id;
+            if ($this->shouldRecalcDrawingPricesForTask($mergedTask, $old)) {
+                $projectId = isset($old['project_id']) ? intval($old['project_id']) : 0;
+                if ($projectId > 0) {
+                    $this->getDrawingModel()->autoCalculateAllDrawingPricesForProject($projectId);
+                }
+            }
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'message' => 'Update failed'];
         }
+    }
+
+    /**
+     * Toggle task link to drawings list (drawing_count 0 = off, >0 = on). Project editors only.
+     */
+    function updateDrawingLink() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        if ($id <= 0 || $project_id <= 0) {
+            return ['status' => 'error', 'message' => 'Missing required parameters'];
+        }
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        $projectModel = new Project();
+        if (!$projectModel->canUserEditProject($project_id)) {
+            return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
+        }
+        $old = $this->getById($id);
+        if (!$old || intval($old['project_id']) !== $project_id) {
+            return ['status' => 'error', 'message' => 'Task not found'];
+        }
+        $linked = isset($_POST['linked']) && (string) $_POST['linked'] === '1';
+        if ($linked) {
+            $drawingCount = isset($_POST['drawing_count']) ? max(1, intval($_POST['drawing_count'])) : max(1, intval($old['drawing_count']));
+        } else {
+            $drawingCount = 0;
+        }
+        $data = array(
+            'drawing_count' => $drawingCount,
+            'updated_at' => date('Y-m-d H:i:s'),
+        );
+        $result = $this->query_update($data, ['id' => $id]);
+        // mysqli_affected_rows() is 0 when values are unchanged (e.g. duplicate change+blur requests).
+        if ($result < 0) {
+            return ['status' => 'error', 'message' => 'Update failed'];
+        }
+        if (intval($old['drawing_count']) !== $drawingCount) {
+            $this->logTaskAction($id, 'updated', '図面数を変更', $old['drawing_count'], $drawingCount);
+        }
+        $mergedTask = array_merge($old, $data);
+        $mergedTask['id'] = $id;
+        $syncOptions = array();
+        if ($this->shouldRecalcDrawingPricesForTask($mergedTask, $old)) {
+            $syncOptions['recalc_prices'] = true;
+        }
+        $this->syncTaskDrawingsForTask($id, $mergedTask, $syncOptions);
+        return ['status' => 'success', 'drawing_count' => $drawingCount];
     }
 
     function updateAssignee() {
@@ -628,7 +1059,14 @@ class Task extends ApplicationModel {
         if ($result) {
             // Sync task_assignees table
             $this->syncTaskAssignees($id, $assigned_to);
-           // $this->logTaskAction($id, 'progress_updated', '進捗変更', $old['progress'], $progress);
+            $task = $this->getById($id);
+            if ($task) {
+                $syncOptions = array();
+                if ($this->shouldRecalcDrawingPricesForTask($task)) {
+                    $syncOptions['recalc_prices'] = true;
+                }
+                $this->syncTaskDrawingsForTask($id, $task, $syncOptions);
+            }
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'message' => 'Update failed'];
@@ -780,6 +1218,331 @@ class Task extends ApplicationModel {
         }
     }
     
+
+    function updateEstimatedHours() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+
+        if ($id <= 0) {
+            return ['status' => 'error', 'message' => 'Missing task id'];
+        }
+
+        if (!$this->checkPermission($project_id, $id)) {
+            return ['status' => 'error', 'message' => 'このタスクを更新する権限がありません'];
+        }
+
+        $old = $this->getById($id);
+        if (!$old) {
+            return ['status' => 'error', 'message' => 'Task not found'];
+        }
+
+        $estimatedHours = $this->normalize_estimated_hours(isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0);
+        $data = array(
+            'estimated_hours' => $estimatedHours,
+            'updated_at' => date('Y-m-d H:i:s'),
+        );
+
+        $result = $this->query_update($data, ['id' => $id]);
+        if ($result < 0) {
+            return ['status' => 'error', 'message' => 'Update failed'];
+        }
+
+        $oldHours = isset($old['estimated_hours']) ? $this->normalize_estimated_hours($old['estimated_hours']) : 0;
+        if ($oldHours != $estimatedHours) {
+            $this->logTaskAction($id, 'updated', '工数を変更', $oldHours, $estimatedHours);
+        }
+
+        return ['status' => 'success', 'estimated_hours' => $estimatedHours];
+    }
+
+    function updateNote() {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+
+        if ($id <= 0) {
+            return ['status' => 'error', 'message' => 'Missing task id'];
+        }
+
+        if (!$this->checkPermission($project_id, $id)) {
+            return ['status' => 'error', 'message' => 'このタスクを更新する権限がありません'];
+        }
+
+        $old = $this->getById($id);
+        if (!$old) {
+            return ['status' => 'error', 'message' => 'Task not found'];
+        }
+
+        $note = array_key_exists('note', $_POST) ? (string) $_POST['note'] : (isset($old['note']) ? (string) $old['note'] : '');
+        $data = array(
+            'note' => $note,
+            'updated_at' => date('Y-m-d H:i:s'),
+        );
+
+        $result = $this->query_update($data, ['id' => $id]);
+        if ($result < 0) {
+            return ['status' => 'error', 'message' => 'Update failed'];
+        }
+
+        $oldNote = isset($old['note']) ? (string) $old['note'] : '';
+        if ($oldNote !== $note) {
+            $this->logTaskAction($id, 'updated', 'メモを変更', $oldNote, $note);
+        }
+
+        return ['status' => 'success'];
+    }
+
+    private function resolveTimerUserId() {
+        return isset($_SESSION['userid']) ? (string) $_SESSION['userid'] : '';
+    }
+
+    private function isCurrentUserAssignedToTask($task) {
+        if (!$task || empty($task['assigned_to'])) {
+            return false;
+        }
+
+        $currentUserId = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
+        if ($currentUserId <= 0) {
+            return false;
+        }
+
+        $assignedIds = array_map('intval', array_filter(array_map('trim', explode(',', $task['assigned_to']))));
+        return in_array($currentUserId, $assignedIds, true);
+    }
+
+    private function fetchActiveTaskTimerRow($userId) {
+        if ($userId === '') {
+            return null;
+        }
+
+        $query = sprintf(
+            "SELECT te.*, t.title AS task_title, t.project_id, t.estimated_hours, p.name AS project_name
+            FROM %stime_entries te
+            INNER JOIN %stasks t ON te.task_id = t.id
+            LEFT JOIN %sprojects p ON t.project_id = p.id
+            WHERE te.user_id = '%s' AND te.end_time IS NULL
+            ORDER BY te.id DESC
+            LIMIT 1",
+            DB_PREFIX,
+            DB_PREFIX,
+            DB_PREFIX,
+            $userId
+        );
+
+        return $this->fetchOne($query);
+    }
+
+    private function formatActiveTimerPayload($row) {
+        if (!$row) {
+            return null;
+        }
+
+        $startTime = isset($row['start_time']) ? $row['start_time'] : '';
+        $startTimestamp = ($startTime !== '' && $startTime !== null) ? intval(strtotime($startTime)) : 0;
+
+        return array(
+            'id' => intval($row['id']),
+            'task_id' => intval($row['task_id']),
+            'task_title' => isset($row['task_title']) ? $row['task_title'] : '',
+            'project_id' => intval($row['project_id']),
+            'project_name' => isset($row['project_name']) ? $row['project_name'] : '',
+            'start_time' => $startTime,
+            'start_timestamp' => $startTimestamp,
+            'estimated_hours' => isset($row['estimated_hours'])
+                ? $this->normalize_estimated_hours($row['estimated_hours'])
+                : 0,
+        );
+    }
+
+    function getActiveTaskTimer() {
+        $userId = $this->resolveTimerUserId();
+        if ($userId === '') {
+            return array('status' => 'success', 'active' => null);
+        }
+
+        $row = $this->fetchActiveTaskTimerRow($userId);
+        return array(
+            'status' => 'success',
+            'active' => $row ? $this->formatActiveTimerPayload($row) : null,
+        );
+    }
+
+    private function stopActiveTaskTimerEntry($active) {
+        if (!$active || empty($active['id'])) {
+            return array('status' => 'error', 'message' => '進行中の作業計測がありません');
+        }
+
+        $taskId = intval($active['task_id']);
+        $task = $this->getById($taskId);
+        if (!$task) {
+            return array('status' => 'error', 'message' => 'Task not found');
+        }
+
+        $endTime = date('Y-m-d H:i:s');
+        $startTs = strtotime($active['start_time']);
+        $endTs = strtotime($endTime);
+        $elapsedSeconds = max(0, $endTs - $startTs);
+        $hours = $this->normalize_estimated_hours($elapsedSeconds / 3600);
+
+        $this->table = DB_PREFIX . 'time_entries';
+        $updateResult = $this->query_update(
+            array(
+                'end_time' => $endTime,
+                'hours' => $hours,
+                'updated_at' => $endTime,
+            ),
+            array('id' => intval($active['id']))
+        );
+        $this->table = DB_PREFIX . 'tasks';
+
+        if ($updateResult < 0) {
+            return array('status' => 'error', 'message' => '作業計測の終了に失敗しました');
+        }
+
+        $task = $this->getById($taskId);
+        if (!$task) {
+            return array('status' => 'error', 'message' => 'Task not found');
+        }
+
+        $oldHours = $this->normalize_estimated_hours(isset($task['estimated_hours']) ? $task['estimated_hours'] : 0);
+        $newHours = $this->normalize_estimated_hours($oldHours + $hours);
+
+        $taskUpdate = $this->query_update(
+            array(
+                'estimated_hours' => $newHours,
+                'updated_at' => $endTime,
+            ),
+            array('id' => $taskId)
+        );
+
+        if ($taskUpdate < 0) {
+            return array('status' => 'error', 'message' => '作業計測の終了に失敗しました');
+        }
+
+        if ($oldHours != $newHours) {
+            $this->logTaskAction($taskId, 'updated', '作業時間を計測', $oldHours, $newHours);
+        }
+
+        return array(
+            'status' => 'success',
+            'task_id' => $taskId,
+            'hours_added' => $hours,
+            'estimated_hours' => $newHours,
+        );
+    }
+
+    function startTaskTimer() {
+        $taskId = isset($_POST['task_id']) ? intval($_POST['task_id']) : 0;
+
+        if ($taskId <= 0) {
+            return array('status' => 'error', 'message' => 'Missing task id');
+        }
+
+        $task = $this->getById($taskId);
+        if (!$task) {
+            return array('status' => 'error', 'message' => 'Task not found');
+        }
+
+        if (!$this->isCurrentUserAssignedToTask($task)) {
+            return array('status' => 'error', 'message' => 'このタスクの担当者のみ作業時間を計測できます');
+        }
+
+        $userId = $this->resolveTimerUserId();
+        if ($userId === '') {
+            return array('status' => 'error', 'message' => 'ログインが必要です');
+        }
+
+        $stoppedPreviousTask = null;
+        $active = $this->fetchActiveTaskTimerRow($userId);
+        if ($active) {
+            $payload = $this->formatActiveTimerPayload($active);
+            if (intval($active['task_id']) === $taskId) {
+                return array(
+                    'status' => 'success',
+                    'active' => $payload,
+                    'message' => 'すでに計測中です',
+                );
+            }
+
+            $stopResult = $this->stopActiveTaskTimerEntry($active);
+            if ($stopResult['status'] !== 'success') {
+                return $stopResult;
+            }
+
+            $stoppedPreviousTask = array(
+                'task_id' => intval($stopResult['task_id']),
+                'hours_added' => $stopResult['hours_added'],
+                'estimated_hours' => $stopResult['estimated_hours'],
+            );
+        }
+
+        $startTime = date('Y-m-d H:i:s');
+        $this->table = DB_PREFIX . 'time_entries';
+        $entryId = $this->query_insert(array(
+            'task_id' => $taskId,
+            'user_id' => $userId,
+            'start_time' => $startTime,
+            'created_at' => $startTime,
+        ));
+        $this->table = DB_PREFIX . 'tasks';
+
+        if (!$entryId) {
+            return array('status' => 'error', 'message' => '作業計測の開始に失敗しました');
+        }
+
+        $this->logTaskAction($taskId, 'updated', '作業時間の計測を開始', '', $startTime);
+        $activeRow = $this->fetchActiveTaskTimerRow($userId);
+
+        $response = array(
+            'status' => 'success',
+            'active' => $this->formatActiveTimerPayload($activeRow),
+        );
+        if ($stoppedPreviousTask) {
+            $response['stopped_previous_task'] = $stoppedPreviousTask;
+        }
+
+        return $response;
+    }
+
+    function stopTaskTimer() {
+        $requestedTaskId = isset($_POST['task_id']) ? intval($_POST['task_id']) : 0;
+        $userId = $this->resolveTimerUserId();
+
+        if ($userId === '') {
+            return array('status' => 'error', 'message' => 'ログインが必要です');
+        }
+
+        $active = $this->fetchActiveTaskTimerRow($userId);
+        if (!$active) {
+            return array('status' => 'error', 'message' => '進行中の作業計測がありません');
+        }
+
+        $taskId = intval($active['task_id']);
+
+        if ($requestedTaskId > 0 && $requestedTaskId !== $taskId) {
+            return array(
+                'status' => 'error',
+                'message' => '別のタスクで作業計測中です',
+                'active' => $this->formatActiveTimerPayload($active),
+            );
+        }
+
+        $task = $this->getById($taskId);
+        if (!$task) {
+            return array('status' => 'error', 'message' => 'Task not found');
+        }
+
+        if (!$this->isCurrentUserAssignedToTask($task)) {
+            return array('status' => 'error', 'message' => 'このタスクの担当者のみ作業時間を計測できます');
+        }
+
+        $result = $this->stopActiveTaskTimerEntry($active);
+        if ($result['status'] !== 'success') {
+            return $result;
+        }
+
+        $result['active'] = null;
+        return $result;
+    }
 
     function updatePriority() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -2431,6 +3194,10 @@ class Task extends ApplicationModel {
                 t.title,
                 t.status,
                 t.priority,
+                t.task_kind,
+                t.drawing_count,
+                t.estimated_hours,
+                t.note,
                 t.assigned_to,
                 t.created_by,
                 t.due_date,
@@ -2474,6 +3241,11 @@ class Task extends ApplicationModel {
 
         $tasks = [];
         $assignedUserIdSet = [];
+        $projectDrawingEditCache = [];
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        $projectModelForDrawing = new Project();
         foreach ($taskRows as $row) {
             // Parse assigned_to (internal user IDs, comma separated)
             $assignedIds = [];
@@ -2488,14 +3260,25 @@ class Task extends ApplicationModel {
                 }
             }
 
+            $projectIdForDrawing = isset($row['project_id']) ? intval($row['project_id']) : 0;
+            if ($projectIdForDrawing > 0 && !isset($projectDrawingEditCache[$projectIdForDrawing])) {
+                $projectDrawingEditCache[$projectIdForDrawing] = $projectModelForDrawing->canUserEditProject($projectIdForDrawing);
+            }
+
             $tasks[] = [
                 'id' => $row['id'],
                 'project_id' => $row['project_id'],
-                'project_number' => $row['project_number'],
+                'project_number' => isset($row['project_number']) ? $row['project_number'] : null,
                 'project_name' => $row['project_name'],
                 'title' => $row['title'],
                 'status' => $row['status'],
                 'priority' => $row['priority'],
+                'task_kind' => isset($row['task_kind']) ? $row['task_kind'] : '',
+                'drawing_count' => isset($row['drawing_count']) ? intval($row['drawing_count']) : 0,
+                'can_edit_drawing' => $projectIdForDrawing > 0 && !empty($projectDrawingEditCache[$projectIdForDrawing]),
+                'estimated_hours' => isset($row['estimated_hours']) ? $this->normalize_estimated_hours($row['estimated_hours']) : 0,
+                'note' => isset($row['note']) ? $row['note'] : '',
+                'assigned_to' => isset($row['assigned_to']) ? $row['assigned_to'] : '',
                 'due_date' => $row['due_date'],
                 'start_date' => $row['start_date'],
                 'progress' => $row['progress'],

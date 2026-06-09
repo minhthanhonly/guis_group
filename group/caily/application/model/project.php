@@ -1506,27 +1506,8 @@ class Project extends ApplicationModel {
         $this->notifyProjectCreated($project_id, $data['name'], array_column($listAllUsers, 'userid'));
         $this->logProjectAction($project_id, 'created', '案件作成', '', '');
 
-        // Khi tạo dự án con: tạo thêm 2 drawing mặc định với giá theo % tổng tiền dự án
-        if (!empty($data['parent_project_id']) && (int)$data['parent_project_id'] > 0) {
-            $amount = isset($data['amount']) ? floatval($data['amount']) : 0;
-            require_once __DIR__ . '/drawing.php';
-            $drawingModel = new Drawing();
-            $defaultDrawings = [
-                ['name' => 'お客様との連絡・調整・納品対応', 'pct' => 0.15],
-                ['name' => '全図面のチェック・確認作業', 'pct' => 0.20],
-            ];
-            foreach ($defaultDrawings as $d) {
-                $price = round($amount * $d['pct'], 2);
-                $drawingModel->query_insert([
-                    'project_id' => (int)$project_id,
-                    'name' => $d['name'],
-                    'status' => 'draft',
-                    'price' => $price,
-                    'created_at' => date('Y-m-d H:i:s'),
-                    'updated_at' => date('Y-m-d H:i:s')
-                ]);
-            }
-        }
+        // Khi tạo dự án con: tạo 2 task mặc định (đồng bộ 2 bản vẽ kèm giá theo % tổng tiền)
+        $this->createChildProjectDefaultTasks($project_id, $data);
 
         return [
             'status' => 'success',
@@ -1741,19 +1722,7 @@ class Project extends ApplicationModel {
             if ($isChild && (abs($oldAmount - $newAmount) > 0.0001)) {
                 require_once __DIR__ . '/drawing.php';
                 $drawingModel = new Drawing();
-                $defaultDrawings = [
-                    ['name' => 'お客様との連絡・調整・納品対応', 'pct' => 0.15],
-                    ['name' => '全図面のチェック・確認作業', 'pct' => 0.20],
-                ];
-                foreach ($defaultDrawings as $d) {
-                    $rows = $drawingModel->getByNameAndProject($d['name'], $id);
-                    if (!empty($rows)) {
-                        $price = round($newAmount * $d['pct'], 2);
-                        foreach ($rows as $row) {
-                            $drawingModel->query_update(['price' => $price, 'updated_at' => date('Y-m-d H:i:s')], ['id' => $row['id']]);
-                        }
-                    }
-                }
+                $drawingModel->autoCalculateAllDrawingPricesForProject($id);
             }
         }
 
@@ -2337,7 +2306,7 @@ class Project extends ApplicationModel {
             c.name as contact_name, c.company_name, c.department as branch_name, c.category_id as category_id, 
             CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite,
             (SELECT COUNT(*) FROM " . DB_PREFIX . "tasks WHERE project_id = p.id) as task_count,
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "project_drawings WHERE project_id = p.id) as drawing_count,
+            (SELECT COALESCE(SUM(COALESCE(pd.drawing_count, 1)), 0) FROM " . DB_PREFIX . "project_drawings pd WHERE pd.project_id = p.id) as drawing_count,
             (SELECT COUNT(*) FROM " . DB_PREFIX . "project_members WHERE project_id = p.id) as member_count
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
@@ -5419,6 +5388,7 @@ class Project extends ApplicationModel {
         }
         $new_id = $this->query_insert($data);
         if ($new_id) {
+            $this->createChildProjectDefaultTasks($new_id, $data);
             $hash['status'] = 'success';
             $hash['message_code'] = 'created';
             $hash['id'] = (int) $new_id;
@@ -5426,6 +5396,58 @@ class Project extends ApplicationModel {
             $hash['message_code'] = 'insert failed';
         }
         return $hash;
+    }
+
+    /**
+     * Tạo 2 task mặc định (+ bản vẽ đồng bộ) khi tạo dự án con.
+     */
+    private function createChildProjectDefaultTasks($project_id, $data) {
+        if (empty($data['parent_project_id']) || (int) $data['parent_project_id'] <= 0) {
+            return;
+        }
+
+        $amount = isset($data['amount']) ? floatval($data['amount']) : 0;
+        $createdBy = $this->resolveProjectCreatorUserId($data);
+
+        if (!class_exists('Task')) {
+            require_once __DIR__ . '/task.php';
+        }
+        $taskModel = new Task();
+        $taskModel->createDefaultTasksForProject($project_id, array(
+            'amount' => $amount,
+            'created_by' => $createdBy,
+        ));
+    }
+
+    /**
+     * Resolve numeric user id of the child project creator (projects.created_by stores userid string).
+     */
+    private function resolveProjectCreatorUserId($data = null) {
+        if (isset($_SESSION['user_id']) && intval($_SESSION['user_id']) > 0) {
+            return intval($_SESSION['user_id']);
+        }
+
+        $userid = '';
+        if (is_array($data) && !empty($data['created_by'])) {
+            $userid = trim((string) $data['created_by']);
+        } elseif (isset($_SESSION['userid'])) {
+            $userid = trim((string) $_SESSION['userid']);
+        }
+
+        if ($userid === '') {
+            return 0;
+        }
+
+        $user = $this->fetchOne(sprintf(
+            "SELECT id FROM %suser WHERE userid = '%s' LIMIT 1",
+            DB_PREFIX,
+            $this->quote($userid)
+        ));
+        if ($user && !empty($user['id'])) {
+            return intval($user['id']);
+        }
+
+        return 0;
     }
 
     /**

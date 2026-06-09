@@ -1,5 +1,34 @@
 const { createApp } = Vue;
 
+const SERVER_TASK_TIMEZONE = 'Asia/Tokyo';
+const VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
+const TASK_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
+const TASK_DATETIME_JA_DISPLAY_FORMAT = 'YYYY年M月D日 HH:mm';
+const TASK_DATETIME_PARSE_FORMATS = [
+    'YYYY-MM-DD HH:mm:ss',
+    'YYYY-MM-DD HH:mm',
+    'YYYY/M/D HH:mm',
+    'YYYY/MM/DD HH:mm',
+    'YYYY/M/D H:mm',
+    'YYYY/MM/DD H:mm'
+];
+
+const OVERVIEW_TASK_KINDS_WITHOUT_DRAWING_LINK = ['修正(エラー)', 'チェック', '検討', '相談・会議', '連絡'];
+const OVERVIEW_DEFAULT_TASKS_WITHOUT_DRAWING_COUNT = [
+    'お客様との連絡・調整・納品対応',
+    '全図面のチェック・確認作業'
+];
+
+const OVERVIEW_DEFAULT_TASK_KINDS = [
+    { value: '新規作成', label: '新規作成', i18nKey: '新規作成', color: 'success' },
+    { value: '修正(エラー)', label: '修正(エラー)', i18nKey: '修正(エラー)', color: 'danger' },
+    { value: '修正(変更)', label: '修正(変更)', i18nKey: '修正(変更)', color: 'warning' },
+    { value: 'チェック', label: 'チェック', i18nKey: 'チェック', color: 'primary' },
+    { value: '連絡', label: '連絡', i18nKey: '連絡', color: 'info' },
+    { value: '検討', label: '検討', i18nKey: '検討', color: 'secondary' },
+    { value: '相談・会議', label: '相談・会議', i18nKey: '相談・会議', color: 'dark' }
+];
+
 createApp({
     data() {
         // Set default filters based on user role
@@ -24,19 +53,20 @@ createApp({
                 myTask: defaultMyTask // Default to true if not project manager
             },
             taskStatuses: [
-                { value: 'todo', label: '未開始', color: 'secondary' },
-                { value: 'in-progress', label: '進行中', color: 'primary' },
-                { value: 'confirming', label: '確認中', color: 'warning' },
-                { value: 'paused', label: '一時停止', color: 'warning' },
-                { value: 'completed', label: '完了', color: 'success' },
-                { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+                { value: 'todo', label: '未開始', i18nKey: '未開始', color: 'secondary' },
+                { value: 'in-progress', label: '進行中', i18nKey: '進行中', color: 'primary' },
+                { value: 'confirming', label: '確認中', i18nKey: '確認中', color: 'warning' },
+                { value: 'paused', label: '一時停止', i18nKey: '一時停止', color: 'warning' },
+                { value: 'completed', label: '完了', i18nKey: '完了', color: 'success' },
+                { value: 'cancelled', label: 'キャンセル', i18nKey: 'キャンセル', color: 'danger' }
             ],
             taskPriorities: [
-                { value: 'low', label: '低', color: 'secondary' },
-                { value: 'medium', label: '中', color: 'primary' },
-                { value: 'high', label: '高', color: 'warning' },
-                { value: 'urgent', label: '緊急', color: 'danger' }
-            ]
+                { value: 'low', label: '低', i18nKey: '低', color: 'secondary' },
+                { value: 'medium', label: '中', i18nKey: '中', color: 'primary' },
+                { value: 'high', label: '高', i18nKey: '高', color: 'warning' },
+                { value: 'urgent', label: '緊急', i18nKey: '緊急', color: 'danger' }
+            ],
+            taskKinds: OVERVIEW_DEFAULT_TASK_KINDS.slice()
         };
     },
     computed: {
@@ -63,6 +93,74 @@ createApp({
         }
     },
     methods: {
+        $t(label) {
+            if (typeof i18next !== 'undefined' && i18next.isInitialized) {
+                return i18next.t(label) || label;
+            }
+            return label;
+        },
+        normalizeTaskKind(value) {
+            const v = (value || '').trim();
+            return this.taskKinds.some(k => k.value === v) ? v : '';
+        },
+        getTaskKindDisplayValue(task) {
+            return this.normalizeTaskKind(task && task.task_kind);
+        },
+        getTaskKindLabel(value) {
+            const normalized = this.normalizeTaskKind(value);
+            if (!normalized) return '';
+            const kind = this.taskKinds.find(k => k.value === normalized);
+            return kind ? this.$t(kind.i18nKey || kind.label) : (value || '');
+        },
+        getTaskKindBadgeClass(value) {
+            const normalized = this.normalizeTaskKind(value);
+            if (!normalized) return 'bg-label-secondary';
+            const kind = this.taskKinds.find(k => k.value === normalized);
+            const color = kind && kind.color ? kind.color : 'secondary';
+            return 'bg-label-' + color;
+        },
+        isDrawingLinkVisibleForTask(task) {
+            if (!task) return false;
+            const kind = this.getTaskKindDisplayValue(task);
+            return OVERVIEW_TASK_KINDS_WITHOUT_DRAWING_LINK.indexOf(kind) === -1;
+        },
+        isTaskLinkedToDrawings(task) {
+            return this.getTaskDrawingCount(task) > 0;
+        },
+        getTaskDrawingCount(task) {
+            if (!task) return 0;
+            const n = parseInt(task.drawing_count, 10);
+            return Number.isNaN(n) ? 0 : Math.max(0, n);
+        },
+        isDefaultTaskWithoutDrawingCount(task) {
+            if (!task) return false;
+            const title = (task.title || '').trim();
+            return OVERVIEW_DEFAULT_TASKS_WITHOUT_DRAWING_COUNT.indexOf(title) !== -1;
+        },
+        shouldShowTaskDrawingCount(task) {
+            if (!task || this.isDefaultTaskWithoutDrawingCount(task)) return false;
+            if (!this.isDrawingLinkVisibleForTask(task)) return false;
+            return this.getTaskDrawingCount(task) > 0;
+        },
+        formatEstimatedHours(value) {
+            const n = parseFloat(value);
+            if (Number.isNaN(n) || n <= 0) return '';
+            const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+            return formatted + 'h';
+        },
+        decodeHtmlEntities(str) {
+            const txt = document.createElement('textarea');
+            txt.innerHTML = str;
+            return txt.value;
+        },
+        getTaskNoteSnippet(note, maxLen) {
+            if (!note) return '';
+            const decoded = this.decodeHtmlEntities(String(note));
+            const text = decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+            if (!text) return '';
+            const limit = maxLen || 28;
+            return text.length <= limit ? text : text.substring(0, limit) + '…';
+        },
         // Kiểm tra 1 task có thỏa mãn filter hiện tại không
         passesTaskFilters(task) {
             // Department filter on task
@@ -230,7 +328,11 @@ createApp({
         },
         getStatusLabel(status) {
             const s = this.taskStatuses.find(s => s.value === status);
-            return s ? s.label : status;
+            if (!s) return status || '—';
+            if (typeof this.$t === 'function' && s.i18nKey) {
+                return this.$t(s.i18nKey);
+            }
+            return s.label;
         },
         getStatusColor(status) {
             const s = this.taskStatuses.find(s => s.value === status);
@@ -238,21 +340,77 @@ createApp({
         },
         getPriorityLabel(priority) {
             const p = this.taskPriorities.find(p => p.value === priority);
-            return p ? p.label : priority;
+            if (!p) return priority || '—';
+            if (typeof this.$t === 'function' && p.i18nKey) {
+                return this.$t(p.i18nKey);
+            }
+            return p.label;
         },
         getPriorityColor(priority) {
             const p = this.taskPriorities.find(p => p.value === priority);
             return p ? p.color : 'secondary';
         },
+        isVietnameseLocale() {
+            return typeof i18next !== 'undefined'
+                && i18next.isInitialized
+                && String(i18next.language || '').startsWith('vi');
+        },
+        getTaskDisplayTimezone() {
+            return this.isVietnameseLocale() ? VIETNAM_TASK_TIMEZONE : SERVER_TASK_TIMEZONE;
+        },
+        getTaskDateTimeDisplayFormat() {
+            return this.isVietnameseLocale()
+                ? TASK_DATETIME_MOMENT_FORMAT
+                : TASK_DATETIME_JA_DISPLAY_FORMAT;
+        },
+        parseTaskDateTime(date, timezone = SERVER_TASK_TIMEZONE) {
+            if (!date) return null;
+            const raw = String(date).trim();
+            if (!raw || raw === '0000-00-00 00:00:00' || raw === '0000-00-00') return null;
+            if (typeof moment === 'undefined') return null;
+            if (moment.tz) {
+                for (const fmt of TASK_DATETIME_PARSE_FORMATS) {
+                    const parsed = moment.tz(raw, fmt, timezone);
+                    if (parsed.isValid()) return parsed;
+                }
+                const loose = moment.tz(raw, timezone);
+                return loose.isValid() ? loose : null;
+            }
+            const fallback = moment(raw, TASK_DATETIME_PARSE_FORMATS, true);
+            return fallback.isValid() ? fallback : null;
+        },
+        formatTaskDateTimeInDisplayTz(date) {
+            const parsed = this.parseTaskDateTime(date);
+            if (!parsed) return '-';
+            const localized = moment.tz
+                ? parsed.clone().tz(this.getTaskDisplayTimezone())
+                : parsed;
+            return localized.format(this.getTaskDateTimeDisplayFormat());
+        },
         formatDate(dateString) {
-            if (!dateString) return '-';
-            return moment(dateString).format('M月D日 H:mm');
+            return this.formatTaskDateTimeInDisplayTz(dateString);
         },
         isTaskOverdue(task) {
             if (!task || !task.due_date) return false;
             if (task.status === 'completed' || task.status === 'cancelled') return false;
             const due = moment.tz(task.due_date, 'Asia/Tokyo');
             return moment().tz('Asia/Tokyo').isAfter(due, 'minute');
+        },
+        formatOverdueDurationText(hours, minutes) {
+            const isVi = this.isVietnameseLocale();
+            const overdueLabel = this.$t('期限切れ');
+            const hourLabel = this.$t('時間');
+            const minuteLabel = this.$t('分');
+            const fmt = (v, l) => (isVi ? `${v} ${l}` : `${v}${l}`);
+            const join = (parts) => (isVi ? parts.filter(Boolean).join(' ') : parts.filter(Boolean).join(''));
+
+            let durationPart = '';
+            if (hours > 0) {
+                durationPart = join([fmt(hours, hourLabel), fmt(minutes, minuteLabel)]);
+            } else {
+                durationPart = fmt(minutes, minuteLabel);
+            }
+            return `${overdueLabel}: ${durationPart}`;
         },
         getOverdueTooltip(task) {
             if (!this.isTaskOverdue(task)) return '';
@@ -261,10 +419,7 @@ createApp({
             const duration = moment.duration(now.diff(due));
             const hours = Math.floor(duration.asHours());
             const minutes = Math.floor(duration.asMinutes()) % 60;
-            if (hours > 0) {
-                return `期限切れ: ${hours}時間${minutes}分`;
-            }
-            return `期限切れ: ${minutes}分`;
+            return this.formatOverdueDurationText(hours, minutes);
         },
         isTaskDueExceedsProjectDue(task) {
             if (!task || !task.due_date) return false;
@@ -276,7 +431,7 @@ createApp({
         },
         getTaskExceedsProjectDueTooltip(task) {
             if (!this.isTaskDueExceedsProjectDue(task)) return '';
-            return 'タスクの期限がプロジェクトの期限を超えています';
+            return this.$t('タスクの期限がプロジェクトの期限を超えています');
         },
         hasPeriodWarning(task) {
             return this.isTaskOverdue(task) || this.isTaskDueExceedsProjectDue(task);
@@ -290,9 +445,9 @@ createApp({
         initTooltips() {
             if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
                 document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
-                    if (!bootstrap.Tooltip.getInstance(el)) {
-                        new bootstrap.Tooltip(el);
-                    }
+                    const instance = bootstrap.Tooltip.getInstance(el);
+                    if (instance) instance.dispose();
+                    new bootstrap.Tooltip(el);
                 });
             }
         }
@@ -303,7 +458,19 @@ createApp({
             this.filters.myTask = true;
             this.filters.department_id = '';
         }
+        this._onI18nLanguageChanged = () => {
+            this.$forceUpdate();
+            this.$nextTick(() => this.initTooltips());
+        };
+        if (typeof i18next !== 'undefined' && i18next.on) {
+            i18next.on('languageChanged', this._onI18nLanguageChanged);
+        }
         this.loadOverview();
+    },
+    beforeUnmount() {
+        if (typeof i18next !== 'undefined' && i18next.off && this._onI18nLanguageChanged) {
+            i18next.off('languageChanged', this._onI18nLanguageChanged);
+        }
     }
 }).mount('#app');
 

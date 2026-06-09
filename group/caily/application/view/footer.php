@@ -29,7 +29,8 @@
 <script src="<?=$root?>assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js"></script>
 <script src="<?=$root?>assets/vendor/libs/flatpickr/flatpickr.js"></script>
 <script src="<?=$root?>assets/vendor/libs/flatpickr/monthSelect.js"></script>
-<script src="<?=$root?>assets/vendor/libs/flatpickr/ja.js"></script> 
+<script src="<?=$root?>assets/vendor/libs/flatpickr/ja.js"></script>
+<script src="<?=$root?>assets/vendor/libs/flatpickr/vi.js"></script>
 
 
 
@@ -38,8 +39,11 @@
   window.currentUserName = <?= json_encode($_SESSION['userid'] ?? '') ?>;
 </script>
 
+<script src="<?=$root?>assets/vendor/libs/quill/quill.js"></script>
 <script src="<?=$root?>assets/js/todo-modal.js?v=<?=CACHE_VERSION?>"></script>
 <script src="<?=$root?>assets/js/main.js?v=<?=CACHE_VERSION?>"></script>
+<script src="<?=$root?>assets/js/task-timer.js?v=<?=CACHE_VERSION?>"></script>
+<link rel="stylesheet" href="<?=$root?>assets/css/task-timer.css?v=<?=CACHE_VERSION?>">
 <script src="<?=$root?>assets/js/app-chat.js?v=<?=CACHE_VERSION?>"></script>
 <link rel="stylesheet" href="<?=$root?>assets/css/app-chat.css?v=<?=CACHE_VERSION?>">
 

@@ -3,13 +3,65 @@
  * Handles "My Tasks" and "Custom Todos" tabs
  */
 
-document.addEventListener('DOMContentLoaded', function() {
-    if (document.getElementById('todoApp')) {
-        const todoApp = Vue.createApp({
+const TODO_TASK_KINDS_WITHOUT_DRAWING_LINK = ['修正(エラー)', 'チェック', '検討', '相談・会議', '連絡'];
+
+const TODO_SERVER_TIMEZONE = 'Asia/Tokyo';
+const TODO_VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
+const TODO_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
+const TODO_DATETIME_JA_DISPLAY_FORMAT = 'YYYY年M月D日 HH:mm';
+const TODO_DATETIME_PARSE_FORMATS = [
+    'YYYY-MM-DD HH:mm:ss',
+    'YYYY-MM-DD HH:mm',
+    'YYYY/M/D HH:mm',
+    'YYYY/MM/DD HH:mm',
+    'YYYY/M/D H:mm',
+    'YYYY/MM/DD H:mm',
+    'YYYY-MM-DD',
+    'YYYY/M/D'
+];
+
+const TODO_DEFAULT_TASK_KINDS = [
+    { value: '新規作成', label: '新規作成', color: 'success' },
+    { value: '修正(エラー)', label: '修正(エラー)', color: 'danger' },
+    { value: '修正(変更)', label: '修正(変更)', color: 'warning' },
+    { value: 'チェック', label: 'チェック', color: 'primary' },
+    { value: '連絡', label: '連絡', color: 'info' },
+    { value: '検討', label: '検討', color: 'secondary' },
+    { value: '相談・会議', label: '相談・会議', color: 'dark' }
+];
+
+function todoNormalizeTaskKind(value, taskKinds) {
+    const kinds = taskKinds || TODO_DEFAULT_TASK_KINDS;
+    const v = (value || '').trim();
+    return kinds.some(function (k) { return k.value === v; }) ? v : '';
+}
+
+function todoGetTaskKindLabel(value, taskKinds, tFn) {
+    const normalized = todoNormalizeTaskKind(value, taskKinds);
+    if (!normalized) return '—';
+    const kind = (taskKinds || TODO_DEFAULT_TASK_KINDS).find(function (k) { return k.value === normalized; });
+    if (!kind) return value || '—';
+    return tFn ? tFn(kind.label, kind.label) : kind.label;
+}
+
+function todoGetTaskKindBadgeClass(value, taskKinds) {
+    const normalized = todoNormalizeTaskKind(value, taskKinds);
+    if (!normalized) return 'bg-label-secondary';
+    const kind = (taskKinds || TODO_DEFAULT_TASK_KINDS).find(function (k) { return k.value === normalized; });
+    const color = kind && kind.color ? kind.color : 'secondary';
+    return 'bg-label-' + color;
+}
+
+function mountTodoApp() {
+    if (!document.getElementById('todoApp') || typeof Vue === 'undefined') {
+        return;
+    }
+    const todoApp = Vue.createApp({
             data() {
                 return {
                     activeTab: 'tasks',
                     tasks: [],
+                    usersById: {},
                     todos: [],
                     newTodo: {
                         title: '',
@@ -23,12 +75,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     fp: null, // Flatpickr for new-todo date
                     fpEdit: null, // Flatpickr for inline-edit deadline
                     taskStatuses: [
-                        { value: 'todo', label: '未開始', color: 'secondary' },
-                        { value: 'in-progress', label: '進行中', color: 'primary' },
-                        { value: 'confirming', label: '確認中', color: 'warning' },
-                        { value: 'paused', label: '一時停止', color: 'warning' },
-                        { value: 'completed', label: '完了', color: 'success' },
-                        { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+                        { value: 'todo', label: '未開始', i18nKey: '未開始', color: 'secondary' },
+                        { value: 'in-progress', label: '進行中', i18nKey: '進行中', color: 'primary' },
+                        { value: 'confirming', label: '確認中', i18nKey: '確認中', color: 'warning' },
+                        { value: 'paused', label: '一時停止', i18nKey: '一時停止', color: 'warning' },
+                        { value: 'completed', label: '完了', i18nKey: '完了', color: 'success' },
+                        { value: 'cancelled', label: 'キャンセル', i18nKey: 'キャンセル', color: 'danger' }
                     ],
                     taskPriorities: [
                         { value: 'low', label: '低', color: 'secondary' },
@@ -36,13 +88,27 @@ document.addEventListener('DOMContentLoaded', function() {
                         { value: 'high', label: '高', color: 'warning' },
                         { value: 'urgent', label: '緊急', color: 'danger' }
                     ],
+                    taskKinds: TODO_DEFAULT_TASK_KINDS.slice(),
+                    progressOptions: Array.from({ length: 21 }, (_, i) => i * 5),
                     refreshIntervalId: null,
                     editingTodoId: null,
                     editingTodoTitle: '',
                     editingTodoPriority: 50,
                     editingTodoTerm: '',
                     editingTodoLink: '',
-                    editingTodoComment: ''
+                    editingTodoComment: '',
+                    taskTimerTogglingTaskIds: {},
+                    drawingCountSavingTaskIds: {},
+                    showTaskNoteModal: false,
+                    taskNoteModal: {
+                        taskId: null,
+                        projectId: null,
+                        content: '',
+                        canEdit: false
+                    },
+                    quillTaskNoteInstance: null,
+                    quillTaskNoteContent: '',
+                    quillTaskNoteInitTimer: null
                 };
             },
             computed: {
@@ -57,11 +123,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 const dateInput = document.getElementById('new-todo-date');
                 if (dateInput && typeof flatpickr !== 'undefined') {
                     this.fp = flatpickr(dateInput, {
-                        dateFormat: "Y-m-d H:i",
+                        dateFormat: 'Y/m/d H:i',
                         enableTime: true,
                         time_24hr: true,
-                        minDate: "today",
-                        locale: "ja",
+                        minDate: 'today',
+                        locale: this.getFlatpickrLocaleName(),
                         onChange: (selectedDates, dateStr) => {
                             this.newTodo.deadline = dateStr;
                         }
@@ -72,18 +138,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 const offcanvasElement = document.getElementById('offcanvasTodo');
                 if (offcanvasElement) {
                     offcanvasElement.addEventListener('show.bs.offcanvas', () => {
-                        Promise.all([this.loadTasks(), this.loadTodos()]).then(() => this.applyDefaultTab());
+                        Promise.all([this.loadTasks(), this.loadTodos()]).then(() => {
+                            this.applyDefaultTab();
+                            this.$nextTick(() => this.initMyTaskStatusDropdowns());
+                        });
                     });
                 }
                 // Refresh when a todo was added from context menu (e.g. project list/detail)
                 this._onTodoAddedFromContextBound = () => { this.loadTodos(); };
                 document.body.addEventListener('todo-added-from-context', this._onTodoAddedFromContextBound);
+                this._onTaskTimerChangedBound = (event) => this.onTaskTimerChanged(event);
+                document.addEventListener('task-timer-changed', this._onTaskTimerChangedBound);
                 // Refresh data every 1 minute (skip when inline editing a todo)
                 this.refreshIntervalId = setInterval(() => {
                     if (this.editingTodoId) return;
                     this.loadTasks();
                     this.loadTodos();
                 }, 60000);
+
+                this._onI18nLanguageChanged = () => {
+                    this.$forceUpdate();
+                    this.initTodoFlatpickrLocales();
+                };
+                if (typeof i18next !== 'undefined' && i18next.on) {
+                    i18next.on('languageChanged', this._onI18nLanguageChanged);
+                }
+            },
+            updated() {
+                this.$nextTick(() => this.initMyTaskStatusDropdowns());
             },
             beforeUnmount() {
                 if (this.refreshIntervalId) {
@@ -93,7 +175,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (this._onTodoAddedFromContextBound) {
                     document.body.removeEventListener('todo-added-from-context', this._onTodoAddedFromContextBound);
                 }
+                if (this._onTaskTimerChangedBound) {
+                    document.removeEventListener('task-timer-changed', this._onTaskTimerChangedBound);
+                }
                 this.destroyFpEdit();
+                this.destroyQuillTaskNoteEditor();
+                if (typeof i18next !== 'undefined' && i18next.off && this._onI18nLanguageChanged) {
+                    i18next.off('languageChanged', this._onI18nLanguageChanged);
+                }
             },
             methods: {
                 /**
@@ -136,11 +225,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Response structure: { tasks: [...], ... }
                         if (response.data && response.data.tasks && Array.isArray(response.data.tasks)) {
-                             this.tasks = response.data.tasks;
-                             this.myTaskCount = this.tasks.length;
+                            this.tasks = response.data.tasks;
+                            this.myTaskCount = this.tasks.length;
+                            this.usersById = {};
+                            if (Array.isArray(response.data.users)) {
+                                response.data.users.forEach((user) => {
+                                    if (user && user.id != null) {
+                                        this.usersById[user.id] = user;
+                                    }
+                                });
+                            }
                         } else {
                             this.tasks = [];
                             this.myTaskCount = 0;
+                            this.usersById = {};
                         }
                     } catch (error) {
                         console.error('Failed to load tasks', error);
@@ -148,7 +246,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     } finally {
                         this.loadingTasks = false;
                         this.updateTotalCount();
+                        this.$nextTick(() => this.initMyTaskStatusDropdowns());
                     }
+                },
+
+                initMyTaskStatusDropdowns() {
+                    if (typeof bootstrap === 'undefined' || !bootstrap.Dropdown) return;
+                    const root = document.getElementById('offcanvasTodo');
+                    if (!root) return;
+                    root.querySelectorAll('.my-task-status-dropdown [data-bs-toggle="dropdown"]').forEach((el) => {
+                        const existing = bootstrap.Dropdown.getInstance(el);
+                        if (existing) {
+                            existing.dispose();
+                        }
+                        new bootstrap.Dropdown(el);
+                    });
                 },
 
                 /**
@@ -262,10 +374,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!el || typeof flatpickr === 'undefined') return;
                     const input = el.$el || el;
                     this.fpEdit = flatpickr(input, {
-                        dateFormat: "Y-m-d H:i",
+                        dateFormat: 'Y/m/d H:i',
                         enableTime: true,
                         time_24hr: true,
-                        locale: "ja",
+                        locale: this.getFlatpickrLocaleName(),
                         allowInput: false,
                         defaultDate: this.editingTodoTerm || null,
                         onChange: (selectedDates, dateStr) => {
@@ -427,12 +539,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 
                 getStatusLabel(status) {
-                    const s = this.taskStatuses.find(s => s.value === status);
-                    return s ? s.label : status;
+                    const s = this.taskStatuses.find(item => item.value === status);
+                    if (!s) return status || '—';
+                    return this.t(s.i18nKey || s.label, s.label);
+                },
+
+                getStatusButtonClass(status) {
+                    const s = this.taskStatuses.find(item => item.value === status);
+                    return `btn-${s?.color || 'secondary'}`;
                 },
 
                 getStatusColor(status) {
-                    const s = this.taskStatuses.find(s => s.value === status);
+                    const s = this.taskStatuses.find(item => item.value === status);
                     return s ? s.color : 'secondary';
                 },
 
@@ -444,6 +562,438 @@ document.addEventListener('DOMContentLoaded', function() {
                 getPriorityColor(priority) {
                     const p = this.taskPriorities.find(p => p.value === priority);
                     return p ? p.color : 'secondary';
+                },
+
+                normalizeTaskKind(value) {
+                    return todoNormalizeTaskKind(value, this.taskKinds);
+                },
+
+                getTaskKindLabel(value) {
+                    return todoGetTaskKindLabel(value, this.taskKinds, this.t.bind(this));
+                },
+
+                getTaskKindBadgeClass(value) {
+                    return todoGetTaskKindBadgeClass(value, this.taskKinds);
+                },
+
+                getTaskKindDisplayValue(task) {
+                    return this.normalizeTaskKind(task && task.task_kind);
+                },
+
+                isDrawingLinkVisibleForTask(task) {
+                    if (!task) return false;
+                    const kind = this.getTaskKindDisplayValue(task);
+                    return TODO_TASK_KINDS_WITHOUT_DRAWING_LINK.indexOf(kind) === -1;
+                },
+
+                canEditDrawingLink(task) {
+                    return !!(task && task.can_edit_drawing);
+                },
+
+                isTaskLinkedToDrawings(task) {
+                    if (!task) return false;
+                    const n = parseInt(task.drawing_count, 10);
+                    return !Number.isNaN(n) && n > 0;
+                },
+
+                isDrawingCountSaving(taskId) {
+                    return !!(taskId && this.drawingCountSavingTaskIds[taskId]);
+                },
+
+                setDrawingCountSaving(taskId, saving) {
+                    if (!taskId) return;
+                    if (saving) {
+                        this.drawingCountSavingTaskIds = Object.assign({}, this.drawingCountSavingTaskIds, { [taskId]: true });
+                    } else {
+                        const next = Object.assign({}, this.drawingCountSavingTaskIds);
+                        delete next[taskId];
+                        this.drawingCountSavingTaskIds = next;
+                    }
+                },
+
+                applyTaskDrawingCount(taskId, drawingCount) {
+                    const count = parseInt(drawingCount, 10);
+                    if (!taskId || Number.isNaN(count)) return;
+                    const task = (this.tasks || []).find(function (t) { return t.id === taskId; });
+                    if (task) {
+                        task.drawing_count = count;
+                    }
+                },
+
+                async saveTaskDrawingCount(task, value) {
+                    if (!task || !task.id || !this.canEditDrawingLink(task) || !this.isTaskLinkedToDrawings(task)) {
+                        return;
+                    }
+                    const n = parseInt(value, 10);
+                    const drawingCount = Number.isNaN(n) || n < 1 ? 1 : n;
+                    const currentCount = parseInt(task.drawing_count, 10);
+                    if (currentCount === drawingCount || this.isDrawingCountSaving(task.id)) {
+                        return;
+                    }
+                    this.setDrawingCountSaving(task.id, true);
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', task.id);
+                        formData.append('project_id', task.project_id);
+                        formData.append('linked', '1');
+                        formData.append('drawing_count', drawingCount);
+                        const response = await axios.post('/api/index.php?model=task&method=updateDrawingLink', formData);
+                        if (response.data && response.data.status === 'success') {
+                            const savedCount = response.data.drawing_count != null ? response.data.drawing_count : drawingCount;
+                            this.applyTaskDrawingCount(task.id, savedCount);
+                        } else if (typeof showMessage === 'function') {
+                            showMessage(response.data?.message || this.t('図面の更新に失敗しました', '図面の更新に失敗しました'), true);
+                        }
+                    } catch (error) {
+                        if (typeof showMessage === 'function') {
+                            showMessage(this.t('図面の更新に失敗しました', '図面の更新に失敗しました'), true);
+                        }
+                    } finally {
+                        this.setDrawingCountSaving(task.id, false);
+                    }
+                },
+
+                async toggleTaskDrawingLink(task, event) {
+                    if (!task || !task.id || !this.canEditDrawingLink(task)) {
+                        if (event && event.target) {
+                            event.target.checked = this.isTaskLinkedToDrawings(task);
+                        }
+                        return;
+                    }
+                    const linked = !!(event && event.target && event.target.checked);
+                    const prevCount = parseInt(task.drawing_count, 10);
+                    const drawingCount = linked
+                        ? (!Number.isNaN(prevCount) && prevCount > 0 ? prevCount : 1)
+                        : 0;
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', task.id);
+                        formData.append('project_id', task.project_id);
+                        formData.append('linked', linked ? '1' : '0');
+                        formData.append('drawing_count', drawingCount);
+                        const response = await axios.post('/api/index.php?model=task&method=updateDrawingLink', formData);
+                        if (response.data && response.data.status === 'success') {
+                            const savedCount = response.data.drawing_count != null ? response.data.drawing_count : drawingCount;
+                            this.applyTaskDrawingCount(task.id, savedCount);
+                        } else {
+                            if (event && event.target) {
+                                event.target.checked = this.isTaskLinkedToDrawings(task);
+                            }
+                            if (typeof showMessage === 'function') {
+                                showMessage(response.data?.message || this.t('図面の更新に失敗しました', '図面の更新に失敗しました'), true);
+                            }
+                        }
+                    } catch (error) {
+                        if (event && event.target) {
+                            event.target.checked = this.isTaskLinkedToDrawings(task);
+                        }
+                        if (typeof showMessage === 'function') {
+                            showMessage(this.t('図面の更新に失敗しました', '図面の更新に失敗しました'), true);
+                        }
+                    }
+                },
+
+                formatEstimatedHours(value) {
+                    const n = parseFloat(value);
+                    if (Number.isNaN(n) || n <= 0) return '—';
+                    const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+                    return `${formatted}h`;
+                },
+
+                decodeHtmlEntities(str) {
+                    const txt = document.createElement('textarea');
+                    txt.innerHTML = str;
+                    return txt.value;
+                },
+
+                getTaskNoteSnippet(note, maxLen) {
+                    if (!note) return '';
+                    const decoded = this.decodeHtmlEntities(String(note));
+                    const text = decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+                    if (!text) return '';
+                    const limit = maxLen || 28;
+                    return text.length <= limit ? text : `${text.substring(0, limit)}…`;
+                },
+
+                canEditTaskNote(task) {
+                    if (!task || !task.id) return false;
+                    return this.isAssignedToMe(task);
+                },
+
+                openTaskNoteModal(task) {
+                    if (!task || !task.id) return;
+                    this.destroyQuillTaskNoteEditor();
+                    this.showTaskNoteModal = true;
+                    this.taskNoteModal = {
+                        taskId: task.id,
+                        projectId: task.project_id,
+                        content: task.note || '',
+                        canEdit: this.canEditTaskNote(task)
+                    };
+                    this.$nextTick(() => {
+                        if (this.taskNoteModal.canEdit) {
+                            this.initQuillTaskNoteEditor();
+                        }
+                    });
+                },
+
+                closeTaskNoteModal() {
+                    this.showTaskNoteModal = false;
+                    this.destroyQuillTaskNoteEditor();
+                    this.taskNoteModal = { taskId: null, projectId: null, content: '', canEdit: false };
+                    this.quillTaskNoteContent = '';
+                },
+
+                resetQuillTaskNoteDom() {
+                    const el = document.getElementById('quill_mytask_note_content');
+                    if (!el) return;
+                    const parent = el.closest('.custom_editor');
+                    if (parent) {
+                        parent.querySelectorAll('.ql-toolbar').forEach((toolbar) => toolbar.remove());
+                    }
+                    el.innerHTML = '';
+                    el.className = 'custom_editor_content';
+                },
+
+                initQuillTaskNoteEditor() {
+                    if (!this.showTaskNoteModal) return;
+                    if (this.quillTaskNoteInitTimer) {
+                        clearTimeout(this.quillTaskNoteInitTimer);
+                        this.quillTaskNoteInitTimer = null;
+                    }
+                    this.quillTaskNoteInitTimer = setTimeout(() => {
+                        this.quillTaskNoteInitTimer = null;
+                        if (!this.showTaskNoteModal || !this.taskNoteModal.canEdit) return;
+                        if (this.quillTaskNoteInstance) return;
+                        const el = document.getElementById('quill_mytask_note_content');
+                        if (!el || !window.Quill) return;
+                        this.resetQuillTaskNoteDom();
+                        const toolbarOptions = [
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ color: [] }, { background: [] }],
+                            [{ list: 'ordered' }, { list: 'bullet' }],
+                            [{ header: '1' }, { header: '2' }, 'blockquote'],
+                            ['link', 'clean']
+                        ];
+                        this.quillTaskNoteInstance = new Quill(el, {
+                            bounds: el,
+                            placeholder: this.t('メモの詳細を入力してください...', 'メモの詳細を入力してください...'),
+                            modules: { toolbar: { container: toolbarOptions } },
+                            theme: 'snow'
+                        });
+                        if (this.taskNoteModal.content) {
+                            this.quillTaskNoteInstance.root.innerHTML = this.decodeHtmlEntities(this.taskNoteModal.content);
+                        }
+                        this.quillTaskNoteContent = this.quillTaskNoteInstance.getSemanticHTML();
+                        this.quillTaskNoteInstance.on('text-change', () => {
+                            this.quillTaskNoteContent = this.quillTaskNoteInstance.getSemanticHTML();
+                        });
+                    }, 200);
+                },
+
+                destroyQuillTaskNoteEditor() {
+                    if (this.quillTaskNoteInitTimer) {
+                        clearTimeout(this.quillTaskNoteInitTimer);
+                        this.quillTaskNoteInitTimer = null;
+                    }
+                    if (this.quillTaskNoteInstance) {
+                        try {
+                            const toolbar = this.quillTaskNoteInstance.getModule('toolbar');
+                            if (toolbar && toolbar.container) {
+                                toolbar.container.remove();
+                            }
+                        } catch (e) {}
+                        this.quillTaskNoteInstance = null;
+                    }
+                    this.resetQuillTaskNoteDom();
+                    this.quillTaskNoteContent = '';
+                },
+
+                async saveTaskNote() {
+                    const rawContent = (this.quillTaskNoteContent && this.quillTaskNoteContent.trim())
+                        || (this.taskNoteModal.content || '').trim();
+                    if (!this.taskNoteModal.taskId || !this.taskNoteModal.projectId) return;
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', this.taskNoteModal.taskId);
+                        formData.append('project_id', this.taskNoteModal.projectId);
+                        formData.append('note', rawContent);
+                        const response = await axios.post('/api/index.php?model=task&method=updateNote', formData);
+                        if (response.data && response.data.status === 'success') {
+                            if (typeof showMessage === 'function') {
+                                showMessage(this.t('メモが保存されました。', 'メモが保存されました。'), false);
+                            }
+                            await this.loadTasks();
+                            this.closeTaskNoteModal();
+                        } else {
+                            throw new Error(response.data?.message || 'Failed to save note');
+                        }
+                    } catch (error) {
+                        console.error('Error saving task note:', error);
+                        if (typeof showMessage === 'function') {
+                            showMessage(this.t('メモの保存に失敗しました', 'メモの保存に失敗しました'), true);
+                        }
+                    }
+                },
+
+                async clearTaskNote() {
+                    const confirmMsg = this.t('メモを削除しますか？', 'メモを削除しますか？');
+                    if (!confirm(confirmMsg)) return;
+                    if (!this.taskNoteModal.taskId || !this.taskNoteModal.projectId) return;
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', this.taskNoteModal.taskId);
+                        formData.append('project_id', this.taskNoteModal.projectId);
+                        formData.append('note', '');
+                        const response = await axios.post('/api/index.php?model=task&method=updateNote', formData);
+                        if (response.data && response.data.status === 'success') {
+                            if (typeof showMessage === 'function') {
+                                showMessage(this.t('メモが削除されました。', 'メモが削除されました。'), false);
+                            }
+                            await this.loadTasks();
+                            this.closeTaskNoteModal();
+                        } else {
+                            throw new Error(response.data?.message || 'Failed to delete note');
+                        }
+                    } catch (error) {
+                        if (typeof showMessage === 'function') {
+                            showMessage(this.t('メモの削除に失敗しました', 'メモの削除に失敗しました'), true);
+                        }
+                    }
+                },
+
+                getUserById(userId) {
+                    if (userId == null || userId === '') return null;
+                    return this.usersById[userId] || this.usersById[parseInt(userId, 10)] || null;
+                },
+
+                getTaskAssignees(task) {
+                    if (!task) return [];
+                    const ids = Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [];
+                    return ids.map((id) => this.getUserById(id)).filter(Boolean);
+                },
+
+                getTaskCreator(task) {
+                    if (!task) return null;
+                    const fromMap = this.getUserById(task.created_by);
+                    if (fromMap) return fromMap;
+                    if (task.created_by_name) {
+                        return {
+                            id: task.created_by,
+                            realname: task.created_by_name,
+                            user_image: task.created_by_user_image || ''
+                        };
+                    }
+                    return null;
+                },
+
+                getUserAvatarSrc(user) {
+                    if (!user || !user.user_image) return '';
+                    const img = String(user.user_image).trim();
+                    if (!img || img === 'default.png') return '';
+                    return img.startsWith('http') || img.startsWith('/') ? img : `/upload/user/${img}`;
+                },
+
+                getUserInitials(name) {
+                    if (!name) return '?';
+                    const parts = String(name).trim().split(/\s+/);
+                    if (parts.length >= 2) {
+                        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                    }
+                    return name.substring(0, 2).toUpperCase();
+                },
+
+                isAssignedToMe(task) {
+                    if (!task || !window.currentUserId) return false;
+                    const currentUserId = String(window.currentUserId);
+                    const ids = Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [];
+                    if (ids.some(function (id) { return String(id) === currentUserId; })) {
+                        return true;
+                    }
+                    if (task.assigned_to) {
+                        return String(task.assigned_to).split(',').map(function (id) { return id.trim(); }).includes(currentUserId);
+                    }
+                    return false;
+                },
+
+                canTrackTaskTime(task) {
+                    if (!task || !task.id) return false;
+                    if (!this.isAssignedToMe(task) && !this.isTaskTimerActive(task.id)) {
+                        return false;
+                    }
+                    if (this.isTaskTimerActive(task.id)) {
+                        return true;
+                    }
+                    return task.status !== 'completed' && task.status !== 'cancelled';
+                },
+
+                isTaskTimerActive(taskId) {
+                    return !!(window.TaskTimer && window.TaskTimer.isActive(taskId));
+                },
+
+                isTaskTimerToggling(taskId) {
+                    return !!(taskId && this.taskTimerTogglingTaskIds[taskId]);
+                },
+
+                setTaskTimerToggling(taskId, toggling) {
+                    if (!taskId) return;
+                    if (toggling) {
+                        this.taskTimerTogglingTaskIds = Object.assign({}, this.taskTimerTogglingTaskIds, { [taskId]: true });
+                    } else {
+                        const next = Object.assign({}, this.taskTimerTogglingTaskIds);
+                        delete next[taskId];
+                        this.taskTimerTogglingTaskIds = next;
+                    }
+                },
+
+                applyTaskEstimatedHours(taskId, hours) {
+                    const n = parseFloat(hours);
+                    if (!taskId || Number.isNaN(n)) return;
+                    const value = n < 0 ? 0 : Math.round(n * 100) / 100;
+                    const task = this.tasks.find(function (t) { return parseInt(t.id, 10) === parseInt(taskId, 10); });
+                    if (task) {
+                        task.estimated_hours = value;
+                    }
+                },
+
+                async toggleTaskTimer(task) {
+                    if (!task || !task.id || !this.canTrackTaskTime(task) || !window.TaskTimer) {
+                        return;
+                    }
+                    if (this.isTaskTimerToggling(task.id)) {
+                        return;
+                    }
+                    this.setTaskTimerToggling(task.id, true);
+                    try {
+                        if (window.TaskTimer.isActive(task.id)) {
+                            const result = await window.TaskTimer.stop(task.id);
+                            if (result && result.estimated_hours != null) {
+                                this.applyTaskEstimatedHours(task.id, result.estimated_hours);
+                            }
+                        } else {
+                            const result = await window.TaskTimer.start(task.id, task.project_id, {
+                                title: task.title,
+                                project_name: task.project_name || ''
+                            });
+                            if (result && result.stopped_previous_task) {
+                                this.applyTaskEstimatedHours(
+                                    result.stopped_previous_task.task_id,
+                                    result.stopped_previous_task.estimated_hours
+                                );
+                            }
+                        }
+                    } finally {
+                        this.setTaskTimerToggling(task.id, false);
+                        this.$forceUpdate();
+                    }
+                },
+
+                onTaskTimerChanged(event) {
+                    const detail = event && event.detail ? event.detail : {};
+                    if (detail.stopped && detail.task_id != null && detail.estimated_hours != null) {
+                        this.applyTaskEstimatedHours(detail.task_id, detail.estimated_hours);
+                    }
+                    this.$forceUpdate();
                 },
                 
                 getTodoPriorityLabel(priority) {
@@ -458,14 +1008,73 @@ document.addEventListener('DOMContentLoaded', function() {
                     return 'primary';
                 },
 
-                formatDate(dateString) {
-                    if (!dateString || dateString === '0000-00-00 00:00:00' || dateString === '0000-00-00') return '-';
-                    // Use moment if available for consistent formatting with task-overview.js
-                    if (typeof moment !== 'undefined') {
-                        return moment(dateString).format('M月D日 H:mm');
+                isVietnameseLocale() {
+                    return typeof i18next !== 'undefined'
+                        && i18next.isInitialized
+                        && String(i18next.language || '').startsWith('vi');
+                },
+
+                getTaskDisplayTimezone() {
+                    return this.isVietnameseLocale() ? TODO_VIETNAM_TIMEZONE : TODO_SERVER_TIMEZONE;
+                },
+
+                getTaskDateTimeDisplayFormat() {
+                    return this.isVietnameseLocale()
+                        ? TODO_DATETIME_MOMENT_FORMAT
+                        : TODO_DATETIME_JA_DISPLAY_FORMAT;
+                },
+
+                parseTaskDateTime(date, timezone) {
+                    if (!date) return null;
+                    const raw = String(date).trim();
+                    if (!raw || raw === '0000-00-00 00:00:00' || raw === '0000-00-00') return null;
+                    if (typeof moment === 'undefined') return null;
+                    const tz = timezone || TODO_SERVER_TIMEZONE;
+
+                    if (moment.tz) {
+                        for (let i = 0; i < TODO_DATETIME_PARSE_FORMATS.length; i++) {
+                            const parsed = moment.tz(raw, TODO_DATETIME_PARSE_FORMATS[i], tz);
+                            if (parsed.isValid()) return parsed;
+                        }
+                        const loose = moment.tz(raw, tz);
+                        return loose.isValid() ? loose : null;
                     }
-                    const d = new Date(dateString);
-                    return d.toLocaleDateString();
+
+                    const fallback = moment(raw, TODO_DATETIME_PARSE_FORMATS, true);
+                    return fallback.isValid() ? fallback : null;
+                },
+
+                formatTaskDateTimeInDisplayTz(date) {
+                    const parsed = this.parseTaskDateTime(date);
+                    if (!parsed) return '-';
+                    const localized = moment.tz
+                        ? parsed.clone().tz(this.getTaskDisplayTimezone())
+                        : parsed;
+                    return localized.format(this.getTaskDateTimeDisplayFormat());
+                },
+
+                formatDate(dateString) {
+                    return this.formatTaskDateTimeInDisplayTz(dateString);
+                },
+
+                getFlatpickrLocaleName() {
+                    return this.isVietnameseLocale() ? 'vi' : 'ja';
+                },
+
+                initTodoFlatpickrLocales() {
+                    if (typeof flatpickr === 'undefined') return;
+                    const locale = this.getFlatpickrLocaleName();
+                    const common = {
+                        enableTime: true,
+                        time_24hr: true,
+                        locale: locale
+                    };
+                    if (this.fp) {
+                        this.fp.set('locale', locale);
+                    }
+                    if (this.fpEdit) {
+                        this.fpEdit.set('locale', locale);
+                    }
                 },
 
                 /**
@@ -474,18 +1083,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 getTimeRemainingForDue(dateString) {
                     if (!dateString || dateString === '0000-00-00 00:00:00' || dateString === '0000-00-00') return null;
                     const now = typeof moment !== 'undefined' && moment.tz
-                        ? moment.tz('Asia/Tokyo')
+                        ? moment.tz(TODO_SERVER_TIMEZONE)
                         : moment();
-                    const end = typeof moment !== 'undefined' && moment.tz
-                        ? moment.tz(dateString, 'Asia/Tokyo')
-                        : moment(dateString);
-                    if (!end.isValid()) return null;
-                    const isVietnamese = typeof i18next !== 'undefined' && i18next.isInitialized && i18next.language === 'vi';
-                    const dayLabel = (typeof i18next !== 'undefined' && i18next.isInitialized && i18next.t('日')) ? i18next.t('日') : '日';
-                    const hourLabel = (typeof i18next !== 'undefined' && i18next.isInitialized && i18next.t('時間')) ? i18next.t('時間') : '時間';
-                    const minuteLabel = (typeof i18next !== 'undefined' && i18next.isInitialized && i18next.t('分')) ? i18next.t('分') : '分';
-                    const overdueLabel = (typeof i18next !== 'undefined' && i18next.isInitialized && i18next.t('期限超過')) ? i18next.t('期限超過') : '期限超過';
-                    const remainingLabel = (typeof i18next !== 'undefined' && i18next.isInitialized && i18next.t('残り')) ? i18next.t('残り') : '残り';
+                    const end = this.parseTaskDateTime(dateString, TODO_SERVER_TIMEZONE);
+                    if (!end) return null;
+                    const isVietnamese = this.isVietnameseLocale();
+                    const dayLabel = this.t('日', '日');
+                    const hourLabel = this.t('時間', '時間');
+                    const minuteLabel = this.t('分', '分');
+                    const overdueLabel = this.t('期限超過', '期限超過');
+                    const remainingLabel = this.t('残り', '残り');
                     const fmt = (v, l) => isVietnamese ? v + ' ' + l : v + l;
                     const join = (parts) => isVietnamese ? parts.filter(Boolean).join(' ') : parts.filter(Boolean).join('');
                     if (end.isBefore(now)) {
@@ -644,6 +1251,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         });
-        todoApp.mount('#todoApp');
-    }
-});
+    todoApp.mount('#todoApp');
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountTodoApp);
+} else {
+    mountTodoApp();
+}

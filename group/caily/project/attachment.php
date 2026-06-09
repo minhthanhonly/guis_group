@@ -49,6 +49,7 @@ if($_SESSION['show_project'] == 0){
                 </div>
             </div>
         </nav>
+        <?php $statusBannerVar = 'project'; require __DIR__ . '/partials/project-status-banner.php'; ?>
 
         <div class="row">
             <!-- Back button -->

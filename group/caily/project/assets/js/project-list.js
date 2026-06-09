@@ -241,12 +241,12 @@ var projectTable;
         return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    /** Format date-time as "M月D日<br>H:mm" for display (date and time on separate lines) */
+    /** Format date-time for display (date and time on separate lines, no year; locale + timezone aware) */
     function formatDateTimeWithLineBreak(v) {
         if (typeof moment === 'undefined' || !v) return '';
-        var m = moment(v);
-        if (!m.isValid()) return '';
-        return m.format('M月D日') + '<br>' + m.format('H:mm');
+        var m = toProjectDisplayMoment(v);
+        if (!m) return '';
+        return formatProjectDateOnly(m) + '<br>' + formatProjectTimeOnly(m);
     }
 
     function decodeHtmlForNote(s) {
@@ -264,6 +264,40 @@ var projectTable;
     function isVietnameseLocale() {
         if (typeof i18next === 'undefined' || !i18next.isInitialized) return false;
         return String(i18next.language || '').toLowerCase().indexOf('vi') === 0;
+    }
+
+    var SERVER_TASK_TIMEZONE = 'Asia/Tokyo';
+    var VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
+
+    function getProjectDisplayTimezone() {
+        return isVietnameseLocale() ? VIETNAM_TASK_TIMEZONE : SERVER_TASK_TIMEZONE;
+    }
+
+    function toProjectDisplayMoment(value) {
+        var parsed = parseProjectDateMoment(value);
+        if (!parsed || !parsed.isValid()) return null;
+        if (typeof moment.tz === 'function') {
+            return parsed.clone().tz(getProjectDisplayTimezone());
+        }
+        return parsed;
+    }
+
+    function formatProjectDateOnly(momentObj) {
+        if (!momentObj || !momentObj.isValid()) return '';
+        return isVietnameseLocale()
+            ? momentObj.format('M/D')
+            : momentObj.format('M月D日');
+    }
+
+    function formatProjectTimeOnly(momentObj) {
+        if (!momentObj || !momentObj.isValid()) return '';
+        return momentObj.format('H:mm');
+    }
+
+    function formatProjectDateTimeInline(value) {
+        var m = toProjectDisplayMoment(value);
+        if (!m) return '-';
+        return formatProjectDateOnly(m) + ' ' + formatProjectTimeOnly(m);
     }
 
     function getBranchRomaji(branchName) {
@@ -382,10 +416,16 @@ var projectTable;
                 var vnTip = window.formatVietnamTimeTooltip(v);
                 if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
             }
-            if (typeof moment !== 'undefined' && moment(v).isValid()) {
-                var m = moment(v);
+            if (typeof moment !== 'undefined') {
+                var m = toProjectDisplayMoment(v);
+                if (!m) {
+                    if (typeof window.formatDateTime === 'function') return '<span class="small text-nowrap"' + attrs + '>' + window.formatDateTime(v) + '</span>';
+                    return '<span class="small text-nowrap"' + attrs + '>' + v + '</span>';
+                }
                 var displayStr = formatDateTimeWithLineBreak(v);
-                var now = moment();
+                var now = typeof moment.tz === 'function'
+                    ? moment.tz(getProjectDisplayTimezone())
+                    : moment();
                 var isToday = m.isSame(now, 'day');
                 var isOverdue = m.isBefore(now);
                 
@@ -441,13 +481,16 @@ var projectTable;
         }
         // Text field: nếu giống ngày (yyyy/m/d, m/d, yyyy/mm/dd hoặc có thời gian) thì format
         if (typeof moment !== 'undefined') {
-            var m = moment(v, ['YYYY/M/D', 'YYYY/MM/DD', 'M/D', 'YYYY/M/D H:mm', 'YYYY/MM/DD HH:mm', 'M/D H:mm'], true);
-            if (m.isValid()) {
-                var timeStr = m.format('YYYY/M/D H:mm');
+            var m = toProjectDisplayMoment(v);
+            if (m) {
+                var serverMoment = parseProjectDateMoment(v);
+                var timeStr = serverMoment && serverMoment.isValid()
+                    ? serverMoment.format('YYYY/M/D H:mm')
+                    : v;
                 var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(timeStr) : '';
                 var attrs = ' data-time="' + String(timeStr).replace(/"/g, '&quot;') + '"' + todoAttrs;
                 if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
-                return '<span class="text-nowrap small"' + attrs + '>' + m.format('M月D日') + '</span>';
+                return '<span class="text-nowrap small"' + attrs + '>' + formatProjectDateOnly(m) + '</span>';
             }
         }
         return '<span class="text-break small">' + escapeHtmlForNote(v) + '</span>';
@@ -1994,7 +2037,8 @@ var projectTable;
                 }
                 function formatTaskDue(d) {
                     if (!d) return '-';
-                    if (typeof moment !== 'undefined' && moment(d).isValid()) return moment(d).format('MM/DD');
+                    var m = toProjectDisplayMoment(d);
+                    if (m) return formatProjectDateOnly(m);
                     return String(d).substring(0, 10);
                 }
                 function getTaskAssigneeDisplay(t, members) {
@@ -5196,8 +5240,7 @@ var projectTable;
             },
             
             formatDate(dateString) {
-                if (!dateString) return '-';
-                return moment(dateString).format('M/D H:mm');
+                return formatProjectDateTimeInline(dateString);
             },
             
             async moveToMainProject(project) {

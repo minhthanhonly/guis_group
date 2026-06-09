@@ -155,19 +155,56 @@ document.addEventListener('DOMContentLoaded', () => {
    * @param {string} selector - CSS selector for chat/contact list items.
    * @param {string} searchValue - Search input value.
    * @param {string} placeholderSelector - Selector for placeholder element.
+   * @param {boolean} onlineOnly - When true, hide offline contacts (contact list only).
    */
-  const filterChatContacts = (selector, searchValue, placeholderSelector) => {
+  const filterChatContacts = (selector, searchValue, placeholderSelector, onlineOnly = false) => {
     const items = document.querySelectorAll(`${selector}:not(.chat-contact-list-item-title)`);
     let visibleCount = 0;
 
     items.forEach(item => {
-      const isVisible = item.textContent.toLowerCase().includes(searchValue);
+      if (item.classList.contains('chat-list-item-0') || item.classList.contains('contact-list-item-0')) {
+        return;
+      }
+      const matchesSearch = item.textContent.toLowerCase().includes(searchValue);
+      const isOnline = !onlineOnly || isContactListItemOnline(item);
+      const isVisible = matchesSearch && isOnline;
       item.classList.toggle('d-flex', isVisible);
       item.classList.toggle('d-none', !isVisible);
       if (isVisible) visibleCount++;
     });
 
     document.querySelector(placeholderSelector)?.classList.toggle('d-none', visibleCount > 0);
+  };
+
+  const isContactListItemOnline = (item) => {
+    const avatar = item.querySelector('.avatar[data-userid]');
+    return !!(avatar && avatar.classList.contains('avatar-online'));
+  };
+
+  /**
+   * Show only online users in #contact-list; hide offline contacts.
+   */
+  const updateOnlineContactVisibility = () => {
+    const searchValue = (elements.searchInput?.value || '').toLowerCase();
+    filterChatContacts('#contact-list li', searchValue, '.contact-list-item-0', true);
+  };
+
+  const observeContactOnlineStatus = () => {
+    const contactList = document.getElementById('contact-list');
+    if (!contactList) return;
+
+    const observer = new MutationObserver(mutations => {
+      const classChanged = mutations.some(
+        m => m.type === 'attributes' && m.attributeName === 'class' && m.target.classList?.contains('avatar')
+      );
+      if (classChanged) {
+        updateOnlineContactVisibility();
+      }
+    });
+
+    contactList.querySelectorAll('.avatar[data-userid]').forEach(avatar => {
+      observer.observe(avatar, { attributes: true, attributeFilter: ['class'] });
+    });
   };
 
   /**
@@ -250,9 +287,21 @@ document.addEventListener('DOMContentLoaded', () => {
     debounce(e => {
       const searchValue = e.target.value.toLowerCase();
       filterChatContacts('#chat-list li', searchValue, '.chat-list-item-0');
-      filterChatContacts('#contact-list li', searchValue, '.contact-list-item-0');
+      filterChatContacts('#contact-list li', searchValue, '.contact-list-item-0', true);
     }, 300)
   );
+
+  // Contact list: show online users only
+  updateOnlineContactVisibility();
+  observeContactOnlineStatus();
+  window.addEventListener('storage', e => {
+    if (e.key === 'connected_users') {
+      updateOnlineContactVisibility();
+    }
+  });
+  // Firebase may set avatar classes after notification.js loads
+  setTimeout(updateOnlineContactVisibility, 500);
+  setTimeout(updateOnlineContactVisibility, 2000);
 
   // Attach message send event
   elements.formSendMessage?.addEventListener('submit', e => {

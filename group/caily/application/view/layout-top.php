@@ -627,6 +627,8 @@
           </nav>
 
           <!-- / Navbar -->
+          <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/quill/typography.css" />
+          <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/quill/editor.css" />
           <!-- Todo Widget Offcanvas -->
           <div class="offcanvas offcanvas-bottom" tabindex="-1" id="offcanvasTodo" aria-labelledby="offcanvasTodoLabel" style="height: 80vh;">
             <div class="offcanvas-header border-bottom">
@@ -650,7 +652,7 @@
                         </button>
                       </li>
                     </ul>
-                    <div class="tab-content flex-grow-1 overflow-auto pt-3">
+                    <div class="tab-content flex-grow-1 overflow-auto pt-3 px-0">
                       <!-- My Tasks Tab -->
                       <div class="tab-pane fade" :class="{ 'show active': activeTab === 'tasks' }" id="navs-tasks" role="tabpanel">
                          <div v-if="loadingTasks" class="text-center py-5">
@@ -662,17 +664,23 @@
                             <i class="fas fa-inbox fa-3x mb-3"></i>
                             <p data-i18n="割り当てられたタスクはありません">割り当てられたタスクはありません</p>
                          </div>
-                         <div v-else class="table-responsive">
-                            <table class="table table-sm table-hover align-middle mb-0">
+                         <div v-else class="my-task-table-wrap">
+                            <table class="table table-sm table-hover align-middle mb-0 my-task-table">
                                 <thead class="table-light">
                                     <tr>
-                                        <th><span data-i18n="案件">案件</span></th>
-                                        <th><span data-i18n="タスク">タスク</span></th>
-                                        <th><span data-i18n="受領">受領</span></th>
-                                        <th><span data-i18n="ステータス">ステータス</span></th>
-                                        <th><span data-i18n="優先度">優先度</span></th>
-                                        <th><span data-i18n="進捗">進捗</span></th>
-                                        <th><span data-i18n="期限">期限</span></th>
+                                        <th class="my-task-col-project"><span data-i18n="案件">案件</span></th>
+                                        <th class="my-task-col-title"><span data-i18n="タスク">タスク</span></th>
+                                        <th class="my-task-col-kind"><span data-i18n="種別">種別</span></th>
+                                        <th class="my-task-col-drawing"><span data-i18n="図面">図面</span></th>
+                                        <th class="my-task-col-priority"><span data-i18n="優先度">優先度</span></th>
+                                        <th class="my-task-col-period"><span data-i18n="期限">期限</span></th>
+                                        <th class="my-task-col-assignee"><span data-i18n="担当者">担当者</span></th>
+                                        <th class="my-task-col-ack"><span data-i18n="受領">受領</span></th>
+                                        <th class="my-task-col-creator"><span data-i18n="作成者">作成者</span></th>
+                                        <th class="my-task-col-status"><span data-i18n="ステータス">ステータス</span></th>
+                                        <th class="my-task-col-progress"><span data-i18n="進捗">進捗</span></th>
+                                        <th class="my-task-col-workload"><span data-i18n="工数">工数</span></th>
+                                        <th class="my-task-col-note"><span data-i18n="メモ">メモ</span></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -680,14 +688,62 @@
                                         <td>
                                             <a :href="'/project/detail.php?id=' + task.project_id" class="text-decoration-none small">
                                                 <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
-                                                {{ task.project_name }}
+                                                <span class="text-truncate d-inline-block my-task-project-name">{{ task.project_name }}</span>
                                             </a>
                                         </td>
                                         <td>
                                             <a :href="'/project/task.php?project_id=' + task.project_id + '&task_id=' + task.id" class="text-decoration-none fw-bold small">
                                                 <span class="badge bg-label-secondary me-1">#{{ task.id }}</span>
-                                                {{ task.title }}
+                                                <span class="text-truncate d-inline-block my-task-title">{{ task.title }}</span>
                                             </a>
+                                        </td>
+                                        <td>
+                                            <span class="badge small" :class="getTaskKindBadgeClass(task.task_kind)">{{ getTaskKindLabel(task.task_kind) }}</span>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-1 flex-wrap small">
+                                                <template v-if="isDrawingLinkVisibleForTask(task)">
+                                                    <div class="form-check mb-0" :title="t('図面リストに追加', '図面リストに追加')">
+                                                        <input type="checkbox" class="form-check-input" :id="'mytask-drawing-link-' + task.id"
+                                                            :checked="isTaskLinkedToDrawings(task)"
+                                                            :disabled="!canEditDrawingLink(task)"
+                                                            @change="toggleTaskDrawingLink(task, $event)">
+                                                    </div>
+                                                    <input v-if="isTaskLinkedToDrawings(task) && canEditDrawingLink(task)"
+                                                        type="number"
+                                                        class="form-control form-control-sm my-task-drawing-count-input"
+                                                        :class="{ 'my-task-drawing-count-input--loading': isDrawingCountSaving(task.id) }"
+                                                        min="1"
+                                                        step="1"
+                                                        :value="task.drawing_count > 0 ? task.drawing_count : 1"
+                                                        :disabled="isDrawingCountSaving(task.id)"
+                                                        @change="saveTaskDrawingCount(task, $event.target.value)">
+                                                    <span v-else-if="isTaskLinkedToDrawings(task)" class="text-nowrap">{{ task.drawing_count }}</span>
+                                                </template>
+                                                <span v-else class="text-muted">—</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge" :class="'bg-' + getPriorityColor(task.priority)">{{ getPriorityLabel(task.priority) }}</span>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex flex-column gap-1">
+                                                <small class="text-nowrap text-muted">{{ formatDate(task.due_date) }}</small>
+                                                <span v-if="task.status !== 'completed' && task.status !== 'cancelled' && getTimeRemainingForDue(task.due_date)" :class="['badge badge-sm', getTimeRemainingForDue(task.due_date).class]" style="font-size: 0.7rem;">
+                                                    {{ getTimeRemainingForDue(task.due_date).text }}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-1">
+                                                <template v-for="assignee in getTaskAssignees(task)" :key="'assignee-' + task.id + '-' + assignee.id">
+                                                    <span class="avatar avatar-xs" :title="assignee.realname">
+                                                        <img v-if="getUserAvatarSrc(assignee)" class="rounded-circle" :src="getUserAvatarSrc(assignee)" :alt="assignee.realname" width="24" height="24">
+                                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getUserInitials(assignee.realname) }}</span>
+                                                    </span>
+                                                </template>
+                                                <span v-if="getTaskAssignees(task).length === 0" class="text-muted small">—</span>
+                                            </div>
                                         </td>
                                         <td>
                                             <button v-if="!isAcknowledged(task)" type="button" class="btn btn-sm btn-outline-success" @click="acknowledgeTask(task)" title="受領">
@@ -696,24 +752,53 @@
                                             <span v-else class="badge bg-success" title="受領済み"><i class="fas fa-check me-1"></i><span data-i18n="受領済み">受領済み</span></span>
                                         </td>
                                         <td>
-                                            <select class="form-select form-select-sm" style="min-width: 90px;" :value="task.status" @change="updateTaskStatus(task, $event.target.value)">
-                                                <option v-for="s in taskStatuses" :key="s.value" :value="s.value">{{ s.label }}</option>
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <span class="badge" :class="'bg-' + getPriorityColor(task.priority)">{{ getPriorityLabel(task.priority) }}</span>
-                                        </td>
-                                        <td>
-                                            <select class="form-select form-select-sm"  :value="task.progress != null ? task.progress : 0" @change="updateTaskProgress(task, parseInt($event.target.value, 10))">
-                                                <option v-for="p in [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]" :key="p" :value="p">{{ p }}%</option>
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <div class="d-flex flex-start gap-1">
-                                                <small class="text-nowrap text-muted">{{ formatDate(task.due_date) }}</small>
-                                                <span v-if="task.status !== 'completed' && task.status !== 'cancelled' && getTimeRemainingForDue(task.due_date)" :class="['badge badge-sm', getTimeRemainingForDue(task.due_date).class]" style="font-size: 0.7rem;">
-                                                    {{ getTimeRemainingForDue(task.due_date).text }}
+                                            <div class="d-flex align-items-center gap-1" v-if="getTaskCreator(task)">
+                                                <span class="avatar avatar-xs" :title="getTaskCreator(task).realname">
+                                                    <img v-if="getUserAvatarSrc(getTaskCreator(task))" class="rounded-circle" :src="getUserAvatarSrc(getTaskCreator(task))" :alt="getTaskCreator(task).realname" width="24" height="24">
+                                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getUserInitials(getTaskCreator(task).realname) }}</span>
                                                 </span>
+                                            </div>
+                                            <span v-else class="text-muted small">—</span>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group my-task-status-dropdown">
+                                                <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
+                                                        :class="getStatusButtonClass(task.status)"
+                                                        data-bs-toggle="dropdown"
+                                                        aria-expanded="false">
+                                                    {{ getStatusLabel(task.status) }}
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li v-for="status in taskStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateTaskStatus(task, status.value)">
+                                                        {{ t(status.i18nKey || status.label, status.label) }}
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <select class="form-select form-select-sm" style="min-width: 72px;" :value="task.progress != null ? task.progress : 0" @change="updateTaskProgress(task, parseInt($event.target.value, 10))">
+                                                <option v-for="p in progressOptions" :key="p" :value="p">{{ p }}%</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-1 task-workload-cell">
+                                                <span class="small text-nowrap">{{ formatEstimatedHours(task.estimated_hours) }}</span>
+                                                <button
+                                                    v-if="canTrackTaskTime(task)"
+                                                    type="button"
+                                                    class="btn btn-sm task-timer-btn"
+                                                    :class="isTaskTimerActive(task.id) ? 'btn-danger task-timer-btn--active' : 'btn-outline-success'"
+                                                    :title="isTaskTimerActive(task.id) ? t('作業時間を終了', '作業時間を終了') : t('作業時間を開始', '作業時間を開始')"
+                                                    :disabled="isTaskTimerToggling(task.id)"
+                                                    @click="toggleTaskTimer(task)">
+                                                    <i :class="isTaskTimerActive(task.id) ? 'fa fa-stop' : 'fa fa-play'"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="my-task-note-cell" @click="openTaskNoteModal(task)" :title="getTaskNoteSnippet(task.note) || t('メモ', 'メモ')">
+                                                <span v-if="getTaskNoteSnippet(task.note)" class="small text-truncate d-inline-block my-task-note">{{ getTaskNoteSnippet(task.note) }}</span>
+                                                <i v-else class="fa fa-sticky-note text-muted"></i>
                                             </div>
                                         </td>
                                     </tr>
@@ -841,15 +926,155 @@
                       </div>
                     </div>
                    </div>
+
+            <!-- Task Note Modal (same as project/task.php) -->
+            <div class="modal fade task-note-modal" tabindex="-1" :class="{ show: showTaskNoteModal }" style="display: block;" v-if="showTaskNoteModal">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><span data-i18n="メモ">メモ</span></h5>
+                            <button type="button" class="btn-close" @click="closeTaskNoteModal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div v-if="!taskNoteModal.canEdit">
+                                <label class="form-label"><span data-i18n="内容">内容</span></label>
+                                <div class="form-control ql-editor" style="min-height:120px;max-height:480px;overflow-y:auto;" v-html="taskNoteModal.content || '-'"></div>
+                            </div>
+                            <form v-else @submit.prevent="saveTaskNote">
+                                <div class="mb-0">
+                                    <label class="form-label"><span data-i18n="内容">内容</span></label>
+                                    <div class="custom_editor">
+                                        <div class="custom_editor_content" id="quill_mytask_note_content"></div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button v-if="taskNoteModal.canEdit && (taskNoteModal.content || quillTaskNoteContent)" type="button" class="btn btn-danger me-auto" @click="clearTaskNote">
+                                <i class="fa fa-trash me-1"></i><span data-i18n="削除">削除</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary" @click="closeTaskNoteModal"><span data-i18n="キャンセル">キャンセル</span></button>
+                            <button v-if="taskNoteModal.canEdit" type="button" class="btn btn-primary" @click="saveTaskNote" :disabled="!((quillTaskNoteContent && quillTaskNoteContent.trim()) || (taskNoteModal.content && taskNoteModal.content.trim()))">
+                                <i class="fa fa-save me-1"></i><span data-i18n="保存">保存</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
             </div>
           </div>
           <style>
             #offcanvasTodo{
               z-index: 9999;
             }
+            .task-note-modal {
+              z-index: 10050;
+              background: rgba(0, 0, 0, 0.5);
+            }
+            .my-task-note-cell {
+              cursor: pointer;
+              max-width: 100%;
+              line-height: 1.3;
+            }
+            .my-task-note-cell:hover .fa-sticky-note {
+              color: var(--bs-primary) !important;
+            }
+            .my-task-table-wrap .table-sm > :not(caption) > * > *{
+              padding: 0.594rem .25rem;
+            }
+            .my-task-status-dropdown {
+              position: relative;
+            }
+            .my-task-status-dropdown .dropdown-menu[data-bs-popper] {
+              position: absolute !important;
+            }
+            .my-task-table {
+              min-width: 1100px;
+              font-size: 0.8125rem;
+            }
+            .my-task-table th,
+            .my-task-table td {
+              white-space: nowrap;
+              vertical-align: middle;
+            }
+            .my-task-col-project { min-width: 8rem; }
+            .my-task-col-title { min-width: 10rem; }
+            .my-task-col-kind { min-width: 5.5rem; }
+            .my-task-col-drawing { min-width: 8rem; }
+            .my-task-drawing-count-input {
+              width: 4rem;
+              min-width: 4rem;
+              padding: 0.4rem 0.5rem;
+              font-size: 0.95rem;
+              line-height: 1.35;
+            }
+            .my-task-drawing-count-input--loading {
+              animation: my-task-drawing-count-border-pulse 0.9s ease-in-out infinite;
+              pointer-events: none;
+            }
+            @keyframes my-task-drawing-count-border-pulse {
+              0%, 100% {
+                border-color: var(--bs-primary, #696cff);
+                box-shadow: 0 0 0 0 rgba(105, 108, 255, 0.45);
+              }
+              50% {
+                border-color: var(--bs-primary, #696cff);
+                box-shadow: 0 0 0 3px rgba(105, 108, 255, 0.25);
+              }
+            }
+            .my-task-col-priority { min-width: 4rem; }
+            .my-task-col-period { min-width: 7rem; }
+            .my-task-col-assignee,
+            .my-task-col-creator { min-width: 3.5rem; }
+            .my-task-col-ack { min-width: 5rem; }
+            .my-task-col-status { min-width: 6.5rem; }
+            .my-task-status-dropdown .btn {
+              min-width: 5.5rem;
+              text-align: left;
+            }
+            .my-task-status-dropdown .dropdown-menu {
+              min-width: 6.5rem;
+            }
+            .my-task-col-progress { min-width: 5rem; }
+            .my-task-col-workload { min-width: 5.5rem; }
+            .my-task-col-note { min-width: 5rem; max-width: 8rem; }
+            .my-task-project-name,
+            .my-task-title {
+              max-width: 10rem;
+              vertical-align: bottom;
+            }
+            .my-task-note {
+              max-width: 7rem;
+            }
+            .my-task-table .avatar-xs {
+              width: 24px;
+              height: 24px;
+            }
+            .my-task-table .avatar-xs .avatar-initial {
+              width: 24px;
+              height: 24px;
+              font-size: 0.65rem;
+            }
           </style>
 
           <span class="app-version" style="background-color: #ccc; padding: 5px; border-radius: 5px; position: fixed; bottom: 10px; left: 10px; font-size: 10px; color: #000; z-index: 2000;">v<?=APP_VERSION?></span>
+
+          <!-- Task Timer Widget - bottom right, left of Todo button -->
+          <div id="global-task-timer-nav" class="global-task-timer-fab" style="display: none;" aria-live="polite">
+            <div class="global-task-timer-widget">
+              <span class="global-task-timer-time me-1">
+                <span class="">
+                <i class="fa fa-stopwatch text-success"></i>
+                <span id="global-task-timer-label" class="global-task-timer-label" data-i18n="作業計測中">作業計測中</span>
+                </span>
+                <span id="global-task-timer-display" class="font-monospace">00:00:00</span>
+              </span>
+              <i class="fas fa-arrow-right"></i><a href="javascript:void(0);" id="global-task-timer-task-link" class="global-task-timer-task-link"></a>
+              <button type="button" class="btn btn-sm btn-danger btn-icon rounded-circle global-task-timer-stop-btn" id="global-task-timer-stop-btn" title="作業時間を終了" aria-label="作業時間を終了">
+                <i class="fa fa-stop"></i>
+              </button>
+            </div>
+          </div>
 
           <!-- Todo Toggle Button (same style as AI Chat button) -->
           <button data-bs-toggle="offcanvas" data-bs-target="#offcanvasTodo" id="todo-toggle" class="btn btn-primary rounded-circle position-fixed waves-effect waves-light">

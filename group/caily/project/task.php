@@ -42,6 +42,7 @@ if($_SESSION['show_project'] == 0){
             </div>
         </div>
     </nav>
+    <?php $statusBannerVar = 'projectInfo'; require __DIR__ . '/partials/project-status-banner.php'; ?>
 
     <div class="row">
         <!-- Back button -->
@@ -140,19 +141,12 @@ if($_SESSION['show_project'] == 0){
         <div class="d-flex align-items-center justify-content-between mb-2">
             <div class="d-flex align-items-center gap-2">
             <select class="form-select" v-model="filterStatus">
-                <option value="" data-i18n="全てのステータス">全てのステータス</option>
-                <option value="todo" data-i18n="未開始">未開始</option>
-                <option value="in-progress" data-i18n="進行中">進行中</option>
-                <option value="confirming" data-i18n="確認中">確認中</option>
-                <option value="paused" data-i18n="一時停止">一時停止</option>
-                <option value="completed" data-i18n="完了">完了</option>
-                <option value="cancelled" data-i18n="キャンセル">キャンセル</option>
+                <option value="">{{ $t('全てのステータス') }}</option>
+                <option v-for="status in taskStatuses" :key="status.value" :value="status.value">{{ $t(status.i18nKey || status.label) }}</option>
             </select>
             <select class="form-select" v-model="filterPriority">
-                <option value="" data-i18n="全ての優先度">全ての優先度</option>
-                <option value="high" data-i18n="高">高</option>
-                <option value="medium" data-i18n="中">中</option>
-                <option value="low" data-i18n="低">低</option>
+                <option value="">{{ $t('全ての優先度') }}</option>
+                <option v-for="priority in taskPriorities" :key="priority.value" :value="priority.value">{{ $t(priority.i18nKey || priority.label) }}</option>
             </select>
             </div>
             <button v-if="permission.can_manage_project || permission.is_member || (permission.rule && permission.rule.task_add == 1)" class="btn btn-primary ms-2" @click="openNewTaskModal">
@@ -163,13 +157,17 @@ if($_SESSION['show_project'] == 0){
         <div class="d-flex align-items-center justify-content-between mb-2">
             <div class="task-table-header w-100 g-0 align-items-center fw-bold text-primary bg-light">
                 <div class="task-col-title py-2 px-2"><span data-i18n="タスク">タスク</span></div>
+                <div class="task-col-kind py-2 pe-2"><span data-i18n="種別">種別</span></div>
+                <div class="task-col-drawing py-2 pe-2"><span data-i18n="図面">図面</span></div>
                 <div class="task-col-priority py-2 pe-2"><span data-i18n="優先度">優先度</span></div>
-                <div class="task-col-period py-2 pe-2"><span data-i18n="期間">期間</span></div>
+                <div class="task-col-period py-2 pe-2"><span data-i18n="期限">期限</span></div>
                 <div class="task-col-assignee py-2 pe-2"><span data-i18n="担当者">担当者</span></div>
                 <div class="task-col-ack py-2 pe-2"></div>
                 <div class="task-col-creator py-2 pe-2"><span data-i18n="作成者">作成者</span></div>
                 <div class="task-col-status py-2 pe-2"><span data-i18n="ステータス">ステータス</span></div>
                 <div class="task-col-progress py-2 pe-2"><span data-i18n="進捗">進捗</span></div>
+                <div class="task-col-workload py-2 pe-2"><span data-i18n="工数">工数</span></div>
+                <div class="task-col-note py-2 pe-2"><span data-i18n="メモ">メモ</span></div>
                 <div class="task-col-actions py-2"><span data-i18n="操作">操作</span></div>
             </div>
         </div>
@@ -187,6 +185,30 @@ if($_SESSION['show_project'] == 0){
                             <input type="text" class="form-control inline-task-input" :value="task.title" placeholder="タスク名" required @input="updateTaskField(task._inlineIndex, 'title', $event.target.value)">
                         </div>
                     </div>
+                    <div class="task-col-kind">
+                        <div class="py-2 pe-2">
+                            <select class="form-select form-select-sm" :value="normalizeTaskKind(task.task_kind || getDefaultTaskKind())" @change="updateTaskField(task._inlineIndex, 'task_kind', $event.target.value)">
+                                <option v-for="kind in taskKinds" :key="kind.value" :value="kind.value">{{ $t(kind.i18nKey || kind.label) }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="task-col-drawing">
+                        <div class="py-2 pe-2 d-flex align-items-center gap-1 flex-wrap">
+                            <template v-if="isDrawingLinkVisibleForTask(task)">
+                                <div class="form-check mb-0" :title="$t('図面リストに追加')">
+                                    <input type="checkbox" class="form-check-input" :id="'inline-drawing-link-' + task._inlineIndex"
+                                        :checked="isTaskLinkedToDrawings(task)"
+                                        :disabled="!canEditDrawingLink()"
+                                        @change="onInlineDrawingLinkChange(task._inlineIndex, $event.target.checked)">
+                                </div>
+                                <input v-if="isTaskLinkedToDrawings(task)" type="number" class="form-control form-control-sm task-drawing-count-input" min="1" step="1"
+                                    :value="task.drawing_count > 0 ? task.drawing_count : 1"
+                                    :disabled="!canEditDrawingLink()"
+                                    @input="updateTaskField(task._inlineIndex, 'drawing_count', $event.target.value)">
+                            </template>
+                            <span v-else-if="!isDefaultTaskWithAutoDrawingLink(task)" class="text-muted small">—</span>
+                        </div>
+                    </div>
                     <div class="task-col-priority">
                         <div class="py-2 pe-2">
                             <div class="btn-group w-100">
@@ -198,7 +220,7 @@ if($_SESSION['show_project'] == 0){
                                 <ul class="dropdown-menu">
                                     <li v-for="priority in taskPriorities" :key="priority.value">
                                         <a class="dropdown-item waves-effect" href="#" @click="updateInlineTaskPriority(task._inlineIndex, priority.value)">
-                                            {{ priority.label }}
+                                            {{ $t(priority.i18nKey || priority.label) }}
                                         </a>
                                     </li>
                                 </ul>
@@ -206,36 +228,19 @@ if($_SESSION['show_project'] == 0){
                         </div>
                     </div>
                     <div class="task-col-period">
-                        <div class="pe-2 d-flex align-items-center gap-2">
-                            <input type="text" class="form-control px-1 py-0 datetimepicker" :value="task.start_date" placeholder="開始日" @input="updateTaskField(task._inlineIndex, 'start_date', $event.target.value)">
+                        <div class="pe-2 d-flex align-items-center">
                             <input type="text" class="form-control px-1 py-0 datetimepicker" :value="task.due_date" placeholder="期限日" @input="updateTaskField(task._inlineIndex, 'due_date', $event.target.value)">
                         </div>
                     </div>
                     <div class="task-col-assignee">
-                        <div class="d-flex align-items-center flex-wrap" @click="openAssigneeModal(task._inlineIndex)">
-                            <template v-if="task.assignees && task.assignees.length">
-                                <template v-for="(userId, i) in task.assignees.slice(0, 5)">
-                                    <div :key="userId" class="avatar me-1" data-bs-toggle="tooltip" :title="projectMembers.find(m => m.user_id == userId)?.user_name">
-                                        <img v-if="!projectMembers.find(m => m.user_id == userId)?.avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == userId))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == userId))" :alt="projectMembers.find(m => m.user_id == userId)?.user_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == userId))" width="28" height="28">
-                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(projectMembers.find(m => m.user_id == userId)?.user_name) }}</span>
-                                    </div>
-                                </template>
-                                <div v-if="task.assignees.length > 5" class="avatar">
-                                    <span class="avatar-initial rounded-circle pull-up" data-bs-toggle="tooltip" data-bs-placement="bottom" :data-bs-original-title="assigneeNames(task.assignees.slice(5))">
-                                        +{{ task.assignees.length - 5 }}
-                                    </span>
-                                </div>
-                                <div class="avatar">
-                                    <span class="avatar-initial rounded-circle pull-up bg-label-success" data-bs-toggle="tooltip" data-bs-placement="bottom">
-                                        <i class="fa fa-plus"></i>
-                                    </span>
+                        <div class="d-flex align-items-center flex-wrap" style="cursor: pointer;" @click="openAssigneeModal(task._inlineIndex)">
+                            <template v-if="getPrimaryAssigneeId(task)">
+                                <div class="avatar me-1" data-bs-toggle="tooltip" :title="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name">
+                                    <img v-if="!projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" width="28" height="28">
+                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name) }}</span>
                                 </div>
                             </template>
-                            <div v-else class="avatar">
-                                <span class="avatar-initial rounded-circle pull-up bg-label-success">
-                                    <i class="fa fa-plus"></i>
-                                </span>
-                            </div>
+                            <span v-else class="text-muted small">{{ $t('未選択') }}</span>
                         </div>
                     </div>
                     <div class="task-col-ack"></div>
@@ -260,7 +265,7 @@ if($_SESSION['show_project'] == 0){
                                 </button>
                                 <ul class="dropdown-menu">
                                     <li v-for="status in taskStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateInlineTaskStatus(task._inlineIndex, status.value)">
-                                        {{ status.label }}
+                                        {{ $t(status.i18nKey || status.label) }}
                                     </li>
                                 </ul>
                             </div>
@@ -285,8 +290,18 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                     </div>
+                    <div class="task-col-workload">
+                        <div class="py-2 pe-2"></div>
+                    </div>
+                    <div class="task-col-note">
+                        <div v-if="task.id" class="py-2 pe-2 task-note-cell" @click="openTaskNoteModal(task)" :title="getTaskNoteSnippet(task.note) || $t('メモ')">
+                            <span v-if="getTaskNoteSnippet(task.note)" class="small text-truncate d-block">{{ getTaskNoteSnippet(task.note) }}</span>
+                            <i v-else class="fa fa-sticky-note text-muted"></i>
+                        </div>
+                        <div v-else class="py-2 pe-2"></div>
+                    </div>
                     <div class="task-col-actions">
-                        <div class="d-flex align-items-center justify-content-end gap-1 pe-2">
+                        <div class="d-flex align-items-center gap-1 pe-2">
                             <button class="btn btn-sm btn-success me-1" @click="saveTaskInline(task._inlineIndex)"><i class="fas fa-check"></i></button>
                             <button class="btn btn-sm btn-secondary" @click="cancelTaskInline(task._inlineIndex)"><i class="fas fa-times"></i></button>
                         </div>
@@ -299,8 +314,36 @@ if($_SESSION['show_project'] == 0){
                         <span class="drag-handle ps-2 pe-2 fs-16" style="cursor: move;" :class="{'prevent-click': !(permission.can_manage_project || (permission.rule && permission.rule.task_edit == 1 && checkAssignee(task)))}">≡</span>
                         <span class="badge badge-sm bg-label-primary me-2">#{{ task.id }}</span>
                         <div class="d-flex align-items-center justify-content-between gap-2 flex-grow-1 task-title">
-                            <span class="fw-bold" @click="openTaskDetails(task)" style="cursor: pointer; max-width: 100%;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;">{{ task.title }}</span>
+                            <span class="fw-bold" @click="openTaskDetails(task)" style="cursor: pointer; max-width: 100%;overflow: hidden;text-overflow: ellipsis; white-space: nowrap;">{{ task.title }}</span>
                             <i class="fa fa-expand-alt" style="cursor: pointer;" @click="openTaskDetails(task)"></i>
+                        </div>
+                    </div>
+                    <div class="task-col-kind">
+                        <div class="py-2 pe-2">
+                            <span class="badge small" :class="getTaskKindBadgeClass(getTaskKindDisplayValue(task))">{{ getTaskKindLabel(getTaskKindDisplayValue(task)) }}</span>
+                        </div>
+                    </div>
+                    <div class="task-col-drawing">
+                        <div class="py-2 pe-2 d-flex align-items-center gap-1 flex-wrap small">
+                            <template v-if="isDrawingLinkVisibleForTask(task)">
+                                <div class="form-check mb-0" :title="$t('図面リストに追加')">
+                                    <input type="checkbox" class="form-check-input" :id="'drawing-link-' + task.id"
+                                        :checked="isTaskLinkedToDrawings(task)"
+                                        :disabled="!canEditDrawingLink()"
+                                        @change="toggleTaskDrawingLink(task, $event)">
+                                </div>
+                                <input v-if="isTaskLinkedToDrawings(task) && canEditDrawingLink()"
+                                    type="number"
+                                    class="form-control form-control-sm task-drawing-count-input"
+                                    :class="{ 'task-drawing-count-input--loading': isDrawingCountSaving(task.id) }"
+                                    min="1"
+                                    step="1"
+                                    :value="task.drawing_count > 0 ? task.drawing_count : 1"
+                                    :disabled="isDrawingCountSaving(task.id)"
+                                    @change="saveTaskDrawingCount(task, $event.target.value)">
+                                <span v-else-if="isTaskLinkedToDrawings(task)" class="text-nowrap">{{ task.drawing_count }}</span>
+                            </template>
+                            <span v-else-if="!isDefaultTaskWithAutoDrawingLink(task)" class="text-muted">—</span>
                         </div>
                     </div>
                     <div class="task-col-priority">
@@ -315,41 +358,27 @@ if($_SESSION['show_project'] == 0){
                     </div>
                     <div class="task-col-period">
                         <div class="d-flex align-items-center gap-1 flex-wrap small">
-                            <span class="text-nowrap">{{ formatDate(task.start_date) }}</span> ~
                             <span class="text-nowrap" :class="{ 'text-danger fw-bold': isTaskDueExceedsProjectDue(task) }">{{ formatDate(task.due_date) }}</span>
                             <i v-if="hasPeriodWarning(task)" class="fas fa-exclamation-triangle text-warning ms-1" 
                                data-bs-toggle="tooltip" data-bs-placement="top" 
                                :title="getPeriodWarningTooltip(task)"></i>
                         </div>
-                        
                     </div>
                     <div class="task-col-assignee">
                         <div class="d-flex align-items-center flex-wrap">
-                            <template v-if="task.assigned_to">
-                                <template v-for="(userId, i) in task.assigned_to.split(',').slice(0, 4)">
-                                    <div :key="userId" class="avatar me-1 position-relative" :data-userid="projectMembers.find(m => m.user_id == userId)?.userid" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, userId)">
-                                        <img v-if="!projectMembers.find(m => m.user_id == userId)?.avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == userId))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == userId))" :alt="projectMembers.find(m => m.user_id == userId)?.user_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == userId))" width="28" height="28">
-                                        <span v-else class="avatar-initial rounded-circle bg-label-primary" @click="removeAssignee(task, userId)">{{ getInitials(projectMembers.find(m => m.user_id == userId)?.user_name) }}</span>
-                                        <!-- Badge trạng thái xác nhận -->
-                                        <span v-if="isAcknowledged(task, userId)" class="badge bg-success position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;">
-                                            <i class="fa fa-check"></i>
-                                        </span>
-                                        <span v-else class="badge bg-secondary position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;">
-                                            <i class="fa fa-clock"></i>
-                                        </span>
-                                    </div>
-                                </template>
-                                <div v-if="task.assigned_to.split(',').length > 4" class="avatar">
-                                    <span 
-                                        class="avatar-initial rounded-circle pull-up" 
-                                        data-bs-toggle="tooltip" 
-                                        data-bs-placement="bottom" 
-                                        :data-bs-original-title="getOverflowAssigneesTooltip(task)">
-                                        +{{ task.assigned_to.split(',').length - 4 }}
+                            <template v-if="getPrimaryAssigneeId(task)">
+                                <div class="avatar me-1 position-relative" :data-userid="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.userid" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, getPrimaryAssigneeId(task))">
+                                    <img v-if="!projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" width="28" height="28">
+                                    <span v-else class="avatar-initial rounded-circle bg-label-primary" @click="removeAssignee(task, getPrimaryAssigneeId(task))">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name) }}</span>
+                                    <span v-if="isAcknowledged(task, getPrimaryAssigneeId(task))" class="badge bg-success position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;">
+                                        <i class="fa fa-check"></i>
+                                    </span>
+                                    <span v-else class="badge bg-secondary position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;">
+                                        <i class="fa fa-clock"></i>
                                     </span>
                                 </div>
                             </template>
-                            <span v-else class="text-muted">未選択</span>
+                            <span v-else class="text-muted">{{ $t('未選択') }}</span>
                         </div>
                     </div>
                     <!-- Cột riêng cho nút 受領 -->
@@ -388,7 +417,7 @@ if($_SESSION['show_project'] == 0){
                                 </button>
                                 <ul class="dropdown-menu">
                                     <li v-for="status in taskStatuses" :key="status.value" class="dropdown-item" style="cursor:pointer" @click="updateTaskStatus(task, status.value); $nextTick(() => closeAllDropdowns())">
-                                        {{ status.label }}
+                                        {{ $t(status.i18nKey || status.label) }}
                                     </li>
                                 </ul>
                             </div>
@@ -414,6 +443,39 @@ if($_SESSION['show_project'] == 0){
                                 </ul>
                             </div>
                             <span v-else>{{ task.progress || 0 }}%</span>
+                        </div>
+                    </div>
+                    <div class="task-col-workload">
+                        <div class="py-2 pe-2 small task-workload-cell">
+                            <template v-if="canEditTaskWorkload(task)">
+                                <input
+                                    type="number"
+                                    class="form-control form-control-sm task-workload-input"
+                                    min="0"
+                                    step="0.1"
+                                    :value="task.estimated_hours != null && task.estimated_hours !== '' ? task.estimated_hours : ''"
+                                    placeholder="0"
+                                    :class="{ 'task-workload-input--loading': isEstimatedHoursSaving(task.id) }"
+                                    :disabled="isEstimatedHoursSaving(task.id)"
+                                    @change="saveTaskEstimatedHours(task, $event.target.value)">
+                                <button
+                                    v-if="canTrackTaskTime(task)"
+                                    type="button"
+                                    class="btn btn-sm task-timer-btn"
+                                    :class="isTaskTimerActive(task.id) ? 'btn-danger task-timer-btn--active' : 'btn-outline-success'"
+                                    :title="isTaskTimerActive(task.id) ? $t('作業時間を終了') : $t('作業時間を開始')"
+                                    :disabled="isTaskTimerToggling(task.id)"
+                                    @click="toggleTaskTimer(task)">
+                                    <i :class="isTaskTimerActive(task.id) ? 'fa fa-stop' : 'fa fa-play'"></i>
+                                </button>
+                            </template>
+                            <span v-else class="text-nowrap">{{ formatEstimatedHours(task.estimated_hours) }}</span>
+                        </div>
+                    </div>
+                    <div class="task-col-note">
+                        <div class="py-2 pe-2 task-note-cell" @click="openTaskNoteModal(task)" :title="getTaskNoteSnippet(task.note) || $t('メモ')">
+                            <span v-if="getTaskNoteSnippet(task.note)" class="small text-truncate d-block">{{ getTaskNoteSnippet(task.note) }}</span>
+                            <i v-else class="fa fa-sticky-note text-muted"></i>
                         </div>
                     </div>
 
@@ -491,7 +553,7 @@ if($_SESSION['show_project'] == 0){
                                 <span v-else class="avatar-initial rounded-circle bg-label-primary" style="width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;">{{ getInitials(member.user_name) }}</span>
                             </div>
                             <div style="font-size:12px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ member.user_name }}</div>
-                            <input type="checkbox" class="form-check-input mt-1" :checked="assigneeModal.selected.includes(member.user_id)" @change="toggleAssignee(member.user_id)">
+                            <input type="radio" class="form-check-input mt-1" name="task_assignee_radio" :checked="assigneeModal.selected.includes(member.user_id)" @change="toggleAssignee(member.user_id)">
                         </div>
                     </div>
                 </div>
@@ -701,6 +763,41 @@ if($_SESSION['show_project'] == 0){
             </div>
         </div>
     </div>
+
+    <!-- Task Note Modal (Quill, tham khảo project-list) -->
+    <div class="modal fade" tabindex="-1" :class="{show: showTaskNoteModal}" style="display: block;" v-if="showTaskNoteModal">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><span data-i18n="メモ">メモ</span></h5>
+                    <button type="button" class="btn-close" @click="closeTaskNoteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div v-if="!taskNoteModal.canEdit">
+                        <label class="form-label"><span data-i18n="内容">内容</span></label>
+                        <div class="form-control ql-editor" style="min-height:120px;max-height:480px;overflow-y:auto;" v-html="taskNoteModal.content || '-'"></div>
+                    </div>
+                    <form v-else @submit.prevent="saveTaskNote">
+                        <div class="mb-0">
+                            <label class="form-label"><span data-i18n="内容">内容</span></label>
+                            <div class="custom_editor">
+                                <div class="custom_editor_content" id="quill_task_note_content"></div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button v-if="taskNoteModal.canEdit && (taskNoteModal.content || quillTaskNoteContent)" type="button" class="btn btn-danger me-auto" @click="clearTaskNote">
+                        <i class="fa fa-trash me-1"></i><span data-i18n="削除">削除</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary" @click="closeTaskNoteModal"><span data-i18n="キャンセル">キャンセル</span></button>
+                    <button v-if="taskNoteModal.canEdit" type="button" class="btn btn-primary" @click="saveTaskNote" :disabled="!((quillTaskNoteContent && quillTaskNoteContent.trim()) || (taskNoteModal.content && taskNoteModal.content.trim()))">
+                        <i class="fa fa-save me-1"></i><span data-i18n="保存">保存</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 
@@ -726,15 +823,61 @@ if($_SESSION['show_project'] == 0){
     flex: 0 0 auto;
     box-sizing: border-box;
 }
-.task-col-title { width: 21%; min-width: 0; }
-.task-col-priority { width: 6%; min-width: 4rem; }
-.task-col-period { width: 14%; min-width: 0; }
-.task-col-assignee { width: 14%; min-width: 0; }
+.task-col-title { width: 16%; min-width: 0; }
+.task-col-kind { width: 8%; min-width: 5.5rem; }
+.task-col-drawing { width: 7%; min-width: 8rem; }
+.task-drawing-count-input {
+    width: 4rem;
+    min-width: 4rem;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.95rem;
+    line-height: 1.35;
+}
+.task-drawing-count-input--loading {
+    animation: task-drawing-count-border-pulse 0.9s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes task-drawing-count-border-pulse {
+    0%, 100% {
+        border-color: var(--bs-primary, #696cff);
+        box-shadow: 0 0 0 0 rgba(105, 108, 255, 0.45);
+    }
+    50% {
+        border-color: var(--bs-primary, #696cff);
+        box-shadow: 0 0 0 3px rgba(105, 108, 255, 0.25);
+    }
+}
+.task-col-workload { width: 8%; min-width: 4rem; justify-content: flex-start; }
+.task-workload-input {
+    width: 5rem;
+    min-width: 3rem;
+    max-width: 6.5rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.875rem;
+    text-align: center;
+}
+.task-workload-input--loading {
+    animation: task-drawing-count-border-pulse 0.9s ease-in-out infinite;
+    pointer-events: none;
+}
+.task-col-note { width: 8%; min-width: 4.5rem; }
+.task-col-priority { width: 5%; min-width: 3.5rem; }
+.task-col-period { width: 8%; min-width: 0; }
+.task-col-assignee { width: 5%; min-width: 0; max-width: 6.5rem; }
 .task-col-ack { width: 5%; min-width: 3rem; }
 .task-col-creator { width: 5%; min-width: 0; }
-.task-col-status { width: 9%; min-width: 4rem; }
-.task-col-progress { width: 8%; min-width: 3.5rem; }
-.task-col-actions { width: 14%; min-width: 0; }
+.task-col-status { width: 8%; min-width: 4rem; }
+.task-col-progress { width: 6%; min-width: 3.5rem; }
+.task-col-actions { width: 12%; min-width: 0; }
+
+.task-note-cell {
+    cursor: pointer;
+    max-width: 100%;
+    line-height: 1.3;
+}
+.task-note-cell:hover .fa-sticky-note {
+    color: var(--bs-primary) !important;
+}
 
 /* Task row & hover actions */
 .task-row {
@@ -801,6 +944,14 @@ if($_SESSION['show_project'] == 0){
 }
 .subtask .avatar-initial{
     background: #fff!important;
+}
+
+/* Dropdown: position absolute relative to btn-group (default Bootstrap behavior) */
+.task-list .btn-group {
+    position: relative;
+}
+.task-list .dropdown-menu[data-bs-popper] {
+    position: absolute !important;
 }
 
 /* Progress dropdown scroll */

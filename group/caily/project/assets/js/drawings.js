@@ -1,5 +1,10 @@
 const { createApp } = Vue;
 
+const DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
+    'お客様との連絡・調整・納品対応': 0.15,
+    '全図面のチェック・確認作業': 0.20
+};
+
 createApp({
     data() {
         return {
@@ -17,13 +22,15 @@ createApp({
             editingDrawing: {
                 id: null,
                 name: '',
-                status: 'draft',
+                status: 'todo',
                 file_path: '',
-                price: null
+                price: null,
+                drawing_count: 1,
+                task_id: null
             },
             
             // Bulk operations
-            bulkStatus: 'draft',
+            bulkStatus: 'todo',
             
             // Import data
             importFiles: [],
@@ -34,12 +41,12 @@ createApp({
             
             // Drawing statuses for dropdown
             drawingStatuses: [
-                { value: 'draft', label: '下書き', color: 'secondary' },
-                { value: 'review', label: 'レビュー中', color: 'warning' },
-                { value: 'revision', label: '修正中', color: 'info' },
-                { value: 'revised', label: '修正済', color: 'primary' },
-                { value: 'approved', label: '承認済み', color: 'success' },
-                { value: 'rejected', label: '却下', color: 'danger' }
+                { value: 'todo', label: '未開始', color: 'secondary' },
+                { value: 'in-progress', label: '進行中', color: 'primary' },
+                { value: 'confirming', label: '確認中', color: 'warning' },
+                { value: 'paused', label: '一時停止', color: 'warning' },
+                { value: 'completed', label: '完了', color: 'success' },
+                { value: 'cancelled', label: 'キャンセル', color: 'danger' }
             ],
             
             // Drag selection
@@ -67,7 +74,10 @@ createApp({
     
     computed: {
         canViewProject() {
-            return this.permission.can_manage_project || this.permission.is_member;
+            if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') {
+                return true;
+            }
+            return !!(this.permission && (this.permission.can_manage_project || this.permission.is_member));
         },
         
         filteredDrawings() {
@@ -88,14 +98,8 @@ createApp({
             filtered.sort((a, b) => {
                 let aValue, bValue;
                 
-                // Handle special sorting for file type
-                if (this.sortField === 'file_type') {
-                    aValue = a.name ? a.name.split('.').pop().toUpperCase() : '';
-                    bValue = b.name ? b.name.split('.').pop().toUpperCase() : '';
-                } else {
-                    aValue = a[this.sortField];
-                    bValue = b[this.sortField];
-                }
+                aValue = a[this.sortField];
+                bValue = b[this.sortField];
                 
                 // Handle null/undefined values
                 if (aValue === null || aValue === undefined) aValue = '';
@@ -127,10 +131,7 @@ createApp({
         },
         
         totalDrawingsPrice() {
-            return this.drawings.reduce((sum, drawing) => {
-                const price = drawing.price ? parseFloat(drawing.price) : 0;
-                return sum + price;
-            }, 0);
+            return this.drawings.reduce((sum, drawing) => sum + this.getEffectiveDrawingPrice(drawing), 0);
         },
         
         projectAmount() {
@@ -145,94 +146,105 @@ createApp({
             return this.totalDrawingsPrice - this.projectAmount;
         },
         
-        // Tổng giá tiền của các bản vẽ đã có đơn giá
+        // Tổng giá đã phân bổ: đơn giá đã nhập + phần cố định 15%/20% của bản vẽ task mặc định đã hoàn thành
         totalPriceOfDrawingsWithPrice() {
-            return this.drawings
-                .filter(d => this.hasPrice(d))
-                .reduce((sum, d) => sum + (parseFloat(d.price) || 0), 0);
+            return this.drawings.reduce((sum, d) => {
+                const effective = this.getEffectiveDrawingPrice(d);
+                if (effective > 0) {
+                    return sum + effective;
+                }
+                const reserved = this.getDefaultTaskDrawingReservedPrice(d);
+                return sum + (reserved || 0);
+            }, 0);
         },
-        // Các bản vẽ còn lại (chưa có đơn giá)
+        // Các bản vẽ còn lại được chia phần dư (không gồm task mặc định / task chưa hoàn thành)
         remainingDrawingsList() {
-            return this.drawings.filter(d => !this.hasPrice(d));
+            return this.drawings.filter(d => this.isDrawingEligibleForRemainderAutoPrice(d));
         },
         remainingDrawingsCount() {
-            return this.remainingDrawingsList.length;
+            return this.remainingDrawingsList.reduce((sum, d) => sum + this.getDrawingQuantity(d), 0);
         },
-        // (tổng tiền dự án - tổng giá bản vẽ đã có đơn giá) / số bản vẽ còn lại
-        // Giá cơ bản làm tròn xuống 2 chữ số; bản vẽ cuối nhận phần dư để tổng = rest chính xác
         autoPricePerRemaining() {
             if (this.projectAmount <= 0 || this.remainingDrawingsCount <= 0) return null;
             const rest = this.projectAmount - this.totalPriceOfDrawingsWithPrice;
             if (rest < 0) return null;
-            return Math.floor((rest / this.remainingDrawingsCount) * 100) / 100;
+            return Math.floor(rest / this.remainingDrawingsCount);
         },
-        // Mảng giá gán cho từng bản vẽ còn lại: dùng số nguyên để tránh DB làm tròn vượt tổng
-        // (n-1) bản đầu = floor(rest/n), bản cuối = rest - floor*(n-1) → tổng = rest chính xác
         autoPriceListForRemaining() {
             if (this.projectAmount <= 0 || this.remainingDrawingsCount <= 0) return [];
             const rest = this.projectAmount - this.totalPriceOfDrawingsWithPrice;
             if (rest < 0) return [];
-            const count = this.remainingDrawingsCount;
-            const basePrice = Math.floor(rest / count);
-            const lastPrice = rest - basePrice * (count - 1);
-            const list = Array(count - 1).fill(basePrice);
-            list.push(lastPrice);
-            return list;
+            const rows = this.remainingDrawingsList;
+            const totalQty = this.remainingDrawingsCount;
+            let allocated = 0;
+            return rows.map((d, index) => {
+                if (index === rows.length - 1) {
+                    return rest - allocated;
+                }
+                const qty = this.getDrawingQuantity(d);
+                const share = Math.floor((rest * qty) / totalQty);
+                allocated += share;
+                return share;
+            });
         },
         canAutoCalculateRemaining() {
             return this.autoPricePerRemaining != null && this.remainingDrawingsCount > 0;
         },
         
+        countableDrawings() {
+            return this.drawings.filter(d => !this.isDefaultTaskDrawing(d));
+        },
         stats() {
+            const sumQty = (list) => this.sumCountableDrawingQuantity(list);
             return [
                 {
                     label: '図面総数',
-                    value: this.drawings.filter(d => d.name && d.name.includes('.')).length,
+                    value: sumQty(this.countableDrawings),
                     icon: 'fa fa-file-alt text-primary',
                     color: 'text-primary',
                     status: ''
                 },
                 {
-                    label: '下書き',
-                    value: this.drawings.filter(d => d.status === 'draft').length,
+                    label: '未開始',
+                    value: sumQty(this.countableDrawings.filter(d => d.status === 'todo')),
                     icon: 'fa fa-pencil-alt text-secondary',
                     color: 'text-secondary',
-                    status: 'draft'
+                    status: 'todo'
                 },
                 {
-                    label: 'レビュー中',
-                    value: this.drawings.filter(d => d.status === 'review').length,
-                    icon: 'fa fa-search text-info',
-                    color: 'text-info',
-                    status: 'review'
+                    label: '進行中',
+                    value: sumQty(this.countableDrawings.filter(d => d.status === 'in-progress')),
+                    icon: 'fa fa-play text-primary',
+                    color: 'text-primary',
+                    status: 'in-progress'
                 },
                 {
-                    label: '修正中',
-                    value: this.drawings.filter(d => d.status === 'revision').length,
-                    icon: 'fa fa-tools text-warning',
+                    label: '確認中',
+                    value: sumQty(this.countableDrawings.filter(d => d.status === 'confirming')),
+                    icon: 'fa fa-search text-warning',
                     color: 'text-warning',
-                    status: 'revision'
+                    status: 'confirming'
                 },
                 {
-                    label: '修正済',
-                    value: this.drawings.filter(d => d.status === 'revised').length,
-                    icon: 'fa fa-check text-success',
-                    color: 'text-success',
-                    status: 'revised'
+                    label: '一時停止',
+                    value: sumQty(this.countableDrawings.filter(d => d.status === 'paused')),
+                    icon: 'fa fa-pause text-warning',
+                    color: 'text-warning',
+                    status: 'paused'
                 },
                 {
-                    label: '承認済み',
-                    value: this.drawings.filter(d => d.status === 'approved').length,
+                    label: '完了',
+                    value: sumQty(this.countableDrawings.filter(d => d.status === 'completed')),
                     icon: 'fa fa-check-circle text-success',
                     color: 'text-success',
-                    status: 'approved'
+                    status: 'completed'
                 },
                 {
-                    label: '却下',
-                    value: this.drawings.filter(d => d.status === 'rejected').length,
+                    label: 'キャンセル',
+                    value: sumQty(this.countableDrawings.filter(d => d.status === 'cancelled')),
                     icon: 'fa fa-times-circle text-danger',
                     color: 'text-danger',
-                    status: 'rejected'
+                    status: 'cancelled'
                 }
             ];
         },
@@ -342,14 +354,89 @@ createApp({
             }
             return label;
         },
+        getDrawingQuantity(drawing) {
+            const n = parseInt(drawing?.drawing_count, 10);
+            return (!Number.isNaN(n) && n > 0) ? n : 1;
+        },
+        resolveDefaultTaskDrawingTitleKey(drawing) {
+            const name = (drawing?.name || '').trim();
+            return Object.prototype.hasOwnProperty.call(DEFAULT_TASK_DRAWING_PRICE_PERCENTS, name)
+                ? name
+                : null;
+        },
+        isDefaultTaskDrawing(drawing) {
+            return this.resolveDefaultTaskDrawingTitleKey(drawing) !== null;
+        },
+        sumCountableDrawingQuantity(drawings) {
+            return (drawings || []).reduce((sum, d) => {
+                if (this.isDefaultTaskDrawing(d)) {
+                    return sum;
+                }
+                return sum + this.getDrawingQuantity(d);
+            }, 0);
+        },
+        getDefaultTaskDrawingPricePercent(drawing) {
+            const key = this.resolveDefaultTaskDrawingTitleKey(drawing);
+            if (!key || (drawing?.status || '') !== 'completed') {
+                return null;
+            }
+            return DEFAULT_TASK_DRAWING_PRICE_PERCENTS[key];
+        },
+        getDefaultTaskDrawingReservedPrice(drawing) {
+            const pct = this.getDefaultTaskDrawingPricePercent(drawing);
+            if (pct == null || this.projectAmount <= 0) {
+                return 0;
+            }
+            return Math.round(this.projectAmount * pct * 100) / 100;
+        },
+        getEffectiveDrawingPrice(drawing) {
+            if (!drawing) return 0;
+            if (this.isDefaultTaskDrawing(drawing) && (drawing.status || '') !== 'completed') {
+                return 0;
+            }
+            const price = parseFloat(drawing.price);
+            return Number.isNaN(price) || price < 0 ? 0 : price;
+        },
+        isDrawingEligibleForRemainderAutoPrice(drawing) {
+            if (!drawing || this.hasPrice(drawing)) {
+                return false;
+            }
+            if (this.isDefaultTaskDrawing(drawing)) {
+                return false;
+            }
+            const taskId = parseInt(drawing.task_id, 10);
+            if (!Number.isNaN(taskId) && taskId > 0 && (drawing.status || '') !== 'completed') {
+                return false;
+            }
+            return true;
+        },
         // Bản vẽ đã có đơn giá: price không rỗng (null/undefined/'')
         hasPrice(d) {
             return d.price != null && d.price !== '' && d.price !== 0;
         },
+
+        canEditDrawingPrice() {
+            if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') {
+                return true;
+            }
+            return !!(this.permission && this.permission.can_manage_project);
+        },
+
+        canManageDrawingAssignee() {
+            if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') {
+                return true;
+            }
+            return !!(this.permission && this.permission.can_manage_project);
+        },
         
         async loadPermission() {
-            const response = await axios.get('/api/index.php?model=task&method=getPermission&project_id=' + PROJECT_ID);
-            this.permission = response.data;
+            try {
+                const response = await axios.get('/api/index.php?model=task&method=getPermission&project_id=' + PROJECT_ID);
+                this.permission = (response.data && typeof response.data === 'object') ? response.data : {};
+            } catch (error) {
+                console.error('Error loading permission:', error);
+                this.permission = {};
+            }
         },
         // Project loading
         async loadProject() {
@@ -399,11 +486,16 @@ createApp({
             try {
                 const response = await axios.get(`/api/index.php?model=drawing&method=list&project_id=${PROJECT_ID}`);
                 if (Array.isArray(response.data)) {
-                    this.drawings = response.data.map(d => ({
-                        ...d,
-                        // Ensure price is numeric or null
-                        price: d.price !== undefined && d.price !== null ? Number(d.price) : null
-                    }));
+                    this.drawings = response.data.map(d => {
+                        const drawing = {
+                            ...d,
+                            price: d.price !== undefined && d.price !== null ? Number(d.price) : null
+                        };
+                        if (this.isDefaultTaskDrawing(drawing) && (drawing.status || '') !== 'completed') {
+                            drawing.price = 0;
+                        }
+                        return drawing;
+                    });
                 } else {
                     this.showError('ファイルの読み込みに失敗しました');
                 }
@@ -566,7 +658,7 @@ createApp({
                         const formData = new FormData();
                         formData.append('project_id', PROJECT_ID);
                         formData.append('name', fileInfo.name);
-                        formData.append('status', 'draft');
+                        formData.append('status', 'todo');
                         
                         const response = await axios.post('/api/index.php?model=drawing&method=add', formData);
                         
@@ -613,7 +705,7 @@ createApp({
         
         async saveDrawing() {
             if (!this.editingDrawing.name) {
-                this.showError('ファイル名を入力してください');
+                this.showError(this.$t('タスク名は必須です。') || 'タスク名は必須です。');
                 return;
             }
             
@@ -628,7 +720,10 @@ createApp({
                     if (this.editingDrawing.price != null && this.editingDrawing.price !== '') {
                         formData.append('price', this.editingDrawing.price);
                     }
-                    
+                    if (!this.editingDrawing.task_id) {
+                        formData.append('drawing_count', this.getDrawingQuantity(this.editingDrawing));
+                    }
+
                     response = await axios.post('/api/index.php?model=drawing&method=edit', formData);
                 } else {
                     // Create new drawing
@@ -636,6 +731,7 @@ createApp({
                     formData.append('project_id', PROJECT_ID);
                     formData.append('name', this.editingDrawing.name);
                     formData.append('status', this.editingDrawing.status);
+                    formData.append('drawing_count', this.getDrawingQuantity(this.editingDrawing));
                     if (this.editingDrawing.price != null && this.editingDrawing.price !== '') {
                         formData.append('price', this.editingDrawing.price);
                     }
@@ -716,7 +812,7 @@ createApp({
                 } else {
                     // Revert local change on error
                     if (drawing) {
-                        drawing.status = response.data?.original_status || 'draft';
+                        drawing.status = response.data?.original_status || 'todo';
                     }
                     this.showError(response.data?.message || 'ステータスの更新に失敗しました');
                 }
@@ -725,7 +821,7 @@ createApp({
                 // Revert local change on error
                 const drawing = this.drawings.find(d => d.id === id);
                 if (drawing) {
-                    drawing.status = 'draft'; // Fallback to draft
+                    drawing.status = 'todo';
                 }
                 this.showError('ステータスの更新に失敗しました');
             }
@@ -835,6 +931,9 @@ createApp({
         },
         // Update price for a single drawing when input changes
         async updatePrice(drawing) {
+            if (!this.canEditDrawingPrice()) {
+                return;
+            }
             try {
                 const response = await this.updatePriceById(
                     drawing.id,
@@ -858,8 +957,8 @@ createApp({
             }
             const priceList = this.autoPriceListForRemaining;
             const count = this.remainingDrawingsCount;
-            const basePrice = priceList[0] ?? 0;
-            const msg = (this.$t('残り図面の単価を自動計算') || '残り図面の単価を自動計算') + ` (${count}件、¥${this.formatNumber(basePrice)}/件、最終1件で端数調整)`;
+            const unitPrice = this.autoPricePerRemaining ?? 0;
+            const msg = (this.$t('残り図面の単価を自動計算') || '残り図面の単価を自動計算') + ` (${count}枚、約¥${this.formatNumber(unitPrice)}/枚、最終行で端数調整)`;
             const result = await Swal.fire({
                 title: this.$t('残り図面の単価を自動計算') || '残り図面の単価を自動計算',
                 html: msg + '<br><br>' + (this.$t('実行しますか？') || '実行しますか？'),
@@ -1019,6 +1118,9 @@ createApp({
 
         // Bulk assign current user to selected drawings
         async bulkAssign() {
+            if (!this.canManageDrawingAssignee()) {
+                return;
+            }
             if (this.selectedDrawings.length === 0) {
                 this.showError('ファイルを選択してください');
                 return;
@@ -1029,6 +1131,9 @@ createApp({
 
         // Bulk unassign current user from selected drawings
         async bulkUnassign() {
+            if (!this.canManageDrawingAssignee()) {
+                return;
+            }
             if (this.selectedDrawings.length === 0) {
                 this.showError('ファイルを選択してください');
                 return;
@@ -1099,6 +1204,10 @@ createApp({
         },
         
         async confirmAssigneeModal() {
+            if (!this.canManageDrawingAssignee()) {
+                this.closeAssigneeModal();
+                return;
+            }
             if (this.assigneeModal.isBulk) {
                 // Bulk assignment
                 if (this.selectedDrawings.length === 0) {
@@ -1173,11 +1282,17 @@ createApp({
         },
         
         async assignDrawing(drawingId) {
+            if (!this.canManageDrawingAssignee()) {
+                return;
+            }
             this.openAssigneeModal(drawingId, false);
         },
 
         // Unassign current user from drawing
         async unassignDrawing(drawingId) {
+            if (!this.canManageDrawingAssignee()) {
+                return;
+            }
             try {
                 const formData = new FormData();
                 formData.append('drawing_id', drawingId);
@@ -1228,12 +1343,26 @@ createApp({
         
         getStatusLabel(status) {
             const s = this.drawingStatuses.find(s => s.value === status);
-            return s ? this.$t(s.label) : status;
+            if (s) return this.$t(s.label);
+            const legacyLabels = {
+                draft: '未開始',
+                review: '確認中',
+                revision: '進行中',
+                revised: '完了',
+                approved: '完了',
+                rejected: 'キャンセル'
+            };
+            if (legacyLabels[status]) return this.$t(legacyLabels[status]);
+            return status;
         },
         
         getStatusButtonClass(status) {
             const s = this.drawingStatuses.find(s => s.value === status);
             return `btn-${s?.color || 'secondary'}`;
+        },
+        getStatusBadgeClass(status) {
+            const s = this.drawingStatuses.find(s => s.value === status);
+            return 'bg-label-' + (s?.color || 'secondary');
         },
         
         closeAllDropdowns() {
@@ -1423,8 +1552,10 @@ createApp({
             this.editingDrawing = {
                 id: null,
                 name: '',
-                status: 'draft',
-                file_path: ''
+                status: 'todo',
+                file_path: '',
+                drawing_count: 1,
+                task_id: null
             };
         },
         
