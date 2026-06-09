@@ -25,6 +25,178 @@ var NOTE_DISPLAY_COLUMNS = [
     { key: 'parent_guis_receiver', label: 'GUIS 受付者' }
 ];
 
+const SERVER_TASK_TIMEZONE = 'Asia/Tokyo';
+const VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
+const PROJECT_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
+const PROJECT_DATETIME_JA_DISPLAY_FORMAT = 'YYYY年M月D日 HH:mm';
+const PROJECT_DATETIME_JA_DATE_FORMAT = 'YYYY年M月D日';
+const PROJECT_DATETIME_VI_DATE_FORMAT = 'YYYY/M/D';
+const PROJECT_DATETIME_FLATPICKR_FORMAT = 'Y/m/d H:i';
+const PROJECT_DATETIME_FLATPICKR_JA_ALT_FORMAT = 'Y年n月j日 H:i';
+const PROJECT_DATETIME_FLATPICKR_MOMENT_FORMAT = 'Y/M/D H:mm';
+const PROJECT_DATETIME_PARSE_FORMATS = [
+    'YYYY-MM-DD HH:mm:ss',
+    'YYYY-MM-DD HH:mm',
+    'YYYY/M/D HH:mm',
+    'YYYY/MM/DD HH:mm',
+    'YYYY/M/D H:mm',
+    'YYYY/MM/DD H:mm',
+    'Y/M/D H:mm',
+    'Y/n/j H:i'
+];
+
+function isProjectDetailVietnameseLocale() {
+    return typeof i18next !== 'undefined'
+        && i18next.isInitialized
+        && String(i18next.language || '').startsWith('vi');
+}
+
+function getProjectDetailDisplayTimezone() {
+    return isProjectDetailVietnameseLocale() ? VIETNAM_TASK_TIMEZONE : SERVER_TASK_TIMEZONE;
+}
+
+function parseProjectDateMomentServer(value) {
+    if (value === undefined || value === null) return null;
+    const s = String(value).trim();
+    if (!s || s === '-') return null;
+    const normalized = s.replace(/\//g, '-');
+    if (typeof moment !== 'undefined') {
+        const formats = ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', 'YYYY-M-D'];
+        const m = typeof moment.tz === 'function'
+            ? moment.tz(normalized, formats, SERVER_TASK_TIMEZONE)
+            : moment(normalized, formats, true);
+        if (m.isValid()) return m;
+    }
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return null;
+    return typeof moment !== 'undefined' ? moment(d) : null;
+}
+
+function parseProjectDateTimeInDisplayTz(value) {
+    if (value === undefined || value === null) return null;
+    const s = String(value).trim();
+    if (!s || s === '-' || s === '0000-00-00 00:00:00' || s === '0000-00-00') return null;
+    if (typeof moment === 'undefined') return null;
+    const tz = getProjectDetailDisplayTimezone();
+    if (moment.tz) {
+        for (let i = 0; i < PROJECT_DATETIME_PARSE_FORMATS.length; i++) {
+            const parsed = moment.tz(s, PROJECT_DATETIME_PARSE_FORMATS[i], tz);
+            if (parsed.isValid()) return parsed;
+        }
+        const normalized = s.replace(/\//g, '-');
+        const normalizedFormats = ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', 'YYYY-M-D'];
+        for (let j = 0; j < normalizedFormats.length; j++) {
+            const parsedNorm = moment.tz(normalized, normalizedFormats[j], tz);
+            if (parsedNorm.isValid()) return parsedNorm;
+        }
+        const loose = moment.tz(s, tz);
+        return loose.isValid() ? loose : null;
+    }
+    const fallback = moment(s, PROJECT_DATETIME_PARSE_FORMATS, true);
+    return fallback.isValid() ? fallback : null;
+}
+
+function toProjectDateTimeInputValue(date) {
+    const parsed = parseProjectDateMomentServer(date);
+    if (!parsed || !parsed.isValid()) return '';
+    const localized = moment.tz
+        ? parsed.clone().tz(getProjectDetailDisplayTimezone())
+        : parsed;
+    return localized.format(PROJECT_DATETIME_FLATPICKR_MOMENT_FORMAT);
+}
+
+function fromProjectDateTimeInputValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const parsed = parseProjectDateTimeInDisplayTz(raw);
+    if (!parsed) return raw;
+    if (moment.tz) {
+        return parsed.clone().tz(SERVER_TASK_TIMEZONE).format(PROJECT_DATETIME_MOMENT_FORMAT);
+    }
+    return parsed.format(PROJECT_DATETIME_MOMENT_FORMAT);
+}
+
+function formatProjectDateTimeForDisplay(value) {
+    const parsed = parseProjectDateMomentServer(value);
+    if (!parsed) return '-';
+    const localized = moment.tz
+        ? parsed.clone().tz(getProjectDetailDisplayTimezone())
+        : parsed;
+    return localized.format(
+        isProjectDetailVietnameseLocale()
+            ? PROJECT_DATETIME_MOMENT_FORMAT
+            : PROJECT_DATETIME_JA_DISPLAY_FORMAT
+    );
+}
+
+function getProjectDetailFlatpickrLocale() {
+    if (typeof window === 'undefined' || !window.flatpickr || !window.flatpickr.l10ns) {
+        return 'default';
+    }
+    if (isProjectDetailVietnameseLocale()) {
+        return window.flatpickr.l10ns.vi || 'default';
+    }
+    return window.flatpickr.l10ns.ja || 'default';
+}
+
+function makeProjectDetailTimeInputsEditable(selectedDates, dateStr, instance) {
+    const cal = instance && instance.calendarContainer;
+    if (!cal) return;
+    cal.querySelectorAll('.flatpickr-time input, .flatpickr-time .numInputWrapper input').forEach((input) => {
+        input.removeAttribute('readonly');
+        input.readOnly = false;
+    });
+}
+
+function getProjectDetailFlatpickrOptions(extra) {
+    const options = {
+        enableTime: true,
+        time_24hr: true,
+        dateFormat: PROJECT_DATETIME_FLATPICKR_FORMAT,
+        allowInput: true,
+        locale: getProjectDetailFlatpickrLocale(),
+        onOpen: makeProjectDetailTimeInputsEditable
+    };
+    if (!isProjectDetailVietnameseLocale()) {
+        options.altInput = true;
+        options.altFormat = PROJECT_DATETIME_FLATPICKR_JA_ALT_FORMAT;
+        options.altInputClass = 'form-control';
+    }
+    if (extra) {
+        Object.assign(options, extra);
+    }
+    return options;
+}
+
+function initProjectDetailFlatpickr(el, extra, serverValue) {
+    if (!el || typeof flatpickr === 'undefined') return null;
+    if (el._flatpickr) el._flatpickr.destroy();
+    const inputVal = toProjectDateTimeInputValue(serverValue);
+    if (inputVal) el.value = inputVal;
+    const fp = flatpickr(el, getProjectDetailFlatpickrOptions(extra || {}));
+    if (inputVal) {
+        // Wall-clock string only — avoid parsed.toDate() which shifts via UTC/browser TZ.
+        fp.setDate(inputVal, false, PROJECT_DATETIME_FLATPICKR_FORMAT);
+    }
+    return fp;
+}
+
+function getProjectDateTimePlaceholder() {
+    return isProjectDetailVietnameseLocale() ? 'YYYY/M/D HH:mm' : 'YYYY年M月D日 HH:mm';
+}
+
+function getCustomFieldDefaultHour() {
+    return isProjectDetailVietnameseLocale() ? 17 : 19;
+}
+
+function getStartDateDefaultHour() {
+    return isProjectDetailVietnameseLocale() ? 7 : 9;
+}
+
+function getDeadlineDefaultHour() {
+    return isProjectDetailVietnameseLocale() ? 16 : 18;
+}
+
 const vueApp = createApp({
     data() {
         return {
@@ -100,6 +272,7 @@ const vueApp = createApp({
             buildingBranchTagify: null,
             customFields: [],
             departmentCustomFieldSets: [],
+            _serverProjectDates: null,
             // Danh sách các tỉnh/thành phố của Nhật Bản
             japanPrefectures: [
                 '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
@@ -613,7 +786,16 @@ const vueApp = createApp({
         },
         formatDate(date) {
             if (!date) return '-';
-            return moment(date).format('YYYY/MM/DD');
+            const parsed = parseProjectDateMomentServer(date);
+            if (!parsed) return '-';
+            const localized = moment.tz
+                ? parsed.clone().tz(getProjectDetailDisplayTimezone())
+                : parsed;
+            return localized.format(
+                isProjectDetailVietnameseLocale()
+                    ? PROJECT_DATETIME_VI_DATE_FORMAT
+                    : PROJECT_DATETIME_JA_DATE_FORMAT
+            );
         },
         getTimeRemaining() {
             if (!this.project || !this.project.end_date || this.project.status === 'completed' ||
@@ -749,12 +931,13 @@ const vueApp = createApp({
             }
         },
         formatDateForInput(date) {
-            if (!date) return '';
-            return moment(date).format('YYYY-MM-DD');
+            return toProjectDateTimeInputValue(date);
         },
         formatDateTime(datetime) {
-            if (!datetime) return '-';
-            return moment(datetime).format('YYYY/MM/DD HH:mm');
+            return formatProjectDateTimeForDisplay(datetime);
+        },
+        getProjectDateTimePlaceholder() {
+            return getProjectDateTimePlaceholder();
         },
         /** Tooltip giờ VN khi hover lên giờ Nhật: "VN hh:ii" (dùng chung với main.js) */
         getVietnamTimeTooltip(jpDateTimeStr) {
@@ -778,8 +961,7 @@ const vueApp = createApp({
             });
         },
         formatShortDateTime(datetime) {
-            if (!datetime) return '-';
-            return moment(datetime).format('M月D日 HH:mm');
+            return formatProjectDateTimeForDisplay(datetime);
         },
         formatCurrency(amount) {
             if (!amount) return '¥0';
@@ -1304,119 +1486,83 @@ const vueApp = createApp({
                 })));
             }
         },
+        initProjectDatePicker(elId, key, extra) {
+            if (!this.isEditMode || !this.project) return;
+            const el = document.getElementById(elId);
+            if (!el) return;
+            const serverValue = (this._serverProjectDates && this._serverProjectDates[key] != null)
+                ? this._serverProjectDates[key]
+                : this.project[key];
+            const inputVal = toProjectDateTimeInputValue(serverValue);
+            if (el._flatpickr) {
+                const fpVal = String(
+                    (el._flatpickr._input && el._flatpickr._input.value) || el.value || ''
+                ).trim();
+                const displayVal = String(this.project[key] || '').trim();
+                if (fpVal && (fpVal === inputVal || fpVal === displayVal)) {
+                    return;
+                }
+            }
+            initProjectDetailFlatpickr(el, {
+                defaultHour: extra.defaultHour,
+                defaultMinute: extra.defaultMinute,
+                onChange: (selectedDates, dateStr) => {
+                    this.project[key] = dateStr;
+                }
+            }, serverValue);
+            if (inputVal && this.project[key] !== inputVal) {
+                this.project[key] = inputVal;
+            }
+            if (this._serverProjectDates) {
+                delete this._serverProjectDates[key];
+            }
+        },
         initDatePickers() {
-            if (!this.isEditMode) return;
-            const optionsStart = {
-                enableTime: true,
-                dateFormat: "Y/m/d H:i",
-                time_24hr: true,
-                allowInput: true,
-                locale: "ja",
-                defaultHour: 9,
-                defaultMinute: 0,
-                onChange: (selectedDates, dateStr, instance) => {
-                    if (instance.input.id === 'start_date_picker') this.project.start_date = dateStr;
-                }
-            };
-            const optionsEnd = {
-                enableTime: true,
-                dateFormat: "Y/m/d H:i",
-                time_24hr: true,
-                allowInput: true,
-                locale: "ja",
-                defaultHour: 18,
-                defaultMinute: 0,
-                onChange: (selectedDates, dateStr, instance) => {
-                    if (instance.input.id === 'end_date_picker') this.project.end_date = dateStr;
-                }
-            };
-
-            const elStart = document.getElementById('start_date_picker');
-            if (elStart) {
-                if (elStart._flatpickr) elStart._flatpickr.destroy();
-                flatpickr(elStart, optionsStart);
-            }
-            const elEnd = document.getElementById('end_date_picker');
-            if (elEnd) {
-                if (elEnd._flatpickr) elEnd._flatpickr.destroy();
-                flatpickr(elEnd, optionsEnd);
-            }
-            const optionsDatetime = {
-                enableTime: true,
-                dateFormat: "Y/m/d H:i",
-                time_24hr: true,
-                allowInput: true,
-                locale: "ja",
-                defaultHour: 18,
-                defaultMinute: 0
-            };
-            ['caily_nouki_picker', 'guis_nouki_picker'].forEach((id, i) => {
-                const key = id.replace('_picker', '');
-                const el = document.getElementById(id);
-                if (el) {
-                    if (el._flatpickr) el._flatpickr.destroy();
-                    flatpickr(el, {
-                        ...optionsDatetime,
-                        onChange: (selectedDates, dateStr) => { this.project[key] = dateStr; }
-                    });
-                }
-            });
-            // Initialize actual_end_date picker
-            const elActualEnd = document.getElementById('actual_end_date_picker');
-            if (elActualEnd) {
-                if (elActualEnd._flatpickr) elActualEnd._flatpickr.destroy();
-                flatpickr(elActualEnd, {
-                    enableTime: true,
-                    dateFormat: "Y/m/d H:i",
-                    time_24hr: true,
-                    allowInput: true,
-                    locale: "ja",
-                    defaultHour: 18,
-                    defaultMinute: 0,
-                    onChange: (selectedDates, dateStr) => { this.project.actual_end_date = dateStr; }
-                });
-            }
-            // Initialize custom field datetime pickers
+            if (!this.isEditMode || !this.project) return;
+            this.initProjectDatePicker('start_date_picker', 'start_date', { defaultHour: getStartDateDefaultHour(), defaultMinute: 0 });
+            this.initProjectDatePicker('end_date_picker', 'end_date', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 });
+            this.initProjectDatePicker('caily_nouki_picker', 'caily_nouki', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 });
+            this.initProjectDatePicker('guis_nouki_picker', 'guis_nouki', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 });
+            this.initProjectDatePicker('actual_end_date_picker', 'actual_end_date', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 });
             this.initCustomFieldDatePickers();
         },
         initCustomFieldDatePickers() {
             if (!this.isEditMode || !this.customFields) {
-                console.log('initCustomFieldDatePickers: early return', { isEditMode: this.isEditMode, customFields: this.customFields });
                 return;
             }
             this.$nextTick(() => {
-                // Similar to project-list.js: flatpickr will automatically parse the value from input
-                // Vue's v-model already sets the value to the input element
                 this.customFields.forEach((field, idx) => {
-                    if (field.type === 'datetime') {
-                        const el = document.getElementById('custom_datetime_' + idx);
-                        if (!el) {
+                    if (field.type !== 'datetime') return;
+                    const el = document.getElementById('custom_datetime_' + idx);
+                    if (!el) return;
+                    const serverValue = field._serverDatetime != null ? field._serverDatetime : field.value;
+                    const inputVal = toProjectDateTimeInputValue(serverValue);
+                    if (el._flatpickr) {
+                        const fpVal = String(
+                            (el._flatpickr._input && el._flatpickr._input.value) || el.value || ''
+                        ).trim();
+                        const displayVal = String(field.value || '').trim();
+                        if (fpVal && (fpVal === inputVal || fpVal === displayVal)) {
                             return;
                         }
-                        
-                        if (el._flatpickr) el._flatpickr.destroy();
-
-                        
-                        // Ensure the input has the value from field.value (v-model should have set it, but double-check)
-                        const fieldValue = field.value || '';
-                        if (fieldValue && el.value !== fieldValue) {
-                            el.value = fieldValue;
+                    }
+                    initProjectDetailFlatpickr(el, {
+                        defaultHour: getCustomFieldDefaultHour(),
+                        defaultMinute: 0,
+                        onChange: (selectedDates, dateStr) => {
+                            this.customFields[idx].value = dateStr;
+                            delete this.customFields[idx]._serverDatetime;
                         }
-                        
-                        // Initialize flatpickr - it will automatically parse the value from the input
-                        const fp = flatpickr(el, {
-                            enableTime: true,
-                            dateFormat: "Y/m/d H:i",
-                            time_24hr: true,
-                            allowInput: true,
-                            locale: "ja",
-                            defaultHour: 19,
-                            defaultMinute: 0,
-                            onChange: (selectedDates, dateStr) => {
-                                this.customFields[idx].value = dateStr;
-                            }
+                    }, serverValue);
+                    if (inputVal && field.value !== inputVal) {
+                        this._syncingCustomFieldDatetime = true;
+                        this.customFields[idx].value = inputVal;
+                        this.$nextTick(() => {
+                            this._syncingCustomFieldDatetime = false;
+                            delete this.customFields[idx]._serverDatetime;
                         });
-                        
+                    } else {
+                        delete this.customFields[idx]._serverDatetime;
                     }
                 });
             });
@@ -1474,25 +1620,13 @@ const vueApp = createApp({
             }
             this.isEditMode = true;
             this.originalProject = { ...this.project };
-            // Format dates for input fields (keep as yyyy/MM/dd HH:mm)
-            if (this.project.start_date) {
-                this.project.start_date = this.formatDateTime(this.project.start_date);
-            } else {
-                this.project.start_date = '';
-            }
-            if (this.project.end_date) {
-                this.project.end_date = this.formatDateTime(this.project.end_date);
-            } else {
-                this.project.end_date = '';
-            }
-            ['caily_nouki', 'guis_nouki'].forEach(k => {
-                this.project[k] = this.project[k] ? this.formatDateTime(this.project[k]) : '';
-            });
-            if (this.project.actual_end_date) {
-                this.project.actual_end_date = this.formatDateTime(this.project.actual_end_date);
-            } else {
-                this.project.actual_end_date = '';
-            }
+            this._serverProjectDates = {
+                start_date: this.project.start_date,
+                end_date: this.project.end_date,
+                caily_nouki: this.project.caily_nouki,
+                guis_nouki: this.project.guis_nouki,
+                actual_end_date: this.project.actual_end_date
+            };
             // Lưu lại prevTeamIds khi vào edit mode
             this.prevTeamIds = (this.project.team_list || []).map(t => String(t.id)).sort();
             // Preload teams + department users song song để Tagify không phải chờ API khi init
@@ -1505,15 +1639,13 @@ const vueApp = createApp({
                     setTimeout(() => {
                         this.initTagify();
                         this.initManagerMembersTagify();
-                        this.initCustomFieldDatePickers();
                     }, 200);
                 });
             });
         },
         toAPIDate(str) {
             if (str == null || str === '') return '';
-            if (typeof str !== 'string') str = String(str);
-            return str.replace(/\//g, '-');
+            return fromProjectDateTimeInputValue(str);
         },
         prepareCustomFieldsForSave() {
             // Merge all fields from all department custom field sets
@@ -1523,9 +1655,11 @@ const vueApp = createApp({
             // Create a map of label -> value for quick lookup
             const valueMap = {};
             this.customFields.forEach(field => {
-                if (field.label) {
+                    if (field.label) {
                     if (field.type === 'checkbox') {
                         valueMap[field.label.trim()] = Array.isArray(field.valueArr) ? field.valueArr.join(',') : '';
+                    } else if (field.type === 'datetime') {
+                        valueMap[field.label.trim()] = fromProjectDateTimeInputValue(field.value || '');
                     } else {
                         valueMap[field.label.trim()] = field.value || '';
                     }
@@ -1665,6 +1799,7 @@ const vueApp = createApp({
                 if (response.data && response.data.status == 'success') {
                     this.isEditMode = false;
                     this.originalProject = null;
+                    this._serverProjectDates = null;
                     showMessage('プロジェクトを更新しました。');
                     // Hoãn loadProject để trình duyệt kịp vẽ thông báo trước khi xử lý nặng
                     setTimeout(() => { this.loadProject(); }, 0);
@@ -1690,6 +1825,7 @@ const vueApp = createApp({
             
             this.isEditMode = false;
             this.project = { ...this.originalProject };
+            this._serverProjectDates = null;
             this.loadMembers(); // Restore managers and members from backend for correct avatars
             this.initVietnamTimeTooltips();
         },
@@ -2702,13 +2838,25 @@ const vueApp = createApp({
 
         parseProjectDateTime(value) {
             if (!this.hasProjectDateValue(value)) return null;
-            const normalized = String(value).trim().replace(/\//g, '-');
-            if (typeof moment !== 'undefined') {
-                const m = moment(normalized, ['YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', moment.ISO_8601], true);
-                if (m.isValid()) return m.toDate();
-            }
-            const d = new Date(normalized);
-            return isNaN(d.getTime()) ? null : d;
+            const parsed = parseProjectDateTimeInDisplayTz(value);
+            return parsed ? parsed.toDate() : null;
+        },
+
+        syncCustomFieldDatePickers() {
+            if (!this.customFields) return;
+            this.customFields.forEach((field, idx) => {
+                if (field.type !== 'datetime') return;
+                const el = document.getElementById('custom_datetime_' + idx);
+                if (!el) return;
+                const fp = el._flatpickr;
+                if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
+                    field.value = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
+                } else if (fp && fp._input) {
+                    field.value = String(fp._input.value || '').trim();
+                } else {
+                    field.value = String(el.value || '').trim();
+                }
+            });
         },
 
         syncProjectDateFieldsFromPickers() {
@@ -2723,12 +2871,15 @@ const vueApp = createApp({
                 const el = document.getElementById(fieldIds[key]);
                 if (!el || !this.project) return;
                 const fp = el._flatpickr;
-                if (fp && fp.input) {
-                    this.project[key] = (fp.input.value || '').trim();
+                if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
+                    this.project[key] = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
+                } else if (fp && fp._input) {
+                    this.project[key] = String(fp._input.value || '').trim();
                 } else {
-                    this.project[key] = (el.value || '').trim();
+                    this.project[key] = String(el.value || '').trim();
                 }
             });
+            this.syncCustomFieldDatePickers();
         },
 
         validateProjectNoukiFields() {
@@ -2868,25 +3019,18 @@ const vueApp = createApp({
                                     arr = savedField.value.split(',').map(s => s.trim()).filter(Boolean);
                                 }
                                 return { label: f.label, type: f.type, options: f.options, one_row: oneRow, value: arr.join(','), valueArr: arr };
-                            } else if (f.type === 'datetime') {
-                                // Get value directly from saved field, no parsing needed
-                                // Flatpickr will handle parsing when initialized (similar to project-list.js)
-                                const value = savedField && savedField.value ? String(savedField.value).trim() : '';
-                                return { 
-                                    label: f.label, 
-                                    type: f.type, 
-                                    options: f.options, 
-                                    one_row: oneRow,
-                                    value: value 
-                                };
                             } else {
-                                return { 
-                                    label: f.label, 
-                                    type: f.type, 
-                                    options: f.options, 
+                                const row = {
+                                    label: f.label,
+                                    type: f.type,
+                                    options: f.options,
                                     one_row: oneRow,
-                                    value: savedField ? savedField.value : '' 
+                                    value: savedField ? savedField.value : ''
                                 };
+                                if (f.type === 'datetime' && savedField && savedField.value) {
+                                    row._serverDatetime = savedField.value;
+                                }
+                                return row;
                             }
                         });
                         
@@ -3235,28 +3379,17 @@ const vueApp = createApp({
                                         arr = savedField.value.split(',').map(s => s.trim()).filter(Boolean);
                                     }
                                     return { label: f.label, type: f.type, options: f.options, value: arr.join(','), valueArr: arr };
-                            } else if (f.type === 'datetime') {
-                                // Get value directly from saved field, no parsing needed
-                                // Flatpickr will handle parsing when initialized (similar to project-list.js)
-                                const value = savedField && savedField.value ? String(savedField.value).trim() : '';
-                                console.log('allDepartmentCustomFieldSets watcher: datetime field', {
-                                    label: f.label,
-                                    savedField: savedField,
-                                    value: value
-                                });
-                                return { 
-                                    label: f.label, 
-                                    type: f.type, 
-                                    options: f.options, 
-                                    value: value 
-                                };
                                 } else {
-                                    return { 
-                                        label: f.label, 
-                                        type: f.type, 
-                                        options: f.options, 
-                                        value: savedField ? savedField.value : '' 
+                                    const row = {
+                                        label: f.label,
+                                        type: f.type,
+                                        options: f.options,
+                                        value: savedField ? savedField.value : ''
                                     };
+                                    if (f.type === 'datetime' && savedField && savedField.value) {
+                                        row._serverDatetime = savedField.value;
+                                    }
+                                    return row;
                                 }
                             });
                             
@@ -3290,14 +3423,6 @@ const vueApp = createApp({
                         }
                     }
                 });
-                // Initialize datetime pickers when customFields change
-                if (this.isEditMode) {
-                    this.$nextTick(() => {
-                        setTimeout(() => {
-                            this.initCustomFieldDatePickers();
-                        }, 100);
-                    });
-                }
             },
             deep: true
         },

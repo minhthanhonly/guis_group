@@ -600,5 +600,7 @@
     "作業時間を計測しました": "Đã ghi nhận thời gian làm việc",
     "作業計測の終了に失敗しました": "Không thể kết thúc đếm giờ",
     "すでに計測中です": "Đang đếm giờ rồi",
-    "このタスクの担当者のみ作業時間を計測できます": "Chỉ người được phân công mới có thể đếm giờ cho công việc này"
+    "このタスクの担当者のみ作業時間を計測できます": "Chỉ người được phân công mới có thể đếm giờ cho công việc này",
+    "表示: JST (日本)": "Hiển thị: JST (Nhật Bản)",
+    "表示: GMT+7 (Việt Nam)": "Hiển thị: GMT+7 (Việt Nam)"
   }

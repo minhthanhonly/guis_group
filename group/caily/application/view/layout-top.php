@@ -282,8 +282,8 @@
             </div>
 
             <div class="navbar-nav-right d-flex align-items-center justify-content-end" id="navbar-collapse">
-              <!-- Search -->
-              <div class="navbar-nav align-items-center">
+              <!-- Search (hidden) -->
+              <div class="navbar-nav align-items-center d-none">
                 <div class="nav-item navbar-search-wrapper px-md-0 px-2 mb-0">
                   <a class="nav-item nav-link search-toggler d-flex align-items-center px-0" href="javascript:void(0);">
                     <span class="d-inline-block text-body-secondary fw-normal" id="autocomplete"></span>
@@ -294,6 +294,17 @@
               <!-- /Search -->
 
               <ul class="navbar-nav flex-row align-items-center ms-md-auto">
+              <?php
+              $__requestUri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+              $__showProjectDisplayTimezone = (bool) preg_match('#/(project|parent_project)(/|$)#', $__requestUri);
+              ?>
+              <?php if ($__showProjectDisplayTimezone): ?>
+              <li class="nav-item d-flex align-items-center me-2 me-xl-1">
+                <span class="badge bg-label-info text-nowrap small" id="nav-display-timezone-badge" title="">
+                  <i class="fa fa-clock me-1"></i><span id="nav-display-timezone-text" data-i18n="表示: JST (日本)">表示: JST (日本)</span>
+                </span>
+              </li>
+              <?php endif; ?>
               <li class="nav-item dropdown-language dropdown me-2 me-xl-0">
                   <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown">
                     <i class="icon-base fa fa-language icon-22px text-heading"></i>
@@ -1096,5 +1107,38 @@
           </div>
 
           <button data-bs-toggle="modal" data-bs-target="#modalAI" id="ai-chat-toggle" class="btn btn-primary rounded-circle position-fixed"><i class="icon-base ti tabler-message-circle-2 icon-md"></i></button>
+          <?php if (!empty($__showProjectDisplayTimezone)): ?>
+          <script>
+          (function () {
+            function getDisplayTimezoneI18nKey() {
+              var lang = (typeof i18next !== 'undefined' && i18next.language) ? String(i18next.language) : 'en';
+              return lang.indexOf('vi') === 0 ? '表示: GMT+7 (Việt Nam)' : '表示: JST (日本)';
+            }
+            function updateNavDisplayTimezone() {
+              var textEl = document.getElementById('nav-display-timezone-text');
+              if (!textEl) return;
+              var key = getDisplayTimezoneI18nKey();
+              textEl.setAttribute('data-i18n', key);
+              textEl.textContent = (typeof i18next !== 'undefined' && i18next.isInitialized)
+                ? i18next.t(key)
+                : key;
+              var badge = document.getElementById('nav-display-timezone-badge');
+              if (badge) badge.title = textEl.textContent;
+            }
+            function scheduleUpdate() {
+              if (typeof i18next !== 'undefined' && i18next.isInitialized) {
+                updateNavDisplayTimezone();
+              } else {
+                setTimeout(scheduleUpdate, 100);
+              }
+            }
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', scheduleUpdate);
+            } else {
+              scheduleUpdate();
+            }
+          })();
+          </script>
+          <?php endif; ?>
           <!-- Content wrapper -->
           <div class="content-wrapper">

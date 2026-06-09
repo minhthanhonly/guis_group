@@ -248,27 +248,20 @@ document.addEventListener('DOMContentLoaded', function () {
       dropdownItems[i].addEventListener('click', function () {
         let currentLanguage = this.getAttribute('data-language');
         let textDirection = this.getAttribute('data-text-direction');
+        const savedLang = localStorage.getItem('templateCustomizer-' + templateName + '--Lang');
+        if (savedLang === currentLanguage) return;
 
-        for (let sibling of this.parentNode.children) {
-          var siblingEle = sibling.parentElement.parentNode.firstChild;
-
-          // Loop through each sibling and push to the array
-          while (siblingEle) {
-            if (siblingEle.nodeType === 1 && siblingEle !== siblingEle.parentElement) {
-              siblingEle.querySelector('.dropdown-item').classList.remove('active');
-            }
-            siblingEle = siblingEle.nextSibling;
-          }
+        localStorage.setItem('templateCustomizer-' + templateName + '--Lang', currentLanguage);
+        if (window.templateCustomizer) {
+          try {
+            window.templateCustomizer.setLang(currentLanguage, true, true);
+          } catch (e) {}
         }
-        this.classList.add('active');
-
-        i18next.changeLanguage(currentLanguage, (err, t) => {
-          window.templateCustomizer ? window.templateCustomizer.setLang(currentLanguage) : '';
-          directionChange(textDirection);
-          if (err) return console.log('something went wrong loading', err);
-          localize();
+        directionChange(textDirection);
+        if (window.Helpers && typeof window.Helpers.syncCustomOptionsRtl === 'function') {
           window.Helpers.syncCustomOptionsRtl(textDirection);
-        });
+        }
+        window.location.reload();
       });
     }
     function directionChange(textDirection) {

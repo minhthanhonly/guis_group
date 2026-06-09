@@ -268,9 +268,140 @@ var projectTable;
 
     var SERVER_TASK_TIMEZONE = 'Asia/Tokyo';
     var VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
+    var PROJECT_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
+    var PROJECT_DATETIME_JA_DISPLAY_FORMAT = 'YYYY年M月D日 HH:mm';
+    var PROJECT_DATETIME_FLATPICKR_FORMAT = 'Y/m/d H:i';
+    var PROJECT_DATETIME_FLATPICKR_JA_ALT_FORMAT = 'Y年n月j日 H:i';
+    var PROJECT_DATETIME_FLATPICKR_MOMENT_FORMAT = 'Y/M/D H:mm';
+    var PROJECT_DATETIME_PARSE_FORMATS = [
+        'YYYY-MM-DD HH:mm:ss',
+        'YYYY-MM-DD HH:mm',
+        'YYYY/M/D HH:mm',
+        'YYYY/MM/DD HH:mm',
+        'YYYY/M/D H:mm',
+        'YYYY/MM/DD H:mm',
+        'Y/M/D H:mm',
+        'Y/n/j H:i'
+    ];
 
     function getProjectDisplayTimezone() {
         return isVietnameseLocale() ? VIETNAM_TASK_TIMEZONE : SERVER_TASK_TIMEZONE;
+    }
+
+    function getProjectFlatpickrLocale() {
+        if (typeof window === 'undefined' || !window.flatpickr || !window.flatpickr.l10ns) {
+            return 'default';
+        }
+        if (isVietnameseLocale()) {
+            return window.flatpickr.l10ns.vi || 'default';
+        }
+        return window.flatpickr.l10ns.ja || 'default';
+    }
+
+    function makeQuickEditTimeInputsEditable(selectedDates, dateStr, instance) {
+        var cal = instance && instance.calendarContainer;
+        if (!cal) return;
+        var inputs = cal.querySelectorAll('.flatpickr-time input, .flatpickr-time .numInputWrapper input');
+        for (var i = 0; i < inputs.length; i++) {
+            inputs[i].removeAttribute('readonly');
+            inputs[i].readOnly = false;
+        }
+    }
+
+    function getProjectFlatpickrOptions(extra) {
+        var options = {
+            enableTime: true,
+            time_24hr: true,
+            dateFormat: PROJECT_DATETIME_FLATPICKR_FORMAT,
+            allowInput: true,
+            locale: getProjectFlatpickrLocale(),
+            onOpen: makeQuickEditTimeInputsEditable
+        };
+        if (!isVietnameseLocale()) {
+            options.altInput = true;
+            options.altFormat = PROJECT_DATETIME_FLATPICKR_JA_ALT_FORMAT;
+            options.altInputClass = 'form-control';
+        }
+        if (extra) {
+            Object.keys(extra).forEach(function(key) {
+                options[key] = extra[key];
+            });
+        }
+        return options;
+    }
+
+    function parseProjectDateTimeInDisplayTz(value) {
+        if (value === undefined || value === null) return null;
+        var s = String(value).trim();
+        if (!s || s === '-' || s === '0000-00-00 00:00:00' || s === '0000-00-00') return null;
+        if (typeof moment === 'undefined') return null;
+        var tz = getProjectDisplayTimezone();
+        if (moment.tz) {
+            for (var i = 0; i < PROJECT_DATETIME_PARSE_FORMATS.length; i++) {
+                var parsed = moment.tz(s, PROJECT_DATETIME_PARSE_FORMATS[i], tz);
+                if (parsed.isValid()) return parsed;
+            }
+            var normalized = s.replace(/\//g, '-');
+            var normalizedFormats = ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', 'YYYY-M-D'];
+            for (var j = 0; j < normalizedFormats.length; j++) {
+                var parsedNorm = moment.tz(normalized, normalizedFormats[j], tz);
+                if (parsedNorm.isValid()) return parsedNorm;
+            }
+            var loose = moment.tz(s, tz);
+            return loose.isValid() ? loose : null;
+        }
+        var fallback = moment(s, PROJECT_DATETIME_PARSE_FORMATS, true);
+        return fallback.isValid() ? fallback : null;
+    }
+
+    function toProjectDateTimeInputValue(date) {
+        var parsed = parseProjectDateMoment(date);
+        if (!parsed || !parsed.isValid()) return '';
+        var localized = moment.tz
+            ? parsed.clone().tz(getProjectDisplayTimezone())
+            : parsed;
+        return localized.format(PROJECT_DATETIME_FLATPICKR_MOMENT_FORMAT);
+    }
+
+    function fromProjectDateTimeInputValue(value) {
+        var raw = String(value || '').trim();
+        if (!raw) return '';
+        var parsed = parseProjectDateTimeInDisplayTz(raw);
+        if (!parsed) return raw;
+        if (moment.tz) {
+            return parsed.clone().tz(SERVER_TASK_TIMEZONE).format(PROJECT_DATETIME_MOMENT_FORMAT);
+        }
+        return parsed.format(PROJECT_DATETIME_MOMENT_FORMAT);
+    }
+
+    function getProjectDateTimePlaceholder() {
+        return isVietnameseLocale() ? 'YYYY/M/D HH:mm' : 'YYYY年M月D日 HH:mm';
+    }
+
+    function getCustomFieldDefaultHour() {
+        return isVietnameseLocale() ? 17 : 19;
+    }
+
+    function getStartDateDefaultHour() {
+        return isVietnameseLocale() ? 7 : 9;
+    }
+
+    function getDeadlineDefaultHour() {
+        return isVietnameseLocale() ? 16 : 18;
+    }
+
+    function initQuickEditFlatpickr(target, extra) {
+        var $el = (target && target.jquery) ? target : $(target);
+        if (!$el.length || typeof $().flatpickr !== 'function') return;
+        if ($el.data('flatpickr')) $el.data('flatpickr').destroy();
+        var currentVal = ($el.val() || '').trim();
+        $el.flatpickr(getProjectFlatpickrOptions(extra || {}));
+        if (currentVal) {
+            var fp = $el.data('flatpickr');
+            if (fp) {
+                fp.setDate(currentVal, false, PROJECT_DATETIME_FLATPICKR_FORMAT);
+            }
+        }
     }
 
     function toProjectDisplayMoment(value) {
@@ -2617,8 +2748,11 @@ var projectTable;
                 $('#quickEditProjectId').val(effectiveId);
                 $('#quickEditProjectIdBadge').text('#' + effectiveId);
                 $('#quickEditName').val(p.name || '');
-                $('#quickEditStartDate').val(p.start_date || '');
-                $('#quickEditEndDate').val(p.end_date || '');
+                var datetimePlaceholder = getProjectDateTimePlaceholder();
+                $('#quickEditStartDate, #quickEditEndDate, #quickEditCailyNouki, #quickEditGuisNouki')
+                    .attr('placeholder', datetimePlaceholder);
+                $('#quickEditStartDate').val(toProjectDateTimeInputValue(p.start_date));
+                $('#quickEditEndDate').val(toProjectDateTimeInputValue(p.end_date));
                 $('#quickEditStatus').val(p.status || 'draft');
                 $('#quickEditAmount').val(p.amount || '');
                 $('#quickEditProjectOrderType').val(typeof p.project_order_type === 'string' ? p.project_order_type : (Array.isArray(p.project_order_type) ? (p.project_order_type || []).join(', ') : ''));
@@ -2626,8 +2760,8 @@ var projectTable;
                 if (p.tantou === 'CAILY') $('#quickEditTantouCaily').prop('checked', true);
                 else if (p.tantou === 'GUIS') $('#quickEditTantouGuis').prop('checked', true);
                 $('#quickEditTantouDisplayText').text(p.tantou || '—');
-                $('#quickEditCailyNouki').val(p.caily_nouki || '');
-                $('#quickEditGuisNouki').val(p.guis_nouki || '');
+                $('#quickEditCailyNouki').val(toProjectDateTimeInputValue(p.caily_nouki));
+                $('#quickEditGuisNouki').val(toProjectDateTimeInputValue(p.guis_nouki));
                 $('#quickEditCailyNoukiStatus').prop('checked', !!(p.caily_nouki_status && String(p.caily_nouki_status).indexOf('納品済み') !== -1));
                 $('#quickEditGuisNoukiStatus').prop('checked', !!(p.guis_nouki_status && String(p.guis_nouki_status).indexOf('納品済み') !== -1));
                 $('#quickEditProgress').val(p.progress != null && p.progress !== '' ? parseInt(p.progress, 10) : 0);
@@ -2707,7 +2841,6 @@ var projectTable;
                         // No custom fields found, but don't hide the wrapper
                         return;
                     }
-                    var fpCommon = { enableTime: true, time_24hr: true, dateFormat: 'Y/m/d H:i', allowInput: true, locale: 'ja' };
                     mergedFields.forEach(function(f, idx) {
                         var label = f.label;
                         var type = f.type;
@@ -2740,7 +2873,8 @@ var projectTable;
                                 html += '<div class="form-check"><input class="form-check-input quickEditCustomCheckbox" type="checkbox" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (checked ? ' checked' : '') + '><label class="form-check-label">' + optText + '</label></div>';
                             });
                         } else if (type === 'datetime') {
-                            html += '<input type="text" class="form-control quickEditCustomInput quickEditCustomDatetime" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">';
+                            var datetimeVal = val ? toProjectDateTimeInputValue(val) : '';
+                            html += '<input type="text" class="form-control quickEditCustomInput quickEditCustomDatetime" data-custom-label="' + safeLabel + '" value="' + (datetimeVal ? String(datetimeVal).replace(/"/g, '&quot;') : '') + '" placeholder="' + datetimePlaceholder.replace(/"/g, '&quot;') + '" autocomplete="off">';
                         } else {
                             html += '<input type="text" class="form-control quickEditCustomInput" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '">';
                         }
@@ -2749,9 +2883,7 @@ var projectTable;
                     });
                     if (typeof $().flatpickr === 'function') {
                         $wrap.find('.quickEditCustomDatetime').each(function() {
-                            var $el = $(this);
-                            if ($el.data('flatpickr')) $el.data('flatpickr').destroy();
-                            $el.flatpickr(Object.assign({}, fpCommon, { defaultHour: 19, defaultMinute: 0 }));
+                            initQuickEditFlatpickr(this, { defaultHour: getCustomFieldDefaultHour(), defaultMinute: 0 });
                         });
                     }
                 }).catch(function(err) { 
@@ -2760,40 +2892,19 @@ var projectTable;
                 });
 
                 if (typeof $().flatpickr === 'function') {
-                    function makeTimeInputsEditable(selectedDates, dateStr, instance) {
-                        var cal = instance.calendarContainer;
-                        if (cal) {
-                            var inputs = cal.querySelectorAll('.flatpickr-time input, .flatpickr-time .numInputWrapper input');
-                            for (var i = 0; i < inputs.length; i++) {
-                                inputs[i].removeAttribute('readonly');
-                                inputs[i].readOnly = false;
-                            }
-                        }
-                    }
-                    var fpCommon = {
-                        enableTime: true,
-                        time_24hr: true,
-                        dateFormat: 'Y/m/d H:i',
-                        allowInput: true,
-                        locale: 'ja',
-                        onOpen: makeTimeInputsEditable
-                    };
                     var fpOnChangeNouki = function() { updateQuickEditNoukiRequiredIndicators(); };
-                    if ($('#quickEditStartDate').data('flatpickr')) $('#quickEditStartDate').data('flatpickr').destroy();
-                    $('#quickEditStartDate').flatpickr(Object.assign({}, fpCommon, { defaultHour: 9, defaultMinute: 0 }));
-                    if ($('#quickEditEndDate').data('flatpickr')) $('#quickEditEndDate').data('flatpickr').destroy();
-                    $('#quickEditEndDate').flatpickr(Object.assign({}, fpCommon, {
-                        defaultHour: 18,
+                    initQuickEditFlatpickr('#quickEditStartDate', { defaultHour: getStartDateDefaultHour(), defaultMinute: 0 });
+                    initQuickEditFlatpickr('#quickEditEndDate', {
+                        defaultHour: getDeadlineDefaultHour(),
                         defaultMinute: 0,
                         onChange: fpOnChangeNouki
-                    }));
+                    });
                     ['#quickEditCailyNouki', '#quickEditGuisNouki'].forEach(function(sel) {
-                        if ($(sel).data('flatpickr')) $(sel).data('flatpickr').destroy();
-                        $(sel).flatpickr(Object.assign({}, fpCommon, {
-                            defaultHour: 18,
+                        initQuickEditFlatpickr(sel, {
+                            defaultHour: getDeadlineDefaultHour(),
                             defaultMinute: 0,
                             onChange: fpOnChangeNouki
-                        }));
+                        });
                     });
                     updateQuickEditNoukiRequiredIndicators();
                 }
@@ -2917,10 +3028,8 @@ var projectTable;
 
         function isValidDateOrDateTime(str) {
             if (!str || typeof str !== 'string') return false;
-            var s = str.trim();
-            if (s === '') return false;
-            var t = Date.parse(s);
-            return !isNaN(t);
+            if (str.trim() === '') return false;
+            return !!parseProjectDateTimeInDisplayTz(str);
         }
 
         function hasQuickEditDateValue(value) {
@@ -2929,13 +3038,13 @@ var projectTable;
 
         function parseQuickEditDateTime(value) {
             if (!hasQuickEditDateValue(value)) return null;
-            var normalized = String(value).trim().replace(/\//g, '-');
-            if (typeof moment !== 'undefined') {
-                var m = moment(normalized, ['YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', moment.ISO_8601], true);
-                if (m.isValid()) return m.toDate();
-            }
-            var d = new Date(normalized);
-            return isNaN(d.getTime()) ? null : d;
+            var parsed = parseProjectDateTimeInDisplayTz(value);
+            return parsed ? parsed.toDate() : null;
+        }
+
+        function getQuickEditDateFieldValue(selector) {
+            syncQuickEditDateFieldsFromPickers();
+            return fromProjectDateTimeInputValue($(selector).val() || '');
         }
 
         function syncQuickEditDateFieldsFromPickers() {
@@ -2943,8 +3052,11 @@ var projectTable;
                 var $el = $(sel);
                 if (!$el.length) return;
                 var fp = $el.data('flatpickr');
-                if (fp && fp.input) {
-                    $el.val((fp.input.value || '').trim());
+                if (!fp) return;
+                if (fp.selectedDates && fp.selectedDates.length > 0) {
+                    $el.val(fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT));
+                } else if (fp._input && fp._input.value) {
+                    $el.val(String(fp._input.value).trim());
                 }
             });
         }
@@ -3123,13 +3235,13 @@ var projectTable;
             formData.append('method', 'update');
             formData.append('id', id);
             formData.append('name', $('#quickEditName').val() || '');
-            formData.append('start_date', $('#quickEditStartDate').val() || '');
-            formData.append('end_date', $('#quickEditEndDate').val() || '');
+            formData.append('start_date', getQuickEditDateFieldValue('#quickEditStartDate'));
+            formData.append('end_date', getQuickEditDateFieldValue('#quickEditEndDate'));
             formData.append('status', $('#quickEditStatus').val() || 'draft');
             formData.append('amount', $('#quickEditAmount').val() || '');
             formData.append('tantou', $('input[name="tantou"]:checked').val() || '');
-            formData.append('caily_nouki', $('#quickEditCailyNouki').val() || '');
-            formData.append('guis_nouki', $('#quickEditGuisNouki').val() || '');
+            formData.append('caily_nouki', getQuickEditDateFieldValue('#quickEditCailyNouki'));
+            formData.append('guis_nouki', getQuickEditDateFieldValue('#quickEditGuisNouki'));
             formData.append('caily_nouki_status', $('#quickEditCailyNoukiStatus').is(':checked') ? '納品済み' : '');
             formData.append('guis_nouki_status', $('#quickEditGuisNoukiStatus').is(':checked') ? '納品済み' : '');
             formData.append('progress', $('#quickEditProgress').val() !== '' ? parseInt($('#quickEditProgress').val(), 10) : 0);
@@ -3155,6 +3267,9 @@ var projectTable;
                 } else {
                     var input = $field.find('.quickEditCustomInput');
                     value = input.length ? (input.val() || '').trim() : '';
+                    if (type === 'datetime') {
+                        value = fromProjectDateTimeInputValue(value);
+                    }
                 }
                 customFieldsData.push({ label: label, value: value });
             });
@@ -3288,28 +3403,21 @@ var projectTable;
             }
         });
 
-        $('#start_date').flatpickr({    
-            dateFormat: 'Y-m-d',
-            onChange: function(date) {
-                console.log(date);
-            }
-        });
-
-        $('#end_date').flatpickr({
-            dateFormat: 'Y-m-d',
-            onChange: function(date) {
-                console.log(date);
-            }
-        });
+        if (typeof $().flatpickr === 'function') {
+            $('#start_date').flatpickr(getProjectFlatpickrOptions({ defaultHour: getStartDateDefaultHour(), defaultMinute: 0 }));
+            $('#end_date').flatpickr(getProjectFlatpickrOptions({ defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 }));
+        }
 
         // Khởi tạo flatpickr dạng tháng (month picker) cho filterStartMonth và filterEndMonth
         if (window.flatpickr) {
+            var monthPickerLocale = getProjectFlatpickrLocale();
+            var monthAltFormat = isVietnameseLocale() ? 'm/Y' : 'Y年m月';
             $('#filterStartMonth').flatpickr({
-                locale: 'ja',
+                locale: monthPickerLocale,
                 plugins: [new monthSelectPlugin({
                     shorthand: true,
                     dateFormat: 'Y-m',
-                    altFormat: 'Y年m月',
+                    altFormat: monthAltFormat,
                 })],
                 onChange: function(date) {
                     saveFiltersToLocalStorage();
@@ -3317,11 +3425,11 @@ var projectTable;
                 }
             });
             $('#filterEndMonth').flatpickr({
-                locale: 'ja',
+                locale: monthPickerLocale,
                 plugins: [new monthSelectPlugin({
                     shorthand: true,
                     dateFormat: 'Y-m',
-                    altFormat: 'Y年m月',
+                    altFormat: monthAltFormat,
                 })],
                 onChange: function(date) {
                     saveFiltersToLocalStorage();

@@ -403,7 +403,7 @@ if($_SESSION['show_project'] == 0){
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="開始日">開始日</span></label>
                                 <div v-if="isEditMode" class="input-group">
-                                    <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                    <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                 </div>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.start_date)" :data-time="project.start_date || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ''" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.start_date)" readonly>
@@ -418,7 +418,7 @@ if($_SESSION['show_project'] == 0){
                                 </label>
                                 <template v-if="isEditMode">
                                     <div class="input-group">
-                                        <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                             :class="{ 'is-invalid': validationErrors.end_date }">
                                         <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                     </div>
@@ -471,7 +471,7 @@ if($_SESSION['show_project'] == 0){
                                 </label>
                                 <div v-if="isEditMode">
                                     <div class="input-group mb-1">
-                                        <input type="text" class="form-control" v-model="project.caily_nouki" id="caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        <input type="text" class="form-control" v-model="project.caily_nouki" id="caily_nouki_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                             :class="{ 'is-invalid': validationErrors.caily_nouki }">
                                         <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                     </div>
@@ -504,7 +504,7 @@ if($_SESSION['show_project'] == 0){
                                 </label>
                                 <div v-if="isEditMode">
                                     <div class="input-group mb-1">
-                                        <input type="text" class="form-control" v-model="project.guis_nouki" id="guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        <input type="text" class="form-control" v-model="project.guis_nouki" id="guis_nouki_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                             :class="{ 'is-invalid': validationErrors.guis_nouki }">
                                         <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                     </div>
@@ -531,7 +531,7 @@ if($_SESSION['show_project'] == 0){
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="実終了日">実終了日</span></label>
                                 <div v-if="isEditMode" class="input-group">
-                                    <input type="text" class="form-control" v-model="project.actual_end_date" id="actual_end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                    <input type="text" class="form-control" v-model="project.actual_end_date" id="actual_end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
                                     <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                 </div>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
@@ -571,7 +571,7 @@ if($_SESSION['show_project'] == 0){
                                                             <input type="text" class="form-control custom-field-datetime" 
                                                                    :id="'custom_datetime_' + idx" 
                                                                    v-model="field.value" 
-                                                                   placeholder="YYYY/MM/DD HH:mm" 
+                                                                   :placeholder="getProjectDateTimePlaceholder()" 
                                                                    autocomplete="off">
                                                             <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                                         </div>

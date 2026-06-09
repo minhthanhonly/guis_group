@@ -14,6 +14,178 @@ if (typeof window.formatVietnamTimeTooltip !== 'function') {
     };
 }
 
+const SERVER_TASK_TIMEZONE = 'Asia/Tokyo';
+const VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
+const PROJECT_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
+const PROJECT_DATETIME_JA_DISPLAY_FORMAT = 'YYYY年M月D日 HH:mm';
+const PROJECT_DATETIME_FLATPICKR_FORMAT = 'Y/m/d H:i';
+const PROJECT_DATETIME_FLATPICKR_JA_ALT_FORMAT = 'Y年n月j日 H:i';
+const PROJECT_DATETIME_FLATPICKR_MOMENT_FORMAT = 'Y/M/D H:mm';
+const PROJECT_DATETIME_PARSE_FORMATS = [
+    'YYYY-MM-DD HH:mm:ss',
+    'YYYY-MM-DD HH:mm',
+    'YYYY/M/D HH:mm',
+    'YYYY/MM/DD HH:mm',
+    'YYYY/M/D H:mm',
+    'YYYY/MM/DD H:mm',
+    'Y/M/D H:mm',
+    'Y/n/j H:i'
+];
+
+function isVietnameseLocale() {
+    return typeof i18next !== 'undefined'
+        && i18next.isInitialized
+        && String(i18next.language || '').startsWith('vi');
+}
+
+function getProjectDisplayTimezone() {
+    return isVietnameseLocale() ? VIETNAM_TASK_TIMEZONE : SERVER_TASK_TIMEZONE;
+}
+
+function parseProjectDateMomentServer(value) {
+    if (value === undefined || value === null) return null;
+    const s = String(value).trim();
+    if (!s || s === '-') return null;
+    const normalized = s.replace(/\//g, '-');
+    if (typeof moment !== 'undefined') {
+        const formats = ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', 'YYYY-M-D'];
+        const m = typeof moment.tz === 'function'
+            ? moment.tz(normalized, formats, SERVER_TASK_TIMEZONE)
+            : moment(normalized, formats, true);
+        if (m.isValid()) return m;
+    }
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return null;
+    return typeof moment !== 'undefined' ? moment(d) : null;
+}
+
+function parseProjectDateTimeInDisplayTz(value) {
+    if (value === undefined || value === null) return null;
+    const s = String(value).trim();
+    if (!s || s === '-' || s === '0000-00-00 00:00:00' || s === '0000-00-00') return null;
+    if (typeof moment === 'undefined') return null;
+    const tz = getProjectDisplayTimezone();
+    if (moment.tz) {
+        for (let i = 0; i < PROJECT_DATETIME_PARSE_FORMATS.length; i++) {
+            const parsed = moment.tz(s, PROJECT_DATETIME_PARSE_FORMATS[i], tz);
+            if (parsed.isValid()) return parsed;
+        }
+        const normalized = s.replace(/\//g, '-');
+        const normalizedFormats = ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', 'YYYY-M-D'];
+        for (let j = 0; j < normalizedFormats.length; j++) {
+            const parsedNorm = moment.tz(normalized, normalizedFormats[j], tz);
+            if (parsedNorm.isValid()) return parsedNorm;
+        }
+        const loose = moment.tz(s, tz);
+        return loose.isValid() ? loose : null;
+    }
+    const fallback = moment(s, PROJECT_DATETIME_PARSE_FORMATS, true);
+    return fallback.isValid() ? fallback : null;
+}
+
+function toProjectDateTimeInputValue(date) {
+    const parsed = parseProjectDateMomentServer(date);
+    if (!parsed || !parsed.isValid()) return '';
+    const localized = moment.tz
+        ? parsed.clone().tz(getProjectDisplayTimezone())
+        : parsed;
+    return localized.format(PROJECT_DATETIME_FLATPICKR_MOMENT_FORMAT);
+}
+
+function fromProjectDateTimeInputValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const parsed = parseProjectDateTimeInDisplayTz(raw);
+    if (!parsed) return raw;
+    if (moment.tz) {
+        return parsed.clone().tz(SERVER_TASK_TIMEZONE).format(PROJECT_DATETIME_MOMENT_FORMAT);
+    }
+    return parsed.format(PROJECT_DATETIME_MOMENT_FORMAT);
+}
+
+function formatProjectDateTimeForDisplay(value) {
+    const parsed = parseProjectDateMomentServer(value);
+    if (!parsed) return '-';
+    const localized = moment.tz
+        ? parsed.clone().tz(getProjectDisplayTimezone())
+        : parsed;
+    return localized.format(
+        isVietnameseLocale()
+            ? PROJECT_DATETIME_MOMENT_FORMAT
+            : PROJECT_DATETIME_JA_DISPLAY_FORMAT
+    );
+}
+
+function getProjectFlatpickrLocale() {
+    if (typeof window === 'undefined' || !window.flatpickr || !window.flatpickr.l10ns) {
+        return 'default';
+    }
+    if (isVietnameseLocale()) {
+        return window.flatpickr.l10ns.vi || 'default';
+    }
+    return window.flatpickr.l10ns.ja || 'default';
+}
+
+function makeChildProjectTimeInputsEditable(selectedDates, dateStr, instance) {
+    const cal = instance && instance.calendarContainer;
+    if (!cal) return;
+    cal.querySelectorAll('.flatpickr-time input, .flatpickr-time .numInputWrapper input').forEach((input) => {
+        input.removeAttribute('readonly');
+        input.readOnly = false;
+    });
+}
+
+function getProjectFlatpickrOptions(extra) {
+    const options = {
+        enableTime: true,
+        time_24hr: true,
+        dateFormat: PROJECT_DATETIME_FLATPICKR_FORMAT,
+        allowInput: true,
+        locale: getProjectFlatpickrLocale(),
+        onOpen: makeChildProjectTimeInputsEditable
+    };
+    if (!isVietnameseLocale()) {
+        options.altInput = true;
+        options.altFormat = PROJECT_DATETIME_FLATPICKR_JA_ALT_FORMAT;
+        options.altInputClass = 'form-control';
+    }
+    if (extra) {
+        Object.assign(options, extra);
+    }
+    return options;
+}
+
+function initChildProjectFlatpickr(el, extra, serverValue, opts) {
+    if (!el || typeof flatpickr === 'undefined') return null;
+    if (el._flatpickr) el._flatpickr.destroy();
+    const options = opts || {};
+    const inputVal = options.alreadyDisplay
+        ? String(serverValue || '').trim()
+        : toProjectDateTimeInputValue(serverValue);
+    if (inputVal) el.value = inputVal;
+    const fp = flatpickr(el, getProjectFlatpickrOptions(extra || {}));
+    if (inputVal) {
+        fp.setDate(inputVal, false, PROJECT_DATETIME_FLATPICKR_FORMAT);
+    }
+    return fp;
+}
+
+function getProjectDateTimePlaceholder() {
+    return isVietnameseLocale() ? 'YYYY/M/D HH:mm' : 'YYYY年M月D日 HH:mm';
+}
+
+function getCustomFieldDefaultHour() {
+    return isVietnameseLocale() ? 17 : 19;
+}
+
+function getStartDateDefaultHour() {
+    return isVietnameseLocale() ? 7 : 9;
+}
+
+function getDeadlineDefaultHour() {
+    return isVietnameseLocale() ? 16 : 18;
+}
+
 createApp({
     data() {
         return {
@@ -206,6 +378,7 @@ createApp({
             createChildProjectQuillInstance: null,
             createChildProjectQuillContent: '',
             createChildProjectQuillInitializing: false,
+            _serverChildProjectDates: null,
             // Quotation data
             quotations: [],
             selectedQuotation: null,
@@ -832,15 +1005,14 @@ createApp({
             return date.toLocaleDateString('ja-JP');
         },
         formatDateTime(dateString) {
-            if (!dateString) return '-';
-            const date = new Date(dateString);
-            return date.toLocaleString('ja-JP', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            return formatProjectDateTimeForDisplay(dateString);
+        },
+        getProjectDateTimePlaceholder() {
+            return getProjectDateTimePlaceholder();
+        },
+        toChildProjectAPIDate(str) {
+            if (str == null || str === '') return '';
+            return fromProjectDateTimeInputValue(str);
         },
         /** Tooltip giờ VN khi hover lên giờ Nhật: "VN hh:ii" (dùng chung với main.js) */
         getVietnamTimeTooltip(jpDateTimeStr) {
@@ -1793,12 +1965,6 @@ createApp({
             if (this.parentProject && this.parentProject.project_name) {
                 this.newChildProject.name = this.parentProject.project_name;
             }
-            // Default start_date only; 期限日・納期は未入力（入力時のみバリデーション）
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const day = String(today.getDate()).padStart(2, '0');
-            this.newChildProject.start_date = `${year}/${month}/${day} 09:00`;
             this.newChildProject.end_date = '';
             this.loadDepartments();
             
@@ -1964,92 +2130,56 @@ createApp({
             }
         },
         
+        getDefaultChildProjectStartDate() {
+            const today = moment.tz
+                ? moment.tz(moment(), getProjectDisplayTimezone())
+                : moment();
+            const startHour = String(getStartDateDefaultHour()).padStart(2, '0');
+            return today.format('YYYY/M/D') + ' ' + startHour + ':00';
+        },
+        initChildProjectDatePicker(elId, key, extra, isEdit = false) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            const project = isEdit ? this.editingChildProject : this.newChildProject;
+            const hasServerValue = this._serverChildProjectDates && this._serverChildProjectDates[key] != null;
+            const serverValue = hasServerValue
+                ? this._serverChildProjectDates[key]
+                : project[key];
+            const useDisplayDefault = !isEdit && !hasServerValue && key === 'start_date' && !serverValue;
+            const displayDefault = useDisplayDefault ? this.getDefaultChildProjectStartDate() : '';
+            const inputVal = useDisplayDefault
+                ? displayDefault
+                : toProjectDateTimeInputValue(serverValue);
+            if (el._flatpickr) {
+                const fpVal = String(
+                    (el._flatpickr._input && el._flatpickr._input.value) || el.value || ''
+                ).trim();
+                const displayVal = String(project[key] || '').trim();
+                if (fpVal && (fpVal === inputVal || fpVal === displayVal)) {
+                    return;
+                }
+            }
+            initChildProjectFlatpickr(el, {
+                defaultHour: extra.defaultHour,
+                defaultMinute: extra.defaultMinute,
+                onChange: (selectedDates, dateStr) => {
+                    project[key] = dateStr || '';
+                }
+            }, useDisplayDefault ? displayDefault : serverValue, {
+                alreadyDisplay: useDisplayDefault
+            });
+            if (inputVal && project[key] !== inputVal) {
+                project[key] = inputVal;
+            }
+            if (this._serverChildProjectDates) {
+                delete this._serverChildProjectDates[key];
+            }
+        },
         initializeChildProjectDatePickers() {
-            // Initialize start date picker
-            const startDatePicker = document.getElementById('start_date_picker');
-            if (startDatePicker) {
-                const startDateOptions = {
-                    enableTime: true,
-                    dateFormat: "Y/m/d H:i",
-                    time_24hr: true,
-                    locale: "ja",
-                    allowInput: true,
-                    clickOpens: true,
-                    onChange: (selectedDates, dateStr) => {
-                        this.newChildProject.start_date = dateStr;
-                    }
-                };
-                // Set default date if value exists
-                if (this.newChildProject.start_date) {
-                    startDateOptions.defaultDate = this.newChildProject.start_date;
-                }
-                flatpickr(startDatePicker, startDateOptions);
-            }
-            
-            // Initialize end date picker
-            const endDatePicker = document.getElementById('end_date_picker');
-            if (endDatePicker) {
-                const endDateOptions = {
-                    enableTime: true,
-                    dateFormat: "Y/m/d H:i",
-                    time_24hr: true,
-                    locale: "ja",
-                    allowInput: true,
-                    clickOpens: true,
-                    onChange: (selectedDates, dateStr) => {
-                        this.newChildProject.end_date = dateStr;
-                    }
-                };
-                // Set default date if value exists
-                if (this.newChildProject.end_date) {
-                    endDateOptions.defaultDate = this.newChildProject.end_date;
-                }
-                flatpickr(endDatePicker, endDateOptions);
-            }
-            
-            // Initialize CAILY納期 date picker
-            const cailyNoukiPicker = document.getElementById('create_caily_nouki_picker');
-            if (cailyNoukiPicker) {
-                const cailyNoukiOptions = {
-                    enableTime: true,
-                    dateFormat: "Y/m/d H:i",
-                    time_24hr: true,
-                    locale: "ja",
-                    allowInput: true,
-                    clickOpens: true,
-                    defaultHour: 18,
-                    defaultMinute: 0,
-                    onChange: (selectedDates, dateStr) => {
-                        this.newChildProject.caily_nouki = dateStr;
-                    }
-                };
-                if (this.newChildProject.caily_nouki) {
-                    cailyNoukiOptions.defaultDate = this.newChildProject.caily_nouki;
-                }
-                flatpickr(cailyNoukiPicker, cailyNoukiOptions);
-            }
-            
-            // Initialize GUIS納期 date picker
-            const guisNoukiPicker = document.getElementById('create_guis_nouki_picker');
-            if (guisNoukiPicker) {
-                const guisNoukiOptions = {
-                    enableTime: true,
-                    dateFormat: "Y/m/d H:i",
-                    time_24hr: true,
-                    locale: "ja",
-                    allowInput: true,
-                    clickOpens: true,
-                    defaultHour: 18,
-                    defaultMinute: 0,
-                    onChange: (selectedDates, dateStr) => {
-                        this.newChildProject.guis_nouki = dateStr;
-                    }
-                };
-                if (this.newChildProject.guis_nouki) {
-                    guisNoukiOptions.defaultDate = this.newChildProject.guis_nouki;
-                }
-                flatpickr(guisNoukiPicker, guisNoukiOptions);
-            }
+            this.initChildProjectDatePicker('start_date_picker', 'start_date', { defaultHour: getStartDateDefaultHour(), defaultMinute: 0 });
+            this.initChildProjectDatePicker('end_date_picker', 'end_date', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 });
+            this.initChildProjectDatePicker('create_caily_nouki_picker', 'caily_nouki', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 });
+            this.initChildProjectDatePicker('create_guis_nouki_picker', 'guis_nouki', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 });
         },
         
         async initializeChildProjectTagify() {
@@ -2341,7 +2471,7 @@ createApp({
             const checkboxClass = prefix + 'CustomCheckbox';
             const radioClass = prefix + 'CustomRadio';
             const datetimeClass = prefix + 'CustomDatetime';
-            const fpCommon = { enableTime: true, time_24hr: true, dateFormat: 'Y/m/d H:i', allowInput: true, locale: 'ja' };
+            const datetimePlaceholder = getProjectDateTimePlaceholder().replace(/"/g, '&quot;');
             mergedFields.forEach((f, idx) => {
                 const label = f.label;
                 const type = f.type;
@@ -2373,7 +2503,8 @@ createApp({
                         inner += '<div class="form-check"><input class="form-check-input ' + checkboxClass + '" type="checkbox" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (checked ? ' checked' : '') + '><label class="form-check-label">' + String(opt).replace(/</g, '&lt;') + '</label></div>';
                     });
                 } else if (type === 'datetime') {
-                    inner += '<input type="text" class="form-control ' + inputClass + ' ' + datetimeClass + '" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">';
+                    const datetimeVal = val ? toProjectDateTimeInputValue(val) : '';
+                    inner += '<input type="text" class="form-control ' + inputClass + ' ' + datetimeClass + '" data-custom-label="' + safeLabel + '" data-server-datetime="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '" value="' + (datetimeVal ? String(datetimeVal).replace(/"/g, '&quot;') : '') + '" placeholder="' + datetimePlaceholder + '" autocomplete="off">';
                 } else {
                     inner += '<input type="text" class="form-control ' + inputClass + '" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '">';
                 }
@@ -2385,11 +2516,13 @@ createApp({
         _initChildProjectCustomFieldsFlatpickr(wrapEl, datetimeClass) {
             if (typeof wrapEl.querySelectorAll !== 'function') return;
             const inputs = wrapEl.querySelectorAll('.' + datetimeClass);
-            const fpCommon = { enableTime: true, time_24hr: true, dateFormat: 'Y/m/d H:i', allowInput: true, locale: 'ja' };
             if (typeof flatpickr !== 'undefined' && inputs.length) {
                 inputs.forEach(el => {
-                    if (el._flatpickr) el._flatpickr.destroy();
-                    el._flatpickr = flatpickr(el, Object.assign({}, fpCommon, { defaultHour: 19, defaultMinute: 0 }));
+                    const serverValue = el.getAttribute('data-server-datetime') || el.value || '';
+                    initChildProjectFlatpickr(el, {
+                        defaultHour: getCustomFieldDefaultHour(),
+                        defaultMinute: 0
+                    }, serverValue);
                 });
             }
         },
@@ -2414,6 +2547,9 @@ createApp({
                 } else {
                     const input = row.querySelector('.' + inputClass);
                     value = input ? (input.value || '').trim() : '';
+                    if (type === 'datetime' && value) {
+                        value = fromProjectDateTimeInputValue(value);
+                    }
                 }
                 result.push({ label: label.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>'), value });
             });
@@ -2452,14 +2588,20 @@ createApp({
             clearInput('edit_child_project_team_tags');
             clearInput('edit_child_project_members_tags');
 
+            this._serverChildProjectDates = {
+                start_date: project.start_date,
+                end_date: project.end_date,
+                caily_nouki: project.caily_nouki,
+                guis_nouki: project.guis_nouki
+            };
             this.editingChildProject = {
                 id: project.id,
                 name: project.name || '',
                 department_id: project.department_id || '',
                 project_number: project.project_number || '',
                 description: project.description || '',
-                start_date: this.formatDateTimeForInput(project.start_date) || '',
-                end_date: this.formatDateTimeForInput(project.end_date) || '',
+                start_date: project.start_date || '',
+                end_date: project.end_date || '',
                 project_order_type: project.project_order_type || '',
                 parent_project_id: PARENT_PROJECT_ID,
                 is_kadai: true,
@@ -2471,8 +2613,8 @@ createApp({
                 managers: [],
                 members: [],
                 tantou: project.tantou || '',
-                caily_nouki: this.formatDateTimeForInput(project.caily_nouki) || '',
-                guis_nouki: this.formatDateTimeForInput(project.guis_nouki) || '',
+                caily_nouki: project.caily_nouki || '',
+                guis_nouki: project.guis_nouki || '',
                 custom_fields: project.custom_fields != null ? project.custom_fields : ''
             };
 
@@ -2507,33 +2649,10 @@ createApp({
         },
         
         initializeEditChildProjectDatePickers() {
-            const p = this.editingChildProject;
-            const bindPicker = (id, field) => {
-                const el = document.getElementById(id);
-                if (!el) return;
-                if (el._flatpickr) el._flatpickr.destroy();
-                const opts = {
-                    enableTime: true,
-                    dateFormat: 'Y/m/d H:i',
-                    time_24hr: true,
-                    locale: 'ja',
-                    allowInput: true,
-                    clickOpens: true,
-                    onChange: (selectedDates, dateStr) => {
-                        p[field] = dateStr || '';
-                    }
-                };
-                if (field === 'caily_nouki' || field === 'guis_nouki') {
-                    opts.defaultHour = 18;
-                    opts.defaultMinute = 0;
-                }
-                if (p[field]) opts.defaultDate = p[field];
-                flatpickr(el, opts);
-            };
-            bindPicker('edit_start_date_picker', 'start_date');
-            bindPicker('edit_end_date_picker', 'end_date');
-            bindPicker('edit_caily_nouki_picker', 'caily_nouki');
-            bindPicker('edit_guis_nouki_picker', 'guis_nouki');
+            this.initChildProjectDatePicker('edit_start_date_picker', 'start_date', { defaultHour: getStartDateDefaultHour(), defaultMinute: 0 }, true);
+            this.initChildProjectDatePicker('edit_end_date_picker', 'end_date', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 }, true);
+            this.initChildProjectDatePicker('edit_caily_nouki_picker', 'caily_nouki', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 }, true);
+            this.initChildProjectDatePicker('edit_guis_nouki_picker', 'guis_nouki', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 }, true);
         },
         
         async initializeEditChildProjectTagify() {
@@ -3278,8 +3397,8 @@ createApp({
 
             // Validate that start date is before end date (only when both are filled)
             if (this.editingChildProject.start_date && this.editingChildProject.end_date) {
-                const startDate = new Date(this.editingChildProject.start_date);
-                const endDate = new Date(this.editingChildProject.end_date);
+                const startDate = this.parseChildProjectDateTime(this.editingChildProject.start_date);
+                const endDate = this.parseChildProjectDateTime(this.editingChildProject.end_date);
                 
                 if (startDate >= endDate) {
                     this.editChildProjectValidationErrors.end_date = '期限日は開始日より後である必要があります';
@@ -3331,8 +3450,8 @@ createApp({
                 formData.append('department_id', this.editingChildProject.department_id);
                 formData.append('project_number', this.editingChildProject.project_number || '');
                 formData.append('description', this.editChildProjectQuillContent || '');
-                formData.append('start_date', this.editingChildProject.start_date);
-                formData.append('end_date', this.editingChildProject.end_date);
+                formData.append('start_date', this.toChildProjectAPIDate(this.editingChildProject.start_date));
+                formData.append('end_date', this.toChildProjectAPIDate(this.editingChildProject.end_date));
                 formData.append('project_order_type', this.editingChildProject.project_order_type || '');
                 // Luôn gửi managers (kể cả rỗng) để backend cập nhật đúng project_members
                 formData.append('managers', (this.editingChildProject.managers && this.editingChildProject.managers.length > 0) ? this.editingChildProject.managers.join(',') : '');
@@ -3345,8 +3464,8 @@ createApp({
                     formData.append('members', Array.isArray(this.editingChildProject.members) ? this.editingChildProject.members.join(',') : String(this.editingChildProject.members));
                 }
                 formData.append('tantou', this.editingChildProject.tantou || '');
-                formData.append('caily_nouki', this.editingChildProject.caily_nouki || '');
-                formData.append('guis_nouki', this.editingChildProject.guis_nouki || '');
+                formData.append('caily_nouki', this.toChildProjectAPIDate(this.editingChildProject.caily_nouki) || '');
+                formData.append('guis_nouki', this.toChildProjectAPIDate(this.editingChildProject.guis_nouki) || '');
 
                 formData.append('is_kadai', '0');
 
@@ -3357,6 +3476,7 @@ createApp({
 
                 if (response.data.status === 'success') {
                     showMessage('課題が正常に更新されました。');
+                    this._serverChildProjectDates = null;
                     
                     // Close modal
                     const modal = bootstrap.Modal.getInstance(document.getElementById('editChildProjectModal'));
@@ -3405,17 +3525,7 @@ createApp({
         },
         
         formatDateTimeForInput(dateTimeString) {
-            if (!dateTimeString) return '';
-            const date = new Date(dateTimeString);
-            if (isNaN(date.getTime())) return '';
-            
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            
-            return `${year}/${month}/${day} ${hours}:${minutes}`;
+            return toProjectDateTimeInputValue(dateTimeString);
         },
 
 
@@ -3463,13 +3573,8 @@ createApp({
 
         parseChildProjectDateTime(value) {
             if (!this.hasChildProjectDateValue(value)) return null;
-            const normalized = String(value).trim().replace(/\//g, '-');
-            if (typeof moment !== 'undefined') {
-                const m = moment(normalized, ['YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', moment.ISO_8601], true);
-                if (m.isValid()) return m.toDate();
-            }
-            const d = new Date(normalized);
-            return isNaN(d.getTime()) ? null : d;
+            const parsed = parseProjectDateTimeInDisplayTz(value);
+            return parsed ? parsed.toDate() : null;
         },
 
         /** DOM/flatpickr → model (create・edit modal). */
@@ -3490,10 +3595,12 @@ createApp({
                 const el = document.getElementById(fieldIds[key]);
                 if (!el) return;
                 const fp = el._flatpickr;
-                if (fp && fp.input) {
-                    project[key] = (fp.input.value || '').trim();
+                if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
+                    project[key] = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
+                } else if (fp && fp._input) {
+                    project[key] = String(fp._input.value || '').trim();
                 } else {
-                    project[key] = (el.value || '').trim();
+                    project[key] = String(el.value || '').trim();
                 }
             });
         },
@@ -3566,8 +3673,8 @@ createApp({
 
             // Validate that start date is before end date (only when both are filled)
             if (this.newChildProject.start_date && this.newChildProject.end_date) {
-                const startDate = new Date(this.newChildProject.start_date);
-                const endDate = new Date(this.newChildProject.end_date);
+                const startDate = this.parseChildProjectDateTime(this.newChildProject.start_date);
+                const endDate = this.parseChildProjectDateTime(this.newChildProject.end_date);
                 
                 if (startDate >= endDate) {
                     this.childProjectValidationErrors.end_date = '期限日は開始日より後である必要があります';
@@ -3631,8 +3738,8 @@ createApp({
                 formData.append('department_id', this.newChildProject.department_id);
                 formData.append('project_number', '');
                 formData.append('description', this.newChildProject.description || '');
-                formData.append('start_date', this.newChildProject.start_date || '');
-                formData.append('end_date', this.newChildProject.end_date || '');
+                formData.append('start_date', this.toChildProjectAPIDate(this.newChildProject.start_date));
+                formData.append('end_date', this.toChildProjectAPIDate(this.newChildProject.end_date));
                 formData.append('project_order_type', this.newChildProject.project_order_type || '');
                 // Luôn gửi managers (kể cả rỗng) để backend lưu đúng
                 formData.append('managers', (this.newChildProject.managers && this.newChildProject.managers.length > 0) ? this.newChildProject.managers.join(',') : '');
@@ -3647,8 +3754,8 @@ createApp({
                 const amountNum = (typeof amountVal === 'number' && !Number.isNaN(amountVal)) ? amountVal : (parseFloat(amountVal) || 0);
                 formData.append('amount', String(amountNum));
                 formData.append('tantou', this.newChildProject.tantou || '');
-                formData.append('caily_nouki', this.newChildProject.caily_nouki || '');
-                formData.append('guis_nouki', this.newChildProject.guis_nouki || '');
+                formData.append('caily_nouki', this.toChildProjectAPIDate(this.newChildProject.caily_nouki) || '');
+                formData.append('guis_nouki', this.toChildProjectAPIDate(this.newChildProject.guis_nouki) || '');
 
                 formData.append('is_kadai', '0');
                 formData.append('status', this.newChildProject.status || 'draft');
@@ -7117,8 +7224,7 @@ createApp({
         },
         
         formatShortDateTime(datetime) {
-            if (!datetime) return '-';
-            return moment(datetime).format('M月D日 HH:mm');
+            return formatProjectDateTimeForDisplay(datetime);
         },
         
         // Customer modal methods

@@ -1085,7 +1085,7 @@ $view->heading('建物詳細');
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="開始日">開始日</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.start_date"
-                                        id="start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                        id="start_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
                                     <div v-if="childProjectValidationErrors.start_date"
                                         class="invalid-feedback d-block">
                                         {{ childProjectValidationErrors.start_date }}
@@ -1096,7 +1096,7 @@ $view->heading('建物詳細');
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.end_date"
-                                        id="end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        id="end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                         :class="{ 'is-invalid': childProjectValidationErrors.end_date }">
                                     <div v-if="childProjectValidationErrors.end_date" class="invalid-feedback d-block">
                                         {{ childProjectValidationErrors.end_date }}
@@ -1180,7 +1180,7 @@ $view->heading('建物詳細');
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label">CAILY納期 <span v-if="newChildProject.end_date && newChildProject.tantou === 'CAILY'" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.caily_nouki" 
-                                        id="create_caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        id="create_caily_nouki_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                         :class="{ 'is-invalid': childProjectValidationErrors.caily_nouki }">
                                     <div v-if="childProjectValidationErrors.caily_nouki" class="invalid-feedback d-block">
                                         {{ childProjectValidationErrors.caily_nouki }}
@@ -1191,7 +1191,7 @@ $view->heading('建物詳細');
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label">GUIS納期 <span v-if="newChildProject.end_date && newChildProject.tantou === 'GUIS'" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.guis_nouki" 
-                                        id="create_guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        id="create_guis_nouki_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                         :class="{ 'is-invalid': childProjectValidationErrors.guis_nouki }">
                                     <div v-if="childProjectValidationErrors.guis_nouki" class="invalid-feedback d-block">
                                         {{ childProjectValidationErrors.guis_nouki }}
@@ -1304,7 +1304,7 @@ $view->heading('建物詳細');
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="開始日">開始日</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.start_date"
-                                        id="edit_start_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                        id="edit_start_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
                                     <div v-if="editChildProjectValidationErrors.start_date"
                                         class="invalid-feedback d-block">
                                         {{ editChildProjectValidationErrors.start_date }}
@@ -1315,7 +1315,7 @@ $view->heading('建物詳細');
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.end_date"
-                                        id="edit_end_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        id="edit_end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                         :class="{ 'is-invalid': editChildProjectValidationErrors.end_date }">
                                     <div v-if="editChildProjectValidationErrors.end_date"
                                         class="invalid-feedback d-block">
@@ -1396,7 +1396,7 @@ $view->heading('建物詳細');
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label">CAILY納期 <span v-if="editingChildProject.end_date && editingChildProject.tantou === 'CAILY'" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.caily_nouki" 
-                                        id="edit_caily_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        id="edit_caily_nouki_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                         :class="{ 'is-invalid': editChildProjectValidationErrors.caily_nouki }">
                                     <div v-if="editChildProjectValidationErrors.caily_nouki" class="invalid-feedback d-block">
                                         {{ editChildProjectValidationErrors.caily_nouki }}
@@ -1407,7 +1407,7 @@ $view->heading('建物詳細');
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label">GUIS納期 <span v-if="editingChildProject.end_date && editingChildProject.tantou === 'GUIS'" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.guis_nouki" 
-                                        id="edit_guis_nouki_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off"
+                                        id="edit_guis_nouki_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                         :class="{ 'is-invalid': editChildProjectValidationErrors.guis_nouki }">
                                     <div v-if="editChildProjectValidationErrors.guis_nouki" class="invalid-feedback d-block">
                                         {{ editChildProjectValidationErrors.guis_nouki }}

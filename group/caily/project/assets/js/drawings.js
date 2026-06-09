@@ -1,5 +1,51 @@
 const { createApp } = Vue;
 
+const SERVER_TASK_TIMEZONE = 'Asia/Tokyo';
+const VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
+const PROJECT_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
+const PROJECT_DATETIME_JA_DISPLAY_FORMAT = 'YYYY年M月D日 HH:mm';
+const PROJECT_DATETIME_JA_SHORT_FORMAT = 'M月D日 HH:mm';
+
+function isDrawingsVietnameseLocale() {
+    return typeof i18next !== 'undefined'
+        && i18next.isInitialized
+        && String(i18next.language || '').startsWith('vi');
+}
+
+function getDrawingsDisplayTimezone() {
+    return isDrawingsVietnameseLocale() ? VIETNAM_TASK_TIMEZONE : SERVER_TASK_TIMEZONE;
+}
+
+function parseDrawingDateMomentServer(value) {
+    if (value === undefined || value === null) return null;
+    const s = String(value).trim();
+    if (!s || s === '-') return null;
+    const normalized = s.replace(/\//g, '-');
+    if (typeof moment !== 'undefined') {
+        const formats = ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', 'YYYY-M-D'];
+        const m = typeof moment.tz === 'function'
+            ? moment.tz(normalized, formats, SERVER_TASK_TIMEZONE)
+            : moment(normalized, formats, true);
+        if (m.isValid()) return m;
+    }
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return null;
+    return typeof moment !== 'undefined' ? moment(d) : null;
+}
+
+function formatDrawingDateTimeForDisplay(value) {
+    const parsed = parseDrawingDateMomentServer(value);
+    if (!parsed) return '';
+    const localized = moment.tz
+        ? parsed.clone().tz(getDrawingsDisplayTimezone())
+        : parsed;
+    return localized.format(
+        isDrawingsVietnameseLocale()
+            ? PROJECT_DATETIME_MOMENT_FORMAT
+            : PROJECT_DATETIME_JA_SHORT_FORMAT
+    );
+}
+
 const DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
     'お客様との連絡・調整・納品対応': 0.15,
     '全図面のチェック・確認作業': 0.20
@@ -1445,13 +1491,13 @@ createApp({
         
         formatDateTime(dateString) {
             if (!dateString) return '-';
-            return moment(dateString).format('MM月DD日 HH:mm');
+            const formatted = formatDrawingDateTimeForDisplay(dateString);
+            return formatted || '-';
         },
-        // Người chỉnh sửa cuối: updated_by_name (m月d日 hh:ii)
         formatLastEditor(drawing) {
             if (!drawing) return '-';
             const name = drawing.updated_by_name || '';
-            const dateStr = drawing.updated_at ? moment(drawing.updated_at).format('M月D日 HH:mm') : '';
+            const dateStr = drawing.updated_at ? formatDrawingDateTimeForDisplay(drawing.updated_at) : '';
             if (!name && !dateStr) return '-';
             if (!dateStr) return name;
             return name ? name + ' (' + dateStr + ')' : '(' + dateStr + ')';
