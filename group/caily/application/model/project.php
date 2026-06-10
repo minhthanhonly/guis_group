@@ -1859,20 +1859,65 @@ class Project extends ApplicationModel {
     }
 
     /**
-     * Rút giá trị hiển thị từ custom field (object có 'value' hoặc scalar), không trả về JSON.
+     * Extract raw value from a custom field item.
      */
-    private function customFieldValueToDisplay($val) {
-        if ($val === null) {
+    private function getCustomFieldItemValue($item) {
+        if ($item === null) {
             return '';
         }
-        if (is_scalar($val)) {
-            return trim((string)$val);
+        if (is_scalar($item)) {
+            return trim((string)$item);
         }
-        if (is_array($val) && isset($val['value'])) {
-            $v = $val['value'];
+        if (is_array($item) && array_key_exists('value', $item)) {
+            $v = $item['value'];
             return is_scalar($v) ? trim((string)$v) : '';
         }
         return '';
+    }
+
+    /**
+     * Extract type from a custom field item.
+     */
+    private function getCustomFieldItemType($item) {
+        if (!is_array($item) || !isset($item['type'])) {
+            return '';
+        }
+        return trim((string)$item['type']);
+    }
+
+    /**
+     * Compare custom field values (datetime normalized to avoid format-only diffs).
+     */
+    private function customFieldValuesEqual($old, $new) {
+        $oldVal = $this->getCustomFieldItemValue($old);
+        $newVal = $this->getCustomFieldItemValue($new);
+        $type = $this->getCustomFieldItemType($new);
+        if ($type === '') {
+            $type = $this->getCustomFieldItemType($old);
+        }
+        if ($type === 'datetime') {
+            return $this->normalizeDatetimeForCompare($oldVal) === $this->normalizeDatetimeForCompare($newVal);
+        }
+        return $oldVal === $newVal;
+    }
+
+    /**
+     * Rút giá trị hiển thị từ custom field (object có 'value' hoặc scalar), không trả về JSON.
+     */
+    private function customFieldValueToDisplay($val) {
+        $raw = $this->getCustomFieldItemValue($val);
+        if ($raw === '') {
+            return '';
+        }
+        $type = $this->getCustomFieldItemType($val);
+        if ($type === 'datetime') {
+            $norm = $this->normalizeDatetimeForCompare($raw);
+            if ($norm !== '') {
+                $ts = strtotime($norm);
+                return ($ts !== false) ? date('Y/m/d H:i', $ts) : $raw;
+            }
+        }
+        return $raw;
     }
 
     /**
@@ -1955,11 +2000,9 @@ class Project extends ApplicationModel {
                 foreach ($allLabels as $fieldLabel) {
                     $o = array_key_exists($fieldLabel, $oldByLabel) ? $oldByLabel[$fieldLabel] : null;
                     $n = array_key_exists($fieldLabel, $newByLabel) ? $newByLabel[$fieldLabel] : null;
-                    $oStr = $o === null ? '' : (is_scalar($o) ? (string)$o : json_encode($o));
-                    $nStr = $n === null ? '' : (is_scalar($n) ? (string)$n : json_encode($n));
-                    $oldDisplay = $this->customFieldValueToDisplay($o);
-                    $newDisplay = $this->customFieldValueToDisplay($n);
-                    if ($oldDisplay !== $newDisplay) {
+                    if (!$this->customFieldValuesEqual($o, $n)) {
+                        $oldDisplay = $this->customFieldValueToDisplay($o);
+                        $newDisplay = $this->customFieldValueToDisplay($n);
                         $labelDisplay = (is_array($n) && isset($n['label'])) ? trim((string)$n['label']) : ((is_array($o) && isset($o['label'])) ? trim((string)$o['label']) : '');
                         if ($labelDisplay === '' && strpos($fieldLabel, '__index_') !== 0) {
                             $labelDisplay = $fieldLabel;
@@ -1975,6 +2018,13 @@ class Project extends ApplicationModel {
             if ($key === 'teams') {
                 $oldStr = $this->convertTeamIdsToNames($oldStr);
                 $newStr = $this->convertTeamIdsToNames($newStr);
+            }
+
+            if ($key === 'status') {
+                if ($oldStr !== $newStr) {
+                    $this->logProjectAction($project_id, 'status_changed', 'ステータス変更' . $aiLabel, $oldStr, $newStr);
+                }
+                continue;
             }
             
             $changed = false;
@@ -3743,11 +3793,10 @@ class Project extends ApplicationModel {
     
     
     /**
-     * Hàm tiện ích để gửi thông báo khi thay đổi trạng thái dự án
+     * Map project status key to Japanese label for logs/notifications.
      */
-    function notifyProjectStatusChanged($projectNumber, $projectId, $projectName, $newStatus, $memberIds) {
-        $projectName = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
-        $statusLabelsJa = [
+    private function getProjectStatusLabelsJa() {
+        return [
             'draft' => '受付',
             'open' => '納期検討',
             'confirming' => '仮受',
@@ -3759,6 +3808,20 @@ class Project extends ApplicationModel {
             'cancelled' => '中止',
             'deleted' => '削除'
         ];
+    }
+
+    private function getProjectStatusLabelJa($status) {
+        $labels = $this->getProjectStatusLabelsJa();
+        $key = is_scalar($status) ? trim((string)$status) : '';
+        return $key !== '' && isset($labels[$key]) ? $labels[$key] : $key;
+    }
+
+    /**
+     * Hàm tiện ích để gửi thông báo khi thay đổi trạng thái dự án
+     */
+    function notifyProjectStatusChanged($projectNumber, $projectId, $projectName, $newStatus, $memberIds) {
+        $projectName = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
+        $statusLabelsJa = $this->getProjectStatusLabelsJa();
 
         $statusLabelsVi = [
             'draft' => 'Nháp',

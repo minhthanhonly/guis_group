@@ -186,6 +186,16 @@ function getDeadlineDefaultHour() {
     return isVietnameseLocale() ? 16 : 18;
 }
 
+const TASK_KINDS = [
+    { value: '新規作成', label: '新規作成', color: 'success' },
+    { value: '修正(エラー)', label: '修正(エラー)', color: 'danger' },
+    { value: '修正(変更)', label: '修正(変更)', color: 'warning' },
+    { value: 'チェック', label: 'チェック', color: 'primary' },
+    { value: '連絡', label: '連絡', color: 'info' },
+    { value: '検討', label: '検討', color: 'secondary' },
+    { value: '相談・会議', label: '相談・会議', color: 'dark' }
+];
+
 createApp({
     data() {
         return {
@@ -194,6 +204,12 @@ createApp({
             permission: {},
             parentProject: null,
             childProjects: [],
+            workloadStatsByDepartment: [],
+            activeWorkloadDeptId: null,
+            loadingWorkloadStats: false,
+            workloadChartInstance: null,
+            workloadChartRenderTimer: null,
+            workloadChartRenderToken: 0,
             loading: true,
             isEditMode: false,
             originalParentProject: null,
@@ -529,6 +545,11 @@ createApp({
             },
             deep: true
         },
+        activeWorkloadDeptId() {
+            if (!this.loadingWorkloadStats) {
+                this.$nextTick(() => this.renderActiveWorkloadChart());
+            }
+        },
         'editingQuotation.items': {
             handler(newItems, oldItems) {
                 // Allow product_code to be freely entered even for set products
@@ -632,6 +653,11 @@ createApp({
     computed: {
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+        },
+        activeWorkloadDept() {
+            if (this.activeWorkloadDeptId == null || this.activeWorkloadDeptId === '') return null;
+            const activeId = String(this.activeWorkloadDeptId);
+            return this.workloadStatsByDepartment.find(d => String(d.department_id) === activeId) || null;
         },
         canAddProject() {
             let canAddProject = false;
@@ -865,9 +891,297 @@ createApp({
                     this.childProjects = response.data;
                     this.initVietnamTimeTooltips();
                 }
+                await this.loadWorkloadStatsByDepartment();
             } catch (error) {
                 console.error('Error loading child projects:', error);
                 this.childProjects = [];
+                this.workloadStatsByDepartment = [];
+                this.activeWorkloadDeptId = null;
+            }
+        },
+        translateLabel(label) {
+            if (typeof i18next !== 'undefined' && i18next.isInitialized) {
+                return i18next.t(label) || label;
+            }
+            return label;
+        },
+        normalizeTaskKind(value) {
+            const v = String(value || '').trim();
+            return v === '新規' ? '新規作成' : v;
+        },
+        getTaskKindLabel(value) {
+            const normalized = this.normalizeTaskKind(value);
+            if (!normalized) return this.translateLabel('未設定');
+            const kind = TASK_KINDS.find(k => k.value === normalized);
+            return kind ? this.translateLabel(kind.label) : normalized;
+        },
+        getTaskKindBadgeClass(value) {
+            const normalized = this.normalizeTaskKind(value);
+            if (!normalized) return 'bg-label-secondary';
+            const kind = TASK_KINDS.find(k => k.value === normalized);
+            return `bg-label-${kind?.color || 'secondary'}`;
+        },
+        getTaskKindChartColor(value) {
+            const normalized = this.normalizeTaskKind(value);
+            let colorName = 'secondary';
+            if (normalized && normalized !== '未設定') {
+                const kind = TASK_KINDS.find(k => k.value === normalized);
+                if (kind) colorName = kind.color;
+            }
+            if (typeof window.Helpers !== 'undefined' && window.Helpers.getCssVar) {
+                const hex = window.Helpers.getCssVar(colorName, true);
+                if (hex) return hex;
+            }
+            const fallbacks = {
+                success: '#28c76f',
+                danger: '#ea5455',
+                warning: '#ff9f43',
+                primary: '#7367f0',
+                info: '#00cfe8',
+                secondary: '#a8aaae',
+                dark: '#4b4b4b'
+            };
+            return fallbacks[colorName] || fallbacks.secondary;
+        },
+        getWorkloadChartElementId() {
+            return 'workload-dept-chart-active';
+        },
+        isDarkTheme() {
+            if (typeof window.Helpers !== 'undefined' && typeof window.Helpers.isDarkStyle === 'function') {
+                return window.Helpers.isDarkStyle();
+            }
+            return document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        },
+        getWorkloadChartTextColor() {
+            if (this.isDarkTheme()) {
+                return '#fff';
+            }
+            if (typeof window.Helpers !== 'undefined' && window.Helpers.getCssVar) {
+                return window.Helpers.getCssVar('heading-color', true) || '#566a7f';
+            }
+            return '#566a7f';
+        },
+        destroyWorkloadChart() {
+            if (this.workloadChartRenderTimer) {
+                clearTimeout(this.workloadChartRenderTimer);
+                this.workloadChartRenderTimer = null;
+            }
+            if (this.workloadChartInstance) {
+                this.workloadChartInstance.destroy();
+                this.workloadChartInstance = null;
+            }
+            const chartElement = document.getElementById(this.getWorkloadChartElementId());
+            if (chartElement) chartElement.innerHTML = '';
+        },
+        destroyAllWorkloadCharts() {
+            this.destroyWorkloadChart();
+        },
+        renderActiveWorkloadChart() {
+            if (this.loadingWorkloadStats) return;
+
+            const dept = this.activeWorkloadDept;
+            if (!dept) {
+                this.destroyWorkloadChart();
+                return;
+            }
+
+            const chartItems = dept.byKind.filter(item => item.hours > 0);
+            this.destroyWorkloadChart();
+            if (!chartItems.length) return;
+
+            const ApexChartsClass = window.ApexCharts || (typeof ApexCharts !== 'undefined' ? ApexCharts : null);
+            if (!ApexChartsClass) return;
+
+            const elementId = this.getWorkloadChartElementId();
+            const formatHours = (val) => this.formatTotalWorkload(val);
+            const totalLabel = this.translateLabel('工数合計');
+            const renderToken = ++this.workloadChartRenderToken;
+
+            this.$nextTick(() => {
+                this.workloadChartRenderTimer = setTimeout(() => {
+                    this.workloadChartRenderTimer = null;
+                    if (renderToken !== this.workloadChartRenderToken) return;
+
+                    const chartElement = document.getElementById(elementId);
+                    if (!chartElement || chartElement.offsetParent === null) return;
+
+                    chartElement.innerHTML = '';
+
+                    const series = chartItems.map(item => item.hours);
+                    const labels = chartItems.map(item => this.getTaskKindLabel(item.kind));
+                    const colors = chartItems.map(item => this.getTaskKindChartColor(item.kind));
+                    const totalWorkload = dept.totalWorkload;
+                    const chartTextColor = this.getWorkloadChartTextColor();
+
+                    const options = {
+                        series,
+                        chart: {
+                            type: 'donut',
+                            height: 300,
+                            fontFamily: (window.config && window.config.fontFamily) ? window.config.fontFamily : 'inherit'
+                        },
+                        labels,
+                        colors,
+                        stroke: { width: 0 },
+                        legend: {
+                            position: 'bottom',
+                            horizontalAlign: 'center',
+                            fontSize: '12px',
+                            markers: { width: 10, height: 10, radius: 2 },
+                            labels: {
+                                colors: chartTextColor
+                            }
+                        },
+                        dataLabels: {
+                            enabled: true,
+                            style: {
+                                colors: [chartTextColor]
+                            },
+                            formatter(val, opts) {
+                                return formatHours(opts.w.config.series[opts.seriesIndex]);
+                            }
+                        },
+                        tooltip: {
+                            theme: this.isDarkTheme() ? 'dark' : 'light',
+                            y: {
+                                formatter: (val) => formatHours(val)
+                            }
+                        },
+                        plotOptions: {
+                            pie: {
+                                donut: {
+                                    size: '68%',
+                                    labels: {
+                                        show: true,
+                                        name: {
+                                            fontSize: '14px',
+                                            color: chartTextColor
+                                        },
+                                        value: {
+                                            fontSize: '18px',
+                                            fontWeight: 600,
+                                            color: chartTextColor,
+                                            formatter: (val) => formatHours(val)
+                                        },
+                                        total: {
+                                            show: true,
+                                            label: totalLabel,
+                                            fontSize: '13px',
+                                            color: chartTextColor,
+                                            formatter: () => formatHours(totalWorkload)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    };
+
+                    try {
+                        this.workloadChartInstance = new ApexChartsClass(chartElement, options);
+                        this.workloadChartInstance.render();
+                    } catch (error) {
+                        console.error('Error rendering workload chart:', error);
+                    }
+                }, 150);
+            });
+        },
+        formatTotalWorkload(value) {
+            const n = parseFloat(value);
+            if (Number.isNaN(n) || n <= 0) return '0h';
+            const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+            return formatted + 'h';
+        },
+        async loadWorkloadStatsByDepartment() {
+            if (!this.childProjects || this.childProjects.length === 0) {
+                this.destroyAllWorkloadCharts();
+                this.workloadStatsByDepartment = [];
+                this.activeWorkloadDeptId = null;
+                return;
+            }
+            this.workloadChartRenderToken++;
+            this.destroyAllWorkloadCharts();
+            this.loadingWorkloadStats = true;
+            try {
+                const deptMap = {};
+                this.childProjects.forEach((p) => {
+                    const deptId = String(p.department_id || '0');
+                    const deptName = p.department_name || this.translateLabel('未設定');
+                    if (!deptMap[deptId]) {
+                        deptMap[deptId] = {
+                            department_id: deptId,
+                            department_name: deptName,
+                            projectIds: new Set(),
+                            kindMap: {},
+                            totalWorkload: 0,
+                            taskCount: 0
+                        };
+                    }
+                    deptMap[deptId].projectIds.add(p.id);
+                });
+
+                const taskResponses = await Promise.all(
+                    this.childProjects.map((p) =>
+                        axios.get(`/api/index.php?model=task&method=list&project_id=${p.id}&include_subtasks=1`)
+                            .then(r => ({ project: p, tasks: r.data || [] }))
+                            .catch(() => ({ project: p, tasks: [] }))
+                    )
+                );
+
+                taskResponses.forEach(({ project, tasks }) => {
+                    const deptId = String(project.department_id || '0');
+                    const dept = deptMap[deptId];
+                    if (!dept) return;
+                    tasks.forEach((t) => {
+                        let kind = this.normalizeTaskKind(t.task_kind);
+                        if (!kind) kind = '未設定';
+                        const n = parseFloat(t.estimated_hours);
+                        const hours = Number.isNaN(n) || n <= 0 ? 0 : n;
+                        dept.totalWorkload += hours;
+                        dept.taskCount += 1;
+                        if (!dept.kindMap[kind]) {
+                            dept.kindMap[kind] = { kind, hours: 0, count: 0 };
+                        }
+                        dept.kindMap[kind].hours += hours;
+                        dept.kindMap[kind].count += 1;
+                    });
+                });
+
+                const predefinedOrder = TASK_KINDS.map(k => k.value);
+                this.workloadStatsByDepartment = Object.values(deptMap)
+                    .map((dept) => ({
+                        department_id: dept.department_id,
+                        department_name: dept.department_name,
+                        projectCount: dept.projectIds.size,
+                        taskCount: dept.taskCount,
+                        totalWorkload: dept.totalWorkload,
+                        byKind: Object.values(dept.kindMap).sort((a, b) => {
+                            const ai = predefinedOrder.indexOf(a.kind);
+                            const bi = predefinedOrder.indexOf(b.kind);
+                            if (ai !== -1 && bi !== -1) return ai - bi;
+                            if (ai !== -1) return -1;
+                            if (bi !== -1) return 1;
+                            return b.hours - a.hours;
+                        })
+                    }))
+                    .sort((a, b) => a.department_name.localeCompare(b.department_name, 'ja'));
+
+                if (this.workloadStatsByDepartment.length) {
+                    const activeExists = this.workloadStatsByDepartment.some(
+                        d => String(d.department_id) === String(this.activeWorkloadDeptId)
+                    );
+                    if (!activeExists) {
+                        this.activeWorkloadDeptId = this.workloadStatsByDepartment[0].department_id;
+                    }
+                } else {
+                    this.activeWorkloadDeptId = null;
+                }
+            } catch (error) {
+                console.error('Error loading workload stats by department:', error);
+                this.workloadStatsByDepartment = [];
+                this.activeWorkloadDeptId = null;
+            } finally {
+                this.loadingWorkloadStats = false;
+                this.$nextTick(() => this.renderActiveWorkloadChart());
             }
         },
         async toggleFavorite() {
@@ -953,9 +1267,19 @@ createApp({
             if (!status) return 'bg-secondary';
             return 'bg-primary';
         },
+        isProjectStatusKey(value) {
+            return !!value && this.projectStatuses.some(s => s.value === value);
+        },
+        getLogNote(log) {
+            if (!log || !log.note) return '';
+            if (log.action === 'status_changed' || log.note === 'ステータスを変更' || log.note.indexOf('ステータス変更') === 0) {
+                return this.translateLabel('ステータス変更');
+            }
+            return log.note;
+        },
         getProjectStatusLabel(status) {
             const s = this.projectStatuses.find(s => s.value === status);
-            return s ? s.label : status;
+            return s ? this.translateLabel(s.label) : status;
         },
         getProjectStatusBadgeClass(status) {
             const s = this.projectStatuses.find(s => s.value === status);
@@ -7186,17 +7510,11 @@ createApp({
         },
         
         getLogBadgeClass(log, field) {
-            if (log.action === 'status_changed') {
-                return 'badge ' + this.getStatusBadgeClass(log[field]);
+            const value = log[field];
+            if (log.action === 'status_changed' || this.isProjectStatusKey(value)) {
+                return 'badge ' + this.getProjectStatusBadgeClass(value);
             }
             return field === 'value1' ? 'badge bg-secondary' : 'badge bg-primary';
-        },
-        
-        getLogBadgeLabel(log, field) {
-            if (log.action === 'status_changed') {
-                return this.getStatusLabel(log[field]);
-            }
-            return log[field];
         },
         
         getStatusBadgeClass(status) {
@@ -7897,27 +8215,23 @@ createApp({
         getLogBadgeClass(log, field) {
             const value = log[field];
             if (!value) return 'badge bg-secondary';
-            
-            // Check if this is a status change action and the value is a status
-            if (log.action === 'status_changed' || log.action === 'confirmed') {
-                // Try to find the status in projectStatuses array
+
+            if (log.action === 'status_changed' || log.action === 'confirmed' || this.isProjectStatusKey(value)) {
                 const projectStatus = this.projectStatuses.find(s => s.value === value);
                 if (projectStatus) {
                     return `badge bg-${projectStatus.color}`;
                 }
-                
-                // Try to find by Japanese label
+
                 const projectStatusByLabel = this.projectStatuses.find(s => s.label === value);
                 if (projectStatusByLabel) {
                     return `badge bg-${projectStatusByLabel.color}`;
                 }
-                
-                // Special handling for kadai/project conversion
+
                 if (value === 'kadai') {
-                    return 'badge bg-warning'; // Same as 承認待ち
+                    return 'badge bg-warning';
                 }
                 if (value === 'project') {
-                    return 'badge bg-success'; // Confirmed project
+                    return 'badge bg-success';
                 }
             }
             
@@ -7933,24 +8247,19 @@ createApp({
         getLogBadgeLabel(log, field) {
             const value = log[field];
             if (!value) return '';
-            
-            // Handle status values - try project statuses first
+
+            if (log.action === 'status_changed' || this.isProjectStatusKey(value)) {
+                return this.getProjectStatusLabel(value);
+            }
+
             if (field === 'value1' || field === 'value2') {
-                // Try to find the status in projectStatuses array
-                const projectStatus = this.projectStatuses.find(s => s.value === value);
-                if (projectStatus) {
-                    return projectStatus.label;
-                }
-                
-                // Special handling for kadai/project conversion
                 if (value === 'kadai') {
                     return '承認待ち';
                 }
                 if (value === 'project') {
                     return '案件';
                 }
-                
-                // Fallback status map for other statuses
+
                 const statusMap = {
                     'draft': '下書き',
                     'under_contract': '契約中',
@@ -7961,7 +8270,7 @@ createApp({
                 };
                 return statusMap[value] || value;
             }
-            
+
             return value;
         }
     },
@@ -8073,6 +8382,23 @@ createApp({
                     this.isPriceListOpenFromEdit = false;
                 });
             }
+
+            this._onWorkloadChartThemeChange = () => {
+                if (!this.loadingWorkloadStats && this.activeWorkloadDept) {
+                    this.renderActiveWorkloadChart();
+                }
+            };
+            this._workloadChartThemeObserver = new MutationObserver(this._onWorkloadChartThemeChange);
+            this._workloadChartThemeObserver.observe(document.documentElement, {
+                attributes: true,
+                attributeFilter: ['data-bs-theme']
+            });
+            this._workloadChartSystemThemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+            if (this._workloadChartSystemThemeMedia.addEventListener) {
+                this._workloadChartSystemThemeMedia.addEventListener('change', this._onWorkloadChartThemeChange);
+            } else if (this._workloadChartSystemThemeMedia.addListener) {
+                this._workloadChartSystemThemeMedia.addListener(this._onWorkloadChartThemeChange);
+            }
         } catch (error) {
             console.error('Error in mounted:', error);
         } finally {
@@ -8083,6 +8409,18 @@ createApp({
     beforeUnmount() {
         // Clean up sortable instances
         this.destroySortable();
+        this.destroyAllWorkloadCharts();
+        if (this._workloadChartThemeObserver) {
+            this._workloadChartThemeObserver.disconnect();
+            this._workloadChartThemeObserver = null;
+        }
+        if (this._workloadChartSystemThemeMedia && this._onWorkloadChartThemeChange) {
+            if (this._workloadChartSystemThemeMedia.removeEventListener) {
+                this._workloadChartSystemThemeMedia.removeEventListener('change', this._onWorkloadChartThemeChange);
+            } else if (this._workloadChartSystemThemeMedia.removeListener) {
+                this._workloadChartSystemThemeMedia.removeListener(this._onWorkloadChartThemeChange);
+            }
+        }
         
         // Clean up Quill editor instances
         this.destroyEditChildProjectQuill();

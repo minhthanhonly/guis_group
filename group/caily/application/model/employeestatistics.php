@@ -475,51 +475,181 @@ class Employeestatistics extends ApplicationModel {
     }
     
     /**
-     * Get statistics list with user and team names
+     * Monthly periods for employee list (single selected month or each month in range).
+     */
+    private function getListPeriods($period_type, $months, $start_date, $end_date, $ignoreSelectedMonth = false) {
+        if ($period_type !== 'month') {
+            return [[
+                'start' => $start_date,
+                'end' => $end_date
+            ]];
+        }
+
+        if (
+            !$ignoreSelectedMonth
+            && !empty($_GET['selected_month'])
+            && preg_match('/^\d{4}-\d{2}$/', $_GET['selected_month'])
+        ) {
+            return [[
+                'start' => $start_date,
+                'end' => $end_date
+            ]];
+        }
+
+        $periods = [];
+        $cursor = new DateTime(date('Y-m-01', strtotime($start_date)));
+        $endMonth = new DateTime(date('Y-m-01', strtotime($end_date)));
+
+        while ($cursor <= $endMonth) {
+            $periods[] = [
+                'start' => $cursor->format('Y-m-01'),
+                'end' => $cursor->format('Y-m-t')
+            ];
+            $cursor->modify('+1 month');
+        }
+
+        if (empty($periods)) {
+            $periods[] = [
+                'start' => $start_date,
+                'end' => $end_date
+            ];
+        }
+
+        return array_reverse($periods);
+    }
+
+    /**
+     * Active team members for employee statistics list.
+     */
+    private function getListMembers($team_id = null, $department_id = null, $user_id = null) {
+        $whereArr = [
+            $this->getActiveEmployeeStatsSql('u'),
+            't.is_active = 1'
+        ];
+
+        if ($team_id) {
+            $whereArr[] = sprintf('tm.team_id = %d', intval($team_id));
+        }
+        if ($department_id) {
+            $whereArr[] = sprintf('t.department_id = %d', intval($department_id));
+        }
+        if ($user_id) {
+            $whereArr[] = sprintf("u.userid = '%s'", $this->quote($user_id));
+        }
+
+        $query = sprintf(
+            "SELECT DISTINCT
+                u.userid,
+                u.realname,
+                tm.team_id,
+                t.name AS team_name,
+                t.department_id,
+                d.name AS department_name
+            FROM " . DB_PREFIX . "user u
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            INNER JOIN " . DB_PREFIX . "team t ON tm.team_id = t.id
+            LEFT JOIN " . DB_PREFIX . "departments d ON t.department_id = d.id
+            WHERE %s
+            ORDER BY t.name ASC, u.realname ASC",
+            implode(' AND ', $whereArr)
+        );
+
+        return $this->fetchAll($query);
+    }
+
+    /**
+     * Get statistics list with user and team names (includes members with zero activity).
      */
     function list() {
         $period_type = isset($_GET['period_type']) ? $_GET['period_type'] : 'month';
         $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
         $team_id = isset($_GET['team_id']) ? intval($_GET['team_id']) : null;
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : null;
         $user_id = isset($_GET['user_id']) ? $this->quote($_GET['user_id']) : null;
-        
-        // Calculate date range for last N months
-        $end_date = date('Y-m-t'); // Last day of current month
-        $start_date = date('Y-m-01', strtotime("-$months months")); // First day of N months ago
-        
-        $whereArr = [];
-        
-        if ($period_type) {
-            $whereArr[] = sprintf("es.period_type = '%s'", $this->quote($period_type));
-        }
-        
-        // Filter by date range (last N months)
-        $whereArr[] = sprintf("es.period_start >= '%s'", $this->quote($start_date));
-        $whereArr[] = sprintf("es.period_end <= '%s'", $this->quote($end_date));
-        
-        if ($team_id) {
-            $whereArr[] = sprintf("es.team_id = %d", intval($team_id));
-        }
-        
-        if ($user_id) {
-            $whereArr[] = sprintf("es.user_id = '%s'", $user_id);
+
+        $range = $this->getStatisticsDateRange($months);
+        $start_date = $range['start_date'];
+        $end_date = $range['end_date'];
+
+        $members = $this->getListMembers($team_id, $department_id, $user_id);
+        if (empty($members)) {
+            return [];
         }
 
-        $whereArr[] = $this->getActiveEmployeeStatsSql('u');
-        
-        $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
-        
-        $query = sprintf(
-            "SELECT es.*, u.realname as user_name, t.name as team_name
-            FROM {$this->table} es
-            INNER JOIN " . DB_PREFIX . "user u ON es.user_id = u.userid
-            LEFT JOIN " . DB_PREFIX . "team t ON es.team_id = t.id
-            %s
-            ORDER BY es.period_start DESC, t.name ASC, u.realname ASC",
-            $where
-        );
-        
-        return $this->fetchAll($query);
+        // Employee monthly chart needs full range; list view uses selected month when set.
+        $useFullRange = !empty($user_id);
+        if ($useFullRange) {
+            $metricStart = date('Y-m-01', strtotime("-$months months"));
+            $metricEnd = date('Y-m-t');
+            $periods = $this->getListPeriods($period_type, $months, $metricStart, $metricEnd, true);
+        } else {
+            $metricStart = $start_date;
+            $metricEnd = $end_date;
+            $periods = $this->getListPeriods($period_type, $months, $start_date, $end_date);
+        }
+
+        $workloadMap = $this->getWorkloadByUserPeriod($metricStart, $metricEnd, $team_id, $department_id);
+        $metricsMap = $this->getProjectMetricsByUserPeriod($metricStart, $metricEnd, $team_id, $department_id);
+
+        if ($department_id) {
+            $deptNameRow = $this->fetchOne(sprintf(
+                "SELECT name FROM " . DB_PREFIX . "departments WHERE id = %d LIMIT 1",
+                intval($department_id)
+            ));
+            $filteredDeptName = $deptNameRow['name'] ?? null;
+        } else {
+            $filteredDeptName = null;
+        }
+
+        $rows = [];
+        $syntheticId = 1;
+        foreach ($periods as $period) {
+            $ym = substr($period['start'], 0, 7);
+            foreach ($members as $member) {
+                $teamId = isset($member['team_id']) ? intval($member['team_id']) : 0;
+                $key = $this->getUserTeamPeriodKey($member['userid'], $teamId, $ym);
+                $wl = isset($workloadMap[$key]) ? $workloadMap[$key] : $this->emptyWorkloadBreakdown();
+                $metrics = isset($metricsMap[$key]) ? $metricsMap[$key] : $this->emptyProjectMetrics();
+
+                $rows[] = [
+                    'id' => $syntheticId++,
+                    'user_id' => $member['userid'],
+                    'team_id' => $teamId ?: null,
+                    'period_type' => $period_type,
+                    'period_start' => $period['start'],
+                    'period_end' => $period['end'],
+                    'user_name' => $member['realname'],
+                    'team_name' => $member['team_name'] ?? null,
+                    'department_name' => $filteredDeptName ?: ($member['department_name'] ?? null),
+                    'revenue' => $metrics['revenue'],
+                    'task_likes' => $metrics['task_likes'],
+                    'task_dislikes' => $metrics['task_dislikes'],
+                    'total_drawings_revenue' => $metrics['total_drawings_revenue'],
+                    'drawing_count' => $metrics['drawing_count'],
+                    'task_count' => $metrics['task_count'],
+                    'total_workload' => $wl['total_workload'],
+                    'workload_new' => $wl['workload_new'],
+                    'workload_error_fix' => $wl['workload_error_fix'],
+                    'workload_change_fix' => $wl['workload_change_fix'],
+                    'workload_other' => $wl['workload_other'],
+                    'updated_at' => null
+                ];
+            }
+        }
+
+        usort($rows, function ($a, $b) {
+            $periodCmp = strcmp($b['period_start'], $a['period_start']);
+            if ($periodCmp !== 0) {
+                return $periodCmp;
+            }
+            $teamCmp = strcmp($a['team_name'] ?? '', $b['team_name'] ?? '');
+            if ($teamCmp !== 0) {
+                return $teamCmp;
+            }
+            return strcmp($a['user_name'] ?? '', $b['user_name'] ?? '');
+        });
+
+        return $rows;
     }
 
     /**
@@ -610,53 +740,1119 @@ class Employeestatistics extends ApplicationModel {
      * Get statistics summary by team
      */
     function getSummaryByTeam() {
-        $period_type = isset($_GET['period_type']) ? $_GET['period_type'] : 'month';
         $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
         $team_id = isset($_GET['team_id']) ? intval($_GET['team_id']) : null;
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : null;
+
+        $range = $this->getStatisticsDateRange($months);
+        $start_date = $range['start_date'];
+        $end_date = $range['end_date'];
         
-        // Calculate date range for last N months
-        $end_date = date('Y-m-t'); // Last day of current month
-        $start_date = date('Y-m-01', strtotime("-$months months")); // First day of N months ago
-        
-        $whereArr = [];
-        
-        if ($period_type) {
-            $whereArr[] = sprintf("es.period_type = '%s'", $this->quote($period_type));
-        }
-        
-        // Filter by date range (last N months)
-        $whereArr[] = sprintf("es.period_start >= '%s'", $this->quote($start_date));
-        $whereArr[] = sprintf("es.period_end <= '%s'", $this->quote($end_date));
+        $whereArr = ["t.is_active = 1"];
         
         if ($team_id) {
-            $whereArr[] = sprintf("es.team_id = %d", intval($team_id));
+            $whereArr[] = sprintf("t.id = %d", intval($team_id));
         }
 
-        $whereArr[] = $this->getActiveEmployeeStatsSql('u');
-        
-        $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
+        if ($department_id) {
+            $whereArr[] = sprintf("t.department_id = %d", intval($department_id));
+        }
+
+        $where = "WHERE " . implode(" AND ", $whereArr);
+        $activeUserSql = $this->getActiveEmployeeStatsSql('u');
         
         $query = sprintf(
             "SELECT 
                 t.id as team_id,
                 t.name as team_name,
-                COUNT(DISTINCT es.user_id) as member_count,
-                COALESCE(SUM(es.revenue), 0) as total_revenue,
-                COALESCE(SUM(es.task_likes), 0) as total_likes,
-                COALESCE(SUM(es.task_dislikes), 0) as total_dislikes,
-                COALESCE(SUM(es.total_drawings_revenue), 0) as total_drawings_revenue,
-                COALESCE(SUM(es.drawing_count), 0) as total_drawing_count,
-                COALESCE(SUM(es.task_count), 0) as total_task_count
-            FROM {$this->table} es
-            INNER JOIN " . DB_PREFIX . "user u ON es.user_id = u.userid
-            LEFT JOIN " . DB_PREFIX . "team t ON es.team_id = t.id
+                t.department_id,
+                (
+                    SELECT COUNT(DISTINCT tm.user_id)
+                    FROM " . DB_PREFIX . "team_members tm
+                    INNER JOIN " . DB_PREFIX . "user u ON tm.user_id = u.id
+                    WHERE tm.team_id = t.id AND %s
+                ) as member_count
+            FROM " . DB_PREFIX . "team t
             %s
-            GROUP BY t.id, t.name
             ORDER BY t.name ASC",
+            $activeUserSql,
             $where
         );
-        
-        return $this->fetchAll($query);
+
+        $rows = $this->fetchAll($query);
+        $workloadMap = $this->getWorkloadByTeam($start_date, $end_date, null, $department_id);
+        $metricsMap = $this->getProjectMetricsByTeamMap($start_date, $end_date, $team_id, $department_id);
+
+        foreach ($rows as &$row) {
+            $tid = $row['team_id'] ? intval($row['team_id']) : 0;
+            $wl = isset($workloadMap[$tid]) ? $workloadMap[$tid] : $this->emptyWorkloadBreakdown();
+            $row['total_workload'] = $wl['total_workload'];
+            $row['workload_task_count'] = $wl['workload_task_count'];
+            $row['workload_new'] = $wl['workload_new'];
+            $row['workload_error_fix'] = $wl['workload_error_fix'];
+            $row['workload_change_fix'] = $wl['workload_change_fix'];
+            $row['workload_other'] = $wl['workload_other'];
+
+            $metrics = isset($metricsMap[$tid]) ? $metricsMap[$tid] : $this->emptyProjectMetrics();
+            $row['total_revenue'] = $metrics['total_revenue'];
+            $row['total_likes'] = $metrics['total_likes'];
+            $row['total_dislikes'] = $metrics['total_dislikes'];
+            $row['total_drawings_revenue'] = $metrics['total_drawings_revenue'];
+            $row['total_drawing_count'] = $metrics['total_drawing_count'];
+            $row['total_task_count'] = $metrics['total_task_count'];
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * Date range for statistics queries (last N months or single selected month).
+     */
+    private function getStatisticsDateRange($months = 12) {
+        if (!empty($_GET['selected_month']) && preg_match('/^\d{4}-\d{2}$/', $_GET['selected_month'])) {
+            $ym = $_GET['selected_month'];
+            return [
+                'start_date' => $ym . '-01',
+                'end_date' => date('Y-m-t', strtotime($ym . '-01'))
+            ];
+        }
+        return [
+            'start_date' => date('Y-m-01', strtotime("-$months months")),
+            'end_date' => date('Y-m-t')
+        ];
+    }
+
+    /**
+     * Task period filter (actual_end_date or due_date).
+     */
+    private function getTaskPeriodSql($alias = 't', $start_date, $end_date) {
+        $a = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 't';
+        return sprintf(
+            "(
+                ({$a}.actual_end_date IS NOT NULL AND DATE({$a}.actual_end_date) BETWEEN '%s' AND '%s')
+                OR ({$a}.actual_end_date IS NULL AND {$a}.due_date IS NOT NULL AND DATE({$a}.due_date) BETWEEN '%s' AND '%s')
+            )",
+            $this->quote($start_date),
+            $this->quote($end_date),
+            $this->quote($start_date),
+            $this->quote($end_date)
+        );
+    }
+
+    /**
+     * SQL expression for task kind category (new / error fix / change fix / other).
+     */
+    private function getTaskKindCategorySql($alias = 't') {
+        $k = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 't';
+        return sprintf(
+            "CASE
+                WHEN TRIM(COALESCE(%s.task_kind, '')) IN ('新規', '新規作成') THEN 'new'
+                WHEN TRIM(COALESCE(%s.task_kind, '')) = '修正(エラー)' THEN 'error_fix'
+                WHEN TRIM(COALESCE(%s.task_kind, '')) = '修正(変更)' THEN 'change_fix'
+                ELSE 'other'
+            END",
+            $k,
+            $k,
+            $k
+        );
+    }
+
+    /**
+     * Filter projects by department (explicit id or any assigned department).
+     */
+    private function getProjectDepartmentWhereSql($projectAlias = 'p', $department_id = null) {
+        $p = preg_replace('/[^a-zA-Z0-9_]/', '', $projectAlias) ?: 'p';
+        if ($department_id) {
+            return sprintf("%s.department_id = %d", $p, intval($department_id));
+        }
+        return sprintf("%s.department_id IS NOT NULL", $p);
+    }
+
+    /**
+     * Scope tasks/drawings to projects in team's department, or an explicit department filter.
+     */
+    private function getTeamProjectScopeSql($teamAlias = 'te', $projectAlias = 'p', $department_id = null) {
+        $te = preg_replace('/[^a-zA-Z0-9_]/', '', $teamAlias) ?: 'te';
+        $p = preg_replace('/[^a-zA-Z0-9_]/', '', $projectAlias) ?: 'p';
+        if ($department_id) {
+            return sprintf("%s.department_id = %d", $p, intval($department_id));
+        }
+        return sprintf("%s.department_id = %s.department_id", $p, $te);
+    }
+
+    /**
+     * Scope tasks/drawings to a team's department via subquery (when team id is known).
+     */
+    private function getTeamIdProjectScopeSql($team_id, $projectAlias = 'p') {
+        $p = preg_replace('/[^a-zA-Z0-9_]/', '', $projectAlias) ?: 'p';
+        return sprintf(
+            "%s.department_id = (SELECT te.department_id FROM " . DB_PREFIX . "team te WHERE te.id = %d)",
+            $p,
+            intval($team_id)
+        );
+    }
+
+    /**
+     * Drawing period filter (created_at).
+     */
+    private function getDrawingPeriodSql($alias = 'pd', $start_date, $end_date) {
+        $a = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'pd';
+        return sprintf(
+            "DATE(%s.created_at) BETWEEN '%s' AND '%s'",
+            $a,
+            $this->quote($start_date),
+            $this->quote($end_date)
+        );
+    }
+
+    /**
+     * SQL match for drawing creator (created_by stores user.id).
+     */
+    private function getDrawingCreatorJoinSql($drawingAlias = 'pd', $userAlias = 'u') {
+        $d = preg_replace('/[^a-zA-Z0-9_]/', '', $drawingAlias) ?: 'pd';
+        $u = preg_replace('/[^a-zA-Z0-9_]/', '', $userAlias) ?: 'u';
+        return sprintf(
+            "(FIND_IN_SET(%s.id, %s.created_by) > 0 OR %s.created_by = %s.id)",
+            $u,
+            $d,
+            $d,
+            $u
+        );
+    }
+
+    /**
+     * Task count grouped by project department.
+     */
+    private function getTaskCountByDepartmentMap($start_date, $end_date, $department_id = null) {
+        $query = sprintf(
+            "SELECT p.department_id, COUNT(*) AS task_count
+            FROM " . DB_PREFIX . "tasks t
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            WHERE %s AND %s
+            GROUP BY p.department_id",
+            $this->getProjectDepartmentWhereSql('p', $department_id),
+            $this->getTaskPeriodSql('t', $start_date, $end_date)
+        );
+        $map = [];
+        foreach ($this->fetchAll($query) as $row) {
+            $map[intval($row['department_id'])] = intval($row['task_count'] ?? 0);
+        }
+        return $map;
+    }
+
+    /**
+     * Task reactions grouped by project department.
+     */
+    private function getReactionMetricsByDepartmentMap($start_date, $end_date, $department_id = null) {
+        $query = sprintf(
+            "SELECT p.department_id,
+                SUM(CASE WHEN tr.type = 'like' THEN 1 ELSE 0 END) AS likes,
+                SUM(CASE WHEN tr.type = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+            FROM " . DB_PREFIX . "task_reactions tr
+            INNER JOIN " . DB_PREFIX . "tasks t ON tr.task_id = t.id
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            WHERE %s AND %s
+            GROUP BY p.department_id",
+            $this->getProjectDepartmentWhereSql('p', $department_id),
+            $this->getTaskPeriodSql('t', $start_date, $end_date)
+        );
+        $map = [];
+        foreach ($this->fetchAll($query) as $row) {
+            $map[intval($row['department_id'])] = [
+                'likes' => intval($row['likes'] ?? 0),
+                'dislikes' => intval($row['dislikes'] ?? 0)
+            ];
+        }
+        return $map;
+    }
+
+    /**
+     * Drawing revenue grouped by project department.
+     */
+    private function getDrawingMetricsByDepartmentMap($start_date, $end_date, $department_id = null) {
+        $query = sprintf(
+            "SELECT p.department_id,
+                COUNT(*) AS drawing_count,
+                COALESCE(SUM(pd.price), 0) AS total_revenue
+            FROM " . DB_PREFIX . "project_drawings pd
+            INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
+            WHERE pd.status = 'approved'
+              AND pd.price IS NOT NULL
+              AND %s
+              AND %s
+            GROUP BY p.department_id",
+            $this->getProjectDepartmentWhereSql('p', $department_id),
+            $this->getDrawingPeriodSql('pd', $start_date, $end_date)
+        );
+        $map = [];
+        foreach ($this->fetchAll($query) as $row) {
+            $map[intval($row['department_id'])] = [
+                'drawing_count' => intval($row['drawing_count'] ?? 0),
+                'total_revenue' => floatval($row['total_revenue'] ?? 0)
+            ];
+        }
+        return $map;
+    }
+
+    /**
+     * Distinct assignees grouped by project department.
+     */
+    private function getMemberCountByDepartmentMap($start_date, $end_date, $department_id = null) {
+        $assigneeJoin = $this->getTaskAssigneeJoinSql('t', 'u');
+        $query = sprintf(
+            "SELECT p.department_id, COUNT(DISTINCT u.userid) AS member_count
+            FROM " . DB_PREFIX . "tasks t
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            WHERE %s AND %s AND %s
+            GROUP BY p.department_id",
+            $assigneeJoin,
+            $this->getProjectDepartmentWhereSql('p', $department_id),
+            $this->getTaskPeriodSql('t', $start_date, $end_date),
+            $this->getActiveEmployeeStatsSql('u')
+        );
+        $map = [];
+        foreach ($this->fetchAll($query) as $row) {
+            $map[intval($row['department_id'])] = intval($row['member_count'] ?? 0);
+        }
+        return $map;
+    }
+
+    /**
+     * Project-based metrics by team (tasks/reactions/drawings on projects in team department).
+     */
+    private function getProjectMetricsByTeamMap($start_date, $end_date, $team_id = null, $department_id = null) {
+        $teamWhere = ["te.is_active = 1"];
+        if ($team_id) {
+            $teamWhere[] = sprintf("te.id = %d", intval($team_id));
+        }
+        if ($department_id) {
+            $teamWhere[] = sprintf("te.department_id = %d", intval($department_id));
+        }
+        $teamWhereSql = implode(' AND ', $teamWhere);
+        $assigneeJoin = $this->getTaskAssigneeJoinSql('t', 'u');
+        $creatorJoin = $this->getDrawingCreatorJoinSql('pd', 'u');
+        $projectScope = $this->getTeamProjectScopeSql('te', 'p', $department_id);
+
+        $taskRows = $this->fetchAll(sprintf(
+            "SELECT tm.team_id, COUNT(*) AS task_count
+            FROM " . DB_PREFIX . "tasks t
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            WHERE %s AND %s AND %s AND %s
+            GROUP BY tm.team_id",
+            $assigneeJoin,
+            $projectScope,
+            $this->getTaskPeriodSql('t', $start_date, $end_date),
+            $teamWhereSql,
+            $this->getActiveEmployeeStatsSql('u')
+        ));
+
+        $reactionRows = $this->fetchAll(sprintf(
+            "SELECT tm.team_id,
+                SUM(CASE WHEN tr.type = 'like' THEN 1 ELSE 0 END) AS likes,
+                SUM(CASE WHEN tr.type = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+            FROM " . DB_PREFIX . "task_reactions tr
+            INNER JOIN " . DB_PREFIX . "tasks t ON tr.task_id = t.id
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            WHERE %s AND %s AND %s AND %s
+            GROUP BY tm.team_id",
+            $assigneeJoin,
+            $projectScope,
+            $this->getTaskPeriodSql('t', $start_date, $end_date),
+            $teamWhereSql,
+            $this->getActiveEmployeeStatsSql('u')
+        ));
+
+        $drawingRows = $this->fetchAll(sprintf(
+            "SELECT tm.team_id,
+                COUNT(*) AS drawing_count,
+                COALESCE(SUM(pd.price), 0) AS total_revenue
+            FROM " . DB_PREFIX . "project_drawings pd
+            INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            WHERE pd.status = 'approved'
+              AND pd.price IS NOT NULL
+              AND %s
+              AND %s
+              AND %s
+              AND %s
+            GROUP BY tm.team_id",
+            $creatorJoin,
+            $projectScope,
+            $this->getDrawingPeriodSql('pd', $start_date, $end_date),
+            $teamWhereSql,
+            $this->getActiveEmployeeStatsSql('u')
+        ));
+
+        $map = [];
+        foreach ($taskRows as $row) {
+            $tid = intval($row['team_id']);
+            if (!isset($map[$tid])) {
+                $map[$tid] = $this->emptyProjectMetrics();
+            }
+            $map[$tid]['total_task_count'] = intval($row['task_count'] ?? 0);
+        }
+        foreach ($reactionRows as $row) {
+            $tid = intval($row['team_id']);
+            if (!isset($map[$tid])) {
+                $map[$tid] = $this->emptyProjectMetrics();
+            }
+            $map[$tid]['total_likes'] = intval($row['likes'] ?? 0);
+            $map[$tid]['total_dislikes'] = intval($row['dislikes'] ?? 0);
+        }
+        foreach ($drawingRows as $row) {
+            $tid = intval($row['team_id']);
+            if (!isset($map[$tid])) {
+                $map[$tid] = $this->emptyProjectMetrics();
+            }
+            $map[$tid]['total_drawings_revenue'] = floatval($row['total_revenue'] ?? 0);
+            $map[$tid]['total_drawing_count'] = intval($row['drawing_count'] ?? 0);
+            $map[$tid]['total_revenue'] = floatval($row['total_revenue'] ?? 0);
+        }
+        return $map;
+    }
+
+    /**
+     * Project-based metrics by user and month.
+     */
+    private function getUserTeamPeriodKey($userid, $teamId, $ym) {
+        return $userid . '|' . intval($teamId) . '|' . $ym;
+    }
+
+    /**
+     * Project-based metrics by user, team and month.
+     */
+    private function getProjectMetricsByUserPeriod($start_date, $end_date, $team_id = null, $department_id = null) {
+        $whereArr = [
+            $this->getTeamProjectScopeSql('te', 'p', $department_id),
+            $this->getTaskPeriodSql('t', $start_date, $end_date),
+            "te.is_active = 1",
+            $this->getActiveEmployeeStatsSql('u')
+        ];
+        if ($team_id) {
+            $whereArr[] = sprintf("tm.team_id = %d", intval($team_id));
+        }
+        if ($department_id) {
+            $whereArr[] = sprintf("te.department_id = %d", intval($department_id));
+        }
+        $where = "WHERE " . implode(' AND ', $whereArr);
+        $assigneeJoin = $this->getTaskAssigneeJoinSql('t', 'u');
+
+        $taskRows = $this->fetchAll(sprintf(
+            "SELECT u.userid, tm.team_id,
+                DATE_FORMAT(COALESCE(t.actual_end_date, t.due_date), '%%Y-%%m') AS ym,
+                COUNT(*) AS task_count
+            FROM " . DB_PREFIX . "tasks t
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            %s
+            GROUP BY u.userid, tm.team_id, ym",
+            $assigneeJoin,
+            $where
+        ));
+
+        $reactionRows = $this->fetchAll(sprintf(
+            "SELECT u.userid, tm.team_id,
+                DATE_FORMAT(COALESCE(t.actual_end_date, t.due_date), '%%Y-%%m') AS ym,
+                SUM(CASE WHEN tr.type = 'like' THEN 1 ELSE 0 END) AS likes,
+                SUM(CASE WHEN tr.type = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+            FROM " . DB_PREFIX . "task_reactions tr
+            INNER JOIN " . DB_PREFIX . "tasks t ON tr.task_id = t.id
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            %s
+            GROUP BY u.userid, tm.team_id, ym",
+            $assigneeJoin,
+            $where
+        ));
+
+        $drawingWhereArr = [
+            $this->getTeamProjectScopeSql('te', 'p', $department_id),
+            $this->getDrawingPeriodSql('pd', $start_date, $end_date),
+            "pd.status = 'approved'",
+            "pd.price IS NOT NULL",
+            "te.is_active = 1",
+            $this->getActiveEmployeeStatsSql('u')
+        ];
+        if ($team_id) {
+            $drawingWhereArr[] = sprintf("tm.team_id = %d", intval($team_id));
+        }
+        if ($department_id) {
+            $drawingWhereArr[] = sprintf("te.department_id = %d", intval($department_id));
+        }
+        $drawingWhere = "WHERE " . implode(' AND ', $drawingWhereArr);
+        $creatorJoin = $this->getDrawingCreatorJoinSql('pd', 'u');
+
+        $drawingRows = $this->fetchAll(sprintf(
+            "SELECT u.userid, tm.team_id,
+                DATE_FORMAT(pd.created_at, '%%Y-%%m') AS ym,
+                COUNT(*) AS drawing_count,
+                COALESCE(SUM(pd.price), 0) AS total_revenue
+            FROM " . DB_PREFIX . "project_drawings pd
+            INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            %s
+            GROUP BY u.userid, tm.team_id, ym",
+            $creatorJoin,
+            $drawingWhere
+        ));
+
+        $map = [];
+        foreach ($taskRows as $row) {
+            if (empty($row['userid']) || empty($row['ym'])) {
+                continue;
+            }
+            $key = $this->getUserTeamPeriodKey($row['userid'], $row['team_id'] ?? 0, $row['ym']);
+            if (!isset($map[$key])) {
+                $map[$key] = $this->emptyProjectMetrics();
+            }
+            $map[$key]['task_count'] = intval($row['task_count'] ?? 0);
+        }
+        foreach ($reactionRows as $row) {
+            if (empty($row['userid']) || empty($row['ym'])) {
+                continue;
+            }
+            $key = $this->getUserTeamPeriodKey($row['userid'], $row['team_id'] ?? 0, $row['ym']);
+            if (!isset($map[$key])) {
+                $map[$key] = $this->emptyProjectMetrics();
+            }
+            $map[$key]['task_likes'] = intval($row['likes'] ?? 0);
+            $map[$key]['task_dislikes'] = intval($row['dislikes'] ?? 0);
+        }
+        foreach ($drawingRows as $row) {
+            if (empty($row['userid']) || empty($row['ym'])) {
+                continue;
+            }
+            $key = $this->getUserTeamPeriodKey($row['userid'], $row['team_id'] ?? 0, $row['ym']);
+            if (!isset($map[$key])) {
+                $map[$key] = $this->emptyProjectMetrics();
+            }
+            $map[$key]['drawing_count'] = intval($row['drawing_count'] ?? 0);
+            $map[$key]['total_drawings_revenue'] = floatval($row['total_revenue'] ?? 0);
+            $map[$key]['revenue'] = floatval($row['total_revenue'] ?? 0);
+        }
+        return $map;
+    }
+
+    /**
+     * Default project-based metrics structure.
+     */
+    private function emptyProjectMetrics() {
+        return [
+            'revenue' => 0,
+            'task_likes' => 0,
+            'task_dislikes' => 0,
+            'total_drawings_revenue' => 0,
+            'drawing_count' => 0,
+            'task_count' => 0,
+            'total_revenue' => 0,
+            'total_likes' => 0,
+            'total_dislikes' => 0,
+            'total_drawing_count' => 0,
+            'total_task_count' => 0
+        ];
+    }
+
+    /**
+     * Default workload breakdown structure.
+     */
+    private function emptyWorkloadBreakdown() {
+        return [
+            'total_workload' => 0,
+            'workload_task_count' => 0,
+            'workload_new' => 0,
+            'workload_error_fix' => 0,
+            'workload_change_fix' => 0,
+            'workload_other' => 0
+        ];
+    }
+
+    /**
+     * SQL join condition: task assigned to user (assigned_to stores user.id).
+     */
+    private function getTaskAssigneeJoinSql($taskAlias = 't', $userAlias = 'u') {
+        $t = preg_replace('/[^a-zA-Z0-9_]/', '', $taskAlias) ?: 't';
+        $u = preg_replace('/[^a-zA-Z0-9_]/', '', $userAlias) ?: 'u';
+        return sprintf(
+            "(FIND_IN_SET(%s.id, %s.assigned_to) > 0 OR %s.assigned_to = %s.id)",
+            $u,
+            $t,
+            $t,
+            $u
+        );
+    }
+
+    /**
+     * Workload (estimated_hours) by user and month from assigned tasks.
+     */
+    private function getWorkloadByUserPeriod($start_date, $end_date, $team_id = null, $department_id = null) {
+        $whereArr = [
+            $this->getTaskPeriodSql('t', $start_date, $end_date),
+            $this->getTeamProjectScopeSql('te', 'p', $department_id),
+            "te.is_active = 1"
+        ];
+        if ($team_id) {
+            $whereArr[] = sprintf("tm.team_id = %d", intval($team_id));
+        }
+        if ($department_id) {
+            $whereArr[] = sprintf("te.department_id = %d", intval($department_id));
+        }
+        $where = "WHERE " . implode(" AND ", $whereArr);
+        $kindCategorySql = $this->getTaskKindCategorySql('t');
+        $assigneeJoin = $this->getTaskAssigneeJoinSql('t', 'u');
+
+        $query = sprintf(
+            "SELECT 
+                u.userid,
+                tm.team_id,
+                DATE_FORMAT(COALESCE(t.actual_end_date, t.due_date), '%%Y-%%m') AS ym,
+                COALESCE(SUM(CASE WHEN t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS total_workload,
+                COALESCE(SUM(CASE WHEN (%s) = 'new' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_new,
+                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_error_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_change_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'other' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_other
+            FROM " . DB_PREFIX . "tasks t
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            %s
+            GROUP BY u.userid, tm.team_id, ym",
+            $kindCategorySql,
+            $kindCategorySql,
+            $kindCategorySql,
+            $kindCategorySql,
+            $assigneeJoin,
+            $where
+        );
+
+        $rows = $this->fetchAll($query);
+        $map = [];
+        foreach ($rows as $row) {
+            if (empty($row['userid']) || empty($row['ym'])) {
+                continue;
+            }
+            $map[$this->getUserTeamPeriodKey($row['userid'], $row['team_id'] ?? 0, $row['ym'])] = [
+                'total_workload' => floatval($row['total_workload'] ?? 0),
+                'workload_new' => floatval($row['workload_new'] ?? 0),
+                'workload_error_fix' => floatval($row['workload_error_fix'] ?? 0),
+                'workload_change_fix' => floatval($row['workload_change_fix'] ?? 0),
+                'workload_other' => floatval($row['workload_other'] ?? 0)
+            ];
+        }
+        return $map;
+    }
+
+    /**
+     * Workload (estimated_hours) by team from tasks assigned to team members.
+     */
+    private function getWorkloadByTeam($start_date, $end_date, $team_id = null, $department_id = null) {
+        $whereArr = [
+            $this->getTaskPeriodSql('t', $start_date, $end_date),
+            "tm.team_id IS NOT NULL",
+            "te.is_active = 1",
+            $this->getTeamProjectScopeSql('te', 'p', $department_id)
+        ];
+        if ($team_id) {
+            $whereArr[] = sprintf("tm.team_id = %d", intval($team_id));
+        }
+        if ($department_id) {
+            $whereArr[] = sprintf("te.department_id = %d", intval($department_id));
+        }
+        $where = "WHERE " . implode(" AND ", $whereArr);
+        $kindCategorySql = $this->getTaskKindCategorySql('t');
+        $assigneeJoin = $this->getTaskAssigneeJoinSql('t', 'u');
+
+        $query = sprintf(
+            "SELECT 
+                tm.team_id,
+                COALESCE(SUM(CASE WHEN t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS total_workload,
+                COUNT(*) AS workload_task_count,
+                COALESCE(SUM(CASE WHEN (%s) = 'new' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_new,
+                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_error_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_change_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'other' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_other
+            FROM " . DB_PREFIX . "tasks t
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            %s
+            GROUP BY tm.team_id",
+            $kindCategorySql,
+            $kindCategorySql,
+            $kindCategorySql,
+            $kindCategorySql,
+            $assigneeJoin,
+            $where
+        );
+
+        $rows = $this->fetchAll($query);
+        $map = [];
+        foreach ($rows as $row) {
+            $map[intval($row['team_id'])] = [
+                'total_workload' => floatval($row['total_workload'] ?? 0),
+                'workload_task_count' => intval($row['workload_task_count'] ?? 0),
+                'workload_new' => floatval($row['workload_new'] ?? 0),
+                'workload_error_fix' => floatval($row['workload_error_fix'] ?? 0),
+                'workload_change_fix' => floatval($row['workload_change_fix'] ?? 0),
+                'workload_other' => floatval($row['workload_other'] ?? 0)
+            ];
+        }
+        return $map;
+    }
+
+    /**
+     * Workload (estimated_hours) by department from project tasks.
+     */
+    private function getWorkloadByDepartment($start_date, $end_date, $department_id = null) {
+        $whereArr = [
+            "p.department_id IS NOT NULL",
+            $this->getTaskPeriodSql('t', $start_date, $end_date)
+        ];
+        if ($department_id) {
+            $whereArr[] = sprintf("p.department_id = %d", intval($department_id));
+        }
+        $where = "WHERE " . implode(" AND ", $whereArr);
+        $kindCategorySql = $this->getTaskKindCategorySql('t');
+
+        $query = sprintf(
+            "SELECT 
+                p.department_id,
+                COALESCE(SUM(CASE WHEN t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS total_workload,
+                COUNT(*) AS workload_task_count,
+                COALESCE(SUM(CASE WHEN (%s) = 'new' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_new,
+                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_error_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_change_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'other' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_other
+            FROM " . DB_PREFIX . "tasks t
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            %s
+            GROUP BY p.department_id",
+            $kindCategorySql,
+            $kindCategorySql,
+            $kindCategorySql,
+            $kindCategorySql,
+            $where
+        );
+
+        $rows = $this->fetchAll($query);
+        $map = [];
+        foreach ($rows as $row) {
+            $map[intval($row['department_id'])] = [
+                'total_workload' => floatval($row['total_workload'] ?? 0),
+                'workload_task_count' => intval($row['workload_task_count'] ?? 0),
+                'workload_new' => floatval($row['workload_new'] ?? 0),
+                'workload_error_fix' => floatval($row['workload_error_fix'] ?? 0),
+                'workload_change_fix' => floatval($row['workload_change_fix'] ?? 0),
+                'workload_other' => floatval($row['workload_other'] ?? 0)
+            ];
+        }
+        return $map;
+    }
+
+    /**
+     * Get statistics summary by department (revenue, ratings, workload).
+     */
+    function getSummaryByDepartment() {
+        $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
+        $range = $this->getStatisticsDateRange($months);
+        $start_date = $range['start_date'];
+        $end_date = $range['end_date'];
+
+        $deptRows = $this->fetchAll(
+            "SELECT d.id AS department_id, d.name AS department_name,
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "team t
+                 WHERE t.department_id = d.id AND t.is_active = 1) AS team_count
+             FROM " . DB_PREFIX . "departments d
+             ORDER BY d.name ASC"
+        );
+
+        $taskCountMap = $this->getTaskCountByDepartmentMap($start_date, $end_date);
+        $reactionMap = $this->getReactionMetricsByDepartmentMap($start_date, $end_date);
+        $drawingMap = $this->getDrawingMetricsByDepartmentMap($start_date, $end_date);
+        $memberMap = $this->getMemberCountByDepartmentMap($start_date, $end_date);
+        $workloadMap = $this->getWorkloadByDepartment($start_date, $end_date);
+
+        $rows = [];
+        foreach ($deptRows as $dept) {
+            $deptId = intval($dept['department_id']);
+            $reactions = isset($reactionMap[$deptId]) ? $reactionMap[$deptId] : ['likes' => 0, 'dislikes' => 0];
+            $drawings = isset($drawingMap[$deptId]) ? $drawingMap[$deptId] : ['drawing_count' => 0, 'total_revenue' => 0];
+            $wl = isset($workloadMap[$deptId]) ? $workloadMap[$deptId] : $this->emptyWorkloadBreakdown();
+
+            $hasActivity = intval($dept['team_count']) > 0
+                || intval($memberMap[$deptId] ?? 0) > 0
+                || intval($taskCountMap[$deptId] ?? 0) > 0
+                || floatval($drawings['total_revenue']) > 0
+                || floatval($wl['total_workload']) > 0;
+            if (!$hasActivity) {
+                continue;
+            }
+
+            $rows[] = [
+                'department_id' => $deptId,
+                'department_name' => $dept['department_name'],
+                'team_count' => intval($dept['team_count']),
+                'member_count' => intval($memberMap[$deptId] ?? 0),
+                'total_revenue' => floatval($drawings['total_revenue']),
+                'total_likes' => intval($reactions['likes']),
+                'total_dislikes' => intval($reactions['dislikes']),
+                'total_drawings_revenue' => floatval($drawings['total_revenue']),
+                'total_drawing_count' => intval($drawings['drawing_count']),
+                'total_task_count' => intval($taskCountMap[$deptId] ?? 0),
+                'total_workload' => floatval($wl['total_workload']),
+                'workload_task_count' => intval($wl['workload_task_count']),
+                'workload_new' => floatval($wl['workload_new']),
+                'workload_error_fix' => floatval($wl['workload_error_fix']),
+                'workload_change_fix' => floatval($wl['workload_change_fix']),
+                'workload_other' => floatval($wl['workload_other'])
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Monthly statistics for a department (chart data).
+     */
+    function getMonthlyByDepartment() {
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+        if ($department_id <= 0) {
+            return [];
+        }
+
+        $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
+        $end_date = date('Y-m-t');
+        $start_date = date('Y-m-01', strtotime("-$months months"));
+
+        $taskRows = $this->fetchAll(sprintf(
+            "SELECT DATE_FORMAT(COALESCE(t.actual_end_date, t.due_date), '%%Y-%%m') AS ym,
+                COUNT(*) AS task_count
+            FROM " . DB_PREFIX . "tasks t
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            WHERE p.department_id = %d AND %s
+            GROUP BY ym
+            ORDER BY ym ASC",
+            $department_id,
+            $this->getTaskPeriodSql('t', $start_date, $end_date)
+        ));
+
+        $reactionRows = $this->fetchAll(sprintf(
+            "SELECT DATE_FORMAT(COALESCE(t.actual_end_date, t.due_date), '%%Y-%%m') AS ym,
+                SUM(CASE WHEN tr.type = 'like' THEN 1 ELSE 0 END) AS likes,
+                SUM(CASE WHEN tr.type = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+            FROM " . DB_PREFIX . "task_reactions tr
+            INNER JOIN " . DB_PREFIX . "tasks t ON tr.task_id = t.id
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            WHERE p.department_id = %d AND %s
+            GROUP BY ym
+            ORDER BY ym ASC",
+            $department_id,
+            $this->getTaskPeriodSql('t', $start_date, $end_date)
+        ));
+
+        $drawingRows = $this->fetchAll(sprintf(
+            "SELECT DATE_FORMAT(pd.created_at, '%%Y-%%m') AS ym,
+                COALESCE(SUM(pd.price), 0) AS revenue
+            FROM " . DB_PREFIX . "project_drawings pd
+            INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
+            WHERE p.department_id = %d
+              AND pd.status = 'approved'
+              AND pd.price IS NOT NULL
+              AND %s
+            GROUP BY ym
+            ORDER BY ym ASC",
+            $department_id,
+            $this->getDrawingPeriodSql('pd', $start_date, $end_date)
+        ));
+
+        $statsMap = [];
+        foreach ($taskRows as $row) {
+            if (empty($row['ym'])) {
+                continue;
+            }
+            if (!isset($statsMap[$row['ym']])) {
+                $statsMap[$row['ym']] = ['task_count' => 0, 'likes' => 0, 'dislikes' => 0, 'revenue' => 0];
+            }
+            $statsMap[$row['ym']]['task_count'] = intval($row['task_count'] ?? 0);
+        }
+        foreach ($reactionRows as $row) {
+            if (empty($row['ym'])) {
+                continue;
+            }
+            if (!isset($statsMap[$row['ym']])) {
+                $statsMap[$row['ym']] = ['task_count' => 0, 'likes' => 0, 'dislikes' => 0, 'revenue' => 0];
+            }
+            $statsMap[$row['ym']]['likes'] = intval($row['likes'] ?? 0);
+            $statsMap[$row['ym']]['dislikes'] = intval($row['dislikes'] ?? 0);
+        }
+        foreach ($drawingRows as $row) {
+            if (empty($row['ym'])) {
+                continue;
+            }
+            if (!isset($statsMap[$row['ym']])) {
+                $statsMap[$row['ym']] = ['task_count' => 0, 'likes' => 0, 'dislikes' => 0, 'revenue' => 0];
+            }
+            $statsMap[$row['ym']]['revenue'] = floatval($row['revenue'] ?? 0);
+        }
+
+        $kindCategorySql = $this->getTaskKindCategorySql('t');
+        $workloadRows = $this->fetchAll(sprintf(
+            "SELECT 
+                DATE_FORMAT(
+                    COALESCE(t.actual_end_date, t.due_date),
+                    '%%Y-%%m'
+                ) AS ym,
+                COALESCE(SUM(CASE WHEN t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload,
+                COALESCE(SUM(CASE WHEN (%s) = 'new' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_new,
+                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_error_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_change_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'other' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_other
+            FROM " . DB_PREFIX . "tasks t
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            WHERE p.department_id = %d
+              AND %s
+            GROUP BY ym
+            ORDER BY ym ASC",
+            $kindCategorySql,
+            $kindCategorySql,
+            $kindCategorySql,
+            $kindCategorySql,
+            $department_id,
+            $this->getTaskPeriodSql('t', $start_date, $end_date)
+        ));
+
+        $workloadMap = [];
+        foreach ($workloadRows as $row) {
+            if (!empty($row['ym'])) {
+                $workloadMap[$row['ym']] = [
+                    'workload' => floatval($row['workload'] ?? 0),
+                    'workload_new' => floatval($row['workload_new'] ?? 0),
+                    'workload_error_fix' => floatval($row['workload_error_fix'] ?? 0),
+                    'workload_change_fix' => floatval($row['workload_change_fix'] ?? 0),
+                    'workload_other' => floatval($row['workload_other'] ?? 0)
+                ];
+            }
+        }
+
+        $allMonths = array_unique(array_merge(array_keys($statsMap), array_keys($workloadMap)));
+        sort($allMonths);
+
+        $results = [];
+        foreach ($allMonths as $ym) {
+            $stat = isset($statsMap[$ym]) ? $statsMap[$ym] : null;
+            $wl = isset($workloadMap[$ym]) ? $workloadMap[$ym] : $this->emptyWorkloadBreakdown();
+            $results[] = [
+                'ym' => $ym,
+                'revenue' => $stat ? floatval($stat['revenue']) : 0,
+                'likes' => $stat ? intval($stat['likes']) : 0,
+                'dislikes' => $stat ? intval($stat['dislikes']) : 0,
+                'task_count' => $stat ? intval($stat['task_count']) : 0,
+                'workload' => $wl['workload'] ?? $wl['total_workload'] ?? 0,
+                'workload_new' => $wl['workload_new'] ?? 0,
+                'workload_error_fix' => $wl['workload_error_fix'] ?? 0,
+                'workload_change_fix' => $wl['workload_change_fix'] ?? 0,
+                'workload_other' => $wl['workload_other'] ?? 0
+            ];
+        }
+
+        return $results;
+    }
+
+    /**
+     * Monthly statistics for a team (chart data).
+     */
+    function getMonthlyByTeam() {
+        $team_id = isset($_GET['team_id']) ? intval($_GET['team_id']) : 0;
+        if ($team_id <= 0) {
+            return [];
+        }
+
+        $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
+        $end_date = date('Y-m-t');
+        $start_date = date('Y-m-01', strtotime("-$months months"));
+
+        $assigneeJoin = $this->getTaskAssigneeJoinSql('t', 'u');
+        $creatorJoin = $this->getDrawingCreatorJoinSql('pd', 'u');
+        $projectScope = $this->getTeamIdProjectScopeSql($team_id, 'p');
+        $activeUserSql = $this->getActiveEmployeeStatsSql('u');
+        $taskPeriodSql = $this->getTaskPeriodSql('t', $start_date, $end_date);
+        $drawingPeriodSql = $this->getDrawingPeriodSql('pd', $start_date, $end_date);
+
+        $taskRows = $this->fetchAll(sprintf(
+            "SELECT DATE_FORMAT(COALESCE(t.actual_end_date, t.due_date), '%%Y-%%m') AS ym,
+                COUNT(*) AS task_count
+            FROM " . DB_PREFIX . "tasks t
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            WHERE tm.team_id = %d AND %s AND %s AND %s
+            GROUP BY ym
+            ORDER BY ym ASC",
+            $assigneeJoin,
+            $team_id,
+            $projectScope,
+            $taskPeriodSql,
+            $activeUserSql
+        ));
+
+        $reactionRows = $this->fetchAll(sprintf(
+            "SELECT DATE_FORMAT(COALESCE(t.actual_end_date, t.due_date), '%%Y-%%m') AS ym,
+                SUM(CASE WHEN tr.type = 'like' THEN 1 ELSE 0 END) AS likes,
+                SUM(CASE WHEN tr.type = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+            FROM " . DB_PREFIX . "task_reactions tr
+            INNER JOIN " . DB_PREFIX . "tasks t ON tr.task_id = t.id
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            WHERE tm.team_id = %d AND %s AND %s AND %s
+            GROUP BY ym
+            ORDER BY ym ASC",
+            $assigneeJoin,
+            $team_id,
+            $projectScope,
+            $taskPeriodSql,
+            $activeUserSql
+        ));
+
+        $drawingRows = $this->fetchAll(sprintf(
+            "SELECT DATE_FORMAT(pd.created_at, '%%Y-%%m') AS ym,
+                COALESCE(SUM(pd.price), 0) AS drawing_revenue
+            FROM " . DB_PREFIX . "project_drawings pd
+            INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            WHERE tm.team_id = %d
+              AND pd.status = 'approved'
+              AND pd.price IS NOT NULL
+              AND %s
+              AND %s
+              AND %s
+            GROUP BY ym
+            ORDER BY ym ASC",
+            $creatorJoin,
+            $team_id,
+            $projectScope,
+            $drawingPeriodSql,
+            $activeUserSql
+        ));
+
+        $statsMap = [];
+        foreach ($taskRows as $row) {
+            if (empty($row['ym'])) {
+                continue;
+            }
+            if (!isset($statsMap[$row['ym']])) {
+                $statsMap[$row['ym']] = ['task_count' => 0, 'likes' => 0, 'dislikes' => 0, 'drawing_revenue' => 0, 'revenue' => 0];
+            }
+            $statsMap[$row['ym']]['task_count'] = intval($row['task_count'] ?? 0);
+        }
+        foreach ($reactionRows as $row) {
+            if (empty($row['ym'])) {
+                continue;
+            }
+            if (!isset($statsMap[$row['ym']])) {
+                $statsMap[$row['ym']] = ['task_count' => 0, 'likes' => 0, 'dislikes' => 0, 'drawing_revenue' => 0, 'revenue' => 0];
+            }
+            $statsMap[$row['ym']]['likes'] = intval($row['likes'] ?? 0);
+            $statsMap[$row['ym']]['dislikes'] = intval($row['dislikes'] ?? 0);
+        }
+        foreach ($drawingRows as $row) {
+            if (empty($row['ym'])) {
+                continue;
+            }
+            if (!isset($statsMap[$row['ym']])) {
+                $statsMap[$row['ym']] = ['task_count' => 0, 'likes' => 0, 'dislikes' => 0, 'drawing_revenue' => 0, 'revenue' => 0];
+            }
+            $statsMap[$row['ym']]['drawing_revenue'] = floatval($row['drawing_revenue'] ?? 0);
+            $statsMap[$row['ym']]['revenue'] = floatval($row['drawing_revenue'] ?? 0);
+        }
+
+        $kindCategorySql = $this->getTaskKindCategorySql('t');
+        $workloadRows = $this->fetchAll(sprintf(
+            "SELECT 
+                DATE_FORMAT(
+                    COALESCE(t.actual_end_date, t.due_date),
+                    '%%Y-%%m'
+                ) AS ym,
+                COALESCE(SUM(CASE WHEN t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload,
+                COALESCE(SUM(CASE WHEN (%s) = 'new' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_new,
+                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_error_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_change_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'other' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_other
+            FROM " . DB_PREFIX . "tasks t
+            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            WHERE tm.team_id = %d
+              AND %s
+              AND %s
+              AND %s
+            GROUP BY ym
+            ORDER BY ym ASC",
+            $kindCategorySql,
+            $kindCategorySql,
+            $kindCategorySql,
+            $kindCategorySql,
+            $assigneeJoin,
+            $team_id,
+            $projectScope,
+            $taskPeriodSql,
+            $activeUserSql
+        ));
+
+        $workloadMap = [];
+        foreach ($workloadRows as $row) {
+            if (!empty($row['ym'])) {
+                $workloadMap[$row['ym']] = [
+                    'workload' => floatval($row['workload'] ?? 0),
+                    'workload_new' => floatval($row['workload_new'] ?? 0),
+                    'workload_error_fix' => floatval($row['workload_error_fix'] ?? 0),
+                    'workload_change_fix' => floatval($row['workload_change_fix'] ?? 0),
+                    'workload_other' => floatval($row['workload_other'] ?? 0)
+                ];
+            }
+        }
+
+        $allMonths = array_unique(array_merge(array_keys($statsMap), array_keys($workloadMap)));
+        sort($allMonths);
+
+        $results = [];
+        foreach ($allMonths as $ym) {
+            $stat = isset($statsMap[$ym]) ? $statsMap[$ym] : null;
+            $wl = isset($workloadMap[$ym]) ? $workloadMap[$ym] : $this->emptyWorkloadBreakdown();
+            $results[] = [
+                'ym' => $ym,
+                'revenue' => $stat ? floatval($stat['revenue']) : 0,
+                'drawing_revenue' => $stat ? floatval($stat['drawing_revenue']) : 0,
+                'likes' => $stat ? intval($stat['likes']) : 0,
+                'dislikes' => $stat ? intval($stat['dislikes']) : 0,
+                'task_count' => $stat ? intval($stat['task_count']) : 0,
+                'workload' => $wl['workload'] ?? $wl['total_workload'] ?? 0,
+                'workload_new' => $wl['workload_new'] ?? 0,
+                'workload_error_fix' => $wl['workload_error_fix'] ?? 0,
+                'workload_change_fix' => $wl['workload_change_fix'] ?? 0,
+                'workload_other' => $wl['workload_other'] ?? 0
+            ];
+        }
+
+        return $results;
     }
 
     /**
@@ -667,18 +1863,36 @@ class Employeestatistics extends ApplicationModel {
         if ($year < 2000 || $year > 2100) {
             $year = intval(date('Y'));
         }
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : null;
+        $team_id = isset($_GET['team_id']) ? intval($_GET['team_id']) : null;
+        if ($department_id <= 0) {
+            $department_id = null;
+        }
+        if ($team_id <= 0) {
+            $team_id = null;
+        }
+
         // Fiscal year: Jul (previous year) -> Jun (selected year)
         $startFiscalYear = $year - 1;
         $startDate = sprintf("%d-07-01", $startFiscalYear);
         $endDate   = sprintf("%d-06-30", $year);
 
-        // 1) Load active teams
-        $teams = $this->fetchAll(
-            "SELECT t.id, t.name, t.department_id
+        // 1) Load active teams (optionally filtered by department / team)
+        $teamWhere = ['t.is_active = 1'];
+        if ($department_id) {
+            $teamWhere[] = sprintf('t.department_id = %d', $department_id);
+        }
+        if ($team_id) {
+            $teamWhere[] = sprintf('t.id = %d', $team_id);
+        }
+        $teams = $this->fetchAll(sprintf(
+            "SELECT t.id, t.name, t.department_id, d.name AS department_name
              FROM " . DB_PREFIX . "team t
-             WHERE t.is_active = 1
-             ORDER BY t.department_id ASC, t.name ASC"
-        );
+             LEFT JOIN " . DB_PREFIX . "departments d ON t.department_id = d.id
+             WHERE %s
+             ORDER BY t.department_id ASC, t.name ASC",
+            implode(' AND ', $teamWhere)
+        ));
 
         // 2) Load revenue targets for both fiscal parts: previous year (Jul-Dec) and current year (Jan-Jun)
         $targetRows = $this->fetchAll(
@@ -713,44 +1927,173 @@ class Employeestatistics extends ApplicationModel {
         };
 
         $activeUserSql = $this->getActiveEmployeeStatsSql('u');
+        $assigneeJoin = $this->getTaskAssigneeJoinSql('t', 'u');
+        $creatorJoin = $this->getDrawingCreatorJoinSql('pd', 'u');
+        $projectScope = $this->getTeamProjectScopeSql('te', 'p', $department_id);
+        $taskPeriodSql = $this->getTaskPeriodSql('t', $startDate, $endDate);
+        $drawingPeriodSql = $this->getDrawingPeriodSql('pd', $startDate, $endDate);
 
-        // 3) Load monthly statistics within the fiscal window (period_type = month)
-        $monthlyRows = $this->fetchAll(
-            "SELECT 
-                es.team_id,
-                DATE_FORMAT(es.period_start, '%Y-%m') AS ym,
-                SUM(es.revenue) AS revenue,
-                SUM(es.task_likes) AS likes,
-                SUM(es.task_dislikes) AS dislikes,
-                SUM(es.total_drawings_revenue) AS drawings_revenue,
-                SUM(es.drawing_count) AS drawing_count,
-                SUM(es.task_count) AS task_count
-             FROM {$this->table} es
-             INNER JOIN " . DB_PREFIX . "user u ON es.user_id = u.userid
-             WHERE es.period_type = 'month'
-               AND es.period_start >= '" . $this->quote($startDate) . "'
-               AND es.period_start <= '" . $this->quote($endDate) . "'
-               AND " . $activeUserSql . "
-             GROUP BY es.team_id, ym"
-        );
+        $teamMemberScope = '';
+        if ($team_id) {
+            $teamMemberScope = sprintf(' AND tm.team_id = %d', $team_id);
+        } elseif ($department_id) {
+            $teamMemberScope = sprintf(' AND te.department_id = %d', $department_id);
+        }
+
+        // 3) Load monthly statistics within the fiscal window (project department scope)
+        $monthlyRows = $this->fetchAll(sprintf(
+            "SELECT team_id, ym,
+                SUM(revenue) AS revenue,
+                SUM(likes) AS likes,
+                SUM(dislikes) AS dislikes,
+                SUM(drawings_revenue) AS drawings_revenue,
+                SUM(drawing_count) AS drawing_count,
+                SUM(task_count) AS task_count
+             FROM (
+                SELECT tm.team_id,
+                    DATE_FORMAT(pd.created_at, '%%Y-%%m') AS ym,
+                    COALESCE(SUM(pd.price), 0) AS revenue,
+                    0 AS likes,
+                    0 AS dislikes,
+                    COALESCE(SUM(pd.price), 0) AS drawings_revenue,
+                    COUNT(*) AS drawing_count,
+                    0 AS task_count
+                FROM " . DB_PREFIX . "project_drawings pd
+                INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
+                INNER JOIN " . DB_PREFIX . "user u ON %s
+                INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+                INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id AND te.is_active = 1
+                WHERE pd.status = 'approved'
+                  AND pd.price IS NOT NULL
+                  AND %s
+                  AND %s
+                  AND %s%s
+                GROUP BY tm.team_id, ym
+                UNION ALL
+                SELECT tm.team_id,
+                    DATE_FORMAT(COALESCE(t.actual_end_date, t.due_date), '%%Y-%%m') AS ym,
+                    0 AS revenue,
+                    SUM(CASE WHEN tr.type = 'like' THEN 1 ELSE 0 END) AS likes,
+                    SUM(CASE WHEN tr.type = 'dislike' THEN 1 ELSE 0 END) AS dislikes,
+                    0 AS drawings_revenue,
+                    0 AS drawing_count,
+                    0 AS task_count
+                FROM " . DB_PREFIX . "task_reactions tr
+                INNER JOIN " . DB_PREFIX . "tasks t ON tr.task_id = t.id
+                INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+                INNER JOIN " . DB_PREFIX . "user u ON %s
+                INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+                INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id AND te.is_active = 1
+                WHERE %s AND %s AND %s%s
+                GROUP BY tm.team_id, ym
+                UNION ALL
+                SELECT tm.team_id,
+                    DATE_FORMAT(COALESCE(t.actual_end_date, t.due_date), '%%Y-%%m') AS ym,
+                    0 AS revenue,
+                    0 AS likes,
+                    0 AS dislikes,
+                    0 AS drawings_revenue,
+                    0 AS drawing_count,
+                    COUNT(*) AS task_count
+                FROM " . DB_PREFIX . "tasks t
+                INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+                INNER JOIN " . DB_PREFIX . "user u ON %s
+                INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+                INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id AND te.is_active = 1
+                WHERE %s AND %s AND %s%s
+                GROUP BY tm.team_id, ym
+             ) monthly_stats
+             GROUP BY team_id, ym",
+            $creatorJoin,
+            $projectScope,
+            $drawingPeriodSql,
+            $activeUserSql,
+            $teamMemberScope,
+            $assigneeJoin,
+            $projectScope,
+            $taskPeriodSql,
+            $activeUserSql,
+            $teamMemberScope,
+            $assigneeJoin,
+            $projectScope,
+            $taskPeriodSql,
+            $activeUserSql,
+            $teamMemberScope
+        ));
 
         // 4) Aggregate yearly totals
-        $yearRows = $this->fetchAll(
-            "SELECT 
-                es.team_id,
-                SUM(es.revenue) AS revenue_year,
-                SUM(es.task_likes) AS total_likes,
-                SUM(es.task_dislikes) AS total_dislikes,
-                SUM(es.drawing_count) AS total_drawing_count,
-                SUM(es.task_count) AS total_task_count
-             FROM {$this->table} es
-             INNER JOIN " . DB_PREFIX . "user u ON es.user_id = u.userid
-             WHERE es.period_type = 'month'
-               AND es.period_start >= '" . $this->quote($startDate) . "'
-               AND es.period_start <= '" . $this->quote($endDate) . "'
-               AND " . $activeUserSql . "
-             GROUP BY es.team_id"
-        );
+        $yearRows = $this->fetchAll(sprintf(
+            "SELECT team_id,
+                SUM(revenue) AS revenue_year,
+                SUM(likes) AS total_likes,
+                SUM(dislikes) AS total_dislikes,
+                SUM(drawing_count) AS total_drawing_count,
+                SUM(task_count) AS total_task_count
+             FROM (
+                SELECT tm.team_id,
+                    COALESCE(SUM(pd.price), 0) AS revenue,
+                    0 AS likes,
+                    0 AS dislikes,
+                    COUNT(*) AS drawing_count,
+                    0 AS task_count
+                FROM " . DB_PREFIX . "project_drawings pd
+                INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
+                INNER JOIN " . DB_PREFIX . "user u ON %s
+                INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+                INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id AND te.is_active = 1
+                WHERE pd.status = 'approved'
+                  AND pd.price IS NOT NULL
+                  AND %s
+                  AND %s
+                  AND %s%s
+                GROUP BY tm.team_id
+                UNION ALL
+                SELECT tm.team_id,
+                    0 AS revenue,
+                    SUM(CASE WHEN tr.type = 'like' THEN 1 ELSE 0 END) AS likes,
+                    SUM(CASE WHEN tr.type = 'dislike' THEN 1 ELSE 0 END) AS dislikes,
+                    0 AS drawing_count,
+                    0 AS task_count
+                FROM " . DB_PREFIX . "task_reactions tr
+                INNER JOIN " . DB_PREFIX . "tasks t ON tr.task_id = t.id
+                INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+                INNER JOIN " . DB_PREFIX . "user u ON %s
+                INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+                INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id AND te.is_active = 1
+                WHERE %s AND %s AND %s%s
+                GROUP BY tm.team_id
+                UNION ALL
+                SELECT tm.team_id,
+                    0 AS revenue,
+                    0 AS likes,
+                    0 AS dislikes,
+                    0 AS drawing_count,
+                    COUNT(*) AS task_count
+                FROM " . DB_PREFIX . "tasks t
+                INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+                INNER JOIN " . DB_PREFIX . "user u ON %s
+                INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+                INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id AND te.is_active = 1
+                WHERE %s AND %s AND %s%s
+                GROUP BY tm.team_id
+             ) yearly_stats
+             GROUP BY team_id",
+            $creatorJoin,
+            $projectScope,
+            $drawingPeriodSql,
+            $activeUserSql,
+            $teamMemberScope,
+            $assigneeJoin,
+            $projectScope,
+            $taskPeriodSql,
+            $activeUserSql,
+            $teamMemberScope,
+            $assigneeJoin,
+            $projectScope,
+            $taskPeriodSql,
+            $activeUserSql,
+            $teamMemberScope
+        ));
         $yearTotals = [];
         foreach ($yearRows as $row) {
             $tid = $row['team_id'] ? intval($row['team_id']) : 0;
@@ -885,6 +2228,8 @@ class Employeestatistics extends ApplicationModel {
             $results[] = [
                 'team_id' => $tid,
                 'team_name' => $team['name'],
+                'department_id' => isset($team['department_id']) ? intval($team['department_id']) : null,
+                'department_name' => $team['department_name'] ?? null,
                 'revenue_year' => $revenueYear,
                 'target_year' => $targetYearly,
                 'pct_year' => $pctYear,

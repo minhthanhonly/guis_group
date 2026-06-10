@@ -26,32 +26,41 @@ if($_SESSION['show_project'] == 0){
             <div class="card">
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-md-4">
+                        <div class="col-md-4 col-lg-3">
                             <label class="form-label">期間</label>
                             <select class="form-select" v-model="filters.selected_month" @change="onMonthChange">
                                 <option value="" data-i18n="すべての期間">すべての期間</option>
                                 <option v-for="month in availableMonths" :key="month.value" :value="month.value">{{ month.label }}</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">チーム</label>
-                            <select class="form-select" v-model="filters.team_id" @change="onTeamChange">
-                                <option value="" data-i18n="すべてのチーム">すべてのチーム</option>
-                                <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
+                        <div class="col-md-4 col-lg-3">
+                            <label class="form-label"><span data-i18n="部署">部署</span></label>
+                            <select class="form-select" v-model="sharedFilters.department_id" @change="onSharedFilterChange('department')">
+                                <option :value="null" data-i18n="すべての部署">すべての部署</option>
+                                <option v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
                             </select>
                         </div>
-                        <div class="col-md-4 d-flex align-items-end gap-2">
-                            <button class="btn btn-primary flex-fill" @click="calculateStatistics" :disabled="calculating">
+                        <div class="col-md-4 col-lg-3">
+                            <label class="form-label">チーム</label>
+                            <select class="form-select" v-model="sharedFilters.team_id" @change="onSharedFilterChange('team')" :disabled="activeTab === 'departments'">
+                                <option :value="null" data-i18n="すべてのチーム">すべてのチーム</option>
+                                <option v-for="team in filterTeams" :key="team.id" :value="team.id">{{ team.name }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-12 d-flex flex-wrap gap-2">
+                            <button class="btn btn-primary" @click="calculateStatistics" :disabled="calculating">
                                 <i class="fa fa-calculator me-1"></i>
                                 <span v-if="calculating">計算中...</span>
                                 <span v-else>統計計算</span>
                             </button>
-                            <button class="btn btn-danger flex-fill" @click="deleteStatistics" :disabled="deleting">
+                            <button class="btn btn-danger" @click="deleteStatistics" :disabled="deleting">
                                 <i class="fa fa-trash me-1"></i>
                                 <span v-if="deleting">削除中...</span>
                                 <span v-else>12ヶ月削除</span>
                             </button>
-                            <button class="btn btn-warning flex-fill" @click="generateSampleStatistics" :disabled="generating">
+                            <button class="btn btn-warning" @click="generateSampleStatistics" :disabled="generating">
                                 <i class="fa fa-magic me-1"></i>
                                 <span v-if="generating">生成中...</span>
                                 <span v-else>サンプルデータ追加</span>
@@ -65,6 +74,11 @@ if($_SESSION['show_project'] == 0){
         <!-- Tabs -->
         <div class="col-12 mb-4">
             <ul class="nav nav-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" :class="{ active: activeTab === 'departments' }" @click="switchTab('departments')" type="button">
+                        <i class="fa fa-building me-1"></i><span data-i18n="部署統計">部署統計</span>
+                    </button>
+                </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" :class="{ active: activeTab === 'teams' }" @click="switchTab('teams')" type="button">
                         <i class="fa fa-users me-1"></i>チーム統計
@@ -89,7 +103,7 @@ if($_SESSION['show_project'] == 0){
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">チーム統計</h5>
                     <div class="d-flex gap-2">
-                        <button v-if="selectedTeamId !== null" class="btn btn-sm btn-outline-primary" @click="clearTeamSelection">
+                        <button v-if="sharedFilters.team_id !== null" class="btn btn-sm btn-outline-primary" @click="clearTeamSelection">
                             <i class="fa fa-list me-1"></i>すべて表示
                         </button>
                         <button class="btn btn-sm btn-outline-secondary" @click="loadSummary">
@@ -140,9 +154,31 @@ if($_SESSION['show_project'] == 0){
                                         <span class="text-muted">図面数:</span>
                                         <strong>{{ stat.total_drawing_count }}</strong>
                                     </div>
-                                    <div class="d-flex justify-content-between">
+                                    <div class="d-flex justify-content-between mb-2">
                                         <span class="text-muted">タスク数:</span>
                                         <strong>{{ stat.total_task_count }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted"><span data-i18n="工数合計">工数合計</span>:</span>
+                                        <strong class="text-primary">{{ formatWorkload(stat.total_workload) }}</strong>
+                                    </div>
+                                    <div class="border-top pt-2 mt-1">
+                                        <div class="d-flex justify-content-between mb-1 small">
+                                            <span class="text-muted"><span data-i18n="新規作成">新規作成</span>:</span>
+                                            <strong>{{ formatWorkload(stat.workload_new) }}</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1 small">
+                                            <span class="text-muted"><span data-i18n="修正(エラー)">修正(エラー)</span>:</span>
+                                            <strong>{{ formatWorkload(stat.workload_error_fix) }}</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1 small">
+                                            <span class="text-muted"><span data-i18n="修正(変更)">修正(変更)</span>:</span>
+                                            <strong>{{ formatWorkload(stat.workload_change_fix) }}</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between small">
+                                            <span class="text-muted"><span data-i18n="その他工数">その他工数</span>:</span>
+                                            <strong>{{ formatWorkload(stat.workload_other) }}</strong>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -160,7 +196,7 @@ if($_SESSION['show_project'] == 0){
         </div>
 
         <!-- Team Monthly Chart Section -->
-        <div class="col-12 mb-4" v-show="selectedTeamId && activeTab === 'teams'">
+        <div class="col-12 mb-4" v-show="sharedFilters.team_id && activeTab === 'teams'">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">
@@ -171,19 +207,133 @@ if($_SESSION['show_project'] == 0){
                         <i class="fa fa-refresh me-1"></i>更新
                     </button>
                 </div>
-                <div class="card-body">
-                    <!-- Loading State -->
-                    <div v-if="chartLoading" class="text-center py-5">
+                <div class="card-body position-relative" style="min-height: 400px;">
+                    <div v-if="chartLoading" class="position-absolute top-50 start-50 translate-middle text-center" style="z-index: 2;">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">読み込み中...</span>
                         </div>
-                        <p class="mt-2 text-muted">チャートデータを読み込み中...</p>
+                        <p class="mt-2 text-muted mb-0">チャートデータを読み込み中...</p>
                     </div>
-                    
-                    <!-- Chart Container -->
-                    <div v-else>
-                        <div id="team-monthly-chart" style="min-height: 400px;"></div>
+                    <div id="team-monthly-chart" style="min-height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Department Statistics Tab -->
+        <div class="col-12" v-show="activeTab === 'departments'">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0"><span data-i18n="部署統計">部署統計</span></h5>
+                    <div class="d-flex gap-2">
+                        <button v-if="selectedDepartmentId" class="btn btn-sm btn-outline-primary" @click="clearDepartmentSelection">
+                            <i class="fa fa-list me-1"></i><span data-i18n="すべて表示">すべて表示</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" @click="loadDepartmentSummary">
+                            <i class="fa fa-refresh me-1"></i><span data-i18n="更新">更新</span>
+                        </button>
                     </div>
+                </div>
+                <div class="card-body">
+                    <div v-if="loading" class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">読み込み中...</span>
+                        </div>
+                        <p class="mt-2 text-muted">データを読み込み中...</p>
+                    </div>
+
+                    <div v-else-if="displayedDepartmentStatistics.length > 0" class="row">
+                        <div class="col-md-4 mb-3" v-for="stat in displayedDepartmentStatistics" :key="stat.department_id">
+                            <div class="card border-info h-100"
+                                 :class="{ 'border-success': isDepartmentSelected(stat.department_id) }"
+                                 style="cursor: pointer; transition: all 0.3s;"
+                                 @click="selectDepartment(stat.department_id)"
+                                 @mouseenter="$event.currentTarget.style.transform = 'scale(1.02)'"
+                                 @mouseleave="$event.currentTarget.style.transform = 'scale(1)'">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="card-title mb-0">{{ stat.department_name }}</h6>
+                                        <i v-if="isDepartmentSelected(stat.department_id)" class="fa fa-check-circle text-success"></i>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted"><span data-i18n="チーム数">チーム数</span>:</span>
+                                        <strong>{{ stat.team_count }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted"><span data-i18n="メンバー数">メンバー数</span>:</span>
+                                        <strong>{{ stat.member_count }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted"><span data-i18n="売上高">売上高</span>:</span>
+                                        <strong>{{ formatCurrency(stat.total_revenue) }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted"><span data-i18n="良い">良い</span>:</span>
+                                        <strong class="text-success">{{ stat.total_likes }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted"><span data-i18n="悪い">悪い</span>:</span>
+                                        <strong class="text-danger">{{ stat.total_dislikes }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted"><span data-i18n="タスク数">タスク数</span>:</span>
+                                        <strong>{{ stat.total_task_count }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted"><span data-i18n="工数合計">工数合計</span>:</span>
+                                        <strong class="text-primary">{{ formatWorkload(stat.total_workload) }}</strong>
+                                    </div>
+                                    <div class="border-top pt-2 mt-1">
+                                        <div class="d-flex justify-content-between mb-1 small">
+                                            <span class="text-muted"><span data-i18n="新規作成">新規作成</span>:</span>
+                                            <strong>{{ formatWorkload(stat.workload_new) }}</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1 small">
+                                            <span class="text-muted"><span data-i18n="修正(エラー)">修正(エラー)</span>:</span>
+                                            <strong>{{ formatWorkload(stat.workload_error_fix) }}</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1 small">
+                                            <span class="text-muted"><span data-i18n="修正(変更)">修正(変更)</span>:</span>
+                                            <strong>{{ formatWorkload(stat.workload_change_fix) }}</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between small">
+                                            <span class="text-muted"><span data-i18n="その他工数">その他工数</span>:</span>
+                                            <strong>{{ formatWorkload(stat.workload_other) }}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else class="text-center py-5">
+                        <i class="fa fa-building fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted"><span data-i18n="部署統計データがありません">部署統計データがありません</span></h5>
+                        <p class="text-muted">期間を選択して「統計計算」ボタンをクリックしてください</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Department Monthly Chart Section -->
+        <div class="col-12 mb-4" v-show="sharedFilters.department_id && activeTab === 'departments'">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fa fa-chart-line me-2"></i>
+                        {{ getSelectedDepartmentName() }} - <span data-i18n="月別統計比較">月別統計比較</span>
+                    </h5>
+                    <button class="btn btn-sm btn-outline-secondary" @click="loadDepartmentMonthlyStatistics">
+                        <i class="fa fa-refresh me-1"></i><span data-i18n="更新">更新</span>
+                    </button>
+                </div>
+                <div class="card-body position-relative" style="min-height: 400px;">
+                    <div v-if="departmentChartLoading" class="position-absolute top-50 start-50 translate-middle text-center" style="z-index: 2;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">読み込み中...</span>
+                        </div>
+                        <p class="mt-2 text-muted mb-0">チャートデータを読み込み中...</p>
+                    </div>
+                    <div id="department-monthly-chart" style="min-height: 400px;"></div>
                 </div>
             </div>
         </div>
@@ -206,14 +356,54 @@ if($_SESSION['show_project'] == 0){
                         <p class="mt-2 text-muted">データを読み込み中...</p>
                     </div>
 
-                    <!-- Statistics Table -->
-                    <div v-else-if="filteredStatistics.length > 0" class="table-responsive">
+                    <template v-else-if="filteredStatistics.length > 0">
+                        <div class="card bg-light mb-3">
+                            <div class="card-body py-3">
+                                <div class="row g-3">
+                                    <div class="col-6 col-md-3 col-lg-2">
+                                        <small class="text-muted d-block"><span data-i18n="メンバー数">メンバー数</span></small>
+                                        <strong>{{ employeeSummaryTotals.member_count }}</strong>
+                                    </div>
+                                    <div class="col-6 col-md-3 col-lg-2">
+                                        <small class="text-muted d-block"><span data-i18n="売上高">売上高</span></small>
+                                        <strong>{{ formatCurrency(employeeSummaryTotals.total_revenue) }}</strong>
+                                    </div>
+                                    <div class="col-6 col-md-3 col-lg-2">
+                                        <small class="text-muted d-block"><span data-i18n="良い">良い</span> / <span data-i18n="悪い">悪い</span></small>
+                                        <strong><span class="text-success">{{ employeeSummaryTotals.total_likes }}</span> / <span class="text-danger">{{ employeeSummaryTotals.total_dislikes }}</span></strong>
+                                    </div>
+                                    <div class="col-6 col-md-3 col-lg-2">
+                                        <small class="text-muted d-block"><span data-i18n="タスク数">タスク数</span></small>
+                                        <strong>{{ employeeSummaryTotals.total_task_count }}</strong>
+                                    </div>
+                                    <div class="col-6 col-md-3 col-lg-2">
+                                        <small class="text-muted d-block"><span data-i18n="工数合計">工数合計</span></small>
+                                        <strong class="text-primary">{{ formatWorkload(employeeSummaryTotals.total_workload) }}</strong>
+                                    </div>
+                                    <div class="col-12 col-lg-4">
+                                        <small class="text-muted d-block mb-1"><span data-i18n="種別別工数">種別別工数</span></small>
+                                        <div class="d-flex flex-wrap gap-3 small">
+                                            <span><span data-i18n="新規作成">新規作成</span>: {{ formatWorkload(employeeSummaryTotals.workload_new) }}</span>
+                                            <span><span data-i18n="修正(エラー)">修正(エラー)</span>: {{ formatWorkload(employeeSummaryTotals.workload_error_fix) }}</span>
+                                            <span><span data-i18n="修正(変更)">修正(変更)</span>: {{ formatWorkload(employeeSummaryTotals.workload_change_fix) }}</span>
+                                            <span><span data-i18n="その他工数">その他工数</span>: {{ formatWorkload(employeeSummaryTotals.workload_other) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
                         <table class="table table-hover">
                             <thead class="table-light">
                                 <tr>
                                     <th style="cursor: pointer;" @click="sortBy('period_start')">
                                         期間
                                         <i class="fa ms-1" :class="getSortIcon('period_start')"></i>
+                                    </th>
+                                    <th style="cursor: pointer;" @click="sortBy('department_name')">
+                                        <span data-i18n="部署">部署</span>
+                                        <i class="fa ms-1" :class="getSortIcon('department_name')"></i>
                                     </th>
                                     <th style="cursor: pointer;" @click="sortBy('team_name')">
                                         チーム
@@ -243,6 +433,26 @@ if($_SESSION['show_project'] == 0){
                                         <i class="fa fa-thumbs-down text-danger"></i> 悪い
                                         <i class="fa ms-1" :class="getSortIcon('task_dislikes')"></i>
                                     </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('total_workload')">
+                                        <span data-i18n="工数合計">工数合計</span>
+                                        <i class="fa ms-1" :class="getSortIcon('total_workload')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('workload_new')">
+                                        <span data-i18n="新規作成">新規作成</span>
+                                        <i class="fa ms-1" :class="getSortIcon('workload_new')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('workload_error_fix')">
+                                        <span data-i18n="修正(エラー)">修正(エラー)</span>
+                                        <i class="fa ms-1" :class="getSortIcon('workload_error_fix')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('workload_change_fix')">
+                                        <span data-i18n="修正(変更)">修正(変更)</span>
+                                        <i class="fa ms-1" :class="getSortIcon('workload_change_fix')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('workload_other')">
+                                        <span data-i18n="その他工数">その他工数</span>
+                                        <i class="fa ms-1" :class="getSortIcon('workload_other')"></i>
+                                    </th>
                                     <th style="cursor: pointer;" @click="sortBy('updated_at')">
                                         更新日時
                                         <i class="fa ms-1" :class="getSortIcon('updated_at')"></i>
@@ -257,6 +467,7 @@ if($_SESSION['show_project'] == 0){
                                             <span>{{ formatDate(stat.period_start) }} ～ {{ formatDate(stat.period_end) }}</span>
                                         </div>
                                     </td>
+                                    <td>{{ stat.department_name || '-' }}</td>
                                     <td>{{ stat.team_name || '-' }}</td>
                                     <td>
                                         <strong class="text-primary" 
@@ -277,20 +488,26 @@ if($_SESSION['show_project'] == 0){
                                     <td class="text-center">
                                         <span class="badge bg-danger">{{ stat.task_dislikes }}</span>
                                     </td>
+                                    <td class="text-center fw-semibold text-primary">{{ formatWorkload(stat.total_workload) }}</td>
+                                    <td class="text-center">{{ formatWorkload(stat.workload_new) }}</td>
+                                    <td class="text-center">{{ formatWorkload(stat.workload_error_fix) }}</td>
+                                    <td class="text-center">{{ formatWorkload(stat.workload_change_fix) }}</td>
+                                    <td class="text-center">{{ formatWorkload(stat.workload_other) }}</td>
                                     <td>
                                         <small class="text-muted">{{ formatDateTime(stat.updated_at) }}</small>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
-                    </div>
+                        </div>
+                    </template>
 
                     <!-- Empty State -->
                     <div v-else class="text-center py-5">
                         <i class="fa fa-chart-bar fa-3x text-muted mb-3"></i>
                         <h5 class="text-muted">統計データがありません</h5>
                         <p v-if="filters.selected_month" class="text-muted">選択した期間のデータがありません</p>
-                        <p v-else class="text-muted">期間を選択して「統計計算」ボタンをクリックしてください</p>
+                        <p v-else class="text-muted">選択した条件に該当する従業員がいません</p>
                     </div>
                 </div>
             </div>
@@ -354,12 +571,16 @@ if($_SESSION['show_project'] == 0){
                     <div v-else-if="annualSummary.length === 0" class="text-center py-5">
                         <i class="fa fa-info-circle fa-3x text-muted mb-3"></i>
                         <h5 class="text-muted">データがありません</h5>
-                        <p class="text-muted">選択した年度に統計データまたは目標がありません</p>
+                        <p class="text-muted">選択した年度・条件に該当するデータがありません</p>
                     </div>
                     <div v-else class="table-responsive">
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
+                                    <th v-if="showAnnualDepartmentColumn" style="cursor: pointer;" @click="sortAnnualBy('department_name')">
+                                        <span data-i18n="部署">部署</span>
+                                        <i class="fa ms-1" :class="getAnnualSortIcon('department_name')"></i>
+                                    </th>
                                     <th style="cursor: pointer;" @click="sortAnnualBy('team_name')">
                                         チーム
                                         <i class="fa ms-1" :class="getAnnualSortIcon('team_name')"></i>
@@ -404,6 +625,7 @@ if($_SESSION['show_project'] == 0){
                             </thead>
                             <tbody>
                                 <tr v-for="team in sortedAnnualSummary" :key="team.team_id || 'no-team'">
+                                    <td v-if="showAnnualDepartmentColumn">{{ team.department_name || '-' }}</td>
                                     <td>
                                         <strong>{{ team.team_name || 'チーム未所属' }}</strong>
                                     </td>

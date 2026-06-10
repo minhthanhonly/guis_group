@@ -166,7 +166,7 @@ if($_SESSION['show_project'] == 0){
                         </button>
                     </div>
                     <div class="form-check form-switch ms-2">
-                        <input class="form-check-input" type="checkbox" id="showInactiveSwitch" checked>
+                        <input class="form-check-input" type="checkbox" id="showInactiveSwitch">
                         <label class="form-check-label small" for="showInactiveSwitch" data-i18n="完了・中止案件等も表示">完了・中止案件等も表示</label>
                     </div>
                     <button class="btn btn-sm btn-outline-primary" id="filterReset" type="button">

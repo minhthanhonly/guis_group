@@ -29,6 +29,11 @@ createApp({
     data() {
         return {
             teams: [],
+            departments: [],
+            sharedFilters: {
+                department_id: null,
+                team_id: null
+            },
             statistics: [],
             summary: [],
             teamStatistics: [],
@@ -40,10 +45,14 @@ createApp({
             deleting: false,
             generating: false,
             chartLoading: false,
-            activeTab: 'teams', // 'teams' or 'employees'
-            selectedTeamId: null,
+            activeTab: 'departments', // 'departments', 'teams', 'employees', 'annual'
             monthlyChartData: [],
             chartInstance: null,
+            departmentStatistics: [],
+            selectedDepartmentId: null,
+            departmentChartLoading: false,
+            departmentMonthlyChartData: [],
+            departmentChartInstance: null,
             selectedUserId: null,
             selectedUserName: '',
             employeeChartData: [],
@@ -53,11 +62,10 @@ createApp({
             sortDirection: 'asc', // 'asc' or 'desc'
             annualSortColumn: null, // Column to sort annual summary by
             annualSortDirection: 'asc', // 'asc' or 'desc'
-            selectedYear: new Date().getFullYear(),
+            selectedYear: getCurrentFiscalEndYear(),
             yearOptions: [],
             filters: {
                 period_type: 'month',
-                team_id: null,
                 selected_month: getCurrentMonth() // Default to current month (Format: YYYY-MM)
             }
         }
@@ -66,9 +74,11 @@ createApp({
     mounted() {
         this.initYearOptions();
         this.loadTeams();
+        this.loadDepartments(); // used by teams + employees tabs
         // Auto load statistics for last 12 months
         this.loadStatistics();
         this.loadSummary();
+        this.loadDepartmentSummary();
         this.loadRevenueTargets();
         this.loadAnnualSummary();
         
@@ -77,26 +87,72 @@ createApp({
     },
     
     computed: {
+        filterTeams() {
+            const deptId = this.sharedFilters.department_id;
+            if (!deptId) {
+                return this.teams;
+            }
+            return this.teams.filter(team => String(team.department_id) === String(deptId));
+        },
+
         displayedTeamStatistics() {
             let stats = this.teamStatistics;
-            
-            // Filter by selected month if a month is selected
-            if (this.filters.selected_month && this.filters.selected_month !== '') {
-                // Calculate team statistics from statistics data filtered by month
-                stats = this.calculateTeamStatisticsByMonth();
+
+            if (this.sharedFilters.department_id) {
+                const allowedTeamIds = new Set(
+                    this.filterTeams.map(team => String(team.id))
+                );
+                stats = stats.filter(stat => stat.team_id && allowedTeamIds.has(String(stat.team_id)));
             }
             
-            // Filter by selected team if a team is selected
-            if (this.selectedTeamId !== null && this.selectedTeamId !== undefined) {
-                stats = stats.filter(stat => {
-                    if (this.selectedTeamId === null || this.selectedTeamId === '' || this.selectedTeamId === 'null') {
-                        return (stat.team_id === null || stat.team_id === undefined || stat.team_id === '');
-                    }
-                    return stat.team_id == this.selectedTeamId;
-                });
+            if (this.sharedFilters.team_id !== null && this.sharedFilters.team_id !== undefined) {
+                stats = stats.filter(stat => stat.team_id == this.sharedFilters.team_id);
             }
             
             return stats;
+        },
+
+        displayedDepartmentStatistics() {
+            let stats = this.departmentStatistics || [];
+            if (this.sharedFilters.department_id) {
+                stats = stats.filter(
+                    stat => String(stat.department_id) === String(this.sharedFilters.department_id)
+                );
+            }
+            return stats;
+        },
+
+        employeeSummaryTotals() {
+            const stats = this.filteredStatistics;
+            const totals = {
+                row_count: stats.length,
+                member_count: new Set(stats.map(s => s.user_id).filter(Boolean)).size,
+                total_revenue: 0,
+                total_drawings_revenue: 0,
+                total_drawing_count: 0,
+                total_task_count: 0,
+                total_likes: 0,
+                total_dislikes: 0,
+                total_workload: 0,
+                workload_new: 0,
+                workload_error_fix: 0,
+                workload_change_fix: 0,
+                workload_other: 0
+            };
+            stats.forEach((stat) => {
+                totals.total_revenue += parseFloat(stat.revenue || 0);
+                totals.total_drawings_revenue += parseFloat(stat.total_drawings_revenue || 0);
+                totals.total_drawing_count += parseInt(stat.drawing_count || 0, 10);
+                totals.total_task_count += parseInt(stat.task_count || 0, 10);
+                totals.total_likes += parseInt(stat.task_likes || 0, 10);
+                totals.total_dislikes += parseInt(stat.task_dislikes || 0, 10);
+                totals.total_workload += parseFloat(stat.total_workload || 0);
+                totals.workload_new += parseFloat(stat.workload_new || 0);
+                totals.workload_error_fix += parseFloat(stat.workload_error_fix || 0);
+                totals.workload_change_fix += parseFloat(stat.workload_change_fix || 0);
+                totals.workload_other += parseFloat(stat.workload_other || 0);
+            });
+            return totals;
         },
         
         availableMonths() {
@@ -169,6 +225,30 @@ createApp({
                             aVal = parseInt(a.task_dislikes || 0);
                             bVal = parseInt(b.task_dislikes || 0);
                             break;
+                        case 'department_name':
+                            aVal = (a.department_name || '').toLowerCase();
+                            bVal = (b.department_name || '').toLowerCase();
+                            break;
+                        case 'total_workload':
+                            aVal = parseFloat(a.total_workload || 0);
+                            bVal = parseFloat(b.total_workload || 0);
+                            break;
+                        case 'workload_new':
+                            aVal = parseFloat(a.workload_new || 0);
+                            bVal = parseFloat(b.workload_new || 0);
+                            break;
+                        case 'workload_error_fix':
+                            aVal = parseFloat(a.workload_error_fix || 0);
+                            bVal = parseFloat(b.workload_error_fix || 0);
+                            break;
+                        case 'workload_change_fix':
+                            aVal = parseFloat(a.workload_change_fix || 0);
+                            bVal = parseFloat(b.workload_change_fix || 0);
+                            break;
+                        case 'workload_other':
+                            aVal = parseFloat(a.workload_other || 0);
+                            bVal = parseFloat(b.workload_other || 0);
+                            break;
                         case 'updated_at':
                             aVal = a.updated_at || '';
                             bVal = b.updated_at || '';
@@ -190,6 +270,10 @@ createApp({
             return stats;
         },
         
+        showAnnualDepartmentColumn() {
+            return !this.sharedFilters.department_id;
+        },
+
         // Sorted data for 年間サマリー
         sortedAnnualSummary() {
             if (!this.annualSummary || this.annualSummary.length === 0) {
@@ -211,6 +295,10 @@ createApp({
                     case 'team_name':
                         aVal = (a.team_name || '').toLowerCase();
                         bVal = (b.team_name || '').toLowerCase();
+                        break;
+                    case 'department_name':
+                        aVal = (a.department_name || '').toLowerCase();
+                        bVal = (b.department_name || '').toLowerCase();
                         break;
                     case 'revenue_year':
                         aVal = parseFloat(a.revenue_year || 0);
@@ -287,60 +375,106 @@ createApp({
             return params;
         },
 
+        /** Chart APIs always use full monthly range (not single selected_month). */
+        appendChartFilterParams(params) {
+            params.append('fiscal_year', String(this.getSelectedFiscalEndYear()));
+            return params;
+        },
+
+        getActiveDepartmentId() {
+            return this.sharedFilters.department_id || this.selectedDepartmentId || null;
+        },
+
+        async refreshChartsForFilters() {
+            if (this.activeTab === 'teams' && this.sharedFilters.team_id) {
+                await this.loadMonthlyStatistics();
+            } else if (this.chartInstance) {
+                this.chartInstance.destroy();
+                this.chartInstance = null;
+            }
+
+            const departmentId = this.getActiveDepartmentId();
+            if (this.activeTab === 'departments' && departmentId) {
+                this.selectedDepartmentId = departmentId;
+                await this.loadDepartmentMonthlyStatistics();
+            } else if (!departmentId && this.departmentChartInstance) {
+                this.departmentChartInstance.destroy();
+                this.departmentChartInstance = null;
+            }
+        },
+
         async loadTeams() {
             try {
                 const response = await axios.get('/api/index.php?model=team&method=list');
                 this.teams = response.data || [];
-                
-                // Default to "すべてのチーム" (all teams) - team_id is null
-                    await this.loadStatistics();
-                    await this.loadSummary();
+                await this.loadSummary();
             } catch (error) {
                 console.error('Error loading teams:', error);
                 this.showError('チームの読み込みに失敗しました');
             }
         },
 
-        initYearOptions() {
-            const currentYear = new Date().getFullYear();
-            // Current year, previous, and next year for convenience
-            this.yearOptions = [currentYear, currentYear + 1, currentYear - 1].sort((a, b) => b - a);
+        async loadDepartments() {
+            try {
+                const response = await axios.get('/api/index.php?model=department&method=list');
+                this.departments = response.data || [];
+            } catch (error) {
+                console.error('Error loading departments:', error);
+                this.departments = [];
+            }
         },
-        
-        async onTeamChange() {
-            await this.loadStatistics();
-            if (this.filters.team_id) {
-                this.selectedTeamId = this.filters.team_id;
-                await this.loadMonthlyStatistics();
-            } else {
-                this.selectedTeamId = null;
-                if (this.chartInstance) {
-                    this.chartInstance.destroy();
-                    this.chartInstance = null;
+
+        async onSharedFilterChange(changedField) {
+            if (changedField === 'department' && this.sharedFilters.team_id) {
+                const teamStillValid = this.filterTeams.some(
+                    team => String(team.id) === String(this.sharedFilters.team_id)
+                );
+                if (!teamStillValid) {
+                    this.sharedFilters.team_id = null;
+                    if (this.chartInstance) {
+                        this.chartInstance.destroy();
+                        this.chartInstance = null;
+                    }
                 }
             }
+
+            if (changedField === 'department') {
+                if (this.sharedFilters.department_id) {
+                    this.selectedDepartmentId = this.sharedFilters.department_id;
+                } else {
+                    this.clearDepartmentSelection();
+                }
+            }
+
+            await this.$nextTick();
+            await this.refreshChartsForFilters();
+
+            await this.loadStatistics();
+            await this.loadSummary();
+
+            if (this.activeTab === 'annual') {
+                await this.loadAnnualSummary();
+            }
+        },
+
+        initYearOptions() {
+            const fiscalEndYear = getCurrentFiscalEndYear();
+            // Fiscal end year (Jul-Jun): current, previous, and next
+            this.yearOptions = [fiscalEndYear, fiscalEndYear + 1, fiscalEndYear - 1].sort((a, b) => b - a);
         },
         
         selectTeam(teamId) {
-            // Toggle: if clicking the same team, deselect it
             if (this.isTeamSelected(teamId)) {
                 this.clearTeamSelection();
                 return;
             }
             
-            this.selectedTeamId = teamId;
-            // Only set filter if teamId is not null
-            if (teamId) {
-                this.filters.team_id = teamId;
-            } else {
-                this.filters.team_id = null;
-            }
+            this.sharedFilters.team_id = teamId;
             this.loadMonthlyStatistics();
         },
         
         clearTeamSelection() {
-            this.selectedTeamId = null;
-            this.filters.team_id = null;
+            this.sharedFilters.team_id = null;
             if (this.chartInstance) {
                 this.chartInstance.destroy();
                 this.chartInstance = null;
@@ -348,27 +482,23 @@ createApp({
         },
         
         isTeamSelected(teamId) {
-            if (this.selectedTeamId === null || this.selectedTeamId === undefined) {
+            if (this.sharedFilters.team_id === null || this.sharedFilters.team_id === undefined) {
                 return (teamId === null || teamId === undefined || teamId === '');
             }
-            return this.selectedTeamId == teamId;
+            return this.sharedFilters.team_id == teamId;
         },
         
         getSelectedTeamName() {
-            if (this.selectedTeamId === null || this.selectedTeamId === undefined) {
+            if (this.sharedFilters.team_id === null || this.sharedFilters.team_id === undefined) {
                 return 'チーム未所属';
             }
-            const team = this.teamStatistics.find(t => {
-                if (this.selectedTeamId === null || this.selectedTeamId === '') {
-                    return (t.team_id === null || t.team_id === undefined || t.team_id === '');
-                }
-                return t.team_id == this.selectedTeamId;
-            });
-            return team ? (team.team_name || 'チーム未所属') : '';
+            const team = this.teams.find(t => t.id == this.sharedFilters.team_id)
+                || this.teamStatistics.find(t => t.team_id == this.sharedFilters.team_id);
+            return team ? (team.name || team.team_name || 'チーム未所属') : '';
         },
         
         async loadMonthlyStatistics() {
-            if (this.selectedTeamId === null || this.selectedTeamId === undefined) {
+            if (this.sharedFilters.team_id === null || this.sharedFilters.team_id === undefined || this.sharedFilters.team_id === '' || this.sharedFilters.team_id === 'null') {
                 if (this.chartInstance) {
                     this.chartInstance.destroy();
                     this.chartInstance = null;
@@ -380,136 +510,75 @@ createApp({
             try {
                 const params = new URLSearchParams({
                     model: 'employeestatistics',
-                    method: 'list',
-                    period_type: 'month',
+                    method: 'getMonthlyByTeam',
+                    team_id: this.sharedFilters.team_id,
                     months: 12
                 });
-                this.appendFiscalFilterParams(params);
-                
-                // Handle null team_id (for teams without team_id)
-                if (this.selectedTeamId !== null && this.selectedTeamId !== '') {
-                    params.append('team_id', this.selectedTeamId);
-                } else {
-                    // For teams without team_id, we need to filter by team_id IS NULL
-                    // This might need API support, but for now we'll try without team_id filter
-                }
+                this.appendChartFilterParams(params);
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
-                let data = response.data || [];
-                
-                // If selectedTeamId is null/empty string, filter for records with null team_id
-                if (this.selectedTeamId === null || this.selectedTeamId === '' || this.selectedTeamId === 'null') {
-                    data = data.filter(stat => !stat.team_id || stat.team_id === null);
-                }
-                
-                this.monthlyChartData = data;
-                
-                // Group data by month and aggregate
-                this.renderChart();
+                const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+                this.monthlyChartData = Array.isArray(data) ? data : [];
             } catch (error) {
                 console.error('Error loading monthly statistics:', error);
                 this.showError('月別統計データの読み込みに失敗しました');
+                this.monthlyChartData = [];
             } finally {
                 this.chartLoading = false;
             }
+            await this.$nextTick();
+            await this.$nextTick();
+            this.renderChart();
         },
         
         renderChart() {
+            const chartElement = document.getElementById('team-monthly-chart');
+            if (!chartElement) {
+                return;
+            }
+
             if (!this.monthlyChartData || this.monthlyChartData.length === 0) {
-                console.log('No chart data available');
+                if (this.chartInstance) {
+                    this.chartInstance.destroy();
+                    this.chartInstance = null;
+                }
+                chartElement.innerHTML = '<div class="text-center text-muted py-5">選択した期間にチャートデータがありません</div>';
                 return;
             }
             
-            console.log('Rendering chart with data:', this.monthlyChartData.length, 'records');
-            
-            // Group data by month
-            const monthlyData = {};
-            
-            this.monthlyChartData.forEach(stat => {
-                const monthKey = stat.period_start.substring(0, 7); // YYYY-MM
-                if (!monthlyData[monthKey]) {
-                    monthlyData[monthKey] = {
-                        month: monthKey,
-                        revenue: 0,
-                        drawing_revenue: 0,
-                        drawing_count: 0,
-                        task_count: 0,
-                        likes: 0,
-                        dislikes: 0
-                    };
-                }
-                
-                monthlyData[monthKey].revenue += parseFloat(stat.revenue || 0);
-                monthlyData[monthKey].drawing_revenue += parseFloat(stat.total_drawings_revenue || 0);
-                monthlyData[monthKey].drawing_count += parseInt(stat.drawing_count || 0);
-                monthlyData[monthKey].task_count += parseInt(stat.task_count || 0);
-                monthlyData[monthKey].likes += parseInt(stat.task_likes || 0);
-                monthlyData[monthKey].dislikes += parseInt(stat.task_dislikes || 0);
-            });
-            
-            // Sort by month
-            const sortedMonths = Object.keys(monthlyData).sort();
-            const categories = sortedMonths.map(month => {
-                const [year, monthNum] = month.split('-');
+            const categories = this.monthlyChartData.map(row => {
+                const [year, monthNum] = row.ym.split('-');
                 return `${year}年${monthNum}月`;
             });
+            const drawingRevenueData = this.monthlyChartData.map(row => parseFloat(row.drawing_revenue || 0));
+            const workloadNewData = this.monthlyChartData.map(row => parseFloat(row.workload_new || 0));
+            const workloadErrorFixData = this.monthlyChartData.map(row => parseFloat(row.workload_error_fix || 0));
+            const workloadChangeFixData = this.monthlyChartData.map(row => parseFloat(row.workload_change_fix || 0));
+            const workloadOtherData = this.monthlyChartData.map(row => parseFloat(row.workload_other || 0));
+            const taskCountData = this.monthlyChartData.map(row => parseInt(row.task_count || 0));
+            const likesData = this.monthlyChartData.map(row => parseInt(row.likes || 0));
+            const dislikesData = this.monthlyChartData.map(row => parseInt(row.dislikes || 0));
             
-            // Prepare series data
-            const revenueData = sortedMonths.map(month => monthlyData[month].revenue);
-            const drawingRevenueData = sortedMonths.map(month => monthlyData[month].drawing_revenue);
-            const drawingCountData = sortedMonths.map(month => monthlyData[month].drawing_count);
-            const taskCountData = sortedMonths.map(month => monthlyData[month].task_count);
-            const likesData = sortedMonths.map(month => monthlyData[month].likes);
-            const dislikesData = sortedMonths.map(month => monthlyData[month].dislikes);
-            
-            // Use colors that match the meaning of each metric
-            // 図面売上: Green (#1cc88a) - positive/revenue
-            // 図面数: Orange (#ff9f43) - neutral/count
-            // タスク数: Purple (#7367f0) - neutral/count
-            // 良い: Blue (#3b82f6) - positive/good (different from green)
-            // 悪い: Red (#dc2626) - negative/bad
-            const chartColors = ['#1cc88a',  '#7367f0', '#3b82f6', '#dc2626', '#ff9f43'];
+            const chartColors = ['#1cc88a', '#28c76f', '#ea5455', '#ff9f43', '#a8aaae', '#7367f0', '#3b82f6', '#dc2626'];
             const borderColor = 'rgba(224,224,224,0.2)';
             const labelColor = '#ccc';
             
-            // Destroy existing chart
             if (this.chartInstance) {
                 this.chartInstance.destroy();
+                this.chartInstance = null;
             }
+            chartElement.innerHTML = '';
             
-            // Create new chart with style similar to index.php
             const options = {
                 series: [
-                    // {
-                    //     name: '売上高',
-                    //     type: 'column',
-                    //     data: revenueData
-                    // },
-                    {
-                        name: '図面売上',
-                        type: 'column',
-                        data: drawingRevenueData
-                    },
-                    // {
-                    //     name: '図面数',
-                    //     type: 'line',
-                    //     data: drawingCountData
-                    // },
-                    {
-                        name: 'タスク数',
-                        type: 'line',
-                        data: taskCountData
-                    },
-                    {
-                        name: '良い',
-                        type: 'line',
-                        data: likesData
-                    },
-                    {
-                        name: '悪い',
-                        type: 'line',
-                        data: dislikesData
-                    }
+                    { name: '図面売上', type: 'column', data: drawingRevenueData },
+                    { name: '新規作成', type: 'line', data: workloadNewData },
+                    { name: '修正(エラー)', type: 'line', data: workloadErrorFixData },
+                    { name: '修正(変更)', type: 'line', data: workloadChangeFixData },
+                    { name: 'その他工数', type: 'line', data: workloadOtherData },
+                    { name: 'タスク数', type: 'line', data: taskCountData },
+                    { name: '良い', type: 'line', data: likesData },
+                    { name: '悪い', type: 'line', data: dislikesData }
                 ],
                 chart: {
                     height: 350,
@@ -520,7 +589,7 @@ createApp({
                     }
                 },
                 stroke: {
-                    width: [0, 0, 3, 3, 3, 3],
+                    width: [0, 3, 3, 3, 3, 3, 3, 3],
                     curve: 'smooth'
                 },
                 plotOptions: {
@@ -578,14 +647,13 @@ createApp({
                                 fontSize: '12px'
                             }
                         },
-                        // Scale only for revenue columns (series 0 and 1)
                         min: 0,
                         forceNiceScale: true
                     },
                     {
                         opposite: true,
                         title: {
-                            text: '数量',
+                            text: '工数 / 数量',
                             style: {
                                 color: labelColor,
                                 fontSize: '12px'
@@ -593,14 +661,15 @@ createApp({
                         },
                         labels: {
                             formatter: function(val) {
-                                return Math.round(val).toLocaleString('ja-JP');
+                                const n = parseFloat(val);
+                                if (Number.isInteger(n)) return String(n);
+                                return n.toFixed(1);
                             },
                             style: {
                                 colors: labelColor,
                                 fontSize: '12px'
                             }
                         },
-                        // Scale only for count metrics (series 2, 3, 4, 5)
                         min: 0,
                         forceNiceScale: true
                     }
@@ -611,11 +680,15 @@ createApp({
                     y: {
                         formatter: function(val, opts) {
                             const seriesIndex = opts.seriesIndex;
-                            // Only 図面売上 (seriesIndex 0) should have currency symbol
                             if (seriesIndex === 0) {
                                 return '¥' + Math.round(val).toLocaleString('ja-JP');
                             }
-                            // All other series (タスク数, 良い, 悪い) are counts, no currency
+                            if (seriesIndex >= 1 && seriesIndex <= 4) {
+                                const n = parseFloat(val);
+                                if (Number.isNaN(n) || n <= 0) return '0h';
+                                const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+                                return formatted + 'h';
+                            }
                             return Math.round(val).toLocaleString('ja-JP');
                         }
                     }
@@ -659,31 +732,19 @@ createApp({
                     setTimeout(() => {
                         const chartElement = document.getElementById('team-monthly-chart');
                         if (chartElement) {
-                            // Check if element is visible (not hidden by v-show)
-                            const isVisible = chartElement.offsetParent !== null || 
-                                            chartElement.style.display !== 'none';
-                            
-                            if (isVisible) {
+                            const section = chartElement.closest('.col-12');
+                            const sectionHidden = section && window.getComputedStyle(section).display === 'none';
+                            if (!sectionHidden) {
                                 try {
-                                    if (this.chartInstance) {
-                                        this.chartInstance.destroy();
-                                    }
-                                    console.log('Creating ApexCharts instance...');
+                                    chartElement.innerHTML = '';
                                     this.chartInstance = new ApexChartsClass(chartElement, options);
                                     this.chartInstance.render();
-                                    console.log('Chart rendered successfully');
                                 } catch (error) {
                                     console.error('Error rendering chart:', error);
                                     this.showError('チャートの表示に失敗しました: ' + error.message);
                                 }
-                            } else {
-                                // Element not visible yet, retry
-                                if (retryCount < maxRetries) {
-                                    console.warn('Chart element not visible yet, retrying...', retryCount);
-                                    setTimeout(renderChart, 100);
-                                } else {
-                                    console.error('Chart element not visible after', maxRetries, 'retries');
-                                }
+                            } else if (retryCount < maxRetries) {
+                                setTimeout(renderChart, 100);
                             }
                         } else {
                             // Element not found, retry
@@ -705,6 +766,9 @@ createApp({
             // Reload statistics when month filter changes
             await this.loadStatistics();
             await this.loadSummary();
+            await this.loadDepartmentSummary();
+            await this.$nextTick();
+            await this.refreshChartsForFilters();
             await this.loadRevenueTargets();
         },
 
@@ -753,11 +817,26 @@ createApp({
                     method: 'getAnnualSummary',
                     year: this.selectedYear
                 });
+                if (this.sharedFilters.department_id) {
+                    params.append('department_id', this.sharedFilters.department_id);
+                }
+                if (this.sharedFilters.team_id) {
+                    params.append('team_id', this.sharedFilters.team_id);
+                }
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
                 const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
-                this.annualSummary = Array.isArray(data) ? data : [];
+                if (Array.isArray(data)) {
+                    this.annualSummary = data;
+                } else if (data && data.error) {
+                    console.error('Annual summary API error:', data.error);
+                    this.showError('年間サマリーの読み込みに失敗しました');
+                    this.annualSummary = [];
+                } else {
+                    this.annualSummary = [];
+                }
             } catch (error) {
                 console.error('Error loading annual summary:', error);
+                this.showError('年間サマリーの読み込みに失敗しました');
                 this.annualSummary = [];
             } finally {
                 this.annualLoading = false;
@@ -892,22 +971,294 @@ createApp({
             this.activeTab = tab;
             // Clear selection when switching tabs
             if (tab === 'employees') {
-                this.selectedTeamId = null;
-                if (this.chartInstance) {
-                    this.chartInstance.destroy();
-                    this.chartInstance = null;
-                }
+                this.loadDepartments();
             } else if (tab === 'teams') {
+                this.loadDepartments();
                 this.selectedUserId = null;
                 this.selectedUserName = '';
+                this.selectedDepartmentId = null;
                 if (this.employeeChartInstance) {
                     this.employeeChartInstance.destroy();
                     this.employeeChartInstance = null;
                 }
+                if (this.departmentChartInstance) {
+                    this.departmentChartInstance.destroy();
+                    this.departmentChartInstance = null;
+                }
+                this.$nextTick(() => this.refreshChartsForFilters());
+            } else if (tab === 'departments') {
+                this.selectedUserId = null;
+                this.selectedUserName = '';
+                if (this.chartInstance) {
+                    this.chartInstance.destroy();
+                    this.chartInstance = null;
+                }
+                if (this.employeeChartInstance) {
+                    this.employeeChartInstance.destroy();
+                    this.employeeChartInstance = null;
+                }
+                this.loadDepartmentSummary();
+                this.$nextTick(() => this.refreshChartsForFilters());
             } else if (tab === 'annual') {
-                // Reload annual summary when switching to annual tab
+                this.selectedDepartmentId = null;
+                if (this.departmentChartInstance) {
+                    this.departmentChartInstance.destroy();
+                    this.departmentChartInstance = null;
+                }
                 this.loadAnnualSummary();
             }
+        },
+
+        isDepartmentSelected(departmentId) {
+            return this.selectedDepartmentId == departmentId;
+        },
+
+        getSelectedDepartmentName() {
+            if (!this.selectedDepartmentId) return '';
+            const dept = this.departmentStatistics.find(d => d.department_id == this.selectedDepartmentId);
+            return dept ? (dept.department_name || '') : '';
+        },
+
+        selectDepartment(departmentId) {
+            if (this.isDepartmentSelected(departmentId)) {
+                this.clearDepartmentSelection();
+                return;
+            }
+            this.sharedFilters.department_id = departmentId;
+            this.selectedDepartmentId = departmentId;
+            this.loadDepartmentMonthlyStatistics();
+        },
+
+        clearDepartmentSelection() {
+            this.selectedDepartmentId = null;
+            if (this.departmentChartInstance) {
+                this.departmentChartInstance.destroy();
+                this.departmentChartInstance = null;
+            }
+        },
+
+        formatWorkload(value) {
+            const n = parseFloat(value);
+            if (Number.isNaN(n) || n <= 0) return '0h';
+            const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+            return formatted + 'h';
+        },
+
+        async loadDepartmentSummary() {
+            try {
+                const params = new URLSearchParams({
+                    model: 'employeestatistics',
+                    method: 'getSummaryByDepartment',
+                    period_type: this.filters.period_type,
+                    months: 12
+                });
+                this.appendFiscalFilterParams(params);
+                const response = await axios.get(`/api/index.php?${params.toString()}`);
+                this.departmentStatistics = response.data || [];
+            } catch (error) {
+                console.error('Error loading department summary:', error);
+                this.departmentStatistics = [];
+            }
+        },
+
+        async loadDepartmentMonthlyStatistics() {
+            const departmentId = this.getActiveDepartmentId();
+            if (!departmentId) {
+                if (this.departmentChartInstance) {
+                    this.departmentChartInstance.destroy();
+                    this.departmentChartInstance = null;
+                }
+                return;
+            }
+
+            this.selectedDepartmentId = departmentId;
+            this.departmentChartLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    model: 'employeestatistics',
+                    method: 'getMonthlyByDepartment',
+                    department_id: departmentId,
+                    months: 12
+                });
+                this.appendChartFilterParams(params);
+                const response = await axios.get(`/api/index.php?${params.toString()}`);
+                const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+                this.departmentMonthlyChartData = Array.isArray(data) ? data : [];
+            } catch (error) {
+                console.error('Error loading department monthly statistics:', error);
+                this.showError('部署の月別統計データの読み込みに失敗しました');
+                this.departmentMonthlyChartData = [];
+            } finally {
+                this.departmentChartLoading = false;
+            }
+            await this.$nextTick();
+            await this.$nextTick();
+            this.renderDepartmentChart();
+        },
+
+        renderDepartmentChart() {
+            const chartElement = document.getElementById('department-monthly-chart');
+            if (!chartElement) {
+                return;
+            }
+
+            if (!this.departmentMonthlyChartData || this.departmentMonthlyChartData.length === 0) {
+                if (this.departmentChartInstance) {
+                    this.departmentChartInstance.destroy();
+                    this.departmentChartInstance = null;
+                }
+                chartElement.innerHTML = '<div class="text-center text-muted py-5">選択した期間にチャートデータがありません</div>';
+                return;
+            }
+
+            const categories = this.departmentMonthlyChartData.map(row => {
+                const [year, monthNum] = row.ym.split('-');
+                return `${year}年${monthNum}月`;
+            });
+            const revenueData = this.departmentMonthlyChartData.map(row => parseFloat(row.revenue || 0));
+            const workloadNewData = this.departmentMonthlyChartData.map(row => parseFloat(row.workload_new || 0));
+            const workloadErrorFixData = this.departmentMonthlyChartData.map(row => parseFloat(row.workload_error_fix || 0));
+            const workloadChangeFixData = this.departmentMonthlyChartData.map(row => parseFloat(row.workload_change_fix || 0));
+            const workloadOtherData = this.departmentMonthlyChartData.map(row => parseFloat(row.workload_other || 0));
+            const taskCountData = this.departmentMonthlyChartData.map(row => parseInt(row.task_count || 0));
+            const likesData = this.departmentMonthlyChartData.map(row => parseInt(row.likes || 0));
+            const dislikesData = this.departmentMonthlyChartData.map(row => parseInt(row.dislikes || 0));
+
+            const chartColors = ['#1cc88a', '#28c76f', '#ea5455', '#ff9f43', '#a8aaae', '#7367f0', '#3b82f6', '#dc2626'];
+            const borderColor = 'rgba(224,224,224,0.2)';
+            const labelColor = '#ccc';
+
+            if (this.departmentChartInstance) {
+                this.departmentChartInstance.destroy();
+                this.departmentChartInstance = null;
+            }
+            chartElement.innerHTML = '';
+
+            const options = {
+                series: [
+                    { name: '売上高', type: 'column', data: revenueData },
+                    { name: '新規作成', type: 'line', data: workloadNewData },
+                    { name: '修正(エラー)', type: 'line', data: workloadErrorFixData },
+                    { name: '修正(変更)', type: 'line', data: workloadChangeFixData },
+                    { name: 'その他工数', type: 'line', data: workloadOtherData },
+                    { name: 'タスク数', type: 'line', data: taskCountData },
+                    { name: '良い', type: 'line', data: likesData },
+                    { name: '悪い', type: 'line', data: dislikesData }
+                ],
+                chart: {
+                    height: 350,
+                    type: 'line',
+                    stacked: false,
+                    toolbar: { show: false }
+                },
+                stroke: {
+                    width: [0, 3, 3, 3, 3, 3, 3, 3],
+                    curve: 'smooth'
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: false,
+                        borderRadius: 4,
+                        columnWidth: '30px',
+                        maxWidth: '30px'
+                    }
+                },
+                colors: chartColors,
+                dataLabels: { enabled: false },
+                grid: {
+                    borderColor: borderColor,
+                    xaxis: { lines: { show: true } }
+                },
+                xaxis: {
+                    categories,
+                    axisBorder: { show: false },
+                    axisTicks: { show: false },
+                    labels: {
+                        style: { colors: labelColor, fontSize: '12px' },
+                        rotate: -45,
+                        rotateAlways: false
+                    }
+                },
+                yaxis: [
+                    {
+                        title: { text: '金額 (¥)', style: { color: labelColor, fontSize: '12px' } },
+                        labels: {
+                            formatter(val) { return '¥' + Math.round(val).toLocaleString('ja-JP'); },
+                            style: { colors: labelColor, fontSize: '12px' }
+                        },
+                        min: 0,
+                        forceNiceScale: true
+                    },
+                    {
+                        opposite: true,
+                        title: { text: '工数 / 数量', style: { color: labelColor, fontSize: '12px' } },
+                        labels: {
+                            formatter(val) {
+                                const n = parseFloat(val);
+                                if (Number.isInteger(n)) return String(n);
+                                return n.toFixed(1);
+                            },
+                            style: { colors: labelColor, fontSize: '12px' }
+                        },
+                        min: 0,
+                        forceNiceScale: true
+                    }
+                ],
+                tooltip: {
+                    shared: true,
+                    intersect: false,
+                    y: {
+                        formatter(val, opts) {
+                            if (opts.seriesIndex === 0) {
+                                return '¥' + Math.round(val).toLocaleString('ja-JP');
+                            }
+                            if (opts.seriesIndex >= 1 && opts.seriesIndex <= 4) {
+                                const n = parseFloat(val);
+                                if (Number.isNaN(n) || n <= 0) return '0h';
+                                const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+                                return formatted + 'h';
+                            }
+                            return Math.round(val).toLocaleString('ja-JP');
+                        }
+                    }
+                },
+                legend: {
+                    position: 'top',
+                    horizontalAlign: 'left',
+                    fontSize: '12px',
+                    labels: { colors: labelColor, useSeriesColors: false }
+                }
+            };
+
+            const ApexChartsClass = window.ApexCharts || ApexCharts;
+            let retryCount = 0;
+            const maxRetries = 50;
+            const renderDepartmentChartElement = () => {
+                retryCount++;
+                this.$nextTick(() => {
+                    setTimeout(() => {
+                        const el = document.getElementById('department-monthly-chart');
+                        if (el) {
+                            const section = el.closest('.col-12');
+                            const sectionHidden = section && window.getComputedStyle(section).display === 'none';
+                            if (!sectionHidden) {
+                                try {
+                                    el.innerHTML = '';
+                                    this.departmentChartInstance = new ApexChartsClass(el, options);
+                                    this.departmentChartInstance.render();
+                                } catch (error) {
+                                    console.error('Error rendering department chart:', error);
+                                }
+                                return;
+                            }
+                        }
+                        if (retryCount < maxRetries) {
+                            setTimeout(renderDepartmentChartElement, 100);
+                        }
+                    }, 100);
+                });
+            };
+            renderDepartmentChartElement();
         },
         
         selectEmployee(userId, userName) {
@@ -1268,9 +1619,12 @@ createApp({
                     months: 12 // Load last 12 months
                 });
                 this.appendFiscalFilterParams(params);
-                
-                if (this.filters.team_id) {
-                    params.append('team_id', this.filters.team_id);
+
+                if (this.sharedFilters.department_id) {
+                    params.append('department_id', this.sharedFilters.department_id);
+                }
+                if (this.sharedFilters.team_id) {
+                    params.append('team_id', this.sharedFilters.team_id);
                 }
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
@@ -1292,6 +1646,13 @@ createApp({
                     months: 12 // Load last 12 months
                 });
                 this.appendFiscalFilterParams(params);
+
+                if (this.sharedFilters.department_id) {
+                    params.append('department_id', this.sharedFilters.department_id);
+                }
+                if (this.sharedFilters.team_id) {
+                    params.append('team_id', this.sharedFilters.team_id);
+                }
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
                 this.teamStatistics = response.data || [];
@@ -1321,6 +1682,7 @@ createApp({
                     this.showSuccess(response.data.message || '統計を計算しました');
                     await this.loadStatistics();
                     await this.loadSummary();
+                    await this.loadDepartmentSummary();
                 } else {
                     this.showError(response.data.message || '統計の計算に失敗しました');
                 }
@@ -1351,9 +1713,11 @@ createApp({
                     this.showSuccess(response.data.message || '統計データを削除しました');
                     await this.loadStatistics();
                     await this.loadSummary();
+                    await this.loadDepartmentSummary();
                     // Clear selected team and employee charts
                     this.clearTeamSelection();
                     this.clearEmployeeSelection();
+                    this.clearDepartmentSelection();
                 } else {
                     this.showError(response.data.message || '統計データの削除に失敗しました');
                 }
@@ -1383,9 +1747,11 @@ createApp({
                     this.showSuccess(response.data.message || 'サンプル統計データを追加しました');
                     await this.loadStatistics();
                     await this.loadSummary();
+                    await this.loadDepartmentSummary();
                     // Clear selection to reflect new data
                     this.clearTeamSelection();
                     this.clearEmployeeSelection();
+                    this.clearDepartmentSelection();
                 } else {
                     this.showError(response.data?.message || 'サンプル統計データの追加に失敗しました');
                 }

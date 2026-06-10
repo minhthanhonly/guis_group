@@ -197,6 +197,16 @@ function getDeadlineDefaultHour() {
     return isProjectDetailVietnameseLocale() ? 16 : 18;
 }
 
+const TASK_KINDS = [
+    { value: '新規作成', label: '新規作成', color: 'success' },
+    { value: '修正(エラー)', label: '修正(エラー)', color: 'danger' },
+    { value: '修正(変更)', label: '修正(変更)', color: 'warning' },
+    { value: 'チェック', label: 'チェック', color: 'primary' },
+    { value: '連絡', label: '連絡', color: 'info' },
+    { value: '検討', label: '検討', color: 'secondary' },
+    { value: '相談・会議', label: '相談・会議', color: 'dark' }
+];
+
 const vueApp = createApp({
     data() {
         return {
@@ -214,8 +224,10 @@ const vueApp = createApp({
                 totalTasks: 0,
                 completedTasks: 0,
                 timeTracked: 0,
-                totalDays: 0
+                totalDays: 0,
+                totalWorkload: 0
             },
+            workloadByKind: [],
             statuses: [
                 { value: 'draft', label: '受付', color: 'secondary' },
                 { value: 'open', label: '納期検討', color: 'info' },
@@ -524,6 +536,7 @@ const vueApp = createApp({
                 this.project.guis_nouki_status = this.project.guis_nouki_status || '';
                 
                 this.calculateStats();
+                this.loadTaskWorkloadStats();
                 
                 if (this.project.teams) {
                     this.loadTeamListByIds(this.project.teams);
@@ -682,6 +695,62 @@ const vueApp = createApp({
             // }
         },
         // Comment functionality is now handled by CommentComponent
+        normalizeTaskKind(value) {
+            const v = String(value || '').trim();
+            return v === '新規' ? '新規作成' : v;
+        },
+        getTaskKindLabel(value) {
+            const normalized = this.normalizeTaskKind(value);
+            if (!normalized) return this.translateLabel('未設定');
+            const kind = TASK_KINDS.find(k => k.value === normalized);
+            return kind ? this.translateLabel(kind.label) : normalized;
+        },
+        getTaskKindBadgeClass(value) {
+            const normalized = this.normalizeTaskKind(value);
+            if (!normalized) return 'bg-label-secondary';
+            const kind = TASK_KINDS.find(k => k.value === normalized);
+            return `bg-label-${kind?.color || 'secondary'}`;
+        },
+        async loadTaskWorkloadStats() {
+            try {
+                const response = await axios.get(`/api/index.php?model=task&method=list&project_id=${this.projectId}&include_subtasks=1`);
+                const tasks = response.data || [];
+                const kindMap = {};
+                let totalWorkload = 0;
+                tasks.forEach((t) => {
+                    let kind = this.normalizeTaskKind(t.task_kind);
+                    if (!kind) kind = '未設定';
+                    const n = parseFloat(t.estimated_hours);
+                    const hours = Number.isNaN(n) || n <= 0 ? 0 : n;
+                    totalWorkload += hours;
+                    if (!kindMap[kind]) {
+                        kindMap[kind] = { kind, hours: 0, count: 0 };
+                    }
+                    kindMap[kind].hours += hours;
+                    kindMap[kind].count += 1;
+                });
+                this.stats.totalWorkload = totalWorkload;
+                const predefinedOrder = TASK_KINDS.map(k => k.value);
+                this.workloadByKind = Object.values(kindMap).sort((a, b) => {
+                    const ai = predefinedOrder.indexOf(a.kind);
+                    const bi = predefinedOrder.indexOf(b.kind);
+                    if (ai !== -1 && bi !== -1) return ai - bi;
+                    if (ai !== -1) return -1;
+                    if (bi !== -1) return 1;
+                    return b.hours - a.hours;
+                });
+            } catch (error) {
+                console.error('Error loading task workload stats:', error);
+                this.stats.totalWorkload = 0;
+                this.workloadByKind = [];
+            }
+        },
+        formatTotalWorkload(value) {
+            const n = parseFloat(value);
+            if (Number.isNaN(n) || n <= 0) return '0h';
+            const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+            return formatted + 'h';
+        },
         calculateStats() {
             this.stats.totalTasks = this.project.task_count || 0;
             // this.stats.completedTasks = this.tasks.filter(t => t.status === 'completed').length;
@@ -2772,9 +2841,20 @@ const vueApp = createApp({
                 default: return action;
             }
         },
+        isProjectStatusKey(value) {
+            return !!value && this.statuses.some(s => s.value === value);
+        },
+        getLogNote(log) {
+            if (!log || !log.note) return '';
+            if (log.action === 'status_changed' || log.note === 'ステータスを変更' || log.note.indexOf('ステータス変更') === 0) {
+                return this.translateLabel('ステータス変更');
+            }
+            return log.note;
+        },
         getLogBadgeClass(log, field) {
-            if (log.action === 'status_changed') {
-                return 'badge ' + this.getStatusBadgeClass(log[field]);
+            const value = log[field];
+            if (log.action === 'status_changed' || this.isProjectStatusKey(value)) {
+                return 'badge ' + this.getStatusBadgeClass(value);
             }
             if (log.action === 'priority_updated') {
                 return 'badge ' + this.getPriorityBadgeClass(log[field]);
@@ -2782,13 +2862,15 @@ const vueApp = createApp({
             return field === 'value1' ? 'badge bg-secondary' : 'badge bg-primary';
         },
         getLogBadgeLabel(log, field) {
-            if (log.action === 'status_changed') {
-                return this.getStatusLabel(log[field]);
+            const value = log[field];
+            if (!value) return '';
+            if (log.action === 'status_changed' || this.isProjectStatusKey(value)) {
+                return this.getStatusLabel(value);
             }
             if (log.action === 'priority_updated') {
-                return this.getPriorityLabel(log[field]);
+                return this.getPriorityLabel(value);
             }
-            return log[field];
+            return value;
         },
         
         // Upload progress handling methods

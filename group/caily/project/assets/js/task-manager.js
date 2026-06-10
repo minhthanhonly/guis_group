@@ -260,7 +260,12 @@ const TaskApp = createApp({
                 }
             }).length;
 
-            return { total, completed, overdue };
+            const totalWorkload = this.tasks.reduce((sum, t) => {
+                const n = parseFloat(t.estimated_hours);
+                return sum + (Number.isNaN(n) || n <= 0 ? 0 : n);
+            }, 0);
+
+            return { total, completed, overdue, totalWorkload };
         },
         isInEditMode() {
             return this.inlineTasks.length > 0 || this.editingInlineId !== null;
@@ -809,6 +814,12 @@ const TaskApp = createApp({
         formatEstimatedHours(value) {
             const n = parseFloat(value);
             if (Number.isNaN(n) || n <= 0) return '—';
+            const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+            return formatted + 'h';
+        },
+        formatTotalWorkload(value) {
+            const n = parseFloat(value);
+            if (Number.isNaN(n) || n <= 0) return '0h';
             const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
             return formatted + 'h';
         },

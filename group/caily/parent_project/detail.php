@@ -690,6 +690,62 @@ $view->heading('建物詳細');
                     </div>
                 </div>
             </div>
+
+            <!-- Task workload by department -->
+            <div class="card mt-4" v-if="childProjects.length > 0">
+                <div class="card-header pb-0">
+                    <h5 class="card-title mb-0"><span data-i18n="部署別種別工数">部署別種別工数</span></h5>
+                </div>
+                <div class="card-body">
+                    <div v-if="loadingWorkloadStats" class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden"><span data-i18n="読み込み中">読み込み中</span>...</span>
+                        </div>
+                    </div>
+                    <template v-else-if="workloadStatsByDepartment.length">
+                        <ul class="nav nav-tabs mb-3" role="tablist">
+                            <li v-for="dept in workloadStatsByDepartment" :key="dept.department_id" class="nav-item" role="presentation">
+                                <button type="button"
+                                        class="nav-link"
+                                        :class="{ active: activeWorkloadDeptId === dept.department_id }"
+                                        @click="activeWorkloadDeptId = dept.department_id">
+                                    {{ dept.department_name }}
+                                </button>
+                            </li>
+                        </ul>
+                        <div v-if="activeWorkloadDept">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">
+                                <small class="text-muted">
+                                    <span data-i18n="案件依頼">案件依頼</span> {{ activeWorkloadDept.projectCount }}<span data-i18n="件">件</span>
+                                    · <span data-i18n="タスク">タスク</span> {{ activeWorkloadDept.taskCount }}<span data-i18n="件">件</span>
+                                </small>
+                                <span class="fw-semibold">
+                                    <span data-i18n="工数合計">工数合計</span>: {{ formatTotalWorkload(activeWorkloadDept.totalWorkload) }}
+                                </span>
+                            </div>
+                            <div v-if="activeWorkloadDept.byKind.length" class="row">
+                                <div v-if="activeWorkloadDept.byKind.some(item => item.hours > 0)" class="col-lg-5 mb-3 mb-lg-0">
+                                    <div id="workload-dept-chart-active" style="min-height: 300px;"></div>
+                                </div>
+                                <div :class="activeWorkloadDept.byKind.some(item => item.hours > 0) ? 'col-lg-7' : 'col-12'">
+                                    <div v-for="(item, idx) in activeWorkloadDept.byKind" :key="item.kind"
+                                         class="d-flex justify-content-between align-items-center py-2"
+                                         :class="{ 'border-bottom': idx < activeWorkloadDept.byKind.length - 1 }">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge" :class="getTaskKindBadgeClass(item.kind)">{{ getTaskKindLabel(item.kind) }}</span>
+                                            <small class="text-muted">{{ item.count }}<span data-i18n="件">件</span></small>
+                                        </div>
+                                        <span class="fw-semibold text-nowrap">{{ formatTotalWorkload(item.hours) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-else class="text-center text-muted py-3">
+                                <span data-i18n="タスクがありません">タスクがありません</span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
         </div>
 
         <!-- Right Column - Quotations -->
@@ -851,7 +907,7 @@ $view->heading('建物詳細');
                                     <div class="flex-grow-1 d-flex align-items-center">
                                         <span>
                                             <i :class="historyIcon(log.action) + ' me-2'"></i>
-                                            <span class="me-2">{{ log.note }}</span>
+                                            <span class="me-2">{{ getLogNote(log) }}</span>
                                             <br>
                                             <span v-if="log.value1" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getLogBadgeLabel(log, 'value1') }}</span>
                                             <span v-if="log.value1 && log.value2" class="mx-1">→</span>
@@ -966,7 +1022,7 @@ $view->heading('建物詳細');
                                     <div class="flex-grow-1 d-flex align-items-center">
                                         <span>
                                             <i :class="historyIcon(log.action) + ' me-2'"></i>
-                                            <span class="me-2">{{ log.note }}</span>
+                                            <span class="me-2">{{ getLogNote(log) }}</span>
                                             <br>
                                             <span v-if="log.value1" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getLogBadgeLabel(log, 'value1') }}</span>
                                             <span v-if="log.value1 && log.value2" class="mx-1">→</span>
@@ -1022,7 +1078,7 @@ $view->heading('建物詳細');
                                     <div class="flex-grow-1 d-flex align-items-center">
                                         <span>
                                             <i :class="historyIcon(log.action) + ' me-2'"></i>
-                                            <span class="me-2">{{ log.note }}</span>
+                                            <span class="me-2">{{ getLogNote(log) }}</span>
                                             <br>
                                             <span v-if="log.value1" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getLogBadgeLabel(log, 'value1') }}</span>
                                             <span v-if="log.value1 && log.value2" class="mx-1">→</span>
@@ -1271,7 +1327,14 @@ $view->heading('建物詳細');
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="editChildProjectModalLabel"><span data-i18n="案件依頼編集">案件依頼編集</span></h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <div class="d-flex align-items-center gap-2 ms-auto">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
+                        <button type="button" class="btn btn-primary btn-sm" @click="updateChildProject" :disabled="updatingChildProject">
+                            <span v-if="updatingChildProject" class="spinner-border spinner-border-sm me-1"></span>
+                            <span data-i18n="更新">更新</span>
+                        </button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
                 </div>
                 <div class="modal-body">
                     <form @submit.prevent="updateChildProject">
@@ -3827,4 +3890,5 @@ $view->footing();
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="https://unpkg.com/@yaireo/tagify"></script>
 <script src="../assets/vendor/libs/quill/quill.js"></script>
+<script src="../assets/vendor/libs/apex-charts/apexcharts.js"></script>
 <script src="assets/js/parent-project-detail.js?v=<?= CACHE_VERSION ?>"></script>

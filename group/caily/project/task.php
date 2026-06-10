@@ -68,7 +68,7 @@ if($_SESSION['show_project'] == 0){
         </div>
         <!-- 統計 task -->
         <div class="row mb-4">
-            <div class="col-md-4 mb-3">
+            <div class="col-md-6 col-lg-3 mb-3">
                 <div class="card border-left-primary shadow h-100 py-2">
                     <div class="card-body">
                         <div class="row no-gutters align-items-center">
@@ -85,7 +85,24 @@ if($_SESSION['show_project'] == 0){
                     </div>
                 </div>
             </div>
-            <div class="col-md-4 mb-3">
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="card border-left-info shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col me-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                    <span data-i18n="工数合計">工数合計</span>
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ formatTotalWorkload(taskStats.totalWorkload) }}</div>
+                            </div>
+                            <div class="col-md-auto">
+                                <i class="fas fa-clock fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3 mb-3">
                 <div class="card border-left-success shadow h-100 py-2">
                     <div class="card-body">
                         <div class="row no-gutters align-items-center">
@@ -102,7 +119,7 @@ if($_SESSION['show_project'] == 0){
                     </div>
                 </div>
             </div>
-            <div class="col-md-4 mb-3">
+            <div class="col-md-6 col-lg-3 mb-3">
                 <div class="card border-left-warning shadow h-100 py-2">
                     <div class="card-body">
                         <div class="row no-gutters align-items-center">

@@ -3698,7 +3698,7 @@ var projectTable;
             $('#filterNoDates').prop('checked', false);
             $('#filterKeyword').val('');
             $('#filterProjectId').val('');
-            $('#showInactiveSwitch').prop('checked', true); // hoặc giá trị mặc định
+            $('#showInactiveSwitch').prop('checked', false);
             // Reset favorites filter
             $('#filterFavoritesOnly').prop('checked', false);
             $('#filterMyProjects').prop('checked', false);

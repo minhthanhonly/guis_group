@@ -804,7 +804,7 @@ if($_SESSION['show_project'] == 0){
                                     <div class="flex-grow-1 d-flex align-items-center">
                                         <span>
                                             <i :class="historyIcon(log.action) + ' me-2'"></i>
-                                            <span class="me-2">{{ log.note }}</span>
+                                            <span class="me-2">{{ getLogNote(log) }}</span>
                                             <br>
                                             <span v-if="log.value1" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getLogBadgeLabel(log, 'value1') }}</span>
                                             <span v-if="log.value1 && log.value2" class="mx-1">→</span>
@@ -820,7 +820,7 @@ if($_SESSION['show_project'] == 0){
 
                 <!-- Statistics Cards -->
                <div class="row g-3 mb-4">
-                    <div class="col-6">
+                    <div class="col-4">
                         <div class="card bg-primary text-white text-center">
                             <div class="card-body">
                                 <div class="mb-1">
@@ -828,6 +828,17 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <h2 class="mb-1 text-white">{{ stats.totalTasks }}</h2>
                                 <small><span data-i18n="タスク総数">タスク総数</span></small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card bg-info text-white text-center">
+                            <div class="card-body">
+                                <div class="mb-1">
+                                    <i class="fa fa-clock fs-3"></i>
+                                </div>
+                                <h2 class="mb-1 text-white fs-3">{{ formatTotalWorkload(stats.totalWorkload) }}</h2>
+                                <small><span data-i18n="工数合計">工数合計</span></small>
                             </div>
                         </div>
                     </div>
@@ -853,8 +864,8 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                     </div>-->
-                    <div class="col-6">
-                        <div class="card bg-info text-white text-center">
+                    <div class="col-4">
+                        <div class="card bg-warning text-white text-center">
                             <div class="card-body">
                                 <div class="mb-1">
                                     <i class="fa fa-calendar fs-3"></i>
@@ -862,6 +873,22 @@ if($_SESSION['show_project'] == 0){
                                 <h2 class="mb-1 text-white">{{ stats.totalDays }}</h2>
                                 <small><span data-i18n="日数">日数</span></small>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4" v-if="workloadByKind.length">
+                    <div class="card-header pb-0">
+                        <h5 class="card-title mb-0"><span data-i18n="種別別工数">種別別工数</span></h5>
+                    </div>
+                    <div class="card-body py-2 px-3">
+                        <div v-for="(item, idx) in workloadByKind" :key="item.kind"
+                             class="d-flex justify-content-between align-items-center py-2"
+                             :class="{ 'border-bottom': idx < workloadByKind.length - 1 }">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge" :class="getTaskKindBadgeClass(item.kind)">{{ getTaskKindLabel(item.kind) }}</span>
+                            </div>
+                            <span class="fw-semibold text-nowrap">{{ formatTotalWorkload(item.hours) }}</span>
                         </div>
                     </div>
                 </div>
