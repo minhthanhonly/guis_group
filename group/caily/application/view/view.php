@@ -238,7 +238,7 @@ class View {
 	
 	public function chat() {
 		$model = new ApplicationModel();
-		$user_list = $model->user_list;
+		$user_list = $model->getUserList();
 		require_once(DIR_VIEW.'chat.php');
 	}
 

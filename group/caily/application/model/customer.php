@@ -48,12 +48,39 @@ class Customer extends ApplicationModel {
 
     function list_category() {
         $query = sprintf(
-            "SELECT c.*, 
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "customer WHERE category_id = c.id) as num_customers
+            "SELECT c.*
             FROM " . DB_PREFIX . "customer_category c
             ORDER BY c.arrange ASC, c.id ASC"
         );
-        return $this->fetchAll($query);
+        $rows = $this->fetchAll($query);
+        $this->attachCustomerCategoryAggregates($rows);
+        return $rows;
+    }
+
+    private function attachCustomerCategoryAggregates(array &$rows) {
+        if (empty($rows)) {
+            return;
+        }
+        $categoryIds = array_values(array_filter(array_map('intval', array_column($rows, 'id')), function ($id) {
+            return $id > 0;
+        }));
+        if (empty($categoryIds)) {
+            return;
+        }
+        $idsList = implode(',', $categoryIds);
+        $countMap = [];
+        $countRows = $this->fetchAll(sprintf(
+            "SELECT category_id, COUNT(*) as num_customers FROM %scustomer WHERE category_id IN (%s) GROUP BY category_id",
+            DB_PREFIX,
+            $idsList
+        ));
+        foreach ($countRows as $row) {
+            $countMap[(int)$row['category_id']] = (int)$row['num_customers'];
+        }
+        foreach ($rows as &$row) {
+            $row['num_customers'] = $countMap[(int)$row['id']] ?? 0;
+        }
+        unset($row);
     }
 
     function add_category() {

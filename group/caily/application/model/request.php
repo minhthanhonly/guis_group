@@ -257,6 +257,64 @@ class Request extends ApplicationModel {
         return $latestTs ? date('Y-m-d H:i:s', $latestTs) : null;
     }
 
+    private function enrichRequestListRows(array $rows, $currentUserid) {
+        if (empty($rows)) {
+            return [];
+        }
+        $user_ids = array();
+        $requestIds = array();
+        foreach ($rows as &$row) {
+            $row['data'] = json_decode($row['data'], true);
+            $row['history'] = json_decode($row['history'], true);
+            $row['comments'] = json_decode($row['comments'], true);
+            $row['comment_count'] = is_array($row['comments']) ? count($row['comments']) : 0;
+            $requestIds[] = intval($row['id']);
+            if (!empty($row['user_id'])) {
+                $user_ids[$row['user_id']] = true;
+            }
+            if (!empty($row['approver_id'])) {
+                $user_ids[$row['approver_id']] = true;
+            }
+            if (!empty($row['completed_userid'])) {
+                $user_ids[$row['completed_userid']] = true;
+            }
+            foreach ($this->parseApproverUserIds(isset($row['approver_user_id']) ? $row['approver_user_id'] : '') as $uid) {
+                if ($uid !== '') {
+                    $user_ids[$uid] = true;
+                }
+            }
+        }
+        unset($row);
+
+        $user_map = array();
+        if (count($user_ids)) {
+            $in = "'" . implode("','", array_map([$this, 'quote'], array_keys($user_ids))) . "'";
+            $users = $this->fetchAll(
+                "SELECT userid, realname, lastname, firstname, lastname_after_married FROM "
+                . DB_PREFIX . "user WHERE userid IN ($in)"
+            );
+            foreach ($users as $u) {
+                $user_map[$u['userid']] = Helper::userDisplayName($u);
+            }
+        }
+        foreach ($rows as &$row) {
+            $row['user_realname'] = isset($user_map[$row['user_id']]) ? $user_map[$row['user_id']] : ($row['user_id'] ?? '');
+            $row['approver_realname'] = !empty($row['approver_id']) && isset($user_map[$row['approver_id']]) ? $user_map[$row['approver_id']] : '';
+            $row['completed_realname'] = !empty($row['completed_userid']) && isset($user_map[$row['completed_userid']]) ? $user_map[$row['completed_userid']] : '';
+            $this->enrichApproverUserDisplay($row, $user_map);
+        }
+        unset($row);
+
+        $readMap = $this->getCommentReadMap($requestIds, $currentUserid);
+        foreach ($rows as &$row) {
+            $lastSeen = isset($readMap[intval($row['id'])]) ? $readMap[intval($row['id'])] : null;
+            $row['unread_comment'] = $this->hasUnreadCommentForUser($row['comments'], $currentUserid, $lastSeen) ? 1 : 0;
+        }
+        unset($row);
+
+        return $rows;
+    }
+
     private function hasUnreadCommentForUser($comments, $userId, $lastSeenAt) {
         $latestOtherCommentAt = $this->latestOtherCommentAt($comments, $userId);
         if (empty($latestOtherCommentAt)) {
@@ -723,69 +781,42 @@ class Request extends ApplicationModel {
         $countRow = $this->fetchOne("SELECT COUNT(*) AS cnt FROM {$this->table} $whereSql");
         $total = $countRow ? intval($countRow['cnt']) : 0;
         $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 0;
+        $scanCapped = false;
 
         if ($filterUnreadComment) {
-            $query = "SELECT * FROM {$this->table} $whereSql $orderSql";
-            $rows = $this->fetchAll($query);
-        } else {
-            $query = "SELECT * FROM {$this->table} $whereSql $orderSql LIMIT {$perPage} OFFSET {$offset}";
-            $rows = $this->fetchAll($query);
-        }
-
-        // Parse JSON fields and collect user ids for name lookup
-        $user_ids = array();
-        $requestIds = array();
-        foreach ($rows as &$row) {
-            $row['data'] = json_decode($row['data'], true);
-            $row['history'] = json_decode($row['history'], true);
-            $row['comments'] = json_decode($row['comments'], true);
-            $row['comment_count'] = is_array($row['comments']) ? count($row['comments']) : 0;
-            $requestIds[] = intval($row['id']);
-            if (!empty($row['user_id'])) $user_ids[$row['user_id']] = true;
-            if (!empty($row['approver_id'])) $user_ids[$row['approver_id']] = true;
-            if (!empty($row['completed_userid'])) $user_ids[$row['completed_userid']] = true;
-            foreach ($this->parseApproverUserIds(isset($row['approver_user_id']) ? $row['approver_user_id'] : '') as $uid) {
-                if ($uid !== '') {
-                    $user_ids[$uid] = true;
+            $matched = [];
+            $scanOffset = 0;
+            $chunkSize = 200;
+            $maxScan = 3000;
+            $scanned = 0;
+            $needCount = $offset + $perPage;
+            while (count($matched) < $needCount && $scanned < $maxScan) {
+                $chunk = $this->fetchAll(
+                    "SELECT * FROM {$this->table} $whereSql $orderSql LIMIT {$chunkSize} OFFSET {$scanOffset}"
+                );
+                if (empty($chunk)) {
+                    break;
                 }
+                $processed = $this->enrichRequestListRows($chunk, $currentUserid);
+                foreach ($processed as $row) {
+                    if (!empty($row['unread_comment'])) {
+                        $matched[] = $row;
+                    }
+                }
+                $scanOffset += $chunkSize;
+                $scanned += count($chunk);
             }
-        }
-        unset($row);
-
-        $user_map = array();
-        if (count($user_ids)) {
-            $in = "'" . implode("','", array_map([$this, 'quote'], array_keys($user_ids))) . "'";
-            $users = $this->fetchAll("SELECT userid, realname, lastname, firstname, lastname_after_married FROM " . DB_PREFIX . "user WHERE userid IN ($in)");
-            foreach ($users as $u) {
-                $user_map[$u['userid']] = Helper::userDisplayName($u);
-            }
-        }
-        foreach ($rows as &$row) {
-            $row['user_realname'] = isset($user_map[$row['user_id']]) ? $user_map[$row['user_id']] : ($row['user_id'] ?? '');
-            $row['approver_realname'] = !empty($row['approver_id']) && isset($user_map[$row['approver_id']]) ? $user_map[$row['approver_id']] : '';
-            $row['completed_realname'] = !empty($row['completed_userid']) && isset($user_map[$row['completed_userid']]) ? $user_map[$row['completed_userid']] : '';
-            $this->enrichApproverUserDisplay($row, $user_map);
-        }
-        unset($row);
-
-        $readMap = $this->getCommentReadMap($requestIds, $currentUserid);
-        foreach ($rows as &$row) {
-            $lastSeen = isset($readMap[intval($row['id'])]) ? $readMap[intval($row['id'])] : null;
-            $row['unread_comment'] = $this->hasUnreadCommentForUser($row['comments'], $currentUserid, $lastSeen) ? 1 : 0;
-        }
-        unset($row);
-
-        if ($filterUnreadComment) {
-            $rows = array_values(array_filter($rows, function($r) {
-                return !empty($r['unread_comment']);
-            }));
-            $total = count($rows);
+            $scanCapped = ($scanned >= $maxScan);
+            $total = count($matched);
             $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 0;
             if ($offset >= $total && $total > 0) {
                 $page = $totalPages;
                 $offset = ($page - 1) * $perPage;
             }
-            $rows = array_slice($rows, $offset, $perPage);
+            $rows = array_slice($matched, $offset, $perPage);
+        } else {
+            $query = "SELECT * FROM {$this->table} $whereSql $orderSql LIMIT {$perPage} OFFSET {$offset}";
+            $rows = $this->enrichRequestListRows($this->fetchAll($query), $currentUserid);
         }
 
         return [
@@ -794,7 +825,8 @@ class Request extends ApplicationModel {
                 'page' => $page,
                 'per_page' => $perPage,
                 'total' => $total,
-                'total_pages' => $totalPages
+                'total_pages' => $totalPages,
+                'scan_capped' => $scanCapped
             ]
         ];
     }

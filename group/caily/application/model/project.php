@@ -50,6 +50,16 @@ class Project extends ApplicationModel {
     }
 
     /**
+     * Customer join: one row per parent (company_name + contact_name), avoids duplicate projects.
+     */
+    private function getProjectCustomerJoinSql() {
+        return "LEFT JOIN " . DB_PREFIX . "customer c ON c.id = (
+            SELECT MIN(c2.id) FROM " . DB_PREFIX . "customer c2
+            WHERE c2.company_name = pp.company_name AND TRIM(COALESCE(c2.name,'')) = TRIM(COALESCE(pp.contact_name,''))
+        )";
+    }
+
+    /**
      * ORDER BY expression for project list (computed columns are not p.* fields).
      */
     function resolveProjectListOrderExpression($order_column, $user_id) {
@@ -91,6 +101,142 @@ class Project extends ApplicationModel {
         }
 
         return 'p.end_date';
+    }
+
+    /**
+     * Attach favorites, members, confirmation notes, task counts in batched queries (avoids per-row subqueries).
+     */
+    private function attachProjectListAggregates(array &$data, $userId) {
+        if (empty($data)) {
+            return;
+        }
+        $projectIds = array_values(array_unique(array_map('intval', array_column($data, 'id'))));
+        $projectIds = array_filter($projectIds, function ($id) { return $id > 0; });
+        if (empty($projectIds)) {
+            return;
+        }
+        $idsList = implode(',', $projectIds);
+        $userId = intval($userId);
+
+        $favoriteSet = [];
+        $favRows = $this->fetchAll(sprintf(
+            "SELECT project_id FROM %sproject_favorites WHERE user_id = %d AND project_id IN (%s)",
+            DB_PREFIX,
+            $userId,
+            $idsList
+        ));
+        foreach ($favRows as $row) {
+            $favoriteSet[(int)$row['project_id']] = true;
+        }
+
+        $membersByProject = $this->fetchProjectMembersByProjectIds($projectIds);
+
+        $notesCaily = [];
+        $notesGuis = [];
+        $this->query("SET SESSION group_concat_max_len = 1048576");
+        $noteRows = $this->fetchAll(sprintf(
+            "SELECT project_id, needs_confirmation, id, content, is_important
+             FROM %sproject_notes
+             WHERE project_id IN (%s) AND needs_confirmation IN (1, 2)
+             ORDER BY project_id, needs_confirmation, is_important DESC, created_at DESC",
+            DB_PREFIX,
+            $idsList
+        ));
+        foreach ($noteRows as $row) {
+            $pid = (int)$row['project_id'];
+            $part = $row['id'] . '_:_' . ($row['content'] ?? '') . '_:_' . ($row['is_important'] ?? 0);
+            if ((int)$row['needs_confirmation'] === 1) {
+                if (!isset($notesCaily[$pid])) {
+                    $notesCaily[$pid] = [];
+                }
+                $notesCaily[$pid][] = $part;
+            } elseif ((int)$row['needs_confirmation'] === 2) {
+                if (!isset($notesGuis[$pid])) {
+                    $notesGuis[$pid] = [];
+                }
+                $notesGuis[$pid][] = $part;
+            }
+        }
+
+        $taskStats = [];
+        $taskRows = $this->fetchAll(sprintf(
+            "SELECT project_id,
+                    COUNT(*) as task_count,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_task_count
+             FROM %stasks
+             WHERE project_id IN (%s)
+             GROUP BY project_id",
+            DB_PREFIX,
+            $idsList
+        ));
+        foreach ($taskRows as $row) {
+            $taskStats[(int)$row['project_id']] = $row;
+        }
+
+        foreach ($data as &$project) {
+            $pid = (int)$project['id'];
+            $project['is_favorite'] = isset($favoriteSet[$pid]) ? 1 : 0;
+            $project['assignment_id'] = isset($membersByProject[$pid]['member'])
+                ? implode('|', $membersByProject[$pid]['member']) : '';
+            $project['manager_id'] = isset($membersByProject[$pid]['manager'])
+                ? implode('|', $membersByProject[$pid]['manager']) : '';
+            $project['confirmation_notes_caily'] = isset($notesCaily[$pid])
+                ? implode('_|_', $notesCaily[$pid]) : '';
+            $project['confirmation_notes_guis'] = isset($notesGuis[$pid])
+                ? implode('_|_', $notesGuis[$pid]) : '';
+            if (isset($taskStats[$pid])) {
+                $project['task_count'] = (int)$taskStats[$pid]['task_count'];
+                $project['completed_task_count'] = (int)$taskStats[$pid]['completed_task_count'];
+            } else {
+                $project['task_count'] = 0;
+                $project['completed_task_count'] = 0;
+            }
+        }
+        unset($project);
+    }
+
+    private function attachProjectDetailAggregates(array &$project, $userId) {
+        $projectId = (int)$project['id'];
+        $userId = (int)$userId;
+        if ($projectId <= 0) {
+            return;
+        }
+        $stats = $this->fetchOne(sprintf(
+            "SELECT
+                (SELECT COUNT(*) FROM %stasks WHERE project_id = %d) as task_count,
+                (SELECT COALESCE(SUM(COALESCE(pd.drawing_count, 1)), 0) FROM %sproject_drawings pd WHERE pd.project_id = %d) as drawing_count,
+                (SELECT COUNT(*) FROM %sproject_members WHERE project_id = %d) as member_count,
+                (SELECT 1 FROM %sproject_favorites f WHERE f.project_id = %d AND f.user_id = %d LIMIT 1) as is_favorite",
+            DB_PREFIX,
+            $projectId,
+            DB_PREFIX,
+            $projectId,
+            DB_PREFIX,
+            $projectId,
+            DB_PREFIX,
+            $projectId,
+            $userId
+        ));
+        $project['task_count'] = (int)($stats['task_count'] ?? 0);
+        $project['drawing_count'] = (int)($stats['drawing_count'] ?? 0);
+        $project['member_count'] = (int)($stats['member_count'] ?? 0);
+        $project['is_favorite'] = !empty($stats['is_favorite']) ? 1 : 0;
+    }
+
+    private function attachProjectMemberAggregates(array &$data) {
+        if (empty($data)) {
+            return;
+        }
+        $projectIds = array_values(array_unique(array_map('intval', array_column($data, 'id'))));
+        $membersByProject = $this->fetchProjectMembersByProjectIds($projectIds);
+        foreach ($data as &$project) {
+            $pid = (int)$project['id'];
+            $project['assignment_id'] = isset($membersByProject[$pid]['member'])
+                ? implode('|', $membersByProject[$pid]['member']) : '';
+            $project['manager_id'] = isset($membersByProject[$pid]['manager'])
+                ? implode('|', $membersByProject[$pid]['manager']) : '';
+        }
+        unset($project);
     }
 
     function list() {
@@ -340,11 +486,7 @@ class Project extends ApplicationModel {
             $orderBy .= ", (CASE WHEN p.status IN ('completed','cancelled','deleted') THEN 1 ELSE 0 END) ASC, p.end_date ASC";
         }
 
-        // Join customer via subquery so at most one row per (company_name, name) - avoids duplicate projects when multiple customers match
-        $customerJoin = "LEFT JOIN " . DB_PREFIX . "customer c ON c.id = (
-            SELECT MIN(c2.id) FROM " . DB_PREFIX . "customer c2
-            WHERE c2.company_name = pp.company_name AND TRIM(COALESCE(c2.name,'')) = TRIM(COALESCE(pp.contact_name,''))
-        )";
+        $customerJoin = $this->getProjectCustomerJoinSql();
 
         // Get total records count
         $totalQuery = "SELECT COUNT(*) as count FROM {$this->table} p
@@ -353,20 +495,7 @@ class Project extends ApplicationModel {
         " . $customerJoin . "
         " . $where;
         $totalRecords = $this->fetchOne($totalQuery)['count'];
-
-        // Get filtered records count
         $filteredRecords = $totalRecords;
-        
-        // Recalculate counts if favorites filter is applied
-        if ($favoritesOnly) {
-            $totalQuery = "SELECT COUNT(*) as count FROM {$this->table} p
-            JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
-            LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
-            " . $customerJoin . "
-            " . $where;
-            $totalRecords = $this->fetchOne($totalQuery)['count'];
-            $filteredRecords = $totalRecords;
-        }
 
         // Get data for current page
         $query = sprintf(
@@ -374,27 +503,7 @@ class Project extends ApplicationModel {
             c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
             CONCAT(c.name, ' ', c.title) as customer_name,
             pp.company_name as parent_company_name, pp.contact_name as parent_contact_name, pp.construction_number as parent_construction_number, pp.branch_name as parent_branch_name,
-            pp.scale as parent_scale, pp.type1 as parent_type1, pp.type2 as parent_type2, pp.guis_receiver as parent_guis_receiver,
-            CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite,
-            (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
-             FROM " . DB_PREFIX . "project_members pm 
-             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
-             WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
-            (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
-             FROM " . DB_PREFIX . "project_members pm 
-             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
-             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id,
-           (SELECT GROUP_CONCAT(CONCAT(n.id, '_:_', n.content, '_:_', n.is_important) SEPARATOR '_|_') 
-             FROM " . DB_PREFIX . "project_notes n 
-             WHERE n.project_id = p.id AND n.needs_confirmation = 1 
-             ORDER BY n.is_important DESC, n.created_at DESC) as confirmation_notes_caily,
-           (SELECT GROUP_CONCAT(CONCAT(n.id, '_:_', n.content, '_:_', n.is_important) SEPARATOR '_|_') 
-             FROM " . DB_PREFIX . "project_notes n 
-             WHERE n.project_id = p.id AND n.needs_confirmation = 2 
-             ORDER BY n.is_important DESC, n.created_at DESC) as confirmation_notes_guis,
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "tasks WHERE project_id = p.id) as task_count,
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "tasks WHERE project_id = p.id AND status = 'completed') as completed_task_count
-           
+            pp.scale as parent_scale, pp.type1 as parent_type1, pp.type2 as parent_type2, pp.guis_receiver as parent_guis_receiver
             FROM {$this->table} p
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
@@ -402,17 +511,14 @@ class Project extends ApplicationModel {
             %s
             %s
             LIMIT %d, %d",
-            $user_id,
             $where,
             $orderBy,
             $start,
             $length
         );
 
-        // GROUP_CONCAT mặc định giới hạn 1024 byte → cắt nội dung confirmation_notes. Tăng để hiển thị đầy đủ.
-        $this->query("SET SESSION group_concat_max_len = 1048576");
-
         $data = $this->fetchAll($query);
+        $this->attachProjectListAggregates($data, $user_id);
         
         // Set default quotation status for projects without quotations
         foreach ($data as &$project) {
@@ -497,9 +603,10 @@ class Project extends ApplicationModel {
             FROM {$this->table} p 
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
-            LEFT JOIN " . DB_PREFIX . "customer c ON c.id = pp.customer_id
+            " . $this->getProjectCustomerJoinSql() . "
             %s
-            ORDER BY p.created_at DESC",
+            ORDER BY p.created_at DESC
+            LIMIT 2000",
             $where
         );
         
@@ -680,7 +787,8 @@ class Project extends ApplicationModel {
         if (!empty($where)) {
             $where = " WHERE " . $where;
         }
-        // Get data for Gantt chart (all projects, no pagination)
+        $customerJoin = $this->getProjectCustomerJoinSql();
+        $ganttLimit = 3000;
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
             c.branch as branch_name,
@@ -688,24 +796,19 @@ class Project extends ApplicationModel {
             CONCAT(c.name, ' ', c.title) as customer_name,
             CONCAT_WS(' ', NULLIF(pp.type1, ''), NULLIF(pp.type2, '')) as building_type,
             pp.scale as building_size,
-            pp.construction_number as construction_number,
-            (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
-             FROM " . DB_PREFIX . "project_members pm 
-             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
-             WHERE p.id = pm.project_id AND pm.role = 'member') as assignment_id,
-            (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
-             FROM " . DB_PREFIX . "project_members pm 
-             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
-             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id
+            pp.construction_number as construction_number
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
-            LEFT JOIN " . DB_PREFIX . "customer c ON c.id = pp.customer_id
+            " . $customerJoin . "
             %s
-            ORDER BY p.start_date ASC, p.created_at DESC",
-            $where
+            ORDER BY p.start_date ASC, p.created_at DESC
+            LIMIT %d",
+            $where,
+            $ganttLimit
         );
         $data = $this->fetchAll($query);
+        $this->attachProjectMemberAggregates($data);
         return $data;
     }
 
@@ -992,28 +1095,103 @@ class Project extends ApplicationModel {
         }
         $where = "WHERE " . implode(" AND ", $whereArr);
 
-        $fields = "p.id, p.name, p.status, p.priority, p.progress, p.amount, p.guis_nouki, p.guis_nouki_status, p.caily_nouki, p.caily_nouki_status, p.department_id, p.start_date, p.end_date, p.tantou,
+        $fields = "p.id, p.name, p.status, p.priority, p.progress, p.amount, p.guis_nouki, p.guis_nouki_status, p.caily_nouki, p.caily_nouki_status, p.department_id, p.start_date, p.end_date, p.tantou, p.teams,
             d.name as department_name,
             pp.company_name as parent_company_name,
             pp.project_name as parent_project_name,
             pp.branch_name as parent_branch_name,
             pp.contact_name as parent_contact_name,
-            pp.construction_number as parent_construction_number,
-            (SELECT GROUP_CONCAT(u.realname SEPARATOR ', ') FROM " . DB_PREFIX . "project_members pm LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id WHERE pm.project_id = p.id AND pm.role = 'manager') as manager_names,
-            (SELECT GROUP_CONCAT(u2.realname SEPARATOR ', ') FROM " . DB_PREFIX . "project_members pm2 LEFT JOIN " . DB_PREFIX . "user u2 ON pm2.user_id = u2.id WHERE pm2.project_id = p.id AND pm2.role = 'member') as member_names,
-            (SELECT GROUP_CONCAT(team.name SEPARATOR ', ') FROM " . DB_PREFIX . "team team WHERE p.teams IS NOT NULL AND p.teams != '' AND FIND_IN_SET(team.id, p.teams) > 0) as team_names";
+            pp.construction_number as parent_construction_number";
         $query = "SELECT " . $fields . " FROM " . $this->table . " p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id 
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id " . $where;
         if ($id !== null && $id > 0) {
             $row = $this->fetchOne($query);
-            return $row ? [$row] : [];
+            if (!$row) {
+                return [];
+            }
+            $results = [$row];
+            $this->attachAiContextProjectAggregates($results);
+            return $results;
         }
         $query .= " ORDER BY p.updated_at DESC";
         // Luôn thêm LIMIT để chỉ lấy 20 dự án gần nhất
         $query .= " LIMIT " . $limit;
         $results = $this->fetchAll($query);
+        $this->attachAiContextProjectAggregates($results);
         return $results;
+    }
+
+    private function attachAiContextProjectAggregates(array &$projects) {
+        if (empty($projects)) {
+            return;
+        }
+        $projectIds = array_values(array_filter(array_map('intval', array_column($projects, 'id')), function ($id) {
+            return $id > 0;
+        }));
+        if (empty($projectIds)) {
+            return;
+        }
+        $idsList = implode(',', $projectIds);
+
+        $nameMap = ['manager' => [], 'member' => []];
+        $memberRows = $this->fetchAll(sprintf(
+            "SELECT pm.project_id, pm.role, GROUP_CONCAT(u.realname ORDER BY u.realname SEPARATOR ', ') as names
+             FROM %sproject_members pm
+             LEFT JOIN %suser u ON pm.user_id = u.id
+             WHERE pm.project_id IN (%s) AND pm.role IN ('manager', 'member')
+             GROUP BY pm.project_id, pm.role",
+            DB_PREFIX,
+            DB_PREFIX,
+            $idsList
+        ));
+        foreach ($memberRows as $row) {
+            $pid = (int)$row['project_id'];
+            $role = $row['role'] === 'manager' ? 'manager' : 'member';
+            $nameMap[$role][$pid] = $row['names'] ?? '';
+        }
+
+        $teamIds = [];
+        foreach ($projects as $project) {
+            if (empty($project['teams'])) {
+                continue;
+            }
+            foreach (explode(',', (string)$project['teams']) as $teamId) {
+                $teamId = (int)trim($teamId);
+                if ($teamId > 0) {
+                    $teamIds[$teamId] = true;
+                }
+            }
+        }
+        $teamNameMap = [];
+        if (!empty($teamIds)) {
+            $teamIdList = implode(',', array_keys($teamIds));
+            $teamRows = $this->fetchAll(sprintf(
+                "SELECT id, name FROM %steam WHERE id IN (%s)",
+                DB_PREFIX,
+                $teamIdList
+            ));
+            foreach ($teamRows as $row) {
+                $teamNameMap[(int)$row['id']] = $row['name'];
+            }
+        }
+
+        foreach ($projects as &$project) {
+            $pid = (int)$project['id'];
+            $project['manager_names'] = $nameMap['manager'][$pid] ?? '';
+            $project['member_names'] = $nameMap['member'][$pid] ?? '';
+            $teamNames = [];
+            if (!empty($project['teams'])) {
+                foreach (explode(',', (string)$project['teams']) as $teamId) {
+                    $teamId = (int)trim($teamId);
+                    if ($teamId > 0 && isset($teamNameMap[$teamId])) {
+                        $teamNames[] = $teamNameMap[$teamId];
+                    }
+                }
+            }
+            $project['team_names'] = implode(', ', $teamNames);
+        }
+        unset($project);
     }
 
     /**
@@ -2351,25 +2529,21 @@ class Project extends ApplicationModel {
         
         $user_id = $_SESSION['id'];
         
+        $projectId = intval($id);
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name, c.department as branch_name, c.category_id as category_id, 
-            CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite,
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "tasks WHERE project_id = p.id) as task_count,
-            (SELECT COALESCE(SUM(COALESCE(pd.drawing_count, 1)), 0) FROM " . DB_PREFIX . "project_drawings pd WHERE pd.project_id = p.id) as drawing_count,
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "project_members WHERE project_id = p.id) as member_count
+            c.name as contact_name, c.company_name, c.department as branch_name, c.category_id as category_id
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
             WHERE p.id = %d",
-            $user_id,
-            intval($id)
+            $projectId
         );
         
         $project = $this->fetchOne($query);
         
-        // Add quotation status to the project data
         if ($project) {
+            $this->attachProjectDetailAggregates($project, $user_id);
             $project['quotation_status'] = $this->getQuotationStatus($id);
         }
         
@@ -2673,12 +2847,7 @@ class Project extends ApplicationModel {
         // If thread_id is null or 0, get all comments (for backward compatibility and search)
         
         $query = sprintf(
-            "SELECT c.*, u.realname as user_name, u.user_image,
-                    (SELECT COUNT(*) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as like_count,
-                    (SELECT GROUP_CONCAT(cl.user_id) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as liked_by,
-                    (SELECT GROUP_CONCAT(CONCAT(cl.user_id, ':', cl.name) SEPARATOR '|') 
-                     FROM " . DB_PREFIX . "comment_likes cl 
-                     WHERE cl.comment_id = c.id) as liked_by_names
+            "SELECT c.*, u.realname as user_name, u.user_image
             FROM " . DB_PREFIX . "comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
             WHERE %s
@@ -2690,32 +2859,7 @@ class Project extends ApplicationModel {
         );
         
         $comments = $this->fetchAll($query);
-        
-        // Process liked_by string to array and liked_by_names
-        foreach ($comments as &$comment) {
-            if ($comment['liked_by']) {
-                $comment['liked_by'] = explode(',', $comment['liked_by']);
-            } else {
-                $comment['liked_by'] = [];
-            }
-            
-            // Process liked_by_names
-            if ($comment['liked_by_names']) {
-                $likedByNames = [];
-                $namePairs = explode('|', $comment['liked_by_names']);
-                foreach ($namePairs as $pair) {
-                    if (strpos($pair, ':') !== false) {
-                        list($userId, $name) = explode(':', $pair, 2);
-                        $likedByNames[] = $name;
-                    }
-                }
-                $comment['liked_by_names'] = $likedByNames;
-            } else {
-                $comment['liked_by_names'] = [];
-            }
-            
-            $comment['like_count'] = intval($comment['like_count']);
-        }
+        $this->attachCommentLikeAggregates($comments);
         
         return $comments;
     }
@@ -2799,59 +2943,48 @@ class Project extends ApplicationModel {
         if (!$project_id) return [];
         
         $query = sprintf(
-            "SELECT t.*, u.realname as creator_name, u.user_image as creator_image,
-                    (SELECT COUNT(*) FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id) as comment_count,
-                    (SELECT MAX(c.created_at) FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id) as last_comment_at,
-                    (SELECT c.content FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1) as last_comment_content,
-                    (SELECT c.user_id FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1) as last_comment_user_id,
-                    (SELECT u2.realname FROM " . DB_PREFIX . "comments c 
-                     LEFT JOIN " . DB_PREFIX . "user u2 ON c.user_id = u2.userid 
-                     WHERE c.thread_id = t.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1) as last_comment_user_name,
-                    (SELECT c.id FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1) as last_comment_id
+            "SELECT t.*, u.realname as creator_name, u.user_image as creator_image
             FROM " . DB_PREFIX . "comment_threads t
             LEFT JOIN " . DB_PREFIX . "user u ON t.created_by = u.userid
-            WHERE t.project_id = %d
-            ORDER BY COALESCE((SELECT MAX(c.created_at) FROM " . DB_PREFIX . "comments c WHERE c.thread_id = t.id), t.created_at) DESC",
+            WHERE t.project_id = %d",
             intval($project_id)
         );
         
         $threads = $this->fetchAll($query);
         
-        // Calculate unread count for each thread
+        if (empty($threads)) {
+            return [];
+        }
+
+        $this->attachThreadListAggregates($threads);
+
+        $threadIds = array_map('intval', array_column($threads, 'id'));
+        $idsList = implode(',', $threadIds);
+        $userEsc = $this->quote($user_id);
+
+        $unreadMap = [];
+        $unreadRows = $this->fetchAll(sprintf(
+            "SELECT c.thread_id, COUNT(*) as unread_count
+             FROM %scomments c
+             LEFT JOIN %scomment_thread_reads r
+               ON r.thread_id = c.thread_id AND r.user_id = '%s'
+             WHERE c.thread_id IN (%s)
+               AND (r.last_read_comment_id IS NULL OR r.last_read_comment_id = 0 OR c.id > r.last_read_comment_id)
+             GROUP BY c.thread_id",
+            DB_PREFIX,
+            DB_PREFIX,
+            $userEsc,
+            $idsList
+        ));
+        foreach ($unreadRows as $row) {
+            $unreadMap[(int)$row['thread_id']] = intval($row['unread_count']);
+        }
+
         foreach ($threads as &$thread) {
-            // Get last read comment ID for this thread and user
-            $lastReadQuery = sprintf(
-                "SELECT last_read_comment_id FROM " . DB_PREFIX . "comment_thread_reads 
-                 WHERE thread_id = %d AND user_id = '%s' LIMIT 1",
-                intval($thread['id']),
-                $this->quote($user_id)
-            );
-            $lastRead = $this->fetchOne($lastReadQuery);
-            $lastReadCommentId = $lastRead ? intval($lastRead['last_read_comment_id']) : 0;
-            
-            // Count unread comments (comments with ID > last_read_comment_id)
+            $tid = (int)$thread['id'];
             if ($thread['last_comment_id']) {
-                // If last_read_comment_id is 0, it means user hasn't read any comments yet
-                // So count all comments as unread
-                if ($lastReadCommentId == 0) {
-                    $unreadQuery = sprintf(
-                        "SELECT COUNT(*) as unread_count FROM " . DB_PREFIX . "comments 
-                         WHERE thread_id = %d",
-                        intval($thread['id'])
-                    );
-                } else {
-                    // Count comments with ID > last_read_comment_id
-                    $unreadQuery = sprintf(
-                        "SELECT COUNT(*) as unread_count FROM " . DB_PREFIX . "comments 
-                         WHERE thread_id = %d AND id > %d",
-                        intval($thread['id']),
-                        $lastReadCommentId
-                    );
-                }
-                $unreadResult = $this->fetchOne($unreadQuery);
-                $thread['unread_count'] = intval($unreadResult['unread_count'] ?? 0);
+                $thread['unread_count'] = $unreadMap[$tid] ?? 0;
             } else {
-                // Thread has no comments, so unread count is 0
                 $thread['unread_count'] = 0;
             }
             
@@ -2862,8 +2995,78 @@ class Project extends ApplicationModel {
                 $thread['last_comment_preview'] = '';
             }
         }
+        unset($thread);
+
+        usort($threads, function ($a, $b) {
+            $ta = !empty($a['last_comment_at']) ? $a['last_comment_at'] : ($a['created_at'] ?? '');
+            $tb = !empty($b['last_comment_at']) ? $b['last_comment_at'] : ($b['created_at'] ?? '');
+            return strcmp($tb, $ta);
+        });
         
         return $threads;
+    }
+
+    private function attachThreadListAggregates(array &$threads) {
+        if (empty($threads)) {
+            return;
+        }
+        $threadIds = array_values(array_filter(array_map('intval', array_column($threads, 'id')), function ($id) {
+            return $id > 0;
+        }));
+        if (empty($threadIds)) {
+            return;
+        }
+        $idsList = implode(',', $threadIds);
+
+        $countMap = [];
+        $countRows = $this->fetchAll(sprintf(
+            "SELECT thread_id, COUNT(*) as comment_count, MAX(created_at) as last_comment_at
+             FROM %scomments WHERE thread_id IN (%s) GROUP BY thread_id",
+            DB_PREFIX,
+            $idsList
+        ));
+        foreach ($countRows as $row) {
+            $countMap[(int)$row['thread_id']] = $row;
+        }
+
+        $lastMap = [];
+        $lastRows = $this->fetchAll(sprintf(
+            "SELECT c.thread_id, c.id as last_comment_id, c.content as last_comment_content,
+                    c.user_id as last_comment_user_id, c.created_at as last_comment_at, u.realname as last_comment_user_name
+             FROM %scomments c
+             INNER JOIN (
+                 SELECT thread_id, MAX(id) as max_id FROM %scomments WHERE thread_id IN (%s) GROUP BY thread_id
+             ) lm ON c.id = lm.max_id
+             LEFT JOIN %suser u ON c.user_id = u.userid",
+            DB_PREFIX,
+            DB_PREFIX,
+            $idsList,
+            DB_PREFIX
+        ));
+        foreach ($lastRows as $row) {
+            $lastMap[(int)$row['thread_id']] = $row;
+        }
+
+        foreach ($threads as &$thread) {
+            $tid = (int)$thread['id'];
+            $counts = $countMap[$tid] ?? null;
+            $last = $lastMap[$tid] ?? null;
+            $thread['comment_count'] = $counts ? (int)$counts['comment_count'] : 0;
+            if ($last) {
+                $thread['last_comment_id'] = (int)$last['last_comment_id'];
+                $thread['last_comment_content'] = $last['last_comment_content'];
+                $thread['last_comment_user_id'] = $last['last_comment_user_id'];
+                $thread['last_comment_user_name'] = $last['last_comment_user_name'];
+                $thread['last_comment_at'] = $last['last_comment_at'];
+            } else {
+                $thread['last_comment_id'] = null;
+                $thread['last_comment_content'] = null;
+                $thread['last_comment_user_id'] = null;
+                $thread['last_comment_user_name'] = null;
+                $thread['last_comment_at'] = $counts['last_comment_at'] ?? null;
+            }
+        }
+        unset($thread);
     }
     
     // Helper function to strip HTML and get preview
@@ -2891,12 +3094,7 @@ class Project extends ApplicationModel {
         $offset = ($page - 1) * $per_page;
         
         $query = sprintf(
-            "SELECT c.*, u.realname as user_name, u.user_image,
-                    (SELECT COUNT(*) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as like_count,
-                    (SELECT GROUP_CONCAT(cl.user_id) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as liked_by,
-                    (SELECT GROUP_CONCAT(CONCAT(cl.user_id, ':', cl.name) SEPARATOR '|') 
-                     FROM " . DB_PREFIX . "comment_likes cl 
-                     WHERE cl.comment_id = c.id) as liked_by_names
+            "SELECT c.*, u.realname as user_name, u.user_image
             FROM " . DB_PREFIX . "comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
             WHERE c.thread_id = %d 
@@ -2908,31 +3106,7 @@ class Project extends ApplicationModel {
         );
         
         $comments = $this->fetchAll($query);
-        
-        // Process liked_by string to array and liked_by_names
-        foreach ($comments as &$comment) {
-            if ($comment['liked_by']) {
-                $comment['liked_by'] = explode(',', $comment['liked_by']);
-            } else {
-                $comment['liked_by'] = [];
-            }
-            
-            if ($comment['liked_by_names']) {
-                $likedByNames = [];
-                $namePairs = explode('|', $comment['liked_by_names']);
-                foreach ($namePairs as $pair) {
-                    if (strpos($pair, ':') !== false) {
-                        list($userId, $name) = explode(':', $pair, 2);
-                        $likedByNames[] = $name;
-                    }
-                }
-                $comment['liked_by_names'] = $likedByNames;
-            } else {
-                $comment['liked_by_names'] = [];
-            }
-            
-            $comment['like_count'] = intval($comment['like_count']);
-        }
+        $this->attachCommentLikeAggregates($comments);
         
         return $comments;
     }
@@ -2958,12 +3132,7 @@ class Project extends ApplicationModel {
         
         // Search in both original and encoded formats
         $query = sprintf(
-            "SELECT c.*, u.realname as user_name, u.user_image, t.title as thread_title, t.id as thread_id,
-                    (SELECT COUNT(*) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as like_count,
-                    (SELECT GROUP_CONCAT(cl.user_id) FROM " . DB_PREFIX . "comment_likes cl WHERE cl.comment_id = c.id) as liked_by,
-                    (SELECT GROUP_CONCAT(CONCAT(cl.user_id, ':', cl.name) SEPARATOR '|') 
-                     FROM " . DB_PREFIX . "comment_likes cl 
-                     WHERE cl.comment_id = c.id) as liked_by_names
+            "SELECT c.*, u.realname as user_name, u.user_image, t.title as thread_title, t.id as thread_id
             FROM " . DB_PREFIX . "comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid
             LEFT JOIN " . DB_PREFIX . "comment_threads t ON c.thread_id = t.id
@@ -2978,31 +3147,7 @@ class Project extends ApplicationModel {
         );
         
         $comments = $this->fetchAll($query);
-        
-        // Process liked_by
-        foreach ($comments as &$comment) {
-            if ($comment['liked_by']) {
-                $comment['liked_by'] = explode(',', $comment['liked_by']);
-            } else {
-                $comment['liked_by'] = [];
-            }
-            
-            if ($comment['liked_by_names']) {
-                $likedByNames = [];
-                $namePairs = explode('|', $comment['liked_by_names']);
-                foreach ($namePairs as $pair) {
-                    if (strpos($pair, ':') !== false) {
-                        list($userId, $name) = explode(':', $pair, 2);
-                        $likedByNames[] = $name;
-                    }
-                }
-                $comment['liked_by_names'] = $likedByNames;
-            } else {
-                $comment['liked_by_names'] = [];
-            }
-            
-            $comment['like_count'] = intval($comment['like_count']);
-        }
+        $this->attachCommentLikeAggregates($comments);
         
         return $comments;
     }
@@ -4079,8 +4224,7 @@ class Project extends ApplicationModel {
         
         // Get folders
         $folderQuery = sprintf(
-            "SELECT f.*, u.realname as created_by_name,
-                    (SELECT COUNT(*) FROM " . DB_PREFIX . "project_attachments a WHERE a.folder_id = f.id) as file_count
+            "SELECT f.*, u.realname as created_by_name
              FROM " . DB_PREFIX . "project_folders f
              LEFT JOIN " . DB_PREFIX . "user u ON f.created_by = u.userid
              WHERE f.project_id = %d AND %s
@@ -4089,6 +4233,7 @@ class Project extends ApplicationModel {
             $folder_id ? "f.parent_folder_id = $folder_id" : "f.parent_folder_id IS NULL"
         );
         $folders = $this->fetchAll($folderQuery);
+        $this->attachFolderListAggregates($folders);
         
         // Get files
         $fileQuery = sprintf(
@@ -4117,28 +4262,28 @@ class Project extends ApplicationModel {
     }
     
     private function getBreadcrumbs($folder_id) {
-        $breadcrumbs = [];
-        $current_id = $folder_id;
-        
-        while ($current_id) {
-            $query = sprintf(
-                "SELECT id, name, parent_folder_id FROM " . DB_PREFIX . "project_folders WHERE id = %d",
-                $current_id
-            );
-            $folder = $this->fetchOne($query);
-            
-            if ($folder) {
-                array_unshift($breadcrumbs, [
-                    'id' => $folder['id'],
-                    'name' => $folder['name']
-                ]);
-                $current_id = $folder['parent_folder_id'];
-            } else {
-                break;
-            }
+        $folder_id = (int)$folder_id;
+        if ($folder_id <= 0) {
+            return [];
         }
-        
-        return $breadcrumbs;
+        $start = $this->fetchOne(sprintf(
+            "SELECT project_id FROM %sproject_folders WHERE id = %d",
+            DB_PREFIX,
+            $folder_id
+        ));
+        if (!$start || empty($start['project_id'])) {
+            return [];
+        }
+        $allFolders = $this->fetchAll(sprintf(
+            "SELECT id, name, parent_folder_id FROM %sproject_folders WHERE project_id = %d",
+            DB_PREFIX,
+            (int)$start['project_id']
+        ));
+        $folderById = [];
+        foreach ($allFolders as $folder) {
+            $folderById[(int)$folder['id']] = $folder;
+        }
+        return $this->buildFolderBreadcrumbsFromMap($folder_id, $folderById);
     }
     
     function createFolder($params = null) {
@@ -4535,9 +4680,7 @@ class Project extends ApplicationModel {
         } else {
             // Get folder info
             $folderQuery = sprintf(
-                "SELECT f.*, p.name as project_name, u.realname as created_by_name,
-                        (SELECT COUNT(*) FROM " . DB_PREFIX . "project_attachments a WHERE a.folder_id = f.id) as file_count,
-                        (SELECT COUNT(*) FROM " . DB_PREFIX . "project_folders sf WHERE sf.parent_folder_id = f.id) as subfolder_count
+                "SELECT f.*, p.name as project_name, u.realname as created_by_name
                  FROM " . DB_PREFIX . "project_folders f
                  LEFT JOIN " . DB_PREFIX . "projects p ON f.project_id = p.id
                  LEFT JOIN " . DB_PREFIX . "user u ON f.created_by = u.userid
@@ -4549,6 +4692,9 @@ class Project extends ApplicationModel {
             if (!$folder) {
                 return ['success' => false, 'message' => 'フォルダが見つかりません。'];
             }
+            $folderRows = [$folder];
+            $this->attachFolderListAggregates($folderRows, ['include_subfolder_count' => true]);
+            $folder = $folderRows[0];
             
             // Get total size of files in folder (including subfolders)
             $totalSize = $this->getFolderTotalSize($folder_id);
@@ -5472,6 +5618,10 @@ class Project extends ApplicationModel {
         $amount = isset($data['amount']) ? floatval($data['amount']) : 0;
         $createdBy = $this->resolveProjectCreatorUserId($data);
 
+        if ($createdBy > 0) {
+            $this->addMember($project_id, $createdBy, null, 'member', false);
+        }
+
         if (!class_exists('Task')) {
             require_once __DIR__ . '/task.php';
         }
@@ -5486,6 +5636,9 @@ class Project extends ApplicationModel {
      * Resolve numeric user id of the child project creator (projects.created_by stores userid string).
      */
     private function resolveProjectCreatorUserId($data = null) {
+        if (isset($_SESSION['id']) && intval($_SESSION['id']) > 0) {
+            return intval($_SESSION['id']);
+        }
         if (isset($_SESSION['user_id']) && intval($_SESSION['user_id']) > 0) {
             return intval($_SESSION['user_id']);
         }

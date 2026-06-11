@@ -1,18 +1,46 @@
 <?php
 
 class ApplicationModel extends Model {
-	public $user_list = [];
+	const USER_SUSPEND_CHECK_TTL = 60;
+	const PROJECT_MANAGER_CHECK_TTL = 300;
+
+	private static $cachedUserList = null;
+
 	function __construct() {
 		parent::__construct();
-		if($this->user_list == null){
-			$this->user_list = $this->findAllActiveUser();
-		}
 	}
+
+	/**
+	 * Lazy-load active users once per request (chat dropdown, etc.).
+	 */
+	function getUserList() {
+		if (self::$cachedUserList !== null) {
+			return self::$cachedUserList;
+		}
+		self::$cachedUserList = $this->findAllActiveUser();
+		return self::$cachedUserList;
+	}
+
+	function __get($name) {
+		if ($name === 'user_list') {
+			return $this->getUserList();
+		}
+		return null;
+	}
+
 	function findProjectManager(){
+		$now = time();
+		if (isset($_SESSION['isProjectManager'], $_SESSION['_pm_checked_at'])
+			&& ($now - (int)$_SESSION['_pm_checked_at']) < self::PROJECT_MANAGER_CHECK_TTL) {
+			return (bool)$_SESSION['isProjectManager'];
+		}
 		$this->connect();
 		$query = "SELECT count(id) as count FROM ".DB_PREFIX."user_department WHERE userid = '".$_SESSION['userid']."' AND project_manager = 1";
 		$data = $this->fetchOne($query);
-		return $_SESSION['group'] == ADMIN_GROUP || $data['count'] > 0;
+		$result = $_SESSION['group'] == ADMIN_GROUP || $data['count'] > 0;
+		$_SESSION['isProjectManager'] = $result;
+		$_SESSION['_pm_checked_at'] = $now;
+		return $result;
 	}
 	function authorize() {
 		$this->connect();
@@ -34,9 +62,16 @@ class ApplicationModel extends Model {
 	}
 
 	function checkSuspend() {
+		$now = time();
+		if (isset($_SESSION['_suspend_checked_at'])
+			&& ($now - (int)$_SESSION['_suspend_checked_at']) < self::USER_SUSPEND_CHECK_TTL) {
+			return;
+		}
 		$this->connect();
-		$query = sprintf("SELECT is_suspend, show_project FROM %suser WHERE id = '%s'", DB_PREFIX, $_SESSION['id']);
+		$userId = intval($_SESSION['id']);
+		$query = sprintf("SELECT is_suspend, show_project FROM %suser WHERE id = %d", DB_PREFIX, $userId);
 		$data = $this->fetchOne($query);
+		$_SESSION['_suspend_checked_at'] = $now;
 		if($data['is_suspend'] == 1 || $_SESSION['show_project'] != $data['show_project']) {
 			$authority = new Authority;
 			$authority->sessionDestroy();
@@ -89,6 +124,189 @@ class ApplicationModel extends Model {
 		}
 		return $where;
 		
+	}
+
+	/**
+	 * Batch-load comment like counts and liker lists (avoids per-comment subqueries).
+	 */
+	protected function attachCommentLikeAggregates(array &$comments) {
+		if (empty($comments)) {
+			return;
+		}
+		$commentIds = array_values(array_filter(array_map('intval', array_column($comments, 'id')), function ($id) {
+			return $id > 0;
+		}));
+		if (empty($commentIds)) {
+			return;
+		}
+		$idsList = implode(',', $commentIds);
+		$likeRows = $this->fetchAll(sprintf(
+			"SELECT comment_id, user_id, name FROM %scomment_likes WHERE comment_id IN (%s) ORDER BY comment_id, id",
+			DB_PREFIX,
+			$idsList
+		));
+		$stats = [];
+		foreach ($likeRows as $row) {
+			$cid = (int)$row['comment_id'];
+			if (!isset($stats[$cid])) {
+				$stats[$cid] = ['liked_by' => [], 'liked_by_names' => []];
+			}
+			if (!empty($row['user_id'])) {
+				$stats[$cid]['liked_by'][] = $row['user_id'];
+			}
+			if (isset($row['name']) && $row['name'] !== '') {
+				$stats[$cid]['liked_by_names'][] = $row['name'];
+			}
+		}
+		foreach ($comments as &$comment) {
+			$cid = (int)$comment['id'];
+			if (isset($stats[$cid])) {
+				$comment['liked_by'] = $stats[$cid]['liked_by'];
+				$comment['liked_by_names'] = $stats[$cid]['liked_by_names'];
+				$comment['like_count'] = count($stats[$cid]['liked_by']);
+			} else {
+				$comment['liked_by'] = [];
+				$comment['liked_by_names'] = [];
+				$comment['like_count'] = 0;
+			}
+		}
+		unset($comment);
+	}
+
+	/**
+	 * Batch file/subfolder counts for folder list rows.
+	 * Options: parent_project_id — limit attachment counts to a parent project scope.
+	 */
+	protected function attachFolderListAggregates(array &$folders, array $options = []) {
+		if (empty($folders)) {
+			return;
+		}
+		$folderIds = array_values(array_filter(array_map('intval', array_column($folders, 'id')), function ($id) {
+			return $id > 0;
+		}));
+		if (empty($folderIds)) {
+			return;
+		}
+		$idsList = implode(',', $folderIds);
+		$fileWhere = "folder_id IN ({$idsList})";
+		if (!empty($options['parent_project_id'])) {
+			$fileWhere .= ' AND parent_project_id = ' . intval($options['parent_project_id']);
+		}
+
+		$fileMap = [];
+		$fileRows = $this->fetchAll(sprintf(
+			"SELECT folder_id, COUNT(*) as file_count FROM %sproject_attachments WHERE %s GROUP BY folder_id",
+			DB_PREFIX,
+			$fileWhere
+		));
+		foreach ($fileRows as $row) {
+			$fileMap[(int)$row['folder_id']] = (int)$row['file_count'];
+		}
+
+		$subfolderMap = [];
+		$subfolderRows = $this->fetchAll(sprintf(
+			"SELECT parent_folder_id, COUNT(*) as subfolder_count FROM %sproject_folders WHERE parent_folder_id IN (%s) GROUP BY parent_folder_id",
+			DB_PREFIX,
+			$idsList
+		));
+		foreach ($subfolderRows as $row) {
+			$subfolderMap[(int)$row['parent_folder_id']] = (int)$row['subfolder_count'];
+		}
+
+		$includeSubfolders = !empty($options['include_subfolder_count']);
+		foreach ($folders as &$folder) {
+			$fid = (int)$folder['id'];
+			$folder['file_count'] = $fileMap[$fid] ?? 0;
+			if ($includeSubfolders) {
+				$folder['subfolder_count'] = $subfolderMap[$fid] ?? 0;
+			}
+		}
+		unset($folder);
+	}
+
+	/**
+	 * Build breadcrumb trail from a preloaded folder map (avoids N queries walking parents).
+	 */
+	protected function buildFolderBreadcrumbsFromMap($folderId, array $folderById) {
+		$folderId = (int)$folderId;
+		if ($folderId <= 0 || empty($folderById)) {
+			return [];
+		}
+		$breadcrumbs = [];
+		$currentId = $folderId;
+		$guard = 0;
+		while ($currentId > 0 && isset($folderById[$currentId]) && $guard < 100) {
+			$guard++;
+			$folder = $folderById[$currentId];
+			array_unshift($breadcrumbs, [
+				'id' => (int)$folder['id'],
+				'name' => $folder['name'],
+			]);
+			$parentId = isset($folder['parent_folder_id']) ? (int)$folder['parent_folder_id'] : 0;
+			$currentId = $parentId > 0 ? $parentId : 0;
+		}
+		return $breadcrumbs;
+	}
+
+	/**
+	 * Batch-load project members/managers for a set of project IDs.
+	 */
+	protected function fetchProjectMembersByProjectIds(array $projectIds) {
+		$projectIds = array_values(array_filter(array_map('intval', $projectIds), function ($id) {
+			return $id > 0;
+		}));
+		if (empty($projectIds)) {
+			return [];
+		}
+		$idsList = implode(',', $projectIds);
+		$membersByProject = [];
+		$memberRows = $this->fetchAll(sprintf(
+			"SELECT pm.project_id, pm.role, pm.user_id, u.realname, u.user_image
+			 FROM %sproject_members pm
+			 LEFT JOIN %suser u ON pm.user_id = u.id
+			 WHERE pm.project_id IN (%s) AND pm.role IN ('member', 'manager')
+			 ORDER BY pm.project_id, pm.role, pm.user_id",
+			DB_PREFIX,
+			DB_PREFIX,
+			$idsList
+		));
+		foreach ($memberRows as $row) {
+			$pid = (int)$row['project_id'];
+			$role = $row['role'] === 'manager' ? 'manager' : 'member';
+			if (!isset($membersByProject[$pid])) {
+				$membersByProject[$pid] = ['member' => [], 'manager' => []];
+			}
+			$membersByProject[$pid][$role][] = $row['user_id'] . ':' . ($row['realname'] ?? '') . ':' . ($row['user_image'] ?? '');
+		}
+		return $membersByProject;
+	}
+
+	protected function attachProjectFavoriteAggregates(array &$projects, $userId) {
+		if (empty($projects)) {
+			return;
+		}
+		$projectIds = array_values(array_filter(array_map('intval', array_column($projects, 'id')), function ($id) {
+			return $id > 0;
+		}));
+		if (empty($projectIds)) {
+			return;
+		}
+		$userId = (int)$userId;
+		$idsList = implode(',', $projectIds);
+		$favoriteSet = [];
+		$favRows = $this->fetchAll(sprintf(
+			"SELECT project_id FROM %sproject_favorites WHERE user_id = %d AND project_id IN (%s)",
+			DB_PREFIX,
+			$userId,
+			$idsList
+		));
+		foreach ($favRows as $row) {
+			$favoriteSet[(int)$row['project_id']] = true;
+		}
+		foreach ($projects as &$project) {
+			$project['is_favorite'] = isset($favoriteSet[(int)$project['id']]) ? 1 : 0;
+		}
+		unset($project);
 	}
 	
 	function permitFind($level = 'public', $id = 0) {
@@ -373,7 +591,11 @@ class ApplicationModel extends Model {
 	function findAllActiveUser() {
 		$this->connect();
 		$retrict_group = array(RETIRE_GROUP);
-		$query = "SELECT userid, realname, user_groupname, user_image, authority FROM groupware_user WHERE (`is_suspend` = '' OR `is_suspend` IS NULL OR is_suspend = '0') and user_group NOT IN ('".implode("','", $retrict_group)."') ORDER BY id";
+		$query = sprintf(
+			"SELECT userid, realname, user_groupname, user_image, authority FROM %suser WHERE (`is_suspend` = '' OR `is_suspend` IS NULL OR is_suspend = '0') AND user_group NOT IN ('%s') ORDER BY id",
+			DB_PREFIX,
+			implode("','", $retrict_group)
+		);
 		$data = $this->fetchAll($query);
 		return $data;
 	}

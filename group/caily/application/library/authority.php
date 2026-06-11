@@ -4,6 +4,7 @@
 class Authority
 {
 	const REMEMBER_ME_DAYS = 30;
+	const SESSION_ACCESS_WRITE_INTERVAL = 60;
 
 	function __construct()
 	{
@@ -63,7 +64,11 @@ class Authority
 			return false;
 		}
 		$authorized = true;
-		$_SESSION['accesstime'] = time();
+		$now = time();
+		$lastAccess = isset($_SESSION['accesstime']) ? (int)$_SESSION['accesstime'] : 0;
+		if ($now - $lastAccess >= self::SESSION_ACCESS_WRITE_INTERVAL) {
+			$_SESSION['accesstime'] = $now;
+		}
 		return $authorized;
 	}
 
@@ -193,6 +198,11 @@ class Authority
 
 	function sessionDestroy()
 	{
+		$userId = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
+		if ($userId !== '' && defined('DIR_LIBRARY') && file_exists(DIR_LIBRARY . 'ApiCache.php')) {
+			require_once DIR_LIBRARY . 'ApiCache.php';
+			ApiCache::invalidateUser($userId);
+		}
 
 		$_SESSION = array();
 		if (isset($_COOKIE[session_name()])) {
@@ -203,6 +213,7 @@ class Authority
 
 	private function populateSessionFromUser($data)
 	{
+		unset($_SESSION['_suspend_checked_at'], $_SESSION['_pm_checked_at']);
 		$_SESSION['logintime'] = time();
 		$_SESSION['accesstime'] = $_SESSION['logintime'];
 		$_SESSION['authorized'] = md5(__FILE__ . $_SESSION['logintime']);

@@ -38,13 +38,39 @@ class Branch extends ApplicationModel {
 
     function list() {
         $query = sprintf(
-            "SELECT c.*,
-            (SELECT COUNT(*) FROM %s WHERE branch_id = c.id) as num_employees
+            "SELECT c.*
             FROM {$this->table} c
-            ORDER BY id ASC", 
-            DB_PREFIX . 'user'
+            ORDER BY id ASC"
         );
-        return $this->fetchAll($query);
+        $rows = $this->fetchAll($query);
+        $this->attachBranchListAggregates($rows);
+        return $rows;
+    }
+
+    private function attachBranchListAggregates(array &$rows) {
+        if (empty($rows)) {
+            return;
+        }
+        $branchIds = array_values(array_filter(array_map('intval', array_column($rows, 'id')), function ($id) {
+            return $id > 0;
+        }));
+        if (empty($branchIds)) {
+            return;
+        }
+        $idsList = implode(',', $branchIds);
+        $countMap = [];
+        $countRows = $this->fetchAll(sprintf(
+            "SELECT branch_id, COUNT(*) as num_employees FROM %suser WHERE branch_id IN (%s) GROUP BY branch_id",
+            DB_PREFIX,
+            $idsList
+        ));
+        foreach ($countRows as $row) {
+            $countMap[(int)$row['branch_id']] = (int)$row['num_employees'];
+        }
+        foreach ($rows as &$row) {
+            $row['num_employees'] = $countMap[(int)$row['id']] ?? 0;
+        }
+        unset($row);
     }
 
     function add() {

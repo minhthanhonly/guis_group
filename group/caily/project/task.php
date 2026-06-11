@@ -50,6 +50,10 @@ if($_SESSION['show_project'] == 0){
             <a href="detail.php?id=<?php echo $project_id; ?>" class="btn btn-outline-primary">
                 <i class="fa fa-arrow-left me-2"></i><span data-i18n="案件概要へ戻る">案件概要へ戻る</span>
             </a>
+            <a v-if="projectInfo && projectInfo.parent_project_id" :href="'../parent_project/detail.php?id=' + projectInfo.parent_project_id" class="btn btn-outline-primary ms-2">
+                <i class="fa fa-external-link me-2"></i>
+                <span data-i18n="建物詳細">建物詳細</span>
+            </a>
         </div>
     </div>
 
@@ -252,9 +256,9 @@ if($_SESSION['show_project'] == 0){
                     <div class="task-col-assignee">
                         <div class="d-flex align-items-center flex-wrap" style="cursor: pointer;" @click="openAssigneeModal(task._inlineIndex)">
                             <template v-if="getPrimaryAssigneeId(task)">
-                                <div class="avatar me-1" data-bs-toggle="tooltip" :title="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name">
-                                    <img v-if="!projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" width="28" height="28">
-                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name) }}</span>
+                                <div class="avatar me-1" data-bs-toggle="tooltip" :title="(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || getPrimaryAssigneeId(task))">
+                                    <img v-if="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) && !projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)).avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" width="28" height="28">
+                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || '') }}</span>
                                 </div>
                             </template>
                             <span v-else class="text-muted small">{{ $t('未選択') }}</span>
@@ -384,9 +388,9 @@ if($_SESSION['show_project'] == 0){
                     <div class="task-col-assignee">
                         <div class="d-flex align-items-center flex-wrap">
                             <template v-if="getPrimaryAssigneeId(task)">
-                                <div class="avatar me-1 position-relative" :data-userid="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.userid" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, getPrimaryAssigneeId(task))">
-                                    <img v-if="!projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" width="28" height="28">
-                                    <span v-else class="avatar-initial rounded-circle bg-label-primary" @click="removeAssignee(task, getPrimaryAssigneeId(task))">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name) }}</span>
+                                <div class="avatar me-1 position-relative" :data-userid="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.userid || task.assigned_to_userid" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, getPrimaryAssigneeId(task))">
+                                    <img v-if="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) && !projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)).avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" width="28" height="28">
+                                    <span v-else class="avatar-initial rounded-circle bg-label-primary" @click="removeAssignee(task, getPrimaryAssigneeId(task))">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || '') }}</span>
                                     <span v-if="isAcknowledged(task, getPrimaryAssigneeId(task))" class="badge bg-success position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;">
                                         <i class="fa fa-check"></i>
                                     </span>
@@ -989,7 +993,8 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <link rel="stylesheet" href="<?=ROOT?>assets/css/comment-component.css" />
 <script src="<?=ROOT?>assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
 <script src="<?=ROOT?>assets/js/mention.js?v=<?=CACHE_VERSION?>"></script>
-<script src="assets/js/task-manager.js?v=<?=CACHE_VERSION?>"></script>
+<?php $taskManagerJsVer = @filemtime(__DIR__ . '/assets/js/task-manager.js') ?: CACHE_VERSION; ?>
+<script src="<?=ROOT?>project/assets/js/task-manager.js?v=<?=$taskManagerJsVer?>"></script>
 
 <script>
 // Reset Quill editor when modal is closed

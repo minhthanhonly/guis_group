@@ -211,7 +211,7 @@ class Timecard extends ApplicationModel {
 		$statusIn = "'" . implode("','", array_map(array($this, 'quote'), $statuses)) . "'";
 		$uid = $this->quote($userId);
 		$table = DB_PREFIX . 'requests';
-		// end_date が空文字のレコードがあるため、期間判定は PHP で行う（SQL の DATE 比較でエラーになる）
+		// DATE 列に 0000-00-00 があると strict mode で SQL 比較が失敗するため、期間判定は PHP で行う
 		$query = "SELECT id, type, status, start_date, end_date, data, created_at,"
 			. " approver_id, approved_at, completed_userid, completed_at FROM {$table}"
 			. " WHERE user_id = '{$uid}' AND type IN ({$typeIn}) AND status IN ({$statusIn})"

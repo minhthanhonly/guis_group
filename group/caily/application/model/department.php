@@ -17,14 +17,54 @@ class Department extends ApplicationModel {
 
     function list() {
         $query = sprintf(
-            "SELECT c.*, 
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE department_id = c.id) as project_count,
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "user_department WHERE department_id = c.id) as num_employees
+            "SELECT c.*
             FROM {$this->table} c
             WHERE c.is_active = 1
             ORDER BY c.id ASC"
         );
-        return $this->fetchAll($query);
+        $rows = $this->fetchAll($query);
+        $this->attachDepartmentListAggregates($rows);
+        return $rows;
+    }
+
+    private function attachDepartmentListAggregates(array &$rows) {
+        if (empty($rows)) {
+            return;
+        }
+        $deptIds = array_values(array_filter(array_map('intval', array_column($rows, 'id')), function ($id) {
+            return $id > 0;
+        }));
+        if (empty($deptIds)) {
+            return;
+        }
+        $idsList = implode(',', $deptIds);
+
+        $projectMap = [];
+        $projectRows = $this->fetchAll(sprintf(
+            "SELECT department_id, COUNT(*) as project_count FROM %sprojects WHERE department_id IN (%s) GROUP BY department_id",
+            DB_PREFIX,
+            $idsList
+        ));
+        foreach ($projectRows as $row) {
+            $projectMap[(int)$row['department_id']] = (int)$row['project_count'];
+        }
+
+        $employeeMap = [];
+        $employeeRows = $this->fetchAll(sprintf(
+            "SELECT department_id, COUNT(*) as num_employees FROM %suser_department WHERE department_id IN (%s) GROUP BY department_id",
+            DB_PREFIX,
+            $idsList
+        ));
+        foreach ($employeeRows as $row) {
+            $employeeMap[(int)$row['department_id']] = (int)$row['num_employees'];
+        }
+
+        foreach ($rows as &$row) {
+            $deptId = (int)$row['id'];
+            $row['project_count'] = $projectMap[$deptId] ?? 0;
+            $row['num_employees'] = $employeeMap[$deptId] ?? 0;
+        }
+        unset($row);
     }
 
     function listByUser() {
@@ -150,13 +190,17 @@ class Department extends ApplicationModel {
     function get() {
         $id = $_GET['id'];
         $query = sprintf(
-            "SELECT c.*, 
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE department_id = c.id) as project_count
+            "SELECT c.*
             FROM {$this->table} c
             WHERE c.id = %d",
             intval($id)
         );
         $department = $this->fetchOne($query);
+        if ($department) {
+            $rows = [$department];
+            $this->attachDepartmentListAggregates($rows);
+            $department = $rows[0];
+        }
         
         // Get department members with their permissions
         if ($department) {

@@ -73,44 +73,44 @@ class Drawing extends ApplicationModel {
         
         $drawings = $this->fetchAll($query);
         
-        // For each drawing, resolve created_by to names
+        $allUserIds = [];
+        foreach ($drawings as $drawing) {
+            if (!empty($drawing['created_by'])) {
+                foreach (array_filter(array_map('trim', explode(',', $drawing['created_by']))) as $uid) {
+                    $allUserIds[$uid] = true;
+                }
+            }
+        }
+        $userMap = [];
+        if (!empty($allUserIds)) {
+            $user_ids_escaped = array_map(function ($id) {
+                return "'" . str_replace("'", "''", $id) . "'";
+            }, array_keys($allUserIds));
+            $user_query = sprintf(
+                "SELECT userid, realname FROM %suser WHERE userid IN (%s)",
+                DB_PREFIX,
+                implode(',', $user_ids_escaped)
+            );
+            foreach ($this->fetchAll($user_query) as $user) {
+                $userMap[$user['userid']] = $user['realname'];
+            }
+        }
+
         foreach ($drawings as &$drawing) {
             $drawing['created_by_names'] = '';
             if (!empty($drawing['created_by'])) {
                 $user_ids = array_filter(array_map('trim', explode(',', $drawing['created_by'])));
                 if (!empty($user_ids)) {
-                    // Create a mapping of userid to realname to preserve order
-                    $user_ids_escaped = array_map(function($id) {
-                        return "'" . str_replace("'", "''", $id) . "'";
-                    }, $user_ids);
-                    $user_query = sprintf(
-                        "SELECT userid, realname FROM %suser WHERE userid IN (%s)",
-                        DB_PREFIX,
-                        implode(',', $user_ids_escaped)
-                    );
-                    $users = $this->fetchAll($user_query);
-                    
-                    if ($users) {
-                        // Create a mapping of userid to realname
-                        $user_map = [];
-                        foreach ($users as $user) {
-                            $user_map[$user['userid']] = $user['realname'];
+                    $names = [];
+                    foreach ($user_ids as $user_id) {
+                        if (isset($userMap[$user_id])) {
+                            $names[] = $userMap[$user_id];
                         }
-                        
-                        // Build names array in the same order as created_by
-                        $names = [];
-                        foreach ($user_ids as $user_id) {
-                            if (isset($user_map[$user_id])) {
-                                $names[] = $user_map[$user_id];
-                            }
-                        }
-                        
-                        $drawing['created_by_names'] = implode(', ', $names);
                     }
+                    $drawing['created_by_names'] = implode(', ', $names);
                 }
             }
         }
-
         unset($drawing);
         
         return $drawings;

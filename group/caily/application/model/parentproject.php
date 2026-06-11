@@ -93,13 +93,17 @@ class ParentProject extends ApplicationModel {
         // Get filtered count
         $filteredRecords = $totalRecords;
         
-        // Handle special columns that are computed (child_project_count, created_by_name)
+        $childCountJoin = '';
         if ($order_column === 'child_project_count') {
-            $orderBy = "ORDER BY child_project_count $order_dir";
+            $childCountJoin = " LEFT JOIN (
+                SELECT parent_project_id, COUNT(*) as child_project_count
+                FROM " . DB_PREFIX . "projects
+                GROUP BY parent_project_id
+            ) ppc ON ppc.parent_project_id = p.id ";
+            $orderBy = "ORDER BY COALESCE(ppc.child_project_count, 0) $order_dir";
         } elseif ($order_column === 'created_by_name') {
             $orderBy = "ORDER BY u.realname $order_dir";
         } else {
-            // Regular column from parent_projects table
             $orderBy = "ORDER BY p.$order_column $order_dir";
         }
         
@@ -119,20 +123,16 @@ class ParentProject extends ApplicationModel {
             $filteredRecords = $totalRecords;
         }
         
-        // Get data for current page
         $query = sprintf(
-            "SELECT p.*, 
-                    (SELECT COUNT(*) FROM " . DB_PREFIX . "projects WHERE parent_project_id = p.id) as child_project_count,
-                    u.realname as created_by_name,
-                    (SELECT GROUP_CONCAT(CONCAT(n.id, '::', n.content) ORDER BY n.is_important DESC, n.created_at DESC SEPARATOR ' | ') 
-                     FROM " . DB_PREFIX . "parent_project_notes n 
-                     WHERE n.parent_project_id = p.id) as notes_display,
-                    CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "parent_project_favorites f WHERE f.parent_project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite
+            "SELECT p.*, u.realname as created_by_name
              FROM %s p 
              LEFT JOIN " . DB_PREFIX . "user u ON p.created_by = u.userid
-             %s %s LIMIT %d, %d",
-            $user_id,
+             %s
+             %s
+             %s
+             LIMIT %d, %d",
             $this->table,
+            $childCountJoin,
             $where,
             $orderBy,
             $start,
@@ -140,6 +140,7 @@ class ParentProject extends ApplicationModel {
         );
         
         $data = $this->fetchAll($query);
+        $this->attachParentProjectListAggregates($data, $user_id);
 
         return array(
             'draw' => $draw,
@@ -147,6 +148,66 @@ class ParentProject extends ApplicationModel {
             'recordsFiltered' => $filteredRecords,
             'data' => $data
         );
+    }
+
+    private function attachParentProjectListAggregates(array &$data, $userId) {
+        if (empty($data)) {
+            return;
+        }
+        $parentIds = array_values(array_filter(array_map('intval', array_column($data, 'id')), function ($id) {
+            return $id > 0;
+        }));
+        if (empty($parentIds)) {
+            return;
+        }
+        $idsList = implode(',', $parentIds);
+        $userId = (int)$userId;
+
+        $childMap = [];
+        $childRows = $this->fetchAll(sprintf(
+            "SELECT parent_project_id, COUNT(*) as child_project_count FROM %sprojects WHERE parent_project_id IN (%s) GROUP BY parent_project_id",
+            DB_PREFIX,
+            $idsList
+        ));
+        foreach ($childRows as $row) {
+            $childMap[(int)$row['parent_project_id']] = (int)$row['child_project_count'];
+        }
+
+        $favoriteSet = [];
+        $favRows = $this->fetchAll(sprintf(
+            "SELECT parent_project_id FROM %sparent_project_favorites WHERE user_id = %d AND parent_project_id IN (%s)",
+            DB_PREFIX,
+            $userId,
+            $idsList
+        ));
+        foreach ($favRows as $row) {
+            $favoriteSet[(int)$row['parent_project_id']] = true;
+        }
+
+        $notesMap = [];
+        $noteRows = $this->fetchAll(sprintf(
+            "SELECT parent_project_id, id, content, is_important, created_at
+             FROM %sparent_project_notes
+             WHERE parent_project_id IN (%s)
+             ORDER BY parent_project_id, is_important DESC, created_at DESC",
+            DB_PREFIX,
+            $idsList
+        ));
+        foreach ($noteRows as $row) {
+            $pid = (int)$row['parent_project_id'];
+            if (!isset($notesMap[$pid])) {
+                $notesMap[$pid] = [];
+            }
+            $notesMap[$pid][] = $row['id'] . '::' . ($row['content'] ?? '');
+        }
+
+        foreach ($data as &$row) {
+            $pid = (int)$row['id'];
+            $row['child_project_count'] = $childMap[$pid] ?? 0;
+            $row['is_favorite'] = isset($favoriteSet[$pid]) ? 1 : 0;
+            $row['notes_display'] = isset($notesMap[$pid]) ? implode(' | ', $notesMap[$pid]) : '';
+        }
+        unset($row);
     }
 
     function create($params = null) {
@@ -723,21 +784,24 @@ class ParentProject extends ApplicationModel {
         
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name, c.department as branch_name,
-            CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_favorites f WHERE f.project_id = p.id AND f.user_id = %d) THEN 1 ELSE 0 END as is_favorite,
-            (SELECT GROUP_CONCAT(CONCAT(pm.user_id, ':', u.realname, ':', COALESCE(u.user_image, '')) SEPARATOR '|') 
-             FROM " . DB_PREFIX . "project_members pm 
-             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
-             WHERE p.id = pm.project_id AND pm.role = 'manager') as manager_id
+            c.name as contact_name, c.company_name, c.department as branch_name
             FROM " . DB_PREFIX . "projects p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
             WHERE p.parent_project_id = %d
             ORDER BY p.created_at DESC",
-            $user_id,
             intval($parent_project_id)
         );
-        return $this->fetchAll($query);
+        $projects = $this->fetchAll($query);
+        $this->attachProjectFavoriteAggregates($projects, $user_id);
+        $membersByProject = $this->fetchProjectMembersByProjectIds(array_column($projects, 'id'));
+        foreach ($projects as &$project) {
+            $pid = (int)$project['id'];
+            $project['manager_id'] = isset($membersByProject[$pid]['manager'])
+                ? implode('|', $membersByProject[$pid]['manager']) : '';
+        }
+        unset($project);
+        return $projects;
     }
 
     /**
@@ -808,17 +872,16 @@ class ParentProject extends ApplicationModel {
         
         // Get folders
         $folderQuery = sprintf(
-            "SELECT f.*, u.realname as created_by_name,
-                    (SELECT COUNT(*) FROM " . DB_PREFIX . "project_attachments a WHERE a.folder_id = f.id AND a.parent_project_id = %d) as file_count
+            "SELECT f.*, u.realname as created_by_name
              FROM " . DB_PREFIX . "project_folders f
              LEFT JOIN " . DB_PREFIX . "user u ON f.created_by = u.userid
              WHERE f.parent_project_id = %d AND %s
              ORDER BY f.name ASC",
             $parent_project_id,
-            $parent_project_id,
             $folder_id ? "f.parent_folder_id = $folder_id" : "f.parent_folder_id IS NULL"
         );
         $folders = $this->fetchAll($folderQuery);
+        $this->attachFolderListAggregates($folders, ['parent_project_id' => $parent_project_id]);
         
         // Get files
         $fileQuery = sprintf(
@@ -847,26 +910,28 @@ class ParentProject extends ApplicationModel {
     }
     
     private function getAttachmentBreadcrumbs($folder_id) {
-        $breadcrumbs = [];
-        $current_folder_id = $folder_id;
-        
-        while ($current_folder_id) {
-            $query = sprintf(
-                "SELECT id, name, parent_folder_id FROM " . DB_PREFIX . "project_folders WHERE id = %d",
-                $current_folder_id
-            );
-            $folder = $this->fetchOne($query);
-            
-            if ($folder) {
-                array_unshift($breadcrumbs, [
-                    'id' => $folder['id'],
-                    'name' => $folder['name']
-                ]);
-                $current_folder_id = $folder['parent_folder_id'];
-            } else {
-                break;
-            }
+        $folder_id = (int)$folder_id;
+        if ($folder_id <= 0) {
+            return [];
         }
+        $start = $this->fetchOne(sprintf(
+            "SELECT parent_project_id FROM %sproject_folders WHERE id = %d",
+            DB_PREFIX,
+            $folder_id
+        ));
+        if (!$start || empty($start['parent_project_id'])) {
+            return [];
+        }
+        $allFolders = $this->fetchAll(sprintf(
+            "SELECT id, name, parent_folder_id FROM %sproject_folders WHERE parent_project_id = %d",
+            DB_PREFIX,
+            (int)$start['parent_project_id']
+        ));
+        $folderById = [];
+        foreach ($allFolders as $folder) {
+            $folderById[(int)$folder['id']] = $folder;
+        }
+        $breadcrumbs = $this->buildFolderBreadcrumbsFromMap($folder_id, $folderById);
         
         return $breadcrumbs;
     }
@@ -1241,9 +1306,7 @@ class ParentProject extends ApplicationModel {
         } else {
             // Get folder info
             $folderQuery = sprintf(
-                "SELECT f.*, pp.project_name as parent_project_name, u.realname as created_by_name,
-                        (SELECT COUNT(*) FROM " . DB_PREFIX . "project_attachments a WHERE a.folder_id = f.id) as file_count,
-                        (SELECT COUNT(*) FROM " . DB_PREFIX . "project_folders sf WHERE sf.parent_folder_id = f.id) as subfolder_count
+                "SELECT f.*, pp.project_name as parent_project_name, u.realname as created_by_name
                  FROM " . DB_PREFIX . "project_folders f
                  LEFT JOIN " . DB_PREFIX . "parent_projects pp ON f.parent_project_id = pp.id
                  LEFT JOIN " . DB_PREFIX . "user u ON f.created_by = u.userid
@@ -1255,6 +1318,9 @@ class ParentProject extends ApplicationModel {
             if (!$folder) {
                 return ['success' => false, 'message' => 'フォルダが見つかりません。'];
             }
+            $folderRows = [$folder];
+            $this->attachFolderListAggregates($folderRows, ['include_subfolder_count' => true]);
+            $folder = $folderRows[0];
             
             // Get total size of files in folder (including subfolders)
             $totalSize = $this->getFolderTotalSize($folder_id);

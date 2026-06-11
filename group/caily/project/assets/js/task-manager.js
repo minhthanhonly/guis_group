@@ -1850,8 +1850,29 @@ const TaskApp = createApp({
             return this.formatTaskDateTimeInDisplayTz(date);
         },
         
+        getAssigneeMember(task, userId) {
+            if (userId == null || userId === undefined || userId === '') {
+                return null;
+            }
+            const member = this.projectMembers.find(m => String(m.user_id) === String(userId));
+            if (member) {
+                return member;
+            }
+            const primaryId = this.getPrimaryAssigneeId(task);
+            if (task && String(primaryId) === String(userId)
+                && (task.assigned_to_name != null || task.assigned_to_user_image != null)) {
+                return {
+                    userid: task.assigned_to_userid,
+                    user_id: userId,
+                    user_name: task.assigned_to_name || '',
+                    user_image: task.assigned_to_user_image || ''
+                };
+            }
+            return null;
+        },
+
         getAssigneeTooltip(task, userId) {
-            const member = this.projectMembers.find(m => m.user_id == userId);
+            const member = this.getAssigneeMember(task, userId);
             const name = member?.user_name || userId;
             const isAck = this.isAcknowledged(task, userId);
             if (isAck) {
@@ -2008,7 +2029,7 @@ const TaskApp = createApp({
         
         assigneeNames(userIds) {
             return userIds.map(userId => {
-                const m = this.projectMembers.find(u => u.user_id == userId);
+                const m = this.projectMembers.find(u => String(u.user_id) === String(userId));
                 return m ? m.user_name : '';
             }).join(', ');
         },

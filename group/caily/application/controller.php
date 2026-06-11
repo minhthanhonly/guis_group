@@ -28,6 +28,7 @@ class Controller {
 		if (!$authority->ensureAuthenticated()) {
 			die('認証に失敗しました。ログインし直してください。');
 		}
+		$this->ensureUserActive();
 		return $this->execute();
 	}
 
@@ -37,6 +38,7 @@ class Controller {
 		if (!$authority->ensureAuthenticated()) {
 			die('認証に失敗しました。ログインし直してください。');
 		}
+		$this->ensureUserActive();
 	}
 
 	function api($model, $method, $params) {
@@ -176,6 +178,16 @@ class Controller {
 			return stripslashes($data);
 		}
 		
+	}
+
+	private function ensureUserActive() {
+		static $checked = false;
+		if ($checked) {
+			return;
+		}
+		$checked = true;
+		$model = new ApplicationModel();
+		$model->checkSuspend();
 	}
 
 }

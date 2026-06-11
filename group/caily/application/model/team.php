@@ -26,14 +26,15 @@ class Team extends ApplicationModel {
 		$query = sprintf(
 			"SELECT t.*, 
 			d.name as department_name,
-			(SELECT COUNT(*) FROM " . DB_PREFIX . "team_members WHERE team_id = t.id) as member_count,
-			GROUP_CONCAT(u.realname SEPARATOR ', ') as members
+			COUNT(DISTINCT tm.user_id) as member_count,
+			GROUP_CONCAT(u.realname ORDER BY u.realname SEPARATOR ', ') as members
 			FROM {$this->table} t
 			LEFT JOIN " . DB_PREFIX . "departments d ON t.department_id = d.id
 			LEFT JOIN " . DB_PREFIX . "team_members tm ON t.id = tm.team_id
 			LEFT JOIN " . DB_PREFIX . "user u ON tm.user_id = u.id
-			WHERE t.is_active = 1 AND (u.is_suspend = 0 OR u.is_suspend IS NULL OR u.is_suspend = '')
-			GROUP BY t.id
+				AND (u.is_suspend = 0 OR u.is_suspend IS NULL OR u.is_suspend = '')
+			WHERE t.is_active = 1
+			GROUP BY t.id, d.name
 			ORDER BY t.id ASC"
 		);
 		$result = $this->fetchAll($query);

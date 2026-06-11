@@ -200,7 +200,9 @@ class Task extends ApplicationModel {
 
         $amount = isset($options['amount']) ? floatval($options['amount']) : 0;
         $createdBy = isset($options['created_by']) ? intval($options['created_by']) : 0;
-        if ($createdBy <= 0 && isset($_SESSION['user_id'])) {
+        if ($createdBy <= 0 && isset($_SESSION['id'])) {
+            $createdBy = intval($_SESSION['id']);
+        } elseif ($createdBy <= 0 && isset($_SESSION['user_id'])) {
             $createdBy = intval($_SESSION['user_id']);
         }
 
@@ -373,39 +375,21 @@ class Task extends ApplicationModel {
         $current_user_id_number = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
         
         $query = sprintf(
-            "SELECT t.*, p.name as project_name, u.realname as assigned_to_name,
+            "SELECT t.*, p.name as project_name,
+            u.realname as assigned_to_name, u.user_image as assigned_to_user_image, u.userid as assigned_to_userid,
             u_creator.realname as created_by_name, u_creator.user_image as created_by_user_image,
-            u_creator.userid as created_by_userid,
-            (SELECT COUNT(*) FROM {$this->table} WHERE parent_id = t.id) as subtask_count,
-            -- Task like/dislike counts
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "task_reactions tr WHERE tr.task_id = t.id AND tr.type = 'like') as like_count,
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "task_reactions tr2 WHERE tr2.task_id = t.id AND tr2.type = 'dislike') as dislike_count,
-            -- Current user's reaction type (like/dislike)
-            (SELECT tr3.type FROM " . DB_PREFIX . "task_reactions tr3 
-             WHERE tr3.task_id = t.id AND tr3.user_id = '%s' LIMIT 1) as current_user_reaction,
-            -- Current user's reaction note
-            (SELECT tr4.note FROM " . DB_PREFIX . "task_reactions tr4 
-             WHERE tr4.task_id = t.id AND tr4.user_id = '%s' LIMIT 1) as current_user_reaction_note,
-            -- Users who liked
-            (SELECT GROUP_CONCAT(u1.realname) FROM " . DB_PREFIX . "task_reactions tr5
-             LEFT JOIN " . DB_PREFIX . "user u1 ON tr5.user_id = u1.userid
-             WHERE tr5.task_id = t.id AND tr5.type = 'like') as liked_by_names,
-            -- Users who disliked
-            (SELECT GROUP_CONCAT(u2.realname) FROM " . DB_PREFIX . "task_reactions tr6
-             LEFT JOIN " . DB_PREFIX . "user u2 ON tr6.user_id = u2.userid
-             WHERE tr6.task_id = t.id AND tr6.type = 'dislike') as disliked_by_names
+            u_creator.userid as created_by_userid
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id 
             LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             LEFT JOIN " . DB_PREFIX . "user u_creator ON t.created_by = u_creator.id
             %s
             ORDER BY t.position, t.created_at DESC",
-            $this->quote($current_user_id),
-            $this->quote($current_user_id),
             $where
         );
         
         $tasks = $this->fetchAll($query);
+        $this->attachTaskListAggregates($tasks, $current_user_id);
         
         // Load acknowledgements for all tasks
         $taskIds = array_map(function($task) { return $task['id']; }, $tasks);
@@ -431,47 +415,202 @@ class Task extends ApplicationModel {
             }
         }
         
-        if ($include_subtasks) {
-            foreach ($tasks as &$task) {
-                $unread_count = $this->getTaskUnreadCommentCount($task['id']);
-                $task['unread_count'] = $unread_count['unread_count'] ?? 0;
-                if ($task['subtask_count'] > 0) {
-                    $task['subtasks'] = $this->getSubtasks($task['id']);
+        $unreadMap = [];
+        $subtasksByParent = [];
+        if ($include_subtasks && !empty($taskIds)) {
+            $unreadMap = $this->batchTaskUnreadCommentCounts($taskIds, $current_user_id);
+            $parentIdsWithSubtasks = [];
+            foreach ($tasks as $task) {
+                if (!empty($task['subtask_count']) && (int)$task['subtask_count'] > 0) {
+                    $parentIdsWithSubtasks[] = (int)$task['id'];
                 }
-                // Parse reaction user names
-                $task['liked_by_names'] = $task['liked_by_names'] ? explode(',', $task['liked_by_names']) : [];
-                $task['disliked_by_names'] = $task['disliked_by_names'] ? explode(',', $task['disliked_by_names']) : [];
-                // Add acknowledgements
-                $task['acknowledgements'] = $acknowledgementsMap[$task['id']] ?? [];
             }
-        } else {
-            // Parse reaction user names even if not including subtasks
-            foreach ($tasks as &$task) {
-                $task['liked_by_names'] = $task['liked_by_names'] ? explode(',', $task['liked_by_names']) : [];
-                $task['disliked_by_names'] = $task['disliked_by_names'] ? explode(',', $task['disliked_by_names']) : [];
-                // Add acknowledgements
-                $task['acknowledgements'] = $acknowledgementsMap[$task['id']] ?? [];
+            if (!empty($parentIdsWithSubtasks)) {
+                $subtasksByParent = $this->batchGetSubtasks($parentIdsWithSubtasks);
             }
         }
 
-        foreach ($tasks as &$task) {
-            $this->ensureDefaultTaskDrawingLinkOnList($task);
+        if ($include_subtasks) {
+            foreach ($tasks as &$task) {
+                $tid = (int)$task['id'];
+                $task['unread_count'] = $unreadMap[$tid] ?? 0;
+                if (!empty($task['subtask_count']) && (int)$task['subtask_count'] > 0) {
+                    $task['subtasks'] = $subtasksByParent[$tid] ?? [];
+                }
+                $task['acknowledgements'] = $acknowledgementsMap[$tid] ?? [];
+            }
+            unset($task);
+        } else {
+            foreach ($tasks as &$task) {
+                $task['acknowledgements'] = $acknowledgementsMap[$task['id']] ?? [];
+            }
+            unset($task);
         }
-        unset($task);
-        
+
         return $tasks;
     }
 
     function getSubtasks($parent_id) {
+        $map = $this->batchGetSubtasks([intval($parent_id)]);
+        return $map[intval($parent_id)] ?? [];
+    }
+
+    private function attachTaskListAggregates(array &$tasks, $currentUserId) {
+        if (empty($tasks)) {
+            return;
+        }
+        $taskIds = array_values(array_filter(array_map('intval', array_column($tasks, 'id')), function ($id) {
+            return $id > 0;
+        }));
+        if (empty($taskIds)) {
+            return;
+        }
+        $idsList = implode(',', $taskIds);
+        $currentUserId = (string)$currentUserId;
+
+        $subtaskMap = $this->fetchSubtaskCountMap($taskIds);
+
+        $reactionStats = [];
+        $reactionRows = $this->fetchAll(sprintf(
+            "SELECT tr.task_id, tr.type, tr.user_id, tr.note, u.realname
+             FROM %stask_reactions tr
+             LEFT JOIN %suser u ON tr.user_id = u.userid
+             WHERE tr.task_id IN (%s)",
+            DB_PREFIX,
+            DB_PREFIX,
+            $idsList
+        ));
+        foreach ($reactionRows as $row) {
+            $tid = (int)$row['task_id'];
+            if (!isset($reactionStats[$tid])) {
+                $reactionStats[$tid] = [
+                    'like_count' => 0,
+                    'dislike_count' => 0,
+                    'liked_by_names' => [],
+                    'disliked_by_names' => [],
+                    'current_user_reaction' => null,
+                    'current_user_reaction_note' => null,
+                ];
+            }
+            $type = $row['type'] ?? '';
+            if ($type === 'like') {
+                $reactionStats[$tid]['like_count']++;
+                if (!empty($row['realname'])) {
+                    $reactionStats[$tid]['liked_by_names'][] = $row['realname'];
+                }
+            } elseif ($type === 'dislike') {
+                $reactionStats[$tid]['dislike_count']++;
+                if (!empty($row['realname'])) {
+                    $reactionStats[$tid]['disliked_by_names'][] = $row['realname'];
+                }
+            }
+            if ($currentUserId !== '' && isset($row['user_id']) && (string)$row['user_id'] === $currentUserId) {
+                $reactionStats[$tid]['current_user_reaction'] = $type;
+                $reactionStats[$tid]['current_user_reaction_note'] = $row['note'] ?? null;
+            }
+        }
+
+        foreach ($tasks as &$task) {
+            $tid = (int)$task['id'];
+            $task['subtask_count'] = $subtaskMap[$tid] ?? 0;
+            $stats = $reactionStats[$tid] ?? null;
+            if ($stats) {
+                $task['like_count'] = $stats['like_count'];
+                $task['dislike_count'] = $stats['dislike_count'];
+                $task['liked_by_names'] = $stats['liked_by_names'];
+                $task['disliked_by_names'] = $stats['disliked_by_names'];
+                $task['current_user_reaction'] = $stats['current_user_reaction'];
+                $task['current_user_reaction_note'] = $stats['current_user_reaction_note'];
+            } else {
+                $task['like_count'] = 0;
+                $task['dislike_count'] = 0;
+                $task['liked_by_names'] = [];
+                $task['disliked_by_names'] = [];
+                $task['current_user_reaction'] = null;
+                $task['current_user_reaction_note'] = null;
+            }
+        }
+        unset($task);
+    }
+
+    private function fetchSubtaskCountMap(array $taskIds) {
+        $taskIds = array_values(array_filter(array_map('intval', $taskIds), function ($id) {
+            return $id > 0;
+        }));
+        if (empty($taskIds)) {
+            return [];
+        }
+        $idsList = implode(',', $taskIds);
+        $subtaskMap = [];
+        $subtaskRows = $this->fetchAll(sprintf(
+            "SELECT parent_id, COUNT(*) as subtask_count FROM %s WHERE parent_id IN (%s) GROUP BY parent_id",
+            $this->table,
+            $idsList
+        ));
+        foreach ($subtaskRows as $row) {
+            $subtaskMap[(int)$row['parent_id']] = (int)$row['subtask_count'];
+        }
+        return $subtaskMap;
+    }
+
+    private function batchGetSubtasks(array $parentIds) {
+        $parentIds = array_values(array_filter(array_map('intval', $parentIds), function ($id) {
+            return $id > 0;
+        }));
+        if (empty($parentIds)) {
+            return [];
+        }
+        $idsList = implode(',', $parentIds);
         $query = sprintf(
-            "SELECT t.*, u.realname as assigned_to_name
-            FROM {$this->table} t 
-            LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
-            WHERE t.parent_id = %d 
-            ORDER BY t.position, t.created_at ASC",
-            intval($parent_id)
+            "SELECT t.*, u.realname as assigned_to_name, u.user_image as assigned_to_user_image, u.userid as assigned_to_userid
+            FROM {$this->table} t
+            LEFT JOIN %suser u ON t.assigned_to = u.id
+            WHERE t.parent_id IN (%s)
+            ORDER BY t.parent_id, t.position, t.created_at ASC",
+            DB_PREFIX,
+            $idsList
         );
-        return $this->fetchAll($query);
+        $rows = $this->fetchAll($query);
+        $byParent = [];
+        foreach ($rows as $row) {
+            $pid = (int)$row['parent_id'];
+            if (!isset($byParent[$pid])) {
+                $byParent[$pid] = [];
+            }
+            $byParent[$pid][] = $row;
+        }
+        return $byParent;
+    }
+
+    private function batchTaskUnreadCommentCounts(array $taskIds, $userId) {
+        $taskIds = array_values(array_filter(array_map('intval', $taskIds), function ($id) {
+            return $id > 0;
+        }));
+        if (empty($taskIds) || $userId === '') {
+            return [];
+        }
+        $idsList = implode(',', $taskIds);
+        $userEsc = $this->quote($userId);
+        $rows = $this->fetchAll(sprintf(
+            "SELECT c.task_id, COUNT(*) as unread_count
+             FROM %scomments c
+             LEFT JOIN %scomment_reads r
+               ON r.task_id = c.task_id AND r.user_id = '%s'
+             WHERE c.task_id IN (%s)
+               AND c.user_id != '%s'
+               AND (r.read_at IS NULL OR c.created_at > r.read_at)
+             GROUP BY c.task_id",
+            DB_PREFIX,
+            DB_PREFIX,
+            $userEsc,
+            $idsList,
+            $userEsc
+        ));
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int)$row['task_id']] = (int)$row['unread_count'];
+        }
+        return $map;
     }
 
     function add() {
@@ -1633,10 +1772,7 @@ class Task extends ApplicationModel {
         $offset = ($page - 1) * $per_page;
         
         $query = sprintf(
-            "SELECT c.*, u.realname as user_name, u.user_image,
-            (SELECT COUNT(*) FROM " . DB_PREFIX . "comment_likes WHERE comment_id = c.id) as like_count,
-            (SELECT GROUP_CONCAT(user_id) FROM " . DB_PREFIX . "comment_likes WHERE comment_id = c.id) as liked_by,
-            (SELECT GROUP_CONCAT(name) FROM " . DB_PREFIX . "comment_likes WHERE comment_id = c.id) as liked_by_names
+            "SELECT c.*, u.realname as user_name, u.user_image
             FROM " . DB_PREFIX . "comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
             WHERE c.task_id = %d 
@@ -1648,13 +1784,7 @@ class Task extends ApplicationModel {
         );
         
         $comments = $this->fetchAll($query);
-        
-        // Convert liked_by to array
-        foreach ($comments as &$comment) {
-            $comment['liked_by'] = $comment['liked_by'] ? explode(',', $comment['liked_by']) : [];
-            $comment['liked_by_names'] = $comment['liked_by_names'] ? explode(',', $comment['liked_by_names']) : [];
-            $comment['like_count'] = intval($comment['like_count']);
-        }
+        $this->attachCommentLikeAggregates($comments);
         
         return $comments;
     }
@@ -1741,15 +1871,22 @@ class Task extends ApplicationModel {
         }
         
         $query = sprintf(
-            "SELECT t.*, u.realname as assigned_to_name,
-            (SELECT COUNT(*) FROM {$this->table} WHERE parent_id = t.id) as subtask_count
+            "SELECT t.*, u.realname as assigned_to_name
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 
             WHERE t.project_id = %d 
             ORDER BY t.position, t.created_at ASC",
             $project_id
         );
-        return $this->fetchAll($query);
+        $tasks = $this->fetchAll($query);
+        if (!empty($tasks)) {
+            $subtaskMap = $this->fetchSubtaskCountMap(array_column($tasks, 'id'));
+            foreach ($tasks as &$task) {
+                $task['subtask_count'] = $subtaskMap[(int)$task['id']] ?? 0;
+            }
+            unset($task);
+        }
+        return $tasks;
     }
 
     private function checkPermission($projectId, $taskId = null) {
@@ -2749,7 +2886,12 @@ class Task extends ApplicationModel {
         $user_id = $_SESSION['userid'] ?? '';
         if (!$task_id || !$user_id) return ['unread_count' => 0];
         // Lấy thời gian đã đọc gần nhất
-        $sqlRead = "SELECT read_at FROM groupware_comment_reads WHERE task_id = $task_id AND user_id = '" . $this->quote($user_id) . "' ORDER BY read_at DESC LIMIT 1";
+        $sqlRead = sprintf(
+            "SELECT read_at FROM %scomment_reads WHERE task_id = %d AND user_id = '%s' ORDER BY read_at DESC LIMIT 1",
+            DB_PREFIX,
+            $task_id,
+            $this->quote($user_id)
+        );
         $rowRead = $this->fetchOne($sqlRead);
         $read_at = $rowRead && !empty($rowRead['read_at']) ? $rowRead['read_at'] : null;
         if ($read_at) {
@@ -2769,17 +2911,30 @@ class Task extends ApplicationModel {
         $user_id = $_SESSION['userid'] ?? '';
         if (!$task_id || !$user_id) return ['success' => false, 'message' => 'Invalid parameters'];
         $now = date('Y-m-d H:i:s');
-        // Nếu đã có bản ghi thì update, chưa có thì insert
-        $sql = "SELECT id FROM groupware_comment_reads WHERE task_id = $task_id AND user_id = '" . $this->quote($user_id) . "'";
-        echo $sql;
+        $table = DB_PREFIX . 'comment_reads';
+        $sql = sprintf(
+            "SELECT id FROM %s WHERE task_id = %d AND user_id = '%s'",
+            $table,
+            $task_id,
+            $this->quote($user_id)
+        );
         $row = $this->fetchOne($sql);
         if ($row && isset($row['id'])) {
-            echo "update";
-            $update = "UPDATE groupware_comment_reads SET read_at = '$now' WHERE id = " . intval($row['id']);
+            $update = sprintf(
+                "UPDATE %s SET read_at = '%s' WHERE id = %d",
+                $table,
+                $now,
+                intval($row['id'])
+            );
             $this->query($update);
         } else {
-            echo "insert";
-            $insert = "INSERT INTO groupware_comment_reads (task_id, user_id, read_at) VALUES ($task_id, '" . $this->quote($user_id) . "', '$now')";
+            $insert = sprintf(
+                "INSERT INTO %s (task_id, user_id, read_at) VALUES (%d, '%s', '%s')",
+                $table,
+                $task_id,
+                $this->quote($user_id),
+                $now
+            );
             $this->query($insert);
         }
         return ['success' => true];

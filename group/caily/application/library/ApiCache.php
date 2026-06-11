@@ -16,9 +16,9 @@ class ApiCache {
      * Danh sách endpoint được phép cache: [ 'model' => [ 'method1', 'method2' ] ]
      */
     private static $cacheable = [
-        'department' => [ 'list_department', 'get_users', 'get_user_permission_by_department', 'get_user_permissions', 'getAll' ],
+        'department' => [ 'list_department', 'get_users', 'get_user_permission_by_department', 'get_user_permissions', 'getAll', 'getCustomFields' ],
         'user' => [ 'searchMembers', 'getMentionUsers'],
-        'customer' => [ 'list_categories'],
+        'customer' => [ 'list_category', 'list_categories'],
         // Thêm model/method khác nếu cần
     ];
 

@@ -87,8 +87,18 @@ class Employeestatistics extends ApplicationModel {
      * Calculate and save statistics for a period
      */
     function calculateStatistics() {
+        $isCli = (php_sapi_name() === 'cli');
+        @set_time_limit($isCli ? 0 : 300);
+        @ini_set('memory_limit', $isCli ? '512M' : '256M');
+
         $period_type = isset($_GET['period_type']) ? $_GET['period_type'] : 'month';
         $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
+        $months = max(1, $months);
+        if ($isCli) {
+            $months = min($months, 120);
+        } else {
+            $months = min($months, 12);
+        }
 
         // Lấy tất cả (user, team) mà user đang thuộc về
         $userTeams = $this->getUsersByTeam(null);
@@ -566,7 +576,7 @@ class Employeestatistics extends ApplicationModel {
         $team_id = isset($_GET['team_id']) ? intval($_GET['team_id']) : null;
         $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : null;
         $user_id = isset($_GET['user_id']) ? $this->quote($_GET['user_id']) : null;
-
+        
         $range = $this->getStatisticsDateRange($months);
         $start_date = $range['start_date'];
         $end_date = $range['end_date'];
@@ -778,7 +788,7 @@ class Employeestatistics extends ApplicationModel {
             $activeUserSql,
             $where
         );
-
+        
         $rows = $this->fetchAll($query);
         $workloadMap = $this->getWorkloadByTeam($start_date, $end_date, null, $department_id);
         $metricsMap = $this->getProjectMetricsByTeamMap($start_date, $end_date, $team_id, $department_id);
