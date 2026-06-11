@@ -86,8 +86,7 @@ if($_SESSION['show_project'] == 0){
             </div>
             <div class="col-md-3 col-6">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="チーム">チーム</label>
-              <select class="form-select form-select-sm" id="filterTeam">
-                <option value="">すべて</option>
+              <select class="form-select form-select-sm" id="filterTeam" multiple>
               </select>
             </div>
             <div class="col-md-3 col-6">
@@ -106,26 +105,28 @@ if($_SESSION['show_project'] == 0){
               <label class="form-label form-label-sm mb-0 text-nowrap">案件ID</label>
               <input type="text" class="form-control form-control-sm" id="filterProjectId" placeholder="ID">
             </div>
-            <div class="col-md-4 col-12 d-flex align-items-end">
+            <div class="col-12 d-flex align-items-end">
               <div class="d-flex flex-wrap align-items-center gap-3">
-                <div class="form-check mb-0">
+                <div class="form-check mb-0 form-switch">
                   <input class="form-check-input" type="checkbox" id="filterMyProjects">
                   <label class="form-check-label" for="filterMyProjects" data-i18n="私の案件">私の案件</label>
                 </div>
-                <div class="form-check mb-0">
+                <div class="form-check mb-0 form-switch">
                   <input class="form-check-input" type="checkbox" id="filterNoDates">
-                  <label class="form-check-label" for="filterNoDates">開始日・終了日未設定</label>
+                  <label class="form-check-label" for="filterNoDates" data-i18n="開始日・終了日未設定">開始日・終了日未設定</label>
                 </div>
-                <div class="form-check mb-0">
+                <div class="form-check mb-0 form-switch">
                   <input class="form-check-input" type="checkbox" id="showInactiveSwitch">
-                  <label class="form-check-label small" for="showInactiveSwitch" data-i18n="完了・中止案件等も表示">完了・中止案件等も表示</label>
+                  <label class="form-check-label" for="showInactiveSwitch" data-i18n="完了・中止案件等も表示">完了・中止案件等も表示</label>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" id="filterReset" type="button">
+                  <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
+                </button>
+                <div class="form-check mb-0 form-switch">
+                  <input class="form-check-input" type="checkbox" id="filterKeepTeamOnReset">
+                  <label class="form-check-label small text-nowrap" for="filterKeepTeamOnReset" data-i18n="リセット時にチームを保持">リセット時にチームを保持</label>
                 </div>
               </div>
-            </div>
-            <div class="col-md-2 col-12 d-flex align-items-end">
-              <button class="btn btn-sm btn-outline-primary w-100" id="filterReset" type="button">
-                <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
-              </button>
             </div>
           </form>
         </div>

@@ -87,6 +87,27 @@ class Project extends ApplicationModel {
         return "TRIM(CONCAT({$contact}, ' ', {$title}))";
     }
 
+    private function appendTeamFilterWhere(array &$whereArr, $filterTeamRaw) {
+        if ($filterTeamRaw === '' || $filterTeamRaw === null) {
+            return;
+        }
+        $teamParts = array_values(array_unique(array_filter(array_map('trim', explode(',', (string)$filterTeamRaw)))));
+        if (empty($teamParts)) {
+            return;
+        }
+        $teamConds = array();
+        foreach ($teamParts as $teamPart) {
+            if ($teamPart === 'none') {
+                $teamConds[] = "(p.teams IS NULL OR p.teams = '')";
+            } elseif (ctype_digit($teamPart)) {
+                $teamConds[] = 'FIND_IN_SET(' . intval($teamPart) . ', p.teams) > 0';
+            }
+        }
+        if (!empty($teamConds)) {
+            $whereArr[] = '(' . implode(' OR ', $teamConds) . ')';
+        }
+    }
+
     /**
      * ORDER BY expression for project list (computed columns are not p.* fields).
      */
@@ -437,16 +458,9 @@ class Project extends ApplicationModel {
                         AND p.project_order_type NOT LIKE '%修正%')";
                 }
             }
-            // Filter by team (teams column chứa id team, dạng comma-separated)
+            // Filter by team (teams column chứa id team, dạng comma-separated; hỗ trợ nhiều team)
             if (isset($_GET['filterTeam']) && $_GET['filterTeam'] !== '') {
-                $filterTeam = $_GET['filterTeam'];
-                if ($filterTeam === 'none') {
-                    // Projects without any team assigned
-                    $whereArr[] = "(p.teams IS NULL OR p.teams = '' )";
-                } else {
-                    $teamId = $this->quote($filterTeam);
-                    $whereArr[] = "FIND_IN_SET('".$teamId."', p.teams)";
-                }
+                $this->appendTeamFilterWhere($whereArr, $_GET['filterTeam']);
             }
             // Filter by tantou (担当: CAILY / GUIS)
             if (isset($_GET['filterTantou']) && $_GET['filterTantou'] !== '') {
@@ -767,13 +781,7 @@ class Project extends ApplicationModel {
             }
             // Filter by team (teams column chứa id team, dạng comma-separated) - advanced filter
             if (isset($_GET['filterTeam']) && $_GET['filterTeam'] !== '') {
-                $filterTeam = $_GET['filterTeam'];
-                if ($filterTeam === 'none') {
-                    $whereArr[] = "(p.teams IS NULL OR p.teams = '' )";
-                } else {
-                    $teamId = $this->quote($filterTeam);
-                    $whereArr[] = "FIND_IN_SET('".$teamId."', p.teams)";
-                }
+                $this->appendTeamFilterWhere($whereArr, $_GET['filterTeam']);
             }
             // Filter by tantou (担当: CAILY / GUIS)
             if (isset($_GET['filterTantou']) && $_GET['filterTantou'] !== '') {

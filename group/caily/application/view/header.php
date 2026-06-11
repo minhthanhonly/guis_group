@@ -33,6 +33,7 @@
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/pickr/pickr-themes.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/css/core.css?v=<?=CACHE_VERSION?>" />
     <link rel="stylesheet" href="<?=$root?>assets/css/demo.css?v=<?=CACHE_VERSION?>" />
+    <link rel="stylesheet" href="<?=$root?>assets/css/command-palette.css?v=<?=CACHE_VERSION?>" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/@form-validation/form-validation.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/datatables-bs5/datatables.bootstrap5.css" />

@@ -51,6 +51,7 @@ var projectTable;
     ];
     // --- LocalStorage filter state ---
     const FILTER_STORAGE_KEY = 'projectListFilters';
+    const KEEP_TEAM_ON_RESET_KEY = 'project_list_keep_team_on_reset';
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment';
     const COLUMN_VISIBILITY_KEY = 'projectListColumnVisibility';
     const COLUMN_ORDER_STORAGE_KEY = 'projectListColumnOrder';
@@ -634,6 +635,128 @@ var projectTable;
         return String(value).trim();
     }
 
+    function parseFilterTeamValue(raw) {
+        if (raw === undefined || raw === null || raw === '') {
+            return [];
+        }
+        if (Array.isArray(raw)) {
+            return raw.map(String).filter(Boolean);
+        }
+        return String(raw).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    }
+
+    function getFilterTeamValue() {
+        const $el = $('#filterTeam');
+        if (!$el.length) {
+            return [];
+        }
+        return parseFilterTeamValue($el.val());
+    }
+
+    function formatFilterTeamForApi(teamIds) {
+        const ids = parseFilterTeamValue(teamIds);
+        return ids.length ? ids.join(',') : '';
+    }
+
+    function loadKeepTeamOnResetFromStorage() {
+        try {
+            return localStorage.getItem(KEEP_TEAM_ON_RESET_KEY) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function saveKeepTeamOnResetToStorage(checked) {
+        try {
+            localStorage.setItem(KEEP_TEAM_ON_RESET_KEY, checked ? '1' : '0');
+        } catch (e) {}
+    }
+
+    function initFilterKeepTeamOnResetCheckbox() {
+        const $cb = $('#filterKeepTeamOnReset');
+        if (!$cb.length) {
+            return;
+        }
+        $cb.prop('checked', loadKeepTeamOnResetFromStorage());
+        $cb.off('change.keepTeamOnReset').on('change.keepTeamOnReset', function() {
+            saveKeepTeamOnResetToStorage($(this).is(':checked'));
+        });
+    }
+
+    function syncFilterTeamSelect2Value($el, teamIds) {
+        const ids = parseFilterTeamValue(teamIds);
+        $el.val(ids.length ? ids : null).trigger('change');
+    }
+
+    function bindFilterTeamSelect2Events($el) {
+        $el.off('select2:open.filterTeam').on('select2:open.filterTeam', function() {
+            setTimeout(function() {
+                const searchField = document.querySelector('.select2-container--open .select2-search__field');
+                if (!searchField) {
+                    return;
+                }
+                searchField.value = '';
+                searchField.dispatchEvent(new Event('input', { bubbles: true }));
+            }, 0);
+        });
+    }
+
+    function refreshFilterTeamSelect(teams) {
+        const $el = $('#filterTeam');
+        if (!$el.length) {
+            return;
+        }
+        let filters = {};
+        try {
+            filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        } catch (e) {
+            filters = {};
+        }
+        const teamIdSet = { none: true };
+        (teams || []).forEach(function(team) {
+            if (team.id != null) {
+                teamIdSet[String(team.id)] = true;
+            }
+        });
+        const rawSaved = parseFilterTeamValue(filters.filterTeam);
+        const saved = rawSaved.filter(function(id) {
+            return teamIdSet[id];
+        });
+        if (rawSaved.length !== saved.length) {
+            try {
+                const stored = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+                stored.filterTeam = saved;
+                localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(stored));
+            } catch (e) {}
+        }
+        if ($el.data('select2')) {
+            $el.select2('destroy');
+        }
+        $el.empty();
+        $el.append(new Option(translateText('未割り当て'), 'none', false, saved.indexOf('none') !== -1));
+        (teams || []).forEach(function(team) {
+            if (team.id != null) {
+                const id = String(team.id);
+                const name = team.name || id;
+                $el.append(new Option(name, id, false, saved.indexOf(id) !== -1));
+            }
+        });
+        $el.select2({
+            placeholder: translateText('すべて'),
+            allowClear: true,
+            width: '100%',
+            dropdownAutoWidth: true,
+            closeOnSelect: false,
+            language: {
+                noResults: function() {
+                    return typeof translateText === 'function' ? translateText('検索結果がありません') : '検索結果がありません';
+                }
+            }
+        });
+        bindFilterTeamSelect2Events($el);
+        syncFilterTeamSelect2Value($el, saved);
+    }
+
     function saveFiltersToLocalStorage() {
         const filters = {
             filterStartMonth: $('#filterStartMonth').val(),
@@ -643,7 +766,7 @@ var projectTable;
             filterTimeLeft: $('#filterTimeLeft').val(),
             filterToday: $('#filterToday').val(),
             filterProjectOrderType: $('#filterProjectOrderType').val(),
-            filterTeam: $('#filterTeam').val(),
+            filterTeam: getFilterTeamValue(),
             filterTantou: $('#filterTantou').val(),
             filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
             filterKeyword: normalizeFilterKeyword($('#filterKeyword').val()),
@@ -700,7 +823,7 @@ var projectTable;
         if (params.has('filterTimeLeft')) merged.filterTimeLeft = params.get('filterTimeLeft') || '';
         if (params.has('filterToday')) merged.filterToday = params.get('filterToday') || '';
         if (params.has('filterProjectOrderType')) merged.filterProjectOrderType = params.get('filterProjectOrderType') || '';
-        if (params.has('filterTeam')) merged.filterTeam = params.get('filterTeam') || '';
+        if (params.has('filterTeam')) merged.filterTeam = parseFilterTeamValue(params.get('filterTeam') || '');
         if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
         if (params.has('filterNoDates')) merged.filterNoDates = getBool('filterNoDates');
         if (params.has('filterKeyword')) merged.filterKeyword = normalizeFilterKeyword(params.get('filterKeyword') || '');
@@ -742,7 +865,7 @@ var projectTable;
         if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
         if (filters.filterToday !== undefined) $('#filterToday').val(filters.filterToday);
         if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
-        if (filters.filterTeam !== undefined) $('#filterTeam').val(filters.filterTeam);
+        // filterTeam: refreshFilterTeamSelect() khôi phục từ localStorage sau khi load teams
         if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
         if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
         if (filters.filterKeyword !== undefined) $('#filterKeyword').val(normalizeFilterKeyword(filters.filterKeyword));
@@ -777,7 +900,7 @@ var projectTable;
             timeLeft: filters.filterTimeLeft || '',
             today: filters.filterToday || '',
             projectOrderType: filters.filterProjectOrderType || '',
-            team: filters.filterTeam || '',
+            teamIds: parseFilterTeamValue(filters.filterTeam),
             tantou: filters.filterTantou || '',
             noDates: filters.filterNoDates == 1,
             keyword: normalizeFilterKeyword(filters.filterKeyword),
@@ -790,6 +913,7 @@ var projectTable;
 
     function renderActiveFilters() {
         const filters = getFiltersFromLocalStorage();
+        const teamIds = filters.teamIds || [];
         const badges = [];
         // Nếu tất cả filter đều rỗng, không hiển thị gì
         if (
@@ -800,7 +924,7 @@ var projectTable;
             (!filters.timeLeft || filters.timeLeft.trim() === '') &&
             (!filters.today || filters.today.trim() === '') &&
             (!filters.projectOrderType || filters.projectOrderType.trim() === '') &&
-            (!filters.team || filters.team.trim() === '') &&
+            teamIds.length === 0 &&
             (!filters.tantou || filters.tantou.trim() === '') &&
             !filters.noDates &&
             !filters.myProjects &&
@@ -884,9 +1008,14 @@ var projectTable;
                 }
                 badges.push(`<span class="badge bg-label-info me-1" >受注形態: ${label}</span>`);
             }
-            if (filters.team && filters.team.trim() !== '') {
-                const teamName = teamIdToName[filters.team] || filters.team;
-                badges.push(`<span class="badge bg-label-info me-1" >チーム: ${teamName}</span>`);
+            if (teamIds.length > 0) {
+                const teamNames = teamIds.map(function(id) {
+                    if (id === 'none') {
+                        return translateText('未割り当て');
+                    }
+                    return teamIdToName[id] || id;
+                }).join(', ');
+                badges.push(`<span class="badge bg-label-info me-1" >チーム: ${teamNames}</span>`);
             }
             if (filters.tantou && filters.tantou.trim() !== '') {
                 let label = filters.tantou;
@@ -948,7 +1077,7 @@ var projectTable;
         setOrDelete('filterTimeLeft', filters.filterTimeLeft);
         setOrDelete('filterToday', filters.filterToday);
         setOrDelete('filterProjectOrderType', filters.filterProjectOrderType);
-        setOrDelete('filterTeam', filters.filterTeam);
+        setOrDelete('filterTeam', formatFilterTeamForApi(filters.filterTeam));
         setOrDelete('filterTantou', filters.filterTantou);
         setOrDelete('filterNoDates', filters.filterNoDates ? 1 : '');
         setOrDelete('filterKeyword', normalizeFilterKeyword(filters.filterKeyword));
@@ -1058,6 +1187,9 @@ var projectTable;
         
         // Khôi phục filter từ localStorage trước khi load projectTable
         loadFiltersFromLocalStorage();
+        if (app && Array.isArray(app.teams)) {
+            refreshFilterTeamSelect(app.teams);
+        }
         projectData = [];
 
         // Fetch custom field sets for current department and build custom columns (at end of table, default hidden)
@@ -1936,7 +2068,7 @@ var projectTable;
                     const filterTimeLeft = $('#filterTimeLeft').val();
                     const filterToday = $('#filterToday').val();
                     const filterProjectOrderType = $('#filterProjectOrderType').val();
-                    const filterTeam = $('#filterTeam').val();
+                    const filterTeam = formatFilterTeamForApi(getFilterTeamValue());
                     const filterTantou = $('#filterTantou').val();
                     const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
                     const filterKeyword = normalizeFilterKeyword($('#filterKeyword').val());
@@ -2128,7 +2260,7 @@ var projectTable;
                     popup = document.createElement('div');
                     popup.id = 'projectTasksPopup';
                     popup.className = 'project-tasks-popup shadow border rounded bg-white p-2';
-                    popup.style.cssText = 'position: fixed; z-index: 9999; min-width: 420px; max-width: 480px; max-height: 320px; overflow: auto; display: none; pointer-events: auto;';
+                    popup.style.cssText = 'position: fixed; z-index: 9999; min-width: 460px; max-width: 540px; max-height: 360px; overflow: auto; display: none; pointer-events: auto;';
                     popup.setAttribute('role', 'tooltip');
                     document.body.appendChild(popup);
                 }
@@ -2185,6 +2317,63 @@ var projectTable;
                     if (m) return formatProjectDateOnly(m);
                     return String(d).substring(0, 10);
                 }
+                var TASK_KIND_META = [
+                    { value: '新規作成', color: 'success' },
+                    { value: '修正(エラー)', color: 'danger' },
+                    { value: '修正(変更)', color: 'warning' },
+                    { value: 'チェック', color: 'primary' },
+                    { value: '連絡', color: 'info' },
+                    { value: '検討', color: 'secondary' },
+                    { value: '相談・会議', color: 'dark' }
+                ];
+                function normalizeTaskKind(value) {
+                    var v = String(value || '').trim();
+                    return v === '新規' ? '新規作成' : v;
+                }
+                function getTaskKindLabel(value) {
+                    var normalized = normalizeTaskKind(value);
+                    if (!normalized) {
+                        return '—';
+                    }
+                    return typeof translateText === 'function' ? translateText(normalized) : normalized;
+                }
+                function getTaskKindBadgeClass(value) {
+                    var normalized = normalizeTaskKind(value);
+                    var kind = TASK_KIND_META.find(function(k) { return k.value === normalized; });
+                    return 'badge bg-label-' + (kind ? kind.color : 'secondary');
+                }
+                function formatWorkloadDisplay(value) {
+                    if (value === null || value === undefined || value === '') {
+                        return '0';
+                    }
+                    var s = String(value).trim();
+                    if (!s) {
+                        return '0';
+                    }
+                    var n = parseFloat(s);
+                    if (Number.isNaN(n) || n <= 0) {
+                        return '0';
+                    }
+                    return s;
+                }
+                function getTaskWorkloadDisplay(t) {
+                    return formatWorkloadDisplay(t && t.estimated_hours);
+                }
+                function sumTaskWorkloads(taskList) {
+                    return (taskList || []).reduce(function(sum, t) {
+                        var n = parseFloat(t && t.estimated_hours);
+                        return sum + (Number.isNaN(n) || n <= 0 ? 0 : n);
+                    }, 0);
+                }
+                function formatWorkloadTotalDisplay(total) {
+                    if (!total || total <= 0) {
+                        return '0';
+                    }
+                    if (Number.isInteger(total)) {
+                        return String(total);
+                    }
+                    return String(total);
+                }
                 function getTaskAssigneeDisplay(t, members) {
                     if (!t.assigned_to && !t.assigned_to_name) return { firstInitials: '', firstTitle: '', restCount: 0 };
                     var ids = t.assigned_to ? String(t.assigned_to).split(',').map(function(x) { return x.trim(); }).filter(Boolean) : [];
@@ -2222,18 +2411,30 @@ var projectTable;
                     if (tasks.length === 0) {
                         el.innerHTML = '<div class="text-muted small">タスクなし</div>';
                     } else {
-                        var html = '<div class="small fw-bold mb-1">タスク (' + tasks.length + ')</div><ul class="list-unstyled mb-0 small">';
+                        var drawingLabel = typeof translateText === 'function' ? translateText('工数') : '工数';
+                        var totalDrawingLabel = typeof translateText === 'function' ? translateText('工数合計') : '工数合計';
+                        var kindColLabel = typeof translateText === 'function' ? translateText('種別') : '種別';
+                        var totalWorkload = sumTaskWorkloads(tasks);
+                        var html = '<div class="small fw-bold mb-1 d-flex justify-content-between align-items-center gap-2 flex-wrap">';
+                        html += '<span>タスク (' + tasks.length + ')</span>';
+                        html += '<span class="text-muted fw-normal">' + escapeHtmlForNote(totalDrawingLabel) + ': ' + escapeHtmlForNote(formatWorkloadTotalDisplay(totalWorkload)) + '</span>';
+                        html += '</div>';
+                        html += '<ul class="list-unstyled mb-0 small">';
                         tasks.slice(0, 20).forEach(function(t) {
                             var statusLabel = getTaskStatusLabel(t.status);
                             var statusClass = getTaskStatusBadgeClass(t.status);
+                            var kindLabel = getTaskKindLabel(t.task_kind);
+                            var kindClass = getTaskKindBadgeClass(t.task_kind);
+                            var workloadDisplay = getTaskWorkloadDisplay(t);
                             var title = (t.title || '').toString().trim() || '-';
-                            if (title.length > 26) title = title.substring(0, 26) + '…';
+                            if (title.length > 22) title = title.substring(0, 22) + '…';
                             var assigneeDisplay = getTaskAssigneeDisplay(t, members);
                             var dueStr = formatTaskDue(t.due_date);
                             var progressVal = t.progress != null ? parseInt(t.progress, 10) : 0;
                             html += '<li class="py-1 border-bottom border-light d-flex flex-wrap align-items-center gap-1">';
-                            html += '<span class="' + statusClass + ' me-1">' + statusLabel + '</span>';
-                            html += '<span class="text-nowrap" title="' + escapeHtmlForNote(title) + '">' + escapeHtmlForNote(title) + '</span>';
+                            html += '<span class="' + statusClass + ' me-1" style="font-size:0.65rem;">' + statusLabel + '</span>';
+                            html += '<span class="' + kindClass + ' me-1" style="font-size:0.65rem;" title="' + escapeHtmlForNote(kindColLabel) + '">' + escapeHtmlForNote(kindLabel) + '</span>';
+                            html += '<span class="text-nowrap" title="' + escapeHtmlForNote((t.title || '').toString().trim()) + '">' + escapeHtmlForNote(title) + '</span>';
                             html += '<span class="ms-auto d-flex align-items-center gap-1 flex-nowrap">';
                             if (assigneeDisplay.firstInitials) {
                                 html += '<span class="avatar-initial rounded-circle bg-label-primary" style="padding: 0 2px;height:18px;font-size:9px;line-height:18px;display:inline-flex;align-items:center;justify-content:center;" title="' + escapeHtmlForNote(assigneeDisplay.firstTitle) + '">' + (assigneeDisplay.firstInitials) + '</span>';
@@ -2241,6 +2442,7 @@ var projectTable;
                                     html += '<span class="avatar-initial rounded-circle bg-label-secondary text-white" style="width:18px;height:18px;font-size:9px;line-height:18px;display:inline-flex;align-items:center;justify-content:center;" title="担当者' + r + '">+' + r + '</span>';
                                 }
                             }
+                            html += '<span class="text-muted text-nowrap" style="font-size:0.7rem;" title="' + escapeHtmlForNote(drawingLabel) + '">' + escapeHtmlForNote(drawingLabel) + ':' + escapeHtmlForNote(workloadDisplay) + '</span>';
                             html += '<span class="text-muted" style="font-size:0.7rem;">' + dueStr + '</span>';
                             html += '<span class="text-muted" style="font-size:0.7rem;">' + progressVal + '%</span>';
                             html += '</span></li>';
@@ -3695,8 +3897,13 @@ var projectTable;
                 renderActiveFilters();
             }, 500);
         });
+        initFilterKeepTeamOnResetCheckbox();
+
         // Đảm bảo badge update khi reset filter
         $('#filterReset').on('click', function() {
+            const keepTeam = $('#filterKeepTeamOnReset').is(':checked');
+            const preservedTeams = keepTeam ? getFilterTeamValue() : [];
+
             // Reset các filter về mặc định
             $('#projectFilterForm')[0].reset();
             $('#filterStartMonth').val('');
@@ -3706,7 +3913,11 @@ var projectTable;
             $('#filterTimeLeft').val('');
             $('#filterToday').val('');
             $('#filterProjectOrderType').val('');
-            $('#filterTeam').val('');
+            if (keepTeam) {
+                $('#filterTeam').val(preservedTeams.length ? preservedTeams : null).trigger('change');
+            } else {
+                $('#filterTeam').val(null).trigger('change');
+            }
             $('#filterTantou').val('');
             $('#filterNoDates').prop('checked', false);
             $('#filterKeyword').val('');
@@ -3719,6 +3930,11 @@ var projectTable;
                 app.showClearAllFavoritesBtn = false;
             }
             localStorage.removeItem(FILTER_STORAGE_KEY);
+            if (keepTeam && preservedTeams.length) {
+                try {
+                    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ filterTeam: preservedTeams }));
+                } catch (e) {}
+            }
             // Reset status filter
             if (app && app.selectedStatus) {
                 app.selectedStatus = null;
@@ -3754,7 +3970,10 @@ var projectTable;
         if (event.persisted) {
             // Reload filters from localStorage to ensure correct state (especially favorites_only)
             loadFiltersFromLocalStorage();
-            
+            if (window.app && Array.isArray(window.app.teams)) {
+                refreshFilterTeamSelect(window.app.teams);
+            }
+
             // Reload departments and reinitialize if needed
             if (window.app) {
                 // Always reload departments to ensure fresh data
@@ -4853,25 +5072,7 @@ var projectTable;
                             name: team.name
                         }));
                     }
-                    // Populate team filter options based on this.teams (only current department)
-                    const $teamFilter = $('#filterTeam');
-                    if ($teamFilter && $teamFilter.length) {
-                        const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
-                        const savedTeam = saved.filterTeam || '';
-                        $teamFilter.empty();
-                        $teamFilter.append('<option value="">すべて</option>');
-                        // Option: 未割り当て (chưa phân công team)
-                        const noneSelected = savedTeam && savedTeam === 'none' ? ' selected' : '';
-                        $teamFilter.append('<option value="none"' + noneSelected + '>未割り当て</option>');
-                        (this.teams || []).forEach(team => {
-                            if (team.id != null) {
-                                const id = String(team.id);
-                                const name = team.name || id;
-                                const selected = savedTeam && String(savedTeam) === id ? ' selected' : '';
-                                $teamFilter.append('<option value="' + id + '"' + selected + '>' + name + '</option>');
-                            }
-                        });
-                    }
+                    refreshFilterTeamSelect(this.teams);
                 });
                 this.loadUsers().then(() => {
                     if (this.membersTagifyInstance) {
