@@ -205,12 +205,14 @@ class Task extends ApplicationModel {
         } elseif ($createdBy <= 0 && isset($_SESSION['user_id'])) {
             $createdBy = intval($_SESSION['user_id']);
         }
+        $guisReceiverUserId = isset($options['guis_receiver_user_id']) ? intval($options['guis_receiver_user_id']) : 0;
+        $contactTaskAssignee = $guisReceiverUserId > 0 ? $guisReceiverUserId : 0;
 
         $defaults = array(
             array(
                 'title' => 'お客様との連絡・調整・納品対応',
                 'task_kind' => '連絡',
-                'assigned_to' => $createdBy > 0 ? (string) $createdBy : null,
+                'assigned_to' => $contactTaskAssignee > 0 ? (string) $contactTaskAssignee : null,
                 'status' => 'completed',
                 'progress' => 100,
                 'drawing_count' => 1,
@@ -272,6 +274,9 @@ class Task extends ApplicationModel {
 
             if (!empty($data['assigned_to'])) {
                 $this->syncTaskAssignees($taskId, $data['assigned_to']);
+                if ($def['title'] === 'お客様との連絡・調整・納品対応') {
+                    $this->acknowledgeTaskAssignees($taskId, $data['assigned_to']);
+                }
             }
 
             $data['id'] = $taskId;
@@ -297,6 +302,53 @@ class Task extends ApplicationModel {
             $drawingModel->autoCalculateAllDrawingPricesForProject($projectId);
         }
 
+        return true;
+    }
+
+    /**
+     * Gán task mặc định「お客様との連絡・調整・納品対応」cho GUIS 受付者 (khi sửa dự án con).
+     */
+    function assignDefaultContactTaskToUser($projectId, $userId) {
+        $projectId = intval($projectId);
+        $userId = intval($userId);
+        if ($projectId <= 0 || $userId <= 0) {
+            return false;
+        }
+
+        $title = 'お客様との連絡・調整・納品対応';
+        $task = $this->fetchOne(sprintf(
+            "SELECT id FROM %s WHERE project_id = %d AND title = '%s' LIMIT 1",
+            $this->table,
+            $projectId,
+            $this->quote($title)
+        ));
+        if (!$task || empty($task['id'])) {
+            return false;
+        }
+
+        $taskId = intval($task['id']);
+        $assignedTo = (string) $userId;
+        $this->query_update(
+            array(
+                'assigned_to' => $assignedTo,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ),
+            array('id' => $taskId)
+        );
+
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        $projectModel = new Project();
+        $projectModel->addMember($projectId, $userId, null, 'member', true);
+        $this->syncTaskAssignees($taskId, $assignedTo);
+        $this->acknowledgeTaskAssignees($taskId, $assignedTo);
+
+        $mergedTask = $this->getById($taskId);
+        if ($mergedTask) {
+            $mergedTask['assigned_to'] = $assignedTo;
+            $this->syncTaskDrawingsForTask($taskId, $mergedTask);
+        }
         return true;
     }
 
@@ -1212,6 +1264,30 @@ class Task extends ApplicationModel {
         }
     }
     
+    /**
+     * Mark assignees as acknowledged (受領済み) without requiring manual 受領 action.
+     */
+    private function acknowledgeTaskAssignees($taskId, $assignedToCsv) {
+        $taskId = intval($taskId);
+        if ($taskId <= 0 || trim((string) $assignedToCsv) === '') {
+            return;
+        }
+        $userIds = array_filter(array_map('intval', explode(',', (string) $assignedToCsv)));
+        foreach ($userIds as $userId) {
+            if ($userId <= 0) {
+                continue;
+            }
+            $this->query(sprintf(
+                "INSERT INTO %stask_assignees (task_id, user_id, acknowledged, acknowledged_at)
+                VALUES (%d, %d, 1, NOW())
+                ON DUPLICATE KEY UPDATE acknowledged = 1, acknowledged_at = NOW(), updated_at = NOW()",
+                DB_PREFIX,
+                $taskId,
+                $userId
+            ));
+        }
+    }
+
     /**
      * Sync task_assignees table when assigned_to changes
      */

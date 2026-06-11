@@ -1879,12 +1879,18 @@ var projectTable;
                     data: 'name',
                     width: '100px',
                     render: function(data, type, row) {
-                        return `<div class="d-flex align-items-start justify-content-start flex-column">
-                                    <div class="mt-1">
-                                        <small class="text-muted d-block">${row.parent_branch_name|| '-'}</small>
-                                        <small class="text-muted d-block">${row.customer_name || '-'}</small>
-                                    </div>
-                                </div>`;
+                        const company = String(row.effective_company_name || row.parent_company_name || '').trim();
+                        const branch = String(row.parent_branch_name || '').trim();
+                        const contact = String(row.effective_contact_name || row.customer_name || '').trim();
+                        const lines = [company, branch, contact].filter(Boolean);
+                        if (!lines.length) {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        return `<div class="d-flex align-items-start justify-content-start flex-column mt-1">` +
+                            lines.map(function(line) {
+                                return `<small class="text-muted d-block">${escapeHtmlForNote(line)}</small>`;
+                            }).join('') +
+                            `</div>`;
                     },
                     title: '<span data-i18n="顧客情報">顧客情報</span>'
                 },

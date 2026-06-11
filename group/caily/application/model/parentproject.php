@@ -797,12 +797,20 @@ class ParentProject extends ApplicationModel {
         
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name, c.department as branch_name
+            COALESCE(NULLIF(TRIM(c.company_name), ''), NULLIF(TRIM(cp.company_name), '')) as company_name,
+            COALESCE(NULLIF(TRIM(c.branch), ''), NULLIF(TRIM(cp.branch), '')) as branch_name,
+            COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(cp.name), '')) as contact_name,
+            COALESCE(NULLIF(TRIM(p.guis_receiver), ''), NULLIF(TRIM(pp.guis_receiver), '')) as effective_guis_receiver,
+            gu.realname as guis_receiver_name
             FROM " . DB_PREFIX . "projects p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+            LEFT JOIN %sparent_projects pp ON pp.id = p.parent_project_id
+            LEFT JOIN " . DB_PREFIX . "customer cp ON cp.id = SUBSTRING_INDEX(pp.customer_id, ',', 1)
+            LEFT JOIN " . DB_PREFIX . "user gu ON gu.userid = COALESCE(NULLIF(TRIM(p.guis_receiver), ''), NULLIF(TRIM(pp.guis_receiver), ''))
             WHERE p.parent_project_id = %d
             ORDER BY p.created_at DESC",
+            DB_PREFIX,
             intval($parent_project_id)
         );
         $projects = $this->fetchAll($query);

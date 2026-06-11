@@ -59,6 +59,34 @@ class Project extends ApplicationModel {
         )";
     }
 
+    private function getProjectListCustomerJoinSql() {
+        return "
+            LEFT JOIN " . DB_PREFIX . "customer pc ON pc.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+            LEFT JOIN " . DB_PREFIX . "customer pp_c ON pp_c.id = SUBSTRING_INDEX(pp.customer_id, ',', 1)";
+    }
+
+    private function getProjectListGuisUserJoinSql() {
+        return "LEFT JOIN " . DB_PREFIX . "user gu ON gu.userid = COALESCE(NULLIF(TRIM(p.guis_receiver), ''), NULLIF(TRIM(pp.guis_receiver), ''))";
+    }
+
+    private function sqlEffectiveCompanyName() {
+        return "COALESCE(NULLIF(TRIM(pc.company_name), ''), NULLIF(TRIM(pp_c.company_name), ''), NULLIF(TRIM(pp.company_name), ''))";
+    }
+
+    private function sqlEffectiveBranchName() {
+        return "COALESCE(NULLIF(TRIM(pc.branch), ''), NULLIF(TRIM(pp_c.branch), ''), NULLIF(TRIM(pp.branch_name), ''))";
+    }
+
+    private function sqlEffectiveContactName() {
+        return "COALESCE(NULLIF(TRIM(pc.name), ''), NULLIF(TRIM(pp_c.name), ''), NULLIF(TRIM(pp.contact_name), ''))";
+    }
+
+    private function sqlEffectiveCustomerName() {
+        $contact = $this->sqlEffectiveContactName();
+        $title = "COALESCE(NULLIF(TRIM(pc.title), ''), NULLIF(TRIM(pp_c.title), ''), '')";
+        return "TRIM(CONCAT({$contact}, ' ', {$title}))";
+    }
+
     /**
      * ORDER BY expression for project list (computed columns are not p.* fields).
      */
@@ -74,13 +102,18 @@ class Project extends ApplicationModel {
             );
         }
 
+        if ($order_column === 'parent_branch_name') {
+            return $this->sqlEffectiveBranchName();
+        }
+        if ($order_column === 'parent_guis_receiver') {
+            return 'gu.realname';
+        }
+
         $parentColumns = array(
             'parent_construction_number' => 'pp.construction_number',
-            'parent_branch_name' => 'pp.branch_name',
             'parent_scale' => 'pp.scale',
             'parent_type1' => 'pp.type1',
             'parent_type2' => 'pp.type2',
-            'parent_guis_receiver' => 'pp.guis_receiver',
         );
         if (isset($parentColumns[$order_column])) {
             return $parentColumns[$order_column];
@@ -474,13 +507,13 @@ class Project extends ApplicationModel {
             $orderBy .= ", (CASE WHEN p.status IN ('completed','cancelled','deleted') THEN 1 ELSE 0 END) ASC, p.end_date ASC";
         }
 
-        $customerJoin = $this->getProjectCustomerJoinSql();
+        $listJoins = $this->getProjectListCustomerJoinSql() . "\n            " . $this->getProjectListGuisUserJoinSql();
 
         // Get total records count
         $totalQuery = "SELECT COUNT(*) as count FROM {$this->table} p
         JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
         LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
-        " . $customerJoin . "
+        " . $listJoins . "
         " . $where;
         $totalRecords = $this->fetchOne($totalQuery)['count'];
         $filteredRecords = $totalRecords;
@@ -488,17 +521,25 @@ class Project extends ApplicationModel {
         // Get data for current page
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
-            CONCAT(c.name, ' ', c.title) as customer_name,
-            pp.company_name as parent_company_name, pp.contact_name as parent_contact_name, pp.construction_number as parent_construction_number, pp.branch_name as parent_branch_name,
-            pp.scale as parent_scale, pp.type1 as parent_type1, pp.type2 as parent_type2, pp.guis_receiver as parent_guis_receiver
+            %s as effective_company_name,
+            %s as effective_contact_name,
+            %s as parent_branch_name,
+            %s as customer_name,
+            COALESCE(pc.category_id, pp_c.category_id) as category_id,
+            pp.company_name as parent_company_name, pp.contact_name as parent_contact_name, pp.construction_number as parent_construction_number,
+            pp.scale as parent_scale, pp.type1 as parent_type1, pp.type2 as parent_type2,
+            gu.realname as parent_guis_receiver
             FROM {$this->table} p
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
-            " . $customerJoin . "
+            " . $listJoins . "
             %s
             %s
             LIMIT %d, %d",
+            $this->sqlEffectiveCompanyName(),
+            $this->sqlEffectiveContactName(),
+            $this->sqlEffectiveBranchName(),
+            $this->sqlEffectiveCustomerName(),
             $where,
             $orderBy,
             $start,
@@ -585,7 +626,7 @@ class Project extends ApplicationModel {
         // Get data for kadai projects
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name, c.category_id as category_id, c.department as branch_name,
+            c.name as contact_name, c.company_name, c.category_id as category_id, c.branch as branch_name,
             CONCAT(c.name, ' ', c.title) as customer_name,
             pp.company_name as parent_company_name, pp.contact_name as parent_contact_name
             FROM {$this->table} p 
@@ -763,23 +804,29 @@ class Project extends ApplicationModel {
         if (!empty($where)) {
             $where = " WHERE " . $where;
         }
-        $customerJoin = $this->getProjectCustomerJoinSql();
+        $listJoins = $this->getProjectListCustomerJoinSql();
         $ganttLimit = 3000;
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.branch as branch_name,
-            c.name as contact_name, c.company_name as company_name, c.category_id as category_id,
-            CONCAT(c.name, ' ', c.title) as customer_name,
+            %s as branch_name,
+            %s as contact_name,
+            %s as company_name,
+            COALESCE(pc.category_id, pp_c.category_id) as category_id,
+            %s as customer_name,
             CONCAT_WS(' ', NULLIF(pp.type1, ''), NULLIF(pp.type2, '')) as building_type,
             pp.scale as building_size,
             pp.construction_number as construction_number
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
-            " . $customerJoin . "
+            " . $listJoins . "
             %s
             ORDER BY p.start_date ASC, p.created_at DESC
             LIMIT %d",
+            $this->sqlEffectiveBranchName(),
+            $this->sqlEffectiveContactName(),
+            $this->sqlEffectiveCompanyName(),
+            $this->sqlEffectiveCustomerName(),
             $where,
             $ganttLimit
         );
@@ -797,11 +844,13 @@ class Project extends ApplicationModel {
             'p.name',
             'CAST(p.id AS CHAR)',
             'p.tags',
-            'c.company_name',
-            'c.company_name_kana',
-            'c.branch',
-            'c.name',
-            'c.name_kana',
+            $this->sqlEffectiveCompanyName(),
+            'pc.company_name_kana',
+            'pp_c.company_name_kana',
+            $this->sqlEffectiveBranchName(),
+            $this->sqlEffectiveContactName(),
+            'pc.name_kana',
+            'pp_c.name_kana',
             'pp.construction_number',
             'pp.scale',
             'pp.type1',
@@ -1598,6 +1647,12 @@ class Project extends ApplicationModel {
         if (array_key_exists('guis_nouki_status', $_POST)) {
             $data['guis_nouki_status'] = trim((string)$_POST['guis_nouki_status']);
         }
+        if (isset($_POST['customer_id']) && $_POST['customer_id'] !== '' && $_POST['customer_id'] !== '0') {
+            $data['customer_id'] = intval($_POST['customer_id']);
+        }
+        if (isset($_POST['guis_receiver']) && $_POST['guis_receiver'] !== '') {
+            $data['guis_receiver'] = $this->validateUTF8MB4($_POST['guis_receiver']);
+        }
         // 総額 (amount) - 必ずリクエストから取得して数値で保存
         $data['amount'] = (array_key_exists('amount', $_POST) && $_POST['amount'] !== '' && $_POST['amount'] !== null)
             ? floatval($_POST['amount'])
@@ -1865,6 +1920,24 @@ class Project extends ApplicationModel {
         if (isset($data['status']) && $data['status'] === 'completed') {
             $data['progress'] = 100;
         }
+
+        $nullScalarFields = [];
+        if (array_key_exists('customer_id', $_POST)) {
+            $customerId = trim((string)$_POST['customer_id']);
+            if ($customerId !== '' && $customerId !== '0') {
+                $data['customer_id'] = intval($customerId);
+            } else {
+                $nullScalarFields[] = 'customer_id';
+            }
+        }
+        if (array_key_exists('guis_receiver', $_POST)) {
+            $guisReceiver = trim((string)$_POST['guis_receiver']);
+            if ($guisReceiver !== '') {
+                $data['guis_receiver'] = $this->validateUTF8MB4($guisReceiver);
+            } else {
+                $nullScalarFields[] = 'guis_receiver';
+            }
+        }
         
         try {
         $result = $this->query_update($data, ['id' => $id]);
@@ -1873,6 +1946,16 @@ class Project extends ApplicationModel {
         if ($result && !empty($nullDatetimeFields)) {
             $setParts = [];
             foreach ($nullDatetimeFields as $field) {
+                $setParts[] = sprintf("`%s` = NULL", $this->escape($field));
+            }
+            if (!empty($setParts)) {
+                $query = sprintf("UPDATE %s SET %s WHERE id = %d", $this->table, implode(', ', $setParts), $id);
+                $this->query($query);
+            }
+        }
+        if ($result && !empty($nullScalarFields)) {
+            $setParts = [];
+            foreach ($nullScalarFields as $field) {
                 $setParts[] = sprintf("`%s` = NULL", $this->escape($field));
             }
             if (!empty($setParts)) {
@@ -1895,6 +1978,12 @@ class Project extends ApplicationModel {
                 $drawingModel = new Drawing();
                 $drawingModel->autoCalculateAllDrawingPricesForProject($id);
             }
+        }
+
+        // Cập nhật người được gán task「お客様との連絡・調整・納品対応」theo GUIS 受付者 (dự án con)
+        if ($result && !empty($old['parent_project_id']) && (int) $old['parent_project_id'] > 0
+            && array_key_exists('guis_receiver', $_POST)) {
+            $this->syncChildProjectDefaultContactTaskGuisAssignee($id);
         }
 
       
@@ -2525,7 +2614,7 @@ class Project extends ApplicationModel {
         $projectId = intval($id);
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name, c.department as branch_name, c.category_id as category_id
+            c.name as contact_name, c.company_name, c.branch as branch_name, c.category_id as category_id
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
@@ -5618,11 +5707,92 @@ class Project extends ApplicationModel {
         if (!class_exists('Task')) {
             require_once __DIR__ . '/task.php';
         }
+        $guisReceiverUserId = $this->resolveChildProjectGuisReceiverUserId($data);
         $taskModel = new Task();
         $taskModel->createDefaultTasksForProject($project_id, array(
             'amount' => $amount,
             'created_by' => $createdBy,
+            'guis_receiver_user_id' => $guisReceiverUserId,
         ));
+    }
+
+    /**
+     * Resolve GUIS 受付者 numeric user id for child project (own guis_receiver or parent building).
+     */
+    private function resolveChildProjectGuisReceiverUserId($data, $projectId = 0) {
+        $guisReceiverUserid = '';
+        if (is_array($data) && !empty($data['guis_receiver'])) {
+            $guisReceiverUserid = trim((string) $data['guis_receiver']);
+        }
+
+        if ($guisReceiverUserid === '' && intval($projectId) > 0) {
+            return $this->resolveChildProjectGuisReceiverUserIdFromDb($projectId);
+        }
+
+        if ($guisReceiverUserid === '' && is_array($data) && !empty($data['parent_project_id'])) {
+            $parentId = intval($data['parent_project_id']);
+            $parent = $this->fetchOne(sprintf(
+                "SELECT guis_receiver FROM %sparent_projects WHERE id = %d LIMIT 1",
+                DB_PREFIX,
+                $parentId
+            ));
+            if ($parent && !empty($parent['guis_receiver'])) {
+                $guisReceiverUserid = trim((string) $parent['guis_receiver']);
+            }
+        }
+
+        return $this->resolveUseridToNumericId($guisReceiverUserid);
+    }
+
+    private function resolveChildProjectGuisReceiverUserIdFromDb($projectId) {
+        $projectId = intval($projectId);
+        if ($projectId <= 0) {
+            return 0;
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT p.guis_receiver, pp.guis_receiver AS parent_guis_receiver
+             FROM %sprojects p
+             LEFT JOIN %sparent_projects pp ON pp.id = p.parent_project_id
+             WHERE p.id = %d LIMIT 1",
+            DB_PREFIX,
+            DB_PREFIX,
+            $projectId
+        ));
+        if (!$row) {
+            return 0;
+        }
+        $guisReceiverUserid = '';
+        if (!empty($row['guis_receiver'])) {
+            $guisReceiverUserid = trim((string) $row['guis_receiver']);
+        } elseif (!empty($row['parent_guis_receiver'])) {
+            $guisReceiverUserid = trim((string) $row['parent_guis_receiver']);
+        }
+        return $this->resolveUseridToNumericId($guisReceiverUserid);
+    }
+
+    private function syncChildProjectDefaultContactTaskGuisAssignee($projectId) {
+        $guisUserId = $this->resolveChildProjectGuisReceiverUserIdFromDb($projectId);
+        if ($guisUserId <= 0) {
+            return;
+        }
+        if (!class_exists('Task')) {
+            require_once __DIR__ . '/task.php';
+        }
+        $taskModel = new Task();
+        $taskModel->assignDefaultContactTaskToUser($projectId, $guisUserId);
+    }
+
+    private function resolveUseridToNumericId($userid) {
+        $userid = trim((string) $userid);
+        if ($userid === '') {
+            return 0;
+        }
+        $user = $this->fetchOne(sprintf(
+            "SELECT id FROM %suser WHERE userid = '%s' LIMIT 1",
+            DB_PREFIX,
+            $this->quote($userid)
+        ));
+        return ($user && !empty($user['id'])) ? intval($user['id']) : 0;
     }
 
     /**

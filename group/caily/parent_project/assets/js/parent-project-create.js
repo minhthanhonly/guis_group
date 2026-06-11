@@ -82,8 +82,11 @@ createApp({
             customerErrors: {
                 company_name: '',
                 name: '',
+                branch: '',
                 guis_department: ''
-            }
+            },
+            selectedCustomer: null,
+            updatingCustomer: false
         }
     },
     methods: {
@@ -767,6 +770,222 @@ createApp({
             }
         },
 
+        async loadCustomerDataByProject() {
+            if (this.parentProject.customer_id) {
+                try {
+                    const response = await axios.get(`/api/index.php?model=customer&method=get&id=${this.parentProject.customer_id}`);
+                    if (response.data && response.data.status === 'success' && response.data.data) {
+                        return response.data.data;
+                    }
+                } catch (error) {
+                    console.error('Error loading customer by id:', error);
+                }
+            }
+
+            if (!this.parentProject.contact_name || !this.parentProject.company_name) {
+                return null;
+            }
+
+            try {
+                if (this.categories.length === 0) {
+                    await this.loadCategories();
+                }
+                for (const category of this.categories) {
+                    const customersResponse = await axios.get(`/api/index.php?model=customer&method=list_customer&category_id=${category.id}`);
+                    if (customersResponse.data.status === 'success' && customersResponse.data.data) {
+                        const customer = customersResponse.data.data.find((c) =>
+                            c.name === this.parentProject.contact_name
+                            && c.company_name === this.parentProject.company_name
+                            && c.branch === this.parentProject.branch_name
+                        );
+                        if (customer) {
+                            return customer;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading customer data:', error);
+            }
+            return null;
+        },
+
+        async showCustomerInfoModal(customer) {
+            await this.loadDepartments();
+            if (this.categories.length === 0) {
+                await this.loadCategories();
+            }
+
+            if (typeof customer.guis_department === 'string') {
+                customer.guis_department = customer.guis_department ? customer.guis_department.split(',').map((id) => id.trim()) : [];
+            } else if (!Array.isArray(customer.guis_department)) {
+                customer.guis_department = [];
+            }
+
+            this.selectedCustomer = { ...customer };
+            $('#customerInfoModal').modal('show');
+
+            setTimeout(() => {
+                const selectElement = $(this.$refs.customerGuisDepartmentSelect);
+                if (selectElement.length) {
+                    if (selectElement.hasClass('select2-hidden-accessible')) {
+                        selectElement.select2('destroy');
+                    }
+                    selectElement.select2({
+                        placeholder: '部署を選択してください',
+                        allowClear: true,
+                        width: '100%',
+                        dropdownParent: $('#customerInfoModal')
+                    });
+                    selectElement.val(this.selectedCustomer.guis_department).trigger('change');
+                    selectElement.off('change.customerInfoModal').on('change.customerInfoModal', (event) => {
+                        const val = $(event.target).val();
+                        this.selectedCustomer.guis_department = val ? val : [];
+                    });
+                }
+            }, 300);
+        },
+
+        async openCustomerInfoModal() {
+            if (!this.parentProject.contact_name && !this.parentProject.customer_id) {
+                showMessage('担当者が選択されていません。', true);
+                return;
+            }
+
+            try {
+                const customer = await this.loadCustomerDataByProject();
+                if (customer) {
+                    await this.showCustomerInfoModal(customer);
+                } else {
+                    showMessage('顧客情報が見つかりません。', true);
+                }
+            } catch (error) {
+                console.error('Error loading customer info:', error);
+                showMessage('顧客情報の読み込みに失敗しました。', true);
+            }
+        },
+
+        setContactSelect2Value(contactName, customerId) {
+            const $contact = $('#contact_name');
+            if (!$contact.length || !contactName) {
+                return;
+            }
+            const value = customerId || contactName;
+            if ($contact.data('select2')) {
+                $contact.empty();
+                const option = new Option(contactName, value, true, true);
+                $contact.append(option).trigger('change');
+            }
+            this.parentProject.contact_name = contactName;
+            this.parentProject.customer_id = customerId ? String(customerId) : '';
+        },
+
+        async updateCustomer() {
+            this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
+            let hasError = false;
+
+            if (!this.selectedCustomer.company_name) {
+                this.customerErrors.company_name = '会社名は必須です。';
+                hasError = true;
+            }
+            if (!this.selectedCustomer.name) {
+                this.customerErrors.name = '担当者名は必須です。';
+                hasError = true;
+            }
+            if (!this.selectedCustomer.branch || this.selectedCustomer.branch.trim() === '') {
+                this.customerErrors.branch = '支店名は必須です。';
+                hasError = true;
+            }
+            if (!this.selectedCustomer.guis_department || this.selectedCustomer.guis_department.length === 0) {
+                this.customerErrors.guis_department = '自社担当部署名は必須です。';
+                hasError = true;
+            }
+            if (hasError) {
+                return;
+            }
+
+            const confirmResult = await Swal.fire({
+                title: '確認',
+                text: 'お客様情報を更新すると、このお客様の情報を利用している他の建物の情報もすべて更新されます。更新しますか？',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '更新する',
+                cancelButtonText: 'キャンセル',
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#6c757d'
+            });
+            if (!confirmResult.isConfirmed) {
+                return;
+            }
+
+            this.updatingCustomer = true;
+
+            try {
+                const customerData = { ...this.selectedCustomer };
+                if (Array.isArray(customerData.guis_department)) {
+                    customerData.guis_department = customerData.guis_department.join(',');
+                }
+
+                const response = await axios.post(
+                    `/api/index.php?model=customer&method=edit_customer&id=${this.selectedCustomer.id}`,
+                    customerData,
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+                );
+
+                if (response.data.status === 'success') {
+                    showMessage('顧客情報を更新しました。');
+
+                    this.parentProject.company_name = this.selectedCustomer.company_name || '';
+                    this.parentProject.branch_name = this.selectedCustomer.branch || '';
+                    this.parentProject.contact_name = this.selectedCustomer.name || '';
+                    this.parentProject.customer_id = String(this.selectedCustomer.id);
+
+                    await this.loadCustomers();
+                    this.$nextTick(() => {
+                        this.setContactSelect2Value(
+                            this.parentProject.contact_name,
+                            this.parentProject.customer_id
+                        );
+                    });
+
+                    $('#customerInfoModal').modal('hide');
+                    this.selectedCustomer = null;
+                } else {
+                    showMessage(response.data.message_code || '顧客情報の更新に失敗しました。', true);
+                }
+            } catch (error) {
+                console.error('Error updating customer:', error);
+                showMessage('顧客情報の更新に失敗しました。', true);
+            } finally {
+                this.updatingCustomer = false;
+            }
+        },
+
+        searchAddressSelectedCustomer() {
+            if (!this.selectedCustomer) {
+                return;
+            }
+            const postalCode = this.selectedCustomer.zip;
+            if (postalCode && postalCode.length >= 7) {
+                const apiUrl = `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${postalCode}`;
+                axios.get(apiUrl)
+                    .then((response) => {
+                        if (response.data.results && response.data.results.length > 0) {
+                            const result = response.data.results[0];
+                            this.selectedCustomer.address1 = result.address1 || '';
+                            this.selectedCustomer.address2 = result.address2 || '';
+                        } else {
+                            showMessage('郵便番号が見つかりません。', true);
+                        }
+                    })
+                    .catch((error) => {
+                        console.error('Error searching address:', error);
+                        showMessage('住所の検索に失敗しました。', true);
+                    });
+            } else {
+                showMessage('郵便番号が正しくありません。', true);
+            }
+        },
+
         openNewCustomerModal() {
             this.resetCustomerData();
             $('#customerModal').modal('show');
@@ -794,12 +1013,12 @@ createApp({
                 category_id: this.categories.length > 0 ? this.categories[0].id : 0,
                 guis_department: []
             };
-            this.customerErrors = { company_name: '', name: '', guis_department: '' };
+            this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
         },
 
         async saveCustomer() {
             // Reset errors
-            this.customerErrors = { company_name: '', name: '', guis_department: '' };
+            this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
             let hasError = false;
             
             if (!this.newCustomer.company_name) {

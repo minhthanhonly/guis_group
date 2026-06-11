@@ -249,6 +249,8 @@ createApp({
             // Customer modal data
             categories: [],
             selectedCustomer: null,
+            customerInfoModalContext: 'parent',
+            customerInfoModalChildProjectId: null,
             customerForDisplay: null,
             customerErrors: {
                 company_name: '',
@@ -321,6 +323,7 @@ createApp({
                 { value: 'paused', label: '一時停止', color: 'warning' },
                 { value: 'cancelled', label: '中止', color: 'danger' }
             ],
+            childCustomerModalContext: null,
             // Child project modal data
             newChildProject: {
                 name: '',
@@ -340,7 +343,14 @@ createApp({
                 members: [],
                 tantou: '',
                 caily_nouki: '',
-                guis_nouki: ''
+                guis_nouki: '',
+                use_parent_customer: true,
+                company_name: '',
+                branch_name: '',
+                contact_name: '',
+                customer_id: '',
+                use_parent_guis_receiver: true,
+                guis_receiver: ''
             },
             editingChildProject: {
                 id: null,
@@ -362,7 +372,14 @@ createApp({
                 members: [],
                 tantou: '',
                 caily_nouki: '',
-                guis_nouki: ''
+                guis_nouki: '',
+                use_parent_customer: true,
+                company_name: '',
+                branch_name: '',
+                contact_name: '',
+                customer_id: '',
+                use_parent_guis_receiver: true,
+                guis_receiver: ''
             },
             childProjectValidationErrors: {
                 name: '',
@@ -373,7 +390,11 @@ createApp({
                 status: '',
                 tantou: '',
                 caily_nouki: '',
-                guis_nouki: ''
+                guis_nouki: '',
+                company_name: '',
+                branch_name: '',
+                contact_name: '',
+                guis_receiver: ''
             },
             editChildProjectValidationErrors: {
                 name: '',
@@ -384,7 +405,11 @@ createApp({
                 project_order_type: '',
                 tantou: '',
                 caily_nouki: '',
-                guis_nouki: ''
+                guis_nouki: '',
+                company_name: '',
+                branch_name: '',
+                contact_name: '',
+                guis_receiver: ''
             },
             creatingChildProject: false,
             updatingChildProject: false,
@@ -2301,6 +2326,451 @@ createApp({
 
         // Child project modal methods
 
+        getChildProjectCustomerModel(isEdit) {
+            return isEdit ? this.editingChildProject : this.newChildProject;
+        },
+        getParentCustomerSummary() {
+            const display = this.customerDisplay || {};
+            const parent = this.parentProject || {};
+            return {
+                company_name: display.company_name || parent.company_name || '-',
+                branch_name: display.branch_name || parent.branch_name || '-',
+                contact_name: display.contact_name || parent.contact_name || '-'
+            };
+        },
+        shouldShowChildProjectCustomer(project) {
+            const parentId = String((this.parentProject && this.parentProject.customer_id) || '').trim();
+            const childId = String((project && project.customer_id) || '').trim();
+            return childId !== '' && childId !== parentId;
+        },
+        getChildProjectCustomerDisplay(project) {
+            const company = (project && project.company_name) ? String(project.company_name).trim() : '';
+            const branch = (project && project.branch_name) ? String(project.branch_name).trim() : '';
+            const contact = (project && project.contact_name) ? String(project.contact_name).trim() : '';
+            return {
+                company_name: company || '-',
+                branch_name: branch || '-',
+                contact_name: contact || '-'
+            };
+        },
+        formatChildProjectCustomerLabel(project) {
+            if (!this.shouldShowChildProjectCustomer(project)) {
+                return '-';
+            }
+            const c = this.getChildProjectCustomerDisplay(project);
+            const parts = [c.company_name, c.branch_name, c.contact_name].filter((p) => p && p !== '-');
+            return parts.length ? parts.join(' / ') : '-';
+        },
+        getChildProjectGuisReceiverDisplay(project) {
+            if (project && project.guis_receiver_name) {
+                return project.guis_receiver_name;
+            }
+            const parentUserid = (this.parentProject && this.parentProject.guis_receiver)
+                ? String(this.parentProject.guis_receiver).trim()
+                : '';
+            const childUserid = (project && project.guis_receiver)
+                ? String(project.guis_receiver).trim()
+                : '';
+            const effectiveUserid = (project && project.effective_guis_receiver)
+                ? String(project.effective_guis_receiver).trim()
+                : (childUserid || parentUserid);
+            if (!effectiveUserid) {
+                return '-';
+            }
+            if (!childUserid && parentUserid && effectiveUserid === parentUserid && this.guisReceiverDisplayName) {
+                return this.guisReceiverDisplayName;
+            }
+            return effectiveUserid;
+        },
+        applyParentCustomerToChildModel(model) {
+            const display = this.customerDisplay || {};
+            const parent = this.parentProject || {};
+            model.company_name = display.company_name || parent.company_name || '';
+            model.branch_name = display.branch_name || parent.branch_name || '';
+            model.contact_name = display.contact_name || parent.contact_name || '';
+            model.customer_id = parent.customer_id != null && parent.customer_id !== ''
+                ? String(parent.customer_id)
+                : '';
+        },
+        getChildProjectCustomerSelectIds(isEdit) {
+            return {
+                company: isEdit ? '#edit_child_company_name' : '#create_child_company_name',
+                branch: isEdit ? '#edit_child_branch_name' : '#create_child_branch_name',
+                contact: isEdit ? '#edit_child_contact_name' : '#create_child_contact_name',
+                modal: isEdit ? '#editChildProjectModal' : '#createChildProjectModal'
+            };
+        },
+        destroyChildProjectCustomerSelect2(isEdit) {
+            const ids = this.getChildProjectCustomerSelectIds(isEdit);
+            [ids.company, ids.branch, ids.contact].forEach((selector) => {
+                const $el = $(selector);
+                if ($el.length && $el.data('select2')) {
+                    $el.select2('destroy');
+                }
+            });
+        },
+        onChildProjectUseParentCustomerChange(isEdit) {
+            const model = this.getChildProjectCustomerModel(isEdit);
+            if (model.use_parent_customer) {
+                this.destroyChildProjectCustomerSelect2(isEdit);
+                model.company_name = '';
+                model.branch_name = '';
+                model.contact_name = '';
+                model.customer_id = '';
+            } else {
+                this.applyParentCustomerToChildModel(model);
+                this.$nextTick(() => {
+                    this.initChildProjectCustomerSelect2(isEdit);
+                });
+            }
+        },
+        initChildProjectCustomerSelect2(isEdit) {
+            this.destroyChildProjectCustomerSelect2(isEdit);
+            this.initChildProjectCompanySelect2(isEdit);
+            this.initChildProjectBranchSelect2(isEdit);
+            this.initChildProjectContactSelect2(isEdit);
+        },
+        initChildProjectCompanySelect2(isEdit) {
+            const model = this.getChildProjectCustomerModel(isEdit);
+            const ids = this.getChildProjectCustomerSelectIds(isEdit);
+            const $company = $(ids.company);
+            if (!$company.length) return;
+            $company.select2({
+                placeholder: '選択してください',
+                dropdownParent: $(ids.modal),
+                allowClear: true,
+                minimumResultsForSearch: 0,
+                ajax: {
+                    url: '/api/index.php?model=customer&method=list_companies',
+                    dataType: 'json',
+                    delay: 250,
+                    data(params) {
+                        return { search: params.term, page: params.page || 1 };
+                    },
+                    processResults(data) {
+                        const list = (data.data || []).slice().sort((a, b) => {
+                            const nameA = (a.company_name || '').toString();
+                            const nameB = (b.company_name || '').toString();
+                            const hasA = nameA.includes('大東');
+                            const hasB = nameB.includes('大東');
+                            if (hasA && !hasB) return -1;
+                            if (!hasA && hasB) return 1;
+                            return nameA.localeCompare(nameB);
+                        });
+                        return {
+                            results: list.map((item) => ({
+                                id: item.company_name,
+                                text: item.company_name
+                            }))
+                        };
+                    }
+                }
+            }).on('select2:select', (e) => {
+                model.company_name = e.params.data.id;
+                model.branch_name = '';
+                model.contact_name = '';
+                model.customer_id = '';
+                this.onChildProjectCompanyChange(isEdit);
+            }).on('select2:clear', () => {
+                model.company_name = '';
+                this.onChildProjectCompanyChange(isEdit);
+            });
+            if (model.company_name) {
+                const option = new Option(model.company_name, model.company_name, true, true);
+                $company.append(option).trigger('change');
+            }
+        },
+        initChildProjectBranchSelect2(isEdit) {
+            const model = this.getChildProjectCustomerModel(isEdit);
+            const ids = this.getChildProjectCustomerSelectIds(isEdit);
+            const $branch = $(ids.branch);
+            if (!$branch.length) return;
+            if ($branch.data('select2')) {
+                $branch.select2('destroy');
+            }
+            $branch.select2({
+                placeholder: '選択してください',
+                dropdownParent: $(ids.modal),
+                allowClear: true,
+                minimumResultsForSearch: 0,
+                ajax: {
+                    url: '/api/index.php?model=customer&method=list_branches_by_company',
+                    dataType: 'json',
+                    delay: 250,
+                    data: (params) => ({
+                        search: params.term,
+                        page: params.page || 1,
+                        company_name: model.company_name
+                    }),
+                    processResults(data) {
+                        return {
+                            results: (data.data || []).map((item) => ({
+                                id: item.branch,
+                                text: item.branch
+                            }))
+                        };
+                    }
+                }
+            }).on('select2:select', (e) => {
+                model.branch_name = e.params.data.id;
+                model.contact_name = '';
+                model.customer_id = '';
+                this.onChildProjectBranchChange(isEdit);
+            }).on('select2:clear', () => {
+                model.branch_name = '';
+                this.onChildProjectBranchChange(isEdit);
+            });
+            if (model.branch_name) {
+                const option = new Option(model.branch_name, model.branch_name, true, true);
+                $branch.append(option).trigger('change');
+            }
+        },
+        initChildProjectContactSelect2(isEdit) {
+            const model = this.getChildProjectCustomerModel(isEdit);
+            const ids = this.getChildProjectCustomerSelectIds(isEdit);
+            const $contact = $(ids.contact);
+            if (!$contact.length) return;
+            if ($contact.data('select2')) {
+                $contact.select2('destroy');
+            }
+            $contact.select2({
+                placeholder: '選択してください',
+                dropdownParent: $(ids.modal),
+                allowClear: true,
+                minimumResultsForSearch: 0,
+                ajax: {
+                    url: '/api/index.php?model=customer&method=list_contacts_by_company_branch',
+                    dataType: 'json',
+                    delay: 250,
+                    data: (params) => ({
+                        search: params.term,
+                        page: params.page || 1,
+                        company_name: model.company_name,
+                        branch_name: model.branch_name
+                    }),
+                    processResults(data) {
+                        return {
+                            results: (data.data || []).map((item) => ({
+                                id: item.id,
+                                text: item.name
+                            }))
+                        };
+                    }
+                }
+            }).on('select2:select', (e) => {
+                model.contact_name = e.params.data.text;
+                model.customer_id = String(e.params.data.id);
+            }).on('select2:clear', () => {
+                model.contact_name = '';
+                model.customer_id = '';
+            });
+            if (model.contact_name) {
+                const optionValue = model.customer_id || model.contact_name;
+                const option = new Option(model.contact_name, optionValue, true, true);
+                $contact.append(option).trigger('change');
+            }
+        },
+        onChildProjectCompanyChange(isEdit) {
+            const model = this.getChildProjectCustomerModel(isEdit);
+            model.branch_name = '';
+            model.contact_name = '';
+            model.customer_id = '';
+            const ids = this.getChildProjectCustomerSelectIds(isEdit);
+            const $branch = $(ids.branch);
+            const $contact = $(ids.contact);
+            if ($branch.length && $branch.data('select2')) {
+                $branch.val(null).trigger('change');
+                $branch.select2('destroy');
+            }
+            if ($contact.length && $contact.data('select2')) {
+                $contact.val(null).trigger('change');
+                $contact.select2('destroy');
+            }
+            this.initChildProjectBranchSelect2(isEdit);
+            this.initChildProjectContactSelect2(isEdit);
+        },
+        onChildProjectBranchChange(isEdit) {
+            const model = this.getChildProjectCustomerModel(isEdit);
+            model.contact_name = '';
+            model.customer_id = '';
+            const ids = this.getChildProjectCustomerSelectIds(isEdit);
+            const $contact = $(ids.contact);
+            if ($contact.length && $contact.data('select2')) {
+                $contact.val(null).trigger('change');
+                $contact.select2('destroy');
+            }
+            this.initChildProjectContactSelect2(isEdit);
+        },
+        resolveChildProjectCustomerId(model) {
+            if (model.use_parent_customer) {
+                return (this.parentProject && this.parentProject.customer_id) ? this.parentProject.customer_id : '';
+            }
+            return model.customer_id || '';
+        },
+        validateChildProjectCustomer(model, errors) {
+            if (model.use_parent_customer) {
+                return true;
+            }
+            let isValid = true;
+            if (!model.company_name) {
+                errors.company_name = '会社名は必須です';
+                isValid = false;
+            }
+            if (!model.branch_name) {
+                errors.branch_name = '支店名は必須です';
+                isValid = false;
+            }
+            if (!model.customer_id) {
+                errors.contact_name = '担当様は必須です';
+                isValid = false;
+            }
+            return isValid;
+        },
+        async openChildProjectNewCustomerModal(isEdit) {
+            this.childCustomerModalContext = isEdit ? 'edit' : 'create';
+            const model = this.getChildProjectCustomerModel(isEdit);
+            const presetCompany = model.company_name;
+            const presetBranch = model.branch_name;
+            await this.openNewCustomerModal();
+            if (presetCompany) {
+                this.newCustomer.company_name = presetCompany;
+            }
+            if (presetBranch) {
+                this.newCustomer.branch = presetBranch;
+            }
+        },
+        async applyNewCustomerToChildProject(companyName, branchName, contactName) {
+            const isEdit = this.childCustomerModalContext === 'edit';
+            const model = this.getChildProjectCustomerModel(isEdit);
+            this.childCustomerModalContext = null;
+            model.use_parent_customer = false;
+            model.company_name = companyName;
+            model.branch_name = branchName;
+            model.contact_name = contactName;
+            model.customer_id = '';
+            try {
+                const response = await axios.get(
+                    `/api/index.php?model=customer&method=list_contacts_by_company_branch&company_name=${encodeURIComponent(companyName)}&branch_name=${encodeURIComponent(branchName)}`
+                );
+                if (response.data && response.data.data) {
+                    const found = response.data.data.find((c) => c.name === contactName);
+                    if (found) {
+                        model.customer_id = String(found.id);
+                    }
+                }
+            } catch (error) {
+                console.error('Error resolving child project customer id:', error);
+            }
+            this.destroyChildProjectCustomerSelect2(isEdit);
+            this.$nextTick(() => {
+                this.initChildProjectCustomerSelect2(isEdit);
+            });
+        },
+        getParentGuisReceiverDisplayName() {
+            if (this.guisReceiverDisplayName) {
+                return this.guisReceiverDisplayName;
+            }
+            const gr = (this.parentProject && this.parentProject.guis_receiver) || '';
+            return gr || '-';
+        },
+        getChildProjectGuisReceiverModel(isEdit) {
+            return isEdit ? this.editingChildProject : this.newChildProject;
+        },
+        destroyChildProjectGuisReceiverSelect2(isEdit) {
+            const selector = isEdit ? '#edit_child_guis_receiver' : '#create_child_guis_receiver';
+            const $el = $(selector);
+            if ($el.length && $el.data('select2')) {
+                $el.select2('destroy');
+            }
+        },
+        onChildProjectUseParentGuisReceiverChange(isEdit) {
+            const model = this.getChildProjectGuisReceiverModel(isEdit);
+            if (model.use_parent_guis_receiver) {
+                this.destroyChildProjectGuisReceiverSelect2(isEdit);
+                model.guis_receiver = '';
+            } else {
+                this.applyParentGuisReceiverToChildModel(model);
+                this.$nextTick(() => {
+                    this.initChildProjectGuisReceiverSelect2(isEdit);
+                });
+            }
+        },
+        applyParentGuisReceiverToChildModel(model) {
+            model.guis_receiver = (this.parentProject && this.parentProject.guis_receiver)
+                ? String(this.parentProject.guis_receiver)
+                : '';
+        },
+        async setChildGuisReceiverSelectValue(isEdit, userid) {
+            const selector = isEdit ? '#edit_child_guis_receiver' : '#create_child_guis_receiver';
+            const $guisReceiver = $(selector);
+            if (!$guisReceiver.length || !userid) return;
+            try {
+                const response = await axios.get('/api/index.php?model=user&method=searchMembers');
+                if (response.data && response.data.data) {
+                    const user = response.data.data.find((u) => u.userid === userid);
+                    if (user && $guisReceiver.data('select2')) {
+                        $guisReceiver.empty();
+                        const option = new Option(user.realname, userid, true, true);
+                        $guisReceiver.append(option).trigger('change');
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading child project GUIS receiver display name:', error);
+            }
+        },
+        initChildProjectGuisReceiverSelect2(isEdit) {
+            this.destroyChildProjectGuisReceiverSelect2(isEdit);
+            const model = this.getChildProjectGuisReceiverModel(isEdit);
+            const selector = isEdit ? '#edit_child_guis_receiver' : '#create_child_guis_receiver';
+            const modal = isEdit ? '#editChildProjectModal' : '#createChildProjectModal';
+            const $guisReceiver = $(selector);
+            if (!$guisReceiver.length) return;
+            $guisReceiver.select2({
+                placeholder: '選択してください',
+                dropdownParent: $(modal),
+                allowClear: true,
+                minimumResultsForSearch: 0,
+                ajax: {
+                    url: '/api/index.php?model=user&method=searchMembers',
+                    dataType: 'json',
+                    delay: 250,
+                    data(params) {
+                        return { search: params.term, page: params.page || 1 };
+                    },
+                    processResults(data) {
+                        return {
+                            results: (data.data || []).map((item) => ({
+                                id: item.userid,
+                                text: item.realname
+                            }))
+                        };
+                    }
+                }
+            }).on('select2:select', (e) => {
+                model.guis_receiver = e.params.data.id;
+            }).on('select2:clear', () => {
+                model.guis_receiver = '';
+            });
+            if (model.guis_receiver) {
+                this.setChildGuisReceiverSelectValue(isEdit, model.guis_receiver);
+            }
+        },
+        resolveChildProjectGuisReceiver(model) {
+            if (model.use_parent_guis_receiver) {
+                return '';
+            }
+            return model.guis_receiver || '';
+        },
+        validateChildProjectGuisReceiver(model, errors) {
+            if (model.use_parent_guis_receiver) {
+                return true;
+            }
+            if (!model.guis_receiver || String(model.guis_receiver).trim() === '') {
+                errors.guis_receiver = 'GUIS受付者は必須です';
+                return false;
+            }
+            return true;
+        },
 
         async showCreateChildProjectModal() {
             // Clear all Tagify and input values before opening modal
@@ -2371,7 +2841,14 @@ createApp({
                 members: [],
                 tantou: '',
                 caily_nouki: '',
-                guis_nouki: ''
+                guis_nouki: '',
+                use_parent_customer: true,
+                company_name: '',
+                branch_name: '',
+                contact_name: '',
+                customer_id: '',
+                use_parent_guis_receiver: true,
+                guis_receiver: ''
             };
 
             // Clear Quill content
@@ -2390,7 +2867,11 @@ createApp({
                 project_order_type: '',
                 tantou: '',
                 caily_nouki: '',
-                guis_nouki: ''
+                guis_nouki: '',
+                company_name: '',
+                branch_name: '',
+                contact_name: '',
+                guis_receiver: ''
             };
 
             // Destroy existing flatpickr instances if they exist
@@ -2749,6 +3230,8 @@ createApp({
                 this.createChildProjectMembersTagify.destroy();
                 this.createChildProjectMembersTagify = null;
             }
+            this.destroyChildProjectCustomerSelect2(false);
+            this.destroyChildProjectGuisReceiverSelect2(false);
         },
 
         /** Load and render custom fields for create child project by department (like project-list quick edit). */
@@ -2948,6 +3431,12 @@ createApp({
                 caily_nouki: project.caily_nouki,
                 guis_nouki: project.guis_nouki
             };
+            const parentCustomerId = String((this.parentProject && this.parentProject.customer_id) || '');
+            const childCustomerId = String(project.customer_id || '');
+            const useParentCustomer = !childCustomerId || childCustomerId === parentCustomerId;
+            const parentGuisReceiver = String((this.parentProject && this.parentProject.guis_receiver) || '');
+            const childGuisReceiver = String(project.guis_receiver || '');
+            const useParentGuisReceiver = !childGuisReceiver || childGuisReceiver === parentGuisReceiver;
             this.editingChildProject = {
                 id: project.id,
                 name: project.name || '',
@@ -2969,7 +3458,14 @@ createApp({
                 tantou: project.tantou || '',
                 caily_nouki: project.caily_nouki || '',
                 guis_nouki: project.guis_nouki || '',
-                custom_fields: project.custom_fields != null ? project.custom_fields : ''
+                custom_fields: project.custom_fields != null ? project.custom_fields : '',
+                use_parent_customer: useParentCustomer,
+                company_name: useParentCustomer ? '' : (project.company_name || ''),
+                branch_name: useParentCustomer ? '' : (project.branch_name || ''),
+                contact_name: useParentCustomer ? '' : (project.contact_name || ''),
+                customer_id: useParentCustomer ? '' : childCustomerId,
+                use_parent_guis_receiver: useParentGuisReceiver,
+                guis_receiver: useParentGuisReceiver ? '' : childGuisReceiver
             };
 
             this.loadDepartments();
@@ -2998,6 +3494,16 @@ createApp({
                 setTimeout(() => {
                     this.initializeEditChildProjectQuill();
                 }, 100);
+                if (!this.editingChildProject.use_parent_customer) {
+                    this.$nextTick(() => {
+                        this.initChildProjectCustomerSelect2(true);
+                    });
+                }
+                if (!this.editingChildProject.use_parent_guis_receiver) {
+                    this.$nextTick(() => {
+                        this.initChildProjectGuisReceiverSelect2(true);
+                    });
+                }
             };
             modalEl.addEventListener('shown.bs.modal', onShown, { once: true });
         },
@@ -3313,6 +3819,8 @@ createApp({
                 this.editChildProjectMembersTagify.destroy();
                 this.editChildProjectMembersTagify = null;
             }
+            this.destroyChildProjectCustomerSelect2(true);
+            this.destroyChildProjectGuisReceiverSelect2(true);
         },
 
         initializeEditChildProjectQuill() {
@@ -3746,7 +4254,11 @@ createApp({
                 project_order_type: '',
                 tantou: '',
                 caily_nouki: '',
-                guis_nouki: ''
+                guis_nouki: '',
+                company_name: '',
+                branch_name: '',
+                contact_name: '',
+                guis_receiver: ''
             };
             
             let isValid = true;
@@ -3785,6 +4297,14 @@ createApp({
             }
 
             if (!this.validateChildProjectNoukiFields(this.editingChildProject, this.editChildProjectValidationErrors)) {
+                isValid = false;
+            }
+
+            if (!this.validateChildProjectCustomer(this.editingChildProject, this.editChildProjectValidationErrors)) {
+                isValid = false;
+            }
+
+            if (!this.validateChildProjectGuisReceiver(this.editingChildProject, this.editChildProjectValidationErrors)) {
                 isValid = false;
             }
             
@@ -3834,6 +4354,8 @@ createApp({
                 formData.append('guis_nouki', this.toChildProjectAPIDate(this.editingChildProject.guis_nouki) || '');
 
                 formData.append('is_kadai', '0');
+                formData.append('customer_id', this.resolveChildProjectCustomerId(this.editingChildProject));
+                formData.append('guis_receiver', this.resolveChildProjectGuisReceiver(this.editingChildProject));
 
                 const editCustomFields = this.collectChildProjectCustomFields('editChildProjectCustomFieldsWrap', 'editChildProjectCustomField', 'editChildProjectCustomInput', 'editChildProjectCustomCheckbox', 'editChildProjectCustomRadio');
                 if (editCustomFields.length) formData.append('custom_fields', JSON.stringify(editCustomFields));
@@ -4020,7 +4542,11 @@ createApp({
                 tantou: '',
                 status: '',
                 caily_nouki: '',
-                guis_nouki: ''
+                guis_nouki: '',
+                company_name: '',
+                branch_name: '',
+                contact_name: '',
+                guis_receiver: ''
             };
 
             let isValid = true;
@@ -4067,6 +4593,14 @@ createApp({
             }
 
             if (!this.validateChildProjectNoukiFields(this.newChildProject, this.childProjectValidationErrors)) {
+                isValid = false;
+            }
+
+            if (!this.validateChildProjectCustomer(this.newChildProject, this.childProjectValidationErrors)) {
+                isValid = false;
+            }
+
+            if (!this.validateChildProjectGuisReceiver(this.newChildProject, this.childProjectValidationErrors)) {
                 isValid = false;
             }
 
@@ -4125,6 +4659,11 @@ createApp({
 
                 formData.append('is_kadai', '0');
                 formData.append('status', this.newChildProject.status || 'draft');
+                formData.append('customer_id', this.resolveChildProjectCustomerId(this.newChildProject));
+                const childGuisReceiver = this.resolveChildProjectGuisReceiver(this.newChildProject);
+                if (childGuisReceiver) {
+                    formData.append('guis_receiver', childGuisReceiver);
+                }
 
                 const createCustomFields = this.collectChildProjectCustomFields('createChildProjectCustomFieldsWrap', 'createChildProjectCustomField', 'createChildProjectCustomInput', 'createChildProjectCustomCheckbox', 'createChildProjectCustomRadio');
                 if (createCustomFields.length) formData.append('custom_fields', JSON.stringify(createCustomFields));
@@ -7690,6 +8229,10 @@ createApp({
                     const contact_name = this.newCustomer.name;
                     $('#newCustomerModal').modal('hide');
                     this.resetNewCustomerData();
+                    if (this.childCustomerModalContext) {
+                        await this.applyNewCustomerToChildProject(company_name, branch_name, contact_name);
+                        return;
+                    }
                     this.parentProject.company_name = company_name;
                     this.parentProject.branch_name = branch_name;
                     this.parentProject.contact_name = contact_name;
@@ -7805,65 +8348,96 @@ createApp({
             }
         },
 
+        async showCustomerInfoModal(customer) {
+            await this.loadDepartments();
+            await this.loadCategories();
+
+            if (typeof customer.guis_department === 'string') {
+                customer.guis_department = customer.guis_department ? customer.guis_department.split(',').map(id => id.trim()) : [];
+            } else if (!Array.isArray(customer.guis_department)) {
+                customer.guis_department = [];
+            }
+
+            this.selectedCustomer = { ...customer };
+            $('#customerInfoModal').modal('show');
+
+            setTimeout(() => {
+                const selectElement = $(this.$refs.customerGuisDepartmentSelect);
+                if (selectElement.length) {
+                    if (selectElement.hasClass('select2-hidden-accessible')) {
+                        selectElement.select2('destroy');
+                    }
+                    selectElement.select2({
+                        placeholder: '部署を選択してください',
+                        allowClear: true,
+                        width: '100%',
+                        dropdownParent: $('#customerInfoModal')
+                    });
+                    selectElement.val(this.selectedCustomer.guis_department).trigger('change');
+                    selectElement.off('change.customerModal').on('change.customerModal', (event) => {
+                        const val = $(event.target).val();
+                        this.selectedCustomer.guis_department = val ? val : [];
+                    });
+                }
+            }, 300);
+        },
+
         async openCustomerInfoModal() {
-            if (!this.parentProject.contact_name) {
+            if (!this.parentProject || (!this.parentProject.contact_name && !this.parentProject.customer_id)) {
                 showMessage('担当者が選択されていません。', true);
                 return;
             }
 
             try {
-                // Load departments first
-                await this.loadDepartments();
-                
-                // Load categories first
-                await this.loadCategories();
-                
-                // Load customer data
                 const customer = await this.loadCustomerDataByProject();
-
                 if (customer) {
-                    // Convert guis_department string to array of strings
-                    if (typeof customer.guis_department === 'string') {
-                        customer.guis_department = customer.guis_department ? customer.guis_department.split(',').map(id => id.trim()) : [];
-                    } else if (!Array.isArray(customer.guis_department)) {
-                        customer.guis_department = [];
-                    }
-                    
-                    this.selectedCustomer = { ...customer };
-                    // Show modal
-                    $('#customerInfoModal').modal('show');
-                    
-                    // Initialize Select2 for guis_department after modal is shown
-                    setTimeout(() => {
-                        const selectElement = $(this.$refs.customerGuisDepartmentSelect);
-                        if (selectElement.length) {
-                            // Destroy existing Select2 if any
-                            if (selectElement.hasClass('select2-hidden-accessible')) {
-                                selectElement.select2('destroy');
-                            }
-                            
-                            // Initialize Select2
-                            selectElement.select2({
-                                placeholder: '部署を選択してください',
-                                allowClear: true,
-                                width: '100%'
-                            });
-                            
-                            // Set values
-                            selectElement.val(this.selectedCustomer.guis_department).trigger('change');
-                            
-                            // Handle change event
-                            selectElement.off('change.customerModal').on('change.customerModal', (event) => {
-                                const val = $(event.target).val();
-                                this.selectedCustomer.guis_department = val ? val : [];
-                            });
-                        }
-                    }, 300);
+                    this.customerInfoModalContext = 'parent';
+                    this.customerInfoModalChildProjectId = null;
+                    await this.showCustomerInfoModal(customer);
                 } else {
                     showMessage('顧客情報が見つかりません。', true);
                 }
             } catch (error) {
                 console.error('Error loading customer info:', error);
+                showMessage('顧客情報の読み込みに失敗しました。', true);
+            }
+        },
+
+        async openChildProjectCustomerInfoModal(project) {
+            if (!project || !this.shouldShowChildProjectCustomer(project)) {
+                return;
+            }
+
+            await this.openChildProjectCustomerInfoById(project.customer_id, project.id);
+        },
+
+        async openEditingChildProjectCustomerInfoModal() {
+            const customerId = this.editingChildProject && this.editingChildProject.customer_id;
+            const projectId = this.editingChildProject && this.editingChildProject.id;
+            if (!customerId) {
+                showMessage('担当者が選択されていません。', true);
+                return;
+            }
+            await this.openChildProjectCustomerInfoById(customerId, projectId);
+        },
+
+        async openChildProjectCustomerInfoById(customerId, projectId = null) {
+            if (!customerId) {
+                showMessage('担当者が選択されていません。', true);
+                return;
+            }
+
+            try {
+                const response = await axios.get(`/api/index.php?model=customer&method=get&id=${customerId}`);
+                if (response.data && response.data.status === 'success' && response.data.data) {
+                    this.customerInfoModalContext = 'child';
+                    this.customerInfoModalChildProjectId = projectId || null;
+                    await this.showCustomerInfoModal(response.data.data);
+                } else {
+                    showMessage('顧客情報が見つかりません。', true);
+                }
+            } catch (error) {
+                console.error('Error loading child project customer info:', error);
                 showMessage('顧客情報の読み込みに失敗しました。', true);
             }
         },
@@ -7891,6 +8465,7 @@ createApp({
             }
             if (hasError) return;
 
+            const isChildCustomerContext = this.customerInfoModalContext === 'child';
             const confirmResult = await Swal.fire({
                 title: '確認',
                 text: 'お客様情報を更新すると、このお客様の情報を利用している他の建物の情報もすべて更新されます。更新しますか？',
@@ -7920,6 +8495,15 @@ createApp({
                 
                 if (response.data.status === 'success') {
                     showMessage('顧客情報を更新しました。');
+
+                    if (isChildCustomerContext) {
+                        await this.loadChildProjects();
+                        $('#customerInfoModal').modal('hide');
+                        this.selectedCustomer = null;
+                        this.customerInfoModalContext = 'parent';
+                        this.customerInfoModalChildProjectId = null;
+                        return;
+                    }
                     
                     // Always update customerDisplay with the latest customer info
                     this.customerDisplay.company_name = this.selectedCustomer.company_name || '';

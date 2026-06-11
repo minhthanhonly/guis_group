@@ -589,8 +589,53 @@ const vueApp = createApp({
         
         async loadParentProjectInfo() {
             try {
+                const rawChildCustomer = {
+                    customer_id: this.project.customer_id,
+                    company_name: this.project.company_name || '',
+                    branch_name: this.project.branch_name || '',
+                    contact_name: this.project.contact_name || '',
+                    guis_receiver: this.project.guis_receiver || ''
+                };
+
                 const response = await axios.get(`/api/index.php?model=parentproject&method=getById&id=${this.project.parent_project_id}`);
                 const parentProject = response.data;
+
+                const parentCustomerId = String(parentProject.customer_id || '').trim();
+                const childCustomerId = String(rawChildCustomer.customer_id || '').trim();
+                this.project.show_child_customer_info = childCustomerId !== '' && childCustomerId !== parentCustomerId;
+                if (this.project.show_child_customer_info) {
+                    this.project.child_customer_company = rawChildCustomer.company_name;
+                    this.project.child_customer_branch = rawChildCustomer.branch_name;
+                    this.project.child_customer_contact = rawChildCustomer.contact_name;
+                    if (childCustomerId) {
+                        try {
+                            const customerRes = await axios.get(`/api/index.php?model=customer&method=get&id=${childCustomerId}`);
+                            if (customerRes.data && customerRes.data.status === 'success' && customerRes.data.data) {
+                                const c = customerRes.data.data;
+                                this.project.child_customer_company = c.company_name || '';
+                                this.project.child_customer_branch = c.branch || '';
+                                this.project.child_customer_contact = c.name || '';
+                            }
+                        } catch (customerErr) {
+                            console.error('Error loading child project customer info:', customerErr);
+                        }
+                    }
+                } else {
+                    this.project.child_customer_company = '';
+                    this.project.child_customer_branch = '';
+                    this.project.child_customer_contact = '';
+                }
+
+                const parentGuisReceiver = String(parentProject.guis_receiver || '').trim();
+                const childGuisReceiver = String(rawChildCustomer.guis_receiver || '').trim();
+                this.project.show_child_guis_receiver = childGuisReceiver !== '' && childGuisReceiver !== parentGuisReceiver;
+                if (this.project.show_child_guis_receiver) {
+                    this.project.child_guis_receiver_userid = childGuisReceiver;
+                    await this.loadChildGuisReceiverDisplayName();
+                } else {
+                    this.project.child_guis_receiver_userid = '';
+                    this.project.child_guis_receiver_display_name = '';
+                }
                 
                 // Copy parent project information to child project
                 this.project.company_name = parentProject.company_name;
@@ -632,6 +677,23 @@ const vueApp = createApp({
                 }
             } catch (error) {
                 console.error('Error loading GUIS receiver display name:', error);
+            }
+        },
+
+        async loadChildGuisReceiverDisplayName() {
+            const userid = this.project && this.project.child_guis_receiver_userid;
+            if (!userid) {
+                this.project.child_guis_receiver_display_name = '';
+                return;
+            }
+            try {
+                const response = await axios.get('/api/index.php?model=user&method=searchMembers');
+                if (response.data && response.data.data) {
+                    const user = response.data.data.find((u) => u.userid === userid);
+                    this.project.child_guis_receiver_display_name = user ? user.realname : '';
+                }
+            } catch (error) {
+                console.error('Error loading child project GUIS receiver display name:', error);
             }
         },
         setConnectedUsers() {

@@ -49,3 +49,7 @@ CREATE TABLE IF NOT EXISTS `groupware_time_entries` (
   KEY `idx_user_id` (`user_id`),
   FOREIGN KEY (`task_id`) REFERENCES `groupware_tasks` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Add GUIS receiver to child projects (optional override of parent building receiver)
+ALTER TABLE `groupware_projects`
+ADD COLUMN `guis_receiver` varchar(255) DEFAULT NULL COMMENT 'GUIS　受付者 (userid)' AFTER `customer_id`;

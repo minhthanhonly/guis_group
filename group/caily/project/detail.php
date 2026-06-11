@@ -160,7 +160,7 @@ if($_SESSION['show_project'] == 0){
                                                         <input type="text" class="form-control" :value="project.building_size || '-'" readonly>
                                                     </div>
                                                     <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="GUIS　受付者">GUIS　受付者</span></label>
+                                                        <label class="form-label"><span data-i18n="GUIS 受付者">GUIS 受付者</span></label>
                                                         <input type="text" class="form-control" :value="project.guis_receiver_display_name || project.guis_receiver || '-'" readonly>
                                                     </div>
                                                     <!--<div class="col-md-4 mb-3">
@@ -227,6 +227,23 @@ if($_SESSION['show_project'] == 0){
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-if="project.parent_project_id && (project.show_child_customer_info || project.show_child_guis_receiver)" class="col-12 mt-3">
+                                <div class="border rounded p-3 border-primary">
+                                    <div v-if="project.show_child_customer_info" :class="{ 'mb-3': project.show_child_guis_receiver }">
+                                        <div class="fw-semibold small text-muted mb-2"><span data-i18n="顧客情報">顧客情報</span></div>
+                                        <div class="small">{{ project.child_customer_company || '-' }}</div>
+                                        <div v-if="project.child_customer_branch" class="small text-muted"><span data-i18n="支店名">支店名</span>: {{ project.child_customer_branch }}</div>
+                                        <div v-if="project.child_customer_contact" class="small text-muted"><span data-i18n="担当様">担当様</span>: {{ project.child_customer_contact }}</div>
+                                    </div>
+                                    <div v-if="project.show_child_guis_receiver">
+                                        <label class="form-label mb-1"><span data-i18n="GUIS 受付者">GUIS 受付者</span></label>
+                                        <input type="text" class="form-control"
+                                            :value="project.child_guis_receiver_display_name || project.child_guis_receiver_userid || '-'"
+                                            readonly>
                                     </div>
                                 </div>
                             </div>

@@ -25,11 +25,11 @@ $view->heading('建物詳細');
 
     <div class="row">
         <!-- Back button -->
-        <div class="col-12 mb-3">
+        <!-- <div class="col-12 mb-3">
             <a href="index.php" class="btn btn-outline-primary">
                 <i class="fa fa-arrow-left me-1"></i> <span data-i18n="建物一覧へ戻る">建物一覧へ戻る</span>
             </a>
-        </div>
+        </div> -->
 
         <!-- Navigation Bar -->
         <div class="col-12 mb-3">
@@ -141,8 +141,10 @@ $view->heading('建物詳細');
                                     <button v-if="isEditMode" type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2" @click="openNewCustomerModal" title="新規顧客追加">
                                         <i class="fa fa-plus me-1"></i> 新規顧客
                                     </button>
-                                    <button v-if="!isEditMode && parentProject.contact_name " type="button" class="btn btn-sm btn-outline-info py-0 small ms-2" @click="openCustomerInfoModal" title="顧客情報表示・編集">
-                                        <i class="fa fa-info-circle me-1"></i> 顧客情報
+                                    <button v-if="parentProject.contact_name || parentProject.customer_id" type="button"
+                                        class="btn btn-sm btn-outline-info py-0 small ms-2" @click="openCustomerInfoModal"
+                                        title="顧客情報表示・編集">
+                                        <i class="fa fa-info-circle me-1"></i> <span data-i18n="顧客情報">顧客情報</span>
                                     </button>
                                 </label>
                                 <template v-if="isEditMode">
@@ -162,7 +164,7 @@ $view->heading('建物詳細');
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="GUIS　受付者">GUIS　受付者</span></label>
+                                <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span></label>
                                 <template v-if="isEditMode">
                                     <select id="guis_receiver" class="form-select select2"
                                         v-model="parentProject.guis_receiver" name="guis_receiver">
@@ -558,6 +560,8 @@ $view->heading('建物詳細');
                                     <th><span data-i18n="受注形態">受注形態</span></th>
                                     <th style="min-width: 150px;"><span data-i18n="案件名">案件名</span></th>
                                     <th style="min-width: 150px;"><span data-i18n="説明">説明</span></th>
+                                    <th style="min-width: 160px;"><span data-i18n="顧客情報">顧客情報</span></th>
+                                    <th style="min-width: 120px;"><span data-i18n="GUIS受付者">GUIS受付者</span></th>
                                     <th style="min-width: 100px;"><span data-i18n="部署">部署</span></th>
                                     <th><span data-i18n="管理">管理</span></th>
                                     <th><span>担当</span></th>
@@ -602,6 +606,20 @@ $view->heading('建物詳細');
                                             {{ formatDescriptionPreview(project.description) }}
                                         </span>
                                     </td>
+                                    <td style="min-width: 160px; max-width: 220px;" :title="shouldShowChildProjectCustomer(project) ? formatChildProjectCustomerLabel(project) : ''">
+                                        <template v-if="shouldShowChildProjectCustomer(project)">
+                                            <span class="d-block small">{{ getChildProjectCustomerDisplay(project).company_name }}</span>
+                                            <span v-if="getChildProjectCustomerDisplay(project).branch_name !== '-'" class="d-block small text-muted">{{ getChildProjectCustomerDisplay(project).branch_name }}</span>
+                                            <span v-if="getChildProjectCustomerDisplay(project).contact_name !== '-'" class="d-block small text-muted">{{ getChildProjectCustomerDisplay(project).contact_name }}</span>
+                                            <button type="button" class="btn btn-sm btn-outline-info py-0 px-1 mt-1"
+                                                @click.stop="openChildProjectCustomerInfoModal(project)"
+                                                title="顧客情報表示・編集">
+                                                <i class="fa fa-info-circle me-1"></i> <span data-i18n="顧客情報">顧客情報</span>
+                                            </button>
+                                        </template>
+                                        <span v-else class="text-muted">-</span>
+                                    </td>
+                                    <td style="min-width: 120px;">{{ getChildProjectGuisReceiverDisplay(project) }}</td>
                                     <td style="min-width: 100px;">{{ project.department_name || '-' }}</td>
                                     <td>
                                         <div class="d-flex align-items-center" v-if="project.manager_id && project.manager_id.split('|').filter(m => m.trim() !== '').length > 0">
@@ -707,7 +725,7 @@ $view->heading('建物詳細');
                                     </td>
                                 </tr>
                                 <tr v-if="childProjects.length === 0">
-                                    <td colspan="16" class="text-center text-muted py-4">
+                                    <td colspan="18" class="text-center text-muted py-4">
                                         案件依頼がありません
                                     </td>
                                 </tr>
@@ -1172,6 +1190,80 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            <div class="col-12">
+                                <div class="mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="create_use_parent_customer"
+                                            v-model="newChildProject.use_parent_customer" @change="onChildProjectUseParentCustomerChange(false)">
+                                        <label class="form-check-label" for="create_use_parent_customer">
+                                            <span data-i18n="顧客情報は建物と同じ">顧客情報は建物と同じ</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div v-if="newChildProject.use_parent_customer" class="small text-muted border rounded p-2 mb-2">
+                                    <div><span data-i18n="会社名">会社名</span>: {{ getParentCustomerSummary().company_name }}</div>
+                                    <div><span data-i18n="支店名">支店名</span>: {{ getParentCustomerSummary().branch_name }}</div>
+                                    <div><span data-i18n="担当様">担当様</span>: {{ getParentCustomerSummary().contact_name }}</div>
+                                </div>
+                            </div>
+                            <template v-if="!newChildProject.use_parent_customer">
+                                <div class="col-md-6">
+                                    <div class="mb-3 form-control-validation">
+                                        <label class="form-label"><span data-i18n="会社名">会社名</span> <span class="text-danger">*</span></label>
+                                        <select id="create_child_company_name" class="form-select select2"></select>
+                                        <div v-if="childProjectValidationErrors.company_name" class="invalid-feedback d-block">
+                                            {{ childProjectValidationErrors.company_name }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3 form-control-validation">
+                                        <label class="form-label"><span data-i18n="支店名">支店名</span> <span class="text-danger">*</span></label>
+                                        <select id="create_child_branch_name" class="form-select select2"></select>
+                                        <div v-if="childProjectValidationErrors.branch_name" class="invalid-feedback d-block">
+                                            {{ childProjectValidationErrors.branch_name }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3 form-control-validation">
+                                        <label class="form-label">
+                                            <span data-i18n="担当様">担当様</span> <span class="text-danger">*</span>
+                                            <button type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2"
+                                                @click="openChildProjectNewCustomerModal(false)" title="新規顧客追加">
+                                                <i class="fa fa-plus me-1"></i> <span data-i18n="新規顧客">新規顧客</span>
+                                            </button>
+                                        </label>
+                                        <select id="create_child_contact_name" class="form-select select2"></select>
+                                        <div v-if="childProjectValidationErrors.contact_name" class="invalid-feedback d-block">
+                                            {{ childProjectValidationErrors.contact_name }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            <div class="col-12">
+                                <div class="mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="create_use_parent_guis_receiver"
+                                            v-model="newChildProject.use_parent_guis_receiver" @change="onChildProjectUseParentGuisReceiverChange(false)">
+                                        <label class="form-check-label" for="create_use_parent_guis_receiver">
+                                            <span data-i18n="GUIS受付者は建物と同じ">GUIS受付者は建物と同じ</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div v-if="newChildProject.use_parent_guis_receiver" class="small text-muted border rounded p-2 mb-2">
+                                    <div><span data-i18n="GUIS受付者">GUIS受付者</span>: {{ getParentGuisReceiverDisplayName() }}</div>
+                                </div>
+                            </div>
+                            <div class="col-12" v-if="!newChildProject.use_parent_guis_receiver">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span> <span class="text-danger">*</span></label>
+                                    <select id="create_child_guis_receiver" class="form-select select2"></select>
+                                    <div v-if="childProjectValidationErrors.guis_receiver" class="invalid-feedback d-block">
+                                        {{ childProjectValidationErrors.guis_receiver }}
+                                    </div>
+                                </div>
+                            </div>
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="開始日">開始日</span></label>
@@ -1395,6 +1487,86 @@ $view->heading('建物詳細');
                                     <div v-if="editChildProjectValidationErrors.department_id"
                                         class="invalid-feedback d-block">
                                         {{ editChildProjectValidationErrors.department_id }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="edit_use_parent_customer"
+                                            v-model="editingChildProject.use_parent_customer" @change="onChildProjectUseParentCustomerChange(true)">
+                                        <label class="form-check-label" for="edit_use_parent_customer">
+                                            <span data-i18n="顧客情報は建物と同じ">顧客情報は建物と同じ</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div v-if="editingChildProject.use_parent_customer" class="small text-muted border rounded p-2 mb-2">
+                                    <div><span data-i18n="会社名">会社名</span>: {{ getParentCustomerSummary().company_name }}</div>
+                                    <div><span data-i18n="支店名">支店名</span>: {{ getParentCustomerSummary().branch_name }}</div>
+                                    <div><span data-i18n="担当様">担当様</span>: {{ getParentCustomerSummary().contact_name }}</div>
+                                </div>
+                            </div>
+                            <template v-if="!editingChildProject.use_parent_customer">
+                                <div class="col-md-6">
+                                    <div class="mb-3 form-control-validation">
+                                        <label class="form-label"><span data-i18n="会社名">会社名</span> <span class="text-danger">*</span></label>
+                                        <select id="edit_child_company_name" class="form-select select2"></select>
+                                        <div v-if="editChildProjectValidationErrors.company_name" class="invalid-feedback d-block">
+                                            {{ editChildProjectValidationErrors.company_name }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3 form-control-validation">
+                                        <label class="form-label"><span data-i18n="支店名">支店名</span> <span class="text-danger">*</span></label>
+                                        <select id="edit_child_branch_name" class="form-select select2"></select>
+                                        <div v-if="editChildProjectValidationErrors.branch_name" class="invalid-feedback d-block">
+                                            {{ editChildProjectValidationErrors.branch_name }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3 form-control-validation">
+                                        <label class="form-label">
+                                            <span data-i18n="担当様">担当様</span> <span class="text-danger">*</span>
+                                            <button type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2"
+                                                @click="openChildProjectNewCustomerModal(true)" title="新規顧客追加">
+                                                <i class="fa fa-plus me-1"></i> <span data-i18n="新規顧客">新規顧客</span>
+                                            </button>
+                                            <button v-if="editingChildProject.customer_id" type="button"
+                                                class="btn btn-sm btn-outline-info py-0 small ms-2"
+                                                @click="openEditingChildProjectCustomerInfoModal"
+                                                title="顧客情報表示・編集">
+                                                <i class="fa fa-info-circle me-1"></i> <span data-i18n="顧客情報">顧客情報</span>
+                                            </button>
+                                        </label>
+                                        <select id="edit_child_contact_name" class="form-select select2"></select>
+                                        <div v-if="editChildProjectValidationErrors.contact_name" class="invalid-feedback d-block">
+                                            {{ editChildProjectValidationErrors.contact_name }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            <div class="col-12">
+                                <div class="mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="edit_use_parent_guis_receiver"
+                                            v-model="editingChildProject.use_parent_guis_receiver" @change="onChildProjectUseParentGuisReceiverChange(true)">
+                                        <label class="form-check-label" for="edit_use_parent_guis_receiver">
+                                            <span data-i18n="GUIS受付者は建物と同じ">GUIS受付者は建物と同じ</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div v-if="editingChildProject.use_parent_guis_receiver" class="small text-muted border rounded p-2 mb-2">
+                                    <div><span data-i18n="GUIS受付者">GUIS受付者</span>: {{ getParentGuisReceiverDisplayName() }}</div>
+                                </div>
+                            </div>
+                            <div class="col-12" v-if="!editingChildProject.use_parent_guis_receiver">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span> <span class="text-danger">*</span></label>
+                                    <select id="edit_child_guis_receiver" class="form-select select2"></select>
+                                    <div v-if="editChildProjectValidationErrors.guis_receiver" class="invalid-feedback d-block">
+                                        {{ editChildProjectValidationErrors.guis_receiver }}
                                     </div>
                                 </div>
                             </div>
