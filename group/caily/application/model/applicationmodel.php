@@ -40,8 +40,8 @@ class ApplicationModel extends Model {
 		if($data['is_suspend'] == 1 || $_SESSION['show_project'] != $data['show_project']) {
 			$authority = new Authority;
 			$authority->sessionDestroy();
-			//clear cookie
-			setcookie('remember_me', '', time() - 3600, '/');
+			$secure = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+			setcookie('remember_me', '', time() - 3600, '/', '', $secure, true);
 			if($data['is_suspend'] == 1){
 				$this->died('アカウントが無効化されています。');
 			} else {

@@ -3,55 +3,67 @@
 
 class Authority
 {
+	const REMEMBER_ME_DAYS = 30;
 
 	function __construct()
 	{
 		session_name(APP_TYPE . 'sid');
 		if (!isset($_SESSION)) {
+			$lifetime = isset($_COOKIE['remember_me']) ? (self::REMEMBER_ME_DAYS * 24 * 60 * 60) : 0;
+			session_set_cookie_params(
+				$lifetime,
+				'/',
+				'',
+				$this->isHttps(),
+				true
+			);
 			session_start();
 		}
 	}
 
+	/**
+	 * Fast path: validate session in memory first; DB lookup only when session is missing/invalid.
+	 */
+	function ensureAuthenticated()
+	{
+		if ($this->authorize() === true) {
+			return true;
+		}
+		return $this->checkRememberMe() === true;
+	}
+
 	function check()
 	{
-		if($this->checkRememberMe() == false) {
-			$authorized = $this->authorize();
-			if ($authorized !== true) {
-				if (basename($_SERVER['SCRIPT_NAME']) != 'login.php') {
-					$_SESSION['referer'] = $_SERVER['REQUEST_URI'];
-					header('Location:' . ROOT . 'login.php');
-					exit();
-				}
-			}
+		if ($this->ensureAuthenticated()) {
+			return;
 		}
-
+		if (basename($_SERVER['SCRIPT_NAME']) != 'login.php') {
+			$_SESSION['referer'] = $_SERVER['REQUEST_URI'];
+			header('Location:' . ROOT . 'login.php');
+			exit();
+		}
 	}
 
 	function authorize()
 	{
 		$authorized = false;
-		if (isset($_SESSION['authorized'])) {
-			// // Check session version - if changed, force logout all users
-			// if (!isset($_SESSION['session_version']) || $_SESSION['session_version'] != SESSION_VERSION) {
-			// 	$_SESSION = array();
-			// 	$_SESSION['status'] = 'expire';
-			// 	return false;
-			// }
-			if ($_SESSION['authorized'] === md5(__FILE__ . $_SESSION['logintime'])) {
-				if (APP_EXPIRE > 0 && (time() - $_SESSION['logintime']) > APP_EXPIRE) {
-					$_SESSION = array();
-					$_SESSION['status'] = 'expire';
-				} else {
-					if (APP_IDLE > 0 && (time() - $_SESSION['accesstime']) > APP_IDLE) {
-						$_SESSION = array();
-						$_SESSION['status'] = 'idle';
-					} else {
-						$authorized = true;
-						$_SESSION['accesstime'] = time();
-					}
-				}
-			}
+		if (!isset($_SESSION['authorized'])) {
+			return false;
 		}
+		if (!isset($_SESSION['logintime']) || $_SESSION['authorized'] !== md5(__FILE__ . $_SESSION['logintime'])) {
+			$this->clearAuthSession();
+			return false;
+		}
+		if (APP_EXPIRE > 0 && (time() - $_SESSION['logintime']) > APP_EXPIRE) {
+			$this->clearAuthSession('expire');
+			return false;
+		}
+		if (APP_IDLE > 0 && (time() - $_SESSION['accesstime']) > APP_IDLE) {
+			$this->clearAuthSession('idle');
+			return false;
+		}
+		$authorized = true;
+		$_SESSION['accesstime'] = time();
 		return $authorized;
 	}
 
@@ -75,18 +87,19 @@ class Authority
 				}
 				if ($postuserid != '' && count($error) <= 0) {
 					$connection = new Connection;
-					$query = sprintf("SELECT id,userid,password,firstname,lastname,realname,user_group,authority,user_image,show_project,is_soumu FROM %suser WHERE userid = '%s'", DB_PREFIX, $connection->quote($postuserid));
+					$query = sprintf(
+						"SELECT id,userid,password,firstname,lastname,realname,user_group,user_groupname,authority,user_image,show_project,is_soumu FROM %suser WHERE userid = '%s'",
+						DB_PREFIX,
+						$connection->quote($postuserid)
+					);
 					$data = $connection->fetchOne($query);
 					$connection->close();
 					if (count($data) > 0 && $data['userid'] === $postuserid && $data['password'] === $password) {
 						$authorized = true;
 
-						// Handle "Remember Me" checkbox
 						if (isset($_POST['remember_me'])) {
-							$token = bin2hex(random_bytes(16)); // Generate a secure token
-							setcookie('remember_me', $token, time() + (30 * 24 * 60 * 60), '/', '', false, true); // Set cookie for 30 days
-
-							// Save the token in the database or another secure storage
+							$token = bin2hex(random_bytes(16));
+							$this->setRememberMeCookie($token);
 							$connection = new Connection;
 							$query = sprintf(
 								"UPDATE %suser SET remember_token = '%s' WHERE userid = '%s'",
@@ -96,6 +109,7 @@ class Authority
 							);
 							$connection->query($query);
 							$connection->close();
+							$this->refreshSessionCookieLifetime(true);
 						}
 					} else {
 						$error[] = 'ユーザー名もしくはパスワードが異なります。';
@@ -113,22 +127,8 @@ class Authority
 			unset($_SESSION['status']);
 		}
 		if ($authorized === true && count($error) <= 0) {
-			session_regenerate_id();
-			$_SESSION['logintime'] = time();
-			$_SESSION['accesstime'] = $_SESSION['logintime'];
-			$_SESSION['authorized'] = md5(__FILE__ . $_SESSION['logintime']);
-			$_SESSION['session_version'] = SESSION_VERSION;
-			$_SESSION['userid'] = $data['userid'];
-			$_SESSION['id'] = $data['id'];
-			$_SESSION['lastname'] = $data['lastname'];
-			$_SESSION['firstname'] = $data['firstname'];
-			$_SESSION['realname'] = $data['realname'];
-			$_SESSION['group'] = $data['user_group'];
-			$_SESSION['authority'] = $data['authority'];
-			$_SESSION['user_image'] = $data['user_image'];
-			$_SESSION['user_groupname'] = $data['user_groupname'];
-			$_SESSION['show_project'] = $data['show_project'];
-			$_SESSION['is_soumu'] = isset($data['is_soumu']) ? $data['is_soumu'] : 0;
+			session_regenerate_id(true);
+			$this->populateSessionFromUser($data);
 			
 			if (isset($_SESSION['referer'])) {
 				header('Location: ' . $_SESSION['referer']);
@@ -145,53 +145,46 @@ class Authority
 
 	function checkRememberMe()
 	{
-		// Check session version - if changed, force logout all users
-		// if (!isset($_SESSION['session_version']) || $_SESSION['session_version'] != SESSION_VERSION) {
-		// 	$_SESSION = array();
-		// 	return false;
-		// }
-		if (isset($_COOKIE['remember_me'])) {
-			$token = $_COOKIE['remember_me'];
-			$connection = new Connection;
-			$query = sprintf(
-				"SELECT * FROM %suser WHERE remember_token = '%s'",
-				DB_PREFIX,
-				$connection->quote($token)
-			);
-			$data = $connection->fetchOne($query);
-			$connection->close();
-
-			if (count($data) > 0) {
-				session_regenerate_id();
-				$_SESSION['logintime'] = time();
-				$_SESSION['accesstime'] = $_SESSION['logintime'];
-				$_SESSION['authorized'] = md5(__FILE__ . $_SESSION['logintime']);
-				$_SESSION['session_version'] = SESSION_VERSION;
-				$_SESSION['userid'] = $data['userid'];
-				$_SESSION['id'] = $data['id'];
-				$_SESSION['lastname'] = $data['lastname'];
-				$_SESSION['firstname'] = $data['firstname'];
-				$_SESSION['realname'] = $data['realname'];
-				$_SESSION['group'] = $data['user_group'];
-				$_SESSION['authority'] = $data['authority'];
-				$_SESSION['user_image'] = $data['user_image'];
-				$_SESSION['user_groupname'] = $data['user_groupname'];
-				$_SESSION['show_project'] = $data['show_project'];
-				$_SESSION['is_soumu'] = isset($data['is_soumu']) ? $data['is_soumu'] : 0;
-
-				return true;
-			}
+		if (!isset($_COOKIE['remember_me']) || $_COOKIE['remember_me'] === '') {
+			return false;
 		}
-		return false;
+		$token = $_COOKIE['remember_me'];
+		$connection = new Connection;
+		$query = sprintf(
+			"SELECT id,userid,firstname,lastname,realname,user_group,user_groupname,authority,user_image,show_project,is_soumu FROM %suser WHERE remember_token = '%s' LIMIT 1",
+			DB_PREFIX,
+			$connection->quote($token)
+		);
+		$data = $connection->fetchOne($query);
+		$connection->close();
+
+		if (count($data) <= 0) {
+			$this->clearRememberMeCookie();
+			return false;
+		}
+
+		session_regenerate_id(true);
+		$this->populateSessionFromUser($data);
+		$this->refreshSessionCookieLifetime(true);
+		return true;
 	}
 
 	function logout()
 	{
-		$this->sessionDestroy();
-		// Clear the "Remember Me" cookie
-		if (isset($_COOKIE['remember_me'])) {
-			setcookie('remember_me', '', time() - 3600, '/'); // Expire the cookie
+		$userId = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
+		if ($userId !== '') {
+			$connection = new Connection;
+			$query = sprintf(
+				"UPDATE %suser SET remember_token = NULL WHERE userid = '%s'",
+				DB_PREFIX,
+				$connection->quote($userId)
+			);
+			$connection->query($query);
+			$connection->close();
 		}
+
+		$this->sessionDestroy();
+		$this->clearRememberMeCookie();
 
 		header('Location:' . ROOT . 'login.php');
 		exit();
@@ -203,9 +196,80 @@ class Authority
 
 		$_SESSION = array();
 		if (isset($_COOKIE[session_name()])) {
-			setcookie(session_name(), '', time() - 42000, '/');
+			setcookie(session_name(), '', time() - 42000, '/', '', $this->isHttps(), true);
 		}
 		session_destroy();
+	}
+
+	private function populateSessionFromUser($data)
+	{
+		$_SESSION['logintime'] = time();
+		$_SESSION['accesstime'] = $_SESSION['logintime'];
+		$_SESSION['authorized'] = md5(__FILE__ . $_SESSION['logintime']);
+		$_SESSION['session_version'] = SESSION_VERSION;
+		$_SESSION['userid'] = $data['userid'];
+		$_SESSION['id'] = $data['id'];
+		$_SESSION['lastname'] = $data['lastname'];
+		$_SESSION['firstname'] = $data['firstname'];
+		$_SESSION['realname'] = $data['realname'];
+		$_SESSION['group'] = $data['user_group'];
+		$_SESSION['authority'] = $data['authority'];
+		$_SESSION['user_image'] = $data['user_image'];
+		$_SESSION['user_groupname'] = isset($data['user_groupname']) ? $data['user_groupname'] : '';
+		$_SESSION['show_project'] = $data['show_project'];
+		$_SESSION['is_soumu'] = isset($data['is_soumu']) ? $data['is_soumu'] : 0;
+	}
+
+	private function clearAuthSession($status = null)
+	{
+		$referer = isset($_SESSION['referer']) ? $_SESSION['referer'] : null;
+		$_SESSION = array();
+		if ($status !== null) {
+			$_SESSION['status'] = $status;
+		}
+		if ($referer !== null) {
+			$_SESSION['referer'] = $referer;
+		}
+	}
+
+	private function setRememberMeCookie($token)
+	{
+		setcookie(
+			'remember_me',
+			$token,
+			time() + (self::REMEMBER_ME_DAYS * 24 * 60 * 60),
+			'/',
+			'',
+			$this->isHttps(),
+			true
+		);
+	}
+
+	private function clearRememberMeCookie()
+	{
+		setcookie('remember_me', '', time() - 3600, '/', '', $this->isHttps(), true);
+		unset($_COOKIE['remember_me']);
+	}
+
+	private function refreshSessionCookieLifetime($rememberMe)
+	{
+		if (!$rememberMe) {
+			return;
+		}
+		setcookie(
+			session_name(),
+			session_id(),
+			time() + (self::REMEMBER_ME_DAYS * 24 * 60 * 60),
+			'/',
+			'',
+			$this->isHttps(),
+			true
+		);
+	}
+
+	private function isHttps()
+	{
+		return !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
 	}
 
 }

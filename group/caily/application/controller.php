@@ -6,8 +6,17 @@ class Controller {
 	function dispatch() {
 		$this->requiring();
 		$authority = new Authority;
-		if(!isset($_SESSION['authorized'])){
-			$authority->check();
+		if (!$authority->ensureAuthenticated()) {
+			if (basename($_SERVER['SCRIPT_NAME']) != 'login.php') {
+				$_SESSION['referer'] = $_SERVER['REQUEST_URI'];
+				header('Location:' . ROOT . 'login.php');
+				exit();
+			}
+		} elseif (basename($_SERVER['SCRIPT_NAME']) == 'login.php') {
+			$redirect = isset($_SESSION['referer']) ? $_SESSION['referer'] : 'index.php';
+			unset($_SESSION['referer']);
+			header('Location: ' . $redirect);
+			exit();
 		}
 		
 		return $this->execute();
@@ -16,20 +25,16 @@ class Controller {
 	function json() {
 		$this->requiring();
 		$authority = new Authority;
-		$authorized = $authority->authorize();
-		if ($authorized !== true) {
+		if (!$authority->ensureAuthenticated()) {
 			die('認証に失敗しました。ログインし直してください。');
-		} else {
-			return $this->execute();
 		}
+		return $this->execute();
 	}
 
 	function initApi() {
 		$this->requiring();
 		$authority = new Authority;
-		$authorized = $authority->authorize();
-		
-		if ($authorized !== true) {
+		if (!$authority->ensureAuthenticated()) {
 			die('認証に失敗しました。ログインし直してください。');
 		}
 	}
