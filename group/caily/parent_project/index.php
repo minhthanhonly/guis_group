@@ -46,13 +46,23 @@ $view->heading('建物一覧');
                 <div class="card-body">
                     <!-- Search and Filter -->
                     <div class="row mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="input-group">
-                                <input type="text" class="form-control" v-model="searchKeyword" :placeholder="translatePlaceholder('検索...')" @input="onSearch">
+                                <input type="text" class="form-control" v-model="searchKeyword" :placeholder="translatePlaceholder('検索...')" @input="onSearch" @blur="onSearchBlur">
                                 <button class="btn btn-outline-secondary" type="button" @click="clearSearch">
                                     <i class="fa fa-times"></i>
                                 </button>
                             </div>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" v-model="requestFilter" @change="onRequestFilterChange">
+                                <option value="" data-i18n="依頼（すべて）">依頼（すべて）</option>
+                                <option value="意匠" data-i18n="意匠">意匠</option>
+                                <option value="設備" data-i18n="設備">設備</option>
+                                <option value="省エネ" data-i18n="省エネ">省エネ</option>
+                                <option value="3D">3D</option>
+                                <option value="その他" data-i18n="その他">その他</option>
+                            </select>
                         </div>
                         <div class="col-md-2 d-flex align-items-center">
                             <div class="form-check">
@@ -119,6 +129,10 @@ $view->heading('建物一覧');
                                     <th v-if="isColumnVisible('type2')" @click="sortBy('type2')" style="cursor: pointer;" class="user-select-none">
                                         <span data-i18n="種類2">種類2</span>
                                         <i class="fa fa-fw" :class="getSortIcon('type2')"></i>
+                                    </th>
+                                    <th v-if="isColumnVisible('requests')" @click="sortBy('requests')" style="cursor: pointer;" class="user-select-none">
+                                        <span data-i18n="依頼">依頼</span>
+                                        <i class="fa fa-fw" :class="getSortIcon('requests')"></i>
                                     </th>
                                     <th v-if="isColumnVisible('child_project_count')" @click="sortBy('child_project_count')" style="cursor: pointer;" class="user-select-none">
                                         <span data-i18n="件数">件数</span>
@@ -187,6 +201,16 @@ $view->heading('建物一覧');
                                             </span>
                                             <span v-else>-</span>
                                         </td>
+                                        <td v-if="isColumnVisible('requests')">
+                                            <span v-if="project.requests">
+                                                <span v-for="item in project.requests.split(',').map(v => v.trim()).filter(v => v)"
+                                                      :key="item"
+                                                      class="badge bg-secondary me-1">
+                                                    {{ item }}
+                                                </span>
+                                            </span>
+                                            <span v-else>-</span>
+                                        </td>
                                         <td v-if="isColumnVisible('child_project_count')" style="white-space: nowrap;">
                                             <span v-if="project.child_project_count > 0">
                                                 <span class="badge bg-info me-2"
@@ -240,7 +264,7 @@ $view->heading('建物一覧');
                                         </td>
                                 </tr>
                                 <tr v-if="filteredParentProjects.length === 0">
-                                    <td colspan="14" class="text-center py-4">
+                                    <td colspan="15" class="text-center py-4">
                                         <div class="text-muted">
                                             <i class="fa fa-inbox fa-2x mb-2"></i>
                                             <p>建物が見つかりません</p>

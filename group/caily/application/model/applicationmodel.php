@@ -640,6 +640,120 @@ class ApplicationModel extends Model {
 		
         return $result;
     }
+
+    /**
+     * Shared flexible keyword search helpers (project list, command palette, etc.)
+     */
+    protected function normalizeSearchKeyword($str) {
+        $str = trim((string)$str);
+        if ($str === '') {
+            return '';
+        }
+        if (function_exists('mb_convert_kana')) {
+            $str = mb_convert_kana($str, 'as', 'UTF-8');
+        }
+        $str = str_replace(['－', '﹣', '―', '‐', '‑', '−', '–'], '-', $str);
+        return trim($str);
+    }
+
+    protected function normalizeSearchKeywordAlnumOnly($str) {
+        $str = trim((string)$str);
+        if ($str === '') {
+            return '';
+        }
+        if (function_exists('mb_convert_kana')) {
+            $str = mb_convert_kana($str, 'a', 'UTF-8');
+        }
+        return str_replace(['－', '﹣', '―', '‐', '‑', '−', '–'], '-', $str);
+    }
+
+    protected function normalizeKeywordSpaces($str) {
+        $str = trim((string)$str);
+        if ($str === '') {
+            return '';
+        }
+        return trim(preg_replace('/[\s　\x{00A0}\x{3000}]+/u', ' ', $str));
+    }
+
+    protected function sqlNormalizeSpacesExpr($field) {
+        return "REPLACE(REPLACE(REPLACE($field, '　', ' '), CHAR(9), ' '), CHAR(10), ' ')";
+    }
+
+    protected function toFullWidthSearchKeyword($str) {
+        $str = $this->normalizeSearchKeywordAlnumOnly($str);
+        if ($str === '') {
+            return '';
+        }
+        if (function_exists('mb_convert_kana')) {
+            $str = mb_convert_kana($str, 'AS', 'UTF-8');
+        }
+        return str_replace('-', '－', $str);
+    }
+
+    protected function getSearchKeywordVariants($raw) {
+        $raw = trim((string)$raw);
+        if ($raw === '') {
+            return [];
+        }
+        $half = $this->normalizeSearchKeyword($raw);
+        $alnumOnly = $this->normalizeSearchKeywordAlnumOnly($raw);
+        $full = $this->toFullWidthSearchKeyword($raw);
+        $spaces = $this->normalizeKeywordSpaces($half);
+        return array_values(array_unique(array_filter([
+            $raw,
+            $half,
+            $alnumOnly,
+            $full,
+            $spaces,
+        ], function ($v) {
+            return $v !== '';
+        })));
+    }
+
+    protected function buildFlexibleLikeWhere($rawKeyword, array $fields) {
+        $variants = $this->getSearchKeywordVariants($rawKeyword);
+        if (empty($variants)) {
+            return '';
+        }
+        $orParts = [];
+        foreach ($variants as $variant) {
+            $kw = $this->quote($variant);
+            foreach ($fields as $field) {
+                $orParts[] = "$field LIKE '%$kw%'";
+                $normField = $this->sqlNormalizeSpacesExpr($field);
+                $orParts[] = "$normField LIKE '%$kw%'";
+            }
+        }
+        return '(' . implode(' OR ', array_unique($orParts)) . ')';
+    }
+
+    protected function getPaletteSearchQuery() {
+        return isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+    }
+
+    protected function isNumericPaletteQuery($q) {
+        $normalized = $this->normalizeSearchKeyword($q);
+        return $normalized !== '' && ctype_digit($normalized);
+    }
+
+    protected function paletteNumericId($q) {
+        return intval($this->normalizeSearchKeyword($q));
+    }
+
+    protected function buildPaletteSearchWhere($rawKeyword, array $likeFields, $idField = null) {
+        $parts = [];
+        if ($idField !== null && $this->isNumericPaletteQuery($rawKeyword)) {
+            $parts[] = sprintf('%s = %d', $idField, $this->paletteNumericId($rawKeyword));
+        }
+        $likeWhere = $this->buildFlexibleLikeWhere($rawKeyword, $likeFields);
+        if ($likeWhere !== '') {
+            $parts[] = $likeWhere;
+        }
+        if (empty($parts)) {
+            return '';
+        }
+        return '(' . implode(' OR ', $parts) . ')';
+    }
 }
 
 ?>

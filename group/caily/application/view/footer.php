@@ -37,6 +37,10 @@
 <script>
   window.currentUserId = <?= json_encode($_SESSION['id'] ?? 0) ?>;
   window.currentUserName = <?= json_encode($_SESSION['userid'] ?? '') ?>;
+  window.__APP_SHORTCUTS = {
+    showProject: <?= json_encode(!empty($_SESSION['show_project'])) ?>,
+    showExtended: <?= json_encode(($_SESSION['group'] ?? '') != '7' && ($_SESSION['group'] ?? '') != '6') ?>
+  };
 </script>
 
 <script src="<?=$root?>assets/vendor/libs/quill/quill.js"></script>
@@ -46,6 +50,11 @@
 <link rel="stylesheet" href="<?=$root?>assets/css/task-timer.css?v=<?=CACHE_VERSION?>">
 <script src="<?=$root?>assets/js/app-chat.js?v=<?=CACHE_VERSION?>"></script>
 <link rel="stylesheet" href="<?=$root?>assets/css/app-chat.css?v=<?=CACHE_VERSION?>">
+<link rel="stylesheet" href="<?=$root?>assets/css/command-palette.css?v=<?=CACHE_VERSION?>">
+<script src="<?=$root?>assets/js/command-palette.js?v=<?=CACHE_VERSION?>"></script>
+<?php if (!empty($_SESSION['show_project']) && ($_SESSION['group'] ?? '') != '7' && ($_SESSION['group'] ?? '') != '6'): ?>
+<script src="<?=$root?>assets/js/customer-global-modal.js?v=<?=CACHE_VERSION?>"></script>
+<?php endif; ?>
 
 <script type="text/javascript" src="<?=$root?>js/library/jquery-ui.min.js"></script>
 <script type="text/javascript" src="<?=$root?>js/application.js?v=<?=CACHE_VERSION?>"></script>

@@ -627,6 +627,13 @@ var projectTable;
         return '<span class="text-break small">' + escapeHtmlForNote(v) + '</span>';
     }
 
+    function normalizeFilterKeyword(value) {
+        if (value === undefined || value === null) {
+            return '';
+        }
+        return String(value).trim();
+    }
+
     function saveFiltersToLocalStorage() {
         const filters = {
             filterStartMonth: $('#filterStartMonth').val(),
@@ -639,7 +646,7 @@ var projectTable;
             filterTeam: $('#filterTeam').val(),
             filterTantou: $('#filterTantou').val(),
             filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
-            filterKeyword: $('#filterKeyword').val(),
+            filterKeyword: normalizeFilterKeyword($('#filterKeyword').val()),
             filterProjectId: $('#filterProjectId').val(),
             showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
             myProjects: app && app.filterMyProjects ? 1 : 0,
@@ -696,7 +703,7 @@ var projectTable;
         if (params.has('filterTeam')) merged.filterTeam = params.get('filterTeam') || '';
         if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
         if (params.has('filterNoDates')) merged.filterNoDates = getBool('filterNoDates');
-        if (params.has('filterKeyword')) merged.filterKeyword = params.get('filterKeyword') || '';
+        if (params.has('filterKeyword')) merged.filterKeyword = normalizeFilterKeyword(params.get('filterKeyword') || '');
         if (params.has('filterProjectId')) merged.filterProjectId = params.get('filterProjectId') || '';
         if (params.has('showInactive')) merged.showInactive = getBool('showInactive');
         if (params.has('my_projects')) merged.myProjects = getBool('my_projects');
@@ -738,7 +745,7 @@ var projectTable;
         if (filters.filterTeam !== undefined) $('#filterTeam').val(filters.filterTeam);
         if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
         if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
-        if (filters.filterKeyword !== undefined) $('#filterKeyword').val(filters.filterKeyword);
+        if (filters.filterKeyword !== undefined) $('#filterKeyword').val(normalizeFilterKeyword(filters.filterKeyword));
         if (filters.filterProjectId !== undefined) $('#filterProjectId').val(filters.filterProjectId);
         if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
         if (filters.myProjects !== undefined && app) app.filterMyProjects = filters.myProjects == 1;
@@ -773,7 +780,7 @@ var projectTable;
             team: filters.filterTeam || '',
             tantou: filters.filterTantou || '',
             noDates: filters.filterNoDates == 1,
-            keyword: filters.filterKeyword || '',
+            keyword: normalizeFilterKeyword(filters.filterKeyword),
             showInactive: filters.showInactive == 1,
             myProjects: filters.myProjects == 1,
             statusKey: filters.statusKey || '',
@@ -944,7 +951,7 @@ var projectTable;
         setOrDelete('filterTeam', filters.filterTeam);
         setOrDelete('filterTantou', filters.filterTantou);
         setOrDelete('filterNoDates', filters.filterNoDates ? 1 : '');
-        setOrDelete('filterKeyword', filters.filterKeyword);
+        setOrDelete('filterKeyword', normalizeFilterKeyword(filters.filterKeyword));
         setOrDelete('filterProjectId', filters.filterProjectId);
         setOrDelete('showInactive', filters.showInactive ? 1 : '');
         setOrDelete('my_projects', filters.myProjects ? 1 : '');
@@ -1926,7 +1933,7 @@ var projectTable;
                     const filterTeam = $('#filterTeam').val();
                     const filterTantou = $('#filterTantou').val();
                     const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
-                    const filterKeyword = $('#filterKeyword').val();
+                    const filterKeyword = normalizeFilterKeyword($('#filterKeyword').val());
                     const filterProjectId = $('#filterProjectId').val();
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
                     const myProjects = $('#filterMyProjects').is(':checked') ? 1 : 0;

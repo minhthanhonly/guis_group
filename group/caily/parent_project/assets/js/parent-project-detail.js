@@ -17,7 +17,7 @@ if (typeof window.formatVietnamTimeTooltip !== 'function') {
 const SERVER_TASK_TIMEZONE = 'Asia/Tokyo';
 const VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
 const PROJECT_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
-const PROJECT_DATETIME_JA_DISPLAY_FORMAT = 'YYYY年M月D日 HH:mm';
+const PROJECT_DATETIME_JA_DISPLAY_FORMAT = 'M月D日 HH:mm';
 const PROJECT_DATETIME_FLATPICKR_FORMAT = 'Y/m/d H:i';
 const PROJECT_DATETIME_FLATPICKR_JA_ALT_FORMAT = 'Y年n月j日 H:i';
 const PROJECT_DATETIME_FLATPICKR_MOMENT_FORMAT = 'Y/M/D H:mm';
@@ -114,6 +114,26 @@ function formatProjectDateTimeForDisplay(value) {
             ? PROJECT_DATETIME_MOMENT_FORMAT
             : PROJECT_DATETIME_JA_DISPLAY_FORMAT
     );
+}
+
+function formatProjectDateOnlyForDisplay(value) {
+    const parsed = parseProjectDateMomentServer(value);
+    if (!parsed) return '-';
+    const localized = moment.tz
+        ? parsed.clone().tz(getProjectDisplayTimezone())
+        : parsed;
+    return isVietnameseLocale()
+        ? localized.format('M/D')
+        : localized.format('M月D日');
+}
+
+function formatProjectTimeOnlyForDisplay(value) {
+    const parsed = parseProjectDateMomentServer(value);
+    if (!parsed) return '';
+    const localized = moment.tz
+        ? parsed.clone().tz(getProjectDisplayTimezone())
+        : parsed;
+    return localized.format('H:mm');
 }
 
 function getProjectFlatpickrLocale() {
@@ -273,6 +293,7 @@ createApp({
             request_equipment: false,
             request_energy_saving: false,
             request_other: false,
+            request_3d: false,
             materials_layout: false,
             materials_rental: false,
             materials_contract: false,
@@ -1331,6 +1352,12 @@ createApp({
         formatDateTime(dateString) {
             return formatProjectDateTimeForDisplay(dateString);
         },
+        formatDateTimeDatePart(dateString) {
+            return formatProjectDateOnlyForDisplay(dateString);
+        },
+        formatDateTimeTimePart(dateString) {
+            return formatProjectTimeOnlyForDisplay(dateString);
+        },
         getProjectDateTimePlaceholder() {
             return getProjectDateTimePlaceholder();
         },
@@ -2047,6 +2074,7 @@ createApp({
                 this.request_equipment = false;
                 this.request_energy_saving = false;
                 this.request_other = false;
+                this.request_3d = false;
                 return;
             }
             const requests = this.parentProject.requests.split(',').map(r => r.trim());
@@ -2054,6 +2082,7 @@ createApp({
             this.request_equipment = requests.includes('設備');
             this.request_energy_saving = requests.includes('省エネ');
             this.request_other = requests.includes('その他');
+            this.request_3d = requests.includes('3D');
         },
         parseMaterials() {
             if (!this.parentProject.materials) {
@@ -2101,6 +2130,7 @@ createApp({
             if (this.request_equipment) requestsArray.push('設備');
             if (this.request_energy_saving) requestsArray.push('省エネ');
             if (this.request_other) requestsArray.push('その他');
+            if (this.request_3d) requestsArray.push('3D');
             this.parentProject.requests = requestsArray.join(',');
 
             // Convert checkbox materials to comma-separated string
@@ -3591,6 +3621,18 @@ createApp({
             const textarea = document.createElement('textarea');
             textarea.innerHTML = str;
             return textarea.value;
+        },
+        getDescriptionPlainText(html) {
+            if (!html) return '';
+            const decoded = this.decodeHtmlEntities(html);
+            const div = document.createElement('div');
+            div.innerHTML = decoded;
+            return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
+        },
+        formatDescriptionPreview(html, maxLength = 50) {
+            const text = this.getDescriptionPlainText(html);
+            if (!text) return '-';
+            return text.length > maxLength ? text.slice(0, maxLength) + '…' : text;
         },
 
         async cancelChildProject(project) {

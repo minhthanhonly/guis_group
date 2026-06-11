@@ -1079,4 +1079,44 @@ class Customer extends ApplicationModel {
     //     }
     //     return $hash;
     // }
+
+    /**
+     * Command palette: quick search customers (company, branch, email, contact name).
+     */
+    function paletteSearch() {
+        if (empty($_SESSION['show_project'])) {
+            return [];
+        }
+        if (isset($_SESSION['group']) && in_array($_SESSION['group'], ['6', '7'], true)) {
+            return [];
+        }
+        $q = $this->getPaletteSearchQuery();
+        if ($q === '') {
+            return [];
+        }
+        $whereArr = ['1=1'];
+        $searchWhere = $this->buildPaletteSearchWhere($q, [
+            'c.company_name',
+            'c.branch',
+            'c.email',
+            'c.name',
+            'CAST(c.id AS CHAR)',
+        ], 'c.id');
+        if ($searchWhere !== '') {
+            $whereArr[] = $searchWhere;
+        }
+        $where = 'WHERE ' . implode(' AND ', $whereArr);
+        $query = sprintf(
+            "SELECT c.id, c.company_name, c.branch, c.name, c.email, cc.name AS category_name
+             FROM %s c
+             LEFT JOIN %s cc ON c.category_id = cc.id
+             %s
+             ORDER BY c.updated_at DESC
+             LIMIT 10",
+            $this->table,
+            $this->table_category,
+            $where
+        );
+        return $this->fetchAll($query);
+    }
 } 

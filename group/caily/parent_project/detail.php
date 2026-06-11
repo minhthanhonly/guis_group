@@ -345,6 +345,15 @@ $view->heading('建物詳細');
                                         </div>
                                         <div class="col-md-3">
                                             <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="request_3d"
+                                                    v-model="request_3d">
+                                                <label class="form-check-label" for="request_3d">
+                                                    3D
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" id="request_other"
                                                     v-model="request_other">
                                                 <label class="form-check-label" for="request_other">
@@ -370,9 +379,14 @@ $view->heading('建物詳細');
                                                 <i class="fa fa-check text-success me-2"></i>省エネ
                                             </div>
                                             <div class="col-md-3"
+                                                v-if="parentProject.requests && parentProject.requests.includes('3D')">
+                                                <i class="fa fa-check text-success me-2"></i>3D
+                                            </div>
+                                            <div class="col-md-3"
                                                 v-if="parentProject.requests && parentProject.requests.includes('その他')">
                                                 <i class="fa fa-check text-success me-2"></i>その他
                                             </div>
+                                            
                                         </div>
                                     </div>
                                 </template>
@@ -536,19 +550,20 @@ $view->heading('建物詳細');
                 </div>
                 <div class="card-body">
                     <div v-if="childProjects.length > 0" class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table table-hover" id="childProjectsTable">
                             <thead>
                                 <tr>
                                     <th class="text-center"><i class="fa fa-star text-muted" title="お気に入り"></i></th>
                                     <th><span data-i18n="ID">ID</span></th>
                                     <th><span data-i18n="受注形態">受注形態</span></th>
                                     <th style="min-width: 150px;"><span data-i18n="案件名">案件名</span></th>
+                                    <th style="min-width: 150px;"><span data-i18n="説明">説明</span></th>
                                     <th style="min-width: 100px;"><span data-i18n="部署">部署</span></th>
                                     <th><span data-i18n="管理">管理</span></th>
                                     <th><span>担当</span></th>
+                                    <th><span data-i18n="開始日">開始日</span></th>
                                     <th><span>CAILY納期</span></th>
                                     <th v-if="!isCailyBranchUser"><span>GUIS納期</span></th>
-                                    <th><span data-i18n="開始日">開始日</span></th>
                                     <th v-if="!isCailyBranchUser"><span data-i18n="期限日">期限日</span></th>
                                     <th><span data-i18n="ステータス">ステータス</span></th>
                                     <th><span data-i18n="進捗">進捗</span></th>
@@ -580,6 +595,12 @@ $view->heading('建物詳細');
                                             class="text-decoration-none">
                                             {{ project.name }}
                                         </a>
+                                    </td>
+                                    <td style="min-width: 150px; max-width: 250px;">
+                                        <span :class="{ 'text-muted': !project.description }"
+                                              :title="project.description ? getDescriptionPlainText(project.description) : ''">
+                                            {{ formatDescriptionPreview(project.description) }}
+                                        </span>
                                     </td>
                                     <td style="min-width: 100px;">{{ project.department_name || '-' }}</td>
                                     <td>
@@ -613,19 +634,32 @@ $view->heading('建物詳細');
                                     </td>
                                     <td>{{ project.tantou || '-' }}</td>
                                     <td>
-                                        <span v-if="project.caily_nouki" :data-time="project.caily_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.caily_nouki)">{{ formatDateTime(project.caily_nouki) }}</span>
-                                        <span v-else class="text-muted">-</span>
-                                    </td>
-                                    <td v-if="!isCailyBranchUser">
-                                        <span v-if="project.guis_nouki" :data-time="project.guis_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)">{{ formatDateTime(project.guis_nouki) }}</span>
+                                        <span v-if="project.start_date" :data-time="project.start_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.start_date)">
+                                            <span class="d-block">{{ formatDateTimeDatePart(project.start_date) }}</span>
+                                            <span class="d-block">{{ formatDateTimeTimePart(project.start_date) }}</span>
+                                        </span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
                                     <td>
-                                        <span v-if="project.start_date" :data-time="project.start_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.start_date)">{{ formatDateTime(project.start_date) }}</span>
+                                        <span v-if="project.caily_nouki" :data-time="project.caily_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.caily_nouki)">
+                                            <span class="d-block">{{ formatDateTimeDatePart(project.caily_nouki) }}</span>
+                                            <span class="d-block">{{ formatDateTimeTimePart(project.caily_nouki) }}</span>
+                                        </span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
                                     <td v-if="!isCailyBranchUser">
-                                        <span v-if="project.end_date" :data-time="project.end_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)">{{ formatDateTime(project.end_date) }}</span>
+                                        <span v-if="project.guis_nouki" :data-time="project.guis_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)">
+                                            <span class="d-block">{{ formatDateTimeDatePart(project.guis_nouki) }}</span>
+                                            <span class="d-block">{{ formatDateTimeTimePart(project.guis_nouki) }}</span>
+                                        </span>
+                                        <span v-else class="text-muted">-</span>
+                                    </td>
+                                   
+                                    <td v-if="!isCailyBranchUser">
+                                        <span v-if="project.end_date" :data-time="project.end_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)">
+                                            <span class="d-block">{{ formatDateTimeDatePart(project.end_date) }}</span>
+                                            <span class="d-block">{{ formatDateTimeTimePart(project.end_date) }}</span>
+                                        </span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
                                     <td>
@@ -642,37 +676,38 @@ $view->heading('建物詳細');
                                         </span>
                                     </td>
                                     <td class="text-center">
-                                        <div class="dropdown">
-                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                                <i class="fa fa-ellipsis-v"></i>
-                                            </button>
-                                            <ul class="dropdown-menu dropdown-menu-end">
-                                                <li>
-                                                    <a class="dropdown-item" :href="'../project/detail.php?id=' + project.id">
-                                                        <i class="fa fa-eye me-1"></i> 詳細
-                                                    </a>
-                                                </li>
-                                                <li v-if="canEditChildProject(project)">
-                                                    <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showEditChildProjectModal(project)">
-                                                        <i class="fa fa-edit me-1"></i> 編集
-                                                    </a>
-                                                </li>
-                                                <li>
-                                                    <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showChildProjectLogs(project)">
-                                                        <i class="fa fa-history me-1"></i> ログ
-                                                    </a>
-                                                </li>
-                                                <li v-if="canDeleteChildProject(project) && project.status !== 'cancelled'">
-                                                    <a class="dropdown-item text-danger" href="javascript:void(0);" @click.prevent="cancelChildProject(project)">
-                                                        <i class="fa fa-trash me-1"></i> 削除
-                                                    </a>
-                                                </li>
-                                            </ul>
+                                        <div class="d-flex flex-column gap-1 align-items-center">
+                                            <a :href="'../project/detail.php?id=' + project.id" class="btn btn-sm btn-outline-primary"
+                                               title="詳細を表示">
+                                                <i class="fa fa-eye"></i>
+                                            </a>
+                                            <div class="dropdown">
+                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <i class="fa fa-ellipsis-v"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <li v-if="canEditChildProject(project)">
+                                                        <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showEditChildProjectModal(project)">
+                                                            <i class="fa fa-edit me-1"></i> 編集
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showChildProjectLogs(project)">
+                                                            <i class="fa fa-history me-1"></i> ログ
+                                                        </a>
+                                                    </li>
+                                                    <li v-if="canDeleteChildProject(project) && project.status !== 'cancelled'">
+                                                        <a class="dropdown-item text-danger" href="javascript:void(0);" @click.prevent="cancelChildProject(project)">
+                                                            <i class="fa fa-trash me-1"></i> 削除
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
                                 <tr v-if="childProjects.length === 0">
-                                    <td colspan="15" class="text-center text-muted py-4">
+                                    <td colspan="16" class="text-center text-muted py-4">
                                         案件依頼がありません
                                     </td>
                                 </tr>
@@ -3721,6 +3756,11 @@ $view->footing();
     .quotation-updated-by .badge {
         font-size: 0.75rem;
         padding: 0.35em 0.65em;
+    }
+    #childProjectsTable td,
+    #childProjectsTable th {
+        padding-left: 0.25rem;
+        padding-right: 0.25rem;
     }
     #edit-quotation-table td,
     #edit-quotation-table th {

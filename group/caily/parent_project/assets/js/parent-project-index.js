@@ -20,6 +20,7 @@ createApp({
         return {
             parentProjects: [],
             searchKeyword: '',
+            requestFilter: '',
             statusFilter: 'all',
             favoritesOnly: false,
             currentPage: 1,
@@ -43,6 +44,7 @@ createApp({
                 { key: 'scale', label: '規模', visible: false },
                 { key: 'type1', label: '種類1', visible: false },
                 { key: 'type2', label: '種類2', visible: false },
+                { key: 'requests', label: '依頼', visible: true },
                 { key: 'child_project_count', label: '件数', visible: true },
                 { key: 'created_by_name', label: '作成者', visible: true },
                 { key: 'notes', label: 'メモ', visible: true },
@@ -66,6 +68,7 @@ createApp({
             noteContextMenuY: 0,
             contextMenuParentProjectId: null,
             columnVisibilityStorageKey: 'parent_project_column_visibility',
+            searchTimer: null,
             // Auto refresh
             autoRefreshTimer: null,
             autoRefreshInterval: 60000, // 60s
@@ -109,6 +112,12 @@ createApp({
         }
     },
     methods: {
+        normalizeSearchKeyword(value) {
+            if (value === undefined || value === null) {
+                return '';
+            }
+            return String(value).trim();
+        },
         async loadParentProjects() {
             this.loading = true;
             try {
@@ -116,7 +125,8 @@ createApp({
                     draw: 1,
                     start: (this.currentPage - 1) * this.pageSize,
                     length: this.pageSize,
-                    search: this.searchKeyword,
+                    search: this.normalizeSearchKeyword(this.searchKeyword),
+                    request_filter: this.requestFilter || '',
                     status: this.statusFilter === 'all' ? '' : this.statusFilter,
                     favorites_only: this.favoritesOnly ? '1' : '0',
                     order_column: this.sortColumn,
@@ -346,6 +356,7 @@ createApp({
                 'scale': 'scale',
                 'type1': 'type1',
                 'type2': 'type2',
+                'requests': 'requests',
                 'request_date': 'request_date',
                 'child_project_count': 'child_project_count',
                 'created_by_name': 'created_by_name',
@@ -377,6 +388,7 @@ createApp({
                 'scale': 'scale',
                 'type1': 'type1',
                 'type2': 'type2',
+                'requests': 'requests',
                 'request_date': 'request_date',
                 'child_project_count': 'child_project_count',
                 'created_by_name': 'created_by_name',
@@ -391,12 +403,26 @@ createApp({
             return this.sortDirection === 'ASC' ? 'fa-sort-up' : 'fa-sort-down';
         },
         onSearch() {
-            this.currentPage = 1;
-            this.loadParentProjects();
+            clearTimeout(this.searchTimer);
+            this.searchTimer = setTimeout(() => {
+                this.currentPage = 1;
+                this.loadParentProjects();
+            }, 500);
+        },
+        onSearchBlur() {
+            const trimmed = this.normalizeSearchKeyword(this.searchKeyword);
+            if (this.searchKeyword !== trimmed) {
+                this.searchKeyword = trimmed;
+                this.onSearch();
+            }
         },
         clearSearch() {
             this.searchKeyword = '';
             this.onSearch();
+        },
+        onRequestFilterChange() {
+            this.currentPage = 1;
+            this.loadParentProjects();
         },
         onStatusFilterChange() {
             this.currentPage = 1;

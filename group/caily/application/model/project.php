@@ -291,19 +291,7 @@ class Project extends ApplicationModel {
         if ($filterByIdOrKeyword) {
             // Khi filter theo ID hoặc keyword: chỉ áp dụng điều kiện keyword (nếu có), bỏ qua các filter nâng cao khác
             if ($hasKeyword) {
-                $kw = $this->escape($_GET['filterKeyword']);
-                $whereArr[] = "(p.name LIKE '%$kw%' 
-                OR p.id LIKE '%$kw%' 
-                OR p.tags LIKE '%$kw%'
-                OR c.company_name LIKE '%$kw%'
-                OR c.company_name_kana LIKE '%$kw%'
-                OR c.branch LIKE '%$kw%'
-                OR c.name LIKE '%$kw%'
-                OR c.name_kana LIKE '%$kw%'
-                OR pp.construction_number LIKE '%$kw%'
-                OR pp.scale LIKE '%$kw%'
-                OR pp.type1 LIKE '%$kw%'
-                OR pp.type2 LIKE '%$kw%')";
+                $whereArr[] = $this->buildKeywordFilterWhere($_GET['filterKeyword']);
             }
             // Status: khi filter theo ID hoặc keyword thì chỉ ẩn deleted, không áp dụng status dropdown và showInactive
             $whereArr[] = "p.status != 'deleted'";
@@ -693,19 +681,7 @@ class Project extends ApplicationModel {
         // Khi filter theo ID hoặc keyword: chỉ áp dụng điều kiện keyword (nếu có), bỏ qua các filter nâng cao khác
         if ($filterByIdOrKeyword) {
             if ($hasKeyword) {
-                $kw = $this->escape(trim($_GET['filterKeyword']));
-                $whereArr[] = "(p.name LIKE '%$kw%' 
-                    OR p.id LIKE '%$kw%' 
-                    OR p.tags LIKE '%$kw%'
-                    OR c.company_name LIKE '%$kw%'
-                    OR c.company_name_kana LIKE '%$kw%'
-                    OR c.branch LIKE '%$kw%'
-                    OR c.name LIKE '%$kw%'
-                    OR c.name_kana LIKE '%$kw%'
-                    OR pp.construction_number LIKE '%$kw%'
-                    OR pp.scale LIKE '%$kw%'
-                    OR pp.type1 LIKE '%$kw%'
-                    OR pp.type2 LIKE '%$kw%')";
+                $whereArr[] = $this->buildKeywordFilterWhere($_GET['filterKeyword']);
             }
         } else {
             if (isset($_GET['filterPriority']) && $_GET['filterPriority'] !== '') {
@@ -814,6 +790,23 @@ class Project extends ApplicationModel {
 
     private function escape($str) {
         return $this->quote($str);
+    }
+
+    private function buildKeywordFilterWhere($rawKeyword) {
+        return $this->buildFlexibleLikeWhere($rawKeyword, [
+            'p.name',
+            'CAST(p.id AS CHAR)',
+            'p.tags',
+            'c.company_name',
+            'c.company_name_kana',
+            'c.branch',
+            'c.name',
+            'c.name_kana',
+            'pp.construction_number',
+            'pp.scale',
+            'pp.type1',
+            'pp.type2',
+        ]);
     }
 
     /**
@@ -5956,6 +5949,50 @@ class Project extends ApplicationModel {
             error_log('Error getting quotation status: ' . $e->getMessage());
             return '未発行';
         }
+    }
+
+    /**
+     * Command palette: quick search child projects (id, name, customer).
+     */
+    function paletteSearch() {
+        if (empty($_SESSION['show_project'])) {
+            return [];
+        }
+        $q = $this->getPaletteSearchQuery();
+        if ($q === '') {
+            return [];
+        }
+        $whereArr = ["p.status != 'deleted'"];
+        $searchWhere = $this->buildPaletteSearchWhere($q, [
+            'p.name',
+            'CAST(p.id AS CHAR)',
+            'c.company_name',
+            'c.branch',
+            'c.name',
+            'pp.construction_number',
+            'pp.company_name',
+            'pp.branch_name',
+        ], 'p.id');
+        if ($searchWhere !== '') {
+            $whereArr[] = $searchWhere;
+        }
+        $where = 'WHERE ' . implode(' AND ', $whereArr);
+        $query = sprintf(
+            "SELECT p.id, p.name, p.project_number,
+                    c.company_name, c.branch as branch_name,
+                    pp.construction_number as parent_construction_number
+             FROM %sprojects p
+             LEFT JOIN %scustomer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+             LEFT JOIN %sparent_projects pp ON p.parent_project_id = pp.id
+             %s
+             ORDER BY p.updated_at DESC
+             LIMIT 10",
+            DB_PREFIX,
+            DB_PREFIX,
+            DB_PREFIX,
+            $where
+        );
+        return $this->fetchAll($query);
     }
 }
 

@@ -2209,7 +2209,7 @@ $(document).ready(function() {
                 const style = document.createElement('style');
                 style.textContent = `
                     #gantt_container {
-                        z-index: 2000 !important;
+                        z-index: 1000 !important;
                     }
                     #gantt_container.gantt-space-pan {
                         cursor: grab;
@@ -2221,7 +2221,7 @@ $(document).ready(function() {
                     .gantt_tooltip,
                     .gantt_modal_box,
                     .gantt_cal_cover{
-                        z-index: 2001 !important;
+                        z-index: 1001 !important;
                     }
                     .weekend {
                         background: var(--dhx-gantt-base-colors-background-alt);

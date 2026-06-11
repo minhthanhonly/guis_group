@@ -471,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function () {
 // Search Configuration
 const SearchConfig = {
   container: '#autocomplete',
-  placeholder: 'Search [CTRL + K]',
+  placeholder: window.__COMMAND_PALETTE_ENABLED ? 'Search' : 'Search [CTRL + K]',
   classNames: {
     detachedContainer: 'd-flex flex-column',
     detachedFormContainer: 'd-flex align-items-center justify-content-between border-bottom',
@@ -740,16 +740,18 @@ function initializeAutocomplete() {
   });
 }
 
-// Initialize search shortcut
-document.addEventListener('keydown', event => {
-  if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
-    event.preventDefault();
-    document.querySelector('.aa-DetachedSearchButton').click();
-  }
-});
+// Initialize search shortcut (disabled when Command Palette uses Ctrl+K)
+if (!window.__COMMAND_PALETTE_ENABLED) {
+  document.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+      event.preventDefault();
+      document.querySelector('.aa-DetachedSearchButton')?.click();
+    }
+  });
+}
 
 // Load search data on page load
-if (document.documentElement.querySelector('#autocomplete')) {
+if (!window.__COMMAND_PALETTE_ENABLED && document.documentElement.querySelector('#autocomplete')) {
   loadSearchData();
 }
 

@@ -23,6 +23,7 @@ createApp({
                 request_equipment: false,
                 request_energy_saving: false,
                 request_other: false,
+                request_3d: false,
                 materials_layout: false,
                 materials_rental: false,
                 materials_contract: false,
@@ -188,6 +189,7 @@ createApp({
                 if (this.parentProject.request_equipment) requestsArray.push('設備');
                 if (this.parentProject.request_energy_saving) requestsArray.push('省エネ');
                 if (this.parentProject.request_other) requestsArray.push('その他');
+                if (this.parentProject.request_3d) requestsArray.push('3D');
                 formData.append('requests', requestsArray.join(','));
                 // Convert checkbox materials to comma-separated string
                 const materialsArray = [];

@@ -39,12 +39,12 @@ class ParentProject extends ApplicationModel {
         $draw = isset($_GET['draw']) ? intval($_GET['draw']) : 1;
         $start = isset($_GET['start']) ? intval($_GET['start']) : 0;
         $length = isset($_GET['length']) ? intval($_GET['length']) : 10;
-        $search = isset($_GET['search']) ? $_GET['search'] : '';
+        $search = isset($_GET['search']) ? trim((string)$_GET['search']) : '';
         
         // Validate and sanitize order_column to prevent SQL injection
         $allowed_columns = [
             'id', 'project_number', 'project_name', 'construction_number', 
-            'company_name', 'scale', 'type1', 'type2', 'request_date', 'created_at', 'updated_at',
+            'company_name', 'scale', 'type1', 'type2', 'requests', 'request_date', 'created_at', 'updated_at',
             'status', 'child_project_count', 'created_by_name'
         ];
         $order_column = isset($_GET['order_column']) ? $_GET['order_column'] : 'created_at';
@@ -72,16 +72,29 @@ class ParentProject extends ApplicationModel {
             $whereArr[] = "p.status != 'deleted'";
         }
 
-        // Search functionality
-        if (!empty($search)) {
-            // Use quote() for safe escaping, then remove surrounding quotes for LIKE pattern
-            $searchEscaped = trim($this->quote($search), "'");
-            $whereArr[] = "(p.company_name LIKE '%$searchEscaped%' 
-                OR p.branch_name LIKE '%$searchEscaped%' 
-                OR p.contact_name LIKE '%$searchEscaped%' 
-                OR p.construction_number LIKE '%$searchEscaped%' 
-                OR p.project_name LIKE '%$searchEscaped%'
-                OR p.project_number LIKE '%$searchEscaped%')";
+        // Search functionality (flexible: trim, full/half-width, spaces)
+        if ($search !== '') {
+            $searchWhere = $this->buildPaletteSearchWhere($search, [
+                'p.company_name',
+                'p.branch_name',
+                'p.contact_name',
+                'p.construction_number',
+                'p.project_name',
+                'p.project_number',
+                'CAST(p.id AS CHAR)',
+            ], 'p.id');
+            if ($searchWhere !== '') {
+                $whereArr[] = $searchWhere;
+            }
+        }
+
+        $requestFilter = isset($_GET['request_filter']) ? trim((string)$_GET['request_filter']) : '';
+        $allowedRequestFilters = ['意匠', '設備', '省エネ', 'その他', '3D'];
+        if ($requestFilter !== '' && in_array($requestFilter, $allowedRequestFilters, true)) {
+            $whereArr[] = sprintf(
+                "FIND_IN_SET('%s', REPLACE(p.requests, ' ', ''))",
+                $this->quote($requestFilter)
+            );
         }
 
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
@@ -2110,6 +2123,43 @@ class ParentProject extends ApplicationModel {
             error_log("Exception in updateCustomerInfoForAllProjects: " . $e->getMessage());
             return ['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()];
         }
+    }
+
+    /**
+     * Command palette: quick search parent projects (construction number, id, customer, branch).
+     */
+    function paletteSearch() {
+        if (empty($_SESSION['show_project'])) {
+            return [];
+        }
+        $q = $this->getPaletteSearchQuery();
+        if ($q === '') {
+            return [];
+        }
+        $whereArr = ["p.status != 'deleted'"];
+        $searchWhere = $this->buildPaletteSearchWhere($q, [
+            'p.company_name',
+            'p.branch_name',
+            'p.contact_name',
+            'p.construction_number',
+            'p.project_name',
+            'p.project_number',
+            'CAST(p.id AS CHAR)',
+        ], 'p.id');
+        if ($searchWhere !== '') {
+            $whereArr[] = $searchWhere;
+        }
+        $where = 'WHERE ' . implode(' AND ', $whereArr);
+        $query = sprintf(
+            "SELECT p.id, p.project_name, p.construction_number, p.company_name, p.branch_name, p.project_number
+             FROM %s p
+             %s
+             ORDER BY p.updated_at DESC
+             LIMIT 10",
+            $this->table,
+            $where
+        );
+        return $this->fetchAll($query);
     }
 }
 ?> 

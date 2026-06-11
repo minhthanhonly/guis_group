@@ -282,11 +282,12 @@
             </div>
 
             <div class="navbar-nav-right d-flex align-items-center justify-content-end" id="navbar-collapse">
-              <!-- Search (hidden) -->
-              <div class="navbar-nav align-items-center d-none">
+              <!-- Search -->
+              <div class="navbar-nav align-items-center">
                 <div class="nav-item navbar-search-wrapper px-md-0 px-2 mb-0">
-                  <a class="nav-item nav-link search-toggler d-flex align-items-center px-0" href="javascript:void(0);">
-                    <span class="d-inline-block text-body-secondary fw-normal" id="autocomplete"></span>
+                  <a class="nav-item nav-link search-toggler d-flex align-items-center px-0 navbar-command-palette-trigger" href="javascript:void(0);" id="navbar-command-palette-trigger" title="コマンドパレット (F1 / Ctrl+K)">
+                    <i class="icon-base ti tabler-search icon-md me-2"></i>
+                    <span class="d-none d-md-inline-block text-body-secondary fw-normal" data-i18n="コマンドパレットを開く">検索 (F1 / Ctrl+K)</span>
                   </a>
                 </div>
               </div>
@@ -1086,6 +1087,52 @@
               </button>
             </div>
           </div>
+
+          <script>
+            window.__APP_ROOT = <?= json_encode($root ?? ROOT) ?>;
+            window.__COMMAND_PALETTE_ENABLED = true;
+          </script>
+
+          <!-- Command Palette Modal -->
+          <div class="modal fade" id="commandPaletteModal" tabindex="-1" aria-labelledby="commandPaletteModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title" id="commandPaletteModalLabel">
+                    <i class="fas fa-keyboard me-2"></i><span data-i18n="コマンドパレット">コマンドパレット</span>
+                  </h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="mb-3">
+                    <div class="btn-group btn-group-sm mb-2" role="group">
+                      <button type="button" class="btn btn-outline-primary active" data-command-palette-mode="parent" data-i18n="建物を検索">建物を検索</button>
+                      <button type="button" class="btn btn-outline-primary" data-command-palette-mode="project" data-i18n="案件を検索">案件を検索</button>
+                      <?php if (($_SESSION['group'] ?? '') != '7' && ($_SESSION['group'] ?? '') != '6'): ?>
+                      <button type="button" class="btn btn-outline-primary" data-command-palette-mode="customer" data-i18n="顧客を検索">顧客を検索</button>
+                      <?php endif; ?>
+                    </div>
+                    <input type="text" class="form-control" id="command-palette-search" autocomplete="off"
+                      placeholder="工事番号 / ID / 会社名 / 支店名" data-i18n="工事番号 / ID / 会社名 / 支店名">
+                    <div id="command-palette-results" class="command-palette-results mt-2 border rounded"></div>
+                    <div id="command-palette-empty" class="text-muted small mt-2 d-none" data-i18n="検索結果がありません">検索結果がありません</div>
+                  </div>
+                  <hr class="my-3">
+                  <h6 class="mb-2" data-i18n="ショートカット一覧">ショートカット一覧</h6>
+                  <div id="command-palette-shortcuts"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <?php if (($_SESSION['group'] ?? '') != '7' && ($_SESSION['group'] ?? '') != '6'): ?>
+          <?php require_once DIR_VIEW . 'customer-global-modal.php'; ?>
+          <?php endif; ?>
+
+          <button type="button" id="command-palette-toggle" class="btn btn-primary rounded-circle position-fixed waves-effect waves-light"
+            title="コマンドパレット (F1 / Ctrl+K)" data-bs-toggle="tooltip" data-bs-placement="left">
+            <i class="fas fa-keyboard"></i>
+          </button>
 
           <!-- Todo Toggle Button (same style as AI Chat button) -->
           <button data-bs-toggle="offcanvas" data-bs-target="#offcanvasTodo" id="todo-toggle" class="btn btn-primary rounded-circle position-fixed waves-effect waves-light">
