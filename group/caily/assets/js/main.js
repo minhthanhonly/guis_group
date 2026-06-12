@@ -514,6 +514,7 @@ function loadSearchData() {
 function initializeAutocomplete() {
   const searchElement = document.getElementById('autocomplete');
   if (!searchElement) return;
+  if (typeof autocomplete !== 'function') return;
 
   return autocomplete({
     ...SearchConfig,
@@ -750,9 +751,11 @@ if (!window.__COMMAND_PALETTE_ENABLED) {
   });
 }
 
-// Load search data on page load
+// Load search data on page load (navbar search; skipped when Algolia bundle not loaded)
 if (!window.__COMMAND_PALETTE_ENABLED && document.documentElement.querySelector('#autocomplete')) {
-  loadSearchData();
+  if (typeof autocomplete === 'function') {
+    loadSearchData();
+  }
 }
 
 // Initialize the displayHourglass

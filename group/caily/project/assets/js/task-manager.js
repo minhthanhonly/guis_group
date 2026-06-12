@@ -4,6 +4,8 @@ const SERVER_TASK_TIMEZONE = 'Asia/Tokyo';
 const VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
 const TASK_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
 const TASK_DATETIME_JA_DISPLAY_FORMAT = 'YYYY年M月D日 HH:mm';
+const TASK_DATETIME_JA_SHORT_DISPLAY_FORMAT = 'M月D日 HH:mm';
+const TASK_DATETIME_VI_SHORT_DISPLAY_FORMAT = 'M/D HH:mm';
 const TASK_DATETIME_FLATPICKR_FORMAT = 'Y/m/d H:i';
 const TASK_DATETIME_FLATPICKR_JA_ALT_FORMAT = 'Y年n月j日 H:i';
 const TASK_DATETIME_PARSE_FORMATS = [
@@ -1560,6 +1562,12 @@ const TaskApp = createApp({
                 : TASK_DATETIME_JA_DISPLAY_FORMAT;
         },
 
+        getTaskDateTimeShortDisplayFormat() {
+            return this.isVietnameseLocale()
+                ? TASK_DATETIME_VI_SHORT_DISPLAY_FORMAT
+                : TASK_DATETIME_JA_SHORT_DISPLAY_FORMAT;
+        },
+
         getFlatpickrLocale() {
             if (typeof window === 'undefined' || !window.flatpickr || !window.flatpickr.l10ns) {
                 return 'default';
@@ -1638,6 +1646,15 @@ const TaskApp = createApp({
 
         formatDate(date) {
             return this.formatTaskDateTimeInDisplayTz(date);
+        },
+
+        formatTaskDueDate(date) {
+            const parsed = this.parseTaskDateTime(date);
+            if (!parsed) return '-';
+            const localized = moment.tz
+                ? parsed.clone().tz(this.getTaskDisplayTimezone())
+                : parsed;
+            return localized.format(this.getTaskDateTimeShortDisplayFormat());
         },
         
         showMessage(message, isError = false) {

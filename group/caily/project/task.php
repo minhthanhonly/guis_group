@@ -378,8 +378,8 @@ if($_SESSION['show_project'] == 0){
                         </div>
                     </div>
                     <div class="task-col-period">
-                        <div class="d-flex align-items-center gap-1 flex-wrap small">
-                            <span class="text-nowrap" :class="{ 'text-danger fw-bold': isTaskDueExceedsProjectDue(task) }">{{ formatDate(task.due_date) }}</span>
+                        <div class="d-flex align-items-center gap-1 small">
+                            <span class="text-nowrap" :class="{ 'text-danger fw-bold': isTaskDueExceedsProjectDue(task) }">{{ formatTaskDueDate(task.due_date) }}</span>
                             <i v-if="hasPeriodWarning(task)" class="fas fa-exclamation-triangle text-warning ms-1" 
                                data-bs-toggle="tooltip" data-bs-placement="top" 
                                :title="getPeriodWarningTooltip(task)"></i>

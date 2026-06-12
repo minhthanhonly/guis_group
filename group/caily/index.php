@@ -401,6 +401,8 @@ if (!empty($_SESSION['userid'])) {
 </div>
 <!-- / Content -->
 <?php
+// top.js load sau FullCalendar (cuối file); bỏ auto-include từ View::heading()
+$view->javascript = preg_replace('#<script[^>]*assets/js/top\.js[^>]*></script>\s*#', '', $view->javascript);
 $view->footing();
 ?>
 <script src="<?=$root?>assets/vendor/libs/apex-charts/apexcharts.js"></script>

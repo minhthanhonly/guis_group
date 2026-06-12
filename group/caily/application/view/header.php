@@ -23,6 +23,8 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&ampdisplay=swap"
       rel="stylesheet" />
@@ -45,16 +47,21 @@
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/bootstrap-select/bootstrap-select.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/spinkit/spinkit.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/notiflix/notiflix.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/flatpickr/flatpickr.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/flatpickr/monthSelect.css" />
+    <link rel="stylesheet" href="<?=$root?>assets/css/task-timer.css?v=<?=CACHE_VERSION?>" />
+    <link rel="stylesheet" href="<?=$root?>assets/css/app-chat.css?v=<?=CACHE_VERSION?>" />
+    <link rel="stylesheet" href="<?=ROOT?>assets/css/image-modal.css" />
     <!-- Page CSS -->
     <?=$style?>
     <!-- Helpers -->
-     
+
     <script src="<?=$root?>assets/vendor/js/template-customizer.js?v=<?=CACHE_VERSION?>"></script>
+    <?php if (($directory ?? '') !== 'login'): ?>
     <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31/dist/vue.global.prod.js"></script>
+    <?php endif; ?>
     <script src="<?=$root?>assets/vendor/js/helpers.js?v=<?=CACHE_VERSION?>"></script>
     <script src="<?=$root?>assets/js/config.js?v=<?=CACHE_VERSION?>"></script>
-    <!-- Notification System -->
-<script src="<?=$root?>assets/js/notification.js?v=<?=CACHE_VERSION?>"></script>
   </head>
 
   <body<?=$onload?>>

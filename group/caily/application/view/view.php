@@ -11,6 +11,11 @@ class View {
 		$this->style = '';
 		$this->directory = '';
 	}
+
+	private function assetSrc($path) {
+		return rtrim(ROOT, '/') . '/' . ltrim(str_replace('\\', '/', $path), '/');
+	}
+
 	public function heading($caption = '', $directory = '', $onload = '') {
 		$this->javascript = '';
 		$this->style = '';
@@ -26,10 +31,11 @@ class View {
 		$current[$directory] = ' class="current"';
 		$root = ROOT;
 		if (file_exists(ROOT_PATH.'assets/js/'.$directory.'.js')) {
-			$this->javascript = '<script type="text/javascript" src="'.$root.'/assets/js/'.$directory.'.js"></script>';
+			$src = $this->assetSrc('assets/js/' . $directory . '.js');
+			$this->javascript = '<script type="text/javascript" src="' . $src . '?v=' . CACHE_VERSION . '"></script>';
 		}
 		if (file_exists(ROOT_PATH.'assets/css/'.$directory.'.css')) {
-			$this->style = '<link rel="stylesheet" href="'.$root.'assets/css/'.$directory.'.css"></link>';
+			$this->style = '<link rel="stylesheet" href="' . $this->assetSrc('assets/css/' . $directory . '.css') . '"></link>';
 		}
 		if ($caption) {
 			$caption = $caption . ' | ' . APP_NAME;
@@ -55,9 +61,9 @@ class View {
 	function script() {
 		$argument = func_get_args();
 		if (is_array($argument) && count($argument) > 0) {
-			$root = ROOT;
 			foreach ($argument as $value) {
-				$this->javascript .= '<script type="text/javascript" src="'.$root.'/js/'.$value.'"></script>';
+				$src = $this->assetSrc('js/' . $value);
+				$this->javascript .= '<script type="text/javascript" src="' . $src . '?v=' . CACHE_VERSION . '"></script>';
 			}
 		}
 	
@@ -69,6 +75,8 @@ class View {
 	public function footing() {
 		$root = ROOT;
 		$javascript = $this->javascript;
+		$directory = $this->directory;
+		$page = $this->page;
 		if($this->directory != 'login')
 			require_once DIR_VIEW.'layout-bottom.php';
 		require_once(DIR_VIEW.'footer.php');
