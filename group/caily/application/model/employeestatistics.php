@@ -379,7 +379,7 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
-     * Get drawings revenue for user (only approved drawings)
+     * Get drawings revenue for user (only completed drawings)
      */
     private function getDrawingsRevenue($user_id, $period_start, $period_end) {
         $query = sprintf(
@@ -390,11 +390,12 @@ class Employeestatistics extends ApplicationModel {
             WHERE (FIND_IN_SET('%s', created_by) > 0 OR created_by = '%s')
             AND DATE(created_at) BETWEEN '%s' AND '%s'
             AND price IS NOT NULL
-            AND status = 'approved'",
+            AND %s",
             $this->quote($user_id),
             $this->quote($user_id),
             $this->quote($period_start),
-            $this->quote($period_end)
+            $this->quote($period_end),
+            $this->getCompletedDrawingStatusSql('')
         );
         
         $result = $this->fetchOne($query);
@@ -904,6 +905,15 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
+     * Drawing statuses that count toward revenue (completed; legacy approved).
+     */
+    private function getCompletedDrawingStatusSql($alias = 'pd') {
+        $a = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $alias);
+        $col = $a !== '' ? $a . '.status' : 'status';
+        return sprintf("%s IN ('completed', 'approved')", $col);
+    }
+
+    /**
      * Drawing period filter (created_at).
      */
     private function getDrawingPeriodSql($alias = 'pd', $start_date, $end_date) {
@@ -987,11 +997,12 @@ class Employeestatistics extends ApplicationModel {
                 COALESCE(SUM(pd.price), 0) AS total_revenue
             FROM " . DB_PREFIX . "project_drawings pd
             INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
-            WHERE pd.status = 'approved'
+            WHERE %s
               AND pd.price IS NOT NULL
               AND %s
               AND %s
             GROUP BY p.department_id",
+            $this->getCompletedDrawingStatusSql('pd'),
             $this->getProjectDepartmentWhereSql('p', $department_id),
             $this->getDrawingPeriodSql('pd', $start_date, $end_date)
         );
@@ -1089,7 +1100,7 @@ class Employeestatistics extends ApplicationModel {
             INNER JOIN " . DB_PREFIX . "user u ON %s
             INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
             INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
-            WHERE pd.status = 'approved'
+            WHERE %s
               AND pd.price IS NOT NULL
               AND %s
               AND %s
@@ -1097,6 +1108,7 @@ class Employeestatistics extends ApplicationModel {
               AND %s
             GROUP BY tm.team_id",
             $creatorJoin,
+            $this->getCompletedDrawingStatusSql('pd'),
             $projectScope,
             $this->getDrawingPeriodSql('pd', $start_date, $end_date),
             $teamWhereSql,
@@ -1192,7 +1204,7 @@ class Employeestatistics extends ApplicationModel {
         $drawingWhereArr = [
             $this->getTeamProjectScopeSql('te', 'p', $department_id),
             $this->getDrawingPeriodSql('pd', $start_date, $end_date),
-            "pd.status = 'approved'",
+            $this->getCompletedDrawingStatusSql('pd'),
             "pd.price IS NOT NULL",
             "te.is_active = 1",
             $this->getActiveEmployeeStatsSql('u')
@@ -1583,12 +1595,13 @@ class Employeestatistics extends ApplicationModel {
             FROM " . DB_PREFIX . "project_drawings pd
             INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
             WHERE p.department_id = %d
-              AND pd.status = 'approved'
+              AND %s
               AND pd.price IS NOT NULL
               AND %s
             GROUP BY ym
             ORDER BY ym ASC",
             $department_id,
+            $this->getCompletedDrawingStatusSql('pd'),
             $this->getDrawingPeriodSql('pd', $start_date, $end_date)
         ));
 
@@ -1749,7 +1762,7 @@ class Employeestatistics extends ApplicationModel {
             INNER JOIN " . DB_PREFIX . "user u ON %s
             INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
             WHERE tm.team_id = %d
-              AND pd.status = 'approved'
+              AND %s
               AND pd.price IS NOT NULL
               AND %s
               AND %s
@@ -1758,6 +1771,7 @@ class Employeestatistics extends ApplicationModel {
             ORDER BY ym ASC",
             $creatorJoin,
             $team_id,
+            $this->getCompletedDrawingStatusSql('pd'),
             $projectScope,
             $drawingPeriodSql,
             $activeUserSql
@@ -1973,7 +1987,7 @@ class Employeestatistics extends ApplicationModel {
                 INNER JOIN " . DB_PREFIX . "user u ON %s
                 INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
                 INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id AND te.is_active = 1
-                WHERE pd.status = 'approved'
+                WHERE %s
                   AND pd.price IS NOT NULL
                   AND %s
                   AND %s
@@ -2015,6 +2029,7 @@ class Employeestatistics extends ApplicationModel {
              ) monthly_stats
              GROUP BY team_id, ym",
             $creatorJoin,
+            $this->getCompletedDrawingStatusSql('pd'),
             $projectScope,
             $drawingPeriodSql,
             $activeUserSql,
@@ -2051,7 +2066,7 @@ class Employeestatistics extends ApplicationModel {
                 INNER JOIN " . DB_PREFIX . "user u ON %s
                 INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
                 INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id AND te.is_active = 1
-                WHERE pd.status = 'approved'
+                WHERE %s
                   AND pd.price IS NOT NULL
                   AND %s
                   AND %s
@@ -2089,6 +2104,7 @@ class Employeestatistics extends ApplicationModel {
              ) yearly_stats
              GROUP BY team_id",
             $creatorJoin,
+            $this->getCompletedDrawingStatusSql('pd'),
             $projectScope,
             $drawingPeriodSql,
             $activeUserSql,

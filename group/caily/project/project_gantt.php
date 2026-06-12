@@ -283,8 +283,8 @@ $view->footing();
 ?>
 
 <!-- DHTMLX Gantt Standard Version -->
-<link rel="stylesheet" href="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.css" type="text/css">
-<script src="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dhtmlx-gantt@9.1.4/codebase/dhtmlxgantt.min.css" type="text/css">
+<script src="https://cdn.jsdelivr.net/npm/dhtmlx-gantt@9.1.4/codebase/dhtmlxgantt.min.js"></script> 
 
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script>

@@ -60,11 +60,11 @@ if($_SESSION['show_project'] == 0){
                                 <span v-if="deleting">削除中...</span>
                                 <span v-else>12ヶ月削除</span>
                             </button>
-                            <button class="btn btn-warning" @click="generateSampleStatistics" :disabled="generating">
+                            <!-- <button class="btn btn-warning" @click="generateSampleStatistics" :disabled="generating">
                                 <i class="fa fa-magic me-1"></i>
                                 <span v-if="generating">生成中...</span>
                                 <span v-else>サンプルデータ追加</span>
-                            </button>
+                            </button> -->
                         </div>
                     </div>
                 </div>
