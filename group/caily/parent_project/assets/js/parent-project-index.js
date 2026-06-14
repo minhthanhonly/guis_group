@@ -28,6 +28,7 @@ createApp({
             totalRecords: 0,
             loading: false,
             isProjectManager: typeof IS_PROJECT_MANAGER !== 'undefined' ? IS_PROJECT_MANAGER : false,
+            permission: [],
             sortColumn: 'created_at',
             sortDirection: 'DESC', // 'ASC' or 'DESC'
             selectedParentProject: null,
@@ -109,9 +110,24 @@ createApp({
             }
             
             return pages;
+        },
+        canManagePriceList() {
+            return this.hasDepartmentPermission('project_director');
+        },
+        canCreateParentProject() {
+            return this.hasDepartmentPermission('project_add');
         }
     },
     methods: {
+        hasDepartmentPermission(field) {
+            if (typeof IS_ADMIN !== 'undefined' && IS_ADMIN) {
+                return true;
+            }
+            if (!this.permission || this.permission.length === 0) {
+                return false;
+            }
+            return this.permission.some((rule) => rule[field] === '1' || rule[field] === 1);
+        },
         normalizeSearchKeyword(value) {
             if (value === undefined || value === null) {
                 return '';
@@ -697,11 +713,20 @@ createApp({
                 console.error('Error deleting parent project:', error);
                 showMessage('削除に失敗しました。', true);
             }
+        },
+        async loadPermission() {
+            try {
+                const response = await axios.get('/api/index.php?model=department&method=get_user_permissions');
+                this.permission = response.data || [];
+            } catch (error) {
+                console.error('Error loading permission:', error);
+                this.permission = [];
+            }
         }
     },
     mounted() {
-        // Khôi phục trạng thái ẩn/hiện cột
         this.loadColumnVisibilityFromStorage();
+        this.loadPermission();
         this.loadParentProjects();
         document.addEventListener('click', () => {
             this.noteContextMenuVisible = false;

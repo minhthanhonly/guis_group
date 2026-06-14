@@ -280,6 +280,10 @@ class Member extends ApplicationModel {
 			$hash['error'] = $this->error;
 			return $hash;
 		}
+
+		if (!empty($_POST['userid'])) {
+			$this->invalidateApiCacheForUserids([$_POST['userid']]);
+		}
 		
 		$hash['status'] = 'success';
 		$hash['message_code'] = 11;
@@ -355,6 +359,10 @@ class Member extends ApplicationModel {
 			$hash['error'] = $this->error;
 			return $hash;
 		}
+
+		if (!empty($_POST['userid'])) {
+			$this->invalidateUserLoginByUserid($_POST['userid']);
+		}
 		
 		$hash['status'] = 'success';
 		$hash['message_code'] = 11;
@@ -397,6 +405,7 @@ class Member extends ApplicationModel {
 		);
 		$response = $this->update_query($query);
 		if($response > 0){
+			$this->invalidateUserLoginById($id);
 			$hash['status'] = 'success';
 			$hash['message_code'] = $response;
 		} else{
@@ -466,7 +475,7 @@ class Member extends ApplicationModel {
 		$editor = $_SESSION['userid'];
 
 		$query = sprintf(
-			"UPDATE groupware_user SET password = '%s', editor = '%s', updated = '%s' WHERE id = '%s'",
+			"UPDATE groupware_user SET remember_token = NULL, password = '%s', editor = '%s', updated = '%s' WHERE id = '%s'",
 			$password,
 			$editor,
 			$date,
@@ -474,6 +483,7 @@ class Member extends ApplicationModel {
 		);
 		$response = $this->update_query($query);
 		if($response > 0){
+			$this->invalidateUserLoginById($id);
 			$hash['status'] = 'success';
 			$hash['message_code'] = $response;
 		} else{
@@ -571,6 +581,7 @@ class Member extends ApplicationModel {
 		);
 		$response = $this->update_query($query);
 		if($response > 0){
+			$this->invalidateUserLoginById($id);
 			$hash['status'] = 'success';
 			$hash['message_code'] = $response;
 		} else{
@@ -608,6 +619,7 @@ class Member extends ApplicationModel {
 			$hash['data'] = $this->post;
 			if($check){
 				$hash['data']['message'] = 'パスワードを変更しました。';
+				$_SESSION['user_updated'] = $this->post['updated'];
 			}
 		}
 		
@@ -664,6 +676,7 @@ class Member extends ApplicationModel {
 				if($this->post['firstname'] != '') {
 					$_SESSION['realname'] .= ' '.$this->post['firstname'];
 				}
+				$_SESSION['user_updated'] = $this->post['updated'];
 			}
 
 			$this->redirect();

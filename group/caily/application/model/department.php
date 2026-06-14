@@ -99,6 +99,77 @@ class Department extends ApplicationModel {
         return $this->fetchAll($query);
     }
 
+    private static function departmentPermissionFields() {
+        return [
+            'project_manager',
+            'project_director',
+            'project_add',
+            'project_edit',
+            'project_delete',
+            'project_comment',
+            'task_view',
+            'task_add',
+            'task_edit',
+            'task_delete',
+        ];
+    }
+
+    private function normalizeDepartmentPermissionRow(array $row) {
+        $perm = [];
+        foreach (self::departmentPermissionFields() as $field) {
+            $perm[$field] = (int) ($row[$field] ?? 0);
+        }
+        return $perm;
+    }
+
+    private function buildDepartmentPermissionFromPost($userid) {
+        $perm = [];
+        foreach (self::departmentPermissionFields() as $field) {
+            $perm[$field] = (isset($_POST[$field][$userid]) && $_POST[$field][$userid] == 'true') ? 1 : 0;
+        }
+        return $perm;
+    }
+
+    private function getDepartmentMembersPermissionMap($departmentId) {
+        $fields = implode(', ', self::departmentPermissionFields());
+        $rows = $this->fetchAll(sprintf(
+            "SELECT userid, %s FROM %suser_department WHERE department_id = %d",
+            $fields,
+            DB_PREFIX,
+            intval($departmentId)
+        ));
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['userid']] = $this->normalizeDepartmentPermissionRow($row);
+        }
+        return $map;
+    }
+
+    /**
+     * Userids whose department membership or permissions changed (for session invalidation).
+     */
+    private function collectDepartmentPermissionChangeUserids($departmentId, array $newMemberUserids) {
+        $oldMap = $this->getDepartmentMembersPermissionMap($departmentId);
+        $changed = [];
+
+        foreach ($oldMap as $userid => $oldPerm) {
+            if (!in_array($userid, $newMemberUserids, true)) {
+                $changed[] = $userid;
+            }
+        }
+
+        foreach ($newMemberUserids as $userid) {
+            $newPerm = $this->buildDepartmentPermissionFromPost($userid);
+            if (!isset($oldMap[$userid])) {
+                $changed[] = $userid;
+            } elseif ($oldMap[$userid] !== $newPerm) {
+                $changed[] = $userid;
+            }
+        }
+
+        return array_values(array_unique($changed));
+    }
+
     function add() {
         $data = array(
             'name' => $_POST['name'],
@@ -129,12 +200,18 @@ class Department extends ApplicationModel {
                 $this->query_insert($member_data, DB_PREFIX . 'user_department');
             }
         }
+
+        if (isset($_POST['members']) && is_array($_POST['members'])) {
+            $this->invalidateUserLoginByUserids($_POST['members']);
+        }
         
         return $department_id;
     }
 
     function edit() {
         $id = $_GET['id'];
+        $newMemberUserids = (isset($_POST['members']) && is_array($_POST['members'])) ? $_POST['members'] : [];
+        $changedUserids = $this->collectDepartmentPermissionChangeUserids($id, $newMemberUserids);
         $data = array(
             'name' => $_POST['name'],
             'description' => $_POST['description'],
@@ -166,12 +243,15 @@ class Department extends ApplicationModel {
                 $this->query_insert($member_data, DB_PREFIX . 'user_department');
             }
         }
+
+        $this->invalidateUserLoginByUserids($changedUserids);
         
         return true;
     }
 
     function delete() {
         $id = $_GET['id'];
+        $this->invalidateUserLoginForDepartmentId($id);
         // Check if category is in use
         $query = sprintf(
             "SELECT COUNT(*) as count FROM " . DB_PREFIX . "projects WHERE department_id = %d",

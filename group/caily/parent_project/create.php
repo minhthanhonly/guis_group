@@ -1,7 +1,8 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('建物登録');
-if(!$_SESSION['isProjectManager']){
+$permModel = new ApplicationModel();
+if (!$permModel->hasDepartmentPermission('project_add')) {
     die('権限がありません。');
 }
 ?>

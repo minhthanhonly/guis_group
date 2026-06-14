@@ -93,7 +93,7 @@ class Authority
 				if ($postuserid != '' && count($error) <= 0) {
 					$connection = new Connection;
 					$query = sprintf(
-						"SELECT id,userid,password,firstname,lastname,realname,user_group,user_groupname,authority,user_image,show_project,is_soumu FROM %suser WHERE userid = '%s'",
+						"SELECT id,userid,password,firstname,lastname,realname,user_group,user_groupname,authority,user_image,show_project,is_soumu,updated FROM %suser WHERE userid = '%s'",
 						DB_PREFIX,
 						$connection->quote($postuserid)
 					);
@@ -156,7 +156,7 @@ class Authority
 		$token = $_COOKIE['remember_me'];
 		$connection = new Connection;
 		$query = sprintf(
-			"SELECT id,userid,firstname,lastname,realname,user_group,user_groupname,authority,user_image,show_project,is_soumu FROM %suser WHERE remember_token = '%s' LIMIT 1",
+			"SELECT id,userid,firstname,lastname,realname,user_group,user_groupname,authority,user_image,show_project,is_soumu,updated FROM %suser WHERE remember_token = '%s' LIMIT 1",
 			DB_PREFIX,
 			$connection->quote($token)
 		);
@@ -229,6 +229,7 @@ class Authority
 		$_SESSION['user_groupname'] = isset($data['user_groupname']) ? $data['user_groupname'] : '';
 		$_SESSION['show_project'] = $data['show_project'];
 		$_SESSION['is_soumu'] = isset($data['is_soumu']) ? $data['is_soumu'] : 0;
+		$_SESSION['user_updated'] = isset($data['updated']) ? (string) $data['updated'] : '';
 	}
 
 	private function clearAuthSession($status = null)

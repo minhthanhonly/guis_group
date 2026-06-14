@@ -89,12 +89,17 @@ class Team extends ApplicationModel {
 				$this->query_insert($member_data, DB_PREFIX . 'team_members');
 			}
 		}
+
+		if (isset($_POST['members']) && is_array($_POST['members'])) {
+			$this->invalidateApiCacheForNumericUserIds($_POST['members']);
+		}
 		
 		return $team_id;
 	}
 
 	function edit() {
 		$id = $_GET['id'];
+		$this->invalidateApiCacheForTeamId($id);
 		$data = array(
 			'name' => $_POST['name'],
 			'department_id' => $_POST['department_id'],
@@ -118,6 +123,10 @@ class Team extends ApplicationModel {
 				);
 				$this->query_insert($member_data, DB_PREFIX . 'team_members');
 			}
+		}
+
+		if (isset($_POST['members']) && is_array($_POST['members'])) {
+			$this->invalidateApiCacheForNumericUserIds($_POST['members']);
 		}
 		
 		return true;

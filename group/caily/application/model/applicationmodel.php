@@ -62,26 +62,126 @@ class ApplicationModel extends Model {
 	}
 
 	function checkSuspend() {
-		$now = time();
-		if (isset($_SESSION['_suspend_checked_at'])
-			&& ($now - (int)$_SESSION['_suspend_checked_at']) < self::USER_SUSPEND_CHECK_TTL) {
+		if (empty($_SESSION['id']) || empty($_SESSION['userid'])) {
 			return;
 		}
 		$this->connect();
 		$userId = intval($_SESSION['id']);
-		$query = sprintf("SELECT is_suspend, show_project FROM %suser WHERE id = %d", DB_PREFIX, $userId);
+		$query = sprintf(
+			"SELECT is_suspend, show_project, updated, authority, user_group, is_soumu FROM %suser WHERE id = %d",
+			DB_PREFIX,
+			$userId
+		);
 		$data = $this->fetchOne($query);
-		$_SESSION['_suspend_checked_at'] = $now;
-		if($data['is_suspend'] == 1 || $_SESSION['show_project'] != $data['show_project']) {
-			$authority = new Authority;
-			$authority->sessionDestroy();
-			$secure = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-			setcookie('remember_me', '', time() - 3600, '/', '', $secure, true);
-			if($data['is_suspend'] == 1){
-				$this->died('アカウントが無効化されています。');
-			} else {
-				$this->died('ユーザーの設定が変更されたため、ログインし直してください。');
+		if (empty($data)) {
+			$this->forceSessionLogout('ユーザーの設定が変更されたため、ログインし直してください。');
+			return;
+		}
+		if ($data['is_suspend'] == 1) {
+			$this->forceSessionLogout('アカウントが無効化されています。');
+			return;
+		}
+
+		$sessionUpdated = isset($_SESSION['user_updated']) ? (string) $_SESSION['user_updated'] : '';
+		$dbUpdated = isset($data['updated']) ? (string) $data['updated'] : '';
+		if ($sessionUpdated !== '' && $dbUpdated !== '' && $sessionUpdated !== $dbUpdated) {
+			$this->forceSessionLogout('ユーザーの設定が変更されたため、ログインし直してください。');
+			return;
+		}
+
+		if ($sessionUpdated === '') {
+			if ((string) $_SESSION['show_project'] !== (string) $data['show_project']
+				|| (string) $_SESSION['authority'] !== (string) $data['authority']
+				|| (string) $_SESSION['group'] !== (string) $data['user_group']
+				|| (int) ($_SESSION['is_soumu'] ?? 0) !== (int) ($data['is_soumu'] ?? 0)) {
+				$this->forceSessionLogout('ユーザーの設定が変更されたため、ログインし直してください。');
 			}
+		}
+	}
+
+	protected function forceSessionLogout($message) {
+		$authority = new Authority;
+		$authority->sessionDestroy();
+		$secure = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+		setcookie('remember_me', '', time() - 3600, '/', '', $secure, true);
+		$isApi = strpos($_SERVER['SCRIPT_NAME'] ?? '', '/api/') !== false;
+		if ($isApi) {
+			header('Content-Type: application/json');
+			http_response_code(401);
+			echo json_encode(['status' => 'error', 'error' => $message], JSON_UNESCAPED_UNICODE);
+			exit();
+		}
+		$this->died($message);
+	}
+
+	protected function invalidateUserLoginByUserid($userid) {
+		$userid = trim((string) $userid);
+		if ($userid === '') {
+			return;
+		}
+		$now = date('Y-m-d H:i:s');
+		$this->query(sprintf(
+			"UPDATE %suser SET remember_token = NULL, updated = '%s' WHERE userid = '%s'",
+			DB_PREFIX,
+			$this->quote($now),
+			$this->quote($userid)
+		));
+		$this->invalidateApiCacheForUserids([$userid]);
+	}
+
+	protected function invalidateUserLoginByUserids(array $userids) {
+		foreach (array_unique(array_filter(array_map('strval', $userids), function ($uid) {
+			return $uid !== '';
+		})) as $userid) {
+			$this->invalidateUserLoginByUserid($userid);
+		}
+	}
+
+	protected function getDepartmentMemberUserids($departmentId) {
+		$departmentId = intval($departmentId);
+		if ($departmentId <= 0) {
+			return [];
+		}
+		$rows = $this->fetchAll(sprintf(
+			"SELECT userid FROM %suser_department WHERE department_id = %d",
+			DB_PREFIX,
+			$departmentId
+		));
+		return array_values(array_filter(array_column($rows, 'userid')));
+	}
+
+	protected function invalidateUserLoginForDepartmentId($departmentId) {
+		$this->invalidateUserLoginByUserids($this->getDepartmentMemberUserids($departmentId));
+	}
+
+	protected function invalidateUserLoginById($id) {
+		$id = intval($id);
+		if ($id <= 0) {
+			return;
+		}
+		$row = $this->fetchOne(sprintf(
+			"SELECT userid FROM %suser WHERE id = %d",
+			DB_PREFIX,
+			$id
+		));
+		if (!empty($row['userid'])) {
+			$this->invalidateUserLoginByUserid($row['userid']);
+		}
+	}
+
+	protected function refreshSessionFromUserRow(array $data) {
+		if (empty($data['userid']) || $data['userid'] !== ($_SESSION['userid'] ?? '')) {
+			return;
+		}
+		unset($_SESSION['_suspend_checked_at'], $_SESSION['_pm_checked_at']);
+		$_SESSION['lastname'] = $data['lastname'] ?? $_SESSION['lastname'];
+		$_SESSION['firstname'] = $data['firstname'] ?? $_SESSION['firstname'];
+		$_SESSION['realname'] = $data['realname'] ?? $_SESSION['realname'];
+		if (array_key_exists('user_image', $data)) {
+			$_SESSION['user_image'] = $data['user_image'];
+		}
+		if (isset($data['updated'])) {
+			$_SESSION['user_updated'] = (string) $data['updated'];
 		}
 	}
 
@@ -103,6 +203,38 @@ class ApplicationModel extends Model {
 		}
 		return $authorized;
 	
+	}
+
+	/**
+	 * Check department-level permission for current user (any department).
+	 */
+	function hasDepartmentPermission($field) {
+		if (($_SESSION['authority'] ?? '') === 'administrator') {
+			return true;
+		}
+		$allowedFields = [
+			'project_manager',
+			'project_director',
+			'project_add',
+			'project_edit',
+			'project_delete',
+			'project_comment',
+			'task_view',
+			'task_add',
+			'task_edit',
+			'task_delete',
+		];
+		if (!in_array($field, $allowedFields, true)) {
+			return false;
+		}
+		$this->connect();
+		$row = $this->fetchOne(sprintf(
+			"SELECT COUNT(*) AS c FROM %suser_department WHERE userid = '%s' AND %s = 1",
+			DB_PREFIX,
+			$this->quote($_SESSION['userid']),
+			$field
+		));
+		return intval($row['c'] ?? 0) > 0;
 	}
 	
 	function permitList($sort = 'id', $desc = 1) {
@@ -753,6 +885,61 @@ class ApplicationModel extends Model {
             return '';
         }
         return '(' . implode(' OR ', $parts) . ')';
+    }
+
+    protected function invalidateApiCacheForUserids(array $userids) {
+        $userids = array_values(array_unique(array_filter(array_map('strval', $userids), function ($uid) {
+            return $uid !== '';
+        })));
+        if (empty($userids)) {
+            return;
+        }
+        if (!defined('DIR_LIBRARY') || !file_exists(DIR_LIBRARY . 'ApiCache.php')) {
+            return;
+        }
+        require_once DIR_LIBRARY . 'ApiCache.php';
+        ApiCache::invalidateUsers($userids);
+    }
+
+    protected function invalidateApiCacheForNumericUserIds(array $numericIds) {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $numericIds), function ($id) {
+            return $id > 0;
+        })));
+        if (empty($ids)) {
+            return;
+        }
+        $rows = $this->fetchAll(sprintf(
+            "SELECT userid FROM %suser WHERE id IN (%s)",
+            DB_PREFIX,
+            implode(',', $ids)
+        ));
+        $this->invalidateApiCacheForUserids(array_column($rows, 'userid'));
+    }
+
+    protected function invalidateApiCacheForDepartmentId($departmentId) {
+        $departmentId = intval($departmentId);
+        if ($departmentId <= 0) {
+            return;
+        }
+        $rows = $this->fetchAll(sprintf(
+            "SELECT userid FROM %suser_department WHERE department_id = %d",
+            DB_PREFIX,
+            $departmentId
+        ));
+        $this->invalidateApiCacheForUserids(array_column($rows, 'userid'));
+    }
+
+    protected function invalidateApiCacheForTeamId($teamId) {
+        $teamId = intval($teamId);
+        if ($teamId <= 0) {
+            return;
+        }
+        $rows = $this->fetchAll(sprintf(
+            "SELECT user_id FROM %steam_members WHERE team_id = %d",
+            DB_PREFIX,
+            $teamId
+        ));
+        $this->invalidateApiCacheForNumericUserIds(array_column($rows, 'user_id'));
     }
 }
 

@@ -116,4 +116,16 @@ class ApiCache {
         @rmdir($userDir);
         return true;
     }
+
+    /**
+     * Xóa cache API của nhiều user (userid string).
+     */
+    public static function invalidateUsers(array $userIds) {
+        foreach (array_unique(array_filter(array_map('strval', $userIds), function ($uid) {
+            return $uid !== '';
+        })) as $userId) {
+            self::invalidateUser($userId);
+        }
+        return true;
+    }
 }

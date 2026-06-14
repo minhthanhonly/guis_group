@@ -10,7 +10,7 @@ $view->heading('建物一覧');
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0"><span data-i18n="建物一覧">建物一覧</span></h5>
-                        <?php if($_SESSION['isProjectManager']): ?>
+                        
                             <div>
                                 <div class="d-inline-flex justify-content-end align-items-center me-2">
                                     <div class="dropdown" v-if="availableColumns && availableColumns.length > 0">
@@ -33,14 +33,13 @@ $view->heading('建物一覧');
                                         </ul>
                                     </div>
                                 </div>
-                                <a href="../price_list/index.php" class="btn btn-outline-info btn-sm me-2">
+                                <a v-if="canManagePriceList" href="../price_list/index.php" class="btn btn-outline-info btn-sm me-2">
                                     <i class="fa fa-list me-1"></i> <span data-i18n="価格表管理">価格表管理</span>
                                 </a>
-                                <a href="create.php" class="btn btn-primary btn-sm">
+                                <a v-if="canCreateParentProject" href="create.php" class="btn btn-primary btn-sm">
                                     <i class="fa fa-plus me-1"></i> <span data-i18n="建物登録">建物登録</span>
                                 </a>
                             </div>
-                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="card-body">
@@ -650,5 +649,6 @@ function showMessage(message, isError = false) {
     }
 }
 const IS_PROJECT_MANAGER = <?php echo isset($_SESSION['isProjectManager']) && $_SESSION['isProjectManager'] ? 'true' : 'false'; ?>;
+const IS_ADMIN = <?php echo json_encode(($_SESSION['authority'] ?? '') === 'administrator'); ?>;
 </script>
 <script src="assets/js/parent-project-index.js?v=<?=CACHE_VERSION?>"></script> 
