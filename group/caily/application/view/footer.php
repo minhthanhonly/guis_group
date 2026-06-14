@@ -64,6 +64,7 @@ $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
 <?php endif; ?>
 <script src="<?=$root?>assets/js/todo-modal.js?v=<?=$cv?>"></script>
 <script src="<?=$root?>assets/js/main.js?v=<?=$cv?>"></script>
+<link rel="stylesheet" href="<?=$root?>assets/css/task-timer.css?v=<?=$cv?>">
 <script src="<?=$root?>assets/js/task-timer.js?v=<?=$cv?>"></script>
 <script src="<?=$root?>assets/js/app-chat.js?v=<?=$cv?>"></script>
 <script src="<?=$root?>assets/js/command-palette.js?v=<?=$cv?>"></script>

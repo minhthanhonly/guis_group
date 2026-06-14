@@ -89,6 +89,7 @@ const TaskApp = createApp({
             filterStatus: '',
             filterPriority: '',
             filterDueDate: '',
+            filterMyTasksOnly: false,
             addingTaskInline: false,
             inlineTasks: [],
             drawingCountSavingTaskIds: {},
@@ -206,6 +207,7 @@ const TaskApp = createApp({
                 let match = true;
                 if (this.filterStatus && task.status !== this.filterStatus) match = false;
                 if (this.filterPriority && task.priority !== this.filterPriority) match = false;
+                if (this.filterMyTasksOnly && !this.isAssignedToMe(task)) match = false;
                 //if (this.filterDueDate && task.due_date !== this.filterDueDate) match = false;
                 return match;
             });
@@ -305,6 +307,7 @@ const TaskApp = createApp({
             await this.loadProjectInfo();
             await this.loadTasks();
             await this.loadProjectMembers();
+            this.applyAppDataI18n();
         })();
         this.$nextTick(() => {
             this.initFlatpickr();
@@ -406,7 +409,10 @@ const TaskApp = createApp({
 
         this._onI18nLanguageChanged = () => {
             this.$forceUpdate();
-            this.$nextTick(() => this.initFlatpickr());
+            this.$nextTick(() => {
+                this.initFlatpickr();
+                this.applyAppDataI18n();
+            });
         };
         if (typeof i18next !== 'undefined' && i18next.on) {
             i18next.on('languageChanged', this._onI18nLanguageChanged);
@@ -429,6 +435,16 @@ const TaskApp = createApp({
 
     
     methods: {
+        applyAppDataI18n() {
+            if (typeof window.applyDataI18n !== 'function') {
+                return;
+            }
+            const appEl = document.getElementById('app');
+            if (appEl) {
+                window.applyDataI18n(appEl);
+            }
+        },
+
         // Phương thức để dịch label động
         $t(label) {
             if (typeof i18next !== 'undefined' && i18next.isInitialized) {
@@ -589,6 +605,10 @@ const TaskApp = createApp({
                 });
 
                 await this.refreshNavbarCounts();
+
+                if (window.TaskTimer && window.TaskTimer.active) {
+                    await window.TaskTimer.refresh();
+                }
                 
                 // Sau khi load tasks, load số comment chưa đọc
                 // await this.loadUnreadComments( );
@@ -835,8 +855,9 @@ const TaskApp = createApp({
         },
         canEditTaskNote(task) {
             if (!task) return false;
-            return this.permission.can_manage_project
-                || (this.permission.rule && this.permission.rule.task_edit == 1 && this.checkAssignee(task));
+            if (!this.permission || !this.permission.is_member) return false;
+            if (this.permission.can_manage_project) return true;
+            return this.isAssignedToMe(task);
         },
         canEditDrawingLink() {
             return !!(this.permission && this.permission.can_manage_project);
@@ -861,6 +882,30 @@ const TaskApp = createApp({
         isTaskTimerActive(taskId) {
             return !!(window.TaskTimer && window.TaskTimer.isActive(taskId));
         },
+        hasActiveTaskTimer(taskOrId) {
+            const taskId = taskOrId && typeof taskOrId === 'object' ? taskOrId.id : taskOrId;
+            if (!taskId) {
+                return false;
+            }
+            if (window.TaskTimer) {
+                return window.TaskTimer.hasActiveTimerForTask(taskId);
+            }
+            if (taskOrId && typeof taskOrId === 'object' && taskOrId.timer_active) {
+                return true;
+            }
+            const canonical = this.tasks.find((t) => parseInt(t.id, 10) === parseInt(taskId, 10));
+            return !!(canonical && canonical.timer_active);
+        },
+        syncTaskTimerActiveFlags(activeTaskIds) {
+            const ids = Array.isArray(activeTaskIds) ? activeTaskIds : [];
+            const activeSet = new Set(ids.map((id) => parseInt(id, 10)));
+            this.tasks.forEach((task) => {
+                if (!task || task.id == null) {
+                    return;
+                }
+                task.timer_active = activeSet.has(parseInt(task.id, 10));
+            });
+        },
         isTaskTimerToggling(taskId) {
             return !!(taskId && this.taskTimerTogglingTaskIds[taskId]);
         },
@@ -872,6 +917,30 @@ const TaskApp = createApp({
                 const next = { ...this.taskTimerTogglingTaskIds };
                 delete next[taskId];
                 this.taskTimerTogglingTaskIds = next;
+            }
+        },
+        isTerminalTaskStatus(status) {
+            return status === 'completed' || status === 'cancelled';
+        },
+        async stopTaskTimerForTerminalStatus(taskId, status, apiResponse) {
+            if (!window.TaskTimer || !taskId || !this.isTerminalTaskStatus(status)) {
+                return;
+            }
+            if (!window.TaskTimer.isActive(taskId)) {
+                return;
+            }
+
+            const stopped = apiResponse && apiResponse.stopped_timer;
+            if (stopped && parseInt(stopped.task_id, 10) === parseInt(taskId, 10)) {
+                window.TaskTimer.setActive(null);
+                window.TaskTimer.removeActiveTaskId(stopped.task_id);
+                this.applyTaskEstimatedHours(stopped.task_id, stopped.estimated_hours);
+                return;
+            }
+
+            const result = await window.TaskTimer.stop(taskId);
+            if (result && result.estimated_hours != null) {
+                this.applyTaskEstimatedHours(taskId, result.estimated_hours);
             }
         },
         async toggleTaskTimer(task) {
@@ -908,6 +977,16 @@ const TaskApp = createApp({
             const detail = event && event.detail ? event.detail : {};
             if (detail.stopped && detail.task_id && detail.estimated_hours != null) {
                 this.applyTaskEstimatedHours(detail.task_id, detail.estimated_hours);
+            }
+            if (window.TaskTimer && Array.isArray(window.TaskTimer.activeTaskIds)) {
+                this.syncTaskTimerActiveFlags(window.TaskTimer.activeTaskIds);
+            } else if (detail.stopped && detail.task_id) {
+                const stoppedId = parseInt(detail.task_id, 10);
+                this.tasks.forEach((task) => {
+                    if (task && parseInt(task.id, 10) === stoppedId) {
+                        task.timer_active = false;
+                    }
+                });
             }
             this.$forceUpdate();
         },
@@ -1211,7 +1290,7 @@ const TaskApp = createApp({
                 formData.append('id', this.taskNoteModal.taskId);
                 formData.append('project_id', this.projectId);
                 formData.append('note', rawContent);
-                const response = await axios.post('/api/index.php?model=task&method=edit', formData);
+                const response = await axios.post('/api/index.php?model=task&method=updateNote', formData);
                 if (response.data && response.data.status === 'success') {
                     this.showMessage('メモが保存されました。');
                     await this.loadTasks();
@@ -1221,7 +1300,8 @@ const TaskApp = createApp({
                 }
             } catch (error) {
                 console.error('Error saving task note:', error);
-                this.showMessage('メモの保存に失敗しました', true);
+                const msg = error.response?.data?.message || 'メモの保存に失敗しました';
+                this.showMessage(msg, true);
             }
         },
         async clearTaskNote() {
@@ -1239,7 +1319,7 @@ const TaskApp = createApp({
                 formData.append('id', this.taskNoteModal.taskId);
                 formData.append('project_id', this.projectId);
                 formData.append('note', '');
-                const response = await axios.post('/api/index.php?model=task&method=edit', formData);
+                const response = await axios.post('/api/index.php?model=task&method=updateNote', formData);
                 if (response.data && response.data.status === 'success') {
                     this.showMessage('メモが削除されました。');
                     await this.loadTasks();
@@ -1248,7 +1328,8 @@ const TaskApp = createApp({
                     this.showMessage(response.data?.message || 'メモの削除に失敗しました', true);
                 }
             } catch (error) {
-                this.showMessage('メモの削除に失敗しました', true);
+                const msg = error.response?.data?.message || 'メモの削除に失敗しました';
+                this.showMessage(msg, true);
             }
         },
         openNewTaskModal() {
@@ -1371,6 +1452,14 @@ const TaskApp = createApp({
                 );
                 
                 if (response.data.status == 'success') {
+                    await this.stopTaskTimerForTerminalStatus(
+                        targetTask.id,
+                        statusToSet,
+                        response.data
+                    );
+                    if (window.TaskTimer && Array.isArray(response.data.active_task_ids)) {
+                        window.TaskTimer.updateActiveTaskIds(response.data.active_task_ids);
+                    }
                     this.showMessage('ステータスを更新しました。');
                     // Nếu user được giao task và chưa acknowledge thì tự động acknowledge
                     if (this.isAssignedToMe(targetTask) && !this.isAcknowledged(targetTask, this.currentUserId)) {

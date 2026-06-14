@@ -52,7 +52,7 @@ if($_SESSION['show_project'] == 0){
             </a>
             <a v-if="projectInfo && projectInfo.parent_project_id" :href="'../parent_project/detail.php?id=' + projectInfo.parent_project_id" class="btn btn-outline-primary ms-2">
                 <i class="fa fa-external-link me-2"></i>
-                <span data-i18n="建物詳細">建物詳細</span>
+                <span>{{ $t('建物詳細') }}</span>
             </a>
         </div>
     </div>
@@ -169,6 +169,10 @@ if($_SESSION['show_project'] == 0){
                 <option value="">{{ $t('全ての優先度') }}</option>
                 <option v-for="priority in taskPriorities" :key="priority.value" :value="priority.value">{{ $t(priority.i18nKey || priority.label) }}</option>
             </select>
+            <div class="form-check mb-0 form-switch">
+                <input class="form-check-input" type="checkbox" id="filterMyTasksOnly" v-model="filterMyTasksOnly">
+                <label class="form-check-label text-nowrap" for="filterMyTasksOnly" data-i18n="自分のタスクのみ">自分のタスクのみ</label>
+            </div>
             </div>
             <button v-if="permission.can_manage_project || permission.is_member || (permission.rule && permission.rule.task_add == 1)" class="btn btn-primary ms-2" @click="openNewTaskModal">
                 <i class="fa fa-plus me-1"></i> <span data-i18n="新規タスク">新規タスク</span>
@@ -469,16 +473,20 @@ if($_SESSION['show_project'] == 0){
                     <div class="task-col-workload">
                         <div class="py-2 pe-2 small task-workload-cell">
                             <template v-if="canEditTaskWorkload(task)">
-                                <input
-                                    type="number"
-                                    class="form-control form-control-sm task-workload-input"
-                                    min="0"
-                                    step="0.1"
-                                    :value="task.estimated_hours != null && task.estimated_hours !== '' ? task.estimated_hours : ''"
-                                    placeholder="0"
-                                    :class="{ 'task-workload-input--loading': isEstimatedHoursSaving(task.id) }"
-                                    :disabled="isEstimatedHoursSaving(task.id)"
-                                    @change="saveTaskEstimatedHours(task, $event.target.value)">
+                                <span
+                                    class="task-workload-input-shell"
+                                    :class="{ 'task-workload-input-shell--timer-active': hasActiveTaskTimer(task) }">
+                                    <input
+                                        type="number"
+                                        class="form-control form-control-sm task-workload-input"
+                                        min="0"
+                                        step="0.1"
+                                        :value="task.estimated_hours != null && task.estimated_hours !== '' ? task.estimated_hours : ''"
+                                        placeholder="0"
+                                        :class="{ 'task-workload-input--loading': isEstimatedHoursSaving(task.id) }"
+                                        :disabled="isEstimatedHoursSaving(task.id)"
+                                        @change="saveTaskEstimatedHours(task, $event.target.value)">
+                                </span>
                                 <button
                                     v-if="canTrackTaskTime(task)"
                                     type="button"
@@ -490,7 +498,12 @@ if($_SESSION['show_project'] == 0){
                                     <i :class="isTaskTimerActive(task.id) ? 'fa fa-stop' : 'fa fa-play'"></i>
                                 </button>
                             </template>
-                            <span v-else class="text-nowrap">{{ formatEstimatedHours(task.estimated_hours) }}</span>
+                            <span
+                                v-else
+                                class="task-workload-input-shell text-nowrap"
+                                :class="{ 'task-workload-input-shell--timer-active': hasActiveTaskTimer(task) }">
+                                <span class="task-workload-display">{{ formatEstimatedHours(task.estimated_hours) }}</span>
+                            </span>
                         </div>
                     </div>
                     <div class="task-col-note">

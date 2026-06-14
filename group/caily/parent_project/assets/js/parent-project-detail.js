@@ -4314,6 +4314,7 @@ createApp({
         async updateChildProject() {
             this.syncChildProjectDateFieldsFromPickers(true);
             if (!this.validateEditChildProjectForm()) {
+                this.notifyChildProjectValidationError();
                 return;
             }
 
@@ -4493,7 +4494,7 @@ createApp({
             });
         },
 
-        /** 期限日なし→納期任意。期限日あり（GUIS側のみ期限日表示）→CAILY納期/GUIS納期は担当に応じて必須。両方入力時はGUIS納期≥CAILY納期。 */
+        /** 期限日なし→納期任意。期限日あり→CAILY/GUIS納期は担当に応じて必須。GUIS納期あり→期限日必須。両方入力時はGUIS納期≥CAILY納期。 */
         validateChildProjectNoukiFields(project, errors) {
             let isValid = true;
             const tantou = (project.tantou || '').trim();
@@ -4502,6 +4503,12 @@ createApp({
             const end = (project.end_date || '').trim();
             const showGuisFields = !this.isCailyBranchUser;
             const endFilled = showGuisFields && this.hasChildProjectDateValue(end);
+            const guisFilled = showGuisFields && this.hasChildProjectDateValue(guis);
+
+            if (guisFilled && !endFilled) {
+                errors.end_date = 'GUIS納期を入力した場合、期限日(実納期)は必須です';
+                isValid = false;
+            }
 
             if (endFilled) {
                 if (tantou === 'CAILY' && !caily) {
@@ -4607,8 +4614,13 @@ createApp({
             return isValid;
         },
 
+        notifyChildProjectValidationError() {
+            showMessage('入力内容にエラーがあります。内容をご確認ください。', true);
+        },
+
         async createChildProject() {
             if (!this.validateChildProjectForm()) {
+                this.notifyChildProjectValidationError();
                 return;
             }
 

@@ -240,14 +240,14 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                                             </label>
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
+                                    <!-- <div class="col-md-3">
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" id="request_3d" v-model="parentProject.request_3d">
                                             <label class="form-check-label" for="request_3d">
                                                 3D
                                             </label>
                                         </div>
-                                    </div>
+                                    </div> -->
                                     <div class="col-md-3">
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" id="request_other" v-model="parentProject.request_other">

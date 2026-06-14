@@ -59,7 +59,7 @@ $view->heading('建物一覧');
                                 <option value="意匠" data-i18n="意匠">意匠</option>
                                 <option value="設備" data-i18n="設備">設備</option>
                                 <option value="省エネ" data-i18n="省エネ">省エネ</option>
-                                <option value="3D">3D</option>
+                                <!-- <option value="3D">3D</option> -->
                                 <option value="その他" data-i18n="その他">その他</option>
                             </select>
                         </div>
@@ -158,11 +158,17 @@ $view->heading('建物一覧');
                             <tbody>
                                 <tr v-for="project in filteredParentProjects" :key="project.id">
                                         <td class="text-center">
-                                            <i class="fa fa-star" 
-                                               :class="project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
-                                               style="cursor: pointer; font-size: 1.2em;"
-                                               @click="toggleFavorite(project)"
-                                               :title="project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
+                                            <div class="d-flex flex-column align-items-center gap-1">
+                                                <i class="fa fa-star" 
+                                                   :class="project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
+                                                   style="cursor: pointer; font-size: 1.2em;"
+                                                   @click="toggleFavorite(project)"
+                                                   :title="project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
+                                                <span v-if="isNewParentProject(project.created_at)"
+                                                      class="badge bg-success"
+                                                      style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;"
+                                                      data-i18n="NEW">NEW</span>
+                                            </div>
                                         </td>
                                         <td v-if="isColumnVisible('project_number')">
                                             <span class="badge bg-label-info">{{ project.project_number || '-' }}</span>

@@ -749,7 +749,7 @@
                                         <td>
                                             <div class="d-flex align-items-center gap-1">
                                                 <template v-for="assignee in getTaskAssignees(task)" :key="'assignee-' + task.id + '-' + assignee.id">
-                                                    <span class="avatar avatar-xs" :title="assignee.realname">
+                                                    <span class="avatar" :title="assignee.realname">
                                                         <img v-if="getUserAvatarSrc(assignee)" class="rounded-circle" :src="getUserAvatarSrc(assignee)" :alt="assignee.realname" width="24" height="24">
                                                         <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getUserInitials(assignee.realname) }}</span>
                                                     </span>
@@ -765,7 +765,7 @@
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center gap-1" v-if="getTaskCreator(task)">
-                                                <span class="avatar avatar-xs" :title="getTaskCreator(task).realname">
+                                                <span class="avatar" :title="getTaskCreator(task).realname">
                                                     <img v-if="getUserAvatarSrc(getTaskCreator(task))" class="rounded-circle" :src="getUserAvatarSrc(getTaskCreator(task))" :alt="getTaskCreator(task).realname" width="24" height="24">
                                                     <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getUserInitials(getTaskCreator(task).realname) }}</span>
                                                 </span>
@@ -794,7 +794,11 @@
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center gap-1 task-workload-cell">
-                                                <span class="small text-nowrap">{{ formatEstimatedHours(task.estimated_hours) }}</span>
+                                                <span
+                                                    class="task-workload-input-shell"
+                                                    :class="{ 'task-workload-input-shell--timer-active': hasActiveTaskTimer(task) }">
+                                                    <span class="small text-nowrap task-workload-display">{{ formatEstimatedHours(task.estimated_hours) }}</span>
+                                                </span>
                                                 <button
                                                     v-if="canTrackTaskTime(task)"
                                                     type="button"

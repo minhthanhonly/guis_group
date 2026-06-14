@@ -111,7 +111,7 @@ if (!empty($_SESSION['userid'])) {
       </div>
     </div>
     <div v-else class="row g-6 mt-1">
-    <div class="col-md-12 col-lg-6 col-xl-6">
+    <div class="col-md-12" :class="{'col-lg-6 col-xl-6': canApprove}">
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between align-items-center py-3">
           <h5 class="card-title mb-0">最近の申請</h5>
@@ -147,7 +147,7 @@ if (!empty($_SESSION['userid'])) {
                       <i :class="statusIcon(req.status)" class="me-1"></i>{{ statusLabel(req.status) }}
                     </span>
                   </td>
-                  <td>{{ req.status === 'approved' && req.approver_realname ? req.approver_realname : '-' }}</td>
+                  <td>{{ (req.status === 'approved' || req.status === 'completed') && req.approver_realname ? req.approver_realname : '-' }}</td>
                   <td>
                     <a :href="detailUrl(req.id)" class="btn btn-sm btn-outline-info">詳細</a>
                   </td>

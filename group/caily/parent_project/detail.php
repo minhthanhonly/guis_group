@@ -1277,7 +1277,7 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-4" v-if="!isCailyBranchUser">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span></label>
+                                    <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span> <span v-if="(newChildProject.guis_nouki || '').trim()" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.end_date"
                                         id="end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                         :class="{ 'is-invalid': childProjectValidationErrors.end_date }">
@@ -1583,7 +1583,7 @@ $view->heading('建物詳細');
                             </div>
                             <div class="col-md-4" v-if="!isCailyBranchUser">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span></label>
+                                    <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span> <span v-if="(editingChildProject.guis_nouki || '').trim()" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.end_date"
                                         id="edit_end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                         :class="{ 'is-invalid': editChildProjectValidationErrors.end_date }">

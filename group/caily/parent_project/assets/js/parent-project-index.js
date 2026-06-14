@@ -645,6 +645,22 @@ createApp({
         formatDateTime(date) {
             return this.formatTaskDateTimeInDisplayTz(date);
         },
+        isNewParentProject(createdAt) {
+            if (!createdAt) {
+                return false;
+            }
+            const created = this.parseTaskDateTime(createdAt, SERVER_TASK_TIMEZONE);
+            if (!created) {
+                return false;
+            }
+            const now = (typeof moment !== 'undefined' && moment.tz)
+                ? moment.tz(SERVER_TASK_TIMEZONE)
+                : (typeof moment !== 'undefined' ? moment() : null);
+            if (!now) {
+                return false;
+            }
+            return now.diff(created, 'hours', true) < 8;
+        },
         formatPrice(amount) {
             const n = Number(amount) || 0;
             return '¥' + n.toLocaleString('ja-JP');

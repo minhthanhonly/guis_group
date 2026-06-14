@@ -64,9 +64,29 @@
         return Number.isNaN(date.getTime()) ? null : date;
     }
 
+    function normalizeTaskIds(ids) {
+        if (!Array.isArray(ids)) {
+            return [];
+        }
+        return ids
+            .map((id) => parseInt(id, 10))
+            .filter((id) => !Number.isNaN(id) && id > 0);
+    }
+
+    function sameTaskIdSet(a, b) {
+        if (a.length !== b.length) {
+            return false;
+        }
+        const setB = new Set(b);
+        return a.every((id) => setB.has(id));
+    }
+
     const TaskTimer = {
         active: null,
+        activeTaskIds: [],
         tickInterval: null,
+        syncInterval: null,
+        syncIntervalMs: 15000,
         busy: false,
         localVersion: 0,
         els: {},
@@ -91,10 +111,61 @@
             }
 
             this.refresh();
+            this.startGlobalSync();
+            this.bindSyncListeners();
+        },
+
+        bindSyncListeners() {
+            if (this._syncListenersBound) return;
+            this._syncListenersBound = true;
+
+            window.addEventListener('focus', () => {
+                this.refresh();
+            });
+
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    this.refresh();
+                }
+            });
         },
 
         dispatchChanged(detail) {
             document.dispatchEvent(new CustomEvent('task-timer-changed', { detail: detail || {} }));
+        },
+
+        updateActiveTaskIds(ids) {
+            const next = normalizeTaskIds(ids);
+            const changed = !sameTaskIdSet(this.activeTaskIds, next);
+            this.activeTaskIds = next;
+            if (changed) {
+                this.dispatchChanged({ active_task_ids: next.slice() });
+            }
+        },
+
+        removeActiveTaskId(taskId) {
+            const id = parseInt(taskId, 10);
+            if (Number.isNaN(id) || id <= 0) {
+                return;
+            }
+            this.updateActiveTaskIds(this.activeTaskIds.filter((activeId) => activeId !== id));
+        },
+
+        applyActiveTaskIdsFromResponse(data) {
+            if (data && Array.isArray(data.active_task_ids)) {
+                this.updateActiveTaskIds(data.active_task_ids);
+            }
+        },
+
+        hasActiveTimerForTask(taskId) {
+            if (!taskId) {
+                return false;
+            }
+            const id = parseInt(taskId, 10);
+            if (Number.isNaN(id) || id <= 0) {
+                return false;
+            }
+            return this.activeTaskIds.includes(id);
         },
 
         setActive(active, fromRemote) {
@@ -141,6 +212,20 @@
             }
         },
 
+        startGlobalSync() {
+            this.stopGlobalSync();
+            this.syncInterval = window.setInterval(() => {
+                this.refresh();
+            }, this.syncIntervalMs);
+        },
+
+        stopGlobalSync() {
+            if (this.syncInterval) {
+                window.clearInterval(this.syncInterval);
+                this.syncInterval = null;
+            }
+        },
+
         updateWidget() {
             if (!this.els.nav || !this.els.display) {
                 this.bindElements();
@@ -177,13 +262,28 @@
 
         async refresh() {
             const versionAtStart = this.localVersion;
+            const previousActive = this.active;
             try {
                 const response = await axios.get(API.getActive);
                 if (versionAtStart !== this.localVersion) {
                     return;
                 }
                 if (response.data && response.data.status === 'success') {
-                    this.setActive(response.data.active || null, true);
+                    this.applyActiveTaskIdsFromResponse(response.data);
+                    const remoteActive = response.data.active || null;
+                    if (previousActive && !remoteActive) {
+                        const stoppedTaskId = previousActive.task_id;
+                        this.setActive(null, true);
+                        this.removeActiveTaskId(stoppedTaskId);
+                        this.dispatchChanged({
+                            active: null,
+                            task_id: stoppedTaskId,
+                            stopped: true,
+                            remote: true,
+                        });
+                        return;
+                    }
+                    this.setActive(remoteActive, true);
                 }
             } catch (error) {
                 console.error('Failed to load active task timer', error);
@@ -203,6 +303,7 @@
                 const data = response.data || {};
 
                 if (data.status === 'success') {
+                    this.applyActiveTaskIdsFromResponse(data);
                     const active = data.active || null;
                     if (active) {
                         if (!active.start_timestamp) {
@@ -254,6 +355,11 @@
                 const data = response.data || {};
 
                 if (data.status === 'success') {
+                    if (Array.isArray(data.active_task_ids)) {
+                        this.updateActiveTaskIds(data.active_task_ids);
+                    } else if (data.task_id) {
+                        this.removeActiveTaskId(data.task_id);
+                    }
                     this.setActive(null);
                     this.dispatchChanged({
                         active: null,

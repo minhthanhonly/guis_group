@@ -657,6 +657,9 @@ class NotificationManager {
                         this.showWindowsNotification(notif);
                     }
                     this.showToastNotification(notif);
+                    if (window.TaskTimer && window.TaskTimer.active) {
+                        window.TaskTimer.refresh();
+                    }
                     // Flash window title để thu hút sự chú ý (theo ngôn ngữ hiện tại)
                     if (!bridgeOpen) {
                         const localized = this.getLocalizedText(notif);

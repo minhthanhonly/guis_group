@@ -186,15 +186,15 @@ function mountTodoApp() {
             },
             methods: {
                 /**
-                 * Set default tab: show tab with count > 1; if both > 1, show Custom Todo.
+                 * Set default tab: prioritize My Tasks when both tabs have items.
                  */
                 applyDefaultTab() {
                     const todoCount = this.incompleteTodoCount;
                     const taskCount = this.myTaskCount;
-                    if (todoCount >= 1) {
-                        this.activeTab = 'todos';
-                    } else if (taskCount >= 1) {
+                    if (taskCount >= 1) {
                         this.activeTab = 'tasks';
+                    } else if (todoCount >= 1) {
+                        this.activeTab = 'todos';
                     } else {
                         this.activeTab = 'tasks';
                     }
@@ -247,6 +247,9 @@ function mountTodoApp() {
                         this.loadingTasks = false;
                         this.updateTotalCount();
                         this.$nextTick(() => this.initMyTaskStatusDropdowns());
+                        if (window.TaskTimer && window.TaskTimer.active) {
+                            window.TaskTimer.refresh();
+                        }
                     }
                 },
 
@@ -895,12 +898,16 @@ function mountTodoApp() {
                 },
 
                 getUserInitials(name) {
-                    if (!name) return '?';
-                    const parts = String(name).trim().split(/\s+/);
-                    if (parts.length >= 2) {
-                        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                    if (typeof getAvatarName === 'function') {
+                        return getAvatarName(name);
                     }
-                    return name.substring(0, 2).toUpperCase();
+                    if (!name) return '?';
+                    const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
+                    if (hasJapanese) {
+                        return name.substring(0, 2);
+                    }
+                    const words = String(name).trim().split(' ');
+                    return words[words.length - 1] || '?';
                 },
 
                 isAssignedToMe(task) {
@@ -929,6 +936,34 @@ function mountTodoApp() {
 
                 isTaskTimerActive(taskId) {
                     return !!(window.TaskTimer && window.TaskTimer.isActive(taskId));
+                },
+
+                hasActiveTaskTimer(taskOrId) {
+                    const taskId = taskOrId && typeof taskOrId === 'object' ? taskOrId.id : taskOrId;
+                    if (!taskId) {
+                        return false;
+                    }
+                    if (window.TaskTimer) {
+                        return window.TaskTimer.hasActiveTimerForTask(taskId);
+                    }
+                    if (taskOrId && typeof taskOrId === 'object' && taskOrId.timer_active) {
+                        return true;
+                    }
+                    const task = this.tasks.find(function (t) {
+                        return parseInt(t.id, 10) === parseInt(taskId, 10);
+                    });
+                    return !!(task && task.timer_active);
+                },
+
+                syncTaskTimerActiveFlags(activeTaskIds) {
+                    const ids = Array.isArray(activeTaskIds) ? activeTaskIds : [];
+                    const activeSet = new Set(ids.map(function (id) { return parseInt(id, 10); }));
+                    this.tasks.forEach(function (task) {
+                        if (!task || task.id == null) {
+                            return;
+                        }
+                        task.timer_active = activeSet.has(parseInt(task.id, 10));
+                    });
                 },
 
                 isTaskTimerToggling(taskId) {
@@ -992,6 +1027,16 @@ function mountTodoApp() {
                     const detail = event && event.detail ? event.detail : {};
                     if (detail.stopped && detail.task_id != null && detail.estimated_hours != null) {
                         this.applyTaskEstimatedHours(detail.task_id, detail.estimated_hours);
+                    }
+                    if (window.TaskTimer && Array.isArray(window.TaskTimer.activeTaskIds)) {
+                        this.syncTaskTimerActiveFlags(window.TaskTimer.activeTaskIds);
+                    } else if (detail.stopped && detail.task_id != null) {
+                        const stoppedId = parseInt(detail.task_id, 10);
+                        this.tasks.forEach(function (task) {
+                            if (task && parseInt(task.id, 10) === stoppedId) {
+                                task.timer_active = false;
+                            }
+                        });
                     }
                     this.$forceUpdate();
                 },
@@ -1193,6 +1238,22 @@ function mountTodoApp() {
                         
                         if (response.data.status == 'success') {
                             task.status = newStatus;
+                            if (
+                                (newStatus === 'completed' || newStatus === 'cancelled')
+                                && window.TaskTimer
+                                && window.TaskTimer.isActive(task.id)
+                            ) {
+                                const stopped = response.data.stopped_timer;
+                                if (stopped && parseInt(stopped.task_id, 10) === parseInt(task.id, 10)) {
+                                    window.TaskTimer.setActive(null);
+                                    window.TaskTimer.removeActiveTaskId(stopped.task_id);
+                                } else {
+                                    await window.TaskTimer.stop(task.id);
+                                }
+                            }
+                            if (window.TaskTimer && Array.isArray(response.data.active_task_ids)) {
+                                window.TaskTimer.updateActiveTaskIds(response.data.active_task_ids);
+                            }
                             if (typeof showMessage === 'function') {
                                 showMessage('ステータスを更新しました。', false);
                             }

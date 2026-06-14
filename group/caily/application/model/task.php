@@ -583,6 +583,61 @@ class Task extends ApplicationModel {
             }
         }
         unset($task);
+
+        $this->attachActiveTimerFlags($tasks);
+    }
+
+    private function fetchActiveTimerTaskIdSet(array $taskIds = null) {
+        $whereParts = array('te.end_time IS NULL');
+        if ($taskIds !== null) {
+            $taskIds = array_values(array_filter(array_map('intval', $taskIds), function ($id) {
+                return $id > 0;
+            }));
+            if (empty($taskIds)) {
+                return array();
+            }
+            $whereParts[] = 'te.task_id IN (' . implode(',', $taskIds) . ')';
+        }
+
+        $rows = $this->fetchAll(sprintf(
+            'SELECT DISTINCT te.task_id FROM %stime_entries te WHERE %s',
+            DB_PREFIX,
+            implode(' AND ', $whereParts)
+        ));
+        if (!is_array($rows)) {
+            return array();
+        }
+
+        $set = array();
+        foreach ($rows as $row) {
+            $set[intval($row['task_id'])] = true;
+        }
+        return $set;
+    }
+
+    private function fetchAllActiveTimerTaskIds() {
+        return array_map('intval', array_keys($this->fetchActiveTimerTaskIdSet(null)));
+    }
+
+    private function attachActiveTimerFlags(array &$tasks) {
+        if (empty($tasks)) {
+            return;
+        }
+
+        $taskIds = array_values(array_filter(array_map('intval', array_column($tasks, 'id')), function ($id) {
+            return $id > 0;
+        }));
+        $activeSet = $this->fetchActiveTimerTaskIdSet($taskIds);
+        foreach ($tasks as &$task) {
+            $tid = intval($task['id']);
+            $task['timer_active'] = !empty($activeSet[$tid]);
+        }
+        unset($task);
+    }
+
+    private function appendActiveTimerTaskIds(array $response) {
+        $response['active_task_ids'] = $this->fetchAllActiveTimerTaskIds();
+        return $response;
     }
 
     private function fetchSubtaskCountMap(array $taskIds) {
@@ -1147,7 +1202,38 @@ class Task extends ApplicationModel {
             $syncOptions['recalc_prices'] = true;
         }
         $this->syncTaskDrawingsForTask($id, $mergedTask, $syncOptions);
-        return ['status' => 'success'];
+
+        $response = array('status' => 'success');
+        if ($status === 'completed' || $status === 'cancelled') {
+            $userId = $this->resolveTimerUserId();
+            $activeEntryId = 0;
+            if ($userId !== '') {
+                $active = $this->fetchActiveTaskTimerRow($userId);
+                if ($active && intval($active['task_id']) === $id) {
+                    $activeEntryId = intval($active['id']);
+                }
+            }
+
+            $stopResults = $this->stopAllActiveTaskTimersForTask($id);
+            if ($activeEntryId > 0) {
+                foreach ($stopResults as $stopResult) {
+                    if (
+                        isset($stopResult['status'], $stopResult['entry_id'])
+                        && $stopResult['status'] === 'success'
+                        && intval($stopResult['entry_id']) === $activeEntryId
+                    ) {
+                        $response['stopped_timer'] = array(
+                            'task_id' => $stopResult['task_id'],
+                            'hours_added' => $stopResult['hours_added'],
+                            'estimated_hours' => $stopResult['estimated_hours'],
+                        );
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $this->appendActiveTimerTaskIds($response);
     }
 
     function updateProgress() {
@@ -1478,8 +1564,19 @@ class Task extends ApplicationModel {
             return ['status' => 'error', 'message' => 'Missing task id'];
         }
 
-        if (!$this->checkPermission($project_id, $id)) {
-            return ['status' => 'error', 'message' => 'このタスクを更新する権限がありません'];
+        if (!$project_id) {
+            $existing = $this->getById($id);
+            if ($existing && !empty($existing['project_id'])) {
+                $project_id = intval($existing['project_id']);
+            }
+        }
+
+        if (!$this->canUserEditTaskNote($project_id, $id)) {
+            return [
+                'status' => 'error',
+                'message' => 'このタスクのメモを更新する権限がありません',
+                'http_status' => 403,
+            ];
         }
 
         $old = $this->getById($id);
@@ -1504,6 +1601,30 @@ class Task extends ApplicationModel {
         }
 
         return ['status' => 'success'];
+    }
+
+    private function canUserEditTaskNote($projectId, $taskId) {
+        $projectId = intval($projectId);
+        $taskId = intval($taskId);
+        if ($projectId <= 0 || $taskId <= 0) {
+            return false;
+        }
+
+        $perm = $this->resolveProjectTaskPermissions($projectId);
+        if (!$perm || empty($perm['is_member'])) {
+            return false;
+        }
+
+        if (!empty($perm['can_manage_project'])) {
+            return true;
+        }
+
+        $task = $this->getById($taskId);
+        if (!$task || intval($task['project_id']) !== $projectId) {
+            return false;
+        }
+
+        return $this->isCurrentUserAssignedToTask($task);
     }
 
     private function resolveTimerUserId() {
@@ -1546,6 +1667,38 @@ class Task extends ApplicationModel {
         return $this->fetchOne($query);
     }
 
+    private function fetchActiveTaskTimerRowsByTaskId($taskId) {
+        $taskId = intval($taskId);
+        if ($taskId <= 0) {
+            return array();
+        }
+
+        $query = sprintf(
+            "SELECT te.*, t.title AS task_title, t.project_id, t.estimated_hours, p.name AS project_name
+            FROM %stime_entries te
+            INNER JOIN %stasks t ON te.task_id = t.id
+            LEFT JOIN %sprojects p ON t.project_id = p.id
+            WHERE te.task_id = %d AND te.end_time IS NULL
+            ORDER BY te.id ASC",
+            DB_PREFIX,
+            DB_PREFIX,
+            DB_PREFIX,
+            $taskId
+        );
+
+        $rows = $this->fetchAll($query);
+        return is_array($rows) ? $rows : array();
+    }
+
+    private function stopAllActiveTaskTimersForTask($taskId) {
+        $rows = $this->fetchActiveTaskTimerRowsByTaskId($taskId);
+        $results = array();
+        foreach ($rows as $row) {
+            $results[] = $this->stopActiveTaskTimerEntry($row);
+        }
+        return $results;
+    }
+
     private function formatActiveTimerPayload($row) {
         if (!$row) {
             return null;
@@ -1575,10 +1728,10 @@ class Task extends ApplicationModel {
         }
 
         $row = $this->fetchActiveTaskTimerRow($userId);
-        return array(
+        return $this->appendActiveTimerTaskIds(array(
             'status' => 'success',
             'active' => $row ? $this->formatActiveTimerPayload($row) : null,
-        );
+        ));
     }
 
     private function stopActiveTaskTimerEntry($active) {
@@ -1639,6 +1792,7 @@ class Task extends ApplicationModel {
 
         return array(
             'status' => 'success',
+            'entry_id' => intval($active['id']),
             'task_id' => $taskId,
             'hours_added' => $hours,
             'estimated_hours' => $newHours,
@@ -1715,7 +1869,7 @@ class Task extends ApplicationModel {
             $response['stopped_previous_task'] = $stoppedPreviousTask;
         }
 
-        return $response;
+        return $this->appendActiveTimerTaskIds($response);
     }
 
     function stopTaskTimer() {
@@ -1756,7 +1910,7 @@ class Task extends ApplicationModel {
         }
 
         $result['active'] = null;
-        return $result;
+        return $this->appendActiveTimerTaskIds($result);
     }
 
     function updatePriority() {
@@ -3523,6 +3677,8 @@ class Task extends ApplicationModel {
                 'acknowledgements' => $acknowledgementsMap[$row['id']] ?? []
             ];
         }
+
+        $this->attachActiveTimerFlags($tasks);
 
         // 5. Determine unassigned users (no active tasks: exclude completed & cancelled)
         // Build set of users that have at least one active task
