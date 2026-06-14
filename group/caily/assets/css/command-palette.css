@@ -25,6 +25,25 @@
 	font-size: 0.95rem;
 }
 
+.command-palette-mode-group [data-command-palette-mode] {
+	font-weight: 500;
+	transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.command-palette-mode-group [data-command-palette-mode].active {
+	background-color: var(--bs-primary) !important;
+	border-color: var(--bs-primary) !important;
+	color: #fff !important;
+	box-shadow: 0 2px 8px rgba(var(--bs-primary-rgb), 0.45);
+	z-index: 2;
+}
+
+.command-palette-mode-group [data-command-palette-mode]:not(.active):hover {
+	background-color: rgba(var(--bs-primary-rgb), 0.1);
+	border-color: var(--bs-primary);
+	color: var(--bs-primary);
+}
+
 .command-palette-results {
 	max-height: 280px;
 	overflow-y: auto;
@@ -52,6 +71,10 @@
 .command-palette-result-title {
 	font-weight: 600;
 	font-size: 0.875rem;
+}
+
+.command-palette-result-title .badge {
+	font-weight: 500;
 }
 
 .command-palette-result-meta {

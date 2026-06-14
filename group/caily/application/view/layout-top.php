@@ -1109,7 +1109,7 @@
                 </div>
                 <div class="modal-body">
                   <div class="mb-3">
-                    <div class="btn-group btn-group-sm mb-2" role="group">
+                    <div class="btn-group btn-group-sm mb-2 command-palette-mode-group" role="group">
                       <button type="button" class="btn btn-outline-primary active" data-command-palette-mode="parent" data-i18n="建物を検索">建物を検索</button>
                       <button type="button" class="btn btn-outline-primary" data-command-palette-mode="project" data-i18n="案件を検索">案件を検索</button>
                       <?php if (($_SESSION['group'] ?? '') != '7' && ($_SESSION['group'] ?? '') != '6'): ?>

@@ -24,6 +24,46 @@
         return fallback || key;
     }
 
+    function getProjectOrderTypeBadgeClass(orderType) {
+        var type = String(orderType || '').trim().toLowerCase();
+        if (type === '修正' || type === 'edit') {
+            return 'bg-warning';
+        }
+        if (type === '新規' || type === 'new') {
+            return 'bg-primary';
+        }
+        return 'bg-info';
+    }
+
+    function formatProjectOrderTypeLabel(value) {
+        var map = {
+            contract: '契約図',
+            new: '新規',
+            edit: '修正',
+            other: 'その他'
+        };
+        var v = String(value || '').trim();
+        return map[v] || v;
+    }
+
+    function parseProjectOrderTypes(raw) {
+        if (!raw) {
+            return [];
+        }
+        return String(raw).split(',').map(function (part) {
+            return formatProjectOrderTypeLabel(part.trim());
+        }).filter(Boolean);
+    }
+
+    function appendProjectOrderTypeBadges(container, rawOrderType) {
+        parseProjectOrderTypes(rawOrderType).forEach(function (orderType) {
+            var badge = document.createElement('span');
+            badge.className = 'badge ' + getProjectOrderTypeBadgeClass(orderType) + ' small';
+            badge.textContent = orderType;
+            container.appendChild(badge);
+        });
+    }
+
     function shouldIgnoreTarget(target) {
         if (!target) {
             return false;
@@ -212,7 +252,7 @@
         });
         if (searchInput) {
             if (searchMode === 'project') {
-                searchInput.placeholder = t('案件ID / 名称 / 会社名', '案件ID / 名称 / 会社名');
+                searchInput.placeholder = t('案件ID / 名称 / 会社名 / 工事番号 / 支店名', '案件ID / 名称 / 会社名 / 工事番号 / 支店名');
             } else if (searchMode === 'customer') {
                 searchInput.placeholder = t('会社名 / 支店名 / メール', '会社名 / 支店名 / メール');
             } else {
@@ -245,9 +285,20 @@
             if (searchMode === 'parent') {
                 title.textContent = '#' + item.id + ' ' + (item.project_name || item.company_name || '');
             } else if (searchMode === 'customer') {
-                title.textContent = '#' + item.id + ' ' + (item.company_name || '');
+                var customerTitle = '#' + item.id;
+                if (item.name) {
+                    customerTitle += ' ' + item.name;
+                }
+                if (item.branch) {
+                    customerTitle += (item.name ? ' · ' : '') + ' (支店名: ' + item.branch + ')';
+                }
+                title.textContent = customerTitle;
             } else {
-                title.textContent = '#' + item.id + ' ' + (item.name || '');
+                title.className = 'command-palette-result-title d-flex align-items-center flex-wrap gap-1';
+                var projectTitleText = document.createElement('span');
+                projectTitleText.textContent = '#' + item.id + ' ' + (item.name || '');
+                title.appendChild(projectTitleText);
+                appendProjectOrderTypeBadges(title, item.project_order_type);
             }
 
             var meta = document.createElement('div');
@@ -260,15 +311,14 @@
                 ].filter(Boolean).join(' · ');
             } else if (searchMode === 'customer') {
                 meta.textContent = [
-                    item.branch || '',
-                    item.name || '',
+                    item.company_name ? (t('会社名', '会社名') + ': ' + item.company_name) : '',
                     item.email || '',
-                    item.category_name ? ('カテゴリー: ' + item.category_name) : ''
+                    item.category_name ? (t('カテゴリー', 'カテゴリー') + ': ' + item.category_name) : ''
                 ].filter(Boolean).join(' · ');
             } else {
                 meta.textContent = [
-                    item.company_name || '',
-                    item.branch_name || '',
+                    item.company_name ? (t('会社名', '会社名') + ': ' + item.company_name) : '',
+                    item.branch_name ? (t('支店名', '支店名') + ': ' + item.branch_name) : '',
                     item.parent_construction_number ? ('工事: ' + item.parent_construction_number) : ''
                 ].filter(Boolean).join(' · ');
             }

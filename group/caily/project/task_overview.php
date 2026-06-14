@@ -185,7 +185,7 @@ if($_SESSION['show_project'] == 0){
                                         <span v-if="getTaskNoteSnippet(task.note)" class="small text-truncate d-inline-block overview-task-note" :title="getTaskNoteSnippet(task.note)">{{ getTaskNoteSnippet(task.note) }}</span>
                                     </td>
                                     <td>
-                                        <div class="d-flex align-items-center gap-1 flex-wrap small">
+                                        <div class="d-flex align-items-center gap-1 small">
                                             <span class="text-nowrap" :class="{ 'text-danger fw-bold': isTaskDueExceedsProjectDue(task) }">{{ formatDate(task.due_date) }}</span>
                                             <i v-if="hasPeriodWarning(task)" class="fas fa-exclamation-triangle text-warning ms-1"
                                                data-bs-toggle="tooltip" data-bs-placement="top"

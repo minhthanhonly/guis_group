@@ -6144,9 +6144,12 @@ class Project extends ApplicationModel {
         $searchWhere = $this->buildPaletteSearchWhere($q, [
             'p.name',
             'CAST(p.id AS CHAR)',
-            'c.company_name',
-            'c.branch',
-            'c.name',
+            'pc.company_name',
+            'pc.branch',
+            'pc.name',
+            'pp_c.company_name',
+            'pp_c.branch',
+            'pp_c.name',
             'pp.construction_number',
             'pp.company_name',
             'pp.branch_name',
@@ -6155,19 +6158,23 @@ class Project extends ApplicationModel {
             $whereArr[] = $searchWhere;
         }
         $where = 'WHERE ' . implode(' AND ', $whereArr);
+        $customerJoin = $this->getProjectListCustomerJoinSql();
         $query = sprintf(
-            "SELECT p.id, p.name, p.project_number,
-                    c.company_name, c.branch as branch_name,
+            "SELECT p.id, p.name, p.project_number, p.project_order_type,
+                    %s AS company_name,
+                    %s AS branch_name,
                     pp.construction_number as parent_construction_number
              FROM %sprojects p
-             LEFT JOIN %scustomer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
              LEFT JOIN %sparent_projects pp ON p.parent_project_id = pp.id
+             %s
              %s
              ORDER BY p.updated_at DESC
              LIMIT 10",
+            $this->sqlEffectiveCompanyName(),
+            $this->sqlEffectiveBranchName(),
             DB_PREFIX,
             DB_PREFIX,
-            DB_PREFIX,
+            $customerJoin,
             $where
         );
         return $this->fetchAll($query);

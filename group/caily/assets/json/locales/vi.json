@@ -633,7 +633,7 @@
     "建物を検索": "Tìm công trình",
     "案件を検索": "Tìm dự án",
     "工事番号 / ID / 会社名 / 支店名": "Mã công trình / ID / tên KH / chi nhánh",
-    "案件ID / 名称 / 会社名": "ID dự án / tên / công ty",
+    "案件ID / 名称 / 会社名 / 工事番号 / 支店名": "ID dự án / tên / công ty / mã công trình / chi nhánh",
     "案件一覧へ": "Đi tới danh sách dự án",
     "建物一覧へ": "Đi tới danh sách công trình",
     "検索結果がありません": "Không có kết quả",
