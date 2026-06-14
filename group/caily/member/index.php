@@ -344,5 +344,3 @@ $view->heading('メンバー一覧');
 <?php
 $view->footing();
 ?>
-
-<script src="<?=ROOT?>assets/js/member.js?v=<?=CACHE_VERSION?>"></script>
