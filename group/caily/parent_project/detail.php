@@ -777,10 +777,10 @@ $view->heading('建物詳細');
                                 </span>
                             </div>
                             <div v-if="activeWorkloadDept.byKind.length" class="row">
-                                <div v-if="activeWorkloadDept.byKind.some(item => item.hours > 0)" class="col-lg-5 mb-3 mb-lg-0">
+                                <div v-if="activeWorkloadDept.byKind.some(item => item.hours > 0)" class="col-lg-6 mb-3 mb-lg-0">
                                     <div id="workload-dept-chart-active" style="min-height: 300px;"></div>
                                 </div>
-                                <div :class="activeWorkloadDept.byKind.some(item => item.hours > 0) ? 'col-lg-7' : 'col-12'">
+                                <div :class="activeWorkloadDept.byKind.some(item => item.hours > 0) ? 'col-lg-6' : 'col-12'">
                                     <div v-for="(item, idx) in activeWorkloadDept.byKind" :key="item.kind"
                                          class="d-flex justify-content-between align-items-center py-2"
                                          :class="{ 'border-bottom': idx < activeWorkloadDept.byKind.length - 1 }">
@@ -788,7 +788,10 @@ $view->heading('建物詳細');
                                             <span class="badge" :class="getTaskKindBadgeClass(item.kind)">{{ getTaskKindLabel(item.kind) }}</span>
                                             <small class="text-muted">{{ item.count }}<span data-i18n="件">件</span></small>
                                         </div>
-                                        <span class="fw-semibold text-nowrap">{{ formatTotalWorkload(item.hours) }}</span>
+                                        <span class="fw-semibold text-nowrap">
+                                            {{ formatTotalWorkload(item.hours) }}
+                                            <small class="text-muted ms-1">({{ formatWorkloadPercent(item.hours, activeWorkloadDept.totalWorkload) }})</small>
+                                        </span>
                                     </div>
                                 </div>
                             </div>

@@ -1137,6 +1137,13 @@ createApp({
             const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
             return formatted + 'h';
         },
+        formatWorkloadPercent(hours, total) {
+            const h = parseFloat(hours);
+            const t = parseFloat(total);
+            if (Number.isNaN(t) || t <= 0 || Number.isNaN(h) || h <= 0) return '0%';
+            const pct = Math.round((h / t) * 1000) / 10;
+            return (Number.isInteger(pct) ? String(pct) : pct.toFixed(1)) + '%';
+        },
         async loadWorkloadStatsByDepartment() {
             if (!this.childProjects || this.childProjects.length === 0) {
                 this.destroyAllWorkloadCharts();

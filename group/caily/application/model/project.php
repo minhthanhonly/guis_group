@@ -538,6 +538,8 @@ class Project extends ApplicationModel {
             %s as effective_company_name,
             %s as effective_contact_name,
             %s as parent_branch_name,
+            pp.branch_name as parent_project_branch_name,
+            NULLIF(TRIM(pc.branch), '') as project_branch_name,
             %s as customer_name,
             COALESCE(pc.category_id, pp_c.category_id) as category_id,
             pp.company_name as parent_company_name, pp.contact_name as parent_contact_name, pp.construction_number as parent_construction_number,

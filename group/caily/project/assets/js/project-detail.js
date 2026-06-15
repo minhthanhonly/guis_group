@@ -638,6 +638,8 @@ const vueApp = createApp({
                 }
                 
                 // Copy parent project information to child project
+                this.project.parent_project_branch_name = parentProject.branch_name || '';
+                this.project.project_branch_name = rawChildCustomer.branch_name || '';
                 this.project.company_name = parentProject.company_name;
                 this.project.branch_name = parentProject.branch_name;
                 this.project.contact_name = parentProject.contact_name; // 担当様 from parent project

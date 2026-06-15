@@ -144,7 +144,8 @@
         return {
             id: data.id,
             parent_construction_number: data.parent_construction_number || data.building_number || '',
-            parent_branch_name: data.parent_branch_name || data.branch_name || '',
+            building_branch_name: data.parent_project_branch_name || '',
+            project_branch_name: data.project_branch_name || data.child_customer_branch || data.branch_name || '',
             name: data.name || data.building_name || '',
             parent_scale: data.parent_scale || data.building_size || '',
             project_order_type: data.project_order_type || '',
@@ -152,6 +153,25 @@
             caily_nouki: data.caily_nouki || '',
             team_list: data.team_list || []
         };
+    }
+
+    function buildBranchClipboardLines(row) {
+        var buildingBranch = String(row.building_branch_name || '').trim();
+        var projectBranch = String(row.project_branch_name || '').trim();
+
+        if (!buildingBranch && !projectBranch) {
+            return ['支店名: '];
+        }
+        if (!buildingBranch) {
+            return ['支店名: ' + formatBranchNameForClipboard(projectBranch)];
+        }
+        if (!projectBranch || buildingBranch === projectBranch) {
+            return ['支店名: ' + formatBranchNameForClipboard(buildingBranch)];
+        }
+        return [
+            '建物支店名: ' + formatBranchNameForClipboard(buildingBranch),
+            '案件支店名: ' + formatBranchNameForClipboard(projectBranch)
+        ];
     }
 
     function formatTeamsForClipboard(data, teamIdToName) {
@@ -170,10 +190,12 @@
         if (!row.id) return '';
         var detailUrl = new URL('detail.php', global.location.href);
         detailUrl.searchParams.set('id', row.id);
-        return [
+        var lines = [
             PROJECT_CLIPBOARD_SEPARATOR,
-            '工事番号: ' + (row.parent_construction_number || ''),
-            '支店名: ' + formatBranchNameForClipboard(row.parent_branch_name),
+            '工事番号: ' + (row.parent_construction_number || '')
+        ];
+        lines.push.apply(lines, buildBranchClipboardLines(row));
+        lines.push(
             'お施主様名: ' + (row.name || ''),
             '規模: ' + (row.parent_scale || ''),
             '受注形態: ' + (row.project_order_type || ''),
@@ -181,7 +203,8 @@
             'CAILY納期: ' + formatProjectClipboardDateTime(row.caily_nouki),
             'URL: ' + detailUrl.href,
             PROJECT_CLIPBOARD_SEPARATOR
-        ].join('\n');
+        );
+        return lines.join('\n') + '\n';
     }
 
     async function copyTextToClipboard(text) {

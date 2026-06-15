@@ -314,6 +314,19 @@ const TaskApp = createApp({
             this.initSortable();
             this.initTooltips();
         });
+
+        this._tooltipMouseOutHandler = (e) => {
+            if (typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+            const trigger = e.target && e.target.closest ? e.target.closest('[data-bs-toggle="tooltip"]') : null;
+            if (!trigger) return;
+            const app = document.getElementById('app');
+            if (!app || !app.contains(trigger)) return;
+            const related = e.relatedTarget;
+            if (related && trigger.contains(related)) return;
+            const instance = bootstrap.Tooltip.getInstance(trigger);
+            if (instance) instance.hide();
+        };
+        document.addEventListener('mouseout', this._tooltipMouseOutHandler);
         
         // Add click outside listener to close dropdowns
         document.addEventListener('click', (event) => {
@@ -420,6 +433,15 @@ const TaskApp = createApp({
     },
 
     beforeUnmount() {
+        if (this._tooltipInitTimer) {
+            clearTimeout(this._tooltipInitTimer);
+            this._tooltipInitTimer = null;
+        }
+        if (this._tooltipMouseOutHandler) {
+            document.removeEventListener('mouseout', this._tooltipMouseOutHandler);
+            this._tooltipMouseOutHandler = null;
+        }
+        this.disposeTooltips();
         if (typeof i18next !== 'undefined' && i18next.off && this._onI18nLanguageChanged) {
             i18next.off('languageChanged', this._onI18nLanguageChanged);
         }
@@ -428,7 +450,11 @@ const TaskApp = createApp({
     updated() {
         this.$nextTick(() => {
             this.initFlatpickr();
-            this.initTooltips();
+            if (this._tooltipInitTimer) clearTimeout(this._tooltipInitTimer);
+            this._tooltipInitTimer = setTimeout(() => {
+                this._tooltipInitTimer = null;
+                this.initTooltips();
+            }, 50);
         });
     },
     
@@ -2507,16 +2533,37 @@ const TaskApp = createApp({
             return now.isAfter(due, 'minute');
         },
         
-        initTooltips() {
-            // Initialize Bootstrap tooltips
+        disposeTooltips(root) {
+            const scope = root || document.getElementById('app');
+            if (!scope) return;
+
             if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
-                const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-                tooltipTriggerList.map(function (tooltipTriggerEl) {
-                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                scope.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
+                    const instance = bootstrap.Tooltip.getInstance(el);
+                    if (instance) {
+                        instance.hide();
+                        instance.dispose();
+                    }
+                });
+                document.querySelectorAll('body > .tooltip.show').forEach((el) => el.remove());
+            } else if (typeof $ !== 'undefined' && $.fn.tooltip) {
+                $(scope).find('[data-bs-toggle="tooltip"]').tooltip('dispose');
+            }
+        },
+
+        initTooltips() {
+            const scope = document.getElementById('app');
+            if (!scope) return;
+
+            this.disposeTooltips(scope);
+
+            if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                scope.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
+                    if (bootstrap.Tooltip.getInstance(el)) return;
+                    new bootstrap.Tooltip(el, { trigger: 'hover focus' });
                 });
             } else if (typeof $ !== 'undefined' && $.fn.tooltip) {
-                // Fallback to jQuery tooltip if Bootstrap is not available
-                $('[data-bs-toggle="tooltip"]').tooltip();
+                $(scope).find('[data-bs-toggle="tooltip"]').tooltip();
             }
         },
         
@@ -3043,15 +3090,15 @@ const TaskApp = createApp({
 
         async openReactionModal(task, type) {
             if (!task || !task.id) return;
-            
-            // Hide any open tooltips
-            const tooltipElements = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-            tooltipElements.forEach(el => {
-                const tooltipInstance = bootstrap.Tooltip.getInstance(el);
-                if (tooltipInstance) {
-                    tooltipInstance.hide();
-                }
-            });
+
+            const scope = document.getElementById('app');
+            if (scope && typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                scope.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
+                    const instance = bootstrap.Tooltip.getInstance(el);
+                    if (instance) instance.hide();
+                });
+                document.querySelectorAll('body > .tooltip.show').forEach((el) => el.remove());
+            }
             
             this.reactionModal.taskId = task.id;
             this.reactionModal.type = type;

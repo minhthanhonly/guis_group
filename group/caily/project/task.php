@@ -1020,18 +1020,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
-    // Đảm bảo tooltip Bootstrap được ẩn khi mouseout để tránh bị kẹt
-    document.addEventListener('mouseleave', function (e) {
-        const target = e.target;
-        if (!target || typeof target.matches !== 'function' || !target.matches('[data-bs-toggle="tooltip"]')) return;
-        if (window.bootstrap && bootstrap.Tooltip) {
-            const instance = bootstrap.Tooltip.getInstance(target);
-            if (instance) {
-                instance.hide();
-            }
-        }
-    }, true);
 });
 </script>
 
