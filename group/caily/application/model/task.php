@@ -744,7 +744,7 @@ class Task extends ApplicationModel {
             $taskKind = $defaultKind;
         }
         $drawingCount = isset($_POST['drawing_count']) ? max(0, intval($_POST['drawing_count'])) : 0;
-        if (!$projectModel->canUserEditProject($project_id)) {
+        if (!$this->userCanEditTaskDrawing($project_id, $taskKind)) {
             $drawingCount = 0;
         }
         $estimatedHours = $this->normalize_estimated_hours(isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0);
@@ -1272,7 +1272,8 @@ class Task extends ApplicationModel {
     }
 
     /**
-     * Toggle task link to drawings list (drawing_count 0 = off, >0 = on). Project editors only.
+     * Toggle task link to drawings list (drawing_count 0 = off, >0 = on).
+     * Project managers or project members (for 新規作成 / 修正(エラー) / 修正(変更)).
      */
     function updateDrawingLink() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -1280,16 +1281,12 @@ class Task extends ApplicationModel {
         if ($id <= 0 || $project_id <= 0) {
             return ['status' => 'error', 'message' => 'Missing required parameters'];
         }
-        if (!class_exists('Project')) {
-            require_once DIR_MODEL . 'project.php';
-        }
-        $projectModel = new Project();
-        if (!$projectModel->canUserEditProject($project_id)) {
-            return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
-        }
         $old = $this->getById($id);
         if (!$old || intval($old['project_id']) !== $project_id) {
             return ['status' => 'error', 'message' => 'Task not found'];
+        }
+        if (!$this->userCanEditTaskDrawing($project_id, isset($old['task_kind']) ? $old['task_kind'] : '')) {
+            return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
         }
         $linked = isset($_POST['linked']) && (string) $_POST['linked'] === '1';
         if ($linked) {
@@ -1625,6 +1622,26 @@ class Task extends ApplicationModel {
         }
 
         return $this->isCurrentUserAssignedToTask($task);
+    }
+
+    private function userCanEditTaskDrawing($projectId, $taskKind) {
+        $projectId = intval($projectId);
+        if ($projectId <= 0) {
+            return false;
+        }
+
+        $perm = $this->resolveProjectTaskPermissions($projectId);
+        if (!$perm || empty($perm['is_member'])) {
+            return false;
+        }
+
+        if (!empty($perm['can_manage_project'])) {
+            return true;
+        }
+
+        $kind = $this->normalize_task_kind($taskKind);
+        $allowedKinds = array('新規作成', '修正(エラー)', '修正(変更)');
+        return in_array($kind, $allowedKinds, true);
     }
 
     private function resolveTimerUserId() {
@@ -3626,11 +3643,6 @@ class Task extends ApplicationModel {
 
         $tasks = [];
         $assignedUserIdSet = [];
-        $projectDrawingEditCache = [];
-        if (!class_exists('Project')) {
-            require_once DIR_MODEL . 'project.php';
-        }
-        $projectModelForDrawing = new Project();
         foreach ($taskRows as $row) {
             // Parse assigned_to (internal user IDs, comma separated)
             $assignedIds = [];
@@ -3646,9 +3658,7 @@ class Task extends ApplicationModel {
             }
 
             $projectIdForDrawing = isset($row['project_id']) ? intval($row['project_id']) : 0;
-            if ($projectIdForDrawing > 0 && !isset($projectDrawingEditCache[$projectIdForDrawing])) {
-                $projectDrawingEditCache[$projectIdForDrawing] = $projectModelForDrawing->canUserEditProject($projectIdForDrawing);
-            }
+            $taskKindForDrawing = isset($row['task_kind']) ? $row['task_kind'] : '';
 
             $tasks[] = [
                 'id' => $row['id'],
@@ -3660,7 +3670,7 @@ class Task extends ApplicationModel {
                 'priority' => $row['priority'],
                 'task_kind' => isset($row['task_kind']) ? $row['task_kind'] : '',
                 'drawing_count' => isset($row['drawing_count']) ? intval($row['drawing_count']) : 0,
-                'can_edit_drawing' => $projectIdForDrawing > 0 && !empty($projectDrawingEditCache[$projectIdForDrawing]),
+                'can_edit_drawing' => $this->userCanEditTaskDrawing($projectIdForDrawing, $taskKindForDrawing),
                 'estimated_hours' => isset($row['estimated_hours']) ? $this->normalize_estimated_hours($row['estimated_hours']) : 0,
                 'note' => isset($row['note']) ? $row['note'] : '',
                 'assigned_to' => isset($row['assigned_to']) ? $row['assigned_to'] : '',

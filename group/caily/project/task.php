@@ -223,12 +223,12 @@ if($_SESSION['show_project'] == 0){
                                 <div class="form-check mb-0" :title="$t('図面リストに追加')">
                                     <input type="checkbox" class="form-check-input" :id="'inline-drawing-link-' + task._inlineIndex"
                                         :checked="isTaskLinkedToDrawings(task)"
-                                        :disabled="!canEditDrawingLink()"
+                                        :disabled="!canEditDrawingLink(task)"
                                         @change="onInlineDrawingLinkChange(task._inlineIndex, $event.target.checked)">
                                 </div>
                                 <input v-if="isTaskLinkedToDrawings(task)" type="number" class="form-control form-control-sm task-drawing-count-input" min="1" step="1"
                                     :value="task.drawing_count > 0 ? task.drawing_count : 1"
-                                    :disabled="!canEditDrawingLink()"
+                                    :disabled="!canEditDrawingLink(task)"
                                     @input="updateTaskField(task._inlineIndex, 'drawing_count', $event.target.value)">
                             </template>
                             <span v-else-if="!isDefaultTaskWithAutoDrawingLink(task)" class="text-muted small">—</span>
@@ -354,10 +354,10 @@ if($_SESSION['show_project'] == 0){
                                 <div class="form-check mb-0" :title="$t('図面リストに追加')">
                                     <input type="checkbox" class="form-check-input" :id="'drawing-link-' + task.id"
                                         :checked="isTaskLinkedToDrawings(task)"
-                                        :disabled="!canEditDrawingLink()"
+                                        :disabled="!canEditDrawingLink(task)"
                                         @change="toggleTaskDrawingLink(task, $event)">
                                 </div>
-                                <input v-if="isTaskLinkedToDrawings(task) && canEditDrawingLink()"
+                                <input v-if="isTaskLinkedToDrawings(task) && canEditTaskDrawingCount(task)"
                                     type="number"
                                     class="form-control form-control-sm task-drawing-count-input"
                                     :class="{ 'task-drawing-count-input--loading': isDrawingCountSaving(task.id) }"

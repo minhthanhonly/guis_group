@@ -85,7 +85,8 @@ const TaskApp = createApp({
                 { value: '検討', label: '検討', i18nKey: '検討', color: 'secondary' },
                 { value: '相談・会議', label: '相談・会議', i18nKey: '相談・会議', color: 'dark' }
             ],
-            taskKindsWithoutDrawingLink: ['修正(エラー)', 'チェック', '検討', '相談・会議', '連絡'],
+            taskKindsWithoutDrawingLink: ['チェック', '検討', '相談・会議', '連絡'],
+            taskKindsWithMemberDrawingCountEdit: ['新規作成', '修正(エラー)', '修正(変更)'],
             filterStatus: '',
             filterPriority: '',
             filterDueDate: '',
@@ -879,14 +880,34 @@ const TaskApp = createApp({
             const limit = maxLen || 28;
             return text.length <= limit ? text : text.substring(0, limit) + '…';
         },
+        isTaskKindAllowingMemberDrawingCount(task) {
+            if (!task) return false;
+            const kind = this.getTaskKindDisplayValue(task);
+            return this.taskKindsWithMemberDrawingCountEdit.indexOf(kind) !== -1;
+        },
         canEditTaskNote(task) {
             if (!task) return false;
             if (!this.permission || !this.permission.is_member) return false;
             if (this.permission.can_manage_project) return true;
             return this.isAssignedToMe(task);
         },
-        canEditDrawingLink() {
-            return !!(this.permission && this.permission.can_manage_project);
+        canEditDrawingLink(task) {
+            if (this.permission && this.permission.can_manage_project) {
+                return true;
+            }
+            if (!this.permission || !this.permission.is_member || !task) {
+                return false;
+            }
+            if (!this.isDrawingLinkVisibleForTask(task)) {
+                return false;
+            }
+            return this.isTaskKindAllowingMemberDrawingCount(task);
+        },
+        canEditTaskDrawingCount(task) {
+            if (!task || !task.id || !this.isTaskLinkedToDrawings(task)) {
+                return false;
+            }
+            return this.canEditDrawingLink(task);
         },
         canEditTaskWorkload(task) {
             if (!task || !task.id) return false;
@@ -1062,7 +1083,7 @@ const TaskApp = createApp({
             return Number.isNaN(n) || n < 1 ? 0 : n;
         },
         getDrawingCountForSave(inlineTask) {
-            if (this.canEditDrawingLink()) {
+            if (this.canEditDrawingLink(inlineTask)) {
                 return this.resolveDrawingCountForSave(inlineTask);
             }
             if (inlineTask && inlineTask.id) {
@@ -1143,7 +1164,7 @@ const TaskApp = createApp({
             }
         },
         async saveTaskDrawingCount(task, value) {
-            if (!task || !task.id || !this.canEditDrawingLink() || !this.isTaskLinkedToDrawings(task)) {
+            if (!task || !task.id || !this.canEditTaskDrawingCount(task)) {
                 return;
             }
             const n = parseInt(value, 10);
@@ -1178,7 +1199,7 @@ const TaskApp = createApp({
             }
         },
         async toggleTaskDrawingLink(task, event) {
-            if (!task || !task.id || !this.canEditDrawingLink()) {
+            if (!task || !task.id || !this.canEditDrawingLink(task)) {
                 if (event && event.target) {
                     event.target.checked = this.isTaskLinkedToDrawings(task);
                 }

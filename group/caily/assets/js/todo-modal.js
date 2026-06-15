@@ -3,7 +3,7 @@
  * Handles "My Tasks" and "Custom Todos" tabs
  */
 
-const TODO_TASK_KINDS_WITHOUT_DRAWING_LINK = ['修正(エラー)', 'チェック', '検討', '相談・会議', '連絡'];
+const TODO_TASK_KINDS_WITHOUT_DRAWING_LINK = ['チェック', '検討', '相談・会議', '連絡'];
 
 const TODO_SERVER_TIMEZONE = 'Asia/Tokyo';
 const TODO_VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
