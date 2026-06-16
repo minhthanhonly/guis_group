@@ -16,6 +16,7 @@ class Drawing extends ApplicationModel {
             'created_by' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search')),
+            'completed_at' => array('except' => array('search')),
             'updated_by' => array(),
             'check_date' => array('except' => array('search')),
             'checked_by' => array(),
@@ -137,20 +138,23 @@ class Drawing extends ApplicationModel {
             }
         }
         
+        $status = isset($_POST['status']) ? $_POST['status'] : 'todo';
         $data = array(
             'project_id' => $project_id,
             'name' => $name,
-            'status' => isset($_POST['status']) ? $_POST['status'] : 'todo',
+            'status' => $status,
             'drawing_count' => isset($_POST['drawing_count']) ? max(1, intval($_POST['drawing_count'])) : 1,
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
+        $this->applyCompletedAtForStatus($data, $status);
         
         // Only set created_by if explicitly provided
         if (isset($_POST['created_by'])) {
             $data['created_by'] = $_POST['created_by'];
         }
         
+        unset($data['_clear_completed_at']);
         
         $drawing_id = $this->query_insert($data);
         
@@ -171,17 +175,19 @@ class Drawing extends ApplicationModel {
         $id = $_POST['id'];
         $existing = $this->getById(array('id' => $id));
 
+        $status = isset($_POST['status']) ? $_POST['status'] : 'todo';
         $data = array(
             'name' => $_POST['name'],
-            'status' => isset($_POST['status']) ? $_POST['status'] : 'todo',
+            'status' => $status,
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : ''
         );
         if ($existing && empty($existing['task_id']) && isset($_POST['drawing_count'])) {
             $data['drawing_count'] = max(1, intval($_POST['drawing_count']));
         }
+        $this->applyCompletedAtForStatus($data, $status);
 
-        $result = $this->query_update($data, ['id' => $id]);
+        $result = $this->drawingQueryUpdate($data, ['id' => $id]);
         
         if($result){
             return [
@@ -320,8 +326,9 @@ class Drawing extends ApplicationModel {
         
         $data['updated_by'] = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
         $this->applyStatusAuditFields($data, $status);
+        $this->applyCompletedAtForStatus($data, $status);
         
-        $result = $this->query_update($data, ['id' => $id]);
+        $result = $this->drawingQueryUpdate($data, ['id' => $id]);
         
         if($result){
             return [
@@ -353,11 +360,17 @@ class Drawing extends ApplicationModel {
             'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : '',
         );
         $this->applyStatusAuditFields($audit, $status);
+        $this->applyCompletedAtForStatus($audit, $status);
         $setParts = array(
             "status = '" . $this->quote($audit['status']) . "'",
             "updated_at = '" . $this->quote($audit['updated_at']) . "'",
             "updated_by = '" . $updated_by . "'",
         );
+        if (!empty($audit['completed_at'])) {
+            $setParts[] = "completed_at = '" . $this->quote($audit['completed_at']) . "'";
+        } elseif (!empty($audit['_clear_completed_at'])) {
+            $setParts[] = 'completed_at = NULL';
+        }
         if (!empty($audit['check_date'])) {
             $setParts[] = "check_date = '" . $this->quote($audit['check_date']) . "'";
             $setParts[] = "checked_by = '" . $this->quote($audit['checked_by']) . "'";
@@ -871,6 +884,46 @@ class Drawing extends ApplicationModel {
         }
     }
 
+    /**
+     * Drawing status that counts as completed for completed_at.
+     */
+    private function isCompletedDrawingStatus($status) {
+        return trim((string) $status) === 'completed';
+    }
+
+    /**
+     * Set completed_at when status is completed; clear when status changes away.
+     */
+    private function applyCompletedAtForStatus(&$data, $status) {
+        if ($this->isCompletedDrawingStatus($status)) {
+            $data['completed_at'] = date('Y-m-d H:i:s');
+            unset($data['_clear_completed_at']);
+            return;
+        }
+        $data['_clear_completed_at'] = true;
+        unset($data['completed_at']);
+    }
+
+    /**
+     * Update drawing row; supports clearing completed_at (query_update cannot set NULL).
+     */
+    private function drawingQueryUpdate($data, $where) {
+        $clearCompletedAt = !empty($data['_clear_completed_at']);
+        unset($data['_clear_completed_at']);
+        $result = true;
+        if (!empty($data)) {
+            $result = $this->query_update($data, $where);
+        }
+        if ($clearCompletedAt && !empty($where['id'])) {
+            $this->query(sprintf(
+                "UPDATE %s SET completed_at = NULL WHERE id = %d",
+                $this->table,
+                intval($where['id'])
+            ));
+        }
+        return $result;
+    }
+
     private function buildTaskDrawingName($taskId, $title) {
         $safeTitle = trim((string) $title);
         return $safeTitle !== '' ? $safeTitle : 'タスク';
@@ -1198,15 +1251,17 @@ class Drawing extends ApplicationModel {
         if ($createdBy !== '') {
             $rowData['created_by'] = $createdBy;
         }
+        $this->applyCompletedAtForStatus($rowData, $drawingStatus);
 
         if ($keepId) {
-            $this->query_update($rowData, array('id' => $keepId));
+            $this->drawingQueryUpdate($rowData, array('id' => $keepId));
         } else {
             $insertData = array_merge($rowData, array(
                 'project_id' => $projectId,
                 'task_id' => $taskId,
                 'created_at' => $now,
             ));
+            unset($insertData['_clear_completed_at']);
             $newId = $this->query_insert($insertData);
             if ($newId) {
                 $keepId = intval($newId);

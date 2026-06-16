@@ -39,13 +39,20 @@ if($_SESSION['show_project'] == 0){
                 <option v-for="user in filteredUsers" :key="user.id" :value="user.id">{{ user.realname }}</option>
             </select>
         </div>
-        <div class="col-md-3 mb-2 d-flex flex-column justify-content-end">
-            <div class="form-check mb-1">
+        <div class="col-md-3 mb-2">
+            <label class="form-label"><span data-i18n="作成月">作成月</span></label>
+            <select class="form-select" v-model="filters.created_month" @change="loadOverview">
+                <option value="" data-i18n="すべて">すべて</option>
+                <option v-for="month in createdMonthOptions" :key="month.value" :value="month.value">{{ month.label }}</option>
+            </select>
+        </div>
+        <div class="col-md-12 mt-4 d-flex flex-wrap gap-4">
+            <div class="form-check form-switch mb-1">
                 <input class="form-check-input" type="checkbox" id="excludeCompleted"
                        v-model="filters.excludeCompleted" @change="loadOverview">
                 <label class="form-check-label" for="excludeCompleted"><span data-i18n="完了タスクを除外">完了タスクを除外</span></label>
             </div>
-            <div class="form-check">
+            <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox" id="myTask"
                        v-model="filters.myTask" @change="onMyTaskChange">
                 <label class="form-check-label" for="myTask"><span data-i18n="自分のタスク">自分のタスク</span></label>
@@ -54,6 +61,11 @@ if($_SESSION['show_project'] == 0){
                 <input class="form-check-input" type="checkbox" id="filterTimerActiveOnly"
                        v-model="filters.timerActiveOnly">
                 <label class="form-check-label text-nowrap" for="filterTimerActiveOnly" data-i18n="作業計測中のタスクのみ">作業計測中のタスクのみ</label>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="showUnassignedTasks"
+                       v-model="filters.showUnassignedTasks">
+                <label class="form-check-label text-nowrap" for="showUnassignedTasks" data-i18n="未割り当てタスクを表示">未割り当てタスクを表示</label>
             </div>
         </div>
     </div>

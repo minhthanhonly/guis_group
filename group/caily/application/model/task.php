@@ -56,6 +56,10 @@ class Task extends ApplicationModel {
         return new Drawing();
     }
 
+    /**
+     * Sync linked project_drawings from task fields (status, assignees, drawing_count).
+     * Drawing::syncFromTask also maintains completed_at when status is completed.
+     */
     private function syncTaskDrawingsForTask($taskId, $taskRow = null, $options = array()) {
         $taskId = intval($taskId);
         if ($taskId <= 0) {
@@ -3473,11 +3477,13 @@ class Task extends ApplicationModel {
             $team_id           = isset($params['team_id']) ? intval($params['team_id']) : 0;
             $user_id           = isset($params['user_id']) ? intval($params['user_id']) : 0;
             $exclude_completed = isset($params['exclude_completed']) ? intval($params['exclude_completed']) : 0;
+            $created_month     = isset($params['created_month']) ? trim((string)$params['created_month']) : '';
         } else {
             $department_id     = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
             $team_id           = isset($_GET['team_id']) ? intval($_GET['team_id']) : 0;
             $user_id           = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
             $exclude_completed = isset($_GET['exclude_completed']) ? intval($_GET['exclude_completed']) : 0;
+            $created_month     = isset($_GET['created_month']) ? trim((string)$_GET['created_month']) : '';
         }
 
         // 1. Load departments
@@ -3578,6 +3584,9 @@ class Task extends ApplicationModel {
         // Loại bỏ completed & cancelled từ phía DB nếu được yêu cầu
         if ($exclude_completed) {
             $taskWhereArr[] = "t.status NOT IN ('completed','cancelled')";
+        }
+        if ($created_month !== '' && preg_match('/^\d{4}-\d{2}$/', $created_month)) {
+            $taskWhereArr[] = "DATE_FORMAT(t.created_at, '%Y-%m') = '" . $this->quote($created_month) . "'";
         }
         $taskWhere = "WHERE " . implode(" AND ", $taskWhereArr);
         // We do not filter by team here because team is derived from users

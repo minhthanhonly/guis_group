@@ -872,10 +872,27 @@ const TaskApp = createApp({
             const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
             return formatted + 'h';
         },
+        stripHtmlToPlainText(html) {
+            if (!html) return '';
+            let text = String(html);
+            for (let i = 0; i < 3; i++) {
+                const txt = document.createElement('textarea');
+                txt.innerHTML = text;
+                const decoded = txt.value;
+                if (decoded === text) break;
+                text = decoded;
+            }
+            const div = document.createElement('div');
+            div.innerHTML = text;
+            return (div.textContent || div.innerText || '')
+                .replace(/&nbsp;/gi, ' ')
+                .replace(/\u00A0/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        },
         getTaskNoteSnippet(note, maxLen) {
             if (!note) return '';
-            const decoded = this.decodeHtmlEntities(String(note));
-            const text = decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+            const text = this.stripHtmlToPlainText(note);
             if (!text) return '';
             const limit = maxLen || 28;
             return text.length <= limit ? text : text.substring(0, limit) + '…';

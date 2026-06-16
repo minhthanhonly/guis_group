@@ -4209,11 +4209,11 @@ var projectTable;
 
         // Setup auto-refresh timer for project list
         if (!autoRefreshTimer) {
-            autoRefreshTimer = setInterval(function() {
-                if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-                    reloadProjectTable(false, { silent: true }); // false để giữ nguyên trang hiện tại
-                }
-            }, 60000); // Cập nhật mỗi 10 giây
+            // autoRefreshTimer = setInterval(function() {
+            //     if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+            //         reloadProjectTable(false, { silent: true }); // false để giữ nguyên trang hiện tại
+            //     }
+            // }, 60000); // Cập nhật mỗi 10 giây
         }
         
         // Wait a bit for Vue app to mount

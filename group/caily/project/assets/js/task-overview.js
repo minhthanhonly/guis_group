@@ -48,10 +48,13 @@ createApp({
                 department_id: isProjectManager ? userDepartmentId : '', // Default to user's department if project manager
                 team_id: '',
                 user_id: '',
+                created_month: '',
                 // Mặc định loại bỏ completed để giảm tải
                 excludeCompleted: true,
                 myTask: defaultMyTask, // Default to true if not project manager
-                timerActiveOnly: false
+                timerActiveOnly: false,
+                // Default OFF: hide tasks without assignee
+                showUnassignedTasks: false
             },
             taskStatuses: [
                 { value: 'todo', label: '未開始', i18nKey: '未開始', color: 'secondary' },
@@ -87,6 +90,21 @@ createApp({
                 }
                 return true;
             });
+        },
+        createdMonthOptions() {
+            const options = [];
+            const now = new Date();
+            // Keep UI simple: last 24 months
+            for (let i = 0; i < 24; i++) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                options.push({
+                    value: `${year}-${month}`,
+                    label: `${year}年${month}月`
+                });
+            }
+            return options;
         },
         // Danh sách task sau khi áp bộ lọc (department / team / user / excludeCompleted / timer)
         filteredTasks() {
@@ -154,10 +172,27 @@ createApp({
             txt.innerHTML = str;
             return txt.value;
         },
+        stripHtmlToPlainText(html) {
+            if (!html) return '';
+            let text = String(html);
+            for (let i = 0; i < 3; i++) {
+                const txt = document.createElement('textarea');
+                txt.innerHTML = text;
+                const decoded = txt.value;
+                if (decoded === text) break;
+                text = decoded;
+            }
+            const div = document.createElement('div');
+            div.innerHTML = text;
+            return (div.textContent || div.innerText || '')
+                .replace(/&nbsp;/gi, ' ')
+                .replace(/\u00A0/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        },
         getTaskNoteSnippet(note, maxLen) {
             if (!note) return '';
-            const decoded = this.decodeHtmlEntities(String(note));
-            const text = decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+            const text = this.stripHtmlToPlainText(note);
             if (!text) return '';
             const limit = maxLen || 28;
             return text.length <= limit ? text : text.substring(0, limit) + '…';
@@ -179,10 +214,14 @@ createApp({
             
             // Lọc theoユーザー đã được xử lý ở phía API (listOverview), 
             // nên không cần kiểm tra lại ở đây để tránh sai khi task có nhiều assignee.
+            const assignedIds = Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [];
+            if (!this.filters.showUnassignedTasks && assignedIds.length === 0) {
+                return false;
+            }
+
             // Nếu filter theo team: ít nhất 1 user được assign thuộc team đó
             if (this.filters.team_id) {
                 const teamId = parseInt(this.filters.team_id, 10);
-                const assignedIds = Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [];
                 const hasUserInTeam = assignedIds.some(uid => {
                     const user = this.users.find(u => u.id == uid);
                     return user && Array.isArray(user.teams) && user.teams.some(t => t.id == teamId);
@@ -311,6 +350,9 @@ createApp({
                 }
                 if (this.filters.team_id) {
                     params.append('team_id', this.filters.team_id);
+                }
+                if (this.filters.created_month) {
+                    params.append('created_month', this.filters.created_month);
                 }
                 // Nếu myTask được chọn, gửi user_id của user hiện tại
                 if (this.filters.myTask && window.currentUser?.user_id) {

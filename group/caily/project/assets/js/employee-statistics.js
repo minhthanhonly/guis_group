@@ -1,11 +1,22 @@
 const { createApp } = Vue;
 
+/** Earliest month shown in employee statistics (YYYY-MM). */
+const STATS_MIN_MONTH = '2026-06';
+const STATS_MIN_FISCAL_END_YEAR = 2026;
+
+function clampStatsMonth(ym) {
+    if (!ym || ym < STATS_MIN_MONTH) {
+        return STATS_MIN_MONTH;
+    }
+    return ym;
+}
+
 // Helper function to get current month in YYYY-MM format
 function getCurrentMonth() {
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
-    return `${year}-${month}`;
+    return clampStatsMonth(`${year}-${month}`);
 }
 
 function getCurrentFiscalEndYear() {
@@ -62,7 +73,7 @@ createApp({
             sortDirection: 'asc', // 'asc' or 'desc'
             annualSortColumn: null, // Column to sort annual summary by
             annualSortDirection: 'asc', // 'asc' or 'desc'
-            selectedYear: getCurrentFiscalEndYear(),
+            selectedYear: Math.max(getCurrentFiscalEndYear(), STATS_MIN_FISCAL_END_YEAR),
             yearOptions: [],
             filters: {
                 period_type: 'month',
@@ -158,22 +169,26 @@ createApp({
         availableMonths() {
             const months = [];
             const today = new Date();
-            
-            // Generate last 12 months
-            for (let i = 11; i >= 0; i--) {
-                const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            const minParts = STATS_MIN_MONTH.split('-');
+            const minDate = new Date(parseInt(minParts[0], 10), parseInt(minParts[1], 10) - 1, 1);
+
+            for (let date = new Date(today.getFullYear(), today.getMonth(), 1);
+                date >= minDate;
+                date = new Date(date.getFullYear(), date.getMonth() - 1, 1)) {
                 const year = date.getFullYear();
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const value = `${year}-${month}`;
-                const label = `${year}年${month}月`;
-                months.push({ value, label });
+                months.push({ value, label: `${year}年${month}月` });
             }
-            
+
             return months;
         },
         
         filteredStatistics() {
-            let stats = this.statistics;
+            let stats = this.statistics.filter((stat) => {
+                const periodMonth = stat.period_start ? stat.period_start.substring(0, 7) : '';
+                return !periodMonth || periodMonth >= STATS_MIN_MONTH;
+            });
             
             // Filter by selected month
             if (this.filters.selected_month && this.filters.selected_month !== '') {
@@ -370,7 +385,7 @@ createApp({
         appendFiscalFilterParams(params) {
             params.append('fiscal_year', String(this.getSelectedFiscalEndYear()));
             if (this.filters.selected_month) {
-                params.append('selected_month', this.filters.selected_month);
+                params.append('selected_month', clampStatsMonth(this.filters.selected_month));
             }
             return params;
         },
@@ -459,8 +474,13 @@ createApp({
 
         initYearOptions() {
             const fiscalEndYear = getCurrentFiscalEndYear();
-            // Fiscal end year (Jul-Jun): current, previous, and next
-            this.yearOptions = [fiscalEndYear, fiscalEndYear + 1, fiscalEndYear - 1].sort((a, b) => b - a);
+            const years = new Set([fiscalEndYear, fiscalEndYear + 1, fiscalEndYear - 1]);
+            this.yearOptions = [...years]
+                .filter((year) => year >= STATS_MIN_FISCAL_END_YEAR)
+                .sort((a, b) => b - a);
+            if (!this.yearOptions.includes(this.selectedYear)) {
+                this.selectedYear = this.yearOptions[0] || Math.max(fiscalEndYear, STATS_MIN_FISCAL_END_YEAR);
+            }
         },
         
         selectTeam(teamId) {
