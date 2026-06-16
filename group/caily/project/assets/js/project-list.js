@@ -16,6 +16,27 @@ var projectTable;
     }
     var isInitializingTable = false;
     var autoRefreshTimer = null;
+    var projectTableSilentDraw = false;
+
+    function reloadProjectTable(resetPaging, options) {
+        options = options || {};
+        if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
+            return;
+        }
+        var preserveScroll = options.preserveScroll !== false && !pendingScrollRestore;
+        var silent = options.silent === true;
+        var scrollY = preserveScroll ? window.scrollY : 0;
+        if (silent) {
+            projectTableSilentDraw = true;
+        }
+        projectTable.ajax.reload(function() {
+            if (preserveScroll) {
+                requestAnimationFrame(function() {
+                    window.scrollTo(0, scrollY);
+                });
+            }
+        }, !!resetPaging);
+    }
     var statuses = [
         { key: 'draft', name: '受付', color: 'secondary' },
         { key: 'open', name: '納期検討', color: 'info' },
@@ -55,6 +76,214 @@ var projectTable;
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment';
     const COLUMN_VISIBILITY_KEY = 'projectListColumnVisibility';
     const COLUMN_ORDER_STORAGE_KEY = 'projectListColumnOrder';
+    const SCROLL_RESTORE_KEY = 'projectListScrollY';
+
+    var pendingScrollRestore = null;
+    var scrollRestoreApplied = false;
+    var projectListBackNavigationHandled = false;
+
+    function isBackForwardNavigation(event) {
+        if (event && event.persisted) {
+            return true;
+        }
+        try {
+            var nav = performance.getEntriesByType('navigation')[0];
+            return nav && nav.type === 'back_forward';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function resetProjectTableDom() {
+        var cardBody = document.querySelector('#projectTableCard .card-body');
+        if (!cardBody) {
+            return;
+        }
+        cardBody.querySelectorAll('.dataTables_wrapper, .dt-container, #projectTable_wrapper').forEach(function(el) {
+            el.remove();
+        });
+        var hint = document.getElementById('projectTableScrollHint');
+        var table = document.getElementById('projectTable');
+        if (table) {
+            table.remove();
+        }
+        table = document.createElement('table');
+        table.id = 'projectTable';
+        table.className = 'table table-striped';
+        if (hint) {
+            hint.insertAdjacentElement('afterend', table);
+        } else {
+            cardBody.appendChild(table);
+        }
+    }
+
+    function saveProjectListScroll() {
+        try {
+            var depId = window.app && app.selectedDepartment ? app.selectedDepartment.id : null;
+            var page = 0;
+            if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+                page = projectTable.page();
+            }
+            sessionStorage.setItem(SCROLL_RESTORE_KEY, JSON.stringify({
+                y: window.scrollY,
+                departmentId: depId,
+                page: page
+            }));
+        } catch (e) { /* ignore */ }
+    }
+
+    function getSavedProjectListScroll() {
+        try {
+            var raw = sessionStorage.getItem(SCROLL_RESTORE_KEY);
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function clearSavedProjectListScroll() {
+        try {
+            sessionStorage.removeItem(SCROLL_RESTORE_KEY);
+        } catch (e) { /* ignore */ }
+    }
+
+    function scheduleProjectListScrollRestore(saved) {
+        if (!saved || typeof saved.y !== 'number' || saved.y < 0) {
+            return;
+        }
+        var depId = window.app && app.selectedDepartment ? app.selectedDepartment.id : null;
+        if (saved.departmentId != null && depId != null && String(saved.departmentId) !== String(depId)) {
+            clearSavedProjectListScroll();
+            return;
+        }
+        scrollRestoreApplied = false;
+        pendingScrollRestore = {
+            y: saved.y,
+            page: typeof saved.page === 'number' ? saved.page : 0
+        };
+    }
+
+    function applyPendingProjectListScrollRestore() {
+        if (!pendingScrollRestore || scrollRestoreApplied) {
+            return;
+        }
+        scrollRestoreApplied = true;
+        var target = pendingScrollRestore;
+        pendingScrollRestore = null;
+        clearSavedProjectListScroll();
+
+        function doScroll() {
+            requestAnimationFrame(function() {
+                requestAnimationFrame(function() {
+                    window.scrollTo(0, target.y);
+                });
+            });
+        }
+
+        if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
+            doScroll();
+            return;
+        }
+        var currentPage = projectTable.page();
+        if (typeof target.page === 'number' && target.page !== currentPage) {
+            $('#projectTable').one('draw.dt.scrollRestore', function() {
+                doScroll();
+            });
+            projectTable.page(target.page).draw(false);
+        } else {
+            doScroll();
+        }
+    }
+
+    function bindProjectListScrollRestoreOnTableLoad() {
+        $('#projectTable').off('xhr.dt.scrollRestore').on('xhr.dt.scrollRestore', function(e, settings, json) {
+            if (!pendingScrollRestore || scrollRestoreApplied) {
+                return;
+            }
+            if (!json || !Array.isArray(json.data)) {
+                return;
+            }
+            $('#projectTable').off('draw.dt.scrollRestore').one('draw.dt.scrollRestore', function() {
+                applyPendingProjectListScrollRestore();
+            });
+        });
+    }
+
+    /** Sau khi Back/Forward (bfcache): DataTable state cũ thường hỏng — destroy và init lại. */
+    async function ensureProjectTableLoadedAfterBack() {
+        if (!window.app || !window.app.selectedDepartment || !window.app.selectedDepartment.id) {
+            return false;
+        }
+        projectTableSilentDraw = false;
+        destroyProjectTable();
+        loadFiltersFromLocalStorage();
+        if (window.app && Array.isArray(window.app.teams)) {
+            refreshFilterTeamSelect(window.app.teams);
+        }
+        window.app.loading = true;
+        try {
+            await initializeProjectTable();
+            if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
+                return false;
+            }
+            await new Promise(function(resolve) {
+                var settled = false;
+                function finish() {
+                    if (settled) return;
+                    settled = true;
+                    resolve();
+                }
+                $('#projectTable').one('draw.dt.backRestore', finish);
+                reloadProjectTable(false, { preserveScroll: !!pendingScrollRestore });
+                window.setTimeout(finish, 8000);
+            });
+            return true;
+        } catch (e) {
+            console.error('Failed to restore project table after back navigation:', e);
+            return false;
+        } finally {
+            if (window.app) {
+                window.app.loading = false;
+            }
+        }
+    }
+
+    async function handleProjectListRestoreOnShow(event) {
+        if (!isBackForwardNavigation(event)) {
+            return;
+        }
+        loadFiltersFromLocalStorage();
+        if (window.app && Array.isArray(window.app.teams)) {
+            refreshFilterTeamSelect(window.app.teams);
+        }
+        if (!window.app) {
+            return;
+        }
+        if (!window.app.departments || window.app.departments.length === 0) {
+            projectListBackNavigationHandled = true;
+            window.app.loadDepartments();
+            return;
+        }
+        var savedDepartment = window.app.loadSelectedDepartmentFromLocalStorage();
+        if (savedDepartment && (!window.app.selectedDepartment || window.app.selectedDepartment.id !== savedDepartment.id)) {
+            var department = window.app.departments.find(function(d) {
+                return d && d.id == savedDepartment.id && d.can_project == 1;
+            });
+            if (department) {
+                projectListBackNavigationHandled = true;
+                window.app.viewProjects(department);
+                return;
+            }
+        }
+        if (window.app.selectedDepartment && window.app.selectedDepartment.id) {
+            projectListBackNavigationHandled = true;
+            await ensureProjectTableLoadedAfterBack();
+            return;
+        }
+        projectListBackNavigationHandled = true;
+        window.app.loadDepartments();
+    }
 
     function getProjectColumnOrderStorageKey(departmentId) {
         return COLUMN_ORDER_STORAGE_KEY + '_' + (departmentId != null ? String(departmentId) : '0');
@@ -1113,22 +1342,39 @@ var projectTable;
 
     // Destroy DataTable khi đổi department để refresh đúng custom fields và dropdown 列の表示
     function destroyProjectTable() {
-        if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-            try {
-                // Hủy ajax request đang chờ để tránh response về sau khi destroy gây lỗi mData
-                var settings = projectTable.settings();
+        var $tbl = $('#projectTable');
+        try {
+            if ($.fn.dataTable && $.fn.dataTable.tables) {
+                $.fn.dataTable.tables({ api: true }).every(function() {
+                    try {
+                        if (this.table().node().id === 'projectTable') {
+                            var settings = this.settings();
+                            if (settings && settings[0] && settings[0].jqXHR && typeof settings[0].jqXHR.abort === 'function') {
+                                try { settings[0].jqXHR.abort(); } catch (e) {}
+                            }
+                            this.destroy();
+                        }
+                    } catch (e) { /* skip */ }
+                });
+            } else if ($tbl.length && $.fn.DataTable.isDataTable($tbl)) {
+                var dt = $tbl.DataTable();
+                var settings = dt.settings();
                 if (settings && settings[0] && settings[0].jqXHR && typeof settings[0].jqXHR.abort === 'function') {
                     try { settings[0].jqXHR.abort(); } catch (e) {}
                 }
-                projectTable.destroy();
-            } catch (e) {
-                console.warn('DataTable destroy error:', e);
+                dt.destroy();
+            } else if (projectTable) {
+                try { projectTable.destroy(); } catch (e) {}
             }
-            projectTable = null;
-            // Xóa nội dung table để init lại sạch, tránh lỗi mData do DOM cũ
-            var $tbl = $('#projectTable');
-            if ($tbl.length) $tbl.empty();
+        } catch (e) {
+            console.warn('DataTable destroy error:', e);
         }
+        projectTable = null;
+        isInitializingTable = false;
+        if ($tbl.length) {
+            $tbl.off('.dt');
+        }
+        resetProjectTableDom();
         customFieldColumnDefinitions = [];
         // Refresh dropdown 列の表示: chỉ còn cột cơ bản, bỏ hết custom field của department cũ
         if (typeof app !== 'undefined' && app) {
@@ -2170,6 +2416,8 @@ var projectTable;
             saveProjectColumnOrder(app.selectedDepartment && app.selectedDepartment.id, keys);
             projectTable.columns.adjust();
         });
+
+        bindProjectListScrollRestoreOnTableLoad();
         
         // Sau mỗi lần vẽ bảng: thêm note snippet vào ô cột có display_column trùng (dưới cùng ô, >40 ký tự thì cắt + tooltip)
         projectTable.on('draw.dt', function() {
@@ -2547,6 +2795,10 @@ var projectTable;
         }
         // Khởi tạo Bootstrap tooltip cho mọi ô có data-bs-toggle="tooltip" (ô giờ data-time, ô text/textarea có data-bs-title, ...) mỗi khi DataTable vẽ lại
         $('#projectTable').on('draw.dt', function() {
+            var silentDraw = projectTableSilentDraw;
+            if (projectTableSilentDraw) {
+                projectTableSilentDraw = false;
+            }
             var table = document.getElementById('projectTable');
             if (!table || !window.bootstrap || !bootstrap.Tooltip) return;
             var triggers = table.querySelectorAll('[data-bs-toggle="tooltip"]');
@@ -2555,7 +2807,9 @@ var projectTable;
                 if (t) t.dispose();
                 new bootstrap.Tooltip(el);
             });
-            applyStickyScrollHead(table);
+            if (!silentDraw) {
+                applyStickyScrollHead(table);
+            }
             // Cho phép AI lấy dữ liệu danh sách dự án hiện đang hiển thị trên trang
             if (projectTable && typeof $.fn.DataTable !== 'undefined' && $.fn.DataTable.isDataTable('#projectTable')) {
                 try {
@@ -2649,13 +2903,13 @@ var projectTable;
             timer2 = setTimeout(function() {
                 saveFiltersToLocalStorage();
                 renderActiveFilters();
-                if (projectTable) projectTable.ajax.reload();
+                if (projectTable) reloadProjectTable(true);
             }, 500);
         });
         $('#showInactiveSwitch').on('change', function() {
             saveFiltersToLocalStorage();
             renderActiveFilters();
-            if (projectTable) projectTable.ajax.reload();
+            if (projectTable) reloadProjectTable(true);
         });
         
 
@@ -2891,7 +3145,7 @@ var projectTable;
                         bootstrap.Modal.getOrCreateInstance(editParentConstructionModalEl).hide();
                     }
                     if (projectTable) {
-                        projectTable.ajax.reload(null, false);
+                        reloadProjectTable(false);
                     }
                 } catch (err) {
                     console.error('Update parent construction number error:', err);
@@ -3491,7 +3745,7 @@ var projectTable;
             if (customFieldsData.length) formData.append('custom_fields', JSON.stringify(customFieldsData));
             axios.post('/api/index.php?model=project&method=update', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(function() {
                 bootstrap.Modal.getInstance(document.getElementById('quickEditProjectModal')).hide();
-                if (projectTable) projectTable.ajax.reload(null, false);
+                if (projectTable) reloadProjectTable(false);
                 if (typeof showMessage === 'function') showMessage(translateText('プロジェクトを更新しました。'));
             }).catch(function(err) {
                 console.error('Quick edit save:', err);
@@ -3607,7 +3861,7 @@ var projectTable;
                 if (response.data && response.data.status === 'success') {
                     showMessage('メモが削除されました');
                     if (projectTable) {
-                        projectTable.ajax.reload(null, false);
+                        reloadProjectTable(false);
                     }
                 } else {
                     showMessage('メモの削除に失敗しました', true);
@@ -3940,24 +4194,33 @@ var projectTable;
                 app.selectedStatus = null;
             }
             renderActiveFilters();
-            projectTable.ajax.reload();
+            reloadProjectTable(true);
         });
         
     }
     
     // Setup auto-refresh timer once (independent of DataTable initialization)
     $(document).ready(function() {
+        var savedScrollOnLoad = getSavedProjectListScroll();
+        if (savedScrollOnLoad) {
+            scheduleProjectListScrollRestore(savedScrollOnLoad);
+        }
+        window.addEventListener('pagehide', saveProjectListScroll);
+
         // Setup auto-refresh timer for project list
         if (!autoRefreshTimer) {
             autoRefreshTimer = setInterval(function() {
                 if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-                    projectTable.ajax.reload(null, false); // false để giữ nguyên trang hiện tại
+                    reloadProjectTable(false, { silent: true }); // false để giữ nguyên trang hiện tại
                 }
-            }, 10000); // Cập nhật mỗi 10 giây
+            }, 60000); // Cập nhật mỗi 10 giây
         }
         
         // Wait a bit for Vue app to mount
         setTimeout(function() {
+            if (projectListBackNavigationHandled) {
+                return;
+            }
             if (app && app.selectedDepartment && app.selectedDepartment.id) {
                 initializeProjectTable();
             }
@@ -3966,42 +4229,11 @@ var projectTable;
     
     // Handle browser back/forward button (pageshow event)
     window.addEventListener('pageshow', function(event) {
-        // event.persisted is true when page is loaded from cache (back/forward navigation)
-        if (event.persisted) {
-            // Reload filters from localStorage to ensure correct state (especially favorites_only)
-            loadFiltersFromLocalStorage();
-            if (window.app && Array.isArray(window.app.teams)) {
-                refreshFilterTeamSelect(window.app.teams);
-            }
-
-            // Reload departments and reinitialize if needed
-            if (window.app) {
-                // Always reload departments to ensure fresh data
-                if (!window.app.departments || window.app.departments.length === 0) {
-                    window.app.loadDepartments();
-                } else {
-                    // If departments are already loaded, check if we need to restore selected department
-                    const savedDepartment = window.app.loadSelectedDepartmentFromLocalStorage();
-                    if (savedDepartment && (!window.app.selectedDepartment || window.app.selectedDepartment.id !== savedDepartment.id)) {
-                        // Find and select the saved department
-                        const department = window.app.departments.find(d => d && d.id == savedDepartment.id && d.can_project == 1);
-                        if (department) {
-                            window.app.viewProjects(department);
-                        }
-                    } else if (window.app.selectedDepartment && window.app.selectedDepartment.id) {
-                        // If department is already selected, ensure DataTable is initialized and reload data
-                        setTimeout(function() {
-                            if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
-                                initializeProjectTable();
-                            } else {
-                                // Reload data if table already exists
-                                projectTable.ajax.reload(null, false);
-                            }
-                        }, 100);
-                    }
-                }
-            }
+        var savedScroll = getSavedProjectListScroll();
+        if (savedScroll) {
+            scheduleProjectListScrollRestore(savedScroll);
         }
+        handleProjectListRestoreOnShow(event);
     });
 
     // Helper function to get initials from name
@@ -4954,7 +5186,7 @@ var projectTable;
                         showMessage('メモが保存されました');
                         this.closeNoteModal();
                         if (projectTable) {
-                            projectTable.ajax.reload(null, false);
+                            reloadProjectTable(false);
                         }
                     } else {
                         showMessage('メモの保存に失敗しました', true);
@@ -4975,7 +5207,7 @@ var projectTable;
                         showMessage('メモが削除されました');
                         this.closeNoteModal();
                         if (projectTable) {
-                            projectTable.ajax.reload(null, false);
+                            reloadProjectTable(false);
                         }
                     } else {
                         showMessage('メモの削除に失敗しました', true);
@@ -5034,6 +5266,13 @@ var projectTable;
                 }
                 // Save selected department to localStorage
                 this.saveSelectedDepartmentToLocalStorage(department);
+
+                var savedScroll = getSavedProjectListScroll();
+                if (savedScroll) {
+                    scheduleProjectListScrollRestore(savedScroll);
+                } else {
+                    pendingScrollRestore = null;
+                }
                 
                 // Destroy bảng cũ để refresh đúng custom fields và 列の表示 của department mới
                 destroyProjectTable();
@@ -5043,7 +5282,7 @@ var projectTable;
                     try {
                         await initializeProjectTable();
                         if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-                            projectTable.ajax.reload();
+                            reloadProjectTable(true);
                         }
                     } finally {
                         this.loading = false;
@@ -5109,7 +5348,7 @@ var projectTable;
                 // Save filter state to localStorage
                 saveFiltersToLocalStorage();
                 if (projectTable) {
-                    projectTable.ajax.reload();
+                    reloadProjectTable(true);
                 }
             },
             async toggleProjectFavorite(projectId, element) {
@@ -5163,7 +5402,7 @@ var projectTable;
                             this.showClearAllFavoritesBtn = false;
                             // Reload the table
                             if (projectTable) {
-                                projectTable.ajax.reload();
+                                reloadProjectTable(true);
                             }
                         } else {
                             showMessage(response.data?.message || '削除に失敗しました。', true);
@@ -5180,7 +5419,7 @@ var projectTable;
                     if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
                         initializeProjectTable();
                     } else {
-                        projectTable.ajax.reload();
+                        reloadProjectTable(true);
                     }
                 } catch (error) {
                     console.error('Error loading projects:', error);
@@ -5580,7 +5819,7 @@ var projectTable;
                         // Refresh both lists
                         await this.loadKadaiProjects();
                         if (projectTable) {
-                            projectTable.ajax.reload();
+                            reloadProjectTable(true);
                         }
                     } else {
                         showMessage('プロジェクトの移動に失敗しました。', true);
@@ -5634,7 +5873,7 @@ var projectTable;
                         // Refresh both lists
                         await this.loadKadaiProjects();
                         if (projectTable) {
-                            projectTable.ajax.reload();
+                            reloadProjectTable(true);
                         }
                     } else {
                         showMessage(response.data.message || 'プロジェクトの承認に失敗しました。', true);
