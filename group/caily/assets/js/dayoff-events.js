@@ -112,10 +112,14 @@
     }
     const startMin = parseVnTimeMinutes(item.time_start);
     const endMin = parseVnTimeMinutes(item.time_end);
-    if (startMin >= 7 * 60 && endMin === 12 * 60) {
+    const morningStart = 7 * 60;
+    const noon = 12 * 60;
+    const afternoonStart = 12 * 60;
+    const workEnd = 17 * 60 + 30;
+    if (startMin >= morningStart && endMin <= noon) {
       return '午前休';
     }
-    if (startMin >= 12 * 60 && endMin === 17 * 60) {
+    if (startMin >= afternoonStart && endMin <= workEnd) {
       return '午後休';
     }
     return '';

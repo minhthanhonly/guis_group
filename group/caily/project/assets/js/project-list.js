@@ -5896,24 +5896,32 @@ var projectTable;
 
     window.app = app;
 
-    // Fixed filter button: show when scroll reaches #projectTableCard; offcanvas shows #projectFilterBox content
+    // Fixed action buttons: show when scroll reaches #projectTableCard; offcanvas shows #projectFilterBox content
     (function() {
+        var floatActions = document.getElementById('projectFloatActions');
         var floatBtn = document.getElementById('projectFilterFloatBtn');
+        var reloadFloatBtn = document.getElementById('projectReloadFloatBtn');
         var projectTableCard = document.getElementById('projectTableCard');
         var projectFilterBox = document.getElementById('projectFilterBox');
         var offcanvasBody = document.getElementById('projectFilterOffcanvasBody');
         var offcanvasEl = document.getElementById('offcanvasProjectFilter');
-        if (!floatBtn || !projectTableCard || !projectFilterBox || !offcanvasBody || !offcanvasEl) return;
+        if (!floatActions || !floatBtn || !projectTableCard || !projectFilterBox || !offcanvasBody || !offcanvasEl) return;
 
         var filterCard = null; // ref to moved .card
 
         function updateFloatButtonVisibility() {
             var rect = projectTableCard.getBoundingClientRect();
             if (rect.top <= 120) {
-                floatBtn.classList.remove('d-none');
+                floatActions.classList.remove('d-none');
             } else {
-                floatBtn.classList.add('d-none');
+                floatActions.classList.add('d-none');
             }
+        }
+
+        if (reloadFloatBtn) {
+            reloadFloatBtn.addEventListener('click', function() {
+                reloadProjectTable(false, { preserveScroll: true });
+            });
         }
 
         window.addEventListener('scroll', function() { updateFloatButtonVisibility(); }, { passive: true });

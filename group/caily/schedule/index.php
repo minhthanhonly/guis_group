@@ -2,14 +2,7 @@
 
 require_once('../application/loader.php');
 $view->heading('スケジュール');
-$calendar = new Calendar;
-$data = $calendar->prepare($hash['list'], $_GET['year'], $_GET['month'], 1, $_GET['year'], $_GET['month'], date('t', mktime(0, 0, 0, $_GET['month'], 1, $_GET['year'])));
-$timestamp = mktime(0, 0, 0, $_GET['month'], 1, $_GET['year']);
-$previous = mktime(0, 0, 0, $_GET['month']-1, 1, $_GET['year']);
-$next = mktime(0, 0, 0, $_GET['month']+1, 1, $_GET['year']);
-if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['owner']['userid'] != $_SESSION['userid'])) {
-    $caption = ' - '.$hash['owner']['realname'];
-}
+
 ?>
 <!-- Content -->
 <div class="container-xxl flex-grow-1 container-p-y">

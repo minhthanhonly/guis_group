@@ -110,6 +110,7 @@
             }
             ?>
              
+             <?php if($_SESSION['group'] != '7'){ ?>
            <li class="menu-item <?php if($directory == 'form') echo 'active open'; ?>">
               <a href="<?=$root?>form/index.php" class="menu-link">
                 <i class="menu-icon icon-base fa fa-file-alt"></i>
@@ -118,6 +119,7 @@
                 <span id="form-unread-comment-badge" class="badge badge_number bg-danger rounded-pill ms-1<?= ($form_unread_comment_badge > 0 ? '' : ' d-none') ?>"><?= intval($form_unread_comment_badge) ?></span>
               </a>
             </li>
+             <?php } ?>
               <li class="menu-item <?php if($directory == 'schedule') echo 'active open'; ?>">
                 <a href="<?=$root?>schedule/" class="menu-link">
                   <i class="menu-icon icon-base ti tabler-calendar-event"></i>

@@ -235,10 +235,15 @@ if($_SESSION['show_project'] == 0){
         </div>
     </div>
 
-    <!-- Fixed filter button (shown when scroll reaches projectTableCard) -->
-    <button type="button" class="btn btn-sm btn-primary rounded-pill shadow-lg position-fixed d-none" id="projectFilterFloatBtn" style="bottom: 10px; left: 6rem; z-index: 1050;" data-bs-toggle="offcanvas" data-bs-target="#offcanvasProjectFilter" aria-controls="offcanvasProjectFilter" title="高度なフィルター">
-        <i class="fa fa-filter me-1"></i> <span data-i18n="高度なフィルター">高度なフィルター</span>
-    </button>
+    <!-- Fixed action buttons (shown when scroll reaches projectTableCard) -->
+    <div class="position-fixed d-none d-flex gap-2" id="projectFloatActions" style="bottom: 10px; left: 6rem; z-index: 1050;">
+        <button type="button" class="btn btn-sm btn-primary rounded-pill shadow-lg" id="projectFilterFloatBtn" data-bs-toggle="offcanvas" data-bs-target="#offcanvasProjectFilter" aria-controls="offcanvasProjectFilter" title="高度なフィルター">
+            <i class="fa fa-filter me-1"></i> <span data-i18n="高度なフィルター">高度なフィルター</span>
+        </button>
+        <button type="button" class="btn btn-sm btn-info rounded-pill shadow-lg" id="projectReloadFloatBtn" title="更新">
+            <i class="fa fa-refresh me-1"></i> <span data-i18n="更新">更新</span>
+        </button>
+    </div>
 
     <!-- Offcanvas: nội dung = #projectFilterBox (mở từ bottom giống Todo List) -->
     <div class="offcanvas offcanvas-bottom" tabindex="-1" id="offcanvasProjectFilter" aria-labelledby="offcanvasProjectFilterLabel" style="height: 30rem;">

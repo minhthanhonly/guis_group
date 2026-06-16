@@ -100,6 +100,7 @@ if (!empty($_SESSION['userid'])) {
     </div>
   </div>
 
+  <?php if($_SESSION['group'] != '7'){ ?>
   <div id="dashboardRequestsApp" v-cloak>
     <div v-if="!dashboardReady" class="row g-6 mt-1">
       <div class="col-12">
@@ -111,7 +112,7 @@ if (!empty($_SESSION['userid'])) {
       </div>
     </div>
     <div v-else class="row g-6 mt-1">
-    <div class="col-md-12" :class="{'col-lg-6 col-xl-6': canApprove}">
+    <div v-if="recentRequests.length > 0" class="col-md-12" :class="{'col-lg-6 col-xl-6': canApprove}">
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between align-items-center py-3">
           <h5 class="card-title mb-0">最近の申請</h5>
@@ -159,7 +160,7 @@ if (!empty($_SESSION['userid'])) {
       </div>
     </div>
 
-    <div v-if="canApprove" class="col-md-12 col-lg-6 col-xl-6">
+    <div v-if="canApprove" class="col-md-12" :class="{'col-lg-6 col-xl-6': recentRequests.length > 0, 'col-lg-12 col-xl-12': recentRequests.length === 0 }">
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between align-items-center py-3">
           <div>
@@ -206,6 +207,7 @@ if (!empty($_SESSION['userid'])) {
     </div>
     </div>
   </div>
+  <?php } ?>
 
   <div class="row g-6 mt-1">
     <div class="col-xl-6 col-md-12">
