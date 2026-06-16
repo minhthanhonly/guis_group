@@ -118,6 +118,17 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     let currentStart = null;
 
+    function filterVisibleScheduleEvents(events) {
+        const userId = typeof USER_ID !== 'undefined' ? String(USER_ID) : '';
+        return (events || []).filter(function (event) {
+            const props = event.extendedProps || {};
+            if (String(props.public_level) === '1') {
+                return String(props.owner || '') === userId;
+            }
+            return true;
+        });
+    }
+
     async function getEventList(start, end){
     eventList = [];
         const response = await axios.get(`/api/index.php?model=schedule&method=get_event&start=${start}&end=${end}&isTop=1`);
@@ -125,7 +136,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (response.status !== 200 || !response.data) {
             handleErrors(response.data);
         }
-        return response.data;
+        return filterVisibleScheduleEvents(response.data);
     }
 
     async function fetchEvents(info, successCallback) {
@@ -211,23 +222,6 @@ document.addEventListener('DOMContentLoaded', async function () {
                     }
                 }
             }
-            if (info.event.extendedProps.public_level == 1) {
-                const badge = document.createElement('span');
-                badge.className = 'badge badge-pill bg-label-warning me-1';
-                badge.innerHTML = '非公開';
-                
-                if (info.view.type === 'listWeek' || info.view.type === 'listMonth') {
-                    const listEventEl = info.el.querySelector('.fc-list-event-title a');
-                    if (listEventEl) {
-                        listEventEl.insertAdjacentElement('beforebegin', badge);
-                    }
-                } else {
-                    const titleEl = info.el.querySelector('.fc-event-title');
-                    if (titleEl) {
-                        titleEl.insertAdjacentElement('beforebegin', badge);
-                    }
-                }
-            }
             // Add Bootstrap tooltip for event comment
             const eventEl = info.el;
             const comment = info.event.extendedProps.comment || '';
@@ -261,22 +255,32 @@ document.addEventListener('DOMContentLoaded', async function () {
             modifySchedulePageButton();
           },
         eventContent: function(arg) {
-            // Create a container for the event content
-            let contentEl = document.createElement('div');
-            
-            // Add the event title
-            let titleEl = document.createElement('div');
-            titleEl.innerHTML = arg.event.title;
-            contentEl.appendChild(titleEl);
+            const contentEl = document.createElement('div');
 
-            // Add the truncated comment
+            const titleRow = document.createElement('div');
+            titleRow.className = 'd-inline-flex align-items-center flex-wrap gap-1';
+
+            if (String(arg.event.extendedProps.public_level) === '1') {
+                const badge = document.createElement('span');
+                badge.className = 'badge badge-pill bg-label-warning schedule-private-badge';
+                badge.textContent = '非公開';
+                titleRow.appendChild(badge);
+            }
+
+            const titleEl = document.createElement('span');
+            titleEl.textContent = arg.event.title;
+            titleRow.appendChild(titleEl);
+            contentEl.appendChild(titleRow);
+
             let comment = arg.event.extendedProps.comment || '';
             if (comment.length > 20) {
                 comment = comment.substring(0, 20) + '...';
             }
-            let commentEl = document.createElement('div');
-            commentEl.innerHTML = `<small>${comment}</small>`;
-            contentEl.appendChild(commentEl);
+            if (comment) {
+                const commentEl = document.createElement('div');
+                commentEl.innerHTML = `<small>${comment}</small>`;
+                contentEl.appendChild(commentEl);
+            }
 
             return { domNodes: [contentEl] };
         },
@@ -300,155 +304,10 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // 休暇スケジュール（groupware 外部 API: get_dayoff_all_api）
     const dayoffCalendarEl = document.getElementById('dayoff-calendar');
-    const DAYOFF_API_URL = (typeof window.DAYOFF_API_URL !== 'undefined' && window.DAYOFF_API_URL)
-        ? window.DAYOFF_API_URL
-        : 'https://group.caily.com.vn/api/index.php?type=get_dayoff_all_api';
-    if (dayoffCalendarEl) {
-        let dayoffListCache = null;
-        let dayoffUserDisplayMap = {};
-
-        /** GUIS: userid (from groupware API) → realname + team_name */
-        function getDayoffUserDisplayTitle(userid) {
-            const key = userid || '';
-            const info = dayoffUserDisplayMap[key];
-            if (!info) {
-                return key;
-            }
-            const name = (info.realname && String(info.realname).trim()) ? info.realname : key;
-            const teamName = info.team_name && String(info.team_name).trim();
-            return teamName ? (name + '（' + teamName + '）') : name;
-        }
-
-        async function resolveDayoffUserDisplaysFromGuis(dayoffList) {
-            const userids = [];
-            (dayoffList || []).forEach(function (item) {
-                const uid = item.userid;
-                if (uid && userids.indexOf(uid) === -1) {
-                    userids.push(uid);
-                }
-            });
-            if (!userids.length) {
-                dayoffUserDisplayMap = {};
-                return dayoffUserDisplayMap;
-            }
-            try {
-                const response = await axios.get(
-                    '/api/index.php?model=user&method=resolveDisplayByUserids&userids=' + encodeURIComponent(userids.join(','))
-                );
-                if (response.status === 200 && response.data && response.data.map) {
-                    dayoffUserDisplayMap = response.data.map;
-                    return dayoffUserDisplayMap;
-                }
-            } catch (e) {
-                console.warn('resolveDisplayByUserids', e);
-            }
-            dayoffUserDisplayMap = {};
-            return dayoffUserDisplayMap;
-        }
-
-        function isDayoffAllDay(item) {
-            return /^true$/i.test(String(item.allday || ''));
-        }
-
-        function dayoffEventOverlapsRange(eventStart, eventEnd, rangeStart, rangeEnd) {
-            return eventStart.isBefore(rangeEnd) && eventEnd.isAfter(rangeStart);
-        }
-
-        /** API times are Vietnam (UTC+7); display in Japan (Asia/Tokyo). */
-        function convertVnDateTimeToJapan(dateStr, timeStr) {
-            const time = timeStr || '00:00';
-            let jp;
-            if (typeof moment.tz === 'function') {
-                jp = moment.tz(dateStr + ' ' + time, 'YYYY-MM-DD HH:mm', 'Asia/Ho_Chi_Minh').tz('Asia/Tokyo');
-            } else {
-                jp = moment(dateStr + ' ' + time, 'YYYY-MM-DD HH:mm').add(2, 'hours');
-            }
-            return {
-                date: jp.format('YYYY-MM-DD'),
-                time: jp.format('HH:mm'),
-                iso: jp.format('YYYY-MM-DDTHH:mm:ss')
-            };
-        }
-
-        function mapDayoffItemToEvent(item) {
-            const isAllDay = isDayoffAllDay(item);
-            const isOwn = String(item.userid || '') === String(typeof USER_ID !== 'undefined' ? USER_ID : '');
-            const title = getDayoffUserDisplayTitle(item.userid);
-
-            if (isAllDay) {
-                const endExclusive = moment(item.date_end, 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD');
-                return {
-                    id: 'dayoff-' + item.id,
-                    title: title,
-                    start: item.date_start,
-                    end: endExclusive,
-                    allDay: true,
-                    extendedProps: {
-                        isOwn: isOwn,
-                        calendar: '勤怠'
-                    }
-                };
-            }
-
-            const vnTimeStart = (item.time_start && item.time_start !== '00:00') ? item.time_start : '00:00';
-            const vnTimeEnd = (item.time_end && item.time_end !== '00:00') ? item.time_end : '23:59';
-            const startJp = convertVnDateTimeToJapan(item.date_start || '', vnTimeStart);
-            const endJp = convertVnDateTimeToJapan(item.date_end || item.date_start || '', vnTimeEnd);
-            return {
-                id: 'dayoff-' + item.id,
-                title: title,
-                start: startJp.iso,
-                end: endJp.iso,
-                allDay: false,
-                extendedProps: {
-                    isOwn: isOwn,
-                    calendar: '勤怠',
-                    timeLabel: startJp.time + ' - ' + endJp.time
-                }
-            };
-        }
-
-        function filterDayoffEventsForRange(list, rangeStart, rangeEnd) {
-            const rangeStartM = moment(rangeStart);
-            const rangeEndM = moment(rangeEnd);
-            const events = [];
-
-            (list || []).forEach(function (item) {
-                if (String(item.status) !== '1') {
-                    return;
-                }
-                const event = mapDayoffItemToEvent(item);
-                const eventStart = moment(event.start);
-                const eventEnd = event.allDay
-                    ? moment(event.end)
-                    : moment(event.end);
-                if (dayoffEventOverlapsRange(eventStart, eventEnd, rangeStartM, rangeEndM)) {
-                    events.push(event);
-                }
-            });
-
-            return events;
-        }
-
-        async function getDayoffList() {
-            if (dayoffListCache) {
-                return dayoffListCache;
-            }
-            const response = await axios.get(DAYOFF_API_URL, { withCredentials: true });
-            if (response.status !== 200 || !response.data || !response.data.success) {
-                if (response.data) {
-                    handleErrors(response.data);
-                }
-                return [];
-            }
-            dayoffListCache = response.data.list || [];
-            await resolveDayoffUserDisplaysFromGuis(dayoffListCache);
-            return dayoffListCache;
-        }
-
+    if (dayoffCalendarEl && typeof DayoffEvents !== 'undefined') {
         async function fetchDayoffEvents(info, successCallback) {
-            const list = await getDayoffList();
-            successCallback(filterDayoffEventsForRange(list, info.start, info.end));
+            const events = await DayoffEvents.fetchDayoffEventsForRange(info.start, info.end);
+            successCallback(events);
         }
 
         const dayoffCalendar = new Calendar(dayoffCalendarEl, {

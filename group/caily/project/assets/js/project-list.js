@@ -3953,7 +3953,7 @@ var projectTable;
                 if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
                     projectTable.ajax.reload(null, false); // false để giữ nguyên trang hiện tại
                 }
-            }, 60000); // Cập nhật mỗi phút
+            }, 10000); // Cập nhật mỗi 10 giây
         }
         
         // Wait a bit for Vue app to mount

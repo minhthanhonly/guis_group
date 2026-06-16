@@ -1,4 +1,8 @@
 // Service Worker Manager for Background Uploads
+// Bump when sw-upload.js behavior changes (must match CACHE_NAME in sw-upload.js)
+const SW_VERSION = '2.2';
+const SW_VERSION_KEY = 'caily_sw_version';
+
 class ServiceWorkerManager {
     constructor() {
         this.swRegistration = null;
@@ -6,35 +10,56 @@ class ServiceWorkerManager {
         this.init();
     }
 
+    async cleanupServiceWorkers() {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+
+        if ('caches' in window) {
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map((name) => caches.delete(name)));
+        }
+
+        return registrations.length;
+    }
+
+    async migrateServiceWorkerIfNeeded() {
+        const storedVersion = localStorage.getItem(SW_VERSION_KEY);
+        if (storedVersion === SW_VERSION) {
+            return false;
+        }
+
+        const hadRegistration = await this.cleanupServiceWorkers();
+        localStorage.setItem(SW_VERSION_KEY, SW_VERSION);
+
+        if (hadRegistration > 0 || navigator.serviceWorker.controller) {
+            window.location.reload();
+            return true;
+        }
+
+        return false;
+    }
+
     async init() {
         if ('serviceWorker' in navigator) {
             try {
-                // Determine the correct path for service worker based on current location
-                let swPath = '/sw-upload.js';
-                
-                // If we're in a subdirectory, adjust the path
-                const currentPath = window.location.pathname;
-                if (currentPath.includes('/project/') || currentPath.includes('/caily/')) {
-                    // Go up to root directory
-                    swPath = '/sw-upload.js';
+                if (await this.migrateServiceWorkerIfNeeded()) {
+                    return;
                 }
-                
+
+                const swPath = '/sw-upload.js';
                 console.log('Attempting to register Service Worker at:', swPath);
-                
+
                 this.swRegistration = await navigator.serviceWorker.register(swPath);
                 console.log('Service Worker registered successfully:', this.swRegistration);
-                
-                // Listen for service worker updates
-                // this.swRegistration.addEventListener('updatefound', () => {
-                //     const newWorker = this.swRegistration.installing;
-                //     newWorker.addEventListener('statechange', () => {
-                //         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                //             // New service worker available
-                //             this.showUpdateNotification();
-                //         }
-                //     });
-                // });
-                
+
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (!this._reloadingForSwUpdate) {
+                        this._reloadingForSwUpdate = true;
+                        window.location.reload();
+                    }
+                });
+
+                await this.swRegistration.update();
             } catch (error) {
                 console.error('Service Worker registration failed:', error);
             }

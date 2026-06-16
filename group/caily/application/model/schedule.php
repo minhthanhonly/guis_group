@@ -71,11 +71,13 @@ class Schedule extends ApplicationModel {
 				)
 			);
 		}
-		$owner = $_SESSION['userid'];
+		$owner = $this->quote($_SESSION['userid']);
+		$start = $this->quote($start);
+		$end = $this->quote($end);
 		$arrayWhere = array(
 			"schedule_type = 0",
-			"(schedule_date BETWEEN '".$start."' AND '".$end."') OR (schedule_date_end BETWEEN '".$start."' AND '".$end."')",
-			"(public_level = 0 OR (public_level = 1 AND owner = '".$this->quote($owner)."'))"
+			"((schedule_date BETWEEN '".$start."' AND '".$end."') OR (schedule_date_end BETWEEN '".$start."' AND '".$end."'))",
+			"(IFNULL(public_level, 0) = 0 OR (public_level = 1 AND owner = '".$owner."'))"
 		);
 
 		$schedule = $this->fetchAll("SELECT * FROM groupware_schedule WHERE ".implode(" AND ", $arrayWhere));
@@ -119,12 +121,12 @@ class Schedule extends ApplicationModel {
 		$end_time = $_POST['end_time'];
 		$allDay = $_POST['allDay']  == 'true' ? 1 : 0;
 		$comment = $_POST['comment'];
-		$public_level = $_POST['public_level'];
+		$public_level = isset($_POST['public_level']) ? intval($_POST['public_level']) : 0;
 		$calendar = $_POST['calendar'];
 		$editor = $_SESSION['userid'];
 		$updated = date('Y-m-d H:i:s');
 
-		$query = sprintf("UPDATE %s SET schedule_title = '%s', schedule_date = '%s', schedule_time = '%s', schedule_date_end = '%s', schedule_endtime = '%s', schedule_allday = '%s', schedule_comment = '%s', public_level = '%s', editor = '%s', updated = '%s', schedule_category = '%s' WHERE id = %d", "groupware_schedule", $title, $start_date, $start_time, $end_date, $end_time, $allDay, $comment, $public_level, $editor, $updated, $calendar, $id);
+		$query = sprintf("UPDATE %s SET schedule_title = '%s', schedule_date = '%s', schedule_time = '%s', schedule_date_end = '%s', schedule_endtime = '%s', schedule_allday = '%s', schedule_comment = '%s', public_level = %d, editor = '%s', updated = '%s', schedule_category = '%s' WHERE id = %d", "groupware_schedule", $title, $start_date, $start_time, $end_date, $end_time, $allDay, $comment, $public_level, $editor, $updated, $calendar, $id);
 		
 		$result = $this->update_query($query);
 		if ($result) {
@@ -143,11 +145,11 @@ class Schedule extends ApplicationModel {
 		$end_time = $_POST['end_time'];
 		$allDay = $_POST['allDay']  == 'true' ? 1 : 0;
 		$comment = $_POST['comment'];
-		$public_level = $_POST['public_level'];
+		$public_level = isset($_POST['public_level']) ? intval($_POST['public_level']) : 0;
 		$calendar = $_POST['calendar'];
 		$created = date('Y-m-d H:i:s');
 		$owner = $_SESSION['userid'];
-		$query = sprintf("INSERT INTO %s (schedule_title, schedule_date, schedule_time, schedule_date_end, schedule_endtime, schedule_allday, schedule_comment, public_level, created, schedule_category, owner) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')", "groupware_schedule", $title, $start_date, $start_time, $end_date, $end_time, $allDay, $comment, $public_level, $created, $calendar, $owner);
+		$query = sprintf("INSERT INTO %s (schedule_title, schedule_date, schedule_time, schedule_date_end, schedule_endtime, schedule_allday, schedule_comment, public_level, created, schedule_category, owner) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, '%s', '%s', '%s')", "groupware_schedule", $title, $start_date, $start_time, $end_date, $end_time, $allDay, $comment, $public_level, $created, $calendar, $owner);
 		$result = $this->query($query);
 		if ($result) {
 			return array('status' => 'success', 'message' => '追加しました。');
@@ -157,7 +159,7 @@ class Schedule extends ApplicationModel {
 	}
 
 	function delete_event() {
-		$id = $_POST['id'];
+		$id = intval($_POST['id']);
 		$query = sprintf("DELETE FROM %s WHERE id = %d", "groupware_schedule", $id);
 		$result = $this->update_query($query);
 		if ($result) {

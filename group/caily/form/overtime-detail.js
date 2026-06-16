@@ -1,5 +1,8 @@
 ﻿export default {
-  props: { data: { type: Object, required: true } },
+  props: {
+    data: { type: Object, required: true },
+    requestId: { type: [Number, String], default: null }
+  },
   computed: {
     hasDateOrDatetime() {
       return !!(this.data && (this.data.date || this.data.datetime));
@@ -38,6 +41,16 @@
       if (Array.isArray(p)) return p.join('、');
       if (typeof p === 'string') return p;
       return '';
+    },
+    attachmentsList() {
+      if (!this.data || !this.data.attachments) return [];
+      return Array.isArray(this.data.attachments) ? this.data.attachments : [];
+    }
+  },
+  methods: {
+    attachmentDownloadUrl(item) {
+      if (!item || !item.filename || !this.requestId) return '#';
+      return 'download.php?file=' + encodeURIComponent(item.filename) + '&request_id=' + encodeURIComponent(this.requestId);
     }
   },
   template: `
@@ -54,6 +67,18 @@
         <tr v-if="data.note">
           <th>備考</th>
           <td>{{ data.note }}</td>
+        </tr>
+        <tr v-if="attachmentsList.length">
+          <th>添付資料</th>
+          <td>
+            <ul class="list-unstyled mb-0">
+              <li v-for="(item, index) in attachmentsList" :key="index" class="mb-1">
+                <a :href="attachmentDownloadUrl(item)" target="_blank" class="btn btn-sm btn-outline-primary">
+                  <i class="fa fa-download me-1"></i>{{ item.original_name || item.filename }}
+                </a>
+              </li>
+            </ul>
+          </td>
         </tr>
         <tr v-if="$root.request.approver_user_realname">
           <th>承認者(指定)</th>

@@ -50,7 +50,8 @@ createApp({
                 user_id: '',
                 // Mặc định loại bỏ completed để giảm tải
                 excludeCompleted: true,
-                myTask: defaultMyTask // Default to true if not project manager
+                myTask: defaultMyTask, // Default to true if not project manager
+                timerActiveOnly: false
             },
             taskStatuses: [
                 { value: 'todo', label: '未開始', i18nKey: '未開始', color: 'secondary' },
@@ -87,7 +88,7 @@ createApp({
                 return true;
             });
         },
-        // Danh sách task sau khi áp bộ lọc (department / team / user / excludeCompleted)
+        // Danh sách task sau khi áp bộ lọc (department / team / user / excludeCompleted / timer)
         filteredTasks() {
             return this.tasks.filter(task => this.passesTaskFilters(task));
         }
@@ -191,7 +192,51 @@ createApp({
                 }
             }
 
+            if (this.filters.timerActiveOnly && !this.hasActiveTaskTimer(task)) {
+                return false;
+            }
+
             return true;
+        },
+        hasActiveTaskTimer(taskOrId) {
+            const taskId = taskOrId && typeof taskOrId === 'object' ? taskOrId.id : taskOrId;
+            if (!taskId) {
+                return false;
+            }
+            if (window.TaskTimer) {
+                return window.TaskTimer.hasActiveTimerForTask(taskId);
+            }
+            if (taskOrId && typeof taskOrId === 'object' && taskOrId.timer_active) {
+                return true;
+            }
+            const canonical = this.tasks.find((t) => parseInt(t.id, 10) === parseInt(taskId, 10));
+            return !!(canonical && canonical.timer_active);
+        },
+        syncTaskTimerActiveFlags(activeTaskIds) {
+            const ids = Array.isArray(activeTaskIds) ? activeTaskIds : [];
+            const activeSet = new Set(ids.map((id) => parseInt(id, 10)));
+            this.tasks.forEach((task) => {
+                if (!task || task.id == null) {
+                    return;
+                }
+                task.timer_active = activeSet.has(parseInt(task.id, 10));
+            });
+        },
+        onTaskTimerChanged(event) {
+            const detail = event && event.detail ? event.detail : {};
+            if (window.TaskTimer && Array.isArray(window.TaskTimer.activeTaskIds)) {
+                this.syncTaskTimerActiveFlags(window.TaskTimer.activeTaskIds);
+            } else if (detail.stopped && detail.task_id) {
+                const stoppedId = parseInt(detail.task_id, 10);
+                this.tasks.forEach((task) => {
+                    if (task && parseInt(task.id, 10) === stoppedId) {
+                        task.timer_active = false;
+                    }
+                });
+            } else if (Array.isArray(detail.active_task_ids)) {
+                this.syncTaskTimerActiveFlags(detail.active_task_ids);
+            }
+            this.$forceUpdate();
         },
         // Lấy tên người phụ trách của task (dùng trong danh sách 1 dòng / task)
         getAssigneeNames(task) {
@@ -283,6 +328,13 @@ createApp({
                 this.users = data.users || [];
                 this.tasks = data.tasks || [];
                 this.unassignedUsers = data.unassigned_users || [];
+                if (window.TaskTimer && Array.isArray(data.active_task_ids)) {
+                    window.TaskTimer.updateActiveTaskIds(data.active_task_ids);
+                } else {
+                    this.syncTaskTimerActiveFlags(
+                        (this.tasks || []).filter((task) => task.timer_active).map((task) => task.id)
+                    );
+                }
                 this.$nextTick(() => this.initTooltips());
             } catch (e) {
                 console.error('Error loading task overview:', e);
@@ -465,9 +517,15 @@ createApp({
         if (typeof i18next !== 'undefined' && i18next.on) {
             i18next.on('languageChanged', this._onI18nLanguageChanged);
         }
+        this._onTaskTimerChanged = (event) => this.onTaskTimerChanged(event);
+        document.addEventListener('task-timer-changed', this._onTaskTimerChanged);
         this.loadOverview();
     },
     beforeUnmount() {
+        if (this._onTaskTimerChanged) {
+            document.removeEventListener('task-timer-changed', this._onTaskTimerChanged);
+            this._onTaskTimerChanged = null;
+        }
         if (typeof i18next !== 'undefined' && i18next.off && this._onI18nLanguageChanged) {
             i18next.off('languageChanged', this._onI18nLanguageChanged);
         }

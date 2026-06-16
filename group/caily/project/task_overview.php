@@ -50,6 +50,11 @@ if($_SESSION['show_project'] == 0){
                        v-model="filters.myTask" @change="onMyTaskChange">
                 <label class="form-check-label" for="myTask"><span data-i18n="自分のタスク">自分のタスク</span></label>
             </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="filterTimerActiveOnly"
+                       v-model="filters.timerActiveOnly">
+                <label class="form-check-label text-nowrap" for="filterTimerActiveOnly" data-i18n="作業計測中のタスクのみ">作業計測中のタスクのみ</label>
+            </div>
         </div>
     </div>
 
@@ -178,8 +183,12 @@ if($_SESSION['show_project'] == 0){
                                             <small class="ms-2 text-nowrap">{{ task.progress || 0 }}%</small>
                                         </div>
                                     </td>
-                                    <td>
-                                        <span class="small text-nowrap">{{ formatEstimatedHours(task.estimated_hours) }}</span>
+                                    <td class="overview-workload-cell">
+                                        <span
+                                            class="task-workload-input-shell text-nowrap"
+                                            :class="{ 'task-workload-input-shell--timer-active': hasActiveTaskTimer(task) }">
+                                            <span class="task-workload-display small">{{ formatEstimatedHours(task.estimated_hours) || '—' }}</span>
+                                        </span>
                                     </td>
                                     <td>
                                         <span v-if="getTaskNoteSnippet(task.note)" class="small text-truncate d-inline-block overview-task-note" :title="getTaskNoteSnippet(task.note)">{{ getTaskNoteSnippet(task.note) }}</span>
@@ -241,6 +250,18 @@ if($_SESSION['show_project'] == 0){
 .overview-task-note {
     max-width: 7rem;
     vertical-align: bottom;
+}
+.overview-workload-cell .task-workload-input-shell {
+    display: inline-flex;
+}
+.overview-workload-cell .task-workload-display {
+    min-width: 2.75rem;
+    padding-right: 0.9rem;
+}
+.overview-workload-cell .task-workload-input-shell--timer-active .task-workload-display {
+    border-color: transparent;
+    background-color: transparent;
+    animation: none;
 }
 </style>
 

@@ -1,18 +1,10 @@
 // Service Worker for Background File Uploads
-const CACHE_NAME = 'upload-cache-v2.1';
+const CACHE_NAME = 'upload-cache-v2.2';
 
-// Install event - cache necessary files
+// Install event
 self.addEventListener('install', (event) => {
     console.log('Service Worker installing...');
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then((cache) => {
-                return cache.addAll([
-                    '/assets/js/axios.min.js',
-                    '/assets/css/app-chat.css'
-                ]);
-            })
-    );
+    self.skipWaiting();
 });
 
 // Activate event - clean up old caches
@@ -27,7 +19,7 @@ self.addEventListener('activate', (event) => {
                     }
                 })
             );
-        })
+        }).then(() => self.clients.claim())
     );
 });
 
@@ -139,17 +131,4 @@ async function handleFileUpload(file, uploadUrl, port, additionalData = {}) {
     }
 }
 
-// Fetch event - serve cached resources
-self.addEventListener('fetch', (event) => {
-    if (event.request.url.includes('/api/upload-image')) {
-        // Don't cache upload requests
-        return;
-    }
-    
-    event.respondWith(
-        caches.match(event.request)
-            .then((response) => {
-                return response || fetch(event.request);
-            })
-    );
-}); 
+// Upload is handled via postMessage only; do not intercept all page fetches.

@@ -856,16 +856,8 @@ class Task extends ApplicationModel {
             require_once DIR_MODEL . 'project.php';
         }
         $projectModel = new Project();
-        if (!$projectModel->canUserEditProject($project_id)) {
+        if (!$projectModel->canUserEditProject($project_id) && !$this->checkPermission($project_id, $id)) {
             return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
-        }
-        if (isset($_POST['status']) || isset($_POST['progress'])) {
-            if (!$this->checkPermission($project_id, $id)) {
-               return [
-                'status' => 'error',
-                'message' => 'このタスクを更新する権限がありません'
-               ];
-            }
         }
         
         $old = $this->getById($id);
@@ -892,7 +884,7 @@ class Task extends ApplicationModel {
             $taskKind = $defaultKind;
         }
         if (array_key_exists('drawing_count', $_POST)) {
-            if ($projectModel->canUserEditProject($project_id)) {
+            if ($projectModel->canUserEditProject($project_id) || $this->userCanEditTaskDrawing($project_id, $taskKind)) {
                 $drawingCount = max(0, intval($_POST['drawing_count']));
             } else {
                 $drawingCount = isset($old['drawing_count']) ? max(0, intval($old['drawing_count'])) : 0;
@@ -2148,7 +2140,7 @@ class Task extends ApplicationModel {
         
         $currentUserIdNumber = $_SESSION['id'];
         $currentUserId = $_SESSION['userid'];
-        $isAssigned = in_array($currentUserIdNumber, explode(',', $task['assigned_to']));
+        $isAssigned = $this->isCurrentUserAssignedToTask($task);
         $isProjectManager = $_SESSION['authority'] == 'administrator';
        
         
@@ -3766,12 +3758,12 @@ class Task extends ApplicationModel {
         // Re-index users array (drop numeric keys)
         $usersList = array_values($users);
 
-        return [
+        return $this->appendActiveTimerTaskIds([
             'departments' => $departments,
             'teams' => $teams,
             'users' => $usersList,
             'tasks' => $tasks,
             'unassigned_users' => $unassigned_users
-        ];
+        ]);
     }
 }

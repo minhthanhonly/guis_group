@@ -125,6 +125,7 @@
               <th class="note-col">注記</th>
               <th>承認者(指定)</th>
               <th>コメント数</th>
+              <th v-if="showAttachmentColumn">添付</th>
               <th>承認者</th>
               <th class="user-select-none" style="cursor:pointer;" @click="changeSort('approved_at')">
                 承認日時
@@ -148,6 +149,10 @@
                 {{ req.comment_count }}
                 <span v-if="Number(req.comment_count || 0) > 0 && Number(req.unread_comment || 0) > 0" class="badge bg-danger ms-1">未読</span>
               </td>
+              <td v-if="showAttachmentColumn">
+                <template v-if="currentTab === 'all' ? formTypeHasAttachments(req.type) : true">{{ attachmentCount(req) }}</template>
+                <span v-else>-</span>
+              </td>
               <td>{{ req.approver_realname || '-' }}</td>
               <td>{{ req.approved_at ? formatDateTime(req.approved_at) : '-' }}</td>
               <td>
@@ -159,7 +164,9 @@
                 </div>
               </td>
               <td>
-                <a :href="'detail.php?id=' + req.id" class="btn btn-sm btn-outline-info">詳細</a>
+                <div class="d-flex gap-1">
+                  <a :href="'detail.php?id=' + req.id" class="btn btn-sm btn-outline-info">詳細</a>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -202,6 +209,7 @@
               <th class="note-col" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">注記</th>
               <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">承認者(指定)</th>
               <th>コメント数</th>
+              <th v-if="showAttachmentColumn">添付</th>
               <th>承認者</th>
               <th class="user-select-none" style="cursor:pointer;" @click="changeSort('approved_at')">
                 承認日時
@@ -310,8 +318,12 @@
                 {{ req.comment_count }}
                 <span v-if="Number(req.comment_count || 0) > 0 && Number(req.unread_comment || 0) > 0" class="badge bg-danger ms-1">未読</span>
               </td>
+              <td v-if="showAttachmentColumn">
+                <template v-if="currentTab === 'all' ? formTypeHasAttachments(req.type) : true">{{ attachmentCount(req) }}</template>
+                <span v-else>-</span>
+              </td>
               <td>{{ req.approver_realname || '-' }}</td>
-              <td>{{ req.approved_at ? formatDateTime(req.approved_at) : '-' }}</td>
+              <td class="small">{{ req.approved_at ? formatDateTime(req.approved_at) : '-' }}</td>
               <td>
                 <span :class="['badge', statusBadgeClass(req.status)]">
                   <i :class="statusIcon(req.status)" class="me-1"></i>{{ statusLabel(req.status) }}
@@ -320,13 +332,15 @@
                   {{ req.completed_realname || req.completed_userid || '-' }} / {{ req.completed_at ? formatDateTime(req.completed_at) : '-' }}
                 </div>
               </td>
-              <td>{{ formatDateTime(req.created_at) }}</td>
+              <td class="small">{{ formatDateTime(req.created_at) }}</td>
               <td>
-                <a :href="'detail.php?id=' + req.id" class="btn btn-sm btn-outline-info me-1">詳細</a>
-                <button type="button" class="btn btn-sm btn-outline-secondary me-1" @click="openPrint(req)" title="印刷">
-                  <i class="fa fa-print"></i> 印刷
-                </button>
-                <button v-if="canDelete(req)" type="button" class="btn btn-sm btn-outline-danger" @click="deleteRequest(req)" title="削除">削除</button>
+                <div class="d-flex gap-1 flex-wrap">
+                  <a :href="'detail.php?id=' + req.id" class="btn btn-xs btn-outline-info">詳細</a>
+                  <button type="button" class="btn btn-xs btn-outline-secondary" @click="openPrint(req)" title="印刷">
+                    <i class="fa fa-print"></i> 印刷
+                  </button>
+                  <button v-if="canDelete(req)" type="button" class="btn btn-xs btn-outline-danger" @click="deleteRequest(req)" title="削除">削除</button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -661,6 +675,7 @@ const app = createApp({
       ],
       // 一時非表示（表示する場合は hiddenTabTypes から削除）
       hiddenTabTypes: ['travel_expense', 'expense', 'trip_expense'],
+      attachmentFormTypes: ['overtime', 'it_support', 'travel_expense', 'expense', 'trip_expense', 'commuting_allowance'],
       currentTab: 'leave',
       requests: [],
       loading: false,
@@ -710,6 +725,10 @@ const app = createApp({
     currentTabLabel() {
       const t = this.visibleTabs.find(x => x.type === this.currentTab);
       return t ? t.label : '申請種別';
+    },
+    showAttachmentColumn() {
+      if (this.currentTab === 'all') return true;
+      return this.attachmentFormTypes.includes(this.currentTab);
     },
     modalDialogClass() {
       // travel_expense 用フォームは内容が多いため、モーダルを大きくする
@@ -1239,6 +1258,23 @@ const app = createApp({
     onFormSubmitted() {
       this.closeForm();
       this.fetchRequests();
+    },
+    formTypeHasAttachments(type) {
+      return this.attachmentFormTypes.includes(type);
+    },
+    attachmentCount(req) {
+      const data = req && req.data ? req.data : {};
+      let count = 0;
+      if (Array.isArray(data.attachments)) {
+        count += data.attachments.length;
+      }
+      if (Array.isArray(data.receipts)) {
+        count += data.receipts.length;
+      }
+      if (data.attachment) {
+        count += 1;
+      }
+      return count;
     },
     renderSummary(req) {
       if (req.type === 'leave') return req.data?.reason || '';

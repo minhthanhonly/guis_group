@@ -61,6 +61,13 @@ if (strlen($hash['owner']['realname']) > 0 && (isset($_GET['member']) || $hash['
               <label class="form-check-label" for="select-etc">その他</label>
             </div>
           </div>
+          <hr class="mx-n4 mb-4" />
+          <div class="pb-4">
+            <div class="form-check form-switch ms-2">
+              <input type="checkbox" class="form-check-input" id="showCailyDayoffSwitch" />
+              <label class="form-check-label" for="showCailyDayoffSwitch">CAILY休暇を表示</label>
+            </div>
+          </div>
         </div>
       </div>
       <!-- /Calendar Sidebar -->
@@ -155,4 +162,8 @@ $view->footing();
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/css/pages/app-calendar.css" />
 <script src="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.js"></script>
+<script>
+  window.DAYOFF_API_URL = 'https://group.caily.com.vn/api/index.php?type=get_dayoff_all_api&debug=1';
+</script>
+<script src="<?=ROOT?>assets/js/dayoff-events.js?v=<?=CACHE_VERSION?>"></script>
 <script src="<?=ROOT?>assets/js/app-calendar.js?v=<?=CACHE_VERSION?>"></script>

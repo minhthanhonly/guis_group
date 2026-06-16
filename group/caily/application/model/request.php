@@ -2180,6 +2180,12 @@ class Request extends ApplicationModel {
             }
             if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+            if (!empty($data['attachments']) && is_array($data['attachments'])) {
+                $names = array_map(function ($a) {
+                    return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+                }, $data['attachments']);
+                $lines[] = $fmt('添付資料', implode('、', array_filter($names)));
+            }
         } elseif ($type === 'attendance_correction') {
             if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
             if (!empty($data['time'])) $lines[] = $fmt('時間', $data['time']);
@@ -2456,6 +2462,12 @@ class Request extends ApplicationModel {
             }
             if (!empty($data['reason'])) $lines[] = $fmt('事由', $data['reason']);
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+            if (!empty($data['attachments']) && is_array($data['attachments'])) {
+                $names = array_map(function ($a) {
+                    return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+                }, $data['attachments']);
+                $lines[] = $fmt('添付資料', implode('、', array_filter($names)));
+            }
         } elseif ($requestType === 'attendance_correction') {
             if (!empty($data['date'])) $lines[] = $fmt('日付', $data['date']);
             if (!empty($data['time'])) $lines[] = $fmt('時間', $data['time']);
@@ -2744,6 +2756,17 @@ class Request extends ApplicationModel {
             $addDiff('終了時刻', 'end_time');
             $addDiff('用途', 'purpose');
             $addDiff('備考', 'note');
+            $oldAtt = isset($old['attachments']) && is_array($old['attachments']) ? $old['attachments'] : [];
+            $newAtt = isset($new['attachments']) && is_array($new['attachments']) ? $new['attachments'] : [];
+            $oldNames = array_map(function ($a) {
+                return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+            }, $oldAtt);
+            $newNames = array_map(function ($a) {
+                return isset($a['original_name']) ? $a['original_name'] : (isset($a['filename']) ? $a['filename'] : '');
+            }, $newAtt);
+            if (implode('、', $oldNames) !== implode('、', $newNames)) {
+                $lines[] = '添付資料: ' . (count($oldNames) ? implode('、', $oldNames) : '（なし）') . ' → ' . (count($newNames) ? implode('、', $newNames) : '（なし）');
+            }
         } elseif ($requestType === 'attendance_correction') {
             $addDiff('日付', 'date');
             $addDiff('時間', 'time');

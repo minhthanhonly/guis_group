@@ -412,6 +412,7 @@ $view->footing();
 <script>
   window.DAYOFF_API_URL = 'https://group.caily.com.vn/api/index.php?type=get_dayoff_all_api&debug=1';
 </script>
+<script src="<?=ROOT?>assets/js/dayoff-events.js?v=<?=CACHE_VERSION?>"></script>
 <script src="<?=ROOT?>assets/js/top.js?v=<?=CACHE_VERSION?>"></script>
 <script>
   window.DASHBOARD_FORM_ROOT = <?= json_encode($root . 'form/') ?>;

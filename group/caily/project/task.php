@@ -1002,7 +1002,7 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
-<script src="<?=ROOT?>assets/js/sw-manager.js"></script>
+<script src="<?=ROOT?>assets/js/sw-manager.js?v=<?=CACHE_VERSION?>"></script>
 <link rel="stylesheet" href="<?=ROOT?>assets/css/comment-component.css" />
 <script src="<?=ROOT?>assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
 <script src="<?=ROOT?>assets/js/mention.js?v=<?=CACHE_VERSION?>"></script>

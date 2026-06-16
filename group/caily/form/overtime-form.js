@@ -17,28 +17,20 @@ export default {
         end_time: '',
         purpose: '',
         note: '',
+        attachments: [],
         approver_user_ids: []
       },
       errors: {},
       modalTitle: this.mode === 'edit' ? '遅刻・早退・時間外勤務 編集' : '遅刻・早退・時間外勤務',
       submitting: false,
+      uploadingAttachments: false,
       approvers: [],
       originalData: null
     };
   },
   created() {
     if (this.defaultData && Object.keys(this.defaultData).length > 0) {
-      const raw = Object.assign({
-        date: '',
-        start_time: '',
-        end_time: '',
-        purpose: '',
-        note: '',
-        approver_user_ids: []
-      }, this.defaultData);
-      raw.date = this.normalizeDateValue(raw.date);
-      raw.purpose = this.normalizePurpose(raw.purpose);
-      this.formData = raw;
+      this.formData = this.buildFormDataFromDefault(this.defaultData);
       this.originalData = JSON.parse(JSON.stringify(this.formData));
     }
     if (this.mode === 'add') {
@@ -53,22 +45,11 @@ export default {
     defaultData: {
       handler(newVal) {
         if (newVal && Object.keys(newVal).length > 0) {
-          const raw = Object.assign({
-            date: '',
-            start_time: '',
-            end_time: '',
-            purpose: '',
-            note: '',
-            approver_user_ids: []
-          }, newVal);
-          raw.date = this.normalizeDateValue(raw.date);
-          raw.purpose = this.normalizePurpose(raw.purpose);
-          this.formData = raw;
+          this.formData = this.buildFormDataFromDefault(newVal);
           this.originalData = JSON.parse(JSON.stringify(this.formData));
         }
       },
-      immediate: true,
-      deep: true
+      immediate: true
     }
   },
   computed: {
@@ -102,6 +83,22 @@ export default {
   },
   methods: {
     formatUserDisplayName,
+    buildFormDataFromDefault(source) {
+      const raw = Object.assign({
+        date: '',
+        start_time: '',
+        end_time: '',
+        purpose: '',
+        note: '',
+        attachments: [],
+        approver_user_ids: []
+      }, source || {});
+      raw.date = this.normalizeDateValue(raw.date);
+      raw.purpose = this.normalizePurpose(raw.purpose);
+      raw.attachments = Array.isArray(raw.attachments) ? JSON.parse(JSON.stringify(raw.attachments)) : [];
+      raw.approver_user_ids = Array.isArray(raw.approver_user_ids) ? raw.approver_user_ids.slice() : [];
+      return raw;
+    },
     normalizeDateValue(value) {
       if (value === null || value === undefined) return '';
       const str = String(value).trim();
@@ -208,6 +205,65 @@ export default {
     },
     close() {
       this.$emit('close');
+    },
+    async onAttachmentsSelect(event) {
+      const files = event.target.files ? Array.from(event.target.files) : [];
+      event.target.value = '';
+      if (!files.length) return;
+      const maxSize = 20 * 1024 * 1024;
+      const toUpload = files.filter(f => {
+        if (f.size > maxSize) {
+          if (typeof showMessage === 'function') showMessage(`ファイル「${f.name}」は20MB以下にしてください。`, true);
+          return false;
+        }
+        return true;
+      });
+      if (!toUpload.length) return;
+      this.uploadingAttachments = true;
+      for (const file of toUpload) {
+        await this.uploadAttachmentFile(file);
+      }
+      this.uploadingAttachments = false;
+    },
+    async uploadAttachmentFile(file) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const xhr = new XMLHttpRequest();
+        const url = '/api/index.php?model=request&method=uploadFormFile';
+        const result = await new Promise((resolve, reject) => {
+          xhr.addEventListener('load', () => {
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch (e) {
+              resolve({ success: false, error: 'Invalid response' });
+            }
+          });
+          xhr.addEventListener('error', () => reject(new Error('Network error')));
+          xhr.open('POST', url);
+          xhr.send(formData);
+        });
+        if (result && result.success) {
+          if (!Array.isArray(this.formData.attachments)) this.formData.attachments = [];
+          this.formData.attachments.push({
+            filename: result.filename,
+            original_name: result.original_name || file.name
+          });
+        } else if (typeof showMessage === 'function') {
+          showMessage(result && result.error ? result.error : 'アップロードに失敗しました。', true);
+        }
+      } catch (e) {
+        if (typeof showMessage === 'function') showMessage('アップロードに失敗しました。', true);
+      }
+    },
+    removeAttachment(index) {
+      this.formData.attachments = this.formData.attachments.filter((_, i) => i !== index);
+    },
+    attachmentDownloadUrl(item) {
+      if (!item || !item.filename) return '#';
+      const requestId = this.mode === 'edit' && this.defaultData && this.defaultData.id ? this.defaultData.id : '';
+      if (!requestId) return '#';
+      return 'download.php?file=' + encodeURIComponent(item.filename) + '&request_id=' + encodeURIComponent(requestId);
     }
   },
   template: `
@@ -281,6 +337,23 @@ export default {
             <label class="col-sm-3 col-form-label">備考</label>
             <div class="col-sm-9">
               <textarea class="form-control" v-model="formData.note" rows="2"></textarea>
+            </div>
+          </div>
+          <div class="mb-3 row" v-if="mode !== 'print'">
+            <label class="col-sm-3 col-form-label">添付資料</label>
+            <div class="col-sm-9">
+              <input type="file" class="form-control mb-2" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif" multiple @change="onAttachmentsSelect" :disabled="uploadingAttachments">
+              <div v-if="uploadingAttachments" class="text-muted small">アップロード中...</div>
+              <ul v-if="formData.attachments && formData.attachments.length" class="list-group list-group-flush mt-2">
+                <li v-for="(item, index) in formData.attachments" :key="index" class="list-group-item d-flex align-items-center justify-content-between py-2">
+                  <a v-if="mode==='edit' && defaultData && defaultData.id" :href="attachmentDownloadUrl(item)" target="_blank" class="btn btn-sm btn-link p-0 text-start text-truncate">
+                    <i class="fa fa-download me-1"></i>{{ item.original_name || item.filename }}
+                  </a>
+                  <span v-else class="text-truncate">{{ item.original_name || item.filename }}</span>
+                  <button type="button" class="btn btn-sm btn-outline-danger ms-2" @click="removeAttachment(index)">削除</button>
+                </li>
+              </ul>
+              <small class="text-muted">遅延証明書などを添付できます。複数可。各20MB以下。</small>
             </div>
           </div>
           <div class="mb-3 row">

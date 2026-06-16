@@ -42,6 +42,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     const eventLastUpdateTime = document.getElementById('eventLastUpdateTime');
     const filterInputs = Array.from(document.querySelectorAll('.input-filter'));
     const eventBtn = document.getElementById('eventBtn');
+    const showCailyDayoffSwitch = document.getElementById('showCailyDayoffSwitch');
+    const SHOW_CAILY_DAYOFF_KEY = 'schedule_show_caily_dayoff';
 
     // Calendar settings
     const calendarColors = {
@@ -57,6 +59,18 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     let eventList = [];
     let forceUpdate = false;
+
+    function filterVisibleScheduleEvents(events) {
+      const userId = typeof USER_ID !== 'undefined' ? String(USER_ID) : '';
+      return (events || []).filter(function (event) {
+        const props = event.extendedProps || {};
+        if (String(props.public_level) === '1') {
+          return String(props.owner || '') === userId;
+        }
+        return true;
+      });
+    }
+
     async function getEventList(start, end){
       eventList = [];
       const response = await axios.get(`/api/index.php?model=schedule&method=get_event&start=${start}&end=${end}`);
@@ -64,7 +78,7 @@ document.addEventListener('DOMContentLoaded', async function () {
       if (response.status !== 200 || !response.data) {
         handleErrors(response.data);
       }
-      return response.data;
+      return filterVisibleScheduleEvents(response.data);
     }
 
 
@@ -202,7 +216,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // Event click function
     function eventClick(info) {
-      if(info.event.extendedProps.type == 'holiday'){
+      if(info.event.extendedProps.type == 'holiday' || info.event.extendedProps.type == 'dayoff'){
         return;
       }
       eventToUpdate = info.event;
@@ -320,6 +334,32 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     let currentStart = null;
 
+    if (showCailyDayoffSwitch) {
+      showCailyDayoffSwitch.checked = localStorage.getItem(SHOW_CAILY_DAYOFF_KEY) === '1';
+    }
+
+    function isMultiDayEvent(event) {
+      const start = moment(event.start).startOf('day');
+      let endDay;
+      if (event.allDay) {
+        endDay = moment(event.end).subtract(1, 'day').startOf('day');
+      } else {
+        endDay = moment(event.end).startOf('day');
+      }
+      return endDay.isAfter(start, 'day');
+    }
+
+    function resolveDisplayPriority(event) {
+      const props = event.extendedProps || {};
+      if (props.type === 'dayoff') {
+        return 2;
+      }
+      if (props.type === 'schedule' && isMultiDayEvent(event)) {
+        return 0;
+      }
+      return 1;
+    }
+
     async function fetchEvents(info, successCallback) {
       if (currentStart === null || moment(info.start).format('YYYY-MM-DD') !== currentStart || forceUpdate) {
         currentStart = moment(info.start).format('YYYY-MM-DD');
@@ -331,6 +371,16 @@ document.addEventListener('DOMContentLoaded', async function () {
       let selectedEvents = events.filter(function (event) {
         return calendars.includes(event.extendedProps.calendar.toLowerCase());
       });
+
+      if (showCailyDayoffSwitch && showCailyDayoffSwitch.checked && typeof DayoffEvents !== 'undefined') {
+        const dayoffEvents = await DayoffEvents.fetchDayoffEventsForRange(info.start, info.end, { shortTitle: true });
+        selectedEvents = selectedEvents.concat(dayoffEvents);
+      }
+
+      selectedEvents = selectedEvents.map(function (event) {
+        return Object.assign({}, event, { displayPriority: resolveDisplayPriority(event) });
+      });
+
       successCallback(selectedEvents);
     }
 
@@ -343,8 +393,10 @@ document.addEventListener('DOMContentLoaded', async function () {
       plugins: [dayGridPlugin, interactionPlugin, listPlugin, timegridPlugin],
       editable: true,
       dragScroll: true,
-      dayMaxEvents: 4,
+      dayMaxEvents: 5,
       defaultAllDay: true,
+      eventOrder: 'displayPriority,allDay,-start,title',
+      eventOrderStrict: true,
       eventResizableFromStart: true,
       customButtons: {
         sidebarToggle: {
@@ -421,6 +473,21 @@ document.addEventListener('DOMContentLoaded', async function () {
       },
 
       eventDidMount: function(info) {
+        if (info.event.extendedProps.type === 'dayoff') {
+          if (info.view.type === 'listWeek' || info.view.type === 'listMonth') {
+            const timeEl = info.el.querySelector('.fc-list-event-time');
+            const dayoffLabel = info.event.extendedProps.dayoffLabel;
+            if (timeEl && dayoffLabel) {
+              timeEl.textContent = dayoffLabel;
+            } else if (timeEl && info.event.allDay) {
+              timeEl.textContent = '全休';
+            } else if (timeEl && info.event.extendedProps.timeLabel) {
+              timeEl.textContent = info.event.extendedProps.timeLabel;
+            }
+          }
+          return;
+        }
+
         if (info.event.extendedProps.public_level == 1) {
           const titleEl = info.el.querySelector('.fc-event-title');
           if (titleEl) {
@@ -537,6 +604,10 @@ document.addEventListener('DOMContentLoaded', async function () {
       });
     }
 
+    function toFormBody(data) {
+      return new URLSearchParams(data);
+    }
+
     // Add Event
     // ------------------------------------------------
     async function addEvent(eventData) {
@@ -552,7 +623,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         calendar: eventData.extendedProps.calendar
       }
 
-      const response = await axios.post(`/api/index.php?model=schedule&method=add_event`, data,
+      const response = await axios.post(`/api/index.php?model=schedule&method=add_event`, toFormBody(data),
         {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
@@ -581,7 +652,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         calendar: eventData.extendedProps.calendar
       }
 
-      const response = await axios.post(`/api/index.php?model=schedule&method=update_event&id=${eventData.extendedProps.id}`, data,
+      const response = await axios.post(`/api/index.php?model=schedule&method=update_event&id=${eventData.extendedProps.id}`, toFormBody(data),
         {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
@@ -682,9 +753,9 @@ document.addEventListener('DOMContentLoaded', async function () {
           axios({
             method: 'post',
             url: '/api/index.php?model=schedule&method=delete_event',
-            data: {
+            data: toFormBody({
               id: eventToUpdate.extendedProps.id,
-            },
+            }),
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded'
             }
@@ -765,6 +836,13 @@ document.addEventListener('DOMContentLoaded', async function () {
             : (selectAll.checked = true);
           calendar.refetchEvents();
         });
+      });
+    }
+
+    if (showCailyDayoffSwitch) {
+      showCailyDayoffSwitch.addEventListener('change', function () {
+        localStorage.setItem(SHOW_CAILY_DAYOFF_KEY, showCailyDayoffSwitch.checked ? '1' : '0');
+        calendar.refetchEvents();
       });
     }
 

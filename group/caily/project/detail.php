@@ -1205,7 +1205,7 @@ window.__chatPageContext = { project_id: PROJECT_ID };
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/tagify/tagify.css" />
 
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
-<script src="<?=ROOT?>assets/js/sw-manager.js"></script>
+<script src="<?=ROOT?>assets/js/sw-manager.js?v=<?=CACHE_VERSION?>"></script>
 <script src="/assets/js/mention.js?v=<?=CACHE_VERSION?>"></script>
 <script src="/assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
 <script src="assets/js/project-clipboard.js?v=<?=CACHE_VERSION?>"></script>
