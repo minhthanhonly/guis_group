@@ -652,5 +652,6 @@
     "案件ガントチャートへ": "Đi tới Gantt dự án",
     "顧客を検索": "Tìm khách hàng",
     "会社名 / 支店名 / メール": "Tên KH / chi nhánh / email",
-    "コマンドパレットを開く": "Tìm kiếm (F1 / Ctrl+K)"
+    "コマンドパレットを開く": "Tìm kiếm (F1 / Ctrl+K)",
+    "既定タスク追加": "Thêm công việc mặc định"
 }

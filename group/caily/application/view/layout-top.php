@@ -467,6 +467,16 @@
                   #notification_list{
                     right: 0;
                   }
+                  #notification_dot.badge-notifications {
+                    display: none;
+                    min-width: 1.1rem;
+                    height: 1.1rem;
+                    padding: 0 0.3rem;
+                    font-size: 0.65rem;
+                    line-height: 1.1rem;
+                    align-items: center;
+                    justify-content: center;
+                  }
                 </style>
                 <!-- Notification -->
                 <li class="nav-item dropdown-notifications navbar-dropdown dropdown me-3 me-xl-2">
@@ -478,7 +488,7 @@
                     aria-expanded="false">
                     <span class="position-relative">
                       <i class="icon-base ti tabler-bell icon-22px text-heading"></i>
-                      <span class="badge rounded-pill bg-danger badge-dot badge-notifications border" id="notification_dot" style="display: none;"></span>
+                      <span class="badge rounded-pill bg-danger badge-notifications border badge_number" id="notification_dot" style="display: none;"></span>
                     </span>
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end p-0" id="notification_list">

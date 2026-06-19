@@ -403,7 +403,7 @@ if($_SESSION['show_project'] == 0){
                                                 {{ getStatusLabel(project.status) }}
                                             </button>
                                             <ul class="dropdown-menu">
-                                                <li v-for="status in statuses" :key="status.value">
+                                                <li v-for="status in editableStatuses" :key="status.value">
                                                     <a class="dropdown-item waves-effect" href="javascript:void(0);" 
                                                     @click="selectStatus(status.value)">
                                                         {{ translateLabel(status.label) }}

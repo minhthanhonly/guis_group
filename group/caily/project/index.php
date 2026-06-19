@@ -1099,6 +1099,9 @@ body.is-caily-branch-user #quickEditProjectForm #quickEditTantouWrap {
 body.is-caily-branch-user #quickEditProjectForm #quickEditTantouDisplayText {
     display: block !important;
 }
+body.is-caily-branch-user #quickEditStatus option[value="completed"] {
+    display: none;
+}
 </style>
 
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.css" />

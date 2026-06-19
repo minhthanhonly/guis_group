@@ -579,7 +579,6 @@ class NotificationManager {
         renderTo(projectUl, projectList);
         renderTo(soumuUl, soumuList);
 
-        this.updateNotificationDot();
         this.updateNotificationCount();
         
         // Dừng flash nếu không còn notification chưa đọc
@@ -712,16 +711,41 @@ class NotificationManager {
         });
     }
 
-    updateNotificationDot() {
+    getUnreadNotificationCounts() {
+        const list = this.notifications || [];
+        let totalUnread = 0;
+        let projectUnread = 0;
+        let soumuUnread = 0;
+
+        list.forEach((n) => {
+            if (n.is_read != 0) return;
+            totalUnread++;
+            const ev = (n.event || '').toString();
+            if (ev.startsWith('form') || ev.startsWith('other')) {
+                soumuUnread++;
+            } else {
+                projectUnread++;
+            }
+        });
+
+        return { totalUnread, projectUnread, soumuUnread };
+    }
+
+    updateNotificationDot(totalUnread) {
         const dot = document.getElementById('notification_dot');
         if (!dot) return;
-        const hasUnread = this.notifications.some(n => n.is_read == 0);
-        dot.style.display = hasUnread ? 'inline-block' : 'none';
+        const count = typeof totalUnread === 'number' ? totalUnread : this.getUnreadNotificationCounts().totalUnread;
+        if (count > 0) {
+            dot.style.display = 'inline-flex';
+            dot.textContent = count > 99 ? '99+' : String(count);
+        } else {
+            dot.style.display = 'none';
+            dot.textContent = '';
+        }
     }
     
     updateNotificationCount() {
-        const list = this.notifications || [];
-        const totalUnread = list.filter(n => n.is_read == 0).length;
+        const { totalUnread, projectUnread, soumuUnread } = this.getUnreadNotificationCounts();
 
         // Tổng số notification chưa đọc (badge ở header)
         const countElement = document.getElementById('notification_count');
@@ -733,18 +757,6 @@ class NotificationManager {
         // Số lượng cho từng tab
         const projectBadge = document.getElementById('notification_count_project');
         const soumuBadge = document.getElementById('notification_count_soumu');
-        let projectUnread = 0;
-        let soumuUnread = 0;
-
-        list.forEach((n) => {
-            if (n.is_read != 0) return;
-            const ev = (n.event || '').toString();
-            if (ev.startsWith('form') || ev.startsWith('other')) {
-                soumuUnread++;
-            } else {
-                projectUnread++;
-            }
-        });
 
         if (projectBadge) {
             projectBadge.style.display = projectUnread > 0 ? 'inline' : 'none';
@@ -754,6 +766,8 @@ class NotificationManager {
             soumuBadge.style.display = soumuUnread > 0 ? 'inline' : 'none';
             soumuBadge.textContent = soumuUnread > 0 ? soumuUnread : '';
         }
+
+        this.updateNotificationDot(totalUnread);
     }
 
     /**

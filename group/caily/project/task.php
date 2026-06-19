@@ -174,9 +174,15 @@ if($_SESSION['show_project'] == 0){
                 <label class="form-check-label text-nowrap" for="filterMyTasksOnly" data-i18n="自分のタスクのみ">自分のタスクのみ</label>
             </div>
             </div>
-            <button v-if="permission.can_manage_project || permission.is_member || (permission.rule && permission.rule.task_add == 1)" class="btn btn-primary ms-2" @click="openNewTaskModal">
-                <i class="fa fa-plus me-1"></i> <span data-i18n="新規タスク">新規タスク</span>
-            </button>
+            <div class="d-flex justify-content-end gap-2">
+                <button v-if="canCreateMissingDefaultTasks" class="btn btn-outline-primary ms-2" @click="createMissingDefaultTasks" :disabled="creatingDefaultTasks">
+                    <i class="fa fa-list-check me-1"></i>
+                    <span data-i18n="既定タスク追加">既定タスク追加</span>
+                </button>
+                <button v-if="permission.can_manage_project || permission.is_member || (permission.rule && permission.rule.task_add == 1)" class="btn btn-primary ms-2" @click="openNewTaskModal">
+                    <i class="fa fa-plus me-1"></i> <span data-i18n="新規タスク">新規タスク</span>
+                </button>
+            </div>
         </div>
         
         <div class="d-flex align-items-center justify-content-between mb-2">

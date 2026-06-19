@@ -293,6 +293,39 @@ var projectTable;
         return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
     }
 
+    var quickEditCompletedStatusOption = null;
+
+    function syncQuickEditStatusOptions(currentStatus) {
+        var $sel = $('#quickEditStatus');
+        if (!$sel.length) {
+            return;
+        }
+        if (!quickEditCompletedStatusOption || !quickEditCompletedStatusOption.length) {
+            quickEditCompletedStatusOption = $sel.find('option[value="completed"]').first().detach();
+        }
+        $sel.find('option[value="completed"]').remove();
+        if (!isCailyBranchUser()) {
+            if (quickEditCompletedStatusOption && quickEditCompletedStatusOption.length) {
+                var $inProgress = $sel.find('option[value="in_progress"]');
+                if ($inProgress.length) {
+                    $inProgress.after(quickEditCompletedStatusOption);
+                } else {
+                    $sel.append(quickEditCompletedStatusOption);
+                }
+            }
+            return;
+        }
+        if (currentStatus === 'completed' && quickEditCompletedStatusOption && quickEditCompletedStatusOption.length) {
+            var $displayOnly = quickEditCompletedStatusOption.clone().prop('disabled', true);
+            var $anchor = $sel.find('option[value="in_progress"]');
+            if ($anchor.length) {
+                $anchor.after($displayOnly);
+            } else {
+                $sel.append($displayOnly);
+            }
+        }
+    }
+
     function parseProjectDateMoment(value) {
         if (value === undefined || value === null) return null;
         var s = String(value).trim();
@@ -3164,6 +3197,7 @@ var projectTable;
         let quickEditTeamTagify = null, quickEditManagerTagify = null, quickEditMembersTagify = null;
         let quickEditQuillInstance = null;
         let quickEditIsManagerOnly = false;
+        let quickEditOriginalStatus = '';
         function destroyQuickEditQuill() {
             if (quickEditQuillInstance) {
                 try {
@@ -3222,7 +3256,9 @@ var projectTable;
                     .attr('placeholder', datetimePlaceholder);
                 $('#quickEditStartDate').val(toProjectDateTimeInputValue(p.start_date));
                 $('#quickEditEndDate').val(toProjectDateTimeInputValue(p.end_date));
-                $('#quickEditStatus').val(p.status || 'draft');
+                quickEditOriginalStatus = p.status || 'draft';
+                syncQuickEditStatusOptions(quickEditOriginalStatus);
+                $('#quickEditStatus').val(quickEditOriginalStatus);
                 $('#quickEditAmount').val(p.amount || '');
                 $('#quickEditProjectOrderType').val(typeof p.project_order_type === 'string' ? p.project_order_type : (Array.isArray(p.project_order_type) ? (p.project_order_type || []).join(', ') : ''));
                 $('input[name="tantou"]').prop('checked', false);
@@ -3706,7 +3742,14 @@ var projectTable;
             formData.append('name', $('#quickEditName').val() || '');
             formData.append('start_date', getQuickEditDateFieldValue('#quickEditStartDate'));
             formData.append('end_date', getQuickEditDateFieldValue('#quickEditEndDate'));
-            formData.append('status', $('#quickEditStatus').val() || 'draft');
+            var quickEditStatus = $('#quickEditStatus').val() || 'draft';
+            if (isCailyBranchUser() && quickEditStatus === 'completed' && quickEditOriginalStatus !== 'completed') {
+                if (typeof showMessage === 'function') {
+                    showMessage(translateText('このステータスは選択できません。'), true);
+                }
+                return;
+            }
+            formData.append('status', quickEditStatus);
             formData.append('amount', $('#quickEditAmount').val() || '');
             formData.append('tantou', $('input[name="tantou"]:checked').val() || '');
             formData.append('caily_nouki', getQuickEditDateFieldValue('#quickEditCailyNouki'));
@@ -4201,6 +4244,7 @@ var projectTable;
     
     // Setup auto-refresh timer once (independent of DataTable initialization)
     $(document).ready(function() {
+        syncQuickEditStatusOptions();
         var savedScrollOnLoad = getSavedProjectListScroll();
         if (savedScrollOnLoad) {
             scheduleProjectListScrollRestore(savedScrollOnLoad);

@@ -347,6 +347,12 @@ const vueApp = createApp({
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
         },
+        editableStatuses() {
+            if (!this.isCailyBranchUser) {
+                return this.statuses;
+            }
+            return this.statuses.filter(function(s) { return s.value !== 'completed'; });
+        },
         isManager() {
             if(USER_ROLE == `administrator`) return true;
             if (!this.managers) return false;
@@ -1162,6 +1168,9 @@ const vueApp = createApp({
             }
         },
         selectStatus(status) {
+            if (this.isCailyBranchUser && status === 'completed') {
+                return;
+            }
             this.project.status = status;
             this.updateStatus();
             // Close dropdown

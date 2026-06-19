@@ -175,11 +175,22 @@ const TaskApp = createApp({
             },
             quillTaskNoteInstance: null,
             quillTaskNoteContent: '',
-            quillTaskNoteInitTimer: null
+            quillTaskNoteInitTimer: null,
+            creatingDefaultTasks: false
         }
     },
     
     computed: {
+        canCreateMissingDefaultTasks() {
+            const canAdd = this.permission.can_manage_project
+                || this.permission.is_member
+                || (this.permission.rule && this.permission.rule.task_add == 1);
+            if (!canAdd) {
+                return false;
+            }
+            const existingTitles = new Set((this.tasks || []).map((t) => String(t.title || '').trim()));
+            return DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.some((title) => !existingTitles.has(title));
+        },
         canViewTaskList() {
             return this.permission.can_manage_project || this.permission.is_member;
         },
@@ -1394,6 +1405,31 @@ const TaskApp = createApp({
             } catch (error) {
                 const msg = error.response?.data?.message || 'メモの削除に失敗しました';
                 this.showMessage(msg, true);
+            }
+        },
+        async createMissingDefaultTasks() {
+            if (!this.projectId || this.creatingDefaultTasks) {
+                return;
+            }
+            this.creatingDefaultTasks = true;
+            try {
+                const formData = new FormData();
+                formData.append('project_id', this.projectId);
+                const response = await axios.post('/api/index.php?model=task&method=createMissingDefaultTasks', formData);
+                const data = response.data || {};
+                if (data.status === 'success') {
+                    this.showMessage(data.message || '既定タスクを追加しました');
+                    await this.loadTasks();
+                    await this.refreshNavbarCounts();
+                } else {
+                    this.showMessage(data.message || '既定タスクの追加に失敗しました', true);
+                }
+            } catch (error) {
+                console.error('createMissingDefaultTasks', error);
+                const msg = error.response?.data?.message || '既定タスクの追加に失敗しました';
+                this.showMessage(msg, true);
+            } finally {
+                this.creatingDefaultTasks = false;
             }
         },
         openNewTaskModal() {

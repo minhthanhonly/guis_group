@@ -9,6 +9,30 @@
   let dayoffListCache = null;
   let dayoffUserDisplayMap = {};
 
+  /** Groupware userid -> GUIS userid for display lookup. */
+  const DAYOFF_USERID_GUI_ALIASES = {
+    nguyen: 'duynguyen'
+  };
+
+  function resolveDayoffUseridForGuis(userid) {
+    const key = String(userid || '').trim();
+    if (!key) {
+      return key;
+    }
+    return DAYOFF_USERID_GUI_ALIASES[key] || key;
+  }
+
+  function applyDayoffUserDisplayAliases(map) {
+    const next = Object.assign({}, map || {});
+    Object.keys(DAYOFF_USERID_GUI_ALIASES).forEach(function (apiUserid) {
+      const guisUserid = DAYOFF_USERID_GUI_ALIASES[apiUserid];
+      if (next[guisUserid] && !next[apiUserid]) {
+        next[apiUserid] = next[guisUserid];
+      }
+    });
+    return next;
+  }
+
   function getApiUrl() {
     return (typeof global.DAYOFF_API_URL !== 'undefined' && global.DAYOFF_API_URL)
       ? global.DAYOFF_API_URL
@@ -30,7 +54,7 @@
   function getDayoffUserDisplayTitle(userid, options) {
     const opts = options || {};
     const key = userid || '';
-    const info = dayoffUserDisplayMap[key];
+    const info = dayoffUserDisplayMap[key] || dayoffUserDisplayMap[resolveDayoffUseridForGuis(key)];
     if (!info) {
       return key;
     }
@@ -41,23 +65,23 @@
   }
 
   async function resolveDayoffUserDisplaysFromGuis(dayoffList) {
-    const userids = [];
+    const guisUserids = [];
     (dayoffList || []).forEach(function (item) {
-      const uid = item.userid;
-      if (uid && userids.indexOf(uid) === -1) {
-        userids.push(uid);
+      const uid = resolveDayoffUseridForGuis(item.userid);
+      if (uid && guisUserids.indexOf(uid) === -1) {
+        guisUserids.push(uid);
       }
     });
-    if (!userids.length) {
+    if (!guisUserids.length) {
       dayoffUserDisplayMap = {};
       return dayoffUserDisplayMap;
     }
     try {
       const response = await axios.get(
-        '/api/index.php?model=user&method=resolveDisplayByUserids&userids=' + encodeURIComponent(userids.join(','))
+        '/api/index.php?model=user&method=resolveDisplayByUserids&userids=' + encodeURIComponent(guisUserids.join(','))
       );
       if (response.status === 200 && response.data && response.data.map) {
-        dayoffUserDisplayMap = response.data.map;
+        dayoffUserDisplayMap = applyDayoffUserDisplayAliases(response.data.map);
         return dayoffUserDisplayMap;
       }
     } catch (e) {

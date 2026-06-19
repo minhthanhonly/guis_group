@@ -5754,6 +5754,13 @@ class Project extends ApplicationModel {
         return $this->resolveUseridToNumericId($guisReceiverUserid);
     }
 
+    /**
+     * Resolve GUIS 受付者 numeric user id for a project (project or parent building).
+     */
+    function getGuisReceiverNumericUserId($projectId) {
+        return $this->resolveChildProjectGuisReceiverUserIdFromDb(intval($projectId));
+    }
+
     private function resolveChildProjectGuisReceiverUserIdFromDb($projectId) {
         $projectId = intval($projectId);
         if ($projectId <= 0) {

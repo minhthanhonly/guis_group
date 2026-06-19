@@ -220,7 +220,6 @@ class Task extends ApplicationModel {
                 'status' => 'completed',
                 'progress' => 100,
                 'drawing_count' => 1,
-                'position' => 1,
                 'price_pct' => 0.15,
             ),
             array(
@@ -230,10 +229,12 @@ class Task extends ApplicationModel {
                 'status' => 'todo',
                 'progress' => 0,
                 'drawing_count' => 1,
-                'position' => 2,
                 'price_pct' => 0.20,
             ),
         );
+
+        $created = array();
+        $skipped = array();
 
         if (!class_exists('Project')) {
             require_once DIR_MODEL . 'project.php';
@@ -241,8 +242,26 @@ class Task extends ApplicationModel {
         $projectModel = new Project();
         $drawingModel = $this->getDrawingModel();
         $now = date('Y-m-d H:i:s');
+        $posRow = $this->fetchOne(sprintf(
+            "SELECT COALESCE(MAX(position), 0) AS max_pos FROM %s WHERE project_id = %d",
+            $this->table,
+            $projectId
+        ));
+        $nextPosition = intval(isset($posRow['max_pos']) ? $posRow['max_pos'] : 0);
 
         foreach ($defaults as $def) {
+            $existing = $this->fetchOne(sprintf(
+                "SELECT id FROM %s WHERE project_id = %d AND title = '%s' LIMIT 1",
+                $this->table,
+                $projectId,
+                $this->quote($def['title'])
+            ));
+            if ($existing && !empty($existing['id'])) {
+                $skipped[] = $def['title'];
+                continue;
+            }
+
+            $nextPosition++;
             $data = array(
                 'project_id' => $projectId,
                 'parent_id' => null,
@@ -257,7 +276,7 @@ class Task extends ApplicationModel {
                 'assigned_to' => $def['assigned_to'],
                 'created_by' => $createdBy > 0 ? $createdBy : null,
                 'progress' => $def['progress'],
-                'position' => $def['position'],
+                'position' => $nextPosition,
                 'created_at' => $now,
                 'updated_at' => $now,
             );
@@ -275,6 +294,7 @@ class Task extends ApplicationModel {
             if (!$taskId) {
                 continue;
             }
+            $created[] = $def['title'];
 
             if (!empty($data['assigned_to'])) {
                 $this->syncTaskAssignees($taskId, $data['assigned_to']);
@@ -306,7 +326,68 @@ class Task extends ApplicationModel {
             $drawingModel->autoCalculateAllDrawingPricesForProject($projectId);
         }
 
-        return true;
+        return array(
+            'created' => $created,
+            'skipped' => $skipped,
+        );
+    }
+
+    /**
+     * Create bootstrap default tasks that are not already on the project (task page action).
+     */
+    function createMissingDefaultTasks() {
+        $projectId = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        if ($projectId <= 0) {
+            return array('status' => 'error', 'message' => 'project_id required');
+        }
+        if (!$this->canUserAddTask($projectId)) {
+            return array('status' => 'error', 'message' => 'Forbidden', 'http_status' => 403);
+        }
+
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        $projectModel = new Project();
+        $project = $this->fetchOne(sprintf(
+            "SELECT id, amount FROM %sprojects WHERE id = %d LIMIT 1",
+            DB_PREFIX,
+            $projectId
+        ));
+        if (!$project || empty($project['id'])) {
+            return array('status' => 'error', 'message' => 'Project not found');
+        }
+
+        $createdBy = 0;
+        if (isset($_SESSION['id'])) {
+            $createdBy = intval($_SESSION['id']);
+        } elseif (isset($_SESSION['user_id'])) {
+            $createdBy = intval($_SESSION['user_id']);
+        }
+
+        $result = $this->createDefaultTasksForProject($projectId, array(
+            'amount' => isset($project['amount']) ? floatval($project['amount']) : 0,
+            'created_by' => $createdBy,
+            'guis_receiver_user_id' => $projectModel->getGuisReceiverNumericUserId($projectId),
+        ));
+
+        $created = isset($result['created']) ? $result['created'] : array();
+        $skipped = isset($result['skipped']) ? $result['skipped'] : array();
+
+        if (empty($created)) {
+            return array(
+                'status' => 'success',
+                'created' => $created,
+                'skipped' => $skipped,
+                'message' => '既定タスクは既にすべて存在します',
+            );
+        }
+
+        return array(
+            'status' => 'success',
+            'created' => $created,
+            'skipped' => $skipped,
+            'message' => count($created) . '件の既定タスクを追加しました',
+        );
     }
 
     /**
@@ -641,6 +722,7 @@ class Task extends ApplicationModel {
 
     private function appendActiveTimerTaskIds(array $response) {
         $response['active_task_ids'] = $this->fetchAllActiveTimerTaskIds();
+        $response['server_now'] = time();
         return $response;
     }
 
@@ -1719,6 +1801,8 @@ class Task extends ApplicationModel {
 
         $startTime = isset($row['start_time']) ? $row['start_time'] : '';
         $startTimestamp = ($startTime !== '' && $startTime !== null) ? intval(strtotime($startTime)) : 0;
+        $serverNow = time();
+        $elapsedSeconds = ($startTimestamp > 0) ? max(0, $serverNow - $startTimestamp) : 0;
 
         return array(
             'id' => intval($row['id']),
@@ -1728,6 +1812,7 @@ class Task extends ApplicationModel {
             'project_name' => isset($row['project_name']) ? $row['project_name'] : '',
             'start_time' => $startTime,
             'start_timestamp' => $startTimestamp,
+            'elapsed_seconds' => $elapsedSeconds,
             'estimated_hours' => isset($row['estimated_hours'])
                 ? $this->normalize_estimated_hours($row['estimated_hours'])
                 : 0,
@@ -1737,7 +1822,7 @@ class Task extends ApplicationModel {
     function getActiveTaskTimer() {
         $userId = $this->resolveTimerUserId();
         if ($userId === '') {
-            return array('status' => 'success', 'active' => null);
+            return array('status' => 'success', 'active' => null, 'server_now' => time());
         }
 
         $row = $this->fetchActiveTaskTimerRow($userId);

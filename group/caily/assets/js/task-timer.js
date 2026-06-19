@@ -40,9 +40,19 @@
         return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
     }
 
+    function parseServerWallClockAsDate(raw) {
+        if (!raw) return null;
+        const text = String(raw).trim();
+        const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+        if (!match) return null;
+        const iso = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6] || '00'}+09:00`;
+        const date = new Date(iso);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
     function parseStartTime(startTime, startTimestamp) {
         const ts = Number(startTimestamp);
-        if (!Number.isNaN(ts) && ts > 0) {
+        if (Number.isFinite(ts) && ts > 0) {
             return new Date(ts * 1000);
         }
 
@@ -59,9 +69,7 @@
             }
         }
 
-        const normalized = raw.replace(' ', 'T');
-        const date = new Date(normalized);
-        return Number.isNaN(date.getTime()) ? null : date;
+        return parseServerWallClockAsDate(raw);
     }
 
     function normalizeTaskIds(ids) {
@@ -89,6 +97,9 @@
         syncIntervalMs: 15000,
         busy: false,
         localVersion: 0,
+        serverSkewSeconds: null,
+        elapsedAtSync: null,
+        syncedAtPerf: null,
         els: {},
 
         bindElements() {
@@ -187,8 +198,43 @@
             return parseInt(this.active.task_id, 10) === parseInt(taskId, 10);
         },
 
+        applyServerTimeFromResponse(data, active) {
+            if (!data) {
+                return;
+            }
+            const serverNow = Number(data.server_now);
+            if (Number.isFinite(serverNow) && serverNow > 0) {
+                this.serverSkewSeconds = serverNow - Math.floor(Date.now() / 1000);
+            }
+            const payload = active || data.active || null;
+            if (payload && payload.elapsed_seconds != null) {
+                const elapsed = Number(payload.elapsed_seconds);
+                if (Number.isFinite(elapsed) && elapsed >= 0) {
+                    this.elapsedAtSync = elapsed;
+                    this.syncedAtPerf = performance.now();
+                }
+            }
+        },
+
+        getServerNowSeconds() {
+            if (Number.isFinite(this.serverSkewSeconds)) {
+                return Math.floor(Date.now() / 1000) + this.serverSkewSeconds;
+            }
+            return Math.floor(Date.now() / 1000);
+        },
+
         getElapsedSeconds() {
             if (!this.active) return 0;
+
+            const startTs = Number(this.active.start_timestamp);
+            if (Number.isFinite(startTs) && startTs > 0 && Number.isFinite(this.serverSkewSeconds)) {
+                return Math.max(0, this.getServerNowSeconds() - startTs);
+            }
+
+            if (Number.isFinite(this.elapsedAtSync) && this.syncedAtPerf != null) {
+                const driftSeconds = (performance.now() - this.syncedAtPerf) / 1000;
+                return Math.max(0, Math.floor(this.elapsedAtSync + driftSeconds));
+            }
 
             const start = parseStartTime(
                 this.active.start_time,
@@ -269,6 +315,7 @@
                     return;
                 }
                 if (response.data && response.data.status === 'success') {
+                    this.applyServerTimeFromResponse(response.data, response.data.active);
                     this.applyActiveTaskIdsFromResponse(response.data);
                     const remoteActive = response.data.active || null;
                     if (previousActive && !remoteActive) {
@@ -306,11 +353,15 @@
                     this.applyActiveTaskIdsFromResponse(data);
                     const active = data.active || null;
                     if (active) {
+                        this.applyServerTimeFromResponse(data, active);
                         if (!active.start_timestamp) {
-                            const parsed = parseStartTime(active.start_time);
-                            active.start_timestamp = parsed
-                                ? Math.floor(parsed.getTime() / 1000)
-                                : Math.floor(Date.now() / 1000);
+                            const serverNow = Number(data.server_now);
+                            active.start_timestamp = Number.isFinite(serverNow) && serverNow > 0
+                                ? serverNow
+                                : (() => {
+                                    const parsed = parseStartTime(active.start_time);
+                                    return parsed ? Math.floor(parsed.getTime() / 1000) : this.getServerNowSeconds();
+                                })();
                         }
                         if (meta) {
                             if (meta.title && !active.task_title) active.task_title = meta.title;
@@ -331,6 +382,7 @@
                 }
 
                 if (data.active) {
+                    this.applyServerTimeFromResponse(data, data.active);
                     this.setActive(data.active);
                 }
                 notify(data.message || t('作業計測の開始に失敗しました'), true);
@@ -373,6 +425,7 @@
                 }
 
                 if (data.active) {
+                    this.applyServerTimeFromResponse(data, data.active);
                     this.setActive(data.active);
                 }
                 notify(data.message || t('作業計測の終了に失敗しました'), true);
