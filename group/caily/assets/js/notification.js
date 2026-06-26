@@ -953,17 +953,68 @@ class NotificationManager {
 
     registerConnectedUser() {
         if (!this.userId || !this.database) return;
-        const ref = this.database.ref('connected_users/' + this.userId);
-        ref.set(true);
-        ref.onDisconnect().remove();
-        // Đảm bảo xóa khi unload trang (trường hợp onDisconnect không kịp)
-        window.addEventListener('beforeunload', () => {
-            if (this.autoRefreshTimer) {
-                clearInterval(this.autoRefreshTimer);
-                this.autoRefreshTimer = null;
+        const userRef = this.database.ref('connected_users/' + this.userId);
+        const webRef = userRef.child('web');
+
+        userRef.transaction((current) => this.mergePresenceNode(current, 'web'))
+            .then((result) => {
+                if (!result || !result.committed) {
+                    throw new Error('web presence transaction not committed');
+                }
+                return webRef.onDisconnect().remove();
+            })
+            .then(() => {
+                window.addEventListener('beforeunload', () => {
+                    if (this.autoRefreshTimer) {
+                        clearInterval(this.autoRefreshTimer);
+                        this.autoRefreshTimer = null;
+                    }
+                    webRef.remove();
+                });
+            })
+            .catch((error) => {
+                console.error('Failed to register web presence:', error);
+            });
+    }
+
+    isPresenceFlag(value) {
+        return value === true || value === 1 || value === '1' || value === 'true';
+    }
+
+    mergePresenceNode(current, platform) {
+        let next = {};
+        if (current && typeof current === 'object' && !Array.isArray(current)) {
+            next = { ...current };
+        } else if (this.isPresenceFlag(current)) {
+            next = { web: true };
+        }
+        next[platform] = true;
+        return next;
+    }
+
+    parseConnectedUsersPresence(data) {
+        const presence = {};
+        if (!data || typeof data !== 'object') {
+            return presence;
+        }
+
+        Object.keys(data).forEach((userId) => {
+            const value = data[userId];
+            if (this.isPresenceFlag(value)) {
+                presence[userId] = { web: true, app: false, online: true };
+                return;
             }
-            ref.remove();
+            if (!value || typeof value !== 'object') {
+                return;
+            }
+            const web = this.isPresenceFlag(value.web);
+            const app = this.isPresenceFlag(value.app);
+            if (web || app) {
+                presence[userId] = { web, app, online: true };
+            }
         });
+
+        return presence;
     }
 
     listenConnectedUsers() {
@@ -971,19 +1022,22 @@ class NotificationManager {
         const ref = this.database.ref('connected_users');
         ref.on('value', (snapshot) => {
             const connected = snapshot.val() || {};
-            const userIds = Object.keys(connected);
-            //save to session storage
+            const presence = this.parseConnectedUsersPresence(connected);
+            const userIds = Object.keys(presence).filter((uid) => presence[uid].online);
             sessionStorage.setItem('connected_users', JSON.stringify(userIds));
-            // Tìm tất cả .avatar có data-userid
+            sessionStorage.setItem('connected_users_presence', JSON.stringify(presence));
+
             document.querySelectorAll('.avatar[data-userid]').forEach(avatar => {
                 const uid = avatar.getAttribute('data-userid');
-                if (userIds.includes(uid)) {
+                const state = presence[uid];
+                if (state && state.online) {
                     avatar.classList.add('avatar-online');
                     avatar.classList.remove('avatar-offline');
                 } else {
                     avatar.classList.remove('avatar-online');
                     avatar.classList.add('avatar-offline');
                 }
+                avatar.classList.toggle('avatar-online-app', !!(state && state.app));
             });
         });
     }

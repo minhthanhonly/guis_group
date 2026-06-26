@@ -165,8 +165,6 @@ $view->heading('休日設定');
 	</div>
 </div>
 <!-- / Content -->
- 
-<script src="<?=ROOT?>assets/js/holiday.js"></script>
 <?php
 $view->footing();
 ?>

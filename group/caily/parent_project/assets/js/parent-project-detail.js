@@ -216,6 +216,69 @@ const TASK_KINDS = [
     { value: '相談・会議', label: '相談・会議', color: 'dark' }
 ];
 
+const BUSINESS_ESTIMATE_STATUSES = [
+    { value: '未発行', label: '未発行', color: 'secondary' },
+    { value: '発行済', label: '発行済', color: 'success' },
+    { value: '発行済み', label: '発行済', color: 'success' },
+];
+
+const BUSINESS_INVOICE_STATUSES = [
+    { value: '未発行', label: '未発行', color: 'secondary' },
+    { value: '発行済', label: '発行済', color: 'success' },
+    { value: '発行済み', label: '発行済', color: 'success' },
+];
+
+const BUSINESS_PAYMENT_STATUSES = [
+    { value: '未入金', label: '未入金', color: 'secondary' },
+    { value: '入金済', label: '入金済', color: 'success' },
+    { value: '入金拒否', label: '入金拒否', color: 'danger' },
+];
+
+const BUSINESS_DOCUMENT_LOG_ACTIONS = new Set([
+    'amount_updated',
+    'estimate_status_updated',
+    'estimate_date_updated',
+    'estimate_number_updated',
+    'invoice_status_updated',
+    'invoice_date_updated',
+    'invoice_amount_updated',
+    'invoice_number_updated',
+    'payment_status_updated',
+    'payment_date_updated',
+    'payment_amount_updated',
+    'receipt_number_updated',
+    'payment_note_updated',
+]);
+
+const BUSINESS_DOCUMENT_FIELDS = [
+    'amount',
+    'estimate_status',
+    'estimate_date',
+    'estimate_number',
+    'invoice_status',
+    'invoice_date',
+    'invoice_amount',
+    'invoice_number',
+    'payment_status',
+    'payment_date',
+    'payment_amount',
+    'receipt_number',
+    'payment_note',
+];
+
+const BUSINESS_DOCUMENT_DATE_FIELDS = ['estimate_date', 'invoice_date', 'payment_date'];
+
+const BD_MODAL_PICKER_IDS = {
+    estimate_date: 'bd_modal_estimate_date_picker',
+    invoice_date: 'bd_modal_invoice_date_picker',
+    payment_date: 'bd_modal_payment_date_picker',
+};
+
+function isProjectServerDateTimeFormat(value) {
+    const s = String(value || '').trim();
+    return /^\d{4}-\d{1,2}-\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/.test(s);
+}
+
 createApp({
     data() {
         return {
@@ -431,6 +494,19 @@ createApp({
             childProjectLogs: [],
             loadingChildProjectLogs: false,
             selectedChildProject: null,
+            showBusinessDocumentLogModal: false,
+            businessDocumentProject: null,
+            businessDocumentProjectId: null,
+            businessDocumentLogs: [],
+            _bdServerDates: null,
+            businessDocumentSaveStatus: null,
+            businessDocumentSaveHideTimer: null,
+            businessDocumentDirty: false,
+            businessDocumentUpdateTimer: null,
+            isUpdatingBusinessDocument: false,
+            businessEstimateStatuses: BUSINESS_ESTIMATE_STATUSES.filter((s) => s.value !== '発行済み'),
+            businessInvoiceStatuses: BUSINESS_INVOICE_STATUSES.filter((s) => s.value !== '発行済み'),
+            businessPaymentStatuses: BUSINESS_PAYMENT_STATUSES,
             restoringChildProject: false,
             // Quill editor instance for edit child project modal
             editChildProjectQuillInstance: null,
@@ -719,16 +795,40 @@ createApp({
             return this.isProjectManager || canAddProject;
         },
         canAddQuotation() {
+            if (this.isAdmin) return true;
             let canAddQuotation = false;
             if(this.permission && this.permission.length > 0) {
                 for (const rule of this.permission) {
-                    if (rule.project_director === "1" || rule.project_director === 1) {
+                    if (rule.project_director_edit === "1" || rule.project_director_edit === 1) {
                         canAddQuotation = true;
                         break;
                     }
                 }
             }
             return this.isProjectManager || canAddQuotation;
+        },
+        canViewBusinessDocuments() {
+            if (this.isAdmin) return true;
+            if (!this.permission || this.permission.length === 0) return false;
+            return this.permission.some((rule) =>
+                rule.project_director_stat === '1' || rule.project_director_stat === 1
+                || rule.project_director_view === '1' || rule.project_director_view === 1
+                || rule.project_director_edit === '1' || rule.project_director_edit === 1
+                || rule.project_director === '1' || rule.project_director === 1
+            );
+        },
+        canEditBusinessDocuments() {
+            if (this.isAdmin) return true;
+            if (!this.permission || this.permission.length === 0) return false;
+            return this.permission.some((rule) =>
+                rule.project_director_edit === '1' || rule.project_director_edit === 1
+            );
+        },
+        sortedBusinessDocumentLogs() {
+            if (!this.businessDocumentLogs) return [];
+            return [...this.businessDocumentLogs]
+                .filter((log) => this.isBusinessDocumentLog(log))
+                .sort((a, b) => (b.time > a.time ? 1 : -1));
         },
         canAddNote() {
             return this.isAdmin || (this.permission && this.permission.length > 0);
@@ -5738,6 +5838,471 @@ createApp({
             return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(integerPrice);
         },
 
+        normalizeBusinessDocumentStatus(status, fallback) {
+            if (!status || status === '発行済み') {
+                return status === '発行済み' ? '発行済' : (fallback || '未発行');
+            }
+            return status;
+        },
+        findBusinessDocumentStatusOption(list, status) {
+            const normalized = this.normalizeBusinessDocumentStatus(status, '');
+            return list.find((item) => item.value === normalized || item.value === status);
+        },
+        getBusinessEstimateStatusLabel(status) {
+            const item = this.findBusinessDocumentStatusOption(BUSINESS_ESTIMATE_STATUSES, status);
+            return item ? this.translateLabel(item.label) : this.translateLabel('未発行');
+        },
+        getBusinessEstimateStatusBadgeClass(status) {
+            const item = this.findBusinessDocumentStatusOption(BUSINESS_ESTIMATE_STATUSES, status);
+            return item ? `bg-${item.color}` : 'bg-secondary';
+        },
+        getBusinessInvoiceStatusLabel(status) {
+            const item = this.findBusinessDocumentStatusOption(BUSINESS_INVOICE_STATUSES, status);
+            return item ? this.translateLabel(item.label) : this.translateLabel('未発行');
+        },
+        getBusinessInvoiceStatusBadgeClass(status) {
+            const item = this.findBusinessDocumentStatusOption(BUSINESS_INVOICE_STATUSES, status);
+            return item ? `bg-${item.color}` : 'bg-secondary';
+        },
+        getBusinessPaymentStatusLabel(status) {
+            const item = BUSINESS_PAYMENT_STATUSES.find((s) => s.value === status);
+            return item ? this.translateLabel(item.label) : this.translateLabel('未入金');
+        },
+        getBusinessPaymentStatusBadgeClass(status) {
+            const item = BUSINESS_PAYMENT_STATUSES.find((s) => s.value === status);
+            return item ? `bg-${item.color}` : 'bg-secondary';
+        },
+        getChildProjectPaymentLines(project) {
+            if (!project) return [];
+            return [
+                {
+                    key: 'estimate',
+                    label: this.translateLabel('見積'),
+                    statusLabel: this.getBusinessEstimateStatusLabel(project.estimate_status),
+                    badgeClass: this.getBusinessEstimateStatusBadgeClass(project.estimate_status),
+                    amount: Number(project.amount) || 0,
+                },
+                {
+                    key: 'invoice',
+                    label: this.translateLabel('請求'),
+                    statusLabel: this.getBusinessInvoiceStatusLabel(project.invoice_status),
+                    badgeClass: this.getBusinessInvoiceStatusBadgeClass(project.invoice_status),
+                    amount: Number(project.invoice_amount) || 0,
+                },
+                {
+                    key: 'payment',
+                    label: this.translateLabel('入金'),
+                    statusLabel: this.getBusinessPaymentStatusLabel(project.payment_status),
+                    badgeClass: this.getBusinessPaymentStatusBadgeClass(project.payment_status),
+                    amount: Number(project.payment_amount) || 0,
+                },
+            ];
+        },
+
+        async openBusinessDocumentModal(project) {
+            if (!this.canEditBusinessDocuments || !project?.id) return;
+            try {
+                const response = await axios.get(`/api/index.php?model=project&method=getById&id=${project.id}`);
+                this.businessDocumentProject = response.data;
+                this.businessDocumentProjectId = project.id;
+                this.normalizeBdFields();
+                this.businessDocumentSaveStatus = null;
+                this.businessDocumentDirty = false;
+                const modalEl = document.getElementById('businessDocumentModal');
+                let modal = bootstrap.Modal.getInstance(modalEl);
+                if (!modal) {
+                    modal = new bootstrap.Modal(modalEl);
+                }
+                modal.show();
+                this.$nextTick(() => {
+                    setTimeout(() => this.initBdDatePickers(), 150);
+                });
+            } catch (error) {
+                console.error('Error loading business document:', error);
+                if (typeof showMessage === 'function') {
+                    showMessage('業務書類の読み込みに失敗しました。', true);
+                }
+            }
+        },
+        closeBusinessDocumentModal() {
+            clearTimeout(this.businessDocumentUpdateTimer);
+            this.businessDocumentUpdateTimer = null;
+            this.destroyBdDatePickers();
+            this.businessDocumentProject = null;
+            this.businessDocumentProjectId = null;
+            this._bdServerDates = null;
+        },
+        destroyBdDatePickers() {
+            Object.values(BD_MODAL_PICKER_IDS).forEach((elId) => {
+                const el = document.getElementById(elId);
+                if (el && el._flatpickr) {
+                    el._flatpickr.destroy();
+                }
+            });
+        },
+        normalizeBdFields() {
+            if (!this.businessDocumentProject) return;
+            const p = this.businessDocumentProject;
+            p.estimate_status = this.normalizeBusinessDocumentStatus(p.estimate_status, '未発行');
+            p.invoice_status = this.normalizeBusinessDocumentStatus(p.invoice_status, '未発行');
+            p.payment_status = p.payment_status || '未入金';
+            p.estimate_number = p.estimate_number || '';
+            p.invoice_number = p.invoice_number || '';
+            p.receipt_number = p.receipt_number || '';
+            p.payment_note = p.payment_note || '';
+            p.invoice_amount = p.invoice_amount != null ? Number(p.invoice_amount) : 0;
+            p.payment_amount = p.payment_amount != null ? Number(p.payment_amount) : 0;
+            p.amount = p.amount != null ? Number(p.amount) : 0;
+            this.normalizeBdDateFields();
+        },
+        normalizeBdDateFields() {
+            if (!this.businessDocumentProject) return;
+            BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
+                const raw = this.businessDocumentProject[key];
+                if (!raw || !String(raw).trim()) {
+                    this.businessDocumentProject[key] = '';
+                }
+            });
+            this.syncBdServerDatesFromProject();
+        },
+        syncBdServerDatesFromProject() {
+            if (!this.businessDocumentProject) return;
+            const server = {};
+            BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
+                const raw = String(this.businessDocumentProject[key] || '').trim();
+                if (!raw) {
+                    server[key] = '';
+                    return;
+                }
+                server[key] = isProjectServerDateTimeFormat(raw)
+                    ? raw
+                    : (fromProjectDateTimeInputValue(raw) || raw);
+            });
+            this._bdServerDates = server;
+        },
+        getBdServerDate(key) {
+            if (this._bdServerDates && this._bdServerDates[key] != null && String(this._bdServerDates[key]).trim()) {
+                return this._bdServerDates[key];
+            }
+            const raw = String(this.businessDocumentProject?.[key] || '').trim();
+            if (!raw) return '';
+            if (isProjectServerDateTimeFormat(raw)) return raw;
+            return fromProjectDateTimeInputValue(raw) || raw;
+        },
+        setBdServerDate(key, displayOrServerValue) {
+            if (!this._bdServerDates) {
+                this._bdServerDates = {};
+            }
+            const raw = String(displayOrServerValue || '').trim();
+            if (!raw) {
+                this._bdServerDates[key] = '';
+                return;
+            }
+            this._bdServerDates[key] = isProjectServerDateTimeFormat(raw)
+                ? raw
+                : (fromProjectDateTimeInputValue(raw) || raw);
+        },
+        getBdDateForApi(key) {
+            if (!this.businessDocumentProject) return '';
+            const elId = BD_MODAL_PICKER_IDS[key];
+            const el = document.getElementById(elId);
+            let displayVal = String(this.businessDocumentProject[key] || '').trim();
+            if (el) {
+                const fp = el._flatpickr;
+                if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
+                    displayVal = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
+                } else if (fp && fp._input) {
+                    displayVal = String(fp._input.value || '').trim();
+                } else if (el.value) {
+                    displayVal = String(el.value).trim();
+                }
+            }
+            return fromProjectDateTimeInputValue(displayVal);
+        },
+        hasBdDate(key) {
+            return !!String(this.getBdServerDate(key) || this.businessDocumentProject?.[key] || '').trim();
+        },
+        hasBdAmount(amount) {
+            return amount != null && amount !== '' && Number(amount) > 0;
+        },
+        scheduleBdUpdate() {
+            if (!this.canEditBusinessDocuments || !this.businessDocumentProject) return;
+            this.businessDocumentDirty = true;
+            clearTimeout(this.businessDocumentUpdateTimer);
+            this.businessDocumentUpdateTimer = setTimeout(() => {
+                this.businessDocumentUpdateTimer = null;
+                this.updateBdProjectStatus();
+            }, 800);
+        },
+        async updateBdProjectStatus() {
+            if (this.isUpdatingBusinessDocument || !this.businessDocumentProject || !this.businessDocumentProjectId) return;
+            clearTimeout(this.businessDocumentUpdateTimer);
+            this.businessDocumentUpdateTimer = null;
+            clearTimeout(this.businessDocumentSaveHideTimer);
+            this.businessDocumentSaveStatus = 'loading';
+            this.isUpdatingBusinessDocument = true;
+            try {
+                this.syncBdDatesFromPickers();
+                const p = this.businessDocumentProject;
+                const formData = new FormData();
+                formData.append('id', this.businessDocumentProjectId);
+                formData.append('amount', p.amount || 0);
+                formData.append('estimate_status', p.estimate_status || '未発行');
+                formData.append('estimate_date', this.getBdDateForApi('estimate_date'));
+                formData.append('estimate_number', p.estimate_number || '');
+                formData.append('invoice_status', p.invoice_status || '未発行');
+                formData.append('invoice_date', this.getBdDateForApi('invoice_date'));
+                formData.append('invoice_amount', p.invoice_amount != null ? p.invoice_amount : 0);
+                formData.append('invoice_number', p.invoice_number || '');
+                formData.append('payment_status', p.payment_status || '未入金');
+                formData.append('payment_date', this.getBdDateForApi('payment_date'));
+                formData.append('payment_amount', p.payment_amount != null ? p.payment_amount : 0);
+                formData.append('receipt_number', p.receipt_number || '');
+                formData.append('payment_note', p.payment_note || '');
+                const response = await axios.post('/api/index.php?model=project&method=updateProjectStatus', formData);
+                if (response.data && response.data.status === 'success') {
+                    this.businessDocumentDirty = false;
+                    BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
+                        const apiVal = this.getBdDateForApi(key);
+                        if (apiVal) {
+                            this.setBdServerDate(key, apiVal);
+                        }
+                    });
+                    this.syncChildProjectFromBd();
+                    this.businessDocumentSaveStatus = 'saved';
+                    this.businessDocumentSaveHideTimer = setTimeout(() => {
+                        this.businessDocumentSaveStatus = null;
+                        this.businessDocumentSaveHideTimer = null;
+                    }, 5000);
+                } else {
+                    this.businessDocumentSaveStatus = null;
+                }
+            } catch (error) {
+                console.error('Error updating business document:', error);
+                this.businessDocumentSaveStatus = null;
+            } finally {
+                this.isUpdatingBusinessDocument = false;
+            }
+        },
+        syncChildProjectFromBd() {
+            if (!this.businessDocumentProject || !this.businessDocumentProjectId) return;
+            const idx = this.childProjects.findIndex((p) => String(p.id) === String(this.businessDocumentProjectId));
+            if (idx < 0) return;
+            BUSINESS_DOCUMENT_FIELDS.forEach((key) => {
+                this.childProjects[idx][key] = this.businessDocumentProject[key];
+            });
+        },
+        syncBdDatesFromPickers() {
+            if (!this.businessDocumentProject) return;
+            Object.keys(BD_MODAL_PICKER_IDS).forEach((key) => {
+                const el = document.getElementById(BD_MODAL_PICKER_IDS[key]);
+                if (!el) return;
+                const fp = el._flatpickr;
+                let displayVal = '';
+                if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
+                    displayVal = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
+                } else if (fp && fp._input) {
+                    displayVal = String(fp._input.value || '').trim();
+                } else {
+                    displayVal = String(el.value || '').trim();
+                }
+                this.businessDocumentProject[key] = displayVal;
+                if (displayVal) {
+                    this.setBdServerDate(key, displayVal);
+                } else {
+                    this.setBdServerDate(key, '');
+                }
+            });
+        },
+        initBdDatePickers() {
+            if (!this.businessDocumentProject) return;
+            Object.keys(BD_MODAL_PICKER_IDS).forEach((key) => {
+                this.initBdDatePicker(BD_MODAL_PICKER_IDS[key], key);
+            });
+        },
+        initBdDatePicker(elId, key) {
+            if (!this.businessDocumentProject) return;
+            const el = document.getElementById(elId);
+            if (!el) return;
+            const serverValue = this.getBdServerDate(key);
+            const inputVal = toProjectDateTimeInputValue(serverValue);
+            initChildProjectFlatpickr(el, {
+                onChange: (selectedDates, dateStr) => {
+                    this.businessDocumentProject[key] = dateStr;
+                    this.setBdServerDate(key, dateStr);
+                    this.scheduleBdUpdate();
+                }
+            }, serverValue);
+            if (inputVal && this.businessDocumentProject[key] !== inputVal) {
+                this.businessDocumentProject[key] = inputVal;
+            }
+            if (serverValue) {
+                this.setBdServerDate(key, serverValue);
+            }
+        },
+        setBdDateToday(field) {
+            if (!this.businessDocumentProject) return;
+            const serverNow = moment.tz(SERVER_TASK_TIMEZONE).format('YYYY-MM-DD HH:mm:ss');
+            const dateStr = toProjectDateTimeInputValue(serverNow);
+            this.businessDocumentProject[field] = dateStr || '';
+            this.setBdServerDate(field, serverNow);
+            const el = document.getElementById(BD_MODAL_PICKER_IDS[field]);
+            if (el && el._flatpickr) {
+                el._flatpickr.setDate(dateStr, false, PROJECT_DATETIME_FLATPICKR_FORMAT);
+            }
+            this.scheduleBdUpdate();
+        },
+        copyBdEstimateAmountToInvoice() {
+            if (!this.businessDocumentProject) return;
+            this.businessDocumentProject.invoice_amount = this.businessDocumentProject.amount != null
+                ? Number(this.businessDocumentProject.amount) : 0;
+            this.scheduleBdUpdate();
+        },
+        copyBdInvoiceAmountToPayment() {
+            if (!this.businessDocumentProject) return;
+            this.businessDocumentProject.payment_amount = this.businessDocumentProject.invoice_amount != null
+                ? Number(this.businessDocumentProject.invoice_amount) : 0;
+            this.scheduleBdUpdate();
+        },
+        findBdStatusOption(list, status) {
+            const normalized = this.normalizeBusinessDocumentStatus(status, '');
+            return list.find((s) => s.value === normalized || s.value === status);
+        },
+        getBdEstimateStatusLabel(status) {
+            const item = this.findBdStatusOption(BUSINESS_ESTIMATE_STATUSES, status);
+            return item ? this.translateLabel(item.label) : this.translateLabel('未発行');
+        },
+        getBdEstimateStatusButtonClass(status) {
+            const item = this.findBdStatusOption(BUSINESS_ESTIMATE_STATUSES, status);
+            return item ? `btn-${item.color}` : 'btn-secondary';
+        },
+        getBdInvoiceStatusLabel(status) {
+            const item = this.findBdStatusOption(BUSINESS_INVOICE_STATUSES, status);
+            return item ? this.translateLabel(item.label) : this.translateLabel('未発行');
+        },
+        getBdInvoiceStatusButtonClass(status) {
+            const item = this.findBdStatusOption(BUSINESS_INVOICE_STATUSES, status);
+            return item ? `btn-${item.color}` : 'btn-secondary';
+        },
+        getBdPaymentStatusLabel(status) {
+            const item = BUSINESS_PAYMENT_STATUSES.find((s) => s.value === status);
+            return item ? this.translateLabel(item.label) : this.translateLabel('未入金');
+        },
+        getBdPaymentStatusButtonClass(status) {
+            const item = BUSINESS_PAYMENT_STATUSES.find((s) => s.value === status);
+            return item ? `btn-${item.color}` : 'btn-secondary';
+        },
+        selectBdEstimateStatus(status) {
+            if (!this.businessDocumentProject) return;
+            this.businessDocumentProject.estimate_status = status;
+            this.scheduleBdUpdate();
+            const dropdownElement = document.querySelector('#bdEstimateStatusDropdown');
+            if (dropdownElement) {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                if (dropdown) dropdown.hide();
+            }
+        },
+        selectBdInvoiceStatus(status) {
+            if (!this.businessDocumentProject) return;
+            this.businessDocumentProject.invoice_status = status;
+            this.scheduleBdUpdate();
+            const dropdownElement = document.querySelector('#bdInvoiceStatusDropdown');
+            if (dropdownElement) {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                if (dropdown) dropdown.hide();
+            }
+        },
+        selectBdPaymentStatus(status) {
+            if (!this.businessDocumentProject) return;
+            this.businessDocumentProject.payment_status = status;
+            this.scheduleBdUpdate();
+            const dropdownElement = document.querySelector('#bdPaymentStatusDropdown');
+            if (dropdownElement) {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                if (dropdown) dropdown.hide();
+            }
+        },
+        async loadBusinessDocumentLogs() {
+            if (!this.businessDocumentProjectId) return;
+            try {
+                const res = await axios.get(`/api/index.php?model=project&method=getLogs&project_id=${this.businessDocumentProjectId}`);
+                this.businessDocumentLogs = (res.data && Array.isArray(res.data)) ? res.data : [];
+            } catch (e) {
+                this.businessDocumentLogs = [];
+            }
+        },
+        isBusinessDocumentLog(log) {
+            if (!log) return false;
+            if (log.action && BUSINESS_DOCUMENT_LOG_ACTIONS.has(log.action)) {
+                return true;
+            }
+            const note = String(log.note || '');
+            return /見積|請求|入金|決済|金額変更|領収書/.test(note);
+        },
+        openBusinessDocumentLogModal() {
+            this.loadBusinessDocumentLogs();
+            this.showBusinessDocumentLogModal = true;
+        },
+        closeBusinessDocumentLogModal() {
+            this.showBusinessDocumentLogModal = false;
+        },
+        hasBdLogValue(value) {
+            return value !== null && value !== undefined && String(value).trim() !== '';
+        },
+        getBusinessDocumentLogValue(log, field) {
+            const value = log[field];
+            if (!this.hasBdLogValue(value)) return '—';
+            if (log.action && log.action.endsWith('_date_updated')) {
+                return this.formatShortDateTime(value) || value;
+            }
+            if (log.action === 'amount_updated' || log.action === 'invoice_amount_updated' || log.action === 'payment_amount_updated') {
+                const num = Number(value);
+                if (!isNaN(num)) {
+                    return this.formatCurrency(num);
+                }
+            }
+            return this.getLogBadgeLabel(log, field) || value;
+        },
+        getBdLogBadgeClass(log, field) {
+            const value = log[field];
+            if (!this.hasBdLogValue(value)) return 'badge bg-secondary';
+            if (log.action === 'estimate_status_updated' || log.action === 'invoice_status_updated') {
+                const cls = log.action === 'estimate_status_updated'
+                    ? this.getBusinessEstimateStatusBadgeClass(value)
+                    : this.getBusinessInvoiceStatusBadgeClass(value);
+                return `badge ${cls}`;
+            }
+            if (log.action === 'payment_status_updated') {
+                return `badge ${this.getBusinessPaymentStatusBadgeClass(value)}`;
+            }
+            return field === 'value1' ? 'badge bg-secondary' : 'badge bg-primary';
+        },
+        bdHistoryIcon(action) {
+            switch (action) {
+                case 'amount_updated':
+                case 'invoice_amount_updated':
+                case 'payment_amount_updated':
+                    return 'fa fa-yen-sign text-success';
+                case 'estimate_status_updated':
+                case 'estimate_date_updated':
+                case 'estimate_number_updated':
+                    return 'fa fa-file-invoice text-info';
+                case 'invoice_status_updated':
+                case 'invoice_date_updated':
+                case 'invoice_number_updated':
+                    return 'fa fa-file-alt text-primary';
+                case 'payment_status_updated':
+                case 'payment_date_updated':
+                case 'payment_amount_updated':
+                case 'receipt_number_updated':
+                    return 'fa fa-money-bill-wave text-success';
+                case 'payment_note_updated':
+                    return 'fa fa-sticky-note text-secondary';
+                default:
+                    return 'fa fa-history text-secondary';
+            }
+        },
+
         formatNumberForInput(number) {
             // Format number with 2 decimal places for input display
             if (number === null || number === undefined || isNaN(number)) {
@@ -8962,6 +9527,13 @@ createApp({
                     setTimeout(() => {
                         this.cleanupModalBackdrop();
                     }, 200);
+                });
+            }
+
+            const businessDocumentModal = document.getElementById('businessDocumentModal');
+            if (businessDocumentModal) {
+                businessDocumentModal.addEventListener('hidden.bs.modal', () => {
+                    this.closeBusinessDocumentModal();
                 });
             }
 

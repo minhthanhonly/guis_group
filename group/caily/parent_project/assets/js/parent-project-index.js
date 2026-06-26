@@ -112,13 +112,18 @@ createApp({
             return pages;
         },
         canManagePriceList() {
-            return this.hasDepartmentPermission('project_director');
+            return this.hasDirectorPermission('project_director_stat');
         },
         canCreateParentProject() {
             return this.hasDepartmentPermission('project_add');
         }
     },
     methods: {
+        hasDirectorPermission(field) {
+            if (typeof IS_ADMIN !== 'undefined' && IS_ADMIN) return true;
+            if (!this.permission || this.permission.length === 0) return false;
+            return this.permission.some((rule) => rule[field] === '1' || rule[field] === 1);
+        },
         hasDepartmentPermission(field) {
             if (typeof IS_ADMIN !== 'undefined' && IS_ADMIN) {
                 return true;

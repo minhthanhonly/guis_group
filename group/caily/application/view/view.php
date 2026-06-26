@@ -30,7 +30,12 @@ class View {
 		$this->directory = $directory;
 		$current[$directory] = ' class="current"';
 		$root = ROOT;
-		if (file_exists(ROOT_PATH.'assets/js/'.$directory.'.js')) {
+		$pageJsPath = ROOT_PATH . 'assets/js/' . $filename . '.js';
+		$dirJsPath = ROOT_PATH . 'assets/js/' . $directory . '.js';
+		if (file_exists($pageJsPath)) {
+			$src = $this->assetSrc('assets/js/' . $filename . '.js');
+			$this->javascript = '<script type="text/javascript" src="' . $src . '?v=' . CACHE_VERSION . '"></script>';
+		} elseif (file_exists($dirJsPath)) {
 			$src = $this->assetSrc('assets/js/' . $directory . '.js');
 			$this->javascript = '<script type="text/javascript" src="' . $src . '?v=' . CACHE_VERSION . '"></script>';
 		}

@@ -6,7 +6,7 @@ $view->heading('価格表管理');
 $current_user_name = $_SESSION['realname'] ?? $_SESSION['userid'] ?? 'ユーザー';
 
 $permModel = new ApplicationModel();
-if (!$permModel->hasDepartmentPermission('project_director')) {
+if (!$permModel->hasDepartmentPermission('project_director_stat')) {
     echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
     exit;
 }

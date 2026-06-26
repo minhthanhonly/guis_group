@@ -2387,6 +2387,14 @@ class Task extends ApplicationModel {
                 "AND ud.userid = '" . $currentUserId . "' LIMIT 1"
             );
             $isDepartmentManager = ($departmentCheck && $departmentCheck['project_manager'] == 1);
+        } else {
+            $departmentCheck = [
+                'project_manager' => 1,
+                'project_director' => 1,
+                'project_director_stat' => 1,
+                'project_director_view' => 1,
+                'project_director_edit' => 1,
+            ];
         }
 
         $isTeamLeader = false;
@@ -2409,8 +2417,13 @@ class Task extends ApplicationModel {
         }
 
         $isProjectDirector = false;
-        if ($departmentCheck && isset($departmentCheck['project_director'])) {
-            $isProjectDirector = ($departmentCheck['project_director'] == 1);
+        if ($departmentCheck) {
+            $isProjectDirector = (
+                ($departmentCheck['project_director'] ?? 0) == 1
+                || ($departmentCheck['project_director_stat'] ?? 0) == 1
+                || ($departmentCheck['project_director_view'] ?? 0) == 1
+                || ($departmentCheck['project_director_edit'] ?? 0) == 1
+            );
         }
 
         return [

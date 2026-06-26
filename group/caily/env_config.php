@@ -50,7 +50,8 @@ class EnvConfig {
             'FIREBASE_STORAGE_BUCKET',
             'FIREBASE_MESSAGING_SENDER_ID',
             'FIREBASE_APP_ID',
-            'FIREBASE_DATABASE_URL'
+            'FIREBASE_DATABASE_URL',
+            'GUIS_PLUS_SECRET'
         ];
         
         foreach ($envVars as $var) {

@@ -45,6 +45,40 @@ const PROJECT_DATETIME_PARSE_FORMATS = [
     'Y/n/j H:i'
 ];
 
+const BUSINESS_DOCUMENT_LOG_ACTIONS = new Set([
+    'amount_updated',
+    'estimate_status_updated',
+    'estimate_date_updated',
+    'estimate_number_updated',
+    'invoice_status_updated',
+    'invoice_date_updated',
+    'invoice_amount_updated',
+    'invoice_number_updated',
+    'payment_status_updated',
+    'payment_date_updated',
+    'payment_amount_updated',
+    'receipt_number_updated',
+    'payment_note_updated',
+]);
+
+const BUSINESS_DOCUMENT_FIELDS = [
+    'amount',
+    'estimate_status',
+    'estimate_date',
+    'estimate_number',
+    'invoice_status',
+    'invoice_date',
+    'invoice_amount',
+    'invoice_number',
+    'payment_status',
+    'payment_date',
+    'payment_amount',
+    'receipt_number',
+    'payment_note',
+];
+
+const BUSINESS_DOCUMENT_DATE_FIELDS = ['estimate_date', 'invoice_date', 'payment_date'];
+
 function isProjectDetailVietnameseLocale() {
     return typeof i18next !== 'undefined'
         && i18next.isInitialized
@@ -53,6 +87,11 @@ function isProjectDetailVietnameseLocale() {
 
 function getProjectDetailDisplayTimezone() {
     return isProjectDetailVietnameseLocale() ? VIETNAM_TASK_TIMEZONE : SERVER_TASK_TIMEZONE;
+}
+
+function isProjectServerDateTimeFormat(value) {
+    const s = String(value || '').trim();
+    return /^\d{4}-\d{1,2}-\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/.test(s);
 }
 
 function parseProjectDateMomentServer(value) {
@@ -259,6 +298,19 @@ const vueApp = createApp({
                 { value: '却下', label: '却下', color: 'danger' },
                 { value: '調整', label: '調整', color: 'warning' }
             ],
+            businessEstimateStatuses: [
+                { value: '未発行', label: '未発行', color: 'secondary' },
+                { value: '発行済', label: '発行済', color: 'success' },
+            ],
+            businessInvoiceStatuses: [
+                { value: '未発行', label: '未発行', color: 'secondary' },
+                { value: '発行済', label: '発行済', color: 'success' },
+            ],
+            paymentStatuses: [
+                { value: '未入金', label: '未入金', color: 'secondary' },
+                { value: '入金済', label: '入金済', color: 'success' },
+                { value: '入金拒否', label: '入金拒否', color: 'danger' },
+            ],
             categories: [],
             companies: [],
             contacts: [],
@@ -285,6 +337,7 @@ const vueApp = createApp({
             customFields: [],
             departmentCustomFieldSets: [],
             _serverProjectDates: null,
+            _serverBusinessDocumentDates: null,
             // Danh sách các tỉnh/thành phố của Nhật Bản
             japanPrefectures: [
                 '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
@@ -312,9 +365,13 @@ const vueApp = createApp({
             quillNoteContent: '',
             // Project status update loading
             isUpdatingStatus: false,
+            businessDocumentSaveStatus: null,
+            businessDocumentSaveHideTimer: null,
+            businessDocumentDirty: false,
             savingProject: false,
             // Debounce timer for amount updates
             amountUpdateTimer: null,
+            businessDocumentUpdateTimer: null,
             tagsUpdateTimer: null,
             projectTagsTagify: null,
             // Quill editor content storage (separate from Vue reactivity)
@@ -322,6 +379,7 @@ const vueApp = createApp({
             userPermissions: null,
             // mention-related variables removed
             logs: [], // Thêm biến lưu log lịch sử
+            showBusinessDocumentLogModal: false,
             // Current user data
             currentUser: {
                 userid: typeof USER_ID !== 'undefined' ? USER_ID : null,
@@ -426,7 +484,9 @@ const vueApp = createApp({
             
             // Check if user has project_manager or project_director permission
             if (this.permission && this.permission.rule) {
-                if (this.permission.rule.project_manager == 1 || this.permission.rule.project_director == 1) return true;
+                const rule = this.permission.rule;
+                if (rule.project_manager == 1) return true;
+                if (rule.project_director_stat == 1 || rule.project_director_view == 1 || rule.project_director_edit == 1) return true;
             }
             
             // Check if user is in the same department (even if not a member)
@@ -477,15 +537,52 @@ const vueApp = createApp({
             return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_comment == 1);
         },
         canDocumentProject() {
-            return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_director == 1);
+            return this.canViewBusinessDocuments;
+        },
+        canViewBusinessDocuments() {
+            if (this.isAdministrator()) return true;
+            if (!this.permission) return false;
+            if (this.permission.can_manage_project) return true;
+            const rule = this.permission.rule;
+            if (!rule) return false;
+            return rule.project_director_stat == 1
+                || rule.project_director_view == 1
+                || rule.project_director_edit == 1
+                || rule.project_director == 1;
+        },
+        canEditBusinessDocuments() {
+            if (this.isAdministrator()) return true;
+            if (!this.permission) return false;
+            if (this.permission.can_manage_project) return true;
+            const rule = this.permission.rule;
+            if (!rule) return false;
+            return rule.project_director_edit == 1;
+        },
+        sortedGeneralLogs() {
+            if (!this.logs) return [];
+            return [...this.logs]
+                .filter((log) => !this.isBusinessDocumentLog(log))
+                .sort((a, b) => (b.time > a.time ? 1 : -1));
+        },
+        sortedBusinessDocumentLogs() {
+            if (!this.logs) return [];
+            return [...this.logs]
+                .filter((log) => this.isBusinessDocumentLog(log))
+                .sort((a, b) => (b.time > a.time ? 1 : -1));
         },
         sortedLogs() {
-            if (!this.logs) return [];
-            // Sắp xếp giảm dần theo thời gian
-            return [...this.logs].sort((a, b) => (b.time > a.time ? 1 : -1));
+            return this.sortedGeneralLogs;
         },
     },
     methods: {
+        isAdministrator() {
+            return typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator';
+        },
+        hasDirectorPermission(field) {
+            if (this.isAdministrator()) return true;
+            if (!this.permission || this.permission.length === 0) return false;
+            return this.permission.some((rule) => rule[field] === '1' || rule[field] === 1);
+        },
         async loadPermission() {
             try {
                 const response = await axios.get('/api/index.php?model=task&method=getPermission&project_id=' + this.projectId);
@@ -521,7 +618,11 @@ const vueApp = createApp({
             return label;
         },
         
-        async loadProject() {
+        async loadProject(options = {}) {
+            const preserveBusinessDocs = options.preserveBusinessDocs !== false
+                && this.hasPendingBusinessDocumentChanges();
+            const businessDocSnapshot = preserveBusinessDocs ? this.getBusinessDocumentSnapshot() : null;
+
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
                 this.project = response.data;
@@ -540,6 +641,12 @@ const vueApp = createApp({
                 // Khởi tạo trạng thái CAILY納期状況 / GUIS納期状況 từ cột riêng trong DB
                 this.project.caily_nouki_status = this.project.caily_nouki_status || '';
                 this.project.guis_nouki_status = this.project.guis_nouki_status || '';
+
+                if (businessDocSnapshot) {
+                    this.applyBusinessDocumentSnapshot(businessDocSnapshot);
+                } else {
+                    this.normalizeBusinessDocumentFields();
+                }
                 
                 this.calculateStats();
                 this.loadTaskWorkloadStats();
@@ -556,6 +663,7 @@ const vueApp = createApp({
                     //this.initTagify(); 
                     this.setConnectedUsers();
                     this.initVietnamTimeTooltips();
+                    this.initBusinessDocumentDatePickers();
                 });
                 
             } catch (error) {
@@ -1075,6 +1183,10 @@ const vueApp = createApp({
         formatDateTime(datetime) {
             return formatProjectDateTimeForDisplay(datetime);
         },
+        formatBusinessDocumentDateTime(key) {
+            const serverVal = this.getBusinessDocumentServerDate(key);
+            return formatProjectDateTimeForDisplay(serverVal || this.project?.[key]);
+        },
         getProjectDateTimePlaceholder() {
             return getProjectDateTimePlaceholder();
         },
@@ -1294,36 +1406,307 @@ const vueApp = createApp({
             }
         },
         async updateProjectStatus() {
-            if (this.isUpdatingStatus) return; // Prevent multiple simultaneous updates
-            if (!this.canDocumentProject) return; // Only managers can update status
-            
+            if (this.isUpdatingStatus) return;
+            if (!this.canEditBusinessDocuments) return;
+
+            clearTimeout(this.businessDocumentUpdateTimer);
+            this.businessDocumentUpdateTimer = null;
+            clearTimeout(this.businessDocumentSaveHideTimer);
+            this.businessDocumentSaveStatus = 'loading';
             this.isUpdatingStatus = true;
             try {
+                this.syncBusinessDocumentDatesFromPickers();
                 const formData = new FormData();
                 formData.append('id', this.projectId);
                 formData.append('amount', this.project.amount || 0);
                 formData.append('estimate_status', this.project.estimate_status || '未発行');
+                formData.append('estimate_date', this.getBusinessDocumentDateForApi('estimate_date'));
+                formData.append('estimate_number', this.project.estimate_number || '');
                 formData.append('invoice_status', this.project.invoice_status || '未発行');
+                formData.append('invoice_date', this.getBusinessDocumentDateForApi('invoice_date'));
+                formData.append('invoice_amount', this.project.invoice_amount != null ? this.project.invoice_amount : 0);
+                formData.append('invoice_number', this.project.invoice_number || '');
+                formData.append('payment_status', this.project.payment_status || '未入金');
+                formData.append('payment_date', this.getBusinessDocumentDateForApi('payment_date'));
+                formData.append('payment_amount', this.project.payment_amount != null ? this.project.payment_amount : 0);
+                formData.append('receipt_number', this.project.receipt_number || '');
+                formData.append('payment_note', this.project.payment_note || '');
                 const response = await axios.post('/api/index.php?model=project&method=updateProjectStatus', formData);
                 if (response.data && response.data.status === 'success') {
-                    showMessage('プロジェクトステータスを更新しました。');
+                    this.businessDocumentDirty = false;
+                    BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
+                        const apiVal = this.getBusinessDocumentDateForApi(key);
+                        if (apiVal) {
+                            this.setBusinessDocumentServerDate(key, apiVal);
+                        }
+                    });
+                    this.businessDocumentSaveStatus = 'saved';
+                    this.loadLogs();
+                    this.businessDocumentSaveHideTimer = setTimeout(() => {
+                        this.businessDocumentSaveStatus = null;
+                        this.businessDocumentSaveHideTimer = null;
+                    }, 5000);
                 } else {
-                    showMessage('プロジェクトステータスの更新に失敗しました。', true);
+                    this.businessDocumentSaveStatus = null;
                 }
             } catch (error) {
                 console.error('Error updating project status:', error);
-                showMessage('プロジェクトステータスの更新に失敗しました。', true);
+                this.businessDocumentSaveStatus = null;
             } finally {
                 this.isUpdatingStatus = false;
             }
         },
+        normalizeBusinessDocumentStatus(status, fallback) {
+            if (!status || status === '発行済み') {
+                return status === '発行済み' ? '発行済' : (fallback || '未発行');
+            }
+            return status;
+        },
+        normalizeBusinessDocumentFields() {
+            if (!this.project) return;
+            this.project.estimate_status = this.normalizeBusinessDocumentStatus(this.project.estimate_status, '未発行');
+            this.project.invoice_status = this.normalizeBusinessDocumentStatus(this.project.invoice_status, '未発行');
+            this.project.payment_status = this.project.payment_status || '未入金';
+            this.project.estimate_number = this.project.estimate_number || '';
+            this.project.invoice_number = this.project.invoice_number || '';
+            this.project.receipt_number = this.project.receipt_number || '';
+            this.project.payment_note = this.project.payment_note || '';
+            this.project.invoice_amount = this.project.invoice_amount != null ? Number(this.project.invoice_amount) : 0;
+            this.project.payment_amount = this.project.payment_amount != null ? Number(this.project.payment_amount) : 0;
+            this.project.amount = this.project.amount != null ? Number(this.project.amount) : 0;
+            this.normalizeBusinessDocumentDateFields();
+        },
+        normalizeBusinessDocumentDateFields() {
+            if (!this.project) return;
+            BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
+                const raw = this.project[key];
+                if (!raw || !String(raw).trim()) {
+                    this.project[key] = '';
+                }
+            });
+            this.syncServerBusinessDocumentDatesFromProject();
+        },
+        syncServerBusinessDocumentDatesFromProject() {
+            if (!this.project) return;
+            const server = {};
+            BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
+                const raw = String(this.project[key] || '').trim();
+                if (!raw) {
+                    server[key] = '';
+                    return;
+                }
+                server[key] = isProjectServerDateTimeFormat(raw)
+                    ? raw
+                    : (fromProjectDateTimeInputValue(raw) || raw);
+            });
+            this._serverBusinessDocumentDates = server;
+        },
+        getBusinessDocumentServerDate(key) {
+            if (this._serverBusinessDocumentDates
+                && this._serverBusinessDocumentDates[key] != null
+                && String(this._serverBusinessDocumentDates[key]).trim()) {
+                return this._serverBusinessDocumentDates[key];
+            }
+            const raw = String(this.project?.[key] || '').trim();
+            if (!raw) return '';
+            if (isProjectServerDateTimeFormat(raw)) return raw;
+            return fromProjectDateTimeInputValue(raw) || raw;
+        },
+        setBusinessDocumentServerDate(key, displayOrServerValue) {
+            if (!this._serverBusinessDocumentDates) {
+                this._serverBusinessDocumentDates = {};
+            }
+            const raw = String(displayOrServerValue || '').trim();
+            if (!raw) {
+                this._serverBusinessDocumentDates[key] = '';
+                return;
+            }
+            this._serverBusinessDocumentDates[key] = isProjectServerDateTimeFormat(raw)
+                ? raw
+                : (fromProjectDateTimeInputValue(raw) || raw);
+        },
+        getBusinessDocumentDateForApi(key) {
+            if (!this.project) return '';
+            const pickerIds = {
+                estimate_date: 'estimate_date_picker',
+                invoice_date: 'invoice_date_picker',
+                payment_date: 'payment_date_picker',
+            };
+            const el = document.getElementById(pickerIds[key]);
+            let displayVal = String(this.project[key] || '').trim();
+            if (el) {
+                const fp = el._flatpickr;
+                if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
+                    displayVal = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
+                } else if (fp && fp._input) {
+                    displayVal = String(fp._input.value || '').trim();
+                } else if (el.value) {
+                    displayVal = String(el.value).trim();
+                }
+            }
+            return this.toAPIDate(displayVal);
+        },
+        getBusinessDocumentDateForTooltip(key) {
+            const serverVal = this.getBusinessDocumentServerDate(key);
+            if (serverVal) return serverVal;
+            const apiVal = this.getBusinessDocumentDateForApi(key);
+            return apiVal || String(this.project?.[key] || '').trim();
+        },
+        hasBusinessDocumentDate(key) {
+            return !!String(this.getBusinessDocumentServerDate(key) || this.project?.[key] || '').trim();
+        },
+        hasBusinessDocumentAmount(amount) {
+            return amount != null && amount !== '' && Number(amount) > 0;
+        },
+        scheduleBusinessDocumentUpdate() {
+            if (!this.canEditBusinessDocuments) return;
+            this.businessDocumentDirty = true;
+            clearTimeout(this.businessDocumentUpdateTimer);
+            this.businessDocumentUpdateTimer = setTimeout(() => {
+                this.businessDocumentUpdateTimer = null;
+                this.updateProjectStatus();
+            }, 800);
+        },
+        hasPendingBusinessDocumentChanges() {
+            return !!(
+                this.businessDocumentDirty
+                || this.isUpdatingStatus
+                || this.businessDocumentUpdateTimer
+            );
+        },
+        getBusinessDocumentSnapshot() {
+            if (!this.project) return null;
+            const snapshot = {};
+            BUSINESS_DOCUMENT_FIELDS.forEach((key) => {
+                snapshot[key] = this.project[key];
+            });
+            return snapshot;
+        },
+        applyBusinessDocumentSnapshot(snapshot) {
+            if (!this.project || !snapshot) return;
+            BUSINESS_DOCUMENT_FIELDS.forEach((key) => {
+                if (Object.prototype.hasOwnProperty.call(snapshot, key)) {
+                    this.project[key] = snapshot[key];
+                }
+            });
+            this.normalizeBusinessDocumentFields();
+        },
+        normalizeBusinessDocumentStatusValue(status) {
+            if (status === '発行済み') return '発行済';
+            return status;
+        },
+        findBusinessStatusOption(list, status) {
+            const normalized = this.normalizeBusinessDocumentStatusValue(status);
+            return list.find((s) => s.value === normalized || s.value === status);
+        },
+        setBusinessDocumentDateToday(field) {
+            if (!this.canEditBusinessDocuments || !this.project) return;
+            const pickerIds = {
+                estimate_date: 'estimate_date_picker',
+                invoice_date: 'invoice_date_picker',
+                payment_date: 'payment_date_picker',
+            };
+            const serverNow = moment.tz(SERVER_TASK_TIMEZONE).format('YYYY-MM-DD HH:mm:ss');
+            const dateStr = toProjectDateTimeInputValue(serverNow);
+            this.project[field] = dateStr || '';
+            this.setBusinessDocumentServerDate(field, serverNow);
+            const el = document.getElementById(pickerIds[field]);
+            if (el && el._flatpickr) {
+                el._flatpickr.setDate(dateStr, false, PROJECT_DATETIME_FLATPICKR_FORMAT);
+            }
+            this.scheduleBusinessDocumentUpdate();
+        },
+        copyEstimateAmountToInvoice() {
+            if (!this.canEditBusinessDocuments || !this.project) return;
+            this.project.invoice_amount = this.project.amount != null ? Number(this.project.amount) : 0;
+            this.scheduleBusinessDocumentUpdate();
+        },
+        copyInvoiceAmountToPayment() {
+            if (!this.canEditBusinessDocuments || !this.project) return;
+            this.project.payment_amount = this.project.invoice_amount != null ? Number(this.project.invoice_amount) : 0;
+            this.scheduleBusinessDocumentUpdate();
+        },
+        syncBusinessDocumentDatesFromPickers() {
+            if (!this.project) return;
+            const fieldIds = {
+                estimate_date: 'estimate_date_picker',
+                invoice_date: 'invoice_date_picker',
+                payment_date: 'payment_date_picker',
+            };
+            Object.keys(fieldIds).forEach((key) => {
+                const el = document.getElementById(fieldIds[key]);
+                if (!el) return;
+                const fp = el._flatpickr;
+                let displayVal = '';
+                if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
+                    displayVal = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
+                } else if (fp && fp._input) {
+                    displayVal = String(fp._input.value || '').trim();
+                } else {
+                    displayVal = String(el.value || '').trim();
+                }
+                this.project[key] = displayVal;
+                if (displayVal) {
+                    this.setBusinessDocumentServerDate(key, displayVal);
+                }
+            });
+        },
+        initBusinessDocumentDatePicker(elId, key, force) {
+            if (!this.project || !this.canEditBusinessDocuments) return;
+            const el = document.getElementById(elId);
+            if (!el) return;
+            const serverValue = this.getBusinessDocumentServerDate(key);
+            const inputVal = toProjectDateTimeInputValue(serverValue);
+            if (!force && el._flatpickr) {
+                const fpVal = String(
+                    (el._flatpickr._input && el._flatpickr._input.value) || el.value || ''
+                ).trim();
+                const displayVal = String(this.project[key] || '').trim();
+                if (fpVal && (fpVal === inputVal || fpVal === displayVal)) {
+                    return;
+                }
+            }
+            initProjectDetailFlatpickr(el, {
+                onChange: (selectedDates, dateStr) => {
+                    this.project[key] = dateStr;
+                    this.setBusinessDocumentServerDate(key, dateStr);
+                    this.scheduleBusinessDocumentUpdate();
+                }
+            }, serverValue);
+            if (inputVal && this.project[key] !== inputVal) {
+                this.project[key] = inputVal;
+            }
+            if (serverValue) {
+                this.setBusinessDocumentServerDate(key, serverValue);
+            }
+        },
+        initBusinessDocumentDatePickers(force) {
+            if (!this.project || !this.canEditBusinessDocuments) return;
+            this.initBusinessDocumentDatePicker('estimate_date_picker', 'estimate_date', force);
+            this.initBusinessDocumentDatePicker('invoice_date_picker', 'invoice_date', force);
+            this.initBusinessDocumentDatePicker('payment_date_picker', 'payment_date', force);
+        },
+        reinitBusinessDocumentDatePickersOnLocaleChange() {
+            if (!this.project || !this.canEditBusinessDocuments) return;
+            ['estimate_date_picker', 'invoice_date_picker', 'payment_date_picker'].forEach((elId) => {
+                const el = document.getElementById(elId);
+                if (el && el._flatpickr) {
+                    el._flatpickr.destroy();
+                }
+            });
+            BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
+                const serverVal = this.getBusinessDocumentServerDate(key);
+                if (!serverVal || !String(serverVal).trim()) return;
+                this.project[key] = toProjectDateTimeInputValue(serverVal);
+            });
+            this.initBusinessDocumentDatePickers(true);
+        },
         updateAmount() {
-            if (!this.isManager) return; // Only managers can update amount
-            // Debounce the amount update to avoid too many API calls
+            if (!this.canEditBusinessDocuments) return;
             clearTimeout(this.amountUpdateTimer);
             this.amountUpdateTimer = setTimeout(() => {
                 this.updateProjectStatus();
-            }, 1000); // Wait 1 second after user stops typing
+            }, 1000);
         },
         updateTags() {
             // Get tags from Tagify instance
@@ -2314,21 +2697,23 @@ const vueApp = createApp({
         },
         // Estimate status methods
         getEstimateStatusLabel(status) {
-            const statusObj = this.estimateStatuses.find(s => s.value === status);
+            const statusObj = this.findBusinessStatusOption(this.businessEstimateStatuses, status)
+                || this.estimateStatuses.find(s => s.value === status);
             return statusObj ? statusObj.label : '未発行';
         },
         getEstimateStatusBadgeClass(status) {
-            const statusObj = this.estimateStatuses.find(s => s.value === status);
+            const statusObj = this.findBusinessStatusOption(this.businessEstimateStatuses, status)
+                || this.estimateStatuses.find(s => s.value === status);
             return statusObj ? `bg-${statusObj.color}` : 'bg-secondary';
         },
         getEstimateStatusButtonClass(status) {
-            const statusObj = this.estimateStatuses.find(s => s.value === status);
+            const statusObj = this.findBusinessStatusOption(this.businessEstimateStatuses, status)
+                || this.estimateStatuses.find(s => s.value === status);
             return statusObj ? `btn-${statusObj.color}` : 'btn-secondary';
         },
         selectEstimateStatus(status) {
             this.project.estimate_status = status;
-            this.updateProjectStatus();
-            // Close dropdown
+            this.scheduleBusinessDocumentUpdate();
             const dropdownElement = document.querySelector('#estimateStatusDropdown');
             if (dropdownElement) {
                 const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
@@ -2366,22 +2751,47 @@ const vueApp = createApp({
         
         // Invoice status methods
         getInvoiceStatusLabel(status) {
-            const statusObj = this.invoiceStatuses.find(s => s.value === status);
+            const statusObj = this.findBusinessStatusOption(this.businessInvoiceStatuses, status)
+                || this.invoiceStatuses.find(s => s.value === status);
             return statusObj ? statusObj.label : '未発行';
         },
         getInvoiceStatusBadgeClass(status) {
-            const statusObj = this.invoiceStatuses.find(s => s.value === status);
+            const statusObj = this.findBusinessStatusOption(this.businessInvoiceStatuses, status)
+                || this.invoiceStatuses.find(s => s.value === status);
             return statusObj ? `bg-${statusObj.color}` : 'bg-secondary';
         },
         getInvoiceStatusButtonClass(status) {
-            const statusObj = this.invoiceStatuses.find(s => s.value === status);
+            const statusObj = this.findBusinessStatusOption(this.businessInvoiceStatuses, status)
+                || this.invoiceStatuses.find(s => s.value === status);
             return statusObj ? `btn-${statusObj.color}` : 'btn-secondary';
         },
         selectInvoiceStatus(status) {
             this.project.invoice_status = status;
-            this.updateProjectStatus();
-            // Close dropdown
+            this.scheduleBusinessDocumentUpdate();
             const dropdownElement = document.querySelector('#invoiceStatusDropdown');
+            if (dropdownElement) {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                if (dropdown) {
+                    dropdown.hide();
+                }
+            }
+        },
+        getPaymentStatusLabel(status) {
+            const statusObj = this.paymentStatuses.find(s => s.value === status);
+            return statusObj ? statusObj.label : '未入金';
+        },
+        getPaymentStatusBadgeClass(status) {
+            const statusObj = this.paymentStatuses.find(s => s.value === status);
+            return statusObj ? `bg-${statusObj.color}` : 'bg-secondary';
+        },
+        getPaymentStatusButtonClass(status) {
+            const statusObj = this.paymentStatuses.find(s => s.value === status);
+            return statusObj ? `btn-${statusObj.color}` : 'btn-secondary';
+        },
+        selectPaymentStatus(status) {
+            this.project.payment_status = status;
+            this.scheduleBusinessDocumentUpdate();
+            const dropdownElement = document.querySelector('#paymentStatusDropdown');
             if (dropdownElement) {
                 const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
                 if (dropdown) {
@@ -2877,6 +3287,38 @@ const vueApp = createApp({
                 this.logs = [];
             }
         },
+        isBusinessDocumentLog(log) {
+            if (!log) return false;
+            if (log.action && BUSINESS_DOCUMENT_LOG_ACTIONS.has(log.action)) {
+                return true;
+            }
+            const note = String(log.note || '');
+            return /見積|請求|入金|決済|金額変更|領収書/.test(note);
+        },
+        openBusinessDocumentLogModal() {
+            this.loadLogs();
+            this.showBusinessDocumentLogModal = true;
+        },
+        closeBusinessDocumentLogModal() {
+            this.showBusinessDocumentLogModal = false;
+        },
+        hasLogValue(value) {
+            return value !== null && value !== undefined && String(value).trim() !== '';
+        },
+        getBusinessDocumentLogValue(log, field) {
+            const value = log[field];
+            if (!this.hasLogValue(value)) return '—';
+            if (log.action && log.action.endsWith('_date_updated')) {
+                return this.formatShortDateTime(value) || value;
+            }
+            if (log.action === 'amount_updated' || log.action === 'invoice_amount_updated' || log.action === 'payment_amount_updated') {
+                const num = Number(value);
+                if (!isNaN(num)) {
+                    return this.formatCurrency(num);
+                }
+            }
+            return this.getLogBadgeLabel(log, field) || value;
+        },
         loadCurrentUser() {
             // Set basic user data from global variables
             this.currentUser.userid = typeof USER_ID !== 'undefined' ? USER_ID : null;
@@ -2897,6 +3339,25 @@ const vueApp = createApp({
                 case 'deleted': return 'fa fa-trash text-danger';
                 case 'date_updated': return 'fa fa-calendar-alt text-info';
                 case 'priority_updated': return 'fa fa-exclamation text-warning';
+                case 'amount_updated':
+                case 'invoice_amount_updated':
+                case 'payment_amount_updated':
+                    return 'fa fa-yen-sign text-success';
+                case 'estimate_status_updated':
+                case 'estimate_date_updated':
+                case 'estimate_number_updated':
+                    return 'fa fa-file-invoice text-info';
+                case 'invoice_status_updated':
+                case 'invoice_date_updated':
+                case 'invoice_number_updated':
+                    return 'fa fa-file-alt text-primary';
+                case 'payment_status_updated':
+                case 'payment_date_updated':
+                case 'payment_amount_updated':
+                case 'receipt_number_updated':
+                    return 'fa fa-money-bill-wave text-success';
+                case 'payment_note_updated':
+                    return 'fa fa-sticky-note text-secondary';
                 default: return 'fa fa-history';
             }
         },
@@ -3121,6 +3582,11 @@ const vueApp = createApp({
         },
     },
     watch: {
+        canEditBusinessDocuments(newVal) {
+            if (newVal) {
+                this.$nextTick(() => this.initBusinessDocumentDatePickers());
+            }
+        },
         isEditMode(newVal) {
             if (newVal) {
                 this.$nextTick(() => {
@@ -3607,6 +4073,21 @@ const vueApp = createApp({
             }
         });
 
+        this._onI18nLanguageChanged = () => {
+            this.$forceUpdate();
+            this.$nextTick(() => {
+                this.reinitBusinessDocumentDatePickersOnLocaleChange();
+                this.initVietnamTimeTooltips();
+                if (typeof window.applyDataI18n === 'function') {
+                    const appEl = document.getElementById('app');
+                    if (appEl) window.applyDataI18n(appEl);
+                }
+            });
+        };
+        if (typeof i18next !== 'undefined' && i18next.on) {
+            i18next.on('languageChanged', this._onI18nLanguageChanged);
+        }
+
         // Initialize mention manager
         this.$nextTick(() => {
             if (window.mentionManager) {
@@ -3738,10 +4219,9 @@ const vueApp = createApp({
         // }
         this.addZoomToDescriptionImages();
         
-        // Auto-refresh project information and history every 10 seconds if not in edit mode
+        // Auto-refresh project information and history every 60 seconds if not in edit mode
         this.autoRefreshTimer = setInterval(() => {
-            // Only refresh if not in edit mode
-            if (!this.isEditMode) {
+            if (!this.isEditMode && !this.hasPendingBusinessDocumentChanges()) {
                 this.loadProject();
                 this.loadLogs();
             }
@@ -3755,12 +4235,18 @@ const vueApp = createApp({
         });
     },
     beforeUnmount() {
+        if (typeof i18next !== 'undefined' && i18next.off && this._onI18nLanguageChanged) {
+            i18next.off('languageChanged', this._onI18nLanguageChanged);
+        }
         // Clean up timers
         if (this.timeRemainingTimer) {
             clearInterval(this.timeRemainingTimer);
         }
         if (this.autoRefreshTimer) {
             clearInterval(this.autoRefreshTimer);
+        }
+        if (this.businessDocumentSaveHideTimer) {
+            clearTimeout(this.businessDocumentSaveHideTimer);
         }
     }
 });

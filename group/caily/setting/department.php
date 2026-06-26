@@ -118,6 +118,7 @@ $view->heading('部署設定');
                                             <tr>
                                                 <th>名前</th>
                                                 <th>プロジェクト権限</th>
+                                                <th>業務担当権限</th>
                                                 <th>タスク権限</th>
                                                 <th>操作</th>
                                             </tr>
@@ -129,10 +130,6 @@ $view->heading('部署設定');
                                                     <div class="form-check form-check-inline">
                                                         <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_manager">
                                                         マネージャー</label>
-                                                    </div>
-                                                    <div class="form-check form-check-inline">
-                                                        <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_director">
-                                                        業務担当</label>
                                                     </div>
                                                     <div class="form-check form-check-inline">
                                                         <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_add">
@@ -149,6 +146,20 @@ $view->heading('部署設定');
                                                     <div class="form-check form-check-inline">
                                                         <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_comment">
                                                         コメント</label>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div class="form-check form-check-inline">
+                                                        <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_director_stat">
+                                                        統計</label>
+                                                    </div>
+                                                    <div class="form-check form-check-inline">
+                                                        <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_director_view">
+                                                        閲覧</label>
+                                                    </div>
+                                                    <div class="form-check form-check-inline">
+                                                        <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_director_edit">
+                                                        編集</label>
                                                     </div>
                                                 </td>
                                                 <td>
@@ -204,6 +215,7 @@ $view->heading('部署設定');
                                     <tr>
                                         <th>名前</th>
                                         <th>プロジェクト権限</th>
+                                        <th>業務担当権限</th>
                                         <th>タスク権限</th>
                                     </tr>
                                 </thead>
@@ -212,11 +224,15 @@ $view->heading('部署設定');
                                         <td>{{ member.user_name }}</td>
                                         <td>
                                             <span v-if="member.project_manager == 1" class="badge bg-label-primary me-1">マネージャー</span>
-                                            <span v-if="member.project_director == 1" class="badge bg-label-info me-1">業務担当</span>
                                             <span v-if="member.project_add == 1" class="badge bg-label-success me-1">追加</span>
                                             <span v-if="member.project_edit == 1" class="badge bg-label-warning me-1">編集</span>
                                             <span v-if="member.project_delete == 1" class="badge bg-label-danger me-1">削除</span>
                                             <span v-if="member.project_comment == 1" class="badge bg-label-secondary me-1">コメント</span>
+                                        </td>
+                                        <td>
+                                            <span v-if="member.project_director_stat == 1 || member.project_director == 1" class="badge bg-label-info me-1">統計</span>
+                                            <span v-if="member.project_director_view == 1 || member.project_director == 1" class="badge bg-label-info me-1">閲覧</span>
+                                            <span v-if="member.project_director_edit == 1 || member.project_director == 1" class="badge bg-label-info me-1">編集</span>
                                         </td>
                                         <td>
                                             <span v-if="member.task_view == 1" class="badge bg-label-secondary me-1">閲覧</span>
@@ -262,7 +278,9 @@ $view->footing();
                         description: '',
                         members: [],
                         project_manager: {},
-                        project_director: {},
+                        project_director_stat: {},
+                        project_director_view: {},
+                        project_director_edit: {},
                         project_add: {},
                         project_edit: {},
                         project_delete: {},
@@ -305,7 +323,9 @@ $view->footing();
                             description: departmentData.description,
                             members: [],
                             project_manager: {},
-                            project_director: {},
+                            project_director_stat: {},
+                            project_director_view: {},
+                            project_director_edit: {},
                             project_add: {},
                             project_edit: {},
                             project_delete: {},
@@ -321,7 +341,9 @@ $view->footing();
                                 id: member.userid,
                                 name: member.user_name,
                                 project_manager: member.project_manager === '1',
-                                project_director: member.project_director === '1',
+                                project_director_stat: member.project_director_stat === '1' || member.project_director === '1',
+                                project_director_view: member.project_director_view === '1' || member.project_director === '1',
+                                project_director_edit: member.project_director_edit === '1' || member.project_director === '1',
                                 project_add: member.project_add === '1',
                                 project_edit: member.project_edit === '1',
                                 project_delete: member.project_delete === '1',
@@ -373,7 +395,9 @@ $view->footing();
                         id: this.selectedUser.userid,
                         name: this.selectedUser.realname,
                         project_manager: false,
-                        project_director: false,
+                        project_director_stat: false,
+                        project_director_view: false,
+                        project_director_edit: false,
                         project_add: false,
                         project_edit: false,
                         project_delete: false,
@@ -401,7 +425,9 @@ $view->footing();
                         // Add permissions for each member
                         this.selectedMembers.forEach(member => {
                             departmentData[`project_manager[${member.id}]`] = member.project_manager ? 'true' : 'false';
-                            departmentData[`project_director[${member.id}]`] = member.project_director ? 'true' : 'false';
+                            departmentData[`project_director_stat[${member.id}]`] = member.project_director_stat ? 'true' : 'false';
+                            departmentData[`project_director_view[${member.id}]`] = member.project_director_view ? 'true' : 'false';
+                            departmentData[`project_director_edit[${member.id}]`] = member.project_director_edit ? 'true' : 'false';
                             departmentData[`project_add[${member.id}]`] = member.project_add ? 'true' : 'false';
                             departmentData[`project_edit[${member.id}]`] = member.project_edit ? 'true' : 'false';
                             departmentData[`project_delete[${member.id}]`] = member.project_delete ? 'true' : 'false';
@@ -446,7 +472,9 @@ $view->footing();
                         description: '',
                         members: [],
                         project_manager: {},
-                        project_director: {},
+                        project_director_stat: {},
+                        project_director_view: {},
+                        project_director_edit: {},
                         project_add: {},
                         project_edit: {},
                         project_delete: {},

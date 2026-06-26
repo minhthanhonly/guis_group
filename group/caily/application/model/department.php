@@ -102,7 +102,9 @@ class Department extends ApplicationModel {
     private static function departmentPermissionFields() {
         return [
             'project_manager',
-            'project_director',
+            'project_director_stat',
+            'project_director_view',
+            'project_director_edit',
             'project_add',
             'project_edit',
             'project_delete',
@@ -187,7 +189,9 @@ class Department extends ApplicationModel {
                     'department_id' => $department_id,
                     'userid' => $user_id,
                     'project_manager' => isset($_POST['project_manager'][$user_id]) && $_POST['project_manager'][$user_id] == 'true' ? 1 : 0,
-                    'project_director' => isset($_POST['project_director'][$user_id]) && $_POST['project_director'][$user_id] == 'true' ? 1 : 0,
+                    'project_director_stat' => isset($_POST['project_director_stat'][$user_id]) && $_POST['project_director_stat'][$user_id] == 'true' ? 1 : 0,
+                    'project_director_view' => isset($_POST['project_director_view'][$user_id]) && $_POST['project_director_view'][$user_id] == 'true' ? 1 : 0,
+                    'project_director_edit' => isset($_POST['project_director_edit'][$user_id]) && $_POST['project_director_edit'][$user_id] == 'true' ? 1 : 0,
                     'project_add' => isset($_POST['project_add'][$user_id]) && $_POST['project_add'][$user_id] == 'true' ? 1 : 0,
                     'project_edit' => isset($_POST['project_edit'][$user_id]) && $_POST['project_edit'][$user_id] == 'true' ? 1 : 0,
                     'project_delete' => isset($_POST['project_delete'][$user_id]) && $_POST['project_delete'][$user_id] == 'true' ? 1 : 0,
@@ -230,7 +234,9 @@ class Department extends ApplicationModel {
                     'department_id' => $id,
                     'userid' => $user_id,
                     'project_manager' => isset($_POST['project_manager'][$user_id]) && $_POST['project_manager'][$user_id] == 'true' ? 1 : 0,
-                    'project_director' => isset($_POST['project_director'][$user_id]) && $_POST['project_director'][$user_id] == 'true' ? 1 : 0,
+                    'project_director_stat' => isset($_POST['project_director_stat'][$user_id]) && $_POST['project_director_stat'][$user_id] == 'true' ? 1 : 0,
+                    'project_director_view' => isset($_POST['project_director_view'][$user_id]) && $_POST['project_director_view'][$user_id] == 'true' ? 1 : 0,
+                    'project_director_edit' => isset($_POST['project_director_edit'][$user_id]) && $_POST['project_director_edit'][$user_id] == 'true' ? 1 : 0,
                     'project_add' => isset($_POST['project_add'][$user_id]) && $_POST['project_add'][$user_id] == 'true' ? 1 : 0,
                     'project_edit' => isset($_POST['project_edit'][$user_id]) && $_POST['project_edit'][$user_id] == 'true' ? 1 : 0,
                     'project_delete' => isset($_POST['project_delete'][$user_id]) && $_POST['project_delete'][$user_id] == 'true' ? 1 : 0,
@@ -286,7 +292,8 @@ class Department extends ApplicationModel {
         if ($department) {
             $query = sprintf(
                 "SELECT ud.userid, u.realname as user_name,
-                ud.project_manager, ud.project_director, ud.project_add, ud.project_edit, ud.project_delete, ud.project_comment,
+                ud.project_manager, ud.project_director, ud.project_director_stat, ud.project_director_view, ud.project_director_edit,
+                ud.project_add, ud.project_edit, ud.project_delete, ud.project_comment,
                 ud.task_view, ud.task_add, ud.task_edit, ud.task_delete
                 FROM " . DB_PREFIX . "user_department ud
                 LEFT JOIN " . DB_PREFIX . "user u ON u.userid = ud.userid
@@ -314,6 +321,20 @@ class Department extends ApplicationModel {
     }
 
     function get_user_permissions() {
+        if (($_SESSION['authority'] ?? '') === 'administrator') {
+            return [[
+                'project_manager' => 1,
+                'project_director' => 1,
+                'project_director_stat' => 1,
+                'project_director_view' => 1,
+                'project_director_edit' => 1,
+                'project_add' => 1,
+                'project_edit' => 1,
+                'project_delete' => 1,
+                'project_comment' => 1,
+                'department_id' => 0,
+            ]];
+        }
         $userid = $_SESSION['userid'];
         $query = sprintf(
             "SELECT ud.*, d.name as department_name, d.id as department_id

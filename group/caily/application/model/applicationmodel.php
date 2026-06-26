@@ -214,7 +214,9 @@ class ApplicationModel extends Model {
 		}
 		$allowedFields = [
 			'project_manager',
-			'project_director',
+			'project_director_stat',
+			'project_director_view',
+			'project_director_edit',
 			'project_add',
 			'project_edit',
 			'project_delete',

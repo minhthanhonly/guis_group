@@ -228,5 +228,77 @@ class FirebaseHelper {
         }
         return $httpCode >= 200 && $httpCode < 300;
     }
+
+    /**
+     * Read connected users presence from Firebase (web / app).
+     * @return array<string, array{web:bool,app:bool,online:bool}>
+     */
+    public function getConnectedUsersPresence() {
+        if (!$this->databaseUrl) {
+            return [];
+        }
+
+        $url = rtrim($this->databaseUrl, '/') . '/connected_users.json';
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/json']);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($error || $httpCode < 200 || $httpCode >= 300) {
+            if ($error) {
+                error_log('Firebase getConnectedUsersPresence cURL error: ' . $error);
+            }
+            return [];
+        }
+
+        $data = json_decode($response, true);
+        if (!is_array($data)) {
+            return [];
+        }
+
+        $presence = [];
+        foreach ($data as $userId => $value) {
+            $parsed = $this->parseConnectedUserPresenceValue($value);
+            if (!empty($parsed['online'])) {
+                $presence[(string) $userId] = $parsed;
+            }
+        }
+
+        return $presence;
+    }
+
+    /**
+     * @deprecated Use getConnectedUsersPresence()
+     */
+    public function getConnectedUserIds() {
+        return array_keys($this->getConnectedUsersPresence());
+    }
+
+    private function parseConnectedUserPresenceValue($value) {
+        if ($value === true || $value === 1 || $value === '1' || $value === 'true') {
+            return ['web' => true, 'app' => false, 'online' => true];
+        }
+        if (!is_array($value)) {
+            return ['web' => false, 'app' => false, 'online' => false];
+        }
+
+        $web = !empty($value['web']) && $value['web'] !== '0' && $value['web'] !== 'false';
+        $app = !empty($value['app']) && $value['app'] !== '0' && $value['app'] !== 'false';
+
+        return [
+            'web' => $web,
+            'app' => $app,
+            'online' => $web || $app,
+        ];
+    }
 }
 ?> 
