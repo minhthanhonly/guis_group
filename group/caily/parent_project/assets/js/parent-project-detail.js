@@ -279,6 +279,39 @@ function isProjectServerDateTimeFormat(value) {
     return /^\d{4}-\d{1,2}-\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/.test(s);
 }
 
+function normalizeProjectVersion(version) {
+    const n = Number(version);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+function appendProjectVersionToFormData(formData, projectOrVersion) {
+    if (!formData) return;
+    const version = typeof projectOrVersion === 'object'
+        ? projectOrVersion?.version
+        : projectOrVersion;
+    formData.append('version', normalizeProjectVersion(version));
+}
+
+function applyProjectVersionFromResponse(project, responseData) {
+    if (project && responseData && responseData.version != null) {
+        project.version = normalizeProjectVersion(responseData.version);
+    }
+}
+
+function handleProjectVersionConflict(responseData, onReload) {
+    if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
+        return false;
+    }
+    const msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
+    if (typeof showMessage === 'function') {
+        showMessage(msg, true);
+    }
+    if (typeof onReload === 'function') {
+        onReload();
+    }
+    return true;
+}
+
 createApp({
     data() {
         return {
@@ -3559,6 +3592,7 @@ createApp({
                 previous_status: project.previous_status || '',
                 amount: project.amount || project.total_amount || 0,
                 progress: project.progress != null ? parseInt(project.progress, 10) : 0,
+                version: normalizeProjectVersion(project.version),
                 teams: project.teams || '',
                 managers: [],
                 members: [],
@@ -4468,6 +4502,7 @@ createApp({
                 const editCustomFields = this.collectChildProjectCustomFields('editChildProjectCustomFieldsWrap', 'editChildProjectCustomField', 'editChildProjectCustomInput', 'editChildProjectCustomCheckbox', 'editChildProjectCustomRadio');
                 if (editCustomFields.length) formData.append('custom_fields', JSON.stringify(editCustomFields));
 
+                appendProjectVersionToFormData(formData, this.editingChildProject);
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
 
                 if (response.data.status === 'success') {
@@ -4510,6 +4545,9 @@ createApp({
                     // Reset Quill content
                     this.editChildProjectQuillContent = '';
                 } else {
+                    if (handleProjectVersionConflict(response.data, () => this.loadChildProjects())) {
+                        return;
+                    }
                     showMessage(response.data.message || '課題の更新に失敗しました。', true);
                 }
             } catch (error) {
@@ -5904,6 +5942,9 @@ createApp({
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${project.id}`);
                 this.businessDocumentProject = response.data;
+                if (this.businessDocumentProject) {
+                    this.businessDocumentProject.version = normalizeProjectVersion(this.businessDocumentProject.version);
+                }
                 this.businessDocumentProjectId = project.id;
                 this.normalizeBdFields();
                 this.businessDocumentSaveStatus = null;
@@ -6059,8 +6100,10 @@ createApp({
                 formData.append('payment_amount', p.payment_amount != null ? p.payment_amount : 0);
                 formData.append('receipt_number', p.receipt_number || '');
                 formData.append('payment_note', p.payment_note || '');
+                appendProjectVersionToFormData(formData, this.businessDocumentProject);
                 const response = await axios.post('/api/index.php?model=project&method=updateProjectStatus', formData);
                 if (response.data && response.data.status === 'success') {
+                    applyProjectVersionFromResponse(this.businessDocumentProject, response.data);
                     this.businessDocumentDirty = false;
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBdDateForApi(key);
@@ -6069,12 +6112,23 @@ createApp({
                         }
                     });
                     this.syncChildProjectFromBd();
+                    if (response.data.version != null) {
+                        const idx = this.childProjects.findIndex((item) => String(item.id) === String(this.businessDocumentProjectId));
+                        if (idx >= 0) {
+                            this.childProjects[idx].version = normalizeProjectVersion(response.data.version);
+                        }
+                    }
                     this.businessDocumentSaveStatus = 'saved';
                     this.businessDocumentSaveHideTimer = setTimeout(() => {
                         this.businessDocumentSaveStatus = null;
                         this.businessDocumentSaveHideTimer = null;
                     }, 5000);
                 } else {
+                    if (handleProjectVersionConflict(response.data, async () => {
+                        await this.openBusinessDocumentModal({ id: this.businessDocumentProjectId });
+                    })) {
+                        return;
+                    }
                     this.businessDocumentSaveStatus = null;
                 }
             } catch (error) {

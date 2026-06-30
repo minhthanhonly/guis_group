@@ -79,6 +79,39 @@ const BUSINESS_DOCUMENT_FIELDS = [
 
 const BUSINESS_DOCUMENT_DATE_FIELDS = ['estimate_date', 'invoice_date', 'payment_date'];
 
+function normalizeProjectVersion(version) {
+    const n = Number(version);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+function appendProjectVersionToFormData(formData, projectOrVersion) {
+    if (!formData) return;
+    const version = typeof projectOrVersion === 'object'
+        ? projectOrVersion?.version
+        : projectOrVersion;
+    formData.append('version', normalizeProjectVersion(version));
+}
+
+function applyProjectVersionFromResponse(project, responseData) {
+    if (project && responseData && responseData.version != null) {
+        project.version = normalizeProjectVersion(responseData.version);
+    }
+}
+
+function handleProjectVersionConflict(responseData, onReload) {
+    if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
+        return false;
+    }
+    const msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
+    if (typeof showMessage === 'function') {
+        showMessage(msg, true);
+    }
+    if (typeof onReload === 'function') {
+        onReload();
+    }
+    return true;
+}
+
 function isProjectDetailVietnameseLocale() {
     return typeof i18next !== 'undefined'
         && i18next.isInitialized
@@ -550,6 +583,9 @@ const vueApp = createApp({
                 || rule.project_director_edit == 1
                 || rule.project_director == 1;
         },
+        canViewDrawings() {
+            return this.isAdministrator() || this.canViewBusinessDocuments;
+        },
         canEditBusinessDocuments() {
             if (this.isAdministrator()) return true;
             if (!this.permission) return false;
@@ -626,6 +662,9 @@ const vueApp = createApp({
             try {
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${this.projectId}`);
                 this.project = response.data;
+                if (this.project) {
+                    this.project.version = normalizeProjectVersion(this.project.version);
+                }
                 // Cho phép AI lấy dữ liệu dự án hiện tại đang xem
                 if (typeof window !== 'undefined' && this.project) {
                     window.__chatPageContext = window.__chatPageContext || {};
@@ -1431,8 +1470,10 @@ const vueApp = createApp({
                 formData.append('payment_amount', this.project.payment_amount != null ? this.project.payment_amount : 0);
                 formData.append('receipt_number', this.project.receipt_number || '');
                 formData.append('payment_note', this.project.payment_note || '');
+                appendProjectVersionToFormData(formData, this.project);
                 const response = await axios.post('/api/index.php?model=project&method=updateProjectStatus', formData);
                 if (response.data && response.data.status === 'success') {
+                    applyProjectVersionFromResponse(this.project, response.data);
                     this.businessDocumentDirty = false;
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBusinessDocumentDateForApi(key);
@@ -1447,6 +1488,9 @@ const vueApp = createApp({
                         this.businessDocumentSaveHideTimer = null;
                     }, 5000);
                 } else {
+                    if (handleProjectVersionConflict(response.data, () => this.loadProject())) {
+                        return;
+                    }
                     this.businessDocumentSaveStatus = null;
                 }
             } catch (error) {
@@ -2224,14 +2268,19 @@ const vueApp = createApp({
                 } else if (kind === 'guis') {
                     formData.append('guis_nouki_status', this.project.guis_nouki_status || '');
                 }
+                appendProjectVersionToFormData(formData, this.project);
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
                 if (!response.data || response.data.status !== 'success') {
+                    if (handleProjectVersionConflict(response.data, () => this.loadProject())) {
+                        return;
+                    }
                     this.project.caily_nouki_status = prevCaily;
                     this.project.guis_nouki_status = prevGuis;
                     if (typeof showMessage === 'function') {
                         showMessage('納期状況の更新に失敗しました。', true);
                     }
                 } else{
+                    applyProjectVersionFromResponse(this.project, response.data);
                     showMessage('納期状況を更新しました。');
                 }
 
@@ -2320,8 +2369,10 @@ const vueApp = createApp({
                 // No need to send department_custom_fields_set_id since we use all sets from department
                 formData.append('custom_fields', this.project.custom_fields);
                 formData.append('description', this.project.description || '');
+                appendProjectVersionToFormData(formData, this.project);
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
                 if (response.data && response.data.status == 'success') {
+                    applyProjectVersionFromResponse(this.project, response.data);
                     this.isEditMode = false;
                     this.originalProject = null;
                     this._serverProjectDates = null;
@@ -2329,6 +2380,9 @@ const vueApp = createApp({
                     // Hoãn loadProject để trình duyệt kịp vẽ thông báo trước khi xử lý nặng
                     setTimeout(() => { this.loadProject(); }, 0);
                 } else {
+                    if (handleProjectVersionConflict(response.data, () => this.loadProject())) {
+                        return;
+                    }
                     showMessage('プロジェクトの更新に失敗しました。', true);
                 }
             } catch (error) {

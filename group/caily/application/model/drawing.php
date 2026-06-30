@@ -37,7 +37,29 @@ class Drawing extends ApplicationModel {
         return (new Project())->canUserEditProject($projectId);
     }
 
+    private function canUserViewDrawingProject($projectId) {
+        if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
+            return true;
+        }
+        $projectId = intval($projectId);
+        if ($projectId <= 0) {
+            return false;
+        }
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        return (new Project())->canUserViewBusinessDocuments($projectId);
+    }
+
     private function denyDrawingEditPermission() {
+        return array(
+            'status' => 'error',
+            'message' => '権限がありません',
+            'http_status' => 403,
+        );
+    }
+
+    private function denyDrawingViewPermission() {
         return array(
             'status' => 'error',
             'message' => '権限がありません',
@@ -47,16 +69,23 @@ class Drawing extends ApplicationModel {
 
     function list($params = null) {
         $whereArr = [];
-        
+        $projectId = 0;
+
         // Handle both direct parameters and params array from API
         if (is_array($params)) {
             if (isset($params['project_id'])) {
-                $whereArr[] = sprintf("d.project_id = %d", intval($params['project_id']));
+                $projectId = intval($params['project_id']);
+                $whereArr[] = sprintf("d.project_id = %d", $projectId);
             }
         } else {
             if (isset($_GET['project_id'])) {
-                $whereArr[] = sprintf("d.project_id = %d", intval($_GET['project_id']));
+                $projectId = intval($_GET['project_id']);
+                $whereArr[] = sprintf("d.project_id = %d", $projectId);
             }
+        }
+
+        if ($projectId > 0 && !$this->canUserViewDrawingProject($projectId)) {
+            return $this->denyDrawingViewPermission();
         }
         
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";

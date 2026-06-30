@@ -345,7 +345,7 @@ $view->heading('建物詳細');
                                                 </label>
                                             </div>
                                         </div>
-                                        <div class="col-md-3">
+                                        <!-- <div class="col-md-3">
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" id="request_3d"
                                                     v-model="request_3d">
@@ -353,7 +353,7 @@ $view->heading('建物詳細');
                                                     3D
                                                 </label>
                                             </div>
-                                        </div>
+                                        </div> -->
                                         <div class="col-md-3">
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" id="request_other"
@@ -1136,10 +1136,11 @@ $view->heading('建物詳細');
                     </div>
                 </div>
                 <div class="modal-body">
+                    <input type="hidden" v-model.number="businessDocumentProject.version">
                     <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label">見積状況</label>
+                            <label class="form-label d-block mb-1">見積状況</label>
                             <div class="btn-group">
                                 <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
                                         :class="getBdEstimateStatusButtonClass(businessDocumentProject.estimate_status)"
@@ -1182,7 +1183,7 @@ $view->heading('建物詳細');
                     <h6 class="text-muted mb-3"><span data-i18n="請求">請求</span></h6>
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label">請求状況</label>
+                            <label class="form-label d-block mb-1">請求状況</label>
                             <div class="btn-group">
                                 <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
                                         :class="getBdInvoiceStatusButtonClass(businessDocumentProject.invoice_status)"
@@ -1229,7 +1230,7 @@ $view->heading('建物詳細');
                     <h6 class="text-muted mb-3"><span data-i18n="入金">入金</span></h6>
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label">入金状況</label>
+                            <label class="form-label d-block mb-1">入金状況</label>
                             <div class="btn-group">
                                 <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
                                         :class="getBdPaymentStatusButtonClass(businessDocumentProject.payment_status)"
@@ -1691,6 +1692,7 @@ $view->heading('建物詳細');
                 </div>
                 <div class="modal-body">
                     <form @submit.prevent="updateChildProject">
+                        <input type="hidden" v-model.number="editingChildProject.version">
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <div class="mb-3 form-control-validation">

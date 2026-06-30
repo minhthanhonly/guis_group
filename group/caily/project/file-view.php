@@ -32,7 +32,7 @@ if($_SESSION['show_project'] == 0){
                     <li class="nav-item">
                     <a class="nav-link" :href="`gantt.php?project_id=${project?.id}`"><span data-i18n="ガントチャート">ガントチャート</span></a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item" v-if="canViewBusinessDocuments">
                     <a class="nav-link" :href="`drawings.php?project_id=${project?.id}`"><span data-i18n="図面">図面</span><span class="badge badge-sm bg-info ms-1 rounded-pill">{{ project?.drawing_count }}</span></a>
                     </li>
                     <li class="nav-item">
@@ -158,12 +158,26 @@ createApp({
             fileId: <?php echo $file_id; ?>,
             fileInfo: null,
             project: null,
+            permission: {},
             loading: true,
             errorMessage: null
         }
     },
     
     computed: {
+        canViewBusinessDocuments() {
+            if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') {
+                return true;
+            }
+            if (!this.permission) return false;
+            if (this.permission.can_manage_project) return true;
+            const rule = this.permission.rule;
+            if (!rule) return false;
+            return rule.project_director_stat == 1
+                || rule.project_director_view == 1
+                || rule.project_director_edit == 1
+                || rule.project_director == 1;
+        },
         isImage() {
             if (!this.fileInfo || !this.fileInfo.data) return false;
             const ext = this.fileInfo.data.original_name.split('.').pop().toLowerCase();
@@ -209,8 +223,18 @@ createApp({
                 if (response.data && response.data.success) {
                     this.project = response.data.data;
                 }
+                await this.loadPermission(projectId);
             } catch (error) {
                 console.error('Error loading project:', error);
+            }
+        },
+
+        async loadPermission(projectId) {
+            try {
+                const response = await axios.get('/api/index.php?model=task&method=getPermission&project_id=' + projectId);
+                this.permission = response.data || {};
+            } catch (error) {
+                console.error('Error loading permission:', error);
             }
         },
         

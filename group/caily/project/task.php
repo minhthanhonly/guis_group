@@ -32,7 +32,7 @@ if($_SESSION['show_project'] == 0){
                 <li class="nav-item">
                 <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>"><span data-i18n="ガントチャート">ガントチャート</span></a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item" v-if="canViewBusinessDocuments">
                 <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>"><span data-i18n="図面">図面</span><span class="badge badge-sm bg-info ms-1 rounded-pill">{{ projectInfo?.drawing_count }}</span></a>
                 </li>
                 <li class="nav-item">
@@ -189,7 +189,7 @@ if($_SESSION['show_project'] == 0){
             <div class="task-table-header w-100 g-0 align-items-center fw-bold text-primary bg-light">
                 <div class="task-col-title py-2 px-2"><span data-i18n="タスク">タスク</span></div>
                 <div class="task-col-kind py-2 pe-2"><span data-i18n="種別">種別</span></div>
-                <div class="task-col-drawing py-2 pe-2"><span data-i18n="図面">図面</span></div>
+                <div class="task-col-drawing py-2 pe-2"><span data-i18n="作業比重">作業比重</span></div>
                 <div class="task-col-priority py-2 pe-2"><span data-i18n="優先度">優先度</span></div>
                 <div class="task-col-period py-2 pe-2"><span data-i18n="期限">期限</span></div>
                 <div class="task-col-assignee py-2 pe-2"><span data-i18n="担当者">担当者</span></div>
@@ -373,7 +373,9 @@ if($_SESSION['show_project'] == 0){
                                     :disabled="isDrawingCountSaving(task.id)"
                                     @change="saveTaskDrawingCount(task, $event.target.value)">
                                 <span v-else-if="isTaskLinkedToDrawings(task)" class="text-nowrap">{{ task.drawing_count }}</span>
+                                <span v-if="task.id && isTaskLinkedToDrawings(task) && formatTaskDrawingPricePercent(task)" class="badge bg-label-info text-nowrap">{{ formatTaskDrawingPricePercent(task) }}%</span>
                             </template>
+                            <span v-else-if="task.id && isDefaultTaskWithAutoDrawingLink(task) && formatTaskDrawingPricePercent(task)" class="badge bg-label-info text-nowrap">{{ formatTaskDrawingPricePercent(task) }}%</span>
                             <span v-else-if="!isDefaultTaskWithAutoDrawingLink(task)" class="text-muted">—</span>
                         </div>
                     </div>
@@ -864,8 +866,8 @@ if($_SESSION['show_project'] == 0){
     box-sizing: border-box;
 }
 .task-col-title { width: 16%; min-width: 0; }
-.task-col-kind { width: 8%; min-width: 5.5rem; }
-.task-col-drawing { width: 7%; min-width: 8rem; }
+.task-col-kind { width: 6%; min-width: 5rem; }
+.task-col-drawing { width: 9%; min-width: 10rem; }
 .task-drawing-count-input {
     width: 4rem;
     min-width: 4rem;
@@ -902,8 +904,8 @@ if($_SESSION['show_project'] == 0){
 }
 .task-col-note { width: 8%; min-width: 4.5rem; }
 .task-col-priority { width: 5%; min-width: 3.5rem; }
-.task-col-period { width: 8%; min-width: 0; }
-.task-col-assignee { width: 5%; min-width: 0; max-width: 6.5rem; }
+.task-col-period { width: 7%; min-width: 0; }
+.task-col-assignee { width: 5%; min-width: 0; max-width: 4rem; }
 .task-col-ack { width: 5%; min-width: 3rem; }
 .task-col-creator { width: 5%; min-width: 0; }
 .task-col-status { width: 8%; min-width: 4rem; }

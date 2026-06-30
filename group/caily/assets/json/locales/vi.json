@@ -320,6 +320,7 @@
     "種別": "Loại hình",
     "図面数": "Số bản vẽ",
     "図面": "Bản vẽ",
+    "作業": "Tỉ trọng CV",
     "図面リストに追加": "Thêm vào danh sách bản vẽ",
     "工数": "Công số",
     "工数合計": "Tổng công số",
@@ -639,7 +640,6 @@
     "建物一覧へ": "Đi tới danh sách công trình",
     "検索結果がありません": "Không có kết quả",
     "ナビゲーション": "Điều hướng",
-    "検索": "Tìm kiếm",
     "ショートカット一覧": "Danh sách phím tắt",
     "ホームへ": "Đi tới trang chủ",
     "タスク一覧へ": "Đi tới danh sách công việc",
@@ -653,5 +653,6 @@
     "顧客を検索": "Tìm khách hàng",
     "会社名 / 支店名 / メール": "Tên KH / chi nhánh / email",
     "コマンドパレットを開く": "Tìm kiếm (F1 / Ctrl+K)",
-    "既定タスク追加": "Thêm công việc mặc định"
+    "既定タスク追加": "Thêm công việc mặc định",
+    "他のユーザーが先に更新しました。ページを再読み込みしてください。": "Người dùng khác đã cập nhật trước đó. Vui lòng tải lại trang."
 }

@@ -1351,7 +1351,7 @@ class Task extends ApplicationModel {
 
     /**
      * Toggle task link to drawings list (drawing_count 0 = off, >0 = on).
-     * Project managers or project members (for 新規作成 / 修正(エラー) / 修正(変更)).
+     * Project managers or project members.
      */
     function updateDrawingLink() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -1709,17 +1709,7 @@ class Task extends ApplicationModel {
         }
 
         $perm = $this->resolveProjectTaskPermissions($projectId);
-        if (!$perm || empty($perm['is_member'])) {
-            return false;
-        }
-
-        if (!empty($perm['can_manage_project'])) {
-            return true;
-        }
-
-        $kind = $this->normalize_task_kind($taskKind);
-        $allowedKinds = array('新規作成', '修正(エラー)', '修正(変更)');
-        return in_array($kind, $allowedKinds, true);
+        return $perm && !empty($perm['is_member']);
     }
 
     private function resolveTimerUserId() {

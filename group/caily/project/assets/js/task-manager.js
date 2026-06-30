@@ -27,6 +27,11 @@ const DEFAULT_TASK_KIND_BY_TITLE = {
     '全図面のチェック・確認作業': 'チェック'
 };
 
+const DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
+    'お客様との連絡・調整・納品対応': 15,
+    '全図面のチェック・確認作業': 20
+};
+
 const TaskApp = createApp({
     components: {
         'comment-component': window.CommentComponent
@@ -85,8 +90,6 @@ const TaskApp = createApp({
                 { value: '検討', label: '検討', i18nKey: '検討', color: 'secondary' },
                 { value: '相談・会議', label: '相談・会議', i18nKey: '相談・会議', color: 'dark' }
             ],
-            taskKindsWithoutDrawingLink: ['チェック', '検討', '相談・会議', '連絡'],
-            taskKindsWithMemberDrawingCountEdit: ['新規作成', '修正(エラー)', '修正(変更)'],
             filterStatus: '',
             filterPriority: '',
             filterDueDate: '',
@@ -193,6 +196,19 @@ const TaskApp = createApp({
         },
         canViewTaskList() {
             return this.permission.can_manage_project || this.permission.is_member;
+        },
+        canViewBusinessDocuments() {
+            if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') {
+                return true;
+            }
+            if (!this.permission) return false;
+            if (this.permission.can_manage_project) return true;
+            const rule = this.permission.rule;
+            if (!rule) return false;
+            return rule.project_director_stat == 1
+                || rule.project_director_view == 1
+                || rule.project_director_edit == 1
+                || rule.project_director == 1;
         },
         canLikeTask() {
             // Quyền chung: chỉ manager hoặc team_leader mới được like/dislike
@@ -532,15 +548,6 @@ const TaskApp = createApp({
                 if (field === 'title') {
                     this.applyDefaultTaskKindForTitle(this.inlineTasks[index]);
                 }
-                if (field === 'task_kind' && !this.isDrawingLinkVisibleForTask(this.inlineTasks[index]) && !this.isDefaultTaskWithAutoDrawingLink(this.inlineTasks[index])) {
-                    if (typeof Vue !== 'undefined' && Vue.set) {
-                        Vue.set(this.inlineTasks[index], 'link_to_drawings', false);
-                        Vue.set(this.inlineTasks[index], 'drawing_count', 0);
-                    } else {
-                        this.inlineTasks[index].link_to_drawings = false;
-                        this.inlineTasks[index].drawing_count = 0;
-                    }
-                }
             }
         },
         
@@ -851,6 +858,63 @@ const TaskApp = createApp({
             const title = (task.title || '').trim();
             return DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.indexOf(title) !== -1;
         },
+        getExistingDefaultTaskPercentTotal() {
+            const titles = new Set((this.tasks || []).map((t) => (t.title || '').trim()));
+            let total = 0;
+            Object.keys(DEFAULT_TASK_DRAWING_PRICE_PERCENTS).forEach((title) => {
+                if (titles.has(title)) {
+                    total += DEFAULT_TASK_DRAWING_PRICE_PERCENTS[title];
+                }
+            });
+            return total;
+        },
+        getDrawingPricePoolPercent() {
+            return Math.max(0, 100 - this.getExistingDefaultTaskPercentTotal());
+        },
+        collectDrawingLinkedTasksForPercent() {
+            return (this.tasks || []).filter((task) => {
+                return task && task.id
+                    && this.isTaskLinkedToDrawings(task)
+                    && !this.isDefaultTaskWithAutoDrawingLink(task);
+            });
+        },
+        getTaskDrawingSlotCount(task) {
+            const n = parseInt(task && task.drawing_count, 10);
+            return (!Number.isNaN(n) && n > 0) ? n : 1;
+        },
+        getTotalDrawingSlotsForPercent() {
+            return this.collectDrawingLinkedTasksForPercent().reduce((sum, task) => {
+                return sum + this.getTaskDrawingSlotCount(task);
+            }, 0);
+        },
+        getTaskDrawingPricePercent(task) {
+            if (!task || !task.id) {
+                return null;
+            }
+            if (this.isDefaultTaskWithAutoDrawingLink(task)) {
+                const title = (task.title || '').trim();
+                const fixed = DEFAULT_TASK_DRAWING_PRICE_PERCENTS[title];
+                return fixed != null ? fixed : null;
+            }
+            if (!this.isTaskLinkedToDrawings(task)) {
+                return null;
+            }
+            const totalSlots = this.getTotalDrawingSlotsForPercent();
+            if (totalSlots <= 0) {
+                return null;
+            }
+            const pool = this.getDrawingPricePoolPercent();
+            const slots = this.getTaskDrawingSlotCount(task);
+            return (pool * slots) / totalSlots;
+        },
+        formatTaskDrawingPricePercent(task) {
+            const pct = this.getTaskDrawingPricePercent(task);
+            if (pct == null) {
+                return '';
+            }
+            const rounded = Math.round(pct * 10) / 10;
+            return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+        },
         getDefaultTaskKindForTitle(title) {
             const normalized = (title || '').trim();
             return DEFAULT_TASK_KIND_BY_TITLE[normalized] || '';
@@ -867,9 +931,7 @@ const TaskApp = createApp({
         },
         isDrawingLinkVisibleForTask(task) {
             if (!task) return false;
-            if (this.isDefaultTaskWithAutoDrawingLink(task)) return false;
-            const kind = this.getTaskKindDisplayValue(task);
-            return this.taskKindsWithoutDrawingLink.indexOf(kind) === -1;
+            return !this.isDefaultTaskWithAutoDrawingLink(task);
         },
         formatEstimatedHours(value) {
             const n = parseFloat(value);
@@ -908,11 +970,6 @@ const TaskApp = createApp({
             const limit = maxLen || 28;
             return text.length <= limit ? text : text.substring(0, limit) + '…';
         },
-        isTaskKindAllowingMemberDrawingCount(task) {
-            if (!task) return false;
-            const kind = this.getTaskKindDisplayValue(task);
-            return this.taskKindsWithMemberDrawingCountEdit.indexOf(kind) !== -1;
-        },
         canEditTaskNote(task) {
             if (!task) return false;
             if (!this.permission || !this.permission.is_member) return false;
@@ -926,10 +983,7 @@ const TaskApp = createApp({
             if (!this.permission || !this.permission.is_member || !task) {
                 return false;
             }
-            if (!this.isDrawingLinkVisibleForTask(task)) {
-                return false;
-            }
-            return this.isTaskKindAllowingMemberDrawingCount(task);
+            return this.isDrawingLinkVisibleForTask(task);
         },
         canEditTaskDrawingCount(task) {
             if (!task || !task.id || !this.isTaskLinkedToDrawings(task)) {

@@ -48,6 +48,32 @@ var projectTable;
         { key: 'paused', name: '一時停止', color: 'warning' },
         { key: 'cancelled', name: '中止', color: 'danger' }
     ];
+
+    function normalizeProjectVersion(version) {
+        var n = Number(version);
+        return Number.isFinite(n) && n > 0 ? n : 1;
+    }
+
+    function appendProjectVersionToFormData(formData, version) {
+        if (!formData) return;
+        formData.append('version', normalizeProjectVersion(version));
+    }
+
+    function handleProjectVersionConflict(responseData, onReload) {
+        if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
+            return false;
+        }
+        var msg = responseData.message || translateText('他のユーザーが先に更新しました。ページを再読み込みしてください。');
+        if (typeof showMessage === 'function') {
+            showMessage(msg, true);
+        } else if (typeof alert === 'function') {
+            alert(msg);
+        }
+        if (typeof onReload === 'function') {
+            onReload();
+        }
+        return true;
+    }
     var priorities = [
         {
             key: 'low',
@@ -3250,6 +3276,7 @@ var projectTable;
                 const effectiveId = p.id || projectId;
                 $('#quickEditProjectId').val(effectiveId);
                 $('#quickEditProjectIdBadge').text('#' + effectiveId);
+                $('#quickEditProjectVersion').val(normalizeProjectVersion(p.version));
                 $('#quickEditName').val(p.name || '');
                 var datetimePlaceholder = getProjectDateTimePlaceholder();
                 $('#quickEditStartDate, #quickEditEndDate, #quickEditCailyNouki, #quickEditGuisNouki')
@@ -3259,7 +3286,6 @@ var projectTable;
                 quickEditOriginalStatus = p.status || 'draft';
                 syncQuickEditStatusOptions(quickEditOriginalStatus);
                 $('#quickEditStatus').val(quickEditOriginalStatus);
-                $('#quickEditAmount').val(p.amount || '');
                 $('#quickEditProjectOrderType').val(typeof p.project_order_type === 'string' ? p.project_order_type : (Array.isArray(p.project_order_type) ? (p.project_order_type || []).join(', ') : ''));
                 $('input[name="tantou"]').prop('checked', false);
                 if (p.tantou === 'CAILY') $('#quickEditTantouCaily').prop('checked', true);
@@ -3750,7 +3776,6 @@ var projectTable;
                 return;
             }
             formData.append('status', quickEditStatus);
-            formData.append('amount', $('#quickEditAmount').val() || '');
             formData.append('tantou', $('input[name="tantou"]:checked').val() || '');
             formData.append('caily_nouki', getQuickEditDateFieldValue('#quickEditCailyNouki'));
             formData.append('guis_nouki', getQuickEditDateFieldValue('#quickEditGuisNouki'));
@@ -3786,13 +3811,42 @@ var projectTable;
                 customFieldsData.push({ label: label, value: value });
             });
             if (customFieldsData.length) formData.append('custom_fields', JSON.stringify(customFieldsData));
-            axios.post('/api/index.php?model=project&method=update', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(function() {
-                bootstrap.Modal.getInstance(document.getElementById('quickEditProjectModal')).hide();
-                if (projectTable) reloadProjectTable(false);
-                if (typeof showMessage === 'function') showMessage(translateText('プロジェクトを更新しました。'));
+            appendProjectVersionToFormData(formData, $('#quickEditProjectVersion').val());
+            axios.post('/api/index.php?model=project&method=update', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(function(res) {
+                var data = res && res.data ? res.data : {};
+                if (data.status === 'success') {
+                    bootstrap.Modal.getInstance(document.getElementById('quickEditProjectModal')).hide();
+                    if (projectTable) reloadProjectTable(false);
+                    if (typeof showMessage === 'function') showMessage(translateText('プロジェクトを更新しました。'));
+                    return;
+                }
+                if (handleProjectVersionConflict(data, function() {
+                    var reloadId = $('#quickEditProjectId').val();
+                    if (reloadId) {
+                        openQuickEditProjectModal(reloadId, quickEditIsManagerOnly);
+                    }
+                })) {
+                    return;
+                }
+                var errMsg = data.message || data.error || translateText('更新に失敗しました。');
+                if (typeof showMessage === 'function') showMessage(errMsg, true);
+                else if (typeof alert === 'function') alert(errMsg);
             }).catch(function(err) {
                 console.error('Quick edit save:', err);
-                if (typeof alert === 'function') alert(err.response && err.response.data && err.response.data.message ? err.response.data.message : translateText('更新に失敗しました。'));
+                var errData = err.response && err.response.data ? err.response.data : {};
+                if (handleProjectVersionConflict(errData, function() {
+                    var reloadId = $('#quickEditProjectId').val();
+                    if (reloadId) {
+                        openQuickEditProjectModal(reloadId, quickEditIsManagerOnly);
+                    }
+                })) {
+                    return;
+                }
+                if (typeof showMessage === 'function') {
+                    showMessage(errData.message || translateText('更新に失敗しました。'), true);
+                } else if (typeof alert === 'function') {
+                    alert(errData.message ? errData.message : translateText('更新に失敗しました。'));
+                }
             }).finally(function() {
                 $btn.prop('disabled', false);
                 $spinner.addClass('d-none');

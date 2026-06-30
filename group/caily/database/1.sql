@@ -26,3 +26,8 @@ ALTER TABLE `groupware_projects`
   ADD COLUMN `payment_amount` decimal(15,2) DEFAULT 0 AFTER `payment_date`,
   ADD COLUMN `receipt_number` varchar(100) DEFAULT NULL AFTER `payment_amount`,
   ADD COLUMN `payment_note` text DEFAULT NULL AFTER `receipt_number`;
+
+
+
+ALTER TABLE projects
+    ADD COLUMN version INT UNSIGNED NOT NULL DEFAULT 1 AFTER updated_at;

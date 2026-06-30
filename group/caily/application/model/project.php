@@ -6,7 +6,7 @@ class Project extends ApplicationModel {
         // Add integer fields that should not be quoted
         $this->donotquote = array_merge($this->donotquote, array(
             'parent_folder_id', 'folder_id', 'project_id', 'file_size', 'amount',
-            'invoice_amount', 'payment_amount'
+            'invoice_amount', 'payment_amount', 'version'
         ));
         $this->schema = array(
             'id' => array('except' => array('search')),
@@ -28,6 +28,7 @@ class Project extends ApplicationModel {
             'guis_nouki_status' => array(), //GUIS納期状況
             'created_by' => array(), //userid
             'updated_by' => array(), //userid
+            'version' => array(),
             'created_at' => array('except' => array('search')), //timestamp
             'updated_at' => array('except' => array('search')), //timestamp
             'department_id' => array(), //
@@ -1776,6 +1777,60 @@ class Project extends ApplicationModel {
         return $listAllUsers;
     }
 
+    /**
+     * Validate client version against DB for optimistic locking.
+     */
+    private function assertProjectVersionMatches(array $old) {
+        if (!array_key_exists('version', $_POST)) {
+            return [
+                'ok' => false,
+                'response' => [
+                    'status' => 'error',
+                    'error' => 'version_required',
+                    'message' => 'バージョン情報がありません。ページを再読み込みしてください。',
+                ],
+            ];
+        }
+        $clientVersion = intval($_POST['version']);
+        $dbVersion = intval($old['version'] ?? 1);
+        if ($clientVersion !== $dbVersion) {
+            return [
+                'ok' => false,
+                'response' => [
+                    'status' => 'error',
+                    'error' => 'version_conflict',
+                    'message' => '他のユーザーが先に更新しました。ページを再読み込みしてください。',
+                    'current_version' => $dbVersion,
+                ],
+            ];
+        }
+        return ['ok' => true, 'expected_version' => $dbVersion];
+    }
+
+    /**
+     * UPDATE with version increment; fails when row version changed concurrently.
+     */
+    private function performVersionedProjectUpdate($id, array $data, $expectedVersion) {
+        $newVersion = intval($expectedVersion) + 1;
+        $data['version'] = $newVersion;
+        $result = $this->query_update($data, [
+            'id' => intval($id),
+            'version' => intval($expectedVersion),
+        ]);
+        if (!$result) {
+            return [
+                'ok' => false,
+                'response' => [
+                    'status' => 'error',
+                    'error' => 'version_conflict',
+                    'message' => '他のユーザーが先に更新しました。ページを再読み込みしてください。',
+                    'current_version' => $newVersion,
+                ],
+            ];
+        }
+        return ['ok' => true, 'version' => $newVersion];
+    }
+
     
     function update() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -1788,6 +1843,12 @@ class Project extends ApplicationModel {
         if (!$old) {
             return ['status' => 'error', 'error' => 'Project not found'];
         }
+
+        $versionCheck = $this->assertProjectVersionMatches($old);
+        if (!$versionCheck['ok']) {
+            return $versionCheck['response'];
+        }
+        $expectedVersion = $versionCheck['expected_version'];
 
         // Sensitive fields (amount, name, start_date, end_date, caily_nouki, guis_nouki, tantou) require project_manager or administrator
         $sensitiveFields = ['amount', 'name', 'start_date', 'end_date', 'caily_nouki', 'guis_nouki', 'tantou'];
@@ -1961,7 +2022,12 @@ class Project extends ApplicationModel {
         }
         
         try {
-        $result = $this->query_update($data, ['id' => $id]);
+        $versionedUpdate = $this->performVersionedProjectUpdate($id, $data, $expectedVersion);
+        if (!$versionedUpdate['ok']) {
+            return $versionedUpdate['response'];
+        }
+        $result = true;
+        $newProjectVersion = $versionedUpdate['version'];
         
         // Handle NULL datetime fields separately
         if ($result && !empty($nullDatetimeFields)) {
@@ -2117,7 +2183,7 @@ class Project extends ApplicationModel {
             if (isset($data['guis_nouki_status']) && $data['guis_nouki_status'] !== $old['guis_nouki_status'] && $data['guis_nouki_status'] == '納品済み') {
                 $this->notifyProjectGuisNoukiUpdated($id, $projectName, $this->getUserRealname(), $data['guis_nouki_status'], $managerIds);
             }
-            return ['status' => 'success', 'message' => 'Project updated successfully'];
+            return ['status' => 'success', 'message' => 'Project updated successfully', 'version' => $newProjectVersion];
         } else {
             return ['status' => 'error', 'message' => 'Update failed'];
         }
@@ -2658,6 +2724,7 @@ class Project extends ApplicationModel {
         if ($project) {
             $this->attachProjectDetailAggregates($project, $user_id);
             $project['quotation_status'] = $this->getQuotationStatus($id);
+            $project['version'] = isset($project['version']) ? intval($project['version']) : 1;
         }
         
         return $project;
@@ -3713,6 +3780,15 @@ class Project extends ApplicationModel {
         
         // Lấy dữ liệu cũ để so sánh và ghi log
         $old = $this->getById($id);
+        if (!$old) {
+            return ['status' => 'error', 'error' => 'Project not found'];
+        }
+
+        $versionCheck = $this->assertProjectVersionMatches($old);
+        if (!$versionCheck['ok']) {
+            return $versionCheck['response'];
+        }
+        $expectedVersion = $versionCheck['expected_version'];
         
         $data = array(
             'updated_at' => date('Y-m-d H:i:s'),
@@ -3774,7 +3850,12 @@ class Project extends ApplicationModel {
             }
         }
         
-        $result = $this->query_update($data, ['id' => $id]);
+        $versionedUpdate = $this->performVersionedProjectUpdate($id, $data, $expectedVersion);
+        if (!$versionedUpdate['ok']) {
+            return $versionedUpdate['response'];
+        }
+        $result = true;
+        $newProjectVersion = $versionedUpdate['version'];
 
         if ($result && !empty($nullDatetimeFields)) {
             $setParts = [];
@@ -3788,7 +3869,7 @@ class Project extends ApplicationModel {
         if ($result) {
             $this->logBusinessDocumentChanges($id, $old, $data, $nullDatetimeFields);
 
-            return ['status' => 'success'];
+            return ['status' => 'success', 'version' => $newProjectVersion];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
         }

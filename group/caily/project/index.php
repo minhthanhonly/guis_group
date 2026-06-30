@@ -334,6 +334,7 @@ if($_SESSION['show_project'] == 0){
                     </div>
                     <form id="quickEditProjectForm">
                         <input type="hidden" name="id" id="quickEditProjectId">
+                        <input type="hidden" name="version" id="quickEditProjectVersion" value="1">
                         <div class="row g-3">
                             <div class="col-md-12 quick-edit-full-only">
                                 <label class="form-label"><span data-i18n="案件名">案件名</span> <span class="text-danger">*</span></label>
@@ -368,13 +369,6 @@ if($_SESSION['show_project'] == 0){
                                 <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
                                 <input type="text" class="form-control" name="project_order_type" id="quickEditProjectOrderType" placeholder="新規, 修正">
                                 <div class="invalid-feedback" id="quickEditProjectOrderTypeError"></div>
-                            </div>
-                            <div class="col-md-6 quick-edit-full-only">
-                                <label class="form-label"><span data-i18n="総額">総額</span></label>
-                                <div class="input-group">
-                                    <span class="input-group-text">¥</span>
-                                    <input type="number" class="form-control" name="amount" id="quickEditAmount" min="0" step="1" placeholder="0">
-                                </div>
                             </div>
                             <div class="col-md-4 quick-edit-full-only">
                                 <label class="form-label"><span data-i18n="担当">担当</span></label>

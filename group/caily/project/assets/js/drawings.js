@@ -119,11 +119,19 @@ createApp({
     },
     
     computed: {
-        canViewProject() {
-            if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') {
+        canViewDrawings() {
+            if ((typeof USER_ROLE !== 'undefined' && USER_ROLE == 'administrator')
+                || (typeof IS_ADMINISTRATOR !== 'undefined' && IS_ADMINISTRATOR)) {
                 return true;
             }
-            return !!(this.permission && (this.permission.can_manage_project || this.permission.is_member));
+            if (!this.permission) return false;
+            if (this.permission.can_manage_project) return true;
+            const rule = this.permission.rule;
+            if (!rule) return false;
+            return rule.project_director_stat == 1
+                || rule.project_director_view == 1
+                || rule.project_director_edit == 1
+                || rule.project_director == 1;
         },
         
         filteredDrawings() {

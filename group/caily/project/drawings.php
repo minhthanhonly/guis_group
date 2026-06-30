@@ -12,6 +12,13 @@ if($_SESSION['show_project'] == 0){
     echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
     exit;
 }
+require_once(DIR_MODEL . 'project.php');
+$projectModel = new Project();
+$isAdministrator = isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator';
+if (!$isAdministrator && !$projectModel->canUserViewBusinessDocuments($project_id)) {
+    header('Location: detail.php?id=' . $project_id);
+    exit;
+}
 ?>
 <script>window.__chatPageContext = { project_id: <?php echo (int)$project_id; ?> };</script>
 <div id="app" class="container-fluid mt-4" v-cloak>
@@ -58,7 +65,7 @@ if($_SESSION['show_project'] == 0){
             </div>
 
             <!-- Main Content -->
-            <div class="col-12" v-if="canViewProject">
+            <div class="col-12" v-if="canViewDrawings">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">
@@ -741,6 +748,7 @@ $view->footing();
 <script>
 const PROJECT_ID = <?php echo $project_id; ?>;
 const CURRENT_USER_ID = '<?php echo $_SESSION['userid']; ?>';
+const IS_ADMINISTRATOR = <?php echo (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') ? 'true' : 'false'; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="assets/js/drawings.js?v=<?=CACHE_VERSION?>"></script> 

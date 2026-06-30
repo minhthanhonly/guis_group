@@ -48,7 +48,7 @@ if($_SESSION['show_project'] == 0){
                     <li class="nav-item">
                     <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>"><span data-i18n="ガントチャート">ガントチャート</span></a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item" v-if="canViewDrawings">
                     <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>"><span data-i18n="図面">図面</span><span class="badge badge-sm bg-info ms-1 rounded-pill">{{ project?.drawing_count }}</span></a>
                     </li>
                     <li class="nav-item">
@@ -252,6 +252,7 @@ if($_SESSION['show_project'] == 0){
                                 <label class="form-label"><span data-i18n="ID">ID</span></label>
                                 <input type="text" class="form-control" :value="project?.id || '-'" readonly>
                             </div>
+                            <input v-if="isEditMode && project" type="hidden" v-model.number="project.version">
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="案件名">案件名</span>  <span class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
@@ -729,6 +730,7 @@ if($_SESSION['show_project'] == 0){
                         </button>
                     </div>
                     <div class="card-body" v-if="project">
+                        <input type="hidden" v-model.number="project.version">
                         <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
@@ -768,11 +770,11 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">見積金額</label>
-                                <input type="number" class="form-control" v-model.number="project.amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
+                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">見積番号</label>
-                                <input type="text" class="form-control" v-model="project.estimate_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
+                                <input type="text" autocomplete="off" class="form-control" v-model="project.estimate_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
                             </div>
                         </div>
 
@@ -821,11 +823,11 @@ if($_SESSION['show_project'] == 0){
                                     <button v-if="canEditBusinessDocuments && !hasBusinessDocumentAmount(project.invoice_amount)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
                                             @click="copyEstimateAmountToInvoice">見積と同額</button>
                                 </div>
-                                <input type="number" class="form-control" v-model.number="project.invoice_amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
+                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.invoice_amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">請求番号</label>
-                                <input type="text" class="form-control" v-model="project.invoice_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
+                                <input type="text" autocomplete="off" class="form-control" v-model="project.invoice_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
                             </div>
                         </div>
 
@@ -874,11 +876,11 @@ if($_SESSION['show_project'] == 0){
                                     <button v-if="canEditBusinessDocuments && !hasBusinessDocumentAmount(project.payment_amount)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
                                             @click="copyInvoiceAmountToPayment">請求と同額</button>
                                 </div>
-                                <input type="number" class="form-control" v-model.number="project.payment_amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
+                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.payment_amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">領収書番号</label>
-                                <input type="text" class="form-control" v-model="project.receipt_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
+                                <input type="text" class="form-control" autocomplete="off" v-model="project.receipt_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
                             </div>
                         </div>
 
