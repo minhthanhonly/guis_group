@@ -94,6 +94,7 @@ $(document).ready(function() {
     // LocalStorage filter state
     const FILTER_STORAGE_KEY = 'projectGanttFilters';
     const KEEP_TEAM_ON_RESET_KEY = 'project_list_keep_team_on_reset';
+    const KEEP_COMPANY_ON_RESET_KEY = 'project_list_keep_company_on_reset';
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment'; // Dùng chung với project-list.js
 
     function ganttTranslateText(key) {
@@ -126,6 +127,29 @@ $(document).ready(function() {
         return ids.length ? ids.join(',') : '';
     }
 
+    function parseFilterCompanyValue(raw) {
+        if (raw === undefined || raw === null || raw === '') {
+            return [];
+        }
+        if (Array.isArray(raw)) {
+            return raw.map(String).map(function(s) { return s.trim(); }).filter(Boolean);
+        }
+        return String(raw).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    }
+
+    function getFilterCompanyValue() {
+        const $el = $('#filterCompany');
+        if (!$el.length) {
+            return [];
+        }
+        return parseFilterCompanyValue($el.val());
+    }
+
+    function formatFilterCompanyForApi(companyKeys) {
+        const keys = parseFilterCompanyValue(companyKeys);
+        return keys.length ? keys.join(',') : '';
+    }
+
     function loadKeepTeamOnResetFromStorage() {
         try {
             return localStorage.getItem(KEEP_TEAM_ON_RESET_KEY) === '1';
@@ -149,6 +173,84 @@ $(document).ready(function() {
         $cb.off('change.keepTeamOnReset').on('change.keepTeamOnReset', function() {
             saveKeepTeamOnResetToStorage($(this).is(':checked'));
         });
+    }
+
+    function loadKeepCompanyOnResetFromStorage() {
+        try {
+            return localStorage.getItem(KEEP_COMPANY_ON_RESET_KEY) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function saveKeepCompanyOnResetToStorage(checked) {
+        try {
+            localStorage.setItem(KEEP_COMPANY_ON_RESET_KEY, checked ? '1' : '0');
+        } catch (e) {}
+    }
+
+    function initFilterKeepCompanyOnResetCheckbox() {
+        const $cb = $('#filterKeepCompanyOnReset');
+        if (!$cb.length) {
+            return;
+        }
+        $cb.prop('checked', loadKeepCompanyOnResetFromStorage());
+        $cb.off('change.keepCompanyOnReset').on('change.keepCompanyOnReset', function() {
+            saveKeepCompanyOnResetToStorage($(this).is(':checked'));
+        });
+    }
+
+    function bindFilterCompanySelect2Events($el) {
+        $el.off('select2:open.filterCompany').on('select2:open.filterCompany', function() {
+            setTimeout(function() {
+                const searchField = document.querySelector('.select2-container--open .select2-search__field');
+                if (!searchField) {
+                    return;
+                }
+                searchField.value = '';
+                searchField.dispatchEvent(new Event('input', { bubbles: true }));
+            }, 0);
+        });
+    }
+
+    function refreshFilterCompanySelect() {
+        const $el = $('#filterCompany');
+        if (!$el.length) {
+            return;
+        }
+        let filters = {};
+        try {
+            filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        } catch (e) {
+            filters = {};
+        }
+        const allowedCompanyKeys = { daito: true, token: true, other: true };
+        const rawSaved = parseFilterCompanyValue(filters.filterCompany);
+        const saved = rawSaved.filter(function(key) { return allowedCompanyKeys[key]; });
+        if (rawSaved.length !== saved.length) {
+            try {
+                const stored = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+                stored.filterCompany = saved;
+                localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(stored));
+            } catch (e) {}
+        }
+        if ($el.data('select2')) {
+            $el.select2('destroy');
+        }
+        $el.empty();
+        $el.append(new Option('大東', 'daito', false, saved.indexOf('daito') !== -1));
+        $el.append(new Option('東建', 'token', false, saved.indexOf('token') !== -1));
+        $el.append(new Option('他社', 'other', false, saved.indexOf('other') !== -1));
+        $el.select2({
+            placeholder: ganttTranslateText('会社'),
+            allowClear: true,
+            width: '100%',
+            dropdownAutoWidth: true,
+            closeOnSelect: false,
+            minimumResultsForSearch: 0
+        });
+        bindFilterCompanySelect2Events($el);
+        $el.val(saved.length ? saved : null).trigger('change');
     }
 
     function syncFilterTeamSelect2Value($el, teamIds) {
@@ -232,6 +334,7 @@ $(document).ready(function() {
             filterTimeLeft: $('#filterTimeLeft').val(),
             filterProjectOrderType: $('#filterProjectOrderType').val(),
             filterTeam: getFilterTeamValue(),
+            filterCompany: getFilterCompanyValue(),
             filterTantou: $('#filterTantou').val(),
             filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
             showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
@@ -283,6 +386,10 @@ $(document).ready(function() {
         if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
         if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
         if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
+        if (filters.filterCompany !== undefined) {
+            const companyValues = parseFilterCompanyValue(filters.filterCompany);
+            $('#filterCompany').val(companyValues.length ? companyValues : null).trigger('change');
+        }
         // filterTeam: refreshFilterTeamSelect() khôi phục từ localStorage sau khi load teams
         if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
         if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
@@ -315,6 +422,7 @@ $(document).ready(function() {
             timeLeft: filters.filterTimeLeft || '',
             projectOrderType: filters.filterProjectOrderType || '',
             teamIds: parseFilterTeamValue(filters.filterTeam),
+            companyKeys: parseFilterCompanyValue(filters.filterCompany),
             tantou: filters.filterTantou || '',
             noDates: filters.filterNoDates == 1,
             keyword: filters.filterKeyword || '',
@@ -346,6 +454,7 @@ $(document).ready(function() {
         setOrDelete('filterTimeLeft', filters.filterTimeLeft);
         setOrDelete('filterProjectOrderType', filters.filterProjectOrderType);
         setOrDelete('filterTeam', formatFilterTeamForApi(filters.filterTeam));
+        setOrDelete('filterCompany', formatFilterCompanyForApi(filters.filterCompany));
         setOrDelete('filterTantou', filters.filterTantou);
         setOrDelete('filterNoDates', filters.filterNoDates ? 1 : '');
         setOrDelete('showInactive', filters.showInactive ? 1 : '');
@@ -385,6 +494,7 @@ $(document).ready(function() {
             (!filters.timeLeft || filters.timeLeft.trim() === '') &&
             (!filters.projectOrderType || filters.projectOrderType.trim() === '') &&
             (!filters.teamIds || filters.teamIds.length === 0) &&
+            (!filters.companyKeys || filters.companyKeys.length === 0) &&
             (!filters.tantou || filters.tantou.trim() === '') &&
             !filters.noDates &&
             !filters.showInactive &&
@@ -431,6 +541,15 @@ $(document).ready(function() {
                     return teamIdToName[id] || id;
                 }).join(', ');
                 badges.push(`<span class="badge bg-label-info me-1">チーム: ${teamNames}</span>`);
+            }
+            if (filters.companyKeys && filters.companyKeys.length > 0) {
+                const companyLabels = filters.companyKeys.map(function(key) {
+                    if (key === 'daito') return '大東';
+                    if (key === 'token') return '東建';
+                    if (key === 'other') return '他社';
+                    return key;
+                }).join(', ');
+                badges.push(`<span class="badge bg-label-info me-1">会社: ${companyLabels}</span>`);
             }
             if (filters.tantou && filters.tantou.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1">担当: ${filters.tantou}</span>`);
@@ -491,6 +610,7 @@ $(document).ready(function() {
         if (params.has('filterTimeLeft')) merged.filterTimeLeft = params.get('filterTimeLeft') || '';
         if (params.has('filterProjectOrderType')) merged.filterProjectOrderType = params.get('filterProjectOrderType') || '';
         if (params.has('filterTeam')) merged.filterTeam = parseFilterTeamValue(params.get('filterTeam') || '');
+        if (params.has('filterCompany')) merged.filterCompany = parseFilterCompanyValue(params.get('filterCompany') || '');
         if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
         if (params.has('filterNoDates')) merged.filterNoDates = getBool('filterNoDates');
         if (params.has('showInactive')) merged.showInactive = getBool('showInactive');
@@ -580,23 +700,35 @@ $(document).ready(function() {
         }
     });
     initFilterKeepTeamOnResetCheckbox();
+    initFilterKeepCompanyOnResetCheckbox();
 
     $(document).on('click', '#filterReset', function() {
         const keepTeam = $('#filterKeepTeamOnReset').is(':checked');
         const preservedTeams = keepTeam ? getFilterTeamValue() : [];
+        const keepCompany = $('#filterKeepCompanyOnReset').is(':checked');
+        const preservedCompanies = keepCompany ? getFilterCompanyValue() : [];
 
         localStorage.removeItem(FILTER_STORAGE_KEY);
         const form = document.getElementById('projectFilterForm');
         if (form) form.reset();
         $('#filterKeepTeamOnReset').prop('checked', keepTeam);
+        $('#filterKeepCompanyOnReset').prop('checked', keepCompany);
         if (keepTeam) {
             $('#filterTeam').val(preservedTeams.length ? preservedTeams : null).trigger('change');
         } else {
             $('#filterTeam').val(null).trigger('change');
         }
+        $('#filterCompany').val(keepCompany && preservedCompanies.length ? preservedCompanies : null).trigger('change');
+        const preservedState = {};
         if (keepTeam && preservedTeams.length) {
+            preservedState.filterTeam = preservedTeams;
+        }
+        if (keepCompany && preservedCompanies.length) {
+            preservedState.filterCompany = preservedCompanies;
+        }
+        if (Object.keys(preservedState).length > 0) {
             try {
-                localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ filterTeam: preservedTeams }));
+                localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(preservedState));
             } catch (e) {}
         }
         // Reset trạng thái status filter về "all"
@@ -641,6 +773,7 @@ $(document).ready(function() {
             // Initialize Gantt after Vue has rendered
             this.$nextTick(() => {
                 this.initGantt();
+                refreshFilterCompanySelect();
             });
             
             // Handle window resize
@@ -856,6 +989,7 @@ $(document).ready(function() {
                     const filterTimeLeft = $('#filterTimeLeft').val();
                     const filterProjectOrderType = $('#filterProjectOrderType').val();
                     const filterTeam = formatFilterTeamForApi(getFilterTeamValue());
+                    const filterCompany = formatFilterCompanyForApi(getFilterCompanyValue());
                     const filterTantou = $('#filterTantou').val();
                     const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
@@ -895,6 +1029,7 @@ $(document).ready(function() {
                         filterTimeLeft,
                         filterProjectOrderType,
                         filterTeam,
+                        filterCompany,
                         filterTantou,
                         filterNoDates,
                         showInactive,
@@ -1790,6 +1925,24 @@ $(document).ready(function() {
                     if (!now || !now.isValid()) return false;
                     return deadline.clone().startOf('day').isBefore(now.clone().startOf('day'));
                 }
+
+                function formatCompanyNameLabel(companyName) {
+                    const company = String(companyName || '').trim();
+                    if (!company || company === '-') return '';
+
+                    let text = '他社';
+                    let style = 'font-size:0.65rem;line-height:1;vertical-align:middle;';
+                    if (company.indexOf('大東建託') !== -1) {
+                        text = '大東';
+                        style += 'background-color:#dc3545;color:#fff;';
+                    } else if (company.indexOf('東建コーポレーション') !== -1) {
+                        text = '東建';
+                        style += 'background-color:#8B4513;color:#fff;';
+                    } else {
+                        style += 'background-color:#0d6efd;color:#fff;';
+                    }
+                    return '<span class="badge me-1 px-1" style="' + style + '">' + text + '</span>';
+                }
                 
                 // // Customize columns
                 gantt.config.columns = [
@@ -1823,7 +1976,22 @@ $(document).ready(function() {
                       }
                     },
                     { name: "branch_name", label: "支店名", width: 90, min_width: 50, template: function(obj) {
-                        return obj.branch_name || '-';
+                        if (obj.parent && obj.parent !== 0) return '';
+                        const branch = String(obj.branch_name || '').trim();
+                        const companyLabel = formatCompanyNameLabel(obj.company);
+                        if (!branch && !companyLabel) {
+                            return '-';
+                        }
+                        if (!branch) {
+                            return companyLabel;
+                        }
+                        if (!companyLabel) {
+                            return branch;
+                        }
+                        return '<div style="display:flex; align-items:center;gap:2px;">' +
+                            companyLabel +
+                            '<span>' + branch + '</span>' +
+                            '</div>';
                     }},
                     { name: "text", label: "件名", width: 350, tree: true, min_width: 300 },
                     { name: "team_name", label: "チーム", width: 120, min_width: 80, template: function(obj) {

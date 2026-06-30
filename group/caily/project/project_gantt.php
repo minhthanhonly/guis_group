@@ -90,6 +90,14 @@ if($_SESSION['show_project'] == 0){
               </select>
             </div>
             <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="会社">会社</label>
+              <select class="form-select form-select-sm" id="filterCompany" multiple>
+                <option value="daito">大東</option>
+                <option value="token">東建</option>
+                <option value="other">他社</option>
+              </select>
+            </div>
+            <div class="col-md-3 col-6">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="担当">担当</label>
               <select class="form-select form-select-sm" id="filterTantou">
                 <option value="">すべて</option>
@@ -125,6 +133,10 @@ if($_SESSION['show_project'] == 0){
                 <div class="form-check mb-0 form-switch">
                   <input class="form-check-input" type="checkbox" id="filterKeepTeamOnReset">
                   <label class="form-check-label small text-nowrap" for="filterKeepTeamOnReset" data-i18n="リセット時にチームを保持">リセット時にチームを保持</label>
+                </div>
+                <div class="form-check mb-0 form-switch">
+                  <input class="form-check-input" type="checkbox" id="filterKeepCompanyOnReset">
+                  <label class="form-check-label small text-nowrap" for="filterKeepCompanyOnReset" data-i18n="リセット時に会社を保持">リセット時に会社を保持</label>
                 </div>
               </div>
             </div>
@@ -291,3 +303,9 @@ $view->footing();
 window.IS_CAILY_BRANCH_USER = <?php echo $isCailyBranchUser ? 'true' : 'false'; ?>;
 </script>
 <script src="assets/js/project-gantt.js?v=<?=CACHE_VERSION?>"></script>
+<style>
+body > .select2-container--default,
+.select2-dropdown{
+    width: 300px!important;
+}
+</style>

@@ -112,6 +112,14 @@ if($_SESSION['show_project'] == 0){
                     </select>
                     </div>
                     <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="会社">会社</label>
+                    <select class="form-select form-select-sm" id="filterCompany" multiple>
+                        <option value="daito">大東</option>
+                        <option value="token">東建</option>
+                        <option value="other">他社</option>
+                    </select>
+                    </div>
+                    <div class="col-md-3 col-6">
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="担当">担当</label>
                     <select class="form-select form-select-sm" id="filterTantou">
                         <option value="">すべて</option>
@@ -175,6 +183,10 @@ if($_SESSION['show_project'] == 0){
                     <div class="form-check mb-0 form-switch">
                         <input class="form-check-input" type="checkbox" id="filterKeepTeamOnReset">
                         <label class="form-check-label text-nowrap" for="filterKeepTeamOnReset" data-i18n="リセット時にチームを保持">リセット時にチームを保持</label>
+                    </div>
+                    <div class="form-check mb-0 form-switch">
+                        <input class="form-check-input" type="checkbox" id="filterKeepCompanyOnReset">
+                        <label class="form-check-label text-nowrap" for="filterKeepCompanyOnReset" data-i18n="リセット時に会社を保持">リセット時に会社を保持</label>
                     </div>
                     <div class="dropdown" v-if="availableColumns && availableColumns.length > 0">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="columnVisibilityDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -334,7 +346,6 @@ if($_SESSION['show_project'] == 0){
                     </div>
                     <form id="quickEditProjectForm">
                         <input type="hidden" name="id" id="quickEditProjectId">
-                        <input type="hidden" name="version" id="quickEditProjectVersion" value="1">
                         <div class="row g-3">
                             <div class="col-md-12 quick-edit-full-only">
                                 <label class="form-label"><span data-i18n="案件名">案件名</span> <span class="text-danger">*</span></label>
@@ -369,6 +380,13 @@ if($_SESSION['show_project'] == 0){
                                 <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
                                 <input type="text" class="form-control" name="project_order_type" id="quickEditProjectOrderType" placeholder="新規, 修正">
                                 <div class="invalid-feedback" id="quickEditProjectOrderTypeError"></div>
+                            </div>
+                            <div class="col-md-6 quick-edit-full-only">
+                                <label class="form-label"><span data-i18n="総額">総額</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">¥</span>
+                                    <input type="number" class="form-control" name="amount" id="quickEditAmount" min="0" step="1" placeholder="0">
+                                </div>
                             </div>
                             <div class="col-md-4 quick-edit-full-only">
                                 <label class="form-label"><span data-i18n="担当">担当</span></label>
@@ -1095,6 +1113,16 @@ body.is-caily-branch-user #quickEditProjectForm #quickEditTantouDisplayText {
 }
 body.is-caily-branch-user #quickEditStatus option[value="completed"] {
     display: none;
+}
+
+/* Keep Select2 multiple filter boxes compact */
+#projectFilterForm .select2-container .select2-selection--multiple .select2-selection__rendered {
+    max-height: 3.2rem;
+    overflow-y: auto;
+}
+body > .select2-container--default,
+.select2-dropdown{
+    width: 300px!important;
 }
 </style>
 

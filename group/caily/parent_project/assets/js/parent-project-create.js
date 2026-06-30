@@ -788,8 +788,8 @@ createApp({
             try {
                 const response = await axios.get('/api/index.php?model=customer&method=list_category');
                 this.categories = response.data;
-                if (this.categories.length > 0) {
-                    this.newCustomer.category_id = this.categories[0].id;
+                if (!this.newCustomer.category_id) {
+                    this.newCustomer.category_id = 2;
                 }
             } catch (error) {
                 console.error('Error loading categories:', error);
@@ -1155,7 +1155,7 @@ createApp({
                 address2: '',
                 memo: '',
                 status: 1,
-                category_id: this.categories.length > 0 ? this.categories[0].id : 0,
+                category_id: 2,
                 guis_department: []
             };
             this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
@@ -1179,6 +1179,9 @@ createApp({
                 hasError = true;
             }
             if (hasError) return;
+            if (!this.newCustomer.category_id) {
+                this.newCustomer.category_id = 2;
+            }
 
             // Set default branch to "本社" if empty
             if (!this.newCustomer.branch || this.newCustomer.branch.trim() === '') {

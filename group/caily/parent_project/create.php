@@ -502,12 +502,6 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                     <form @submit.prevent="saveCustomer">
                         <div class="row">
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">カテゴリー</label>
-                                <select class="form-select" v-model="newCustomer.category_id" required>
-                                    <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4 mb-3">
                                 <label class="form-label">会社名 <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" v-model="newCustomer.company_name" required>
                                 <div v-if="customerErrors.company_name" class="text-danger small mt-1">{{ customerErrors.company_name }}</div>

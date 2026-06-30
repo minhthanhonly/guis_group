@@ -48,32 +48,6 @@ var projectTable;
         { key: 'paused', name: '一時停止', color: 'warning' },
         { key: 'cancelled', name: '中止', color: 'danger' }
     ];
-
-    function normalizeProjectVersion(version) {
-        var n = Number(version);
-        return Number.isFinite(n) && n > 0 ? n : 1;
-    }
-
-    function appendProjectVersionToFormData(formData, version) {
-        if (!formData) return;
-        formData.append('version', normalizeProjectVersion(version));
-    }
-
-    function handleProjectVersionConflict(responseData, onReload) {
-        if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
-            return false;
-        }
-        var msg = responseData.message || translateText('他のユーザーが先に更新しました。ページを再読み込みしてください。');
-        if (typeof showMessage === 'function') {
-            showMessage(msg, true);
-        } else if (typeof alert === 'function') {
-            alert(msg);
-        }
-        if (typeof onReload === 'function') {
-            onReload();
-        }
-        return true;
-    }
     var priorities = [
         {
             key: 'low',
@@ -99,6 +73,7 @@ var projectTable;
     // --- LocalStorage filter state ---
     const FILTER_STORAGE_KEY = 'projectListFilters';
     const KEEP_TEAM_ON_RESET_KEY = 'project_list_keep_team_on_reset';
+    const KEEP_COMPANY_ON_RESET_KEY = 'project_list_keep_company_on_reset';
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment';
     const COLUMN_VISIBILITY_KEY = 'projectListColumnVisibility';
     const COLUMN_ORDER_STORAGE_KEY = 'projectListColumnOrder';
@@ -734,6 +709,25 @@ var projectTable;
         return romaji ? (raw + '<br>' + romaji) : raw;
     }
 
+    function formatCompanyNameLabel(companyName) {
+        var company = String(companyName || '').trim();
+        if (!company) return '';
+
+        var text = '他社';
+        var style = 'font-size: 0.65rem; vertical-align: middle;';
+        if (company.indexOf('大東建託') !== -1) {
+            text = '大東';
+            style += ' background-color: #dc3545; color: #fff;';
+        } else if (company.indexOf('東建コーポレーション') !== -1) {
+            text = '東建';
+            style += ' background-color: #8B4513; color: #fff;';
+        } else {
+            style += ' background-color: #0d6efd; color: #fff;';
+        }
+
+        return '<span class="badge me-1" style="' + style + '">' + escapeHtmlForNote(text) + '</span>';
+    }
+
     /** Giải mã HTML (giống cột CAILYメモ), strip thẻ, rồi cắt còn maxLen ký tự cho snippet note. */
     function noteSnippetText(content, maxLen) {
         if (content == null) return { short: '', full: '' };
@@ -946,6 +940,29 @@ var projectTable;
         return ids.length ? ids.join(',') : '';
     }
 
+    function parseFilterCompanyValue(raw) {
+        if (raw === undefined || raw === null || raw === '') {
+            return [];
+        }
+        if (Array.isArray(raw)) {
+            return raw.map(String).map(function(s) { return s.trim(); }).filter(Boolean);
+        }
+        return String(raw).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    }
+
+    function getFilterCompanyValue() {
+        const $el = $('#filterCompany');
+        if (!$el.length) {
+            return [];
+        }
+        return parseFilterCompanyValue($el.val());
+    }
+
+    function formatFilterCompanyForApi(companyKeys) {
+        const keys = parseFilterCompanyValue(companyKeys);
+        return keys.length ? keys.join(',') : '';
+    }
+
     function loadKeepTeamOnResetFromStorage() {
         try {
             return localStorage.getItem(KEEP_TEAM_ON_RESET_KEY) === '1';
@@ -968,6 +985,49 @@ var projectTable;
         $cb.prop('checked', loadKeepTeamOnResetFromStorage());
         $cb.off('change.keepTeamOnReset').on('change.keepTeamOnReset', function() {
             saveKeepTeamOnResetToStorage($(this).is(':checked'));
+        });
+    }
+
+    function loadKeepCompanyOnResetFromStorage() {
+        try {
+            return localStorage.getItem(KEEP_COMPANY_ON_RESET_KEY) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function saveKeepCompanyOnResetToStorage(checked) {
+        try {
+            localStorage.setItem(KEEP_COMPANY_ON_RESET_KEY, checked ? '1' : '0');
+        } catch (e) {}
+    }
+
+    function initFilterKeepCompanyOnResetCheckbox() {
+        const $cb = $('#filterKeepCompanyOnReset');
+        if (!$cb.length) {
+            return;
+        }
+        $cb.prop('checked', loadKeepCompanyOnResetFromStorage());
+        $cb.off('change.keepCompanyOnReset').on('change.keepCompanyOnReset', function() {
+            saveKeepCompanyOnResetToStorage($(this).is(':checked'));
+        });
+    }
+
+    function initFilterCompanySelect2() {
+        const $el = $('#filterCompany');
+        if (!$el.length) {
+            return;
+        }
+        if ($el.data('select2')) {
+            $el.select2('destroy');
+        }
+        $el.select2({
+            placeholder: translateText('会社'),
+            allowClear: true,
+            width: '100%',
+            dropdownAutoWidth: true,
+            closeOnSelect: false,
+            minimumResultsForSearch: Infinity
         });
     }
 
@@ -1055,6 +1115,7 @@ var projectTable;
             filterToday: $('#filterToday').val(),
             filterProjectOrderType: $('#filterProjectOrderType').val(),
             filterTeam: getFilterTeamValue(),
+            filterCompany: getFilterCompanyValue(),
             filterTantou: $('#filterTantou').val(),
             filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
             filterKeyword: normalizeFilterKeyword($('#filterKeyword').val()),
@@ -1112,6 +1173,7 @@ var projectTable;
         if (params.has('filterToday')) merged.filterToday = params.get('filterToday') || '';
         if (params.has('filterProjectOrderType')) merged.filterProjectOrderType = params.get('filterProjectOrderType') || '';
         if (params.has('filterTeam')) merged.filterTeam = parseFilterTeamValue(params.get('filterTeam') || '');
+        if (params.has('filterCompany')) merged.filterCompany = parseFilterCompanyValue(params.get('filterCompany') || '');
         if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
         if (params.has('filterNoDates')) merged.filterNoDates = getBool('filterNoDates');
         if (params.has('filterKeyword')) merged.filterKeyword = normalizeFilterKeyword(params.get('filterKeyword') || '');
@@ -1153,6 +1215,10 @@ var projectTable;
         if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
         if (filters.filterToday !== undefined) $('#filterToday').val(filters.filterToday);
         if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
+        if (filters.filterCompany !== undefined) {
+            const companyValues = parseFilterCompanyValue(filters.filterCompany);
+            $('#filterCompany').val(companyValues.length ? companyValues : null).trigger('change');
+        }
         // filterTeam: refreshFilterTeamSelect() khôi phục từ localStorage sau khi load teams
         if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
         if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
@@ -1189,6 +1255,7 @@ var projectTable;
             today: filters.filterToday || '',
             projectOrderType: filters.filterProjectOrderType || '',
             teamIds: parseFilterTeamValue(filters.filterTeam),
+            companyKeys: parseFilterCompanyValue(filters.filterCompany),
             tantou: filters.filterTantou || '',
             noDates: filters.filterNoDates == 1,
             keyword: normalizeFilterKeyword(filters.filterKeyword),
@@ -1213,6 +1280,7 @@ var projectTable;
             (!filters.today || filters.today.trim() === '') &&
             (!filters.projectOrderType || filters.projectOrderType.trim() === '') &&
             teamIds.length === 0 &&
+            filters.companyKeys.length === 0 &&
             (!filters.tantou || filters.tantou.trim() === '') &&
             !filters.noDates &&
             !filters.myProjects &&
@@ -1305,6 +1373,15 @@ var projectTable;
                 }).join(', ');
                 badges.push(`<span class="badge bg-label-info me-1" >チーム: ${teamNames}</span>`);
             }
+            if (filters.companyKeys.length > 0) {
+                const labels = filters.companyKeys.map(function(key) {
+                    if (key === 'daito') return '大東';
+                    if (key === 'token') return '東建';
+                    if (key === 'other') return '他社';
+                    return key;
+                }).join(', ');
+                badges.push(`<span class="badge bg-label-info me-1" >会社: ${labels}</span>`);
+            }
             if (filters.tantou && filters.tantou.trim() !== '') {
                 let label = filters.tantou;
                 badges.push(`<span class="badge bg-label-info me-1" >担当: ${label}</span>`);
@@ -1366,6 +1443,7 @@ var projectTable;
         setOrDelete('filterToday', filters.filterToday);
         setOrDelete('filterProjectOrderType', filters.filterProjectOrderType);
         setOrDelete('filterTeam', formatFilterTeamForApi(filters.filterTeam));
+        setOrDelete('filterCompany', formatFilterCompanyForApi(filters.filterCompany));
         setOrDelete('filterTantou', filters.filterTantou);
         setOrDelete('filterNoDates', filters.filterNoDates ? 1 : '');
         setOrDelete('filterKeyword', normalizeFilterKeyword(filters.filterKeyword));
@@ -1993,11 +2071,25 @@ var projectTable;
                     width: '60px',
                     data: 'parent_branch_name',
                     render: function(data, type, row) {
-                        if (!data || data === '') {
+                        var company = String(row.effective_company_name || row.parent_company_name || '').trim();
+                        var branch = String(data || '').trim();
+                        var companyLabel = formatCompanyNameLabel(company);
+
+                        if (!branch && !companyLabel) {
                             return '<span class="text-muted">-</span>';
                         }
-                        const displayBranchName = formatBranchNameForDisplay(data);
-                        return `<span class="small">${displayBranchName}</span>`;
+
+                        var displayBranchName = formatBranchNameForDisplay(branch);
+                        if (!branch) {
+                            return companyLabel;
+                        }
+                        if (!companyLabel) {
+                            return '<span class="small">' + displayBranchName + '</span>';
+                        }
+                        return '<div class="d-flex flex-column align-items-start gap-1">' +
+                            companyLabel +
+                            '<span class="small">' + displayBranchName + '</span>' +
+                            '</div>';
                     },
                     title: '<span data-i18n="支店名">支店名</span>'
                 },
@@ -2374,6 +2466,7 @@ var projectTable;
                     const filterToday = $('#filterToday').val();
                     const filterProjectOrderType = $('#filterProjectOrderType').val();
                     const filterTeam = formatFilterTeamForApi(getFilterTeamValue());
+                    const filterCompany = formatFilterCompanyForApi(getFilterCompanyValue());
                     const filterTantou = $('#filterTantou').val();
                     const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
                     const filterKeyword = normalizeFilterKeyword($('#filterKeyword').val());
@@ -2400,6 +2493,7 @@ var projectTable;
                         filterToday,
                         filterProjectOrderType,
                         filterTeam,
+                        filterCompany,
                         filterTantou,
                         filterNoDates,
                         my_projects: myProjects,
@@ -3276,7 +3370,6 @@ var projectTable;
                 const effectiveId = p.id || projectId;
                 $('#quickEditProjectId').val(effectiveId);
                 $('#quickEditProjectIdBadge').text('#' + effectiveId);
-                $('#quickEditProjectVersion').val(normalizeProjectVersion(p.version));
                 $('#quickEditName').val(p.name || '');
                 var datetimePlaceholder = getProjectDateTimePlaceholder();
                 $('#quickEditStartDate, #quickEditEndDate, #quickEditCailyNouki, #quickEditGuisNouki')
@@ -3286,6 +3379,7 @@ var projectTable;
                 quickEditOriginalStatus = p.status || 'draft';
                 syncQuickEditStatusOptions(quickEditOriginalStatus);
                 $('#quickEditStatus').val(quickEditOriginalStatus);
+                $('#quickEditAmount').val(p.amount || '');
                 $('#quickEditProjectOrderType').val(typeof p.project_order_type === 'string' ? p.project_order_type : (Array.isArray(p.project_order_type) ? (p.project_order_type || []).join(', ') : ''));
                 $('input[name="tantou"]').prop('checked', false);
                 if (p.tantou === 'CAILY') $('#quickEditTantouCaily').prop('checked', true);
@@ -3776,6 +3870,7 @@ var projectTable;
                 return;
             }
             formData.append('status', quickEditStatus);
+            formData.append('amount', $('#quickEditAmount').val() || '');
             formData.append('tantou', $('input[name="tantou"]:checked').val() || '');
             formData.append('caily_nouki', getQuickEditDateFieldValue('#quickEditCailyNouki'));
             formData.append('guis_nouki', getQuickEditDateFieldValue('#quickEditGuisNouki'));
@@ -3811,42 +3906,13 @@ var projectTable;
                 customFieldsData.push({ label: label, value: value });
             });
             if (customFieldsData.length) formData.append('custom_fields', JSON.stringify(customFieldsData));
-            appendProjectVersionToFormData(formData, $('#quickEditProjectVersion').val());
-            axios.post('/api/index.php?model=project&method=update', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(function(res) {
-                var data = res && res.data ? res.data : {};
-                if (data.status === 'success') {
-                    bootstrap.Modal.getInstance(document.getElementById('quickEditProjectModal')).hide();
-                    if (projectTable) reloadProjectTable(false);
-                    if (typeof showMessage === 'function') showMessage(translateText('プロジェクトを更新しました。'));
-                    return;
-                }
-                if (handleProjectVersionConflict(data, function() {
-                    var reloadId = $('#quickEditProjectId').val();
-                    if (reloadId) {
-                        openQuickEditProjectModal(reloadId, quickEditIsManagerOnly);
-                    }
-                })) {
-                    return;
-                }
-                var errMsg = data.message || data.error || translateText('更新に失敗しました。');
-                if (typeof showMessage === 'function') showMessage(errMsg, true);
-                else if (typeof alert === 'function') alert(errMsg);
+            axios.post('/api/index.php?model=project&method=update', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(function() {
+                bootstrap.Modal.getInstance(document.getElementById('quickEditProjectModal')).hide();
+                if (projectTable) reloadProjectTable(false);
+                if (typeof showMessage === 'function') showMessage(translateText('プロジェクトを更新しました。'));
             }).catch(function(err) {
                 console.error('Quick edit save:', err);
-                var errData = err.response && err.response.data ? err.response.data : {};
-                if (handleProjectVersionConflict(errData, function() {
-                    var reloadId = $('#quickEditProjectId').val();
-                    if (reloadId) {
-                        openQuickEditProjectModal(reloadId, quickEditIsManagerOnly);
-                    }
-                })) {
-                    return;
-                }
-                if (typeof showMessage === 'function') {
-                    showMessage(errData.message || translateText('更新に失敗しました。'), true);
-                } else if (typeof alert === 'function') {
-                    alert(errData.message ? errData.message : translateText('更新に失敗しました。'));
-                }
+                if (typeof alert === 'function') alert(err.response && err.response.data && err.response.data.message ? err.response.data.message : translateText('更新に失敗しました。'));
             }).finally(function() {
                 $btn.prop('disabled', false);
                 $spinner.addClass('d-none');
@@ -4238,7 +4304,7 @@ var projectTable;
         // Gọi khi filter thay đổi hoặc khi load trang
         renderActiveFilters();
         // Gọi lại renderActiveFilters mỗi khi filter thay đổi
-        $('#filterStartMonth, #filterEndMonth, #filterPriority, #filterProgress, #filterTimeLeft, #filterToday, #filterProjectOrderType, #filterTeam, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
+        $('#filterStartMonth, #filterEndMonth, #filterPriority, #filterProgress, #filterTimeLeft, #filterToday, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
            renderActiveFilters();
         });
         let timer = null;
@@ -4249,11 +4315,15 @@ var projectTable;
             }, 500);
         });
         initFilterKeepTeamOnResetCheckbox();
+        initFilterKeepCompanyOnResetCheckbox();
+        initFilterCompanySelect2();
 
         // Đảm bảo badge update khi reset filter
         $('#filterReset').on('click', function() {
             const keepTeam = $('#filterKeepTeamOnReset').is(':checked');
             const preservedTeams = keepTeam ? getFilterTeamValue() : [];
+            const keepCompany = $('#filterKeepCompanyOnReset').is(':checked');
+            const preservedCompany = keepCompany ? getFilterCompanyValue() : [];
 
             // Reset các filter về mặc định
             $('#projectFilterForm')[0].reset();
@@ -4269,6 +4339,7 @@ var projectTable;
             } else {
                 $('#filterTeam').val(null).trigger('change');
             }
+            $('#filterCompany').val(keepCompany && preservedCompany.length ? preservedCompany : null).trigger('change');
             $('#filterTantou').val('');
             $('#filterNoDates').prop('checked', false);
             $('#filterKeyword').val('');
@@ -4281,9 +4352,16 @@ var projectTable;
                 app.showClearAllFavoritesBtn = false;
             }
             localStorage.removeItem(FILTER_STORAGE_KEY);
+            const preservedFilterState = {};
             if (keepTeam && preservedTeams.length) {
+                preservedFilterState.filterTeam = preservedTeams;
+            }
+            if (keepCompany && preservedCompany.length) {
+                preservedFilterState.filterCompany = preservedCompany;
+            }
+            if (Object.keys(preservedFilterState).length > 0) {
                 try {
-                    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ filterTeam: preservedTeams }));
+                    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(preservedFilterState));
                 } catch (e) {}
             }
             // Reset status filter
