@@ -48,7 +48,8 @@ createApp({
                 project_name: '',
                 project_number: '',
                 request_date: '',
-                desired_delivery_date: ''
+                desired_delivery_date: '',
+                requests: ''
             },
             type1Tagify: null,
             type2Tagify: null,
@@ -57,6 +58,7 @@ createApp({
             // Customer modal data
             categories: [],
             departments: [],
+            departmentNameMap: {},
             customers: [],
             newCustomer: {
                 company_name: '大東建託株式会社',
@@ -86,7 +88,12 @@ createApp({
                 guis_department: ''
             },
             selectedCustomer: null,
-            updatingCustomer: false
+            updatingCustomer: false,
+            customerSearchKeyword: '',
+            customerSearchResults: [],
+            customerSearchLoading: false,
+            allCustomersForSearch: [],
+            customerSearchLoaded: false,
         }
     },
     methods: {
@@ -118,7 +125,8 @@ createApp({
                 project_name: '',
                 project_number: '',
                 request_date: '',
-                desired_delivery_date: ''
+                desired_delivery_date: '',
+                requests: ''
             };
             let valid = true;
             
@@ -161,8 +169,26 @@ createApp({
             //     this.validationErrors.desired_delivery_date = '希望納期は必須です';
             //     valid = false;
             // }
+
+            if (!this.hasAnyRequestSelected()) {
+                this.validationErrors.requests = '依頼は1つ以上選択してください';
+                valid = false;
+            }
             
             return valid;
+        },
+        hasAnyRequestSelected() {
+            return !!(
+                this.parentProject.request_design
+                || this.parentProject.request_equipment
+                || this.parentProject.request_energy_saving
+                || this.parentProject.request_other
+            );
+        },
+        clearRequestsValidation() {
+            if (this.hasAnyRequestSelected()) {
+                this.validationErrors.requests = '';
+            }
         },
         async saveParentProject() {
             if (!this.validateParentProjectForm()) {
@@ -251,7 +277,7 @@ createApp({
                             };
                         },
                         processResults: function(data) {
-                            const results = data.data.map(function(item) {
+                            const results = (data.data || []).map(function(item) {
                                 return {
                                     id: item.company_name,
                                     text: item.company_name
@@ -715,11 +741,47 @@ createApp({
         async loadDepartments() {
             try {
                 const response = await axios.get('/api/index.php?model=department&method=list_department');
-                this.departments = response.data;
+                this.departments = response.data || [];
+                const map = {};
+                this.departments.forEach((department) => {
+                    if (department && department.id != null) {
+                        map[String(department.id)] = department.name || '';
+                    }
+                });
+                this.departmentNameMap = map;
             } catch (error) {
                 console.error('Error loading departments:', error);
                 showMessage('部署の読み込みに失敗しました。', true);
             }
+        },
+
+        getCustomerGuisDepartmentIds(customer) {
+            if (!customer) return [];
+            if (Array.isArray(customer.guis_department)) {
+                return customer.guis_department.map((id) => String(id)).filter(Boolean);
+            }
+            if (typeof customer.guis_department === 'string' && customer.guis_department) {
+                return customer.guis_department.split(',').map((id) => String(id).trim()).filter(Boolean);
+            }
+            return [];
+        },
+
+        formatGuisDepartmentNames(customer) {
+            const names = this.getCustomerGuisDepartmentIds(customer)
+                .map((id) => this.departmentNameMap[id] || '')
+                .filter(Boolean);
+            return names.length > 0 ? names.join(', ') : '—';
+        },
+
+        normalizeCustomerSearchRow(customer) {
+            if (!customer) return customer;
+            const row = { ...customer };
+            if (typeof row.guis_department === 'string' && row.guis_department) {
+                row.guis_department = row.guis_department.split(',').filter(Boolean);
+            } else if (!Array.isArray(row.guis_department)) {
+                row.guis_department = [];
+            }
+            return row;
         },
 
         async loadCategories() {
@@ -987,17 +1049,100 @@ createApp({
         },
 
         openNewCustomerModal() {
-            this.resetCustomerData();
+            this.resetCustomerData({
+                company_name: this.parentProject.company_name,
+                branch: this.parentProject.branch_name,
+            });
             $('#customerModal').modal('show');
         },
 
-        resetCustomerData() {
+        async openCustomerSearchModal() {
+            this.customerSearchKeyword = '';
+            this.customerSearchResults = [];
+            $('#customerSearchModal').modal('show');
+            if (Object.keys(this.departmentNameMap).length === 0) {
+                await this.loadDepartments();
+            }
+            if (!this.customerSearchLoaded) {
+                await this.loadAllCustomersForSearch();
+            }
+        },
+
+        async loadAllCustomersForSearch() {
+            this.customerSearchLoading = true;
+            try {
+                const response = await axios.get('/api/index.php?model=customer&method=list_customer&all=1');
+                if (response.data && response.data.status === 'success' && Array.isArray(response.data.data)) {
+                    this.allCustomersForSearch = response.data.data.map((customer) => this.normalizeCustomerSearchRow(customer));
+                    this.customerSearchLoaded = true;
+                } else {
+                    this.allCustomersForSearch = [];
+                }
+            } catch (error) {
+                console.error('Error loading customers for search:', error);
+                this.allCustomersForSearch = [];
+                showMessage('顧客の読み込みに失敗しました。', true);
+            } finally {
+                this.customerSearchLoading = false;
+            }
+        },
+
+        searchCustomersByKeyword() {
+            const keyword = (this.customerSearchKeyword || '').trim().toLowerCase();
+            if (!keyword) {
+                this.customerSearchResults = [];
+                return;
+            }
+            const fieldsForSearch = (customer) => [
+                customer.company_name,
+                customer.company_name_kana,
+                customer.branch,
+                customer.name,
+                customer.name_kana,
+                customer.tel,
+                customer.phone,
+                customer.email,
+                this.formatGuisDepartmentNames(customer),
+            ];
+            this.customerSearchResults = (this.allCustomersForSearch || [])
+                .filter((customer) => fieldsForSearch(customer).some((value) => String(value || '').toLowerCase().includes(keyword)))
+                .slice(0, 100);
+        },
+
+        selectCustomerFromSearch(customer) {
+            if (!customer) {
+                return;
+            }
+            $('#customerSearchModal').modal('hide');
+
+            const customerData = {
+                company_name: customer.company_name || '',
+                branch: customer.branch || '',
+                name: customer.name || '',
+                id: customer.id || null,
+            };
+
+            this.parentProject.company_name = customerData.company_name;
+            this.parentProject.branch_name = customerData.branch;
+            this.parentProject.contact_name = customerData.name;
+            this.parentProject.customer_id = customerData.id ? String(customerData.id) : '';
+
+            this.validationErrors.company_name = '';
+            this.validationErrors.branch_name = '';
+            this.validationErrors.contact_name = '';
+
+            this.updateAllSelect2WithCustomer(customerData);
+        },
+
+        resetCustomerData(prefill = {}) {
+            const companyName = (prefill.company_name || '').trim();
+            const branchName = (prefill.branch || '').trim();
             this.newCustomer = {
-                company_name: '大東建託株式会社',
+                company_name: companyName || '大東建託株式会社',
                 company_name_kana: '',
                 name: '',
                 name_kana: '',
-                branch: '本社',
+                branch: branchName || '本社',
                 position: '',
                 department: '',
                 title: '',

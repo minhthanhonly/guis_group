@@ -13,113 +13,19 @@ $view->heading('顧客情報');
                 </button>
                 <div class="collapse navbar-collapse justify-content-start" id="navbarSupportedContent">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <li class="nav-item" v-for="category in categories" :key="category.id" :class="{ 'active bg-primary text-white rounded-3': selectedCategory && selectedCategory.id === category.id }">
-                            <a href="#" class="nav-link" @click="viewCategory(category)" >{{ category.name }}</a>
+                        <li class="nav-item" v-for="department in departments" :key="department.id" :class="{ 'active bg-primary text-white rounded-3': selectedDepartment && String(selectedDepartment.id) === String(department.id) }">
+                            <a href="#" class="nav-link" @click.prevent="viewDepartment(department)">{{ department.name }}</a>
                         </li>
                     </ul>
-                    <button class="btn btn-primary waves-effect waves-light" type="button" data-bs-toggle="modal" data-bs-target="#categoryListModal">
-                        カテゴリー管理
-                    </button>
                 </div>
             </div>
         </nav>
-        <div class="modal fade" id="categoryListModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-            <div class="modal-dialog modal-xl">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">カテゴリー管理</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="row">
-                            <div class="col-md-12">
-                                <div class="d-flex justify-content-end align-items-center mb-4">
-                                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#categoryModal">
-                                        <i class="bi bi-plus"></i> 新規カテゴリー
-                                    </button>
-                                </div>
-
-                                <div class="table-responsive">
-                                    <table class="table table-hover">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>カテゴリー名</th>
-                                                <th>カテゴリー名(ふりがな)</th>
-                                                <th>顧客数</th>
-                                                <th>メモ</th>
-                                                <th>操作</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr v-for="category in categories" :key="category.id">
-                                                <td>{{ category.id }}</td>
-                                                <td>{{ category.name }}</td>
-                                                <td>{{ category.name_kana }}</td>
-                                                <td>{{ category.num_customers }}</td>
-                                                <td>{{ category.memo }}</td>
-                                                <td>
-                                                    <div class="btn-group btn-group-sm">
-                                                        
-                                                        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#categoryModal" @click="editCategory(category)">
-                                                            <i class="icon-base ti tabler-edit"></i>
-                                                        </button>
-                                                        <button class="btn btn-outline-danger" @click="deleteCategory(category)">
-                                                            <i class="icon-base ti tabler-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- New/Edit categoryModal -->
-        <div class="modal fade" id="categoryModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">{{ editingCategory ? 'カテゴリー編集' : '新規カテゴリー' }}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form @submit.prevent="saveCategory">
-                            <div class="mb-3">
-                                <label class="form-label">カテゴリー名</label>
-                                <input type="text" class="form-control" v-model="newCategory.name" required>
-                            </div>  
-                            <div class="mb-3">
-                                <label class="form-label">カテゴリー名(ふりがな)</label>
-                                <input type="text" class="form-control" v-model="newCategory.name_kana" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">メモ</label>
-                                <textarea class="form-control" v-model="newCategory.memo" required></textarea>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                        <button type="button" class="btn btn-primary" @click="saveCategory">保存</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="categoryContent" v-if="showCategoryContent">
+        <div id="departmentContent" v-if="showDepartmentContent">
             <div class="container-fluid mt-4">
                 <div class="row">
                     <div class="col-md-12">
                         <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h2>{{ selectedCategory.name }} - 顧客情報</h2>
+                            <h2>{{ selectedDepartment.name }} - 顧客情報</h2>
                             <div class="d-flex gap-2">
                                 <a href="<?=ROOT?>customer/import.php" class="btn btn-outline-primary">
                                     <i class="icon-base ti tabler-file-spreadsheet me-1"></i> Excel一括登録
@@ -129,7 +35,31 @@ $view->heading('顧客情報');
                                 </button>
                             </div>
                         </div>
-                        <div class="table-responsive">
+                        <div class="card mb-3">
+                            <div class="card-body py-3">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-5 col-lg-4">
+                                        <label class="form-label mb-1 small">キーワード検索</label>
+                                        <input
+                                            type="text"
+                                            class="form-control form-control-sm"
+                                            v-model="customerSearchKeyword"
+                                            placeholder="会社名・支店名・担当者名・電話・メール..."
+                                            autocomplete="off">
+                                    </div>
+                                    <div class="col-md-auto">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" @click="resetCustomerFilters">
+                                            リセット
+                                        </button>
+                                    </div>
+                                    <div class="col-md-auto ms-md-auto text-muted small pb-1">
+                                        {{ filteredCustomers.length }} / {{ customerListDenominator }} 件
+                                        <span v-if="isGlobalCustomerSearch" class="text-primary ms-1">(全部署)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-responsive" id="customerTable">
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
@@ -142,13 +72,21 @@ $view->heading('顧客情報');
                                         <th>電話番号</th>
                                         <th>携帯</th>
                                         <th>メールアドレス</th>
+                                        <th class="text-nowrap">自社担当部署名</th>
                                         <!-- <th>住所</th> -->
                                         <th class="text-nowrap">メモ</th>
                                         <th>操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="customer in customers" :key="customer.id" :class="{ 'bg-label-success': lastEditCustomer && lastEditCustomer.id === customer.id }">
+                                    <tr v-if="filteredCustomers.length === 0">
+                                        <td colspan="11" class="text-center text-muted py-4">
+                                            {{ isGlobalCustomerSearch
+                                                ? (allCustomers.length === 0 ? '顧客がありません' : '条件に一致する顧客がありません')
+                                                : (departmentCustomers.length === 0 ? '顧客がありません' : '条件に一致する顧客がありません') }}
+                                        </td>
+                                    </tr>
+                                    <tr v-for="customer in filteredCustomers" :key="customer.id" :class="{ 'bg-label-success': lastEditCustomer && lastEditCustomer.id === customer.id }">
                                         <td>{{ customer.company_name }}</td>
                                         <td>{{ customer.branch }}</td>
                                         <td class="text-nowrap">{{ customer.name }}</td>
@@ -158,6 +96,7 @@ $view->heading('顧客情報');
                                         <td class="text-nowrap">{{ customer.tel }}</td>
                                         <td class="text-nowrap">{{ customer.phone }}</td>
                                         <td>{{ customer.email }}</td>
+                                        <td class="text-nowrap">{{ formatGuisDepartmentNames(customer) }}</td>
                                         <!-- <td>{{ customer.zip }} {{ customer.address1 }} {{ customer.address2 }}</td> -->
                                         <td>{{ customer.memo }}</td>
                                         <td>
@@ -184,18 +123,12 @@ $view->heading('顧客情報');
             <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">{{ selectedCategory ? selectedCategory.name : '' }} - {{ editingCustomer ? '顧客編集' : '新規顧客' }}</h5>
+                        <h5 class="modal-title">{{ selectedDepartment ? selectedDepartment.name : '' }} - {{ editingCustomer ? '顧客編集' : '新規顧客' }}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
                         <form @submit.prevent="saveCustomer">
                             <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">カテゴリー</label>
-                                    <select class="form-select" v-model="newCustomer.category_id" required>
-                                        <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
-                                    </select>
-                                </div>
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">会社名/支店名  <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newCustomer.company_name" required>
@@ -289,7 +222,7 @@ $view->heading('顧客情報');
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">自社担当部署名  <span class="text-danger">*</span></label>
                                     <select ref="guisDepartmentSelect" class="form-select select2" v-model="newCustomer.guis_department" required multiple>
-                                        <option v-for="department in departments" :key="department.id" :value="department.id">{{ department.name }}</option>
+                                        <option v-for="department in allDepartments" :key="department.id" :value="department.id">{{ department.name }}</option>
                                     </select>
                                     <div v-if="customerErrors.guis_department" class="text-danger small mt-1">{{ customerErrors.guis_department }}</div>
                                 </div>
@@ -309,7 +242,11 @@ $view->heading('顧客情報');
             </div>
         </div>
     </div>
-
+<style>
+    #customerTable {
+       font-size: 0.875rem;
+    }
+</style>
 <?php
 $view->footing();
 ?> 
@@ -317,19 +254,18 @@ $view->footing();
     <script>
         const { createApp } = Vue;
         
+        const OTHER_DEPARTMENT = { id: 'other', name: 'その他', isOther: true };
+
         createApp({
             data() {
                 return {
-                    categories: [],
                     departments: [],
-                    selectedCategory: null,
-                    showCategoryContent: false,
-                    editingCategory: null,
-                    newCategory: {
-                        name: '',
-                        name_kana: '',
-                        memo: ''
-                    },
+                    userDepartments: [],
+                    allDepartments: [],
+                    departmentNameMap: {},
+                    selectedDepartment: null,
+                    showDepartmentContent: false,
+                    customerSearchKeyword: '',
 
                     customers: [],
                     editingCustomer: null,
@@ -363,106 +299,158 @@ $view->footing();
                     }
                 }
             },
-            methods: {
-
-            // カテゴリー
-                openNewCategoryModal() {
-                    this.showNewCategoryModal = true;
-                    this.resetCategoryData();
+            computed: {
+                isGlobalCustomerSearch() {
+                    return (this.customerSearchKeyword || '').trim() !== '';
                 },
-                async loadDepartments() {
+                departmentCustomers() {
+                    if (!this.selectedDepartment) {
+                        return [];
+                    }
+                    if (this.isOtherDepartment(this.selectedDepartment)) {
+                        return (this.allCustomers || []).filter((customer) => !this.customerHasGuisDepartment(customer));
+                    }
+                    if (!this.selectedDepartment.id) {
+                        return [];
+                    }
+                    const deptId = String(this.selectedDepartment.id);
+                    return (this.allCustomers || []).filter((customer) => {
+                        return this.getCustomerGuisDepartmentIds(customer).includes(deptId);
+                    });
+                },
+                filteredCustomers() {
+                    const keyword = (this.customerSearchKeyword || '').trim().toLowerCase();
+                    if (keyword) {
+                        return (this.allCustomers || []).filter((customer) => this.customerMatchesKeyword(customer, keyword));
+                    }
+                    return this.departmentCustomers;
+                },
+                customerListDenominator() {
+                    return this.isGlobalCustomerSearch
+                        ? (this.allCustomers || []).length
+                        : this.departmentCustomers.length;
+                },
+            },
+            methods: {
+                isOtherDepartment(department) {
+                    return !!(department && (department.isOther === true || String(department.id) === 'other'));
+                },
+                customerHasGuisDepartment(customer) {
+                    return this.getCustomerGuisDepartmentIds(customer).length > 0;
+                },
+                async loadAllDepartments() {
                     try {
                         const response = await axios.get('/api/index.php?model=department&method=list_department');
-                        this.departments = response.data;
+                        this.allDepartments = response.data || [];
+                        this.departments = [...this.allDepartments, OTHER_DEPARTMENT];
+                        const map = {};
+                        this.allDepartments.forEach((department) => {
+                            if (department && department.id != null) {
+                                map[String(department.id)] = department.name || '';
+                            }
+                        });
+                        this.departmentNameMap = map;
                     } catch (error) {
-                        console.error('Error loading departments:', error);
+                        console.error('Error loading all departments:', error);
+                        this.allDepartments = [];
+                        this.departments = [];
+                        this.departmentNameMap = {};
+                    }
+                },
+                normalizeCustomerRow(customer) {
+                    if (!customer) return customer;
+                    if (typeof customer.guis_department === 'string' && customer.guis_department) {
+                        customer.guis_department = customer.guis_department.split(',').filter(Boolean);
+                    } else if (!Array.isArray(customer.guis_department)) {
+                        customer.guis_department = [];
+                    }
+                    return customer;
+                },
+                getCustomerGuisDepartmentIds(customer) {                    if (!customer) return [];
+                    if (Array.isArray(customer.guis_department)) {
+                        return customer.guis_department.map((id) => String(id)).filter(Boolean);
+                    }
+                    if (typeof customer.guis_department === 'string' && customer.guis_department) {
+                        return customer.guis_department.split(',').map((id) => String(id).trim()).filter(Boolean);
+                    }
+                    return [];
+                },
+                formatGuisDepartmentNames(customer) {
+                    const names = this.getCustomerGuisDepartmentIds(customer)
+                        .map((id) => this.departmentNameMap[id] || '')
+                        .filter(Boolean);
+                    return names.length > 0 ? names.join(', ') : '—';
+                },
+                customerMatchesKeyword(customer, keyword) {
+                    if (!customer || !keyword) return true;
+                    const fields = [
+                        customer.company_name,
+                        customer.company_name_kana,
+                        customer.branch,
+                        customer.name,
+                        customer.name_kana,
+                        customer.department,
+                        customer.position,
+                        customer.tel,
+                        customer.phone,
+                        customer.email,
+                        customer.memo,
+                        this.formatGuisDepartmentNames(customer),
+                    ];
+                    return fields.some((value) => String(value || '').toLowerCase().includes(keyword));
+                },
+                resetCustomerFilters() {
+                    this.customerSearchKeyword = '';
+                },
+                async loadUserDepartments() {
+                    try {
+                        const response = await axios.get('/api/index.php?model=department&method=listByUser');
+                        this.userDepartments = response.data || [];
+                    } catch (error) {
+                        console.error('Error loading user departments:', error);
+                        this.userDepartments = [];
                         showMessage('部署の読み込みに失敗しました。', true);
                     }
                 },
-                async loadCategories() {
-                    try {
-                        const response = await axios.get('/api/index.php?model=customer&method=list_category');
-                        this.categories = response.data;
-                        if(this.selectedCategory == null) {
-                            this.selectedCategory = this.categories[0];
-                            this.viewCategory(this.selectedCategory);
-                        }
-                    } catch (error) {
-                        console.error('Error loading categories:', error);
-                        showMessage('カテゴリーの読み込みに失敗しました。', true);
-                    }
-                },
-                editCategory(category) {
-                    this.editingCategory = category;
-                    this.newCategory = { ...category };
-                    this.showNewCategoryModal = true;
-                },
-                async deleteCategory(category) {
-                    if (!confirm('このカテゴリーを削除してもよろしいですか？')) {
+                selectInitialDepartment() {
+                    if (this.selectedDepartment) {
+                        this.showDepartmentContent = true;
                         return;
                     }
+                    let defaultDepartment = null;
+                    if (this.userDepartments.length > 0) {
+                        const userDeptId = String(this.userDepartments[0].id);
+                        defaultDepartment = this.departments.find((d) => String(d.id) === userDeptId);
+                    }
+                    if (!defaultDepartment && this.departments.length > 0) {
+                        defaultDepartment = this.departments[0];
+                    }
+                    if (defaultDepartment) {
+                        this.viewDepartment(defaultDepartment, { resetFilters: false });
+                    }
+                },
+                viewDepartment(department, options = {}) {
+                    if (!department || (department.id == null && !department.isOther)) {
+                        return;
+                    }
+                    this.selectedDepartment = department;
+                    this.showDepartmentContent = true;
+                    if (options.resetFilters !== false) {
+                        this.resetCustomerFilters();
+                    }
+                },
 
+                async loadAllCustomers() {
                     try {
-                        await axios.post('/api/index.php?model=customer&method=delete_category&id=' + category.id);
-                        this.loadCategories();
-                    } catch (error) {
-                        console.error('Error deleting category:', error);
-                        showMessage('カテゴリーの削除に失敗しました。', true);
-                    }
-                },
-                async saveCategory() {
-                    try {
-                        if (this.editingCategory) {
-                            await axios.post('/api/index.php?model=customer&method=edit_category&id=' + this.editingCategory.id, this.newCategory,
-                                {
-                                    headers: {
-                                        'Content-Type': 'application/x-www-form-urlencoded'
-                                    }
-                                }
-                            );
+                        const response = await axios.get('/api/index.php?model=customer&method=list_customer&all=1');
+                        if (response.data.status == 'success' && Array.isArray(response.data.data)) {
+                            this.allCustomers = response.data.data.map((customer) => this.normalizeCustomerRow({ ...customer }));
                         } else {
-                            await axios.post('/api/index.php?model=customer&method=add_category', this.newCategory, {
-                                headers: {
-                                    'Content-Type': 'application/x-www-form-urlencoded'
-                                }
-                            });
-                        }
-                        this.resetCategoryData();
-                        $('#categoryModal').modal('hide');
-                        showMessage('カテゴリーを保存しました。');
-                        this.loadCategories();
-                    } catch (error) {
-                        console.error('Error saving category:', error);
-                        showMessage('カテゴリーの保存に失敗しました。', true);
-                    }
-                },
-                resetCategoryData() {
-                    this.editingCategory = null;
-                    this.newCategory = { name: '', name_kana: '', memo: '' };
-                },
-                viewCategory(category) {
-                    this.selectedCategory = category;
-                    this.showCategoryContent = true;
-                    this.customers = [];
-                    this.newCustomer.category_id = category.id;
-                    this.loadCustomers();
-                },
-                
-                // 担当者
-                async loadCustomers() {
-                    this.customers = [];
-                    try {
-                        const response = await axios.get('/api/index.php?model=customer&method=list_customer&category_id=' + this.selectedCategory.id);
-                        if (response.data.status == 'success' && response.data.data.length > 0) {
-                            this.customers = response.data.data;
-                            for (const customer of this.customers) {
-                                customer.guis_department = customer.guis_department.split(',');
-                            }
-                        } else {
-                            //showMessage(response.data.message_code, true);
+                            this.allCustomers = [];
                         }
                     } catch (error) {
                         console.error('Error loading customers:', error);
+                        this.allCustomers = [];
                         showMessage('担当者の読み込みに失敗しました。', true);
                     }
                 },
@@ -477,7 +465,15 @@ $view->footing();
                 },
                 openNewCustomerModal() {
                     this.resetCustomerData();
+                    if (this.selectedDepartment && this.selectedDepartment.id && !this.isOtherDepartment(this.selectedDepartment)) {
+                        this.newCustomer.guis_department = [String(this.selectedDepartment.id)];
+                    }
                     $('#customerModal').modal('show');
+                    this.$nextTick(() => {
+                        if (this.$refs.guisDepartmentSelect) {
+                            $(this.$refs.guisDepartmentSelect).val(this.newCustomer.guis_department).trigger('change');
+                        }
+                    });
                 },
                 async deleteCustomer(customer) {
                     if (!confirm('この担当者を削除してもよろしいですか？')) {
@@ -487,7 +483,7 @@ $view->footing();
                         const response = await axios.post('/api/index.php?model=customer&method=delete_customer&id=' + customer.id);
                         if (response.data && response.data.status === 'success') {
                             showMessage('担当者を削除しました。');
-                            this.loadCustomers();
+                            this.loadAllCustomers();
                             return;
                         }
 
@@ -524,6 +520,9 @@ $view->footing();
                         hasError = true;
                     }
                     if (hasError) return;
+                    if (!this.newCustomer.category_id) {
+                        this.newCustomer.category_id = 2;
+                    }
                     try {
                         $reponse = null;
                         if (this.editingCustomer) {
@@ -578,16 +577,12 @@ $view->footing();
                                 }
                             }
                             
-                            this.loadCustomers();
-                            this.loadCategories();
-                            for (const category of this.categories) {
-                                if (category.id == this.newCustomer.category_id) {
-                                    this.viewCategory(category);
-                                }
+                            await this.loadAllCustomers();
+                            if (this.selectedDepartment) {
+                                this.showDepartmentContent = true;
                             }
                             this.lastEditCustomer = this.newCustomer;
                             this.resetCustomerData();
-                            this.showNewCustomerModal = false;
                             $('#customerModal').modal('hide');
                         } else {
                             showMessage($reponse.data.message_code, true);
@@ -600,7 +595,29 @@ $view->footing();
                 },
                 resetCustomerData() {
                     this.editingCustomer = null;
-                    this.newCustomer = { company_name: '', company_name_kana: '', name: '', name_kana: '', branch: '', position: '', department: '', title: '', tel: '', fax: '', phone: '', email: '', zip: '', address1: '', address2: '', memo: '', category_id: this.selectedCategory.id, status: 1, guis_department: [] };
+                    this.newCustomer = {
+                        company_name: '',
+                        company_name_kana: '',
+                        name: '',
+                        name_kana: '',
+                        branch: '',
+                        position: '',
+                        department: '',
+                        title: '',
+                        tel: '',
+                        fax: '',
+                        phone: '',
+                        email: '',
+                        zip: '',
+                        address1: '',
+                        address2: '',
+                        memo: '',
+                        category_id: 2,
+                        status: 1,
+                        guis_department: this.selectedDepartment && this.selectedDepartment.id && !this.isOtherDepartment(this.selectedDepartment)
+                            ? [String(this.selectedDepartment.id)]
+                            : [],
+                    };
                 },
 
                 searchAddressCustomer() {
@@ -626,9 +643,13 @@ $view->footing();
                     }
                 },
             },
-            mounted() {
-                this.loadDepartments();
-                this.loadCategories();
+            async mounted() {
+                await Promise.all([
+                    this.loadAllDepartments(),
+                    this.loadAllCustomers(),
+                    this.loadUserDepartments(),
+                ]);
+                this.selectInitialDepartment();
                 // Initialize select2
                 this.$nextTick(() => {
                     const selectElement = $(this.$refs.guisDepartmentSelect);
@@ -637,11 +658,6 @@ $view->footing();
                         const val = $(event.target).val();
                         this.newCustomer.guis_department = val ? val : [];
                     });
-                });
-                // Add event listener for modal hide
-                const categoryModal = document.getElementById('categoryModal');
-                categoryModal.addEventListener('hide.bs.modal', () => {
-                    this.resetCategoryData();
                 });
             }
         }).mount('#app');

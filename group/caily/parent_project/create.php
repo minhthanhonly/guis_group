@@ -35,7 +35,12 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                     <div class="row g-3" v-if="parentProject">
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="会社名">会社名</span> <span class="text-danger">*</span></label>
+                                <label class="form-label">
+                                    <span data-i18n="会社名">会社名</span> <span class="text-danger">*</span>
+                                    <button type="button" class="btn btn-sm btn-outline-info py-0 small ms-2" @click="openCustomerSearchModal" title="顧客検索">
+                                        <i class="fa fa-search me-1"></i> 検索
+                                    </button>
+                                </label>
                                 <select id="company_name" class="form-select select2" v-model="parentProject.company_name" @change="onCompanyNameChange" required>
                                     <option value="" data-i18n="選択してください">選択してください</option>
                                 </select>
@@ -214,11 +219,11 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                         </div> -->
                         <div class="col-12">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="依頼">依頼</span></label>
+                                <label class="form-label"><span data-i18n="依頼">依頼</span> <span class="text-danger">*</span></label>
                                 <div class="row">
                                     <div class="col-md-3">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="request_design" v-model="parentProject.request_design">
+                                            <input class="form-check-input" type="checkbox" id="request_design" v-model="parentProject.request_design" @change="clearRequestsValidation">
                                             <label class="form-check-label" for="request_design">
                                                 意匠
                                             </label>
@@ -226,7 +231,7 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                                     </div>
                                     <div class="col-md-3">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="request_equipment" v-model="parentProject.request_equipment">
+                                            <input class="form-check-input" type="checkbox" id="request_equipment" v-model="parentProject.request_equipment" @change="clearRequestsValidation">
                                             <label class="form-check-label" for="request_equipment">
                                                 設備
                                             </label>
@@ -234,7 +239,7 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                                     </div>
                                     <div class="col-md-3">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="request_energy_saving" v-model="parentProject.request_energy_saving">
+                                            <input class="form-check-input" type="checkbox" id="request_energy_saving" v-model="parentProject.request_energy_saving" @change="clearRequestsValidation">
                                             <label class="form-check-label" for="request_energy_saving">
                                                 省エネ
                                             </label>
@@ -250,13 +255,16 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                                     </div> -->
                                     <div class="col-md-3">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="request_other" v-model="parentProject.request_other">
+                                            <input class="form-check-input" type="checkbox" id="request_other" v-model="parentProject.request_other" @change="clearRequestsValidation">
                                             <label class="form-check-label" for="request_other">
                                                 その他
                                             </label>
                                         </div>
                                     </div>
                                    
+                                </div>
+                                <div v-if="validationErrors.requests" class="invalid-feedback d-block">
+                                    {{ validationErrors.requests }}
                                 </div>
                             </div>
                         </div>
@@ -607,6 +615,72 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
             </div>
         </div>
     </div>
+
+    <!-- Customer Search Modal -->
+    <div class="modal fade" id="customerSearchModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">顧客検索</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">キーワード</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            v-model="customerSearchKeyword"
+                            @input="searchCustomersByKeyword"
+                            placeholder="会社名・支店名・担当者名・電話・メール..."
+                            autocomplete="off">
+                    </div>
+                    <div v-if="customerSearchLoading" class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">読み込み中...</span>
+                        </div>
+                    </div>
+                    <div v-else-if="!customerSearchKeyword.trim()" class="text-muted text-center py-3">
+                        キーワードを入力してください
+                    </div>
+                    <div v-else-if="customerSearchResults.length === 0" class="text-muted text-center py-3">
+                        該当する顧客が見つかりません
+                    </div>
+                    <div v-else class="table-responsive customer-search-results">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>会社名</th>
+                                    <th>支店名</th>
+                                    <th>担当者名</th>
+                                    <th class="text-nowrap">自社担当部署名</th>
+                                    <th>電話</th>
+                                    <th>メール</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr
+                                    v-for="customer in customerSearchResults"
+                                    :key="customer.id"
+                                    class="customer-search-row"
+                                    @click="selectCustomerFromSearch(customer)">
+                                    <td>{{ customer.company_name }}</td>
+                                    <td>{{ customer.branch }}</td>
+                                    <td class="text-nowrap">{{ customer.name }}</td>
+                                    <td class="text-nowrap">{{ formatGuisDepartmentNames(customer) }}</td>
+                                    <td class="text-nowrap">{{ customer.tel || customer.phone }}</td>
+                                    <td>{{ customer.email }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <?php
@@ -620,6 +694,19 @@ $view->footing();
 
 .content-wrapper{
     overflow-x: hidden;
+}
+
+.customer-search-results {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.customer-search-row {
+    cursor: pointer;
+}
+
+.customer-search-row:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.08);
 }
 </style>
 

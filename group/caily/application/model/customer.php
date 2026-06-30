@@ -579,22 +579,42 @@ class Customer extends ApplicationModel {
             'message_code' => 'error',
         );
         try {
-            $category_id = $_GET['category_id'];
-            $query = sprintf(
-                "SELECT c.*
-                FROM {$this->table} c
-                WHERE c.category_id = %d
-                ORDER BY c.id ASC",
-                intval($category_id)
-            );
-            $result = $this->fetchAll($query);
-            if ($result) {
-                $hash['status'] = 'success';
-                $hash['message_code'] = 'success';
-                $hash['data'] = $result;
+            $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+            $category_id = isset($_GET['category_id']) ? intval($_GET['category_id']) : 0;
+
+            if ($department_id > 0) {
+                $query = sprintf(
+                    "SELECT c.*
+                    FROM %s c
+                    WHERE FIND_IN_SET(%d, c.guis_department) > 0
+                    ORDER BY c.id ASC",
+                    $this->table,
+                    $department_id
+                );
+            } elseif ($category_id > 0) {
+                $query = sprintf(
+                    "SELECT c.*
+                    FROM %s c
+                    WHERE c.category_id = %d
+                    ORDER BY c.id ASC",
+                    $this->table,
+                    $category_id
+                );
+            } elseif (isset($_GET['all']) && (string) $_GET['all'] === '1') {
+                $query = sprintf(
+                    "SELECT c.*
+                    FROM %s c
+                    ORDER BY c.id ASC",
+                    $this->table
+                );
             } else {
-                throw new Exception('担当者の取得に失敗しました。');
+                throw new Exception('部署IDまたはカテゴリーIDが必要です。');
             }
+
+            $result = $this->fetchAll($query);
+            $hash['status'] = 'success';
+            $hash['message_code'] = 'success';
+            $hash['data'] = $result ? $result : array();
         } catch (Exception $e) {
             $hash['data'] = [];
             $hash['message_code'] = $e->getMessage();
@@ -632,13 +652,17 @@ class Customer extends ApplicationModel {
             'message_code' => 'error',
         );
         try {
-            $search = isset($_GET['search']) ? $_GET['search'] : '';
-            $where = '';
-            if ($search) {
-                $where = "WHERE company_name LIKE '%$search%' OR company_name_kana LIKE '%$search%'";
+            $search = isset($_GET['search']) ? trim((string) $_GET['search']) : '';
+            $conditions = array(
+                "company_name IS NOT NULL",
+                "company_name != ''",
+            );
+            if ($search !== '') {
+                $escaped = $this->quote($search);
+                $conditions[] = "(company_name LIKE '%{$escaped}%' OR company_name_kana LIKE '%{$escaped}%')";
             }
-            
-            $query = "SELECT DISTINCT company_name FROM " . DB_PREFIX . "customer WHERE company_name IS NOT NULL AND company_name != '' $where ORDER BY company_name ASC";
+            $where = implode(' AND ', $conditions);
+            $query = "SELECT DISTINCT company_name FROM " . DB_PREFIX . "customer WHERE {$where} ORDER BY company_name ASC";
             $result = $this->fetchAll($query);
             if ($result) {
                 $hash['status'] = 'success';
