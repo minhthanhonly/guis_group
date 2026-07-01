@@ -654,5 +654,7 @@
     "会社名 / 支店名 / メール": "Tên KH / chi nhánh / email",
     "コマンドパレットを開く": "Tìm kiếm (F1 / Ctrl+K)",
     "既定タスク追加": "Thêm công việc mặc định",
+    "リセット時に会社を保持": "Giữ lại công ty khi Reset",
+    "会社": "Công ty",
     "他のユーザーが先に更新しました。ページを再読み込みしてください。": "Người dùng khác đã cập nhật trước đó. Vui lòng tải lại trang."
 }
