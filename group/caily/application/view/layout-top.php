@@ -45,7 +45,7 @@
                     <div data-i18n="建物一覧">建物一覧</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'project' && $page != 'project_gantt' && $page != 'custom_fields' && $page != 'task_overview' && $page != 'employee_statistics' && $page != 'team_revenue_targets') echo 'active'; ?>">
+                <li class="menu-item <?php if($directory == 'project' && $page != 'project_gantt' && $page != 'custom_fields' && $page != 'task_overview' && $page != 'employee_statistics' && $page != 'team_revenue_targets' && $page != 'revenue_statistics') echo 'active'; ?>">
                   <a href="<?=$root?>project/" class="menu-link">
                     <div data-i18n="案件一覧">案件一覧</div>
                   </a>
@@ -65,6 +65,18 @@
                     <div data-i18n="案件ガントチャート">案件ガントチャート</div>
                   </a>
                 </li>
+                <?php
+                $_revenuePermModel = new ApplicationModel();
+                $showRevenueStatsMenu = ($_SESSION['authority'] ?? '') === 'administrator'
+                    || $_revenuePermModel->hasDepartmentPermission('project_director_stat');
+                if ($showRevenueStatsMenu) {
+                ?>
+                <li class="menu-item <?php if($directory == 'project' && $page == 'revenue_statistics') echo 'active'; ?>">
+                  <a href="<?=$root?>project/revenue_statistics.php" class="menu-link">
+                    <div data-i18n="月次売上統計">月次売上統計</div>
+                  </a>
+                </li>
+                <?php } ?>
                 
                 <?php if($_SESSION['authority'] == 'administrator'){ ?>
                   <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">

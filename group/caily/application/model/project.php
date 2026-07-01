@@ -3789,6 +3789,353 @@ class Project extends ApplicationModel {
         return (int)($row['project_director_edit'] ?? 0) === 1;
     }
 
+    /**
+     * Department-level revenue / business document statistics view.
+     */
+    public function canUserViewDepartmentRevenueStats($department_id) {
+        $department_id = intval($department_id);
+        if ($department_id <= 0) {
+            return false;
+        }
+        if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
+            return true;
+        }
+        $current_userid = isset($_SESSION['userid']) ? $this->escape($_SESSION['userid']) : '';
+        if (!$current_userid) {
+            return false;
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT project_director_stat
+            FROM %suser_department
+            WHERE department_id = %d AND userid = '%s'",
+            DB_PREFIX,
+            $department_id,
+            $current_userid
+        ));
+        if (!$row) {
+            return false;
+        }
+        return (int)($row['project_director_stat'] ?? 0) === 1;
+    }
+
+    private function sqlMonthlyRevenueCompanyLabel() {
+        $companyExpr = $this->sqlEffectiveCompanyName();
+        return "COALESCE(NULLIF(TRIM({$companyExpr}), ''), '（未設定）')";
+    }
+
+    private function getMonthlyRevenueStatsBaseFromSql() {
+        $listJoins = $this->getProjectListCustomerJoinSql();
+        return "FROM {$this->table} p
+            LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
+            LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
+            {$listJoins}";
+    }
+
+    /**
+     * @return array{rows: array, totals: array}
+     */
+    private function buildMonthlyRevenueSummaryByCompany(
+        $baseFrom,
+        $baseWhere,
+        $companyLabel,
+        $monthEsc,
+        $invoiceAmountExpr,
+        $tantou = null
+    ) {
+        $where = $baseWhere;
+        if ($tantou === 'CAILY' || $tantou === 'GUIS') {
+            $where .= " AND p.tantou = '" . $this->escape($tantou) . "'";
+        }
+
+        $summaryQuery = sprintf(
+            "SELECT
+                %s AS company_name,
+                COUNT(DISTINCT CASE
+                    WHEN DATE_FORMAT(p.invoice_date, '%%Y-%%m') = '%s'
+                      OR DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
+                    THEN p.id END) AS project_count,
+                SUM(CASE WHEN DATE_FORMAT(p.estimate_date, '%%Y-%%m') = '%s' THEN 1 ELSE 0 END) AS estimate_count,
+                SUM(CASE WHEN DATE_FORMAT(p.estimate_date, '%%Y-%%m') = '%s' THEN COALESCE(p.amount, 0) ELSE 0 END) AS estimate_amount,
+                SUM(CASE
+                    WHEN DATE_FORMAT(p.invoice_date, '%%Y-%%m') = '%s'
+                     AND p.invoice_status IN ('発行済', '発行済み')
+                    THEN 1 ELSE 0 END) AS invoice_count,
+                SUM(CASE
+                    WHEN DATE_FORMAT(p.invoice_date, '%%Y-%%m') = '%s'
+                     AND p.invoice_status IN ('発行済', '発行済み')
+                    THEN %s ELSE 0 END) AS invoice_amount,
+                SUM(CASE
+                    WHEN DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
+                     AND p.payment_status = '入金済'
+                    THEN 1 ELSE 0 END) AS payment_count,
+                SUM(CASE
+                    WHEN DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
+                     AND p.payment_status = '入金済'
+                    THEN COALESCE(p.payment_amount, 0) ELSE 0 END) AS payment_amount
+            %s
+            WHERE %s
+            GROUP BY company_name
+            HAVING project_count > 0
+            ORDER BY company_name ASC",
+            $companyLabel,
+            $monthEsc, $monthEsc,
+            $monthEsc, $monthEsc,
+            $monthEsc, $monthEsc, $invoiceAmountExpr,
+            $monthEsc, $monthEsc,
+            $baseFrom,
+            $where
+        );
+        $summaryRows = $this->fetchAll($summaryQuery);
+        $totals = [
+            'project_count' => 0,
+            'estimate_count' => 0,
+            'estimate_amount' => 0,
+            'invoice_count' => 0,
+            'invoice_amount' => 0,
+            'payment_count' => 0,
+            'payment_amount' => 0,
+        ];
+        foreach ($summaryRows as &$row) {
+            foreach ($totals as $key => $val) {
+                $totals[$key] += floatval($row[$key] ?? 0);
+            }
+            $row['estimate_amount'] = floatval($row['estimate_amount'] ?? 0);
+            $row['invoice_amount'] = floatval($row['invoice_amount'] ?? 0);
+            $row['payment_amount'] = floatval($row['payment_amount'] ?? 0);
+        }
+        unset($row);
+
+        return ['rows' => $summaryRows, 'totals' => $totals];
+    }
+
+    private function enrichMonthlyRevenueStatsProjects(array &$projects) {
+        if (empty($projects)) {
+            return;
+        }
+        $teamIds = [];
+        foreach ($projects as $project) {
+            if (empty($project['teams'])) {
+                continue;
+            }
+            foreach (explode(',', (string)$project['teams']) as $teamId) {
+                $teamId = (int)trim($teamId);
+                if ($teamId > 0) {
+                    $teamIds[$teamId] = true;
+                }
+            }
+        }
+        $teamNameMap = [];
+        if (!empty($teamIds)) {
+            $teamRows = $this->fetchAll(sprintf(
+                "SELECT id, name FROM %steam WHERE id IN (%s)",
+                DB_PREFIX,
+                implode(',', array_keys($teamIds))
+            ));
+            foreach ($teamRows as $row) {
+                $teamNameMap[(int)$row['id']] = $row['name'] ?? '';
+            }
+        }
+        foreach ($projects as &$project) {
+            $typeParts = array_values(array_filter(array_map('trim', [
+                $project['parent_type1'] ?? '',
+                $project['parent_type2'] ?? '',
+            ]), function ($v) {
+                return $v !== '';
+            }));
+            $project['project_type'] = implode(' / ', $typeParts);
+
+            $teamNames = [];
+            if (!empty($project['teams'])) {
+                foreach (explode(',', (string)$project['teams']) as $teamId) {
+                    $teamId = (int)trim($teamId);
+                    if ($teamId > 0 && isset($teamNameMap[$teamId]) && $teamNameMap[$teamId] !== '') {
+                        $teamNames[] = $teamNameMap[$teamId];
+                    }
+                }
+            }
+            $project['team_names'] = implode(', ', $teamNames);
+        }
+        unset($project);
+    }
+
+    /**
+     * Monthly revenue statistics by department (summary + detail lists).
+     */
+    function getMonthlyRevenueStats($params = null) {
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+        $month = isset($_GET['month']) ? trim((string)$_GET['month']) : date('Y-m');
+        if ($department_id <= 0) {
+            return ['status' => 'error', 'error' => 'department_id required'];
+        }
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return ['status' => 'error', 'error' => 'Invalid month format'];
+        }
+        if (!$this->canUserViewDepartmentRevenueStats($department_id)) {
+            return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
+        }
+
+        $monthEsc = $this->escape($month);
+        $deptId = intval($department_id);
+        $baseFrom = $this->getMonthlyRevenueStatsBaseFromSql();
+        $companyLabel = $this->sqlMonthlyRevenueCompanyLabel();
+        $branchExpr = $this->sqlEffectiveBranchName();
+        $baseWhere = "p.department_id = {$deptId} AND p.status != 'deleted'";
+
+        $invoiceAmountExpr = "CASE WHEN COALESCE(p.invoice_amount, 0) > 0 THEN p.invoice_amount ELSE COALESCE(p.amount, 0) END";
+
+        $summaryAll = $this->buildMonthlyRevenueSummaryByCompany(
+            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr
+        );
+        $summaryRows = $summaryAll['rows'];
+        $totals = $summaryAll['totals'];
+
+        $summaryCaily = $this->buildMonthlyRevenueSummaryByCompany(
+            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr, 'CAILY'
+        );
+        $summaryGuis = $this->buildMonthlyRevenueSummaryByCompany(
+            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr, 'GUIS'
+        );
+
+        $invoicedQuery = sprintf(
+            "SELECT
+                p.id,
+                p.name,
+                %s AS company_name,
+                %s AS branch_name,
+                COALESCE(p.amount, 0) AS amount,
+                p.estimate_status,
+                p.invoice_status,
+                p.invoice_date,
+                %s AS invoice_amount,
+                p.payment_status,
+                p.payment_date,
+                COALESCE(p.payment_amount, 0) AS payment_amount,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.caily_nouki,
+                p.guis_nouki,
+                p.teams
+            %s
+            WHERE %s
+              AND p.invoice_status IN ('発行済', '発行済み')
+              AND DATE_FORMAT(p.invoice_date, '%%Y-%%m') = '%s'
+            ORDER BY company_name ASC, p.invoice_date ASC, p.id ASC",
+            $companyLabel,
+            $branchExpr,
+            $invoiceAmountExpr,
+            $baseFrom,
+            $baseWhere,
+            $monthEsc
+        );
+        $estimatedQuery = sprintf(
+            "SELECT
+                p.id,
+                p.name,
+                %s AS company_name,
+                %s AS branch_name,
+                COALESCE(p.amount, 0) AS amount,
+                p.estimate_status,
+                p.estimate_date,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.caily_nouki,
+                p.guis_nouki,
+                p.teams
+            %s
+            WHERE %s
+              AND p.estimate_date IS NOT NULL
+              AND DATE_FORMAT(p.estimate_date, '%%Y-%%m') = '%s'
+            ORDER BY company_name ASC, p.estimate_date ASC, p.id ASC",
+            $companyLabel,
+            $branchExpr,
+            $baseFrom,
+            $baseWhere,
+            $monthEsc
+        );
+        $estimatedProjects = $this->fetchAll($estimatedQuery);
+        $this->enrichMonthlyRevenueStatsProjects($estimatedProjects);
+
+        $invoicedProjects = $this->fetchAll($invoicedQuery);
+        $this->enrichMonthlyRevenueStatsProjects($invoicedProjects);
+
+        $backlogQuery = sprintf(
+            "SELECT
+                p.id,
+                p.name,
+                %s AS company_name,
+                %s AS branch_name,
+                COALESCE(p.amount, 0) AS amount,
+                p.status,
+                p.invoice_status,
+                p.actual_end_date,
+                p.end_date,
+                p.caily_nouki,
+                p.guis_nouki,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.teams
+            %s
+            WHERE %s
+              AND p.status = 'completed'
+              AND p.invoice_status = '未発行'
+              AND p.estimate_status IN ('発行済', '発行済み')
+            ORDER BY company_name ASC, COALESCE(p.actual_end_date, p.end_date) DESC, p.id ASC",
+            $companyLabel,
+            $branchExpr,
+            $baseFrom,
+            $baseWhere
+        );
+        $completedUninvoiced = $this->fetchAll($backlogQuery);
+        $this->enrichMonthlyRevenueStatsProjects($completedUninvoiced);
+
+        $monthsQuery = sprintf(
+            "SELECT DISTINCT month_value AS month,
+                DATE_FORMAT(STR_TO_DATE(CONCAT(month_value, '-01'), '%%Y-%%m-%%d'), '%%Y年%%m月') AS month_label
+            FROM (
+                SELECT DATE_FORMAT(p.invoice_date, '%%Y-%%m') AS month_value
+                FROM {$this->table} p
+                WHERE p.department_id = %d AND p.status != 'deleted' AND p.invoice_date IS NOT NULL
+                UNION
+                SELECT DATE_FORMAT(p.payment_date, '%%Y-%%m') AS month_value
+                FROM {$this->table} p
+                WHERE p.department_id = %d AND p.status != 'deleted' AND p.payment_date IS NOT NULL
+            ) months
+            WHERE month_value IS NOT NULL AND month_value != ''
+            ORDER BY month_value DESC
+            LIMIT 24",
+            $deptId,
+            $deptId
+        );
+        $availableMonths = $this->fetchAll($monthsQuery);
+
+        return [
+            'status' => 'success',
+            'meta' => [
+                'month' => $month,
+                'department_id' => $deptId,
+                'available_months' => $availableMonths,
+            ],
+            'summary_by_company' => $summaryRows,
+            'summary_totals' => $totals,
+            'summary_by_company_caily' => $summaryCaily['rows'],
+            'summary_totals_caily' => $summaryCaily['totals'],
+            'summary_by_company_guis' => $summaryGuis['rows'],
+            'summary_totals_guis' => $summaryGuis['totals'],
+            'estimated_projects' => $estimatedProjects,
+            'invoiced_projects' => $invoicedProjects,
+            'completed_uninvoiced' => $completedUninvoiced,
+        ];
+    }
+
     function updateProjectStatus($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
