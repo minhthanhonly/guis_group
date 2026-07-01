@@ -5,8 +5,7 @@ class Project extends ApplicationModel {
         $this->table = DB_PREFIX . 'projects';
         // Add integer fields that should not be quoted
         $this->donotquote = array_merge($this->donotquote, array(
-            'parent_folder_id', 'folder_id', 'project_id', 'file_size', 'amount',
-            'invoice_amount', 'payment_amount', 'version'
+            'parent_folder_id', 'folder_id', 'project_id', 'file_size', 'amount'
         ));
         $this->schema = array(
             'id' => array('except' => array('search')),
@@ -28,7 +27,6 @@ class Project extends ApplicationModel {
             'guis_nouki_status' => array(), //GUIS納期状況
             'created_by' => array(), //userid
             'updated_by' => array(), //userid
-            'version' => array(),
             'created_at' => array('except' => array('search')), //timestamp
             'updated_at' => array('except' => array('search')), //timestamp
             'department_id' => array(), //
@@ -44,17 +42,7 @@ class Project extends ApplicationModel {
             'teams' => array(), 
             'amount' => array(), //edit, new, custom
             'estimate_status' => array(), //未発行, 発行済み, 承認済み, 却下, 調整
-            'estimate_date' => array(),
-            'estimate_number' => array(),
             'invoice_status' => array(), //未発行, 発行済み, 承認済み, 却下, 調整
-            'invoice_date' => array(),
-            'invoice_amount' => array(),
-            'invoice_number' => array(),
-            'payment_status' => array(), //未入金, 入金済, 入金拒否
-            'payment_date' => array(),
-            'payment_amount' => array(),
-            'receipt_number' => array(),
-            'payment_note' => array(),
             'tags' => array(), //project tags for search and organization
             'is_kadai' => array(), //boolean field to identify child projects
         );
@@ -699,7 +687,7 @@ class Project extends ApplicationModel {
         $whereArr = [];
         $user_id = $_SESSION['id'];
         $myProjects = isset($_GET['my_projects']) && $_GET['my_projects'] == '1';
-        // Filter "私の案件" — same as list(): only projects where user is member or manager
+        // Filter "私の案件" — same as list(): only when enabled
         if ($myProjects) {
             $whereArr[] = sprintf(
                 "EXISTS (
@@ -1009,7 +997,7 @@ class Project extends ApplicationModel {
         $is_dept_manager = false;
         if ($department_id > 0 && isset($_SESSION['userid'])) {
             $q = sprintf(
-                "SELECT COUNT(id) as c FROM " . DB_PREFIX . "user_department WHERE userid = '%s' AND department_id = %d AND (project_manager = 1 OR project_director = 1 OR project_director_stat = 1 OR project_director_view = 1 OR project_director_edit = 1)",
+                "SELECT COUNT(id) as c FROM " . DB_PREFIX . "user_department WHERE userid = '%s' AND department_id = %d AND (project_manager = 1 OR project_director = 1)",
                 $this->quote($_SESSION['userid']),
                 $department_id
             );
@@ -1297,7 +1285,7 @@ class Project extends ApplicationModel {
         $is_dept_manager = false;
         if ($department_id > 0 && isset($_SESSION['userid'])) {
             $q = sprintf(
-                "SELECT COUNT(id) as c FROM " . DB_PREFIX . "user_department WHERE userid = '%s' AND department_id = %d AND (project_manager = 1 OR project_director = 1 OR project_director_stat = 1 OR project_director_view = 1 OR project_director_edit = 1)",
+                "SELECT COUNT(id) as c FROM " . DB_PREFIX . "user_department WHERE userid = '%s' AND department_id = %d AND (project_manager = 1 OR project_director = 1)",
                 $this->quote($_SESSION['userid']),
                 $department_id
             );
@@ -1796,60 +1784,6 @@ class Project extends ApplicationModel {
         return $listAllUsers;
     }
 
-    /**
-     * Validate client version against DB for optimistic locking.
-     */
-    private function assertProjectVersionMatches(array $old) {
-        if (!array_key_exists('version', $_POST)) {
-            return [
-                'ok' => false,
-                'response' => [
-                    'status' => 'error',
-                    'error' => 'version_required',
-                    'message' => 'バージョン情報がありません。ページを再読み込みしてください。',
-                ],
-            ];
-        }
-        $clientVersion = intval($_POST['version']);
-        $dbVersion = intval($old['version'] ?? 1);
-        if ($clientVersion !== $dbVersion) {
-            return [
-                'ok' => false,
-                'response' => [
-                    'status' => 'error',
-                    'error' => 'version_conflict',
-                    'message' => '他のユーザーが先に更新しました。ページを再読み込みしてください。',
-                    'current_version' => $dbVersion,
-                ],
-            ];
-        }
-        return ['ok' => true, 'expected_version' => $dbVersion];
-    }
-
-    /**
-     * UPDATE with version increment; fails when row version changed concurrently.
-     */
-    private function performVersionedProjectUpdate($id, array $data, $expectedVersion) {
-        $newVersion = intval($expectedVersion) + 1;
-        $data['version'] = $newVersion;
-        $result = $this->query_update($data, [
-            'id' => intval($id),
-            'version' => intval($expectedVersion),
-        ]);
-        if (!$result) {
-            return [
-                'ok' => false,
-                'response' => [
-                    'status' => 'error',
-                    'error' => 'version_conflict',
-                    'message' => '他のユーザーが先に更新しました。ページを再読み込みしてください。',
-                    'current_version' => $newVersion,
-                ],
-            ];
-        }
-        return ['ok' => true, 'version' => $newVersion];
-    }
-
     
     function update() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -1862,12 +1796,6 @@ class Project extends ApplicationModel {
         if (!$old) {
             return ['status' => 'error', 'error' => 'Project not found'];
         }
-
-        $versionCheck = $this->assertProjectVersionMatches($old);
-        if (!$versionCheck['ok']) {
-            return $versionCheck['response'];
-        }
-        $expectedVersion = $versionCheck['expected_version'];
 
         // Sensitive fields (amount, name, start_date, end_date, caily_nouki, guis_nouki, tantou) require project_manager or administrator
         $sensitiveFields = ['amount', 'name', 'start_date', 'end_date', 'caily_nouki', 'guis_nouki', 'tantou'];
@@ -2041,12 +1969,7 @@ class Project extends ApplicationModel {
         }
         
         try {
-        $versionedUpdate = $this->performVersionedProjectUpdate($id, $data, $expectedVersion);
-        if (!$versionedUpdate['ok']) {
-            return $versionedUpdate['response'];
-        }
-        $result = true;
-        $newProjectVersion = $versionedUpdate['version'];
+        $result = $this->query_update($data, ['id' => $id]);
         
         // Handle NULL datetime fields separately
         if ($result && !empty($nullDatetimeFields)) {
@@ -2202,7 +2125,7 @@ class Project extends ApplicationModel {
             if (isset($data['guis_nouki_status']) && $data['guis_nouki_status'] !== $old['guis_nouki_status'] && $data['guis_nouki_status'] == '納品済み') {
                 $this->notifyProjectGuisNoukiUpdated($id, $projectName, $this->getUserRealname(), $data['guis_nouki_status'], $managerIds);
             }
-            return ['status' => 'success', 'message' => 'Project updated successfully', 'version' => $newProjectVersion];
+            return ['status' => 'success', 'message' => 'Project updated successfully'];
         } else {
             return ['status' => 'error', 'message' => 'Update failed'];
         }
@@ -2304,18 +2227,8 @@ class Project extends ApplicationModel {
             'status' => 'ステータスを変更',
             'project_order_type' => '受注形態を変更',
             'priority' => '優先度を変更',
-            'estimate_status' => '見積状況を変更',
-            'estimate_date' => '見積日を変更',
-            'estimate_number' => '見積番号を変更',
-            'invoice_status' => '請求状況を変更',
-            'invoice_date' => '請求日を変更',
-            'invoice_amount' => '請求金額を変更',
-            'invoice_number' => '請求番号を変更',
-            'payment_status' => '入金状況を変更',
-            'payment_date' => '入金日を変更',
-            'payment_amount' => '入金額を変更',
-            'receipt_number' => '領収書番号を変更',
-            'payment_note' => '決済備考を変更',
+            'estimate_status' => '見積ステータスを変更',
+            'invoice_status' => '請求ステータスを変更',
             'tags' => 'タグを変更',
             'amount' => '総額を変更',
             'teams' => 'チームを変更',
@@ -2743,7 +2656,6 @@ class Project extends ApplicationModel {
         if ($project) {
             $this->attachProjectDetailAggregates($project, $user_id);
             $project['quotation_status'] = $this->getQuotationStatus($id);
-            $project['version'] = isset($project['version']) ? intval($project['version']) : 1;
         }
         
         return $project;
@@ -3712,102 +3624,12 @@ class Project extends ApplicationModel {
         return $data;
     }
 
-    /**
-     * Business document view: project_director_stat / view / edit, or department manager.
-     */
-    public function canUserViewBusinessDocuments($project_id) {
-        $project_id = intval($project_id);
-        if ($project_id <= 0) {
-            return false;
-        }
-        if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
-            return true;
-        }
-        $project = $this->fetchOne("SELECT department_id FROM " . $this->table . " WHERE id = " . $project_id);
-        if (!$project || !isset($project['department_id'])) {
-            return false;
-        }
-        $dept_id = intval($project['department_id']);
-        $current_userid = isset($_SESSION['userid']) ? $this->escape($_SESSION['userid']) : '';
-        if ($dept_id <= 0 || !$current_userid) {
-            return false;
-        }
-        $row = $this->fetchOne(sprintf(
-            "SELECT project_manager, project_director, project_director_stat, project_director_view, project_director_edit
-            FROM %suser_department
-            WHERE department_id = %d AND userid = '%s'",
-            DB_PREFIX,
-            $dept_id,
-            $current_userid
-        ));
-        if (!$row) {
-            return false;
-        }
-        if ((int)($row['project_manager'] ?? 0) === 1) {
-            return true;
-        }
-        return (int)($row['project_director_stat'] ?? 0) === 1
-            || (int)($row['project_director_view'] ?? 0) === 1
-            || (int)($row['project_director_edit'] ?? 0) === 1
-            || (int)($row['project_director'] ?? 0) === 1;
-    }
-
-    /**
-     * Business document edit: project_director_edit or department manager.
-     */
-    public function canUserEditBusinessDocuments($project_id) {
-        $project_id = intval($project_id);
-        if ($project_id <= 0) {
-            return false;
-        }
-        if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
-            return true;
-        }
-        $project = $this->fetchOne("SELECT department_id FROM " . $this->table . " WHERE id = " . $project_id);
-        if (!$project || !isset($project['department_id'])) {
-            return false;
-        }
-        $dept_id = intval($project['department_id']);
-        $current_userid = isset($_SESSION['userid']) ? $this->escape($_SESSION['userid']) : '';
-        if ($dept_id <= 0 || !$current_userid) {
-            return false;
-        }
-        $row = $this->fetchOne(sprintf(
-            "SELECT project_manager, project_director_edit
-            FROM %suser_department
-            WHERE department_id = %d AND userid = '%s'",
-            DB_PREFIX,
-            $dept_id,
-            $current_userid
-        ));
-        if (!$row) {
-            return false;
-        }
-        if ((int)($row['project_manager'] ?? 0) === 1) {
-            return true;
-        }
-        return (int)($row['project_director_edit'] ?? 0) === 1;
-    }
-
     function updateProjectStatus($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
-
-        if (!$this->canUserEditBusinessDocuments($id)) {
-            return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
-        }
         
         // Lấy dữ liệu cũ để so sánh và ghi log
         $old = $this->getById($id);
-        if (!$old) {
-            return ['status' => 'error', 'error' => 'Project not found'];
-        }
-
-        $versionCheck = $this->assertProjectVersionMatches($old);
-        if (!$versionCheck['ok']) {
-            return $versionCheck['response'];
-        }
-        $expectedVersion = $versionCheck['expected_version'];
         
         $data = array(
             'updated_at' => date('Y-m-d H:i:s'),
@@ -3821,127 +3643,45 @@ class Project extends ApplicationModel {
         if (isset($_POST['estimate_status'])) {
             $data['estimate_status'] = $_POST['estimate_status'];
         }
-        if (isset($_POST['estimate_number'])) {
-            $data['estimate_number'] = $_POST['estimate_number'];
-        }
         if (isset($_POST['invoice_status'])) {
             $data['invoice_status'] = $_POST['invoice_status'];
         }
-        if (array_key_exists('invoice_amount', $_POST)) {
-            $data['invoice_amount'] = $_POST['invoice_amount'] !== '' ? floatval($_POST['invoice_amount']) : 0;
-        }
-        if (isset($_POST['invoice_number'])) {
-            $data['invoice_number'] = $_POST['invoice_number'];
-        }
-        if (isset($_POST['payment_status'])) {
-            $data['payment_status'] = $_POST['payment_status'];
-        }
-        if (array_key_exists('payment_amount', $_POST)) {
-            $data['payment_amount'] = $_POST['payment_amount'] !== '' ? floatval($_POST['payment_amount']) : 0;
-        }
-        if (isset($_POST['receipt_number'])) {
-            $data['receipt_number'] = $_POST['receipt_number'];
-        }
-        if (isset($_POST['payment_note'])) {
-            $data['payment_note'] = $_POST['payment_note'];
-        }
-
-        $nullDatetimeFields = [];
-        $businessDatetimeFields = [
-            'estimate_date' => '18:00',
-            'invoice_date' => '18:00',
-            'payment_date' => '18:00',
-        ];
-        foreach ($businessDatetimeFields as $field => $defaultTime) {
-            if (!array_key_exists($field, $_POST)) {
-                continue;
-            }
-            $val = trim((string)$_POST[$field]);
-            if ($val === '') {
-                $nullDatetimeFields[] = $field;
-                continue;
-            }
-            $parsed = $this->normalize_datetime_with_default($val, $defaultTime);
-            if ($parsed !== null) {
-                $data[$field] = $parsed;
-            } else {
-                $nullDatetimeFields[] = $field;
-            }
-        }
         
-        $versionedUpdate = $this->performVersionedProjectUpdate($id, $data, $expectedVersion);
-        if (!$versionedUpdate['ok']) {
-            return $versionedUpdate['response'];
-        }
-        $result = true;
-        $newProjectVersion = $versionedUpdate['version'];
-
-        if ($result && !empty($nullDatetimeFields)) {
-            $setParts = [];
-            foreach ($nullDatetimeFields as $field) {
-                $setParts[] = sprintf("`%s` = NULL", $this->escape($field));
-            }
-            $query = sprintf("UPDATE %s SET %s WHERE id = %d", $this->table, implode(', ', $setParts), $id);
-            $this->query($query);
-        }
+        $result = $this->query_update($data, ['id' => $id]);
         
         if ($result) {
-            $this->logBusinessDocumentChanges($id, $old, $data, $nullDatetimeFields);
+            // Ghi log cho từng trường nếu có thay đổi
+            if (isset($data['amount']) && isset($old['amount']) && (float)$old['amount'] !== (float)$data['amount']) {
+                $this->logProjectAction(
+                    $id,
+                    'amount_updated',
+                    '金額変更',
+                    (string)$old['amount'],
+                    (string)$data['amount']
+                );
+            }
+            if (isset($data['estimate_status']) && isset($old['estimate_status']) && $old['estimate_status'] !== $data['estimate_status']) {
+                $this->logProjectAction(
+                    $id,
+                    'estimate_status_updated',
+                    '見積ステータス変更',
+                    (string)$old['estimate_status'],
+                    (string)$data['estimate_status']
+                );
+            }
+            if (isset($data['invoice_status']) && isset($old['invoice_status']) && $old['invoice_status'] !== $data['invoice_status']) {
+                $this->logProjectAction(
+                    $id,
+                    'invoice_status_updated',
+                    '請求ステータス変更',
+                    (string)$old['invoice_status'],
+                    (string)$data['invoice_status']
+                );
+            }
 
-            return ['status' => 'success', 'version' => $newProjectVersion];
+            return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
-        }
-    }
-
-    private function logBusinessDocumentChanges($project_id, array $old, array $data, array $nullDatetimeFields = []) {
-        $new = array_merge($old, $data);
-        foreach ($nullDatetimeFields as $field) {
-            $new[$field] = null;
-        }
-
-        $fields = [
-            'amount' => ['action' => 'amount_updated', 'note' => '見積金額を変更', 'numeric' => true],
-            'estimate_status' => ['action' => 'estimate_status_updated', 'note' => '見積状況を変更'],
-            'estimate_date' => ['action' => 'estimate_date_updated', 'note' => '見積日を変更'],
-            'estimate_number' => ['action' => 'estimate_number_updated', 'note' => '見積番号を変更'],
-            'invoice_status' => ['action' => 'invoice_status_updated', 'note' => '請求状況を変更'],
-            'invoice_date' => ['action' => 'invoice_date_updated', 'note' => '請求日を変更'],
-            'invoice_amount' => ['action' => 'invoice_amount_updated', 'note' => '請求金額を変更', 'numeric' => true],
-            'invoice_number' => ['action' => 'invoice_number_updated', 'note' => '請求番号を変更'],
-            'payment_status' => ['action' => 'payment_status_updated', 'note' => '入金状況を変更'],
-            'payment_date' => ['action' => 'payment_date_updated', 'note' => '入金日を変更'],
-            'payment_amount' => ['action' => 'payment_amount_updated', 'note' => '入金額を変更', 'numeric' => true],
-            'receipt_number' => ['action' => 'receipt_number_updated', 'note' => '領収書番号を変更'],
-            'payment_note' => ['action' => 'payment_note_updated', 'note' => '決済備考を変更'],
-        ];
-
-        $datetimeFields = ['estimate_date', 'invoice_date', 'payment_date'];
-
-        foreach ($fields as $field => $meta) {
-            if (!array_key_exists($field, $data) && !in_array($field, $nullDatetimeFields, true)) {
-                continue;
-            }
-            $oldVal = $old[$field] ?? null;
-            $newVal = $new[$field] ?? null;
-            if (!empty($meta['numeric'])) {
-                if ((float)$oldVal === (float)$newVal) {
-                    continue;
-                }
-            } elseif (in_array($field, $datetimeFields, true)) {
-                if ($this->normalizeDatetimeForCompare($oldVal) === $this->normalizeDatetimeForCompare($newVal)) {
-                    continue;
-                }
-            } elseif (trim((string)$oldVal) === trim((string)$newVal)) {
-                continue;
-            }
-            $this->logProjectAction(
-                $project_id,
-                $meta['action'],
-                $meta['note'],
-                $oldVal !== null && $oldVal !== '' ? (string)$oldVal : '',
-                $newVal !== null && $newVal !== '' ? (string)$newVal : ''
-            );
         }
     }
 
@@ -5947,7 +5687,6 @@ class Project extends ApplicationModel {
             'amount' => $amount,
             'estimate_status' => '未発行',
             'invoice_status' => '未発行',
-            'payment_status' => '未入金',
         );
         if ($parent_project_id > 0) {
             $data['parent_project_id'] = $parent_project_id;
