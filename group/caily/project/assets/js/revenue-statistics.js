@@ -64,6 +64,43 @@
         return y + '-' + m;
     }
 
+    function addMonthsToYearMonth(yearMonth, delta) {
+        const parts = String(yearMonth || '').split('-');
+        let year = parseInt(parts[0], 10);
+        let month = parseInt(parts[1], 10);
+        if (!Number.isFinite(year) || !Number.isFinite(month)) return yearMonth;
+
+        month += delta;
+        while (month > 12) {
+            month -= 12;
+            year += 1;
+        }
+        while (month < 1) {
+            month += 12;
+            year -= 1;
+        }
+        return year + '-' + String(month).padStart(2, '0');
+    }
+
+    function buildMonthOptions(monthsBefore, monthsAfter) {
+        const current = currentYearMonth();
+        const months = [];
+        const before = Number.isFinite(monthsBefore) ? monthsBefore : 18;
+        const after = Number.isFinite(monthsAfter) ? monthsAfter : 12;
+
+        for (let i = -before; i <= after; i++) {
+            const month = addMonthsToYearMonth(current, i);
+            months.push({
+                month: month,
+                month_label: buildMonthLabel(month)
+            });
+        }
+
+        return months.sort(function(a, b) {
+            return String(b.month).localeCompare(String(a.month));
+        });
+    }
+
     function buildMonthLabel(month) {
         if (!month || !/^\d{4}-\d{2}$/.test(month)) return month || '';
         const parts = month.split('-');
@@ -92,6 +129,11 @@
                 activeSubTab: 'summary',
                 loading: false,
                 loadingDepartments: false,
+                showEstimatedAllTime: false,
+                showCancelledAllTime: false,
+                showCancelledEstimatedOnly: true,
+                showTantouCaily: true,
+                showTantouGuis: true,
                 errorMessage: '',
                 summaryByCompany: [],
                 summaryTotals: emptySummaryTotals(),
@@ -99,9 +141,16 @@
                 summaryTotalsCaily: emptySummaryTotals(),
                 summaryByCompanyGuis: [],
                 summaryTotalsGuis: emptySummaryTotals(),
+                targetSummary: {
+                    monthly_target_sales: 0,
+                    cumulative_target_sales: 0,
+                    monthly_actual_sales: 0,
+                    cumulative_actual_sales: 0
+                },
                 estimatedProjects: [],
                 invoicedProjects: [],
-                completedUninvoiced: []
+                completedUninvoiced: [],
+                cancelledProjects: []
             };
         },
         computed: {
@@ -109,14 +158,44 @@
                 const found = (this.availableMonths || []).find(m => m.month === this.selectedMonth);
                 return found && found.month_label ? found.month_label : buildMonthLabel(this.selectedMonth);
             },
+            currentYearMonthValue() {
+                return currentYearMonth();
+            },
             estimatedGroups() {
-                return groupProjectsByCompany(this.estimatedProjects, ['amount']);
+                return groupProjectsByCompany(this.filteredEstimatedProjects, ['amount']);
             },
             invoicedGroups() {
-                return groupProjectsByCompany(this.invoicedProjects, ['amount', 'invoice_amount', 'payment_amount']);
+                return groupProjectsByCompany(this.filteredInvoicedProjects, ['amount', 'invoice_amount']);
             },
             backlogGroups() {
-                return groupProjectsByCompany(this.completedUninvoiced, ['amount']);
+                return groupProjectsByCompany(this.filteredBacklogProjects, ['amount']);
+            },
+            cancelledGroups() {
+                return groupProjectsByCompany(this.filteredCancelledProjects, ['amount']);
+            },
+            filteredInvoicedProjects() {
+                return this.filterProjectsByTantou(this.invoicedProjects);
+            },
+            filteredBacklogProjects() {
+                return this.filterProjectsByTantou(this.completedUninvoiced);
+            },
+            filteredEstimatedProjects() {
+                return this.filterProjectsByTantou(this.estimatedProjects);
+            },
+            filteredCancelledProjects() {
+                return this.filterProjectsByTantou(this.cancelledProjects);
+            },
+            invoicedInvoiceAmountTotal() {
+                return sumProjectField(this.filteredInvoicedProjects, 'invoice_amount');
+            },
+            backlogInvoiceAmountTotal() {
+                return sumProjectField(this.filteredBacklogProjects, 'invoice_amount');
+            },
+            estimatedAmountTotal() {
+                return sumProjectField(this.filteredEstimatedProjects, 'amount');
+            },
+            cancelledAmountTotal() {
+                return sumProjectField(this.filteredCancelledProjects, 'amount');
             },
             summaryTantouBlocks() {
                 return [
@@ -131,6 +210,35 @@
                         totals: this.summaryTotalsGuis
                     }
                 ];
+            },
+            summaryUnbilledTotals() {
+                const projects = this.completedUninvoiced || [];
+                const companySet = {};
+                let amount = 0;
+                projects.forEach(function(p) {
+                    amount += Number(p.amount) || 0;
+                    const name = (p.company_name && String(p.company_name).trim())
+                        ? String(p.company_name).trim()
+                        : '（未設定）';
+                    companySet[name] = true;
+                });
+                return {
+                    amount: amount,
+                    project_count: projects.length,
+                    company_count: Object.keys(companySet).length
+                };
+            },
+            monthlyAchievementRate() {
+                const target = Number(this.targetSummary.monthly_target_sales) || 0;
+                const actual = Number(this.targetSummary.monthly_actual_sales) || 0;
+                if (target <= 0) return 0;
+                return (actual / target) * 100;
+            },
+            cumulativeAchievementRate() {
+                const target = Number(this.targetSummary.cumulative_target_sales) || 0;
+                const actual = Number(this.targetSummary.cumulative_actual_sales) || 0;
+                if (target <= 0) return 0;
+                return (actual / target) * 100;
             }
         },
         methods: {
@@ -143,6 +251,16 @@
             formatCount(val) {
                 const n = Number(val);
                 return Number.isFinite(n) ? String(Math.round(n)) : '0';
+            },
+            formatSummaryAmount(val) {
+                const n = Number(val);
+                if (!Number.isFinite(n) || Math.round(n) === 0) return '';
+                return this.formatCurrency(n);
+            },
+            formatPercent(val) {
+                const n = Number(val);
+                if (!Number.isFinite(n)) return '0%';
+                return Math.round(n).toLocaleString('ja-JP') + '%';
             },
             formatDate(val) {
                 if (!val) return '—';
@@ -170,6 +288,18 @@
                 const names = p && p.team_names ? String(p.team_names).trim() : '';
                 return names || '—';
             },
+            filterProjectsByTantou(projects) {
+                const allowCaily = !!this.showTantouCaily;
+                const allowGuis = !!this.showTantouGuis;
+                if (allowCaily && allowGuis) return projects || [];
+                if (!allowCaily && !allowGuis) return [];
+                return (projects || []).filter(function(p) {
+                    const tantou = String((p && p.tantou) || '').trim().toUpperCase();
+                    if (tantou === 'CAILY') return allowCaily;
+                    if (tantou === 'GUIS') return allowGuis;
+                    return false;
+                });
+            },
             saveMonthToStorage() {
                 try {
                     localStorage.setItem(STORAGE_KEY_MONTH, this.selectedMonth);
@@ -185,7 +315,12 @@
             loadMonthFromStorage() {
                 try {
                     const saved = localStorage.getItem(STORAGE_KEY_MONTH);
-                    if (saved && /^\d{4}-\d{2}$/.test(saved)) {
+                    if (!saved || !/^\d{4}-\d{2}$/.test(saved)) return;
+
+                    const allowed = (this.availableMonths || []).some(function(m) {
+                        return m && m.month === saved;
+                    });
+                    if (allowed) {
                         this.selectedMonth = saved;
                     }
                 } catch (e) {}
@@ -199,9 +334,9 @@
                     return null;
                 }
             },
-            mergeAvailableMonths(months) {
+            refreshAvailableMonths() {
                 const map = {};
-                (months || []).forEach(function(m) {
+                buildMonthOptions(18, 12).forEach(function(m) {
                     if (m && m.month) map[m.month] = m;
                 });
                 if (this.selectedMonth && !map[this.selectedMonth]) {
@@ -210,7 +345,7 @@
                         month_label: buildMonthLabel(this.selectedMonth)
                     };
                 }
-                return Object.values(map).sort(function(a, b) {
+                this.availableMonths = Object.values(map).sort(function(a, b) {
                     return String(b.month).localeCompare(String(a.month));
                 });
             },
@@ -281,7 +416,37 @@
                 await this.loadStats();
             },
             onMonthChange() {
+                this.refreshAvailableMonths();
                 this.saveMonthToStorage();
+                this.loadStats();
+            },
+            setSelectedMonth(month) {
+                if (!month || !/^\d{4}-\d{2}$/.test(month)) return;
+                if (this.selectedMonth === month) return;
+                this.selectedMonth = month;
+                this.refreshAvailableMonths();
+                this.saveMonthToStorage();
+                this.loadStats();
+            },
+            goToPrevMonth() {
+                this.setSelectedMonth(addMonthsToYearMonth(this.selectedMonth, -1));
+            },
+            goToNextMonth() {
+                this.setSelectedMonth(addMonthsToYearMonth(this.selectedMonth, 1));
+            },
+            goToThisMonth() {
+                this.setSelectedMonth(currentYearMonth());
+            },
+            onEstimatedAllTimeChange(checked) {
+                this.showEstimatedAllTime = !!checked;
+                this.loadStats();
+            },
+            onCancelledAllTimeChange(checked) {
+                this.showCancelledAllTime = !!checked;
+                this.loadStats();
+            },
+            onCancelledEstimatedOnlyChange(checked) {
+                this.showCancelledEstimatedOnly = !!checked;
                 this.loadStats();
             },
             async loadStats() {
@@ -294,7 +459,10 @@
                             model: 'project',
                             method: 'getMonthlyRevenueStats',
                             department_id: this.selectedDepartment.id,
-                            month: this.selectedMonth
+                            month: this.selectedMonth,
+                            estimated_all_time: this.showEstimatedAllTime ? 1 : 0,
+                            cancelled_all_time: this.showCancelledAllTime ? 1 : 0,
+                            cancelled_estimated_only: this.showCancelledEstimatedOnly ? 1 : 0
                         }
                     });
                     const data = response.data || {};
@@ -306,9 +474,16 @@
                         this.summaryTotalsCaily = emptySummaryTotals();
                         this.summaryByCompanyGuis = [];
                         this.summaryTotalsGuis = emptySummaryTotals();
+                        this.targetSummary = {
+                            monthly_target_sales: 0,
+                            cumulative_target_sales: 0,
+                            monthly_actual_sales: 0,
+                            cumulative_actual_sales: 0
+                        };
                         this.estimatedProjects = [];
                         this.invoicedProjects = [];
                         this.completedUninvoiced = [];
+                        this.cancelledProjects = [];
                         return;
                     }
                     this.summaryByCompany = data.summary_by_company || [];
@@ -317,12 +492,16 @@
                     this.summaryTotalsCaily = Object.assign(emptySummaryTotals(), data.summary_totals_caily || {});
                     this.summaryByCompanyGuis = data.summary_by_company_guis || [];
                     this.summaryTotalsGuis = Object.assign(emptySummaryTotals(), data.summary_totals_guis || {});
+                    this.targetSummary = Object.assign({
+                        monthly_target_sales: 0,
+                        cumulative_target_sales: 0,
+                        monthly_actual_sales: 0,
+                        cumulative_actual_sales: 0
+                    }, data.meta && data.meta.target_summary ? data.meta.target_summary : {});
                     this.estimatedProjects = data.estimated_projects || [];
                     this.invoicedProjects = data.invoiced_projects || [];
                     this.completedUninvoiced = data.completed_uninvoiced || [];
-                    if (data.meta && Array.isArray(data.meta.available_months)) {
-                        this.availableMonths = this.mergeAvailableMonths(data.meta.available_months);
-                    }
+                    this.cancelledProjects = data.cancelled_projects || [];
                 } catch (err) {
                     console.error('loadStats:', err);
                     const msg = err.response && err.response.data
@@ -337,8 +516,8 @@
             }
         },
         mounted() {
-            this.loadMonthFromStorage();
-            this.availableMonths = this.mergeAvailableMonths([]);
+            this.selectedMonth = currentYearMonth();
+            this.refreshAvailableMonths();
             this.loadDepartments();
         }
     });

@@ -50,11 +50,6 @@
                     <div data-i18n="案件一覧">案件一覧</div>
                   </a>
                 </li>
-                <!-- <li class="menu-item <?php if($directory == 'project' && $page == 'mytask') echo 'active'; ?>">
-                  <a href="<?=$root?>project/mytask.php" class="menu-link">
-                    <div data-i18n="マイタスク">マイタスク</div>
-                  </a>
-                </li> -->
                 <li class="menu-item <?php if($directory == 'project' && $page == 'task_overview') echo 'active'; ?>">
                   <a href="<?=$root?>project/task_overview.php" class="menu-link">
                     <div data-i18n="タスク一覧">タスク一覧</div>
@@ -65,6 +60,33 @@
                     <div data-i18n="案件ガントチャート">案件ガントチャート</div>
                   </a>
                 </li>
+                
+                <?php if($_SESSION['authority'] == 'administrator'){ ?>
+                  <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
+                    <a href="<?=$root?>project/custom_fields.php" class="menu-link">
+                      <div data-i18n="カスタムフィールド">カスタムフィールド</div>
+                    </a>
+                  </li>
+                  <!-- <li class="menu-item <?php if($directory == 'price_list') echo 'active'; ?>">
+                    <a href="<?=$root?>price_list" class="menu-link">
+                      <div data-i18n="価格表管理">価格表管理</div>
+                    </a>
+                  </li> -->
+                 
+                <?php } ?>
+                
+              </ul>
+            </li>
+            <?php } ?>
+
+            <?php if($_SESSION['show_project'] == 1){ ?>
+              <li class="menu-item <?php if($directory == 'project' || $directory == 'parent_project' || $directory == 'price_list') echo 'active open'; ?>">
+              <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base fa fa-briefcase"></i>
+                <div><span data-i18n="統計情報">統計情報</span></div>
+              </a>
+              <ul class="menu-sub">
+                
                 <?php
                 $_revenuePermModel = new ApplicationModel();
                 $showRevenueStatsMenu = ($_SESSION['authority'] ?? '') === 'administrator'
@@ -78,20 +100,6 @@
                 </li>
                 <?php } ?>
                 
-                <?php if($_SESSION['authority'] == 'administrator'){ ?>
-                  <li class="menu-item <?php if($directory == 'project' && $page == 'custom_fields') echo 'active'; ?>">
-                    <a href="<?=$root?>project/custom_fields.php" class="menu-link">
-                      <div data-i18n="カスタムフィールド">カスタムフィールド</div>
-                    </a>
-                  </li>
-                  <li class="menu-item <?php if($directory == 'price_list') echo 'active'; ?>">
-                    <a href="<?=$root?>price_list" class="menu-link">
-                      <div data-i18n="価格表管理">価格表管理</div>
-                    </a>
-                  </li>
-                 
-                <?php } ?>
-
                 <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7'  && $_SESSION['group'] != '6'){?>
                   <li class="menu-item <?php if($directory == 'project' && $page == 'employee_statistics') echo 'active'; ?>">
                     <a href="<?=$root?>project/employee_statistics.php" class="menu-link">

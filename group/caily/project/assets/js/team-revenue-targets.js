@@ -1,4 +1,5 @@
 const { createApp } = Vue;
+const STORAGE_KEY_DEPT = 'team_revenue_targets_selected_department';
 
 function getCurrentFiscalYear() {
     const today = new Date();
@@ -11,12 +12,18 @@ function getCurrentFiscalYear() {
 createApp({
     data() {
         return {
+            departments: [],
+            selectedDepartment: null,
+            loadingDepartments: false,
             teams: [],
             targets: [],
             loading: false,
             saving: false,
+            departmentTargetSaving: false,
+            teamSaveTimers: {},
             selectedYear: getCurrentFiscalYear(),
-            availableYears: []
+            availableYears: [],
+            departmentYearlyTarget: 0
         };
     },
     
@@ -30,18 +37,36 @@ createApp({
             return this.teams.reduce((sum, team) => {
                 return sum + (parseFloat(team.monthly_target) || 0);
             }, 0);
+        },
+        yearlyTotalCompareStatus() {
+            const total = parseFloat(this.totalYearlyTarget) || 0;
+            const target = parseFloat(this.departmentYearlyTarget) || 0;
+            if (total > target) return 'over';
+            if (total < target) return 'under';
+            return 'equal';
+        },
+        yearlyTotalCompareMessage() {
+            const total = parseFloat(this.totalYearlyTarget) || 0;
+            const target = parseFloat(this.departmentYearlyTarget) || 0;
+            const diff = Math.abs(total - target);
+            if (this.yearlyTotalCompareStatus === 'over') {
+                return `部署目標より ¥${this.formatNumber(diff)} 高いです`;
+            }
+            if (this.yearlyTotalCompareStatus === 'under') {
+                return `部署目標より ¥${this.formatNumber(diff)} 低いです`;
+            }
+            return '';
+        },
+        departmentMonthlyTarget() {
+            const yearly = parseFloat(this.departmentYearlyTarget) || 0;
+            return yearly / 12;
         }
     },
     
     async mounted() {
         // Load years first (doesn't depend on anything)
         await this.loadYears();
-        // Load teams, then targets (targets depend on teams)
-        await this.loadTeams();
-        // Only load targets if teams were loaded successfully
-        if (this.teams.length > 0) {
-            await this.loadTargets();
-        }
+        await this.loadDepartments();
     },
     
     methods: {
@@ -96,10 +121,15 @@ createApp({
         },
         
         async loadTeams() {
+            if (!this.selectedDepartment) {
+                this.teams = [];
+                return;
+            }
             try {
                 const params = new URLSearchParams({
                     model: 'teamrevenuetarget',
-                    method: 'getTeams'
+                    method: 'getTeams',
+                    department_id: this.selectedDepartment.id
                 });
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
                 const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
@@ -130,7 +160,8 @@ createApp({
                 const params = new URLSearchParams({
                     model: 'teamrevenuetarget',
                     method: 'list',
-                    year: this.selectedYear
+                    year: this.selectedYear,
+                    department_id: this.selectedDepartment ? this.selectedDepartment.id : ''
                 });
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
                 const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
@@ -170,18 +201,51 @@ createApp({
                 this.loading = false;
             }
         },
+
+        async loadDepartmentTarget() {
+            if (!this.selectedDepartment) {
+                this.departmentYearlyTarget = 0;
+                return;
+            }
+            try {
+                const params = new URLSearchParams({
+                    model: 'teamrevenuetarget',
+                    method: 'getDepartmentTarget',
+                    department_id: this.selectedDepartment.id,
+                    year: this.selectedYear
+                });
+                const response = await axios.get(`/api/index.php?${params.toString()}`);
+                const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+                this.departmentYearlyTarget = data && data.yearly_target != null
+                    ? (parseFloat(data.yearly_target) || 0)
+                    : 0;
+            } catch (error) {
+                console.error('Error loading department target:', error);
+                this.departmentYearlyTarget = 0;
+            }
+        },
         
         updateMonthlyTarget(team) {
             // Calculate monthly target (yearly / 12)
             const yearly = parseFloat(team.yearly_target) || 0;
             team.monthly_target = yearly / 12;
         },
-        
-        async saveTarget(team) {
-            if (!team.yearly_target || team.yearly_target <= 0) {
-                this.showError('年間目標を入力してください');
-                return;
+
+        onTeamTargetInput(team) {
+            this.updateMonthlyTarget(team);
+            const key = String(team.id);
+            if (this.teamSaveTimers[key]) {
+                clearTimeout(this.teamSaveTimers[key]);
             }
+            this.teamSaveTimers[key] = setTimeout(() => {
+                this.saveTarget(team, true);
+            }, 600);
+        },
+        
+        async saveTarget(team, silent = false) {
+            const yearly = parseFloat(team.yearly_target);
+            team.yearly_target = Number.isFinite(yearly) && yearly >= 0 ? yearly : 0;
+            this.updateMonthlyTarget(team);
             
             this.saving = true;
             try {
@@ -190,7 +254,7 @@ createApp({
                     method: 'save',
                     team_id: team.id,
                     year: this.selectedYear,
-                    yearly_target: team.yearly_target
+                    yearly_target: team.yearly_target || 0
                 });
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
@@ -198,74 +262,118 @@ createApp({
                 
                 if (data && data.id && !data.error) {
                     team.target_id = data.id;
-                    this.showSuccess('目標を保存しました');
+                    if (!silent) this.showSuccess('目標を保存しました');
                 } else {
-                    this.showError(data?.error || '保存に失敗しました');
+                    if (!silent) this.showError(data?.error || '保存に失敗しました');
                 }
             } catch (error) {
                 console.error('Error saving target:', error);
                 const errorMsg = error.response?.data ? 
                     (typeof error.response.data === 'string' ? JSON.parse(error.response.data) : error.response.data) : 
                     null;
-                this.showError('保存に失敗しました: ' + (errorMsg?.error || error.message));
+                if (!silent) this.showError('保存に失敗しました: ' + (errorMsg?.error || error.message));
             } finally {
                 this.saving = false;
             }
         },
         
-        async saveAllTargets() {
-            // Filter teams that have targets set
-            const teamsToSave = this.teams.filter(team => 
-                team.yearly_target && team.yearly_target > 0
-            );
-            
-            if (teamsToSave.length === 0) {
-                this.showError('保存する目標がありません');
+        async saveDepartmentTarget() {
+            if (!this.selectedDepartment) {
+                this.showError('部署を選択してください');
                 return;
             }
-            
-            this.saving = true;
-            let successCount = 0;
-            let errorCount = 0;
-            
+            this.departmentTargetSaving = true;
             try {
-                // Save all targets sequentially
-                for (const team of teamsToSave) {
-                    try {
-                        const params = new URLSearchParams({
-                            model: 'teamrevenuetarget',
-                            method: 'save',
-                            team_id: team.id,
-                            year: this.selectedYear,
-                            yearly_target: team.yearly_target
-                        });
-                        
-                        const response = await axios.get(`/api/index.php?${params.toString()}`);
-                        const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
-                        
-                        if (data && data.id && !data.error) {
-                            team.target_id = data.id;
-                            successCount++;
-                        } else {
-                            errorCount++;
-                        }
-                    } catch (error) {
-                        console.error(`Error saving target for team ${team.id}:`, error);
-                        errorCount++;
-                    }
-                }
-                
-                if (errorCount === 0) {
-                    this.showSuccess(`${successCount}件の目標を保存しました`);
+                const params = new URLSearchParams({
+                    model: 'teamrevenuetarget',
+                    method: 'saveDepartmentTarget',
+                    department_id: this.selectedDepartment.id,
+                    year: this.selectedYear,
+                    yearly_target: this.departmentYearlyTarget || 0
+                });
+                const response = await axios.get(`/api/index.php?${params.toString()}`);
+                const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+                if (data && data.id && !data.error) {
+                    this.showSuccess('部署目標を保存しました');
                 } else {
-                    this.showError(`${successCount}件保存成功、${errorCount}件保存失敗`);
+                    this.showError(data?.error || '部署目標の保存に失敗しました');
                 }
             } catch (error) {
-                console.error('Error saving targets:', error);
-                this.showError('保存に失敗しました');
+                console.error('Error saving department target:', error);
+                this.showError('部署目標の保存に失敗しました');
             } finally {
-                this.saving = false;
+                this.departmentTargetSaving = false;
             }
+        },
+
+        async onDepartmentTargetBlur() {
+            const n = parseFloat(this.departmentYearlyTarget);
+            this.departmentYearlyTarget = Number.isFinite(n) && n > 0 ? n : 0;
+            await this.saveDepartmentTarget();
+        },
+        
+        saveDepartmentToStorage(dept) {
+            try {
+                if (dept && dept.id != null) {
+                    localStorage.setItem(STORAGE_KEY_DEPT, JSON.stringify({ id: dept.id, name: dept.name }));
+                }
+            } catch (e) {}
+        },
+
+        loadDepartmentFromStorage() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY_DEPT);
+                if (!raw) return null;
+                return JSON.parse(raw);
+            } catch (e) {
+                return null;
+            }
+        },
+
+        async loadDepartments() {
+            this.loadingDepartments = true;
+            try {
+                const response = await axios.get('/api/index.php?model=department&method=listByUser');
+                const all = Array.isArray(response.data) ? response.data : [];
+                this.departments = all.filter(function(d) { return d && d.can_project != 0; });
+                if (!this.departments.length) {
+                    this.selectedDepartment = null;
+                    this.teams = [];
+                    return;
+                }
+                const saved = this.loadDepartmentFromStorage();
+                let dept = null;
+                if (saved) {
+                    dept = this.departments.find(d => d && String(d.id) === String(saved.id));
+                }
+                if (!dept) {
+                    dept = this.departments[0];
+                }
+                await this.selectDepartment(dept, false);
+            } catch (error) {
+                console.error('Error loading departments:', error);
+                this.departments = [];
+                this.selectedDepartment = null;
+                this.teams = [];
+                this.showError('部署データの読み込みに失敗しました');
+            } finally {
+                this.loadingDepartments = false;
+            }
+        },
+
+        async selectDepartment(department, persist = true) {
+            if (persist !== false) {
+                this.saveDepartmentToStorage(department);
+            }
+            this.selectedDepartment = department;
+            await this.loadTeams();
+            await this.loadTargets();
+            await this.loadDepartmentTarget();
+        },
+
+        async onYearChange() {
+            await this.loadTargets();
+            await this.loadDepartmentTarget();
         },
         
         formatNumber(num) {

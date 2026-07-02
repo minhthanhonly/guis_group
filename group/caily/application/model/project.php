@@ -3964,6 +3964,9 @@ class Project extends ApplicationModel {
     function getMonthlyRevenueStats($params = null) {
         $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
         $month = isset($_GET['month']) ? trim((string)$_GET['month']) : date('Y-m');
+        $estimatedAllTime = isset($_GET['estimated_all_time']) && intval($_GET['estimated_all_time']) === 1;
+        $cancelledAllTime = isset($_GET['cancelled_all_time']) && intval($_GET['cancelled_all_time']) === 1;
+        $cancelledEstimatedOnly = !isset($_GET['cancelled_estimated_only']) || intval($_GET['cancelled_estimated_only']) === 1;
         if ($department_id <= 0) {
             return ['status' => 'error', 'error' => 'department_id required'];
         }
@@ -3976,18 +3979,71 @@ class Project extends ApplicationModel {
 
         $monthEsc = $this->escape($month);
         $deptId = intval($department_id);
+        list($monthYear, $monthNum) = array_map('intval', explode('-', $month));
+        $fiscalYear = ($monthNum >= 7) ? ($monthYear + 1) : $monthYear;
+        $fiscalStartYear = ($monthNum >= 7) ? $monthYear : ($monthYear - 1);
+        $fiscalStartMonth = sprintf('%04d-07', $fiscalStartYear);
+        $fiscalMonthCount = (($monthYear - $fiscalStartYear) * 12 + $monthNum - 7) + 1;
+        if ($fiscalMonthCount < 1) $fiscalMonthCount = 1;
+
+        $departmentTargetTable = DB_PREFIX . 'department_revenue_targets';
+        $this->query("CREATE TABLE IF NOT EXISTS `{$departmentTargetTable}` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `department_id` int(11) NOT NULL,
+            `year` int(4) NOT NULL,
+            `yearly_target` decimal(15,2) NOT NULL DEFAULT 0.00,
+            `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `unique_department_year` (`department_id`, `year`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $departmentTargetQuery = sprintf(
+            "SELECT yearly_target FROM {$departmentTargetTable}
+             WHERE department_id = %d AND year = %d
+             LIMIT 1",
+            $deptId,
+            $fiscalYear
+        );
+        $departmentTargetRow = $this->fetchOne($departmentTargetQuery);
+        $departmentYearlyTarget = floatval($departmentTargetRow['yearly_target'] ?? 0);
+        $monthlyTargetSales = $departmentYearlyTarget / 12;
+        $cumulativeTargetSales = $monthlyTargetSales * $fiscalMonthCount;
+
         $baseFrom = $this->getMonthlyRevenueStatsBaseFromSql();
         $companyLabel = $this->sqlMonthlyRevenueCompanyLabel();
         $branchExpr = $this->sqlEffectiveBranchName();
         $baseWhere = "p.department_id = {$deptId} AND p.status != 'deleted'";
 
         $invoiceAmountExpr = "CASE WHEN COALESCE(p.invoice_amount, 0) > 0 THEN p.invoice_amount ELSE COALESCE(p.amount, 0) END";
+        $cancelledEstimatedWhere = $cancelledEstimatedOnly
+            ? " AND p.estimate_status IN ('発行済', '発行済み')"
+            : "";
 
         $summaryAll = $this->buildMonthlyRevenueSummaryByCompany(
             $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr
         );
         $summaryRows = $summaryAll['rows'];
         $totals = $summaryAll['totals'];
+        $monthlyActualSales = floatval($totals['invoice_amount'] ?? 0);
+
+        $cumulativeActualQuery = sprintf(
+            "SELECT COALESCE(SUM(CASE
+                        WHEN p.invoice_status IN ('発行済', '発行済み') THEN %s
+                        ELSE 0
+                    END), 0) AS cumulative_actual
+             FROM {$this->table} p
+             WHERE p.department_id = %d
+               AND p.status != 'deleted'
+               AND p.invoice_date IS NOT NULL
+               AND DATE_FORMAT(p.invoice_date, '%%Y-%%m') >= '%s'
+               AND DATE_FORMAT(p.invoice_date, '%%Y-%%m') <= '%s'",
+            $invoiceAmountExpr,
+            $deptId,
+            $this->escape($fiscalStartMonth),
+            $monthEsc
+        );
+        $cumulativeActualRow = $this->fetchOne($cumulativeActualQuery);
+        $cumulativeActualSales = floatval($cumulativeActualRow['cumulative_actual'] ?? 0);
 
         $summaryCaily = $this->buildMonthlyRevenueSummaryByCompany(
             $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr, 'CAILY'
@@ -4002,6 +4058,7 @@ class Project extends ApplicationModel {
                 p.name,
                 %s AS company_name,
                 %s AS branch_name,
+                pp.construction_number AS parent_construction_number,
                 COALESCE(p.amount, 0) AS amount,
                 p.estimate_status,
                 p.invoice_status,
@@ -4010,6 +4067,7 @@ class Project extends ApplicationModel {
                 p.payment_status,
                 p.payment_date,
                 COALESCE(p.payment_amount, 0) AS payment_amount,
+                p.payment_note,
                 p.tantou,
                 p.project_order_type,
                 pp.scale AS parent_scale,
@@ -4022,7 +4080,7 @@ class Project extends ApplicationModel {
             WHERE %s
               AND p.invoice_status IN ('発行済', '発行済み')
               AND DATE_FORMAT(p.invoice_date, '%%Y-%%m') = '%s'
-            ORDER BY company_name ASC, p.invoice_date ASC, p.id ASC",
+            ORDER BY p.invoice_date ASC, company_name ASC, p.id ASC",
             $companyLabel,
             $branchExpr,
             $invoiceAmountExpr,
@@ -4030,15 +4088,52 @@ class Project extends ApplicationModel {
             $baseWhere,
             $monthEsc
         );
-        $estimatedQuery = sprintf(
-            "SELECT
+        if ($estimatedAllTime) {
+            $estimatedQuery = sprintf(
+                "SELECT
                 p.id,
                 p.name,
                 %s AS company_name,
                 %s AS branch_name,
+                pp.construction_number AS parent_construction_number,
                 COALESCE(p.amount, 0) AS amount,
+                %s AS invoice_amount,
                 p.estimate_status,
                 p.estimate_date,
+                p.end_date,
+                p.payment_note,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.caily_nouki,
+                p.guis_nouki,
+                p.teams
+            %s
+            WHERE %s
+              AND p.estimate_date IS NOT NULL
+            ORDER BY p.estimate_date ASC, company_name ASC, p.id ASC",
+            $companyLabel,
+            $branchExpr,
+            $invoiceAmountExpr,
+            $baseFrom,
+            $baseWhere
+            );
+        } else {
+            $estimatedQuery = sprintf(
+                "SELECT
+                p.id,
+                p.name,
+                %s AS company_name,
+                %s AS branch_name,
+                pp.construction_number AS parent_construction_number,
+                COALESCE(p.amount, 0) AS amount,
+                %s AS invoice_amount,
+                p.estimate_status,
+                p.estimate_date,
+                p.end_date,
+                p.payment_note,
                 p.tantou,
                 p.project_order_type,
                 pp.scale AS parent_scale,
@@ -4051,13 +4146,15 @@ class Project extends ApplicationModel {
             WHERE %s
               AND p.estimate_date IS NOT NULL
               AND DATE_FORMAT(p.estimate_date, '%%Y-%%m') = '%s'
-            ORDER BY company_name ASC, p.estimate_date ASC, p.id ASC",
-            $companyLabel,
-            $branchExpr,
-            $baseFrom,
-            $baseWhere,
-            $monthEsc
-        );
+            ORDER BY p.estimate_date ASC, company_name ASC, p.id ASC",
+                $companyLabel,
+                $branchExpr,
+                $invoiceAmountExpr,
+                $baseFrom,
+                $baseWhere,
+                $monthEsc
+            );
+        }
         $estimatedProjects = $this->fetchAll($estimatedQuery);
         $this->enrichMonthlyRevenueStatsProjects($estimatedProjects);
 
@@ -4070,11 +4167,14 @@ class Project extends ApplicationModel {
                 p.name,
                 %s AS company_name,
                 %s AS branch_name,
+                pp.construction_number AS parent_construction_number,
                 COALESCE(p.amount, 0) AS amount,
+                %s AS invoice_amount,
                 p.status,
                 p.invoice_status,
                 p.actual_end_date,
                 p.end_date,
+                p.payment_note,
                 p.caily_nouki,
                 p.guis_nouki,
                 p.tantou,
@@ -4088,14 +4188,85 @@ class Project extends ApplicationModel {
               AND p.status = 'completed'
               AND p.invoice_status = '未発行'
               AND p.estimate_status IN ('発行済', '発行済み')
-            ORDER BY company_name ASC, COALESCE(p.actual_end_date, p.end_date) DESC, p.id ASC",
+            ORDER BY (p.end_date IS NULL) ASC, p.end_date ASC, company_name ASC, p.id ASC",
             $companyLabel,
             $branchExpr,
+            $invoiceAmountExpr,
             $baseFrom,
             $baseWhere
         );
         $completedUninvoiced = $this->fetchAll($backlogQuery);
         $this->enrichMonthlyRevenueStatsProjects($completedUninvoiced);
+
+        if ($cancelledAllTime) {
+            $cancelledQuery = sprintf(
+                "SELECT
+                p.id,
+                p.name,
+                %s AS company_name,
+                %s AS branch_name,
+                pp.construction_number AS parent_construction_number,
+                COALESCE(p.amount, 0) AS amount,
+                p.status,
+                p.actual_end_date,
+                p.end_date,
+                p.payment_note,
+                p.caily_nouki,
+                p.guis_nouki,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.teams
+            %s
+            WHERE %s
+              AND p.status = 'cancelled'
+              %s
+            ORDER BY company_name ASC, (p.end_date IS NULL) ASC, p.end_date ASC, p.id ASC",
+                $companyLabel,
+                $branchExpr,
+                $baseFrom,
+                $baseWhere,
+                $cancelledEstimatedWhere
+            );
+        } else {
+            $cancelledQuery = sprintf(
+                "SELECT
+                p.id,
+                p.name,
+                %s AS company_name,
+                %s AS branch_name,
+                pp.construction_number AS parent_construction_number,
+                COALESCE(p.amount, 0) AS amount,
+                p.status,
+                p.actual_end_date,
+                p.end_date,
+                p.payment_note,
+                p.caily_nouki,
+                p.guis_nouki,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.teams
+            %s
+            WHERE %s
+              AND p.status = 'cancelled'
+              %s
+              AND DATE_FORMAT(COALESCE(p.actual_end_date, p.end_date), '%%Y-%%m') = '%s'
+            ORDER BY company_name ASC, (p.end_date IS NULL) ASC, p.end_date ASC, p.id ASC",
+                $companyLabel,
+                $branchExpr,
+                $baseFrom,
+                $baseWhere,
+                $cancelledEstimatedWhere,
+                $monthEsc
+            );
+        }
+        $cancelledProjects = $this->fetchAll($cancelledQuery);
+        $this->enrichMonthlyRevenueStatsProjects($cancelledProjects);
 
         $monthsQuery = sprintf(
             "SELECT DISTINCT month_value AS month,
@@ -4123,6 +4294,16 @@ class Project extends ApplicationModel {
                 'month' => $month,
                 'department_id' => $deptId,
                 'available_months' => $availableMonths,
+                'target_summary' => [
+                    'fiscal_year' => $fiscalYear,
+                    'fiscal_start_month' => $fiscalStartMonth,
+                    'fiscal_month_count' => $fiscalMonthCount,
+                    'department_yearly_target' => $departmentYearlyTarget,
+                    'monthly_target_sales' => $monthlyTargetSales,
+                    'cumulative_target_sales' => $cumulativeTargetSales,
+                    'monthly_actual_sales' => $monthlyActualSales,
+                    'cumulative_actual_sales' => $cumulativeActualSales,
+                ],
             ],
             'summary_by_company' => $summaryRows,
             'summary_totals' => $totals,
@@ -4133,6 +4314,7 @@ class Project extends ApplicationModel {
             'estimated_projects' => $estimatedProjects,
             'invoiced_projects' => $invoicedProjects,
             'completed_uninvoiced' => $completedUninvoiced,
+            'cancelled_projects' => $cancelledProjects,
         ];
     }
 

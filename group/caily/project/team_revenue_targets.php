@@ -21,6 +21,27 @@ if($_SESSION['show_project'] == 0){
             </div>
         </div>
 
+        <div class="col-12 mb-3">
+            <nav class="navbar navbar-expand-lg bg-dark">
+                <div class="container-fluid">
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#teamRevenueDeptNav" aria-controls="teamRevenueDeptNav" aria-expanded="false" aria-label="Toggle navigation">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse justify-content-start" id="teamRevenueDeptNav">
+                        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                            <li class="nav-item" v-for="department in departments" :key="department.id"
+                                :class="{ 'active bg-primary text-white rounded-3': selectedDepartment && selectedDepartment.id === department.id }">
+                                <a href="#" class="nav-link" @click.prevent="selectDepartment(department)">{{ department.name }}</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+            <div v-if="!departments.length && !loadingDepartments" class="alert alert-warning mt-2 mb-0">
+                表示できる部署がありません。
+            </div>
+        </div>
+
         <!-- Filters -->
         <div class="col-12 mb-4">
             <div class="card">
@@ -28,18 +49,13 @@ if($_SESSION['show_project'] == 0){
                     <div class="row g-3">
                         <div class="col-md-4">
                             <label class="form-label">年度 (7月〜翌年6月)</label>
-                            <select class="form-select" v-model="selectedYear" @change="loadTargets">
+                            <select class="form-select" v-model="selectedYear" @change="onYearChange">
                                 <option v-for="opt in availableYears" :key="opt.value" :value="opt.value">
                                     {{ opt.label }}
                                 </option>
                             </select>
                         </div>
-                        <div class="col-md-8 d-flex align-items-end gap-2">
-                            <button class="btn btn-primary" @click="saveAllTargets" :disabled="saving">
-                                <i class="fa fa-save me-1"></i>
-                                <span v-if="saving">保存中...</span>
-                                <span v-else>すべて保存</span>
-                            </button>
+                        <div class="col-md-4 d-flex align-items-end gap-2 flex-wrap">
                             <button class="btn btn-outline-secondary" @click="loadTargets" :disabled="loading">
                                 <i class="fa fa-refresh me-1"></i>更新
                             </button>
@@ -58,7 +74,7 @@ if($_SESSION['show_project'] == 0){
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-4">
-                            <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                            <div class="d-flex h-100 justify-content-between align-items-center p-3 border border-primary rounded">
                                 <div>
                                     <small class="text-muted d-block">チーム数</small>
                                     <h4 class="mb-0">{{ teams.length }}</h4>
@@ -67,19 +83,27 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                            <div class="p-3 border border-primary rounded h-100">
                                 <div>
-                                    <small class="text-muted d-block">年間目標合計</small>
-                                    <h4 class="mb-0">¥{{ formatNumber(totalYearlyTarget) }}</h4>
+                                    <small class="text-muted d-block">部署目標売上</small>
+                                    <div class="input-group mt-2">
+                                        <span class="input-group-text">¥</span>
+                                        <input type="number"
+                                               class="form-control text-end"
+                                               v-model.number="departmentYearlyTarget"
+                                               @blur="onDepartmentTargetBlur"
+                                               step="1000"
+                                               min="0"
+                                               placeholder="0">
+                                    </div>
                                 </div>
-                                <i class="fa fa-yen-sign fa-2x text-success"></i>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                            <div class="d-flex h-100 justify-content-between align-items-center p-3 border border-primary rounded">
                                 <div>
-                                    <small class="text-muted d-block">月間目標合計</small>
-                                    <h4 class="mb-0">¥{{ formatNumber(totalMonthlyTarget) }}</h4>
+                                    <small class="text-muted d-block">部署月間目標</small>
+                                    <h4 class="mb-0">¥{{ formatNumber(departmentMonthlyTarget) }}</h4>
                                 </div>
                                 <i class="fa fa-calendar fa-2x text-info"></i>
                             </div>
@@ -93,8 +117,7 @@ if($_SESSION['show_project'] == 0){
         <div class="col-12 mt-4">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">{{ selectedYear }}年のチーム売上目標</h5>
-                    <small class="text-muted">月間目標は年間目標を12で割った値です</small>
+                    <h5 class="card-title mb-0">{{ selectedYear }}年のチーム売上目標 <span v-if="selectedDepartment">- {{ selectedDepartment.name }}</span></h5>
                 </div>
                 <div class="card-body">
                     <!-- Loading State -->
@@ -111,17 +134,14 @@ if($_SESSION['show_project'] == 0){
                             <thead class="table-light">
                                 <tr>
                                     <th style="width: 5%;">#</th>
-                                    <th style="width: 20%;">部署</th>
-                                    <th style="width: 25%;">チーム名</th>
-                                    <th class="text-end" style="width: 20%;">年間目標 (¥)</th>
-                                    <th class="text-end" style="width: 20%;">月間目標 (¥)</th>
-                                    <th style="width: 10%;">操作</th>
+                                    <th style="width: 35%;">チーム名</th>
+                                    <th class="text-end" style="width: 25%;">年間目標 (¥)</th>
+                                    <th class="text-end" style="width: 25%;">月間目標 (¥)</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr v-for="(team, index) in teams" :key="team.id">
                                     <td>{{ index + 1 }}</td>
-                                    <td>{{ team.department_name || '-' }}</td>
                                     <td>
                                         <strong>{{ team.name }}</strong>
                                     </td>
@@ -131,7 +151,7 @@ if($_SESSION['show_project'] == 0){
                                             <input type="number" 
                                                    class="form-control text-end" 
                                                    v-model.number="team.yearly_target" 
-                                                   @input="updateMonthlyTarget(team)"
+                                                   @input="onTeamTargetInput(team)"
                                                    step="1000"
                                                    min="0"
                                                    placeholder="0">
@@ -142,15 +162,22 @@ if($_SESSION['show_project'] == 0){
                                             ¥{{ formatNumber(team.monthly_target || 0) }}
                                         </span>
                                     </td>
-                                    <td>
-                                        <button class="btn btn-sm btn-primary" 
-                                                @click="saveTarget(team)" 
-                                                :disabled="saving">
-                                            <i class="fa fa-save me-1"></i>保存
-                                        </button>
-                                    </td>
                                 </tr>
                             </tbody>
+                            <tfoot class="table-secondary fw-semibold">
+                                <tr>
+                                    <td colspan="2" data-i18n="合計">合計</td>
+                                    <td class="text-end">
+                                        <div>¥{{ formatNumber(totalYearlyTarget) }}</div>
+                                        <small v-if="yearlyTotalCompareMessage"
+                                               :class="yearlyTotalCompareStatus === 'over' ? 'text-orange' : 'text-danger'"
+                                               class="d-block mt-1 fw-semibold">
+                                            {{ yearlyTotalCompareMessage }}
+                                        </small>
+                                    </td>
+                                    <td class="text-end">¥{{ formatNumber(totalMonthlyTarget) }}</td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
 
@@ -177,6 +204,9 @@ $view->footing();
 }
 .input-group-text {
     background-color: #f8f9fa;
+}
+.text-orange {
+    color: #fd7e14 !important;
 }
 </style>
 
