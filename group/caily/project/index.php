@@ -701,49 +701,73 @@ div.dt-scroll-head thead th {
     cursor: move;
 }
 
+/* Column resize handle (viền phải header) */
+#projectTable thead th.pl-col-resizable-th,
+#projectTable_wrapper .dt-scroll-head thead th.pl-col-resizable-th,
+div.dt-scroll-head thead th.pl-col-resizable-th {
+    position: relative;
+}
+.pl-col-resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 5;
+    user-select: none;
+    touch-action: none;
+    pointer-events: auto;
+}
+.pl-col-resize-handle:hover {
+    background-color: rgba(105, 108, 255, 0.35);
+}
+body.pl-col-resizing {
+    user-select: none;
+    cursor: col-resize !important;
+}
+body.pl-col-resizing * {
+    cursor: col-resize !important;
+}
+
 .table thead tr th {
     padding: 0.4rem!important;
 }
 
-/* Cột 受注形態: giới hạn chiều ngang 100px */
+/* Cột 受注形態: chiều ngang tối thiểu 60px, không khoá max */
 #projectTable th.project-order-type-column,
 #projectTable td.project-order-type-column,
 #projectTable_wrapper .dt-scroll-head th.project-order-type-column {
-    max-width: 100px;
-    width: 100px;
+    min-width: 60px;
     overflow: hidden;
 }
 #projectTable td.project-order-type-column .d-flex {
-    max-width: 100px;
     overflow: hidden;
 }
 
-/* Cột 担当 / 優先度: giới hạn chiều ngang 80px */
+/* Cột 担当 / 優先度: chiều ngang tối thiểu 50px */
 #projectTable th.tantou-column,
 #projectTable td.tantou-column,
 #projectTable th.priority-column,
 #projectTable td.priority-column,
 #projectTable_wrapper .dt-scroll-head th.tantou-column,
 #projectTable_wrapper .dt-scroll-head th.priority-column {
-    max-width: 80px;
-    width: 80px;
+    min-width: 50px;
     overflow: hidden;
 }
 
-/* Cột CAILY納期 / GUIS納期: giới hạn chiều ngang 80px */
+/* Cột CAILY納期 / GUIS納期: chiều ngang tối thiểu 60px */
 #projectTable th.caily-nouki-column,
 #projectTable td.caily-nouki-column,
 #projectTable th.guis-nouki-column,
 #projectTable td.guis-nouki-column,
 #projectTable_wrapper .dt-scroll-head th.caily-nouki-column,
 #projectTable_wrapper .dt-scroll-head th.guis-nouki-column {
-    max-width: 80px;
-    width: 80px;
+    min-width: 60px;
     overflow: hidden;
 }
 #projectTable td.caily-nouki-column .d-flex,
 #projectTable td.guis-nouki-column .d-flex {
-    max-width: 80px;
     overflow: hidden;
 }
 /* Cột CAILY納期: nền xanh lá nhạt */
@@ -892,11 +916,10 @@ div.dt-scroll-head thead th {
     margin-right: 0;
 }
 
-/* Confirmation notes column: đủ rộng để hiển thị đầy đủ nội dung từng note */
+/* Confirmation notes column */
 #projectTable td.confirmation-notes-column {
-    min-width: 200px;
-    max-width: 250px;
-    width: 250px;
+    min-width: 120px;
+    overflow: hidden;
 }
 
 /* Style for each confirmation note item */

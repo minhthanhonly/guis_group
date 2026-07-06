@@ -103,9 +103,14 @@ var projectTable;
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment';
     const COLUMN_VISIBILITY_KEY = 'projectListColumnVisibility';
     const COLUMN_ORDER_STORAGE_KEY = 'projectListColumnOrder';
+    const COLUMN_WIDTH_STORAGE_KEY = 'projectListColumnWidths';
     const SCROLL_RESTORE_KEY = 'projectListScrollY';
+    const PROJECT_LIST_COL_MIN_WIDTH = 40;
+    const PROJECT_LIST_COL_MAX_WIDTH = 1200;
 
     var pendingScrollRestore = null;
+    var projectListColumnResizeDrag = null;
+    var projectListResizeDepartmentId = null;
     var scrollRestoreApplied = false;
     var projectListBackNavigationHandled = false;
     var isProjectListExporting = false;
@@ -606,6 +611,252 @@ var projectTable;
 
     function getProjectColumnOrderStorageKey(departmentId) {
         return COLUMN_ORDER_STORAGE_KEY + '_' + (departmentId != null ? String(departmentId) : '0');
+    }
+
+    function getProjectColumnWidthStorageKey(departmentId) {
+        return COLUMN_WIDTH_STORAGE_KEY + '_' + (departmentId != null ? String(departmentId) : '0');
+    }
+
+    function loadProjectColumnWidths(departmentId) {
+        try {
+            var raw = localStorage.getItem(getProjectColumnWidthStorageKey(departmentId));
+            if (!raw) return {};
+            var parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+            var out = {};
+            Object.keys(parsed).forEach(function(key) {
+                var w = parseInt(parsed[key], 10);
+                if (!key || isNaN(w) || w < PROJECT_LIST_COL_MIN_WIDTH) return;
+                out[key] = Math.min(PROJECT_LIST_COL_MAX_WIDTH, w);
+            });
+            return out;
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function saveProjectColumnWidth(departmentId, columnName, widthPx) {
+        if (!columnName) return;
+        var w = parseInt(widthPx, 10);
+        if (isNaN(w)) return;
+        w = Math.max(PROJECT_LIST_COL_MIN_WIDTH, Math.min(PROJECT_LIST_COL_MAX_WIDTH, w));
+        var widths = loadProjectColumnWidths(departmentId);
+        widths[columnName] = w;
+        try {
+            localStorage.setItem(getProjectColumnWidthStorageKey(departmentId), JSON.stringify(widths));
+        } catch (e) { /* ignore */ }
+    }
+
+    function getProjectListTableWrapper() {
+        var $tbl = $('#projectTable');
+        var $w = $tbl.closest('.dt-container');
+        if ($w.length) return $w;
+        $w = $tbl.closest('.dataTables_wrapper');
+        if ($w.length) return $w;
+        return $('#projectTable_wrapper');
+    }
+
+    // DataTables (2.x) scrollX renders the header in a separate ".dt-scroll-head" table
+    // and the body in a ".dt-scroll-body" table, each with its own <colgroup>. The actual
+    // rendered column width is controlled by the matching <col> element's width, not by
+    // the <th>/<td> style — and calling columns.adjust() re-measures/overrides any width
+    // we set on the header cell. So resizing must write directly to the <col> elements
+    // (found by visual position, since colgroups only contain visible columns) and must
+    // NOT trigger columns.adjust() while dragging.
+    function getProjectListScrollColGroups() {
+        var $wrapper = getProjectListTableWrapper();
+        var groups = [];
+        $wrapper.find('.dt-scroll-head colgroup, .dataTables_scrollHead colgroup, .dt-scroll-body colgroup, .dataTables_scrollBody colgroup').each(function() {
+            groups.push(this);
+        });
+        return groups;
+    }
+
+    function getVisualHeaderPosition(header) {
+        if (!header || !header.parentElement) return -1;
+        return Array.prototype.indexOf.call(header.parentElement.children, header);
+    }
+
+    // With the default "table-layout: auto", widths set on <col>/<td> are only hints:
+    // the browser can still resize columns based on content or redistribute freed space
+    // to other columns, so live drag resizing barely shows any visible change (it only
+    // "sticks" after a full draw() because DataTables rebuilds the whole layout from
+    // scratch then). Forcing "fixed" layout makes the browser strictly honor the <col>
+    // widths we set, so both expand and shrink take effect immediately while dragging.
+    function forceProjectListFixedTableLayout() {
+        try {
+            var bodyTable = document.getElementById('projectTable');
+            if (bodyTable) bodyTable.style.tableLayout = 'fixed';
+            var $wrapper = getProjectListTableWrapper();
+            $wrapper.find('.dt-scroll-head table, .dataTables_scrollHead table').each(function() {
+                this.style.tableLayout = 'fixed';
+            });
+        } catch (e) { /* ignore */ }
+    }
+
+    function getProjectTableColumnWidthPx(table, colIndex) {
+        if (!table || colIndex == null || colIndex < 0) return null;
+        try {
+            var header = table.column(colIndex).header();
+            if (!header) return null;
+            return Math.round(header.getBoundingClientRect().width) || Math.round($(header).outerWidth());
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function setProjectTableColumnWidthPx(table, colIndex, widthPx) {
+        if (!table || colIndex == null || colIndex < 0) return null;
+        var w = parseInt(widthPx, 10);
+        if (isNaN(w)) return null;
+        w = Math.max(PROJECT_LIST_COL_MIN_WIDTH, Math.min(PROJECT_LIST_COL_MAX_WIDTH, w));
+        var wStr = w + 'px';
+        try {
+            var col = table.column(colIndex);
+            var header = col.header();
+            if (!header) return w;
+            header.style.width = wStr;
+            var visualIdx = getVisualHeaderPosition(header);
+            if (visualIdx >= 0) {
+                getProjectListScrollColGroups().forEach(function(colgroup) {
+                    var colEl = colgroup.children[visualIdx];
+                    if (colEl) colEl.style.width = wStr;
+                });
+            }
+            // Keep body <td> in sync too (no scrollX colgroup case / extra safety)
+            col.nodes().each(function() {
+                this.style.width = wStr;
+            });
+        } catch (e) { /* ignore */ }
+        return w;
+    }
+
+    function clearProjectTableColumnInlineWidths(table) {
+        if (!table) return;
+        try {
+            table.columns().every(function() {
+                var header = this.header();
+                if (header) {
+                    header.style.removeProperty('width');
+                    header.style.removeProperty('min-width');
+                    header.style.removeProperty('max-width');
+                }
+                this.nodes().each(function() {
+                    this.style.removeProperty('width');
+                    this.style.removeProperty('min-width');
+                    this.style.removeProperty('max-width');
+                });
+            });
+            getProjectListScrollColGroups().forEach(function(colgroup) {
+                Array.prototype.forEach.call(colgroup.children, function(colEl) {
+                    colEl.style.removeProperty('width');
+                });
+            });
+        } catch (e) { /* ignore */ }
+    }
+
+    function applySavedProjectColumnWidths(table, departmentId) {
+        if (!table) return;
+        var saved = loadProjectColumnWidths(departmentId);
+        Object.keys(saved).forEach(function(colName) {
+            var idx = getDataTableColumnIndexByKey(colName, customFieldColumnDefinitions);
+            if (idx !== null) {
+                setProjectTableColumnWidthPx(table, idx, saved[colName]);
+            }
+        });
+    }
+
+    function _plStartResizeDrag(table, handleEl, pageX) {
+        var colName = handleEl.getAttribute('data-col-name');
+        if (!colName || !table) return;
+        var colIdx = getDataTableColumnIndexByKey(colName, customFieldColumnDefinitions);
+        if (colIdx === null) return;
+        var header = table.column(colIdx).header();
+        // getBoundingClientRect gives the real rendered width, unaffected by min-width style
+        var startWidth = header ? Math.round(header.getBoundingClientRect().width) : 80;
+        if (!startWidth || startWidth < 1) startWidth = $(header).outerWidth() || 80;
+        $('body').addClass('pl-col-resizing');
+        projectListColumnResizeDrag = {
+            table: table,
+            colIdx: colIdx,
+            colName: colName,
+            startX: pageX,
+            startWidth: startWidth,
+            departmentId: projectListResizeDepartmentId,
+            currentWidth: null
+        };
+    }
+
+    function injectProjectListColumnResizeHandles(table) {
+        if (!table) return;
+        try {
+            table.columns(':visible').every(function() {
+                var header = this.header();
+                if (!header) return;
+                var $th = $(header);
+                var name = this.name() || '';
+                $th.addClass('pl-col-resizable-th');
+                var $handle = $th.find('.pl-col-resize-handle');
+                if (!$handle.length) {
+                    $('<div class="pl-col-resize-handle" aria-hidden="true"></div>').appendTo($th);
+                    $handle = $th.find('.pl-col-resize-handle');
+                }
+                var handleEl = $handle[0];
+                $handle.attr('data-col-name', name);
+                // Attach native listener directly on element (target phase) so it fires
+                // before ColReorder's listener on the parent <th> in the bubble phase.
+                if (handleEl && !handleEl._plResizeBound) {
+                    handleEl._plResizeBound = true;
+                    handleEl.addEventListener('mousedown', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        _plStartResizeDrag(table, handleEl, e.pageX);
+                    }, false);
+                }
+            });
+        } catch (e) { /* ignore */ }
+    }
+
+    function unbindProjectListColumnResize() {
+        if (projectListColumnResizeDrag && projectListColumnResizeDrag.table) {
+            projectListColumnResizeDrag.table = null;
+        }
+        projectListColumnResizeDrag = null;
+        $('body').removeClass('pl-col-resizing');
+    }
+
+    function bindProjectListColumnResizeDocumentEvents() {
+        if (window.__projectListColumnResizeDocBound) return;
+        window.__projectListColumnResizeDocBound = true;
+        document.addEventListener('mousemove', function(e) {
+            var drag = projectListColumnResizeDrag;
+            if (!drag || !drag.table) return;
+            e.preventDefault();
+            var newW = setProjectTableColumnWidthPx(drag.table, drag.colIdx, drag.startWidth + (e.pageX - drag.startX));
+            if (newW) drag.currentWidth = newW;
+        }, { passive: false });
+        document.addEventListener('mouseup', function() {
+            var drag = projectListColumnResizeDrag;
+            if (!drag) return;
+            $('body').removeClass('pl-col-resizing');
+            var finalW = drag.currentWidth || getProjectTableColumnWidthPx(drag.table, drag.colIdx);
+            if (finalW && drag.colName) {
+                saveProjectColumnWidth(drag.departmentId, drag.colName, finalW);
+            }
+            projectListColumnResizeDrag = null;
+        });
+    }
+
+    function initProjectListColumnResize(table, departmentId) {
+        if (!table) return;
+        projectListResizeDepartmentId = departmentId;
+        bindProjectListColumnResizeDocumentEvents();
+        forceProjectListFixedTableLayout();
+        try { table.columns.adjust(); } catch (e) { /* ignore */ }
+        clearProjectTableColumnInlineWidths(table);
+        applySavedProjectColumnWidths(table, departmentId);
+        injectProjectListColumnResizeHandles(table);
     }
 
     function isCailyBranchUser() {
@@ -1910,6 +2161,12 @@ var projectTable;
 
     // Destroy DataTable khi đổi department để refresh đúng custom fields và dropdown 列の表示
     function destroyProjectTable() {
+        // Reset drag state and clear _plResizeBound so handles are re-attached on re-init
+        unbindProjectListColumnResize();
+        projectListResizeDepartmentId = null;
+        document.querySelectorAll('#projectTable .pl-col-resize-handle').forEach(function(el) {
+            el._plResizeBound = false;
+        });
         var $tbl = $('#projectTable');
         try {
             if ($.fn.dataTable && $.fn.dataTable.tables) {
@@ -2942,6 +3199,7 @@ var projectTable;
         var defaultColumnKeys = fixedColumnConfigs.map(function(c) { return c.name; }).concat(customColumnConfigs.map(function(c) { return c.name; })).concat(tailForTable.map(function(c) { return c.name; }));
         var depIdForColumnOrder = app.selectedDepartment && app.selectedDepartment.id;
         var mergedColumnKeys = mergeColumnKeyOrder(loadProjectColumnOrder(depIdForColumnOrder), defaultColumnKeys);
+        var savedColumnWidths = loadProjectColumnWidths(depIdForColumnOrder);
         var projectColumnRegistry = {};
         fixedColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
         customColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
@@ -2949,10 +3207,16 @@ var projectTable;
         var orderedColumns = mergedColumnKeys.map(function(k) {
             var col = projectColumnRegistry[k];
             if (!col) return null;
+            var out;
             if (isCailyBranchUser() && k === 'end_date') {
-                return Object.assign({}, col, { visible: false });
+                out = Object.assign({}, col, { visible: false });
+            } else {
+                out = Object.assign({}, col);
             }
-            return col;
+            if (savedColumnWidths[k]) {
+                out.width = savedColumnWidths[k] + 'px';
+            }
+            return out;
         }).filter(Boolean);
         var defaultOrder = getProjectListDefaultOrder(mergedColumnKeys);
 
@@ -3054,6 +3318,7 @@ var projectTable;
                 if (tableEl && typeof applyStickyScrollHead === 'function') {
                     applyStickyScrollHead(tableEl);
                 }
+                initProjectListColumnResize(projectTable, app.selectedDepartment && app.selectedDepartment.id);
                 applyI18nToProjectTableUI();
             }
             
@@ -3075,6 +3340,14 @@ var projectTable;
             }
             saveProjectColumnOrder(app.selectedDepartment && app.selectedDepartment.id, keys);
             projectTable.columns.adjust();
+            // columns.adjust() may rebuild the scroll-head/scroll-body colgroups, so
+            // custom widths must be reapplied afterwards.
+            applySavedProjectColumnWidths(projectTable, app.selectedDepartment && app.selectedDepartment.id);
+            // Reset _plResizeBound so handles are re-attached with correct column name after reorder
+            document.querySelectorAll('#projectTable .pl-col-resize-handle').forEach(function(el) {
+                el._plResizeBound = false;
+            });
+            injectProjectListColumnResizeHandles(projectTable);
         });
 
         bindProjectListScrollRestoreOnTableLoad();
@@ -3124,11 +3397,14 @@ var projectTable;
                 });
             });
             applyI18nToProjectTableUI();
+            injectProjectListColumnResizeHandles(projectTable);
         });
         
         // Apply column visibility after table initialization (base + custom columns; custom default hidden)
         var columnVisibility = loadColumnVisibilityFromLocalStorage(customFieldColumnDefinitions);
         applyColumnVisibility(projectTable, columnVisibility, customFieldColumnDefinitions);
+        applySavedProjectColumnWidths(projectTable, depIdForColumnOrder);
+        injectProjectListColumnResizeHandles(projectTable);
         if (app) {
             var depIdAc = app.selectedDepartment && app.selectedDepartment.id;
             app.availableColumns = buildAvailableColumnsList(customFieldColumnDefinitions, depIdAc, columnVisibility);
@@ -6599,6 +6875,8 @@ var projectTable;
                     if (dtIndex !== null) {
                         projectTable.column(dtIndex).visible(isVisible, false);
                         projectTable.columns.adjust().draw(false);
+                        applySavedProjectColumnWidths(projectTable, this.selectedDepartment && this.selectedDepartment.id);
+                        injectProjectListColumnResizeHandles(projectTable);
                     }
                 }
             },
