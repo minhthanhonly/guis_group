@@ -1085,6 +1085,261 @@ var projectTable;
         reapplyProjectListColumnWidthsAfterLayout(table, departmentId);
     }
 
+    function getCurrentProjectColumnOrderKeys(table) {
+        if (!table) return [];
+        var keys = [];
+        var cnt = table.columns().count();
+        for (var ci = 0; ci < cnt; ci++) {
+            try {
+                var colApi = table.column(ci);
+                var nm = typeof colApi.name === 'function' ? colApi.name() : '';
+                if (!nm && table.settings && table.settings()[0] && table.settings()[0].aoColumns) {
+                    nm = table.settings()[0].aoColumns[ci] && table.settings()[0].aoColumns[ci].name;
+                }
+                if (nm) keys.push(nm);
+            } catch (errCol) { /* skip */ }
+        }
+        return keys;
+    }
+
+    function getProjectColumnNameFromTable(table, colIndex) {
+        if (!table || colIndex == null || colIndex < 0) return '';
+        try {
+            var colApi = table.column(colIndex);
+            var nm = typeof colApi.name === 'function' ? colApi.name() : '';
+            if (!nm && table.settings && table.settings()[0] && table.settings()[0].aoColumns) {
+                nm = table.settings()[0].aoColumns[colIndex] && table.settings()[0].aoColumns[colIndex].name;
+            }
+            return nm || '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function getCurrentProjectColumnWidths(table, departmentId) {
+        var widths = Object.assign({}, loadProjectColumnWidths(departmentId));
+        if (!table || !$.fn.DataTable.isDataTable('#projectTable')) {
+            return widths;
+        }
+        var cnt = table.columns().count();
+        for (var i = 0; i < cnt; i++) {
+            var name = getProjectColumnNameFromTable(table, i);
+            if (!name) continue;
+            try {
+                if (!table.column(i).visible()) {
+                    continue;
+                }
+            } catch (e) { /* ignore */ }
+            var w = getProjectListColumnWidthFromState(table, i);
+            if (w >= PROJECT_LIST_COL_MIN_WIDTH) {
+                widths[name] = Math.min(PROJECT_LIST_COL_MAX_WIDTH, Math.round(w));
+            }
+        }
+        return widths;
+    }
+
+    function buildProjectColumnConfigExport(departmentId) {
+        var defs = customFieldColumnDefinitions || [];
+        var visibility = loadColumnVisibilityFromLocalStorage(defs);
+        var order = (projectTable && $.fn.DataTable.isDataTable('#projectTable'))
+            ? getCurrentProjectColumnOrderKeys(projectTable)
+            : (loadProjectColumnOrder(departmentId) || getDefaultProjectColumnKeys(defs));
+        return {
+            version: 1,
+            type: 'project-list-column-config',
+            exportedAt: new Date().toISOString(),
+            visibility: visibility,
+            order: order,
+            widths: getCurrentProjectColumnWidths(projectTable, departmentId)
+        };
+    }
+
+    function sanitizeProjectColumnConfigFilenamePart(value) {
+        var s = String(value || '').trim();
+        if (!s) return '';
+        return s
+            .replace(/[\\/:*?"<>|]/g, '_')
+            .replace(/\s+/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_|_$/g, '');
+    }
+
+    function getProjectColumnConfigExportFilename(departmentId) {
+        var dep = '';
+        if (window.app && window.app.selectedDepartment) {
+            dep = sanitizeProjectColumnConfigFilenamePart(window.app.selectedDepartment.name);
+        }
+        if (!dep) {
+            dep = departmentId != null ? String(departmentId) : '0';
+        }
+        var d = new Date();
+        var pad = function(n) { return n < 10 ? '0' + n : String(n); };
+        var time = d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_'
+            + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+        return dep + '_config_' + time + '.json';
+    }
+
+    function exportProjectColumnConfigFile(departmentId) {
+        var config = buildProjectColumnConfigExport(departmentId);
+        var blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = getProjectColumnConfigExportFilename(departmentId);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function normalizeProjectColumnConfigImport(data, customColDefs) {
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+        if (data.type && data.type !== 'project-list-column-config') return null;
+        var allowedKeys = getDefaultProjectColumnKeys(customColDefs);
+        var keySet = Object.create(null);
+        allowedKeys.forEach(function(k) { keySet[k] = true; });
+        var out = { visibility: {}, order: [], widths: {} };
+
+        if (data.visibility && typeof data.visibility === 'object' && !Array.isArray(data.visibility)) {
+            Object.keys(data.visibility).forEach(function(k) {
+                if (!keySet[k]) return;
+                out.visibility[k] = !!data.visibility[k];
+            });
+        }
+        if (Array.isArray(data.order)) {
+            out.order = data.order.filter(function(k) { return k && keySet[k]; });
+        }
+        if (data.widths && typeof data.widths === 'object' && !Array.isArray(data.widths)) {
+            Object.keys(data.widths).forEach(function(k) {
+                if (!keySet[k]) return;
+                var w = parseInt(data.widths[k], 10);
+                if (!isNaN(w) && w >= PROJECT_LIST_COL_MIN_WIDTH) {
+                    out.widths[k] = Math.min(PROJECT_LIST_COL_MAX_WIDTH, w);
+                }
+            });
+        }
+        if (!Object.keys(out.visibility).length && !out.order.length && !Object.keys(out.widths).length) {
+            return null;
+        }
+        return out;
+    }
+
+    function applyProjectColumnOrderFromKeys(table, customColDefs, departmentId, orderKeys) {
+        if (!table || !orderKeys || !orderKeys.length) return;
+        var merged = mergeColumnKeyOrder(orderKeys, getDefaultProjectColumnKeys(customColDefs));
+        saveProjectColumnOrder(departmentId, merged);
+        if (!table.colReorder) return;
+        var newOrder = [];
+        merged.forEach(function(key) {
+            try {
+                var idx = table.column(key + ':name').index();
+                if (typeof idx === 'number' && idx >= 0) newOrder.push(idx);
+            } catch (e) { /* skip */ }
+        });
+        var cnt = table.columns().count();
+        for (var i = 0; i < cnt; i++) {
+            if (newOrder.indexOf(i) === -1) newOrder.push(i);
+        }
+        if (newOrder.length === cnt) {
+            try {
+                table.colReorder.order(newOrder);
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    function applyProjectColumnConfigImport(config, table, customColDefs, departmentId) {
+        if (!config || !table || !$.fn.DataTable.isDataTable('#projectTable')) return false;
+        var changed = false;
+
+        if (Object.keys(config.visibility).length) {
+            var visibility = loadColumnVisibilityFromLocalStorage(customColDefs);
+            Object.keys(config.visibility).forEach(function(k) {
+                visibility[k] = config.visibility[k];
+            });
+            saveColumnVisibilityToLocalStorage(visibility);
+            applyColumnVisibility(table, visibility, customColDefs);
+            if (window.app) {
+                window.app.availableColumns = buildAvailableColumnsList(customColDefs, departmentId, visibility);
+                scheduleColumnVisibilityMenuI18n();
+            }
+            changed = true;
+        }
+
+        if (config.order.length) {
+            applyProjectColumnOrderFromKeys(table, customColDefs, departmentId, config.order);
+            if (window.app) {
+                var vis = loadColumnVisibilityFromLocalStorage(customColDefs);
+                window.app.availableColumns = buildAvailableColumnsList(customColDefs, departmentId, vis);
+                scheduleColumnVisibilityMenuI18n();
+            }
+            changed = true;
+        }
+
+        if (Object.keys(config.widths).length) {
+            var widths = loadProjectColumnWidths(departmentId);
+            Object.keys(config.widths).forEach(function(k) {
+                widths[k] = config.widths[k];
+            });
+            try {
+                localStorage.setItem(getProjectColumnWidthStorageKey(departmentId), JSON.stringify(widths));
+            } catch (e) { /* ignore */ }
+            changed = true;
+        }
+
+        if (changed) {
+            table.columns.adjust().draw(false);
+            reapplyProjectListColumnWidthsAfterLayout(table, departmentId);
+        }
+        return changed;
+    }
+
+    function bindProjectListColumnConfigImportInput() {
+        if (window.__projectListColumnConfigImportBound) return;
+        window.__projectListColumnConfigImportBound = true;
+        var fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.id = 'projectListColumnConfigFileInput';
+        fileInput.accept = '.json,application/json';
+        fileInput.className = 'd-none';
+        document.body.appendChild(fileInput);
+        fileInput.addEventListener('change', function() {
+            var file = fileInput.files && fileInput.files[0];
+            fileInput.value = '';
+            if (!file) return;
+            if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
+            var depId = window.app && window.app.selectedDepartment && window.app.selectedDepartment.id;
+            var defs = customFieldColumnDefinitions || [];
+            var reader = new FileReader();
+            reader.onload = function() {
+                try {
+                    var data = JSON.parse(String(reader.result || ''));
+                    var config = normalizeProjectColumnConfigImport(data, defs);
+                    if (!config) {
+                        if (typeof showMessage === 'function') {
+                            showMessage(translateText('列設定ファイルの形式が正しくありません'), true);
+                        }
+                        return;
+                    }
+                    if (applyProjectColumnConfigImport(config, projectTable, defs, depId)) {
+                        if (typeof showMessage === 'function') {
+                            showMessage(translateText('列設定を読み込みました'));
+                        }
+                    }
+                } catch (e) {
+                    if (typeof showMessage === 'function') {
+                        showMessage(translateText('列設定ファイルの形式が正しくありません'), true);
+                    }
+                }
+            };
+            reader.onerror = function() {
+                if (typeof showMessage === 'function') {
+                    showMessage(translateText('列設定ファイルの形式が正しくありません'), true);
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
+
     function ensureProjectListColumnToolsRowBeforeTable() {
         var toolsRow = document.getElementById('projectListColumnToolsRow');
         var table = document.getElementById('projectTable');
@@ -1110,20 +1365,33 @@ var projectTable;
                         '<li><button type="button" class="dropdown-item" data-pl-reset="visibility"><span data-i18n="列の表示を初期値に戻す">列の表示を初期値に戻す</span></button></li>' +
                         '<li><button type="button" class="dropdown-item" data-pl-reset="width"><span data-i18n="列の幅を初期値に戻す">列の幅を初期値に戻す</span></button></li>' +
                         '<li><button type="button" class="dropdown-item" data-pl-reset="order"><span data-i18n="列の順序を初期値に戻す">列の順序を初期値に戻す</span></button></li>' +
+                        '<li><hr class="dropdown-divider"></li>' +
+                        '<li><button type="button" class="dropdown-item" data-pl-reset="export-config"><span data-i18n="列設定をエクスポート">列設定をエクスポート</span></button></li>' +
+                        '<li><button type="button" class="dropdown-item" data-pl-reset="import-config"><span data-i18n="列設定をインポート">列設定をインポート</span></button></li>' +
                     '</ul>' +
                 '</div>' +
             '</div>';
         $mount.html(html);
+        bindProjectListColumnConfigImportInput();
         if (!window.__projectListColumnResetBound) {
             window.__projectListColumnResetBound = true;
             document.addEventListener('click', function(e) {
                 var btn = e.target && e.target.closest ? e.target.closest('[data-pl-reset]') : null;
                 if (!btn) return;
                 e.preventDefault();
-                if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
                 var action = btn.getAttribute('data-pl-reset');
                 var depId = window.app && window.app.selectedDepartment && window.app.selectedDepartment.id;
                 var defs = customFieldColumnDefinitions || [];
+                if (action === 'export-config') {
+                    exportProjectColumnConfigFile(depId);
+                    return;
+                }
+                if (action === 'import-config') {
+                    var input = document.getElementById('projectListColumnConfigFileInput');
+                    if (input) input.click();
+                    return;
+                }
+                if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
                 if (action === 'show-all-columns') {
                     showAllProjectColumns(projectTable, defs, depId);
                 } else if (action === 'visibility') {
