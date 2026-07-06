@@ -77,7 +77,7 @@ const BUSINESS_DOCUMENT_FIELDS = [
     'payment_note',
 ];
 
-const BUSINESS_DOCUMENT_DATE_FIELDS = ['estimate_date', 'invoice_date', 'payment_date'];
+const BUSINESS_DOCUMENT_DATE_FIELDS = ['estimate_date', 'invoice_date'];
 
 function normalizeProjectVersion(version) {
     const n = Number(version);
@@ -400,6 +400,7 @@ const vueApp = createApp({
             isUpdatingStatus: false,
             businessDocumentSaveStatus: null,
             businessDocumentSaveHideTimer: null,
+            businessDocumentError: '',
             businessDocumentDirty: false,
             savingProject: false,
             // Debounce timer for amount updates
@@ -1257,6 +1258,22 @@ const vueApp = createApp({
             if (!amount) return '¥0';
             return '¥' + parseInt(amount).toLocaleString();
         },
+        getBusinessDocumentTaxAmount(amount) {
+            const base = Number(amount);
+            if (!Number.isFinite(base) || base <= 0) return 0;
+            return Math.round(base * 0.1);
+        },
+        getBusinessDocumentTotalWithTax(amount) {
+            const base = Number(amount);
+            if (!Number.isFinite(base) || base <= 0) return 0;
+            return base + this.getBusinessDocumentTaxAmount(base);
+        },
+        formatBusinessDocumentTaxAmount(amount) {
+            return this.formatCurrency(this.getBusinessDocumentTaxAmount(amount));
+        },
+        formatBusinessDocumentTotalWithTax(amount) {
+            return this.formatCurrency(this.getBusinessDocumentTotalWithTax(amount));
+        },
         getStatusLabel(status) {
             const s = this.statuses.find(s => s.value === status);
             return s ? this.translateLabel(s.label) : status;
@@ -1455,6 +1472,18 @@ const vueApp = createApp({
             this.isUpdatingStatus = true;
             try {
                 this.syncBusinessDocumentDatesFromPickers();
+                if (this.normalizeBusinessDocumentStatusValue(this.project.estimate_status) === '発行済'
+                    && !this.isEstimateDocumentFieldsComplete()) {
+                    this.businessDocumentSaveStatus = null;
+                    this.businessDocumentError = this.getEstimateDocumentFieldsValidationError();
+                    return;
+                }
+                if (this.normalizeBusinessDocumentStatusValue(this.project.invoice_status) === '発行済'
+                    && !this.isInvoiceDocumentFieldsComplete()) {
+                    this.businessDocumentSaveStatus = null;
+                    this.businessDocumentError = this.getInvoiceDocumentFieldsValidationError();
+                    return;
+                }
                 const formData = new FormData();
                 formData.append('id', this.projectId);
                 formData.append('amount', this.project.amount || 0);
@@ -1465,16 +1494,13 @@ const vueApp = createApp({
                 formData.append('invoice_date', this.getBusinessDocumentDateForApi('invoice_date'));
                 formData.append('invoice_amount', this.project.invoice_amount != null ? this.project.invoice_amount : 0);
                 formData.append('invoice_number', this.project.invoice_number || '');
-                formData.append('payment_status', this.project.payment_status || '未入金');
-                formData.append('payment_date', this.getBusinessDocumentDateForApi('payment_date'));
-                formData.append('payment_amount', this.project.payment_amount != null ? this.project.payment_amount : 0);
-                formData.append('receipt_number', this.project.receipt_number || '');
                 formData.append('payment_note', this.project.payment_note || '');
                 appendProjectVersionToFormData(formData, this.project);
                 const response = await axios.post('/api/index.php?model=project&method=updateProjectStatus', formData);
                 if (response.data && response.data.status === 'success') {
                     applyProjectVersionFromResponse(this.project, response.data);
                     this.businessDocumentDirty = false;
+                    this.businessDocumentError = '';
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBusinessDocumentDateForApi(key);
                         if (apiVal) {
@@ -1602,6 +1628,54 @@ const vueApp = createApp({
         hasBusinessDocumentAmount(amount) {
             return amount != null && amount !== '' && Number(amount) > 0;
         },
+        hasBusinessDocumentNumber(value) {
+            return !!String(value || '').trim();
+        },
+        isBusinessDocumentIssuedStatus(status) {
+            const normalized = this.normalizeBusinessDocumentStatusValue(status);
+            return normalized === '発行済';
+        },
+        isEstimateDocumentFieldsComplete() {
+            if (!this.project) return false;
+            this.syncBusinessDocumentDatesFromPickers();
+            return this.hasBusinessDocumentDate('estimate_date')
+                && this.hasBusinessDocumentAmount(this.project.amount)
+                && this.hasBusinessDocumentNumber(this.project.estimate_number);
+        },
+        isInvoiceDocumentFieldsComplete() {
+            if (!this.project) return false;
+            this.syncBusinessDocumentDatesFromPickers();
+            return this.hasBusinessDocumentDate('invoice_date')
+                && this.hasBusinessDocumentAmount(this.project.invoice_amount)
+                && this.hasBusinessDocumentNumber(this.project.invoice_number);
+        },
+        getEstimateDocumentFieldsValidationError() {
+            if (!this.project) return '';
+            this.syncBusinessDocumentDatesFromPickers();
+            const missing = [];
+            if (!this.hasBusinessDocumentDate('estimate_date')) missing.push('見積日');
+            if (!this.hasBusinessDocumentAmount(this.project.amount)) missing.push('見積金額');
+            if (!this.hasBusinessDocumentNumber(this.project.estimate_number)) missing.push('見積番号');
+            if (!missing.length) return '';
+            return '発行済にするには以下を入力してください: ' + missing.join('、');
+        },
+        getInvoiceDocumentFieldsValidationError() {
+            if (!this.project) return '';
+            this.syncBusinessDocumentDatesFromPickers();
+            const missing = [];
+            if (!this.hasBusinessDocumentDate('invoice_date')) missing.push('請求日');
+            if (!this.hasBusinessDocumentAmount(this.project.invoice_amount)) missing.push('請求金額');
+            if (!this.hasBusinessDocumentNumber(this.project.invoice_number)) missing.push('請求番号');
+            if (!missing.length) return '';
+            return '発行済にするには以下を入力してください: ' + missing.join('、');
+        },
+        hideBusinessDocumentStatusDropdown(dropdownId) {
+            const dropdownElement = document.querySelector(dropdownId);
+            if (dropdownElement && typeof bootstrap !== 'undefined') {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                if (dropdown) dropdown.hide();
+            }
+        },
         scheduleBusinessDocumentUpdate() {
             if (!this.canEditBusinessDocuments) return;
             this.businessDocumentDirty = true;
@@ -1728,11 +1802,10 @@ const vueApp = createApp({
             if (!this.project || !this.canEditBusinessDocuments) return;
             this.initBusinessDocumentDatePicker('estimate_date_picker', 'estimate_date', force);
             this.initBusinessDocumentDatePicker('invoice_date_picker', 'invoice_date', force);
-            this.initBusinessDocumentDatePicker('payment_date_picker', 'payment_date', force);
         },
         reinitBusinessDocumentDatePickersOnLocaleChange() {
             if (!this.project || !this.canEditBusinessDocuments) return;
-            ['estimate_date_picker', 'invoice_date_picker', 'payment_date_picker'].forEach((elId) => {
+            ['estimate_date_picker', 'invoice_date_picker'].forEach((elId) => {
                 const el = document.getElementById(elId);
                 if (el && el._flatpickr) {
                     el._flatpickr.destroy();
@@ -2766,15 +2839,22 @@ const vueApp = createApp({
             return statusObj ? `btn-${statusObj.color}` : 'btn-secondary';
         },
         selectEstimateStatus(status) {
-            this.project.estimate_status = status;
-            this.scheduleBusinessDocumentUpdate();
-            const dropdownElement = document.querySelector('#estimateStatusDropdown');
-            if (dropdownElement) {
-                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
-                if (dropdown) {
-                    dropdown.hide();
-                }
+            if (!this.canEditBusinessDocuments || !this.project) return;
+            this.syncBusinessDocumentDatesFromPickers();
+            const normalized = this.normalizeBusinessDocumentStatusValue(status);
+            if (normalized === '発行済' && !this.isEstimateDocumentFieldsComplete()) {
+                this.businessDocumentError = this.getEstimateDocumentFieldsValidationError();
+                this.hideBusinessDocumentStatusDropdown('#estimateStatusDropdown');
+                return;
             }
+            if (this.normalizeBusinessDocumentStatusValue(this.project.estimate_status) === normalized) {
+                this.hideBusinessDocumentStatusDropdown('#estimateStatusDropdown');
+                return;
+            }
+            this.project.estimate_status = normalized;
+            this.businessDocumentError = '';
+            this.scheduleBusinessDocumentUpdate();
+            this.hideBusinessDocumentStatusDropdown('#estimateStatusDropdown');
         },
         
         // Quotation status methods
@@ -2820,15 +2900,22 @@ const vueApp = createApp({
             return statusObj ? `btn-${statusObj.color}` : 'btn-secondary';
         },
         selectInvoiceStatus(status) {
-            this.project.invoice_status = status;
-            this.scheduleBusinessDocumentUpdate();
-            const dropdownElement = document.querySelector('#invoiceStatusDropdown');
-            if (dropdownElement) {
-                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
-                if (dropdown) {
-                    dropdown.hide();
-                }
+            if (!this.canEditBusinessDocuments || !this.project) return;
+            this.syncBusinessDocumentDatesFromPickers();
+            const normalized = this.normalizeBusinessDocumentStatusValue(status);
+            if (normalized === '発行済' && !this.isInvoiceDocumentFieldsComplete()) {
+                this.businessDocumentError = this.getInvoiceDocumentFieldsValidationError();
+                this.hideBusinessDocumentStatusDropdown('#invoiceStatusDropdown');
+                return;
             }
+            if (this.normalizeBusinessDocumentStatusValue(this.project.invoice_status) === normalized) {
+                this.hideBusinessDocumentStatusDropdown('#invoiceStatusDropdown');
+                return;
+            }
+            this.project.invoice_status = normalized;
+            this.businessDocumentError = '';
+            this.scheduleBusinessDocumentUpdate();
+            this.hideBusinessDocumentStatusDropdown('#invoiceStatusDropdown');
         },
         getPaymentStatusLabel(status) {
             const statusObj = this.paymentStatuses.find(s => s.value === status);

@@ -734,6 +734,31 @@ if($_SESSION['show_project'] == 0){
                         <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label mb-0">見積日 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                    <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate('estimate_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                            @click="setBusinessDocumentDateToday('estimate_date')">今日</button>
+                                </div>
+                                <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project.estimate_date" id="estimate_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                                <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime('estimate_date')" :data-time="getBusinessDocumentDateForTooltip('estimate_date')" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip('estimate_date'))" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">見積金額(税抜き) <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">消費税（10%）</label>
+                                <input type="text" class="form-control bg-light" readonly tabindex="-1" :value="formatBusinessDocumentTaxAmount(project.amount)">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">税込合計</label>
+                                <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(project.amount)">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">見積番号 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                <input type="text" autocomplete="off" class="form-control" v-model="project.estimate_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
+                            </div>
+                            <div class="col-md-6">
                                 <label class="form-label">見積状況</label>
                                 <div v-if="canEditBusinessDocuments">
                                     <div class="btn-group">
@@ -746,11 +771,15 @@ if($_SESSION['show_project'] == 0){
                                         <ul class="dropdown-menu">
                                             <li v-for="status in businessEstimateStatuses" :key="status.value">
                                                 <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                                   :class="{ disabled: status.value === '発行済' && !isEstimateDocumentFieldsComplete() }"
                                                    @click="selectEstimateStatus(status.value)">
                                                     {{ status.label }}
                                                 </a>
                                             </li>
                                         </ul>
+                                    </div>
+                                    <div v-if="!isEstimateDocumentFieldsComplete()" class="form-text text-muted">
+                                        発行済にするには見積日・見積金額・見積番号が必要です
                                     </div>
                                 </div>
                                 <div v-else>
@@ -759,29 +788,41 @@ if($_SESSION['show_project'] == 0){
                                     </span>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <label class="form-label mb-0">見積日</label>
-                                    <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate('estimate_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                            @click="setBusinessDocumentDateToday('estimate_date')">今日</button>
-                                </div>
-                                <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project.estimate_date" id="estimate_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime('estimate_date')" :data-time="getBusinessDocumentDateForTooltip('estimate_date')" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip('estimate_date'))" readonly>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">見積金額</label>
-                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">見積番号</label>
-                                <input type="text" autocomplete="off" class="form-control" v-model="project.estimate_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
-                            </div>
                         </div>
 
                         <hr class="my-3">
 
                         <h6 class="text-muted mb-3"><span data-i18n="請求">請求</span></h6>
                         <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label mb-0">請求日 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                    <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate('invoice_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                            @click="setBusinessDocumentDateToday('invoice_date')">今日</button>
+                                </div>
+                                <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project.invoice_date" id="invoice_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                                <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime('invoice_date')" :data-time="getBusinessDocumentDateForTooltip('invoice_date')" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip('invoice_date'))" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label mb-0">請求金額(税抜き) <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                    <button v-if="canEditBusinessDocuments && !hasBusinessDocumentAmount(project.invoice_amount)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                            @click="copyEstimateAmountToInvoice">見積と同額</button>
+                                </div>
+                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.invoice_amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">消費税（10%）</label>
+                                <input type="text" class="form-control bg-light" readonly tabindex="-1" :value="formatBusinessDocumentTaxAmount(project.invoice_amount)">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">税込合計</label>
+                                <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(project.invoice_amount)">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">請求番号 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                <input type="text" autocomplete="off" class="form-control" v-model="project.invoice_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
+                            </div>
                             <div class="col-md-6">
                                 <label class="form-label">請求状況</label>
                                 <div v-if="canEditBusinessDocuments">
@@ -795,11 +836,15 @@ if($_SESSION['show_project'] == 0){
                                         <ul class="dropdown-menu">
                                             <li v-for="status in businessInvoiceStatuses" :key="status.value">
                                                 <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                                   :class="{ disabled: status.value === '発行済' && !isInvoiceDocumentFieldsComplete() }"
                                                    @click="selectInvoiceStatus(status.value)">
                                                     {{ status.label }}
                                                 </a>
                                             </li>
                                         </ul>
+                                    </div>
+                                    <div v-if="!isInvoiceDocumentFieldsComplete()" class="form-text text-muted">
+                                        発行済にするには請求日・請求金額・請求番号が必要です
                                     </div>
                                 </div>
                                 <div v-else>
@@ -808,88 +853,16 @@ if($_SESSION['show_project'] == 0){
                                     </span>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <label class="form-label mb-0">請求日</label>
-                                    <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate('invoice_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                            @click="setBusinessDocumentDateToday('invoice_date')">今日</button>
-                                </div>
-                                <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project.invoice_date" id="invoice_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime('invoice_date')" :data-time="getBusinessDocumentDateForTooltip('invoice_date')" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip('invoice_date'))" readonly>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <label class="form-label mb-0">請求金額</label>
-                                    <button v-if="canEditBusinessDocuments && !hasBusinessDocumentAmount(project.invoice_amount)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                            @click="copyEstimateAmountToInvoice">見積と同額</button>
-                                </div>
-                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.invoice_amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">請求番号</label>
-                                <input type="text" autocomplete="off" class="form-control" v-model="project.invoice_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
-                            </div>
-                        </div>
-
-                        <hr class="my-3">
-
-                        <h6 class="text-muted mb-3"><span data-i18n="入金">入金</span></h6>
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">入金状況</label>
-                                <div v-if="canEditBusinessDocuments">
-                                    <div class="btn-group">
-                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
-                                                :class="getPaymentStatusButtonClass(project.payment_status)"
-                                                id="paymentStatusDropdown"
-                                                data-bs-toggle="dropdown" aria-expanded="false">
-                                            {{ getPaymentStatusLabel(project.payment_status) }}
-                                        </button>
-                                        <ul class="dropdown-menu">
-                                            <li v-for="status in paymentStatuses" :key="status.value">
-                                                <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                                   @click="selectPaymentStatus(status.value)">
-                                                    {{ status.label }}
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                </div>
-                                <div v-else>
-                                    <span class="badge" :class="getPaymentStatusBadgeClass(project.payment_status)">
-                                        {{ getPaymentStatusLabel(project.payment_status) }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <label class="form-label mb-0">入金日</label>
-                                    <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate('payment_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                            @click="setBusinessDocumentDateToday('payment_date')">今日</button>
-                                </div>
-                                <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project.payment_date" id="payment_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime('payment_date')" :data-time="getBusinessDocumentDateForTooltip('payment_date')" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip('payment_date'))" readonly>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <label class="form-label mb-0">入金額</label>
-                                    <button v-if="canEditBusinessDocuments && !hasBusinessDocumentAmount(project.payment_amount)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                            @click="copyInvoiceAmountToPayment">請求と同額</button>
-                                </div>
-                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.payment_amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">領収書番号</label>
-                                <input type="text" class="form-control" autocomplete="off" v-model="project.receipt_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
-                            </div>
                         </div>
 
                         <hr class="my-3">
 
                         <div class="mb-0">
-                            <label class="form-label">決済備考</label>
+                            <label class="form-label" data-i18n="決済備考">決済備考</label>
                             <textarea class="form-control" rows="3" v-model="project.payment_note" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate"></textarea>
                         </div>
+
+                        <div v-if="businessDocumentError" class="alert alert-danger mt-3 mb-0">{{ businessDocumentError }}</div>
                     </div>
                     <div class="card-body text-center py-4" v-else>
                         <div class="spinner-border" role="status">

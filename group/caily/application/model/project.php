@@ -4318,6 +4318,420 @@ class Project extends ApplicationModel {
         ];
     }
 
+    /**
+     * Paginated invoiced projects list for accounting (all-time, invoice_date ASC).
+     */
+    function listInvoicedProjects($params = null) {
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+        $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+        $perPage = isset($_GET['per_page']) ? intval($_GET['per_page']) : 50;
+        if ($perPage < 1) {
+            $perPage = 50;
+        }
+        if ($perPage > 100) {
+            $perPage = 100;
+        }
+        $offset = ($page - 1) * $perPage;
+
+        $filterInvoiceMonth = isset($_GET['filterInvoiceMonth']) ? trim((string)$_GET['filterInvoiceMonth']) : '';
+        $filterCompany = isset($_GET['filterCompany']) ? trim((string)$_GET['filterCompany']) : '';
+        $filterBranch = isset($_GET['filterBranch']) ? trim((string)$_GET['filterBranch']) : '';
+        $filterInvoiceNumber = isset($_GET['filterInvoiceNumber']) ? trim((string)$_GET['filterInvoiceNumber']) : '';
+        $filterPaymentMonth = isset($_GET['filterPaymentMonth']) ? trim((string)$_GET['filterPaymentMonth']) : '';
+        $filterPaymentStatus = isset($_GET['filterPaymentStatus']) ? trim((string)$_GET['filterPaymentStatus']) : '';
+        $filterReceiptNumber = isset($_GET['filterReceiptNumber']) ? trim((string)$_GET['filterReceiptNumber']) : '';
+        $filterTantou = isset($_GET['filterTantou']) ? trim((string)$_GET['filterTantou']) : '';
+        $filterKeyword = isset($_GET['filterKeyword']) ? trim((string)$_GET['filterKeyword']) : '';
+
+        if ($department_id <= 0) {
+            return ['status' => 'error', 'error' => 'department_id required'];
+        }
+        if (!$this->canUserViewDepartmentRevenueStats($department_id)) {
+            return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
+        }
+        if ($filterInvoiceMonth !== '' && !preg_match('/^\d{4}-\d{2}$/', $filterInvoiceMonth)) {
+            return ['status' => 'error', 'error' => 'Invalid filterInvoiceMonth format'];
+        }
+        if ($filterPaymentMonth !== '' && !preg_match('/^\d{4}-\d{2}$/', $filterPaymentMonth)) {
+            return ['status' => 'error', 'error' => 'Invalid filterPaymentMonth format'];
+        }
+
+        $deptId = intval($department_id);
+        $baseFrom = $this->getMonthlyRevenueStatsBaseFromSql();
+        $companyLabel = $this->sqlMonthlyRevenueCompanyLabel();
+        $branchExpr = $this->sqlEffectiveBranchName();
+        $contactExpr = $this->sqlEffectiveContactName();
+        $invoiceAmountExpr = "CASE WHEN COALESCE(p.invoice_amount, 0) > 0 THEN p.invoice_amount ELSE COALESCE(p.amount, 0) END";
+
+        $whereArr = [
+            "p.department_id = {$deptId}",
+            "p.status != 'deleted'",
+            "p.invoice_status IN ('発行済', '発行済み')",
+            "p.invoice_date IS NOT NULL",
+        ];
+
+        if ($filterKeyword !== '') {
+            $whereArr[] = $this->buildKeywordFilterWhere($filterKeyword);
+        } else {
+            if ($filterInvoiceMonth !== '') {
+                $whereArr[] = "DATE_FORMAT(p.invoice_date, '%Y-%m') = '" . $this->escape($filterInvoiceMonth) . "'";
+            }
+            if ($filterPaymentMonth !== '') {
+                $whereArr[] = "p.payment_date IS NOT NULL AND DATE_FORMAT(p.payment_date, '%Y-%m') = '" . $this->escape($filterPaymentMonth) . "'";
+            }
+            if ($filterPaymentStatus !== '') {
+                $allowedPaymentStatuses = ['未入金', '入金済', '入金拒否'];
+                if (!in_array($filterPaymentStatus, $allowedPaymentStatuses, true)) {
+                    return ['status' => 'error', 'error' => 'Invalid filterPaymentStatus'];
+                }
+                $whereArr[] = "p.payment_status = '" . $this->escape($filterPaymentStatus) . "'";
+            }
+            if ($filterTantou !== '') {
+                if (!in_array($filterTantou, ['CAILY', 'GUIS'], true)) {
+                    return ['status' => 'error', 'error' => 'Invalid filterTantou'];
+                }
+                $whereArr[] = "p.tantou = '" . $this->escape($filterTantou) . "'";
+            }
+            if ($filterCompany !== '') {
+                $whereArr[] = $this->buildFlexibleLikeWhere($filterCompany, [$this->sqlEffectiveCompanyName()]);
+            }
+            if ($filterBranch !== '') {
+                $whereArr[] = $this->buildFlexibleLikeWhere($filterBranch, [$branchExpr]);
+            }
+            if ($filterInvoiceNumber !== '') {
+                $whereArr[] = $this->buildFlexibleLikeWhere($filterInvoiceNumber, ['p.invoice_number']);
+            }
+            if ($filterReceiptNumber !== '') {
+                $whereArr[] = $this->buildFlexibleLikeWhere($filterReceiptNumber, ['p.receipt_number']);
+            }
+        }
+
+        $whereSql = implode(' AND ', $whereArr);
+
+        $unpaidWhereArr = array_values(array_filter($whereArr, function($clause) {
+            return strpos($clause, 'p.payment_status') === false;
+        }));
+        $unpaidWhereArr[] = "p.payment_status = '未入金'";
+        $unpaidWhereSql = implode(' AND ', $unpaidWhereArr);
+
+        $rejectedWhereArr = array_values(array_filter($whereArr, function($clause) {
+            return strpos($clause, 'p.payment_status') === false;
+        }));
+        $rejectedWhereArr[] = "p.payment_status = '入金拒否'";
+        $rejectedWhereSql = implode(' AND ', $rejectedWhereArr);
+
+        $countRow = $this->fetchOne("SELECT COUNT(*) AS cnt {$baseFrom} WHERE {$whereSql}");
+        $totalCount = intval($countRow['cnt'] ?? 0);
+        $totalPages = $perPage > 0 ? (int)ceil($totalCount / $perPage) : 0;
+
+        $totalsQuery = sprintf(
+            "SELECT
+                COUNT(*) AS invoice_count,
+                COALESCE(SUM(%s), 0) AS invoice_amount,
+                SUM(CASE WHEN p.payment_status = '入金済' THEN 1 ELSE 0 END) AS payment_count,
+                COALESCE(SUM(CASE WHEN p.payment_status = '入金済' THEN COALESCE(p.payment_amount, 0) ELSE 0 END), 0) AS payment_amount
+             %s
+             WHERE %s",
+            $invoiceAmountExpr,
+            $baseFrom,
+            $whereSql
+        );
+        $totalsRow = $this->fetchOne($totalsQuery);
+
+        $unpaidTotalsQuery = sprintf(
+            "SELECT
+                COUNT(*) AS unpaid_count,
+                COALESCE(SUM(%s), 0) AS unpaid_invoice_amount
+             %s
+             WHERE %s",
+            $invoiceAmountExpr,
+            $baseFrom,
+            $unpaidWhereSql
+        );
+        $unpaidTotalsRow = $this->fetchOne($unpaidTotalsQuery);
+
+        $rejectedTotalsQuery = sprintf(
+            "SELECT
+                COUNT(*) AS rejected_count,
+                COALESCE(SUM(%s), 0) AS rejected_invoice_amount
+             %s
+             WHERE %s",
+            $invoiceAmountExpr,
+            $baseFrom,
+            $rejectedWhereSql
+        );
+        $rejectedTotalsRow = $this->fetchOne($rejectedTotalsQuery);
+
+        $listQuery = sprintf(
+            "SELECT
+                p.id,
+                p.name,
+                %s AS company_name,
+                %s AS branch_name,
+                %s AS contact_name,
+                pp.construction_number AS parent_construction_number,
+                p.invoice_status,
+                p.invoice_date,
+                p.invoice_number,
+                %s AS invoice_amount,
+                p.payment_status,
+                p.payment_date,
+                COALESCE(p.payment_amount, 0) AS payment_amount,
+                p.receipt_number,
+                p.payment_note,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.teams
+             %s
+             WHERE %s
+             ORDER BY p.invoice_date ASC, company_name ASC, p.id ASC
+             LIMIT %d, %d",
+            $companyLabel,
+            $branchExpr,
+            $contactExpr,
+            $invoiceAmountExpr,
+            $baseFrom,
+            $whereSql,
+            $offset,
+            $perPage
+        );
+        $projects = $this->fetchAll($listQuery);
+        $this->enrichMonthlyRevenueStatsProjects($projects);
+
+        return [
+            'status' => 'success',
+            'meta' => [
+                'department_id' => $deptId,
+                'page' => $page,
+                'per_page' => $perPage,
+                'total_count' => $totalCount,
+                'total_pages' => $totalPages,
+                'totals' => [
+                    'unpaid_count' => intval($unpaidTotalsRow['unpaid_count'] ?? 0),
+                    'unpaid_invoice_amount' => floatval($unpaidTotalsRow['unpaid_invoice_amount'] ?? 0),
+                    'rejected_count' => intval($rejectedTotalsRow['rejected_count'] ?? 0),
+                    'rejected_invoice_amount' => floatval($rejectedTotalsRow['rejected_invoice_amount'] ?? 0),
+                    'payment_count' => intval($totalsRow['payment_count'] ?? 0),
+                    'payment_amount' => floatval($totalsRow['payment_amount'] ?? 0),
+                ],
+            ],
+            'projects' => $projects,
+        ];
+    }
+
+    /**
+     * Monthly payment report: paid projects grouped by payment month.
+     */
+    function getMonthlyPaymentReport($params = null) {
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+        $month = isset($_GET['month']) ? trim((string)$_GET['month']) : '';
+        $filterKeyword = isset($_GET['filterKeyword']) ? trim((string)$_GET['filterKeyword']) : '';
+
+        if ($department_id <= 0) {
+            return ['status' => 'error', 'error' => 'department_id required'];
+        }
+        if (!$this->canUserViewDepartmentRevenueStats($department_id)) {
+            return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
+        }
+        if ($month !== '' && !preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return ['status' => 'error', 'error' => 'Invalid month format'];
+        }
+
+        $deptId = intval($department_id);
+        $baseFrom = $this->getMonthlyRevenueStatsBaseFromSql();
+        $companyLabel = $this->sqlMonthlyRevenueCompanyLabel();
+        $branchExpr = $this->sqlEffectiveBranchName();
+        $invoiceAmountExpr = "CASE WHEN COALESCE(p.invoice_amount, 0) > 0 THEN p.invoice_amount ELSE COALESCE(p.amount, 0) END";
+
+        $whereArr = [
+            "p.department_id = {$deptId}",
+            "p.status != 'deleted'",
+            "p.payment_status = '入金済'",
+            "p.payment_date IS NOT NULL",
+        ];
+
+        if ($month !== '') {
+            $whereArr[] = "DATE_FORMAT(p.payment_date, '%Y-%m') = '" . $this->escape($month) . "'";
+        }
+        if ($filterKeyword !== '') {
+            $whereArr[] = $this->buildKeywordFilterWhere($filterKeyword);
+        }
+
+        $whereSql = implode(' AND ', $whereArr);
+
+        $listQuery = sprintf(
+            "SELECT
+                p.id,
+                p.name,
+                %s AS company_name,
+                %s AS branch_name,
+                pp.construction_number AS parent_construction_number,
+                p.invoice_date,
+                p.invoice_number,
+                %s AS invoice_amount,
+                p.payment_status,
+                p.payment_date,
+                COALESCE(p.payment_amount, 0) AS payment_amount,
+                p.receipt_number,
+                p.payment_note,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.teams
+             %s
+             WHERE %s
+             ORDER BY p.payment_date ASC, company_name ASC, p.id ASC",
+            $companyLabel,
+            $branchExpr,
+            $invoiceAmountExpr,
+            $baseFrom,
+            $whereSql
+        );
+        $projects = $this->fetchAll($listQuery);
+        $this->enrichMonthlyRevenueStatsProjects($projects);
+
+        $groupMap = [];
+        $groupOrder = [];
+        $grandTotals = [
+            'payment_count' => 0,
+            'payment_amount' => 0,
+        ];
+
+        foreach ($projects as $project) {
+            $paymentDate = $project['payment_date'] ?? '';
+            $monthKey = '';
+            if ($paymentDate && preg_match('/^(\d{4}-\d{2})/', (string)$paymentDate, $matches)) {
+                $monthKey = $matches[1];
+            }
+            if ($monthKey === '') {
+                continue;
+            }
+
+            if (!isset($groupMap[$monthKey])) {
+                $groupMap[$monthKey] = [
+                    'month' => $monthKey,
+                    'month_label' => date('Y年m月', strtotime($monthKey . '-01')),
+                    'totals' => [
+                        'payment_count' => 0,
+                        'payment_amount' => 0,
+                    ],
+                    'projects' => [],
+                ];
+                $groupOrder[] = $monthKey;
+            }
+
+            $amount = floatval($project['payment_amount'] ?? 0);
+            $groupMap[$monthKey]['projects'][] = $project;
+            $groupMap[$monthKey]['totals']['payment_count']++;
+            $groupMap[$monthKey]['totals']['payment_amount'] += $amount;
+            $grandTotals['payment_count']++;
+            $grandTotals['payment_amount'] += $amount;
+        }
+
+        rsort($groupOrder);
+        $groups = array_map(function($monthKey) use ($groupMap) {
+            return $groupMap[$monthKey];
+        }, $groupOrder);
+
+        return [
+            'status' => 'success',
+            'meta' => [
+                'department_id' => $deptId,
+                'month' => $month,
+                'totals' => $grandTotals,
+            ],
+            'groups' => $groups,
+        ];
+    }
+
+    /**
+     * Fiscal-year payment totals vs department revenue target (Jul–Jun).
+     * fiscal_year = fiscal end calendar year (e.g. 2026 = Jul 2025 – Jun 2026).
+     */
+    function getFiscalYearPaymentStats($params = null) {
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+        $fiscalYear = isset($_GET['fiscal_year']) ? intval($_GET['fiscal_year']) : 0;
+
+        if ($department_id <= 0) {
+            return ['status' => 'error', 'error' => 'department_id required'];
+        }
+        if (!$this->canUserViewDepartmentRevenueStats($department_id)) {
+            return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
+        }
+        if ($fiscalYear < 2000 || $fiscalYear > 2100) {
+            return ['status' => 'error', 'error' => 'Invalid fiscal_year'];
+        }
+
+        $deptId = intval($department_id);
+        $fiscalStartYear = $fiscalYear - 1;
+        $fiscalStartDate = sprintf('%04d-07-01', $fiscalStartYear);
+        $fiscalEndDate = sprintf('%04d-06-30', $fiscalYear);
+        $fiscalYearLabel = sprintf('FY%d (%d年7月〜%d年6月)', $fiscalYear, $fiscalStartYear, $fiscalYear);
+
+        $departmentTargetTable = DB_PREFIX . 'department_revenue_targets';
+        $this->query("CREATE TABLE IF NOT EXISTS `{$departmentTargetTable}` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `department_id` int(11) NOT NULL,
+            `year` int(4) NOT NULL,
+            `yearly_target` decimal(15,2) NOT NULL DEFAULT 0.00,
+            `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `unique_department_year` (`department_id`, `year`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $departmentTargetQuery = sprintf(
+            "SELECT yearly_target FROM {$departmentTargetTable}
+             WHERE department_id = %d AND year = %d
+             LIMIT 1",
+            $deptId,
+            $fiscalYear
+        );
+        $departmentTargetRow = $this->fetchOne($departmentTargetQuery);
+        $yearlyTarget = floatval($departmentTargetRow['yearly_target'] ?? 0);
+
+        $baseFrom = $this->getMonthlyRevenueStatsBaseFromSql();
+        $totalsQuery = sprintf(
+            "SELECT
+                COUNT(*) AS payment_count,
+                COALESCE(SUM(COALESCE(p.payment_amount, 0)), 0) AS payment_amount
+             %s
+             WHERE p.department_id = %d
+               AND p.status != 'deleted'
+               AND p.payment_status = '入金済'
+               AND p.payment_date IS NOT NULL
+               AND p.payment_date >= '%s'
+               AND p.payment_date <= '%s'",
+            $baseFrom,
+            $deptId,
+            $this->escape($fiscalStartDate),
+            $this->escape($fiscalEndDate)
+        );
+        $totalsRow = $this->fetchOne($totalsQuery);
+        $paymentCount = intval($totalsRow['payment_count'] ?? 0);
+        $paymentAmount = floatval($totalsRow['payment_amount'] ?? 0);
+        $achievementRate = ($yearlyTarget > 0) ? ($paymentAmount / $yearlyTarget * 100) : 0;
+
+        return [
+            'status' => 'success',
+            'meta' => [
+                'department_id' => $deptId,
+                'fiscal_year' => $fiscalYear,
+                'fiscal_year_label' => $fiscalYearLabel,
+                'fiscal_start_date' => $fiscalStartDate,
+                'fiscal_end_date' => $fiscalEndDate,
+                'payment_count' => $paymentCount,
+                'payment_amount' => $paymentAmount,
+                'yearly_target' => $yearlyTarget,
+                'achievement_rate' => $achievementRate,
+            ],
+        ];
+    }
+
     function updateProjectStatus($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];

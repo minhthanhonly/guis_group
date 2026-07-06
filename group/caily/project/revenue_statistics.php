@@ -106,28 +106,82 @@ if (!$canAccessRevenueStats) {
         <div v-else-if="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
 
         <div v-else-if="activeSubTab === 'summary'">
-            <div class="card mb-3">
-                <div class="card-body p-2">
-                    <table class="table table-bordered mb-0 text-center revenue-target-summary-table">
-                        <tbody>
-                            <tr>
-                                <th data-i18n="月間目標売上">月間目標売上</th>
-                                <td class="text-end">{{ formatCurrency(targetSummary.monthly_target_sales) }}</td>
-                                <th data-i18n="月間実績売上">月間実績売上</th>
-                                <td class="text-end">{{ formatCurrency(targetSummary.monthly_actual_sales) }}</td>
-                                <th data-i18n="達成率">達成率</th>
-                                <td>{{ formatPercent(monthlyAchievementRate) }}</td>
-                            </tr>
-                            <tr>
-                                <th data-i18n="累計目標売上">累計目標売上</th>
-                                <td class="text-end">{{ formatCurrency(targetSummary.cumulative_target_sales) }}</td>
-                                <th data-i18n="累計実績売上">累計実績売上</th>
-                                <td class="text-end">{{ formatCurrency(targetSummary.cumulative_actual_sales) }}</td>
-                                <th data-i18n="達成率">達成率</th>
-                                <td>{{ formatPercent(cumulativeAchievementRate) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+            <div class="card mb-3 revenue-target-summary-card">
+                <div class="card-header revenue-target-summary-header">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <h5 class="mb-0">
+                            <i class="fa fa-bullseye me-2 text-primary"></i>
+                            <span data-i18n="目標と実績">目標と実績</span>
+                            <span class="text-muted fw-normal ms-1">（{{ monthLabel }}）</span>
+                        </h5>
+                        <span class="badge bg-primary revenue-target-dept-badge">{{ selectedDepartment.name }}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <div class="revenue-target-panel revenue-target-panel-monthly h-100 mt-3">
+                                <div class="revenue-target-panel-head">
+                                    <span class="revenue-target-panel-icon"><i class="fa fa-calendar"></i></span>
+                                    <span data-i18n="月間">月間</span>
+                                </div>
+                                <div class="row g-2 revenue-target-metrics">
+                                    <div class="col-sm-6">
+                                        <div class="revenue-target-metric revenue-target-metric-target">
+                                            <span class="revenue-target-metric-label" data-i18n="月間目標売上">月間目標売上</span>
+                                            <span class="revenue-target-metric-value">{{ formatCurrency(targetSummary.monthly_target_sales) }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <div class="revenue-target-metric revenue-target-metric-actual">
+                                            <span class="revenue-target-metric-label" data-i18n="月間実績売上">月間実績売上</span>
+                                            <span class="revenue-target-metric-value">{{ formatCurrency(targetSummary.monthly_actual_sales) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="revenue-target-rate">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="revenue-target-rate-label" data-i18n="達成率">達成率</span>
+                                        <span class="revenue-target-rate-value fw-bold" :class="achievementRateTextClass(monthlyAchievementRate)">{{ formatPercent(monthlyAchievementRate) }}</span>
+                                    </div>
+                                    <div class="progress revenue-target-progress">
+                                        <div class="progress-bar" :class="achievementRateBarClass(monthlyAchievementRate)" :style="{ width: achievementBarWidth(monthlyAchievementRate) }" role="progressbar"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="revenue-target-panel revenue-target-panel-cumulative h-100 mt-3">
+                                <div class="revenue-target-panel-head">
+                                    <span class="revenue-target-panel-icon"><i class="fa fa-line-chart"></i></span>
+                                    <span data-i18n="累計">累計</span>
+                                </div>
+                                <div class="row g-2 revenue-target-metrics">
+                                    <div class="col-sm-6">
+                                        <div class="revenue-target-metric revenue-target-metric-target">
+                                            <span class="revenue-target-metric-label" data-i18n="累計目標売上">累計目標売上</span>
+                                            <span class="revenue-target-metric-value">{{ formatCurrency(targetSummary.cumulative_target_sales) }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <div class="revenue-target-metric revenue-target-metric-actual">
+                                            <span class="revenue-target-metric-label" data-i18n="累計実績売上">累計実績売上</span>
+                                            <span class="revenue-target-metric-value">{{ formatCurrency(targetSummary.cumulative_actual_sales) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="revenue-target-rate">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="revenue-target-rate-label" data-i18n="達成率">達成率</span>
+                                        <span class="revenue-target-rate-value fw-bold" :class="achievementRateTextClass(cumulativeAchievementRate)">{{ formatPercent(cumulativeAchievementRate) }}</span>
+                                    </div>
+                                    <div class="progress revenue-target-progress">
+                                        <div class="progress-bar" :class="achievementRateBarClass(cumulativeAchievementRate)" :style="{ width: achievementBarWidth(cumulativeAchievementRate) }" role="progressbar"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -256,8 +310,9 @@ if (!$canAccessRevenueStats) {
                             <label class="form-check-label small" for="tantouGuisInvoicedToggle">GUIS</label>
                         </span>
                     </h5>
-                    <div v-if="invoicedGroups.length" class="revenue-stats-card-header-totals text-end">
-                        <span class="fw-semibold">{{ formatCurrency(invoicedInvoiceAmountTotal) }}</span>
+                    <div v-if="invoicedGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-invoiced">
+                        <span class="revenue-stats-header-total-label" data-i18n="請求金額合計">請求金額合計</span>
+                        <span class="revenue-stats-header-total-value">{{ formatCurrency(invoicedInvoiceAmountTotal) }}</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -269,7 +324,7 @@ if (!$canAccessRevenueStats) {
                             <span class="badge bg-label-secondary ms-2">{{ group.projects.length }}</span>
                         </h6>
                         <div class="table-responsive">
-                            <table class="table table-sm table-bordered mb-0 revenue-stats-table revenue-stats-table-invoiced">
+                            <table class="table table-sm table-bordered mb-0 revenue-stats-table revenue-stats-table-invoiced  table-narrow">
                                 <colgroup>
                                     <col style="width: 4%;">
                                     <col style="width: 13%;">
@@ -346,8 +401,9 @@ if (!$canAccessRevenueStats) {
                             <label class="form-check-label small" for="tantouGuisBacklogToggle">GUIS</label>
                         </span>
                     </h5>
-                    <div v-if="backlogGroups.length" class="revenue-stats-card-header-totals text-end">
-                        <span class="fw-semibold">{{ formatCurrency(backlogInvoiceAmountTotal) }}</span>
+                    <div v-if="backlogGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-backlog">
+                        <span class="revenue-stats-header-total-label" data-i18n="見積金額合計">見積金額合計</span>
+                        <span class="revenue-stats-header-total-value">{{ formatCurrency(backlogAmountTotal) }}</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -359,7 +415,7 @@ if (!$canAccessRevenueStats) {
                             <span class="badge bg-label-secondary ms-2">{{ group.projects.length }}</span>
                         </h6>
                         <div class="table-responsive">
-                            <table class="table table-sm table-bordered mb-0 revenue-stats-table revenue-stats-table-backlog">
+                            <table class="table table-sm table-bordered mb-0 revenue-stats-table revenue-stats-table-backlog table-narrow">
                                 <colgroup>
                                     <col style="width: 4%;">
                                     <col style="width: 12%;">
@@ -440,8 +496,9 @@ if (!$canAccessRevenueStats) {
                             <label class="form-check-label small" for="estimatedAllTimeToggle" data-i18n="すべての期間">すべての期間</label>
                         </span>
                     </h5>
-                    <div v-if="estimatedGroups.length" class="revenue-stats-card-header-totals text-end">
-                        <span class="fw-semibold">{{ formatCurrency(estimatedAmountTotal) }}</span>
+                    <div v-if="estimatedGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-estimated">
+                        <span class="revenue-stats-header-total-label" data-i18n="見積金額合計">見積金額合計</span>
+                        <span class="revenue-stats-header-total-value">{{ formatCurrency(estimatedAmountTotal) }}</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -453,7 +510,7 @@ if (!$canAccessRevenueStats) {
                             <span class="badge bg-label-secondary ms-2">{{ group.projects.length }}</span>
                         </h6>
                         <div class="table-responsive">
-                            <table class="table table-sm table-bordered mb-0 revenue-stats-table revenue-stats-table-estimated">
+                            <table class="table table-sm table-bordered mb-0 revenue-stats-table revenue-stats-table-estimated  table-narrow">
                                 <colgroup>
                                     <col style="width: 4%;">
                                     <col style="width: 11%;">
@@ -541,8 +598,9 @@ if (!$canAccessRevenueStats) {
                             <label class="form-check-label small" for="cancelledEstimatedOnlyToggle" data-i18n="見積済みのみ">見積済みのみ</label>
                         </span>
                     </h5>
-                    <div v-if="cancelledGroups.length" class="revenue-stats-card-header-totals text-end">
-                        <span class="fw-semibold">{{ formatCurrency(cancelledAmountTotal) }}</span>
+                    <div v-if="cancelledGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-cancelled">
+                        <span class="revenue-stats-header-total-label" data-i18n="見積金額合計">見積金額合計</span>
+                        <span class="revenue-stats-header-total-value">{{ formatCurrency(cancelledAmountTotal) }}</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -554,7 +612,7 @@ if (!$canAccessRevenueStats) {
                             <span class="badge bg-label-secondary ms-2">{{ group.projects.length }}</span>
                         </h6>
                         <div class="table-responsive">
-                            <table class="table table-sm table-bordered mb-0 revenue-stats-table revenue-stats-table-cancelled">
+                            <table class="table table-sm table-bordered mb-0 revenue-stats-table revenue-stats-table-cancelled  table-narrow">
                                 <colgroup>
                                     <col style="width: 4%;">
                                     <col style="width: 13%;">
@@ -685,7 +743,68 @@ body.dark-style .revenue-dept-nav-month .revenue-nav-btn {
 }
 .revenue-stats-card-header-totals {
     flex-shrink: 0;
-    max-width: 55%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.2rem;
+    padding: 0.55rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    min-width: 11rem;
+    box-shadow: 0 0.125rem 0.35rem rgba(47, 43, 61, 0.08);
+}
+.revenue-stats-header-total-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+.revenue-stats-header-total-value {
+    font-size: 1.45rem;
+    font-weight: 700;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.revenue-stats-card-header-totals-invoiced {
+    border-color: rgba(var(--bs-success-rgb), 0.35);
+    background: linear-gradient(135deg, rgba(var(--bs-success-rgb), 0.14) 0%, rgba(var(--bs-success-rgb), 0.04) 100%);
+}
+.revenue-stats-card-header-totals-invoiced .revenue-stats-header-total-value {
+    color: var(--bs-success);
+}
+.revenue-stats-card-header-totals-backlog {
+    border-color: rgba(var(--bs-warning-rgb), 0.4);
+    background: linear-gradient(135deg, rgba(var(--bs-warning-rgb), 0.16) 0%, rgba(var(--bs-warning-rgb), 0.05) 100%);
+}
+.revenue-stats-card-header-totals-backlog .revenue-stats-header-total-value {
+    color: #c87a00;
+}
+.revenue-stats-card-header-totals-estimated {
+    border-color: rgba(var(--bs-info-rgb), 0.35);
+    background: linear-gradient(135deg, rgba(var(--bs-info-rgb), 0.14) 0%, rgba(var(--bs-info-rgb), 0.04) 100%);
+}
+.revenue-stats-card-header-totals-estimated .revenue-stats-header-total-value {
+    color: var(--bs-info);
+}
+.revenue-stats-card-header-totals-cancelled {
+    border-color: rgba(var(--bs-danger-rgb), 0.32);
+    background: linear-gradient(135deg, rgba(var(--bs-danger-rgb), 0.12) 0%, rgba(var(--bs-danger-rgb), 0.04) 100%);
+}
+.revenue-stats-card-header-totals-cancelled .revenue-stats-header-total-value {
+    color: var(--bs-danger);
+}
+[data-bs-theme="dark"] .revenue-stats-card-header-totals-backlog .revenue-stats-header-total-value,
+html.dark-style .revenue-stats-card-header-totals-backlog .revenue-stats-header-total-value,
+body.dark-style .revenue-stats-card-header-totals-backlog .revenue-stats-header-total-value {
+    color: #ffb84d;
+}
+[data-bs-theme="dark"] .revenue-stats-card-header-totals,
+html.dark-style .revenue-stats-card-header-totals,
+body.dark-style .revenue-stats-card-header-totals {
+    box-shadow: 0 0.125rem 0.35rem rgba(0, 0, 0, 0.25);
 }
 .revenue-stats-card-header-company {
     display: inline-block;
@@ -725,14 +844,110 @@ body.dark-style #app .card {
 .revenue-stats-table-summary-grouped tr.revenue-summary-category-divider td {
     border-bottom-style: dotted !important;
 }
-.revenue-target-summary-table th {
-    width: 16%;
-    background: #d7b3df;
-    color: #000;
+.revenue-target-summary-card {
+    overflow: hidden;
 }
-.revenue-target-summary-table td {
-    width: 17%;
-    background: #efd9f3;
+.revenue-target-summary-header {
+    background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.08), rgba(var(--bs-info-rgb), 0.06));
+    border-bottom: 1px solid rgba(var(--bs-primary-rgb), 0.15);
+}
+.revenue-target-dept-badge {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.revenue-target-panel {
+    border: 1px solid rgba(var(--bs-primary-rgb), 0.18);
+    border-radius: 0.75rem;
+    padding: 1rem 1.1rem;
+    background: linear-gradient(180deg, rgba(var(--bs-primary-rgb), 0.04) 0%, transparent 100%);
+}
+.revenue-target-panel-monthly {
+    border-left: 4px solid var(--bs-primary);
+}
+.revenue-target-panel-cumulative {
+    border-left: 4px solid var(--bs-info);
+}
+.revenue-target-panel-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--bs-heading-color);
+}
+.revenue-target-panel-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.45rem;
+    background: rgba(var(--bs-primary-rgb), 0.12);
+    color: var(--bs-primary);
+}
+.revenue-target-panel-cumulative .revenue-target-panel-icon {
+    background: rgba(var(--bs-info-rgb), 0.14);
+    color: var(--bs-info);
+}
+.revenue-target-metric {
+    height: 100%;
+    padding: 0.75rem 0.85rem;
+    border-radius: 0.6rem;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+}
+.revenue-target-metric-target {
+    border-color: rgba(var(--bs-primary-rgb), 0.22);
+    background: rgba(var(--bs-primary-rgb), 0.05);
+}
+.revenue-target-metric-actual {
+    border-color: rgba(var(--bs-success-rgb), 0.22);
+    background: rgba(var(--bs-success-rgb), 0.05);
+}
+.revenue-target-metric-label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--bs-secondary-color);
+    margin-bottom: 0.35rem;
+}
+.revenue-target-metric-value {
+    display: block;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.3;
+    word-break: break-all;
+}
+.revenue-target-rate {
+    margin-top: 0.9rem;
+    padding-top: 0.85rem;
+    border-top: 1px dashed var(--bs-border-color);
+}
+.revenue-target-rate-label {
+    font-size: 0.82rem;
+    color: var(--bs-secondary-color);
+}
+.revenue-target-rate-value {
+    font-size: 1rem;
+}
+.revenue-target-progress {
+    height: 0.65rem;
+    border-radius: 999px;
+    background-color: rgba(var(--bs-secondary-rgb), 0.15);
+}
+.revenue-target-progress .progress-bar {
+    border-radius: 999px;
+    transition: width 0.35s ease;
+}
+[data-bs-theme="dark"] .revenue-target-summary-header,
+html.dark-style .revenue-target-summary-header,
+body.dark-style .revenue-target-summary-header {
+    background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.18), rgba(var(--bs-info-rgb), 0.1));
+}
+[data-bs-theme="dark"] .revenue-target-panel,
+html.dark-style .revenue-target-panel,
+body.dark-style .revenue-target-panel {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
 }
 [data-bs-theme="dark"] .revenue-stats-table-summary-grouped .revenue-summary-section-label,
 html.dark-style .revenue-stats-table-summary-grouped .revenue-summary-section-label {
@@ -784,6 +999,10 @@ html.dark-style .revenue-stats-table tfoot.table-secondary td,
 body.dark-style .revenue-stats-table tfoot.table-secondary td {
     background-color: #fff !important;
     color: #000 !important;
+}
+.table-narrow td,
+.table-narrow th{
+    padding: 0.5rem 0.2rem;
 }
 </style>
 

@@ -188,8 +188,8 @@
             invoicedInvoiceAmountTotal() {
                 return sumProjectField(this.filteredInvoicedProjects, 'invoice_amount');
             },
-            backlogInvoiceAmountTotal() {
-                return sumProjectField(this.filteredBacklogProjects, 'invoice_amount');
+            backlogAmountTotal() {
+                return sumProjectField(this.filteredBacklogProjects, 'amount');
             },
             estimatedAmountTotal() {
                 return sumProjectField(this.filteredEstimatedProjects, 'amount');
@@ -261,6 +261,24 @@
                 const n = Number(val);
                 if (!Number.isFinite(n)) return '0%';
                 return Math.round(n).toLocaleString('ja-JP') + '%';
+            },
+            achievementRateBarClass(rate) {
+                const n = Number(rate) || 0;
+                if (n >= 100) return 'bg-success';
+                if (n >= 70) return 'bg-primary';
+                if (n >= 40) return 'bg-warning';
+                return 'bg-danger';
+            },
+            achievementRateTextClass(rate) {
+                const n = Number(rate) || 0;
+                if (n >= 100) return 'text-success';
+                if (n >= 70) return 'text-primary';
+                if (n >= 40) return 'text-warning';
+                return 'text-danger';
+            },
+            achievementBarWidth(rate) {
+                const n = Math.max(0, Number(rate) || 0);
+                return Math.min(100, n) + '%';
             },
             formatDate(val) {
                 if (!val) return '—';

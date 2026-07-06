@@ -29,5 +29,5 @@ ALTER TABLE `groupware_projects`
 
 
 
-ALTER TABLE projects
+ALTER TABLE groupware_projects
     ADD COLUMN version INT UNSIGNED NOT NULL DEFAULT 1 AFTER updated_at;

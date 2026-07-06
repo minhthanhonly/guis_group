@@ -266,12 +266,11 @@ const BUSINESS_DOCUMENT_FIELDS = [
     'payment_note',
 ];
 
-const BUSINESS_DOCUMENT_DATE_FIELDS = ['estimate_date', 'invoice_date', 'payment_date'];
+const BUSINESS_DOCUMENT_DATE_FIELDS = ['estimate_date', 'invoice_date'];
 
 const BD_MODAL_PICKER_IDS = {
     estimate_date: 'bd_modal_estimate_date_picker',
     invoice_date: 'bd_modal_invoice_date_picker',
-    payment_date: 'bd_modal_payment_date_picker',
 };
 
 function isProjectServerDateTimeFormat(value) {
@@ -535,6 +534,7 @@ createApp({
             businessDocumentSaveStatus: null,
             businessDocumentSaveHideTimer: null,
             businessDocumentDirty: false,
+            businessDocumentError: '',
             businessDocumentUpdateTimer: null,
             isUpdatingBusinessDocument: false,
             businessEstimateStatuses: BUSINESS_ESTIMATE_STATUSES.filter((s) => s.value !== '発行済み'),
@@ -5948,6 +5948,7 @@ createApp({
                 this.businessDocumentProjectId = project.id;
                 this.normalizeBdFields();
                 this.businessDocumentSaveStatus = null;
+                this.businessDocumentError = '';
                 this.businessDocumentDirty = false;
                 const modalEl = document.getElementById('businessDocumentModal');
                 let modal = bootstrap.Modal.getInstance(modalEl);
@@ -5972,6 +5973,7 @@ createApp({
             this.businessDocumentProject = null;
             this.businessDocumentProjectId = null;
             this._bdServerDates = null;
+            this.businessDocumentError = '';
         },
         destroyBdDatePickers() {
             Object.values(BD_MODAL_PICKER_IDS).forEach((elId) => {
@@ -5986,13 +5988,10 @@ createApp({
             const p = this.businessDocumentProject;
             p.estimate_status = this.normalizeBusinessDocumentStatus(p.estimate_status, '未発行');
             p.invoice_status = this.normalizeBusinessDocumentStatus(p.invoice_status, '未発行');
-            p.payment_status = p.payment_status || '未入金';
             p.estimate_number = p.estimate_number || '';
             p.invoice_number = p.invoice_number || '';
-            p.receipt_number = p.receipt_number || '';
             p.payment_note = p.payment_note || '';
             p.invoice_amount = p.invoice_amount != null ? Number(p.invoice_amount) : 0;
-            p.payment_amount = p.payment_amount != null ? Number(p.payment_amount) : 0;
             p.amount = p.amount != null ? Number(p.amount) : 0;
             this.normalizeBdDateFields();
         },
@@ -6066,6 +6065,74 @@ createApp({
         hasBdAmount(amount) {
             return amount != null && amount !== '' && Number(amount) > 0;
         },
+        hasBdNumber(value) {
+            return !!String(value || '').trim();
+        },
+        normalizeBusinessDocumentStatusValue(status) {
+            if (status === '発行済み') return '発行済';
+            return status;
+        },
+        isBdEstimateDocumentFieldsComplete() {
+            if (!this.businessDocumentProject) return false;
+            this.syncBdDatesFromPickers();
+            return this.hasBdDate('estimate_date')
+                && this.hasBdAmount(this.businessDocumentProject.amount)
+                && this.hasBdNumber(this.businessDocumentProject.estimate_number);
+        },
+        isBdInvoiceDocumentFieldsComplete() {
+            if (!this.businessDocumentProject) return false;
+            this.syncBdDatesFromPickers();
+            return this.hasBdDate('invoice_date')
+                && this.hasBdAmount(this.businessDocumentProject.invoice_amount)
+                && this.hasBdNumber(this.businessDocumentProject.invoice_number);
+        },
+        getBdEstimateDocumentFieldsValidationError() {
+            if (!this.businessDocumentProject) return '';
+            this.syncBdDatesFromPickers();
+            const missing = [];
+            if (!this.hasBdDate('estimate_date')) missing.push('見積日');
+            if (!this.hasBdAmount(this.businessDocumentProject.amount)) missing.push('見積金額');
+            if (!this.hasBdNumber(this.businessDocumentProject.estimate_number)) missing.push('見積番号');
+            if (!missing.length) return '';
+            return '発行済にするには以下を入力してください: ' + missing.join('、');
+        },
+        getBdInvoiceDocumentFieldsValidationError() {
+            if (!this.businessDocumentProject) return '';
+            this.syncBdDatesFromPickers();
+            const missing = [];
+            if (!this.hasBdDate('invoice_date')) missing.push('請求日');
+            if (!this.hasBdAmount(this.businessDocumentProject.invoice_amount)) missing.push('請求金額');
+            if (!this.hasBdNumber(this.businessDocumentProject.invoice_number)) missing.push('請求番号');
+            if (!missing.length) return '';
+            return '発行済にするには以下を入力してください: ' + missing.join('、');
+        },
+        getBusinessDocumentTaxAmount(amount) {
+            const base = Number(amount);
+            if (!Number.isFinite(base) || base <= 0) return 0;
+            return Math.round(base * 0.1);
+        },
+        getBusinessDocumentTotalWithTax(amount) {
+            const base = Number(amount);
+            if (!Number.isFinite(base) || base <= 0) return 0;
+            return base + this.getBusinessDocumentTaxAmount(base);
+        },
+        formatBusinessDocumentTaxAmount(amount) {
+            return this.formatBusinessDocumentCurrency(this.getBusinessDocumentTaxAmount(amount));
+        },
+        formatBusinessDocumentTotalWithTax(amount) {
+            return this.formatBusinessDocumentCurrency(this.getBusinessDocumentTotalWithTax(amount));
+        },
+        formatBusinessDocumentCurrency(amount) {
+            if (!amount) return '¥0';
+            return '¥' + parseInt(amount).toLocaleString();
+        },
+        hideBdStatusDropdown(dropdownId) {
+            const dropdownElement = document.querySelector(dropdownId);
+            if (dropdownElement && typeof bootstrap !== 'undefined') {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
+                if (dropdown) dropdown.hide();
+            }
+        },
         scheduleBdUpdate() {
             if (!this.canEditBusinessDocuments || !this.businessDocumentProject) return;
             this.businessDocumentDirty = true;
@@ -6085,6 +6152,18 @@ createApp({
             try {
                 this.syncBdDatesFromPickers();
                 const p = this.businessDocumentProject;
+                if (this.normalizeBusinessDocumentStatusValue(p.estimate_status) === '発行済'
+                    && !this.isBdEstimateDocumentFieldsComplete()) {
+                    this.businessDocumentSaveStatus = null;
+                    this.businessDocumentError = this.getBdEstimateDocumentFieldsValidationError();
+                    return;
+                }
+                if (this.normalizeBusinessDocumentStatusValue(p.invoice_status) === '発行済'
+                    && !this.isBdInvoiceDocumentFieldsComplete()) {
+                    this.businessDocumentSaveStatus = null;
+                    this.businessDocumentError = this.getBdInvoiceDocumentFieldsValidationError();
+                    return;
+                }
                 const formData = new FormData();
                 formData.append('id', this.businessDocumentProjectId);
                 formData.append('amount', p.amount || 0);
@@ -6095,16 +6174,13 @@ createApp({
                 formData.append('invoice_date', this.getBdDateForApi('invoice_date'));
                 formData.append('invoice_amount', p.invoice_amount != null ? p.invoice_amount : 0);
                 formData.append('invoice_number', p.invoice_number || '');
-                formData.append('payment_status', p.payment_status || '未入金');
-                formData.append('payment_date', this.getBdDateForApi('payment_date'));
-                formData.append('payment_amount', p.payment_amount != null ? p.payment_amount : 0);
-                formData.append('receipt_number', p.receipt_number || '');
                 formData.append('payment_note', p.payment_note || '');
                 appendProjectVersionToFormData(formData, this.businessDocumentProject);
                 const response = await axios.post('/api/index.php?model=project&method=updateProjectStatus', formData);
                 if (response.data && response.data.status === 'success') {
                     applyProjectVersionFromResponse(this.businessDocumentProject, response.data);
                     this.businessDocumentDirty = false;
+                    this.businessDocumentError = '';
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBdDateForApi(key);
                         if (apiVal) {
@@ -6248,23 +6324,39 @@ createApp({
         },
         selectBdEstimateStatus(status) {
             if (!this.businessDocumentProject) return;
-            this.businessDocumentProject.estimate_status = status;
-            this.scheduleBdUpdate();
-            const dropdownElement = document.querySelector('#bdEstimateStatusDropdown');
-            if (dropdownElement) {
-                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
-                if (dropdown) dropdown.hide();
+            this.syncBdDatesFromPickers();
+            const normalized = this.normalizeBusinessDocumentStatusValue(status);
+            if (normalized === '発行済' && !this.isBdEstimateDocumentFieldsComplete()) {
+                this.businessDocumentError = this.getBdEstimateDocumentFieldsValidationError();
+                this.hideBdStatusDropdown('#bdEstimateStatusDropdown');
+                return;
             }
+            if (this.normalizeBusinessDocumentStatusValue(this.businessDocumentProject.estimate_status) === normalized) {
+                this.hideBdStatusDropdown('#bdEstimateStatusDropdown');
+                return;
+            }
+            this.businessDocumentProject.estimate_status = normalized;
+            this.businessDocumentError = '';
+            this.scheduleBdUpdate();
+            this.hideBdStatusDropdown('#bdEstimateStatusDropdown');
         },
         selectBdInvoiceStatus(status) {
             if (!this.businessDocumentProject) return;
-            this.businessDocumentProject.invoice_status = status;
-            this.scheduleBdUpdate();
-            const dropdownElement = document.querySelector('#bdInvoiceStatusDropdown');
-            if (dropdownElement) {
-                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement);
-                if (dropdown) dropdown.hide();
+            this.syncBdDatesFromPickers();
+            const normalized = this.normalizeBusinessDocumentStatusValue(status);
+            if (normalized === '発行済' && !this.isBdInvoiceDocumentFieldsComplete()) {
+                this.businessDocumentError = this.getBdInvoiceDocumentFieldsValidationError();
+                this.hideBdStatusDropdown('#bdInvoiceStatusDropdown');
+                return;
             }
+            if (this.normalizeBusinessDocumentStatusValue(this.businessDocumentProject.invoice_status) === normalized) {
+                this.hideBdStatusDropdown('#bdInvoiceStatusDropdown');
+                return;
+            }
+            this.businessDocumentProject.invoice_status = normalized;
+            this.businessDocumentError = '';
+            this.scheduleBdUpdate();
+            this.hideBdStatusDropdown('#bdInvoiceStatusDropdown');
         },
         selectBdPaymentStatus(status) {
             if (!this.businessDocumentProject) return;

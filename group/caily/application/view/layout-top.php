@@ -45,7 +45,7 @@
                     <div data-i18n="建物一覧">建物一覧</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'project' && $page != 'project_gantt' && $page != 'custom_fields' && $page != 'task_overview' && $page != 'employee_statistics' && $page != 'team_revenue_targets' && $page != 'revenue_statistics') echo 'active'; ?>">
+                <li class="menu-item <?php if($directory == 'project' && $page != 'project_gantt' && $page != 'custom_fields' && $page != 'task_overview' && $page != 'employee_statistics' && $page != 'team_revenue_targets' && $page != 'revenue_statistics' && $page != 'invoiced_projects') echo 'active'; ?>">
                   <a href="<?=$root?>project/" class="menu-link">
                     <div data-i18n="案件一覧">案件一覧</div>
                   </a>
@@ -98,6 +98,11 @@
                     <div data-i18n="月次売上統計">月次売上統計</div>
                   </a>
                 </li>
+                <li class="menu-item <?php if($directory == 'project' && $page == 'invoiced_projects') echo 'active'; ?>">
+                  <a href="<?=$root?>project/invoiced_projects.php" class="menu-link">
+                    <div data-i18n="入金管理">入金管理</div>
+                  </a>
+                </li>
                 <?php } ?>
                 
                 <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7'  && $_SESSION['group'] != '6'){?>
@@ -108,7 +113,7 @@
                   </li>
                   <li class="menu-item <?php if($directory == 'project' && $page == 'team_revenue_targets') echo 'active'; ?>">
                     <a href="<?=$root?>project/team_revenue_targets.php" class="menu-link">
-                      <div data-i18n="チーム売上目標設定">チーム売上目標設定</div>
+                      <div data-i18n="売上目標設定">売上目標設定</div>
                     </a>
                   </li>
                 <?php } ?>
