@@ -56,6 +56,7 @@
     <?=$style?>
     <!-- Helpers -->
 
+    <script src="<?=$root?>assets/vendor/libs/pickr/pickr.js"></script>
     <script src="<?=$root?>assets/vendor/js/template-customizer.js?v=<?=CACHE_VERSION?>"></script>
     <?php if (($directory ?? '') !== 'login'): ?>
     <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31/dist/vue.global.prod.js"></script>

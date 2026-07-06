@@ -98,11 +98,11 @@
                     <div data-i18n="月次売上統計">月次売上統計</div>
                   </a>
                 </li>
-                <li class="menu-item <?php if($directory == 'project' && $page == 'invoiced_projects') echo 'active'; ?>">
+                <!-- <li class="menu-item <?php if($directory == 'project' && $page == 'invoiced_projects') echo 'active'; ?>">
                   <a href="<?=$root?>project/invoiced_projects.php" class="menu-link">
                     <div data-i18n="入金管理">入金管理</div>
                   </a>
-                </li>
+                </li> -->
                 <?php } ?>
                 
                 <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7'  && $_SESSION['group'] != '6'){?>

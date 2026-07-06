@@ -1503,8 +1503,20 @@ const vueApp = createApp({
                     this.businessDocumentError = '';
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBusinessDocumentDateForApi(key);
-                        if (apiVal) {
-                            this.setBusinessDocumentServerDate(key, apiVal);
+                        this.setBusinessDocumentServerDate(key, apiVal || '');
+                        this.project[key] = apiVal ? toProjectDateTimeInputValue(apiVal) : '';
+                        const pickerIds = {
+                            estimate_date: 'estimate_date_picker',
+                            invoice_date: 'invoice_date_picker',
+                            payment_date: 'payment_date_picker',
+                        };
+                        const el = document.getElementById(pickerIds[key]);
+                        if (el && el._flatpickr) {
+                            if (apiVal) {
+                                el._flatpickr.setDate(toProjectDateTimeInputValue(apiVal), false, PROJECT_DATETIME_FLATPICKR_FORMAT);
+                            } else {
+                                el._flatpickr.clear();
+                            }
                         }
                     });
                     this.businessDocumentSaveStatus = 'saved';
@@ -1595,6 +1607,15 @@ const vueApp = createApp({
                 ? raw
                 : (fromProjectDateTimeInputValue(raw) || raw);
         },
+        getBusinessDocumentPickerDisplayValue(el) {
+            if (!el) return '';
+            const fp = el._flatpickr;
+            if (fp) {
+                const visibleInput = fp.altInput || fp._input;
+                return String((visibleInput && visibleInput.value) || '').trim();
+            }
+            return String(el.value || '').trim();
+        },
         getBusinessDocumentDateForApi(key) {
             if (!this.project) return '';
             const pickerIds = {
@@ -1603,18 +1624,19 @@ const vueApp = createApp({
                 payment_date: 'payment_date_picker',
             };
             const el = document.getElementById(pickerIds[key]);
-            let displayVal = String(this.project[key] || '').trim();
             if (el) {
+                const displayVal = this.getBusinessDocumentPickerDisplayValue(el);
+                if (!displayVal) {
+                    return '';
+                }
                 const fp = el._flatpickr;
                 if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
-                    displayVal = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
-                } else if (fp && fp._input) {
-                    displayVal = String(fp._input.value || '').trim();
-                } else if (el.value) {
-                    displayVal = String(el.value).trim();
+                    return this.toAPIDate(fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT));
                 }
+                return this.toAPIDate(displayVal);
             }
-            return this.toAPIDate(displayVal);
+            const fallback = String(this.project[key] || '').trim();
+            return fallback ? this.toAPIDate(fallback) : '';
         },
         getBusinessDocumentDateForTooltip(key) {
             const serverVal = this.getBusinessDocumentServerDate(key);
@@ -1754,19 +1776,9 @@ const vueApp = createApp({
             Object.keys(fieldIds).forEach((key) => {
                 const el = document.getElementById(fieldIds[key]);
                 if (!el) return;
-                const fp = el._flatpickr;
-                let displayVal = '';
-                if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
-                    displayVal = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
-                } else if (fp && fp._input) {
-                    displayVal = String(fp._input.value || '').trim();
-                } else {
-                    displayVal = String(el.value || '').trim();
-                }
+                const displayVal = this.getBusinessDocumentPickerDisplayValue(el);
                 this.project[key] = displayVal;
-                if (displayVal) {
-                    this.setBusinessDocumentServerDate(key, displayVal);
-                }
+                this.setBusinessDocumentServerDate(key, displayVal);
             });
         },
         initBusinessDocumentDatePicker(elId, key, force) {
@@ -1786,9 +1798,20 @@ const vueApp = createApp({
             }
             initProjectDetailFlatpickr(el, {
                 onChange: (selectedDates, dateStr) => {
-                    this.project[key] = dateStr;
-                    this.setBusinessDocumentServerDate(key, dateStr);
+                    this.project[key] = dateStr || '';
+                    this.setBusinessDocumentServerDate(key, dateStr || '');
                     this.scheduleBusinessDocumentUpdate();
+                },
+                onClose: () => {
+                    const displayVal = this.getBusinessDocumentPickerDisplayValue(el);
+                    if (!displayVal) {
+                        if (el._flatpickr) {
+                            el._flatpickr.clear();
+                        }
+                        this.project[key] = '';
+                        this.setBusinessDocumentServerDate(key, '');
+                        this.scheduleBusinessDocumentUpdate();
+                    }
                 }
             }, serverValue);
             if (inputVal && this.project[key] !== inputVal) {

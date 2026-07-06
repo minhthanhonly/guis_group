@@ -93,7 +93,7 @@ if($_SESSION['show_project'] == 0){
                         <option value="start_today" data-i18n="開始日=本日">開始日=本日</option>
                         <option value="caily_today" data-i18n="CAILY納期=本日">CAILY納期=本日</option>
                         <option v-if="!isCailyBranchUser" value="guis_today" data-i18n="GUIS納期=本日">GUIS納期=本日</option>
-                        <option v-if="!isCailyBranchUser" value="end_today" data-i18n="終了日=本日">終了日=本日</option>
+                        <option v-if="!isCailyBranchUser" value="end_today" data-i18n="期限日=本日">期限日=本日</option>
                     </select>
                     </div>
                     <div class="col-md-3 col-6">
@@ -148,7 +148,7 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <div class="form-check mb-0 form-switch">
                                 <input class="form-check-input" type="checkbox" id="filterNoDates">
-                                <label class="form-check-label" for="filterNoDates" data-i18n="開始日・終了日未設定">開始日・終了日未設定</label>
+                                <label class="form-check-label" for="filterNoDates" data-i18n="開始日・期限日未設定">開始日・期限日未設定</label>
                             </div>
                             <div class="form-check mb-0 form-switch">
                                 <input class="form-check-input" type="checkbox" id="showInactiveSwitch">
@@ -208,6 +208,9 @@ if($_SESSION['show_project'] == 0){
                             </li>
                         </ul>
                     </div>
+                    <button type="button" class="btn btn-sm btn-success" :disabled="!selectedDepartment || loading" @click="exportProjectListExcel" title="Excel出力">
+                        <i class="fa fa-file-excel me-1"></i><span data-i18n="Excel出力">Excel出力</span>
+                    </button>
                 </div>
                 <div class="d-flex align-items-center gap-2 mt-6">
                     <div class="form-check d-flex align-items-center">
@@ -748,7 +751,7 @@ div.dt-scroll-head thead th {
     background-color: rgba(25, 135, 84, 0.25);
 }
 
-/* Cột 終了日: nền đen nhạt (xám nhạt) */
+/* Cột 期限日: nền đen nhạt (xám nhạt) */
 #projectTable td.end-date-column {
     background-color: rgba(255, 0, 0, 0.15);
 }

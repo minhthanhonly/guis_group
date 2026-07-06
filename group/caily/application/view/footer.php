@@ -8,7 +8,6 @@ $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
 <script src="<?=$root?>assets/vendor/js/bootstrap.js"></script>
 <?php if ($appAssets['needs_full_shell']): ?>
 <script src="<?=$root?>assets/vendor/libs/node-waves/node-waves.js"></script>
-<script src="<?=$root?>assets/vendor/libs/pickr/pickr.js"></script>
 <script src="<?=$root?>assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.js"></script>
 <script src="<?=$root?>assets/vendor/js/menu.js"></script>
 <?php endif; ?>
@@ -38,6 +37,7 @@ $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
 <?php endif; ?>
 
 <?php if ($appAssets['needs_data_tables']): ?>
+<script src="<?=$root?>assets/vendor/libs/jszip/jszip.min.js"></script>
 <script src="<?=$root?>assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js"></script>
 <?php endif; ?>
 

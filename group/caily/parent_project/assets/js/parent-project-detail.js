@@ -5927,13 +5927,6 @@ createApp({
                     badgeClass: this.getBusinessInvoiceStatusBadgeClass(project.invoice_status),
                     amount: Number(project.invoice_amount) || 0,
                 },
-                {
-                    key: 'payment',
-                    label: this.translateLabel('入金'),
-                    statusLabel: this.getBusinessPaymentStatusLabel(project.payment_status),
-                    badgeClass: this.getBusinessPaymentStatusBadgeClass(project.payment_status),
-                    amount: Number(project.payment_amount) || 0,
-                },
             ];
         },
 
@@ -6042,22 +6035,32 @@ createApp({
                 ? raw
                 : (fromProjectDateTimeInputValue(raw) || raw);
         },
+        getBdPickerDisplayValue(el) {
+            if (!el) return '';
+            const fp = el._flatpickr;
+            if (fp) {
+                const visibleInput = fp.altInput || fp._input;
+                return String((visibleInput && visibleInput.value) || '').trim();
+            }
+            return String(el.value || '').trim();
+        },
         getBdDateForApi(key) {
             if (!this.businessDocumentProject) return '';
             const elId = BD_MODAL_PICKER_IDS[key];
             const el = document.getElementById(elId);
-            let displayVal = String(this.businessDocumentProject[key] || '').trim();
             if (el) {
+                const displayVal = this.getBdPickerDisplayValue(el);
+                if (!displayVal) {
+                    return '';
+                }
                 const fp = el._flatpickr;
                 if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
-                    displayVal = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
-                } else if (fp && fp._input) {
-                    displayVal = String(fp._input.value || '').trim();
-                } else if (el.value) {
-                    displayVal = String(el.value).trim();
+                    return fromProjectDateTimeInputValue(fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT));
                 }
+                return fromProjectDateTimeInputValue(displayVal);
             }
-            return fromProjectDateTimeInputValue(displayVal);
+            const fallback = String(this.businessDocumentProject[key] || '').trim();
+            return fallback ? fromProjectDateTimeInputValue(fallback) : '';
         },
         hasBdDate(key) {
             return !!String(this.getBdServerDate(key) || this.businessDocumentProject?.[key] || '').trim();
@@ -6183,8 +6186,15 @@ createApp({
                     this.businessDocumentError = '';
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBdDateForApi(key);
-                        if (apiVal) {
-                            this.setBdServerDate(key, apiVal);
+                        this.setBdServerDate(key, apiVal || '');
+                        this.businessDocumentProject[key] = apiVal ? toProjectDateTimeInputValue(apiVal) : '';
+                        const el = document.getElementById(BD_MODAL_PICKER_IDS[key]);
+                        if (el && el._flatpickr) {
+                            if (apiVal) {
+                                el._flatpickr.setDate(toProjectDateTimeInputValue(apiVal), false, PROJECT_DATETIME_FLATPICKR_FORMAT);
+                            } else {
+                                el._flatpickr.clear();
+                            }
                         }
                     });
                     this.syncChildProjectFromBd();
@@ -6227,21 +6237,9 @@ createApp({
             Object.keys(BD_MODAL_PICKER_IDS).forEach((key) => {
                 const el = document.getElementById(BD_MODAL_PICKER_IDS[key]);
                 if (!el) return;
-                const fp = el._flatpickr;
-                let displayVal = '';
-                if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
-                    displayVal = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
-                } else if (fp && fp._input) {
-                    displayVal = String(fp._input.value || '').trim();
-                } else {
-                    displayVal = String(el.value || '').trim();
-                }
+                const displayVal = this.getBdPickerDisplayValue(el);
                 this.businessDocumentProject[key] = displayVal;
-                if (displayVal) {
-                    this.setBdServerDate(key, displayVal);
-                } else {
-                    this.setBdServerDate(key, '');
-                }
+                this.setBdServerDate(key, displayVal);
             });
         },
         initBdDatePickers() {
@@ -6258,9 +6256,20 @@ createApp({
             const inputVal = toProjectDateTimeInputValue(serverValue);
             initChildProjectFlatpickr(el, {
                 onChange: (selectedDates, dateStr) => {
-                    this.businessDocumentProject[key] = dateStr;
-                    this.setBdServerDate(key, dateStr);
+                    this.businessDocumentProject[key] = dateStr || '';
+                    this.setBdServerDate(key, dateStr || '');
                     this.scheduleBdUpdate();
+                },
+                onClose: () => {
+                    const displayVal = this.getBdPickerDisplayValue(el);
+                    if (!displayVal) {
+                        if (el._flatpickr) {
+                            el._flatpickr.clear();
+                        }
+                        this.businessDocumentProject[key] = '';
+                        this.setBdServerDate(key, '');
+                        this.scheduleBdUpdate();
+                    }
                 }
             }, serverValue);
             if (inputVal && this.businessDocumentProject[key] !== inputVal) {

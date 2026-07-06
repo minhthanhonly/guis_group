@@ -108,6 +108,298 @@ var projectTable;
     var pendingScrollRestore = null;
     var scrollRestoreApplied = false;
     var projectListBackNavigationHandled = false;
+    var isProjectListExporting = false;
+    var projectListExcelButtons = null;
+    var REMOVE_FOR_EXCEL_CLASS = 'removeForExcel';
+
+    function isProjectListExcelExportAvailable() {
+        return typeof $ !== 'undefined'
+            && !!($.fn && $.fn.dataTable && $.fn.dataTable.Buttons);
+    }
+
+    function parseTeamLabelsFromExportHtml(inner) {
+        if (!inner) return [];
+        inner = String(inner);
+        if (inner.indexOf('<') === -1) {
+            var plain = inner.trim();
+            return plain ? [plain] : [];
+        }
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(inner, 'text/html');
+        var labels = [];
+        doc.querySelectorAll('.badge').forEach(function(el) {
+            var text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+            if (text) labels.push(text);
+        });
+        return labels;
+    }
+
+    function formatTeamsForExcelExport(rowIndex, innerHtml) {
+        var data = null;
+        if (projectTable && typeof rowIndex === 'number') {
+            try {
+                var rowData = projectTable.row(rowIndex).data();
+                data = rowData && rowData.teams;
+            } catch (e) {}
+        }
+        if (!data || data === '') {
+            var labelsFromHtml = parseTeamLabelsFromExportHtml(innerHtml);
+            var unassignedLabel = typeof translateText === 'function' ? translateText('未割り当て') : '未割り当て';
+            if (labelsFromHtml.length) {
+                if (labelsFromHtml.length === 1 && labelsFromHtml[0] === unassignedLabel) {
+                    return unassignedLabel;
+                }
+                return labelsFromHtml.join(', ');
+            }
+            return unassignedLabel;
+        }
+        var ids = typeof data === 'string'
+            ? data.split(',').map(function(item) { return item.trim(); }).filter(Boolean)
+            : [String(data)];
+        if (!ids.length) {
+            return typeof translateText === 'function' ? translateText('未割り当て') : '未割り当て';
+        }
+        return ids.map(function(id) {
+            var label = teamIdToName[id] || id;
+            return String(label).replace(/CL意匠/g, 'CL_').replace(/G意匠/g, 'G_');
+        }).join(', ');
+    }
+
+    function getProjectListExcelExportOptions() {
+        return {
+            columns: function(idx) {
+                if (!projectTable) return false;
+                var col = projectTable.column(idx);
+                var name = '';
+                try {
+                    name = typeof col.name === 'function' ? col.name() : '';
+                } catch (e) {}
+                if (!name && projectTable.settings()[0] && projectTable.settings()[0].aoColumns[idx]) {
+                    name = projectTable.settings()[0].aoColumns[idx].name || '';
+                }
+                if (name === 'is_favorite') return false;
+                if (isProjectDirectorColumn(name) && !canViewProjectDirectorColumns()) return false;
+                return col.visible();
+            },
+            format: {
+                body: function(inner, row, column) {
+                    var colName = '';
+                    if (projectTable) {
+                        try {
+                            colName = projectTable.column(column).name() || '';
+                        } catch (e) {}
+                        if (!colName && projectTable.settings()[0] && projectTable.settings()[0].aoColumns[column]) {
+                            colName = projectTable.settings()[0].aoColumns[column].name || '';
+                        }
+                    }
+                    if (colName === 'teams') {
+                        return formatTeamsForExcelExport(row, inner);
+                    }
+                    return stripHtmlForExport(inner);
+                }
+            }
+        };
+    }
+
+    function applyProjectListExcelBorders(xlsx) {
+        if (!xlsx || !xlsx.xl || typeof $ === 'undefined') return;
+        var styleSheet = xlsx.xl['styles.xml'];
+        var sheet = null;
+        var worksheetKeys = xlsx.xl.worksheets ? Object.keys(xlsx.xl.worksheets) : [];
+        if (worksheetKeys.length) {
+            sheet = xlsx.xl.worksheets[worksheetKeys[0]];
+        }
+        if (!sheet || !styleSheet) return;
+
+        var styleCache = {};
+
+        function getBorderedStyle(styleIndex) {
+            styleIndex = parseInt(styleIndex || '0', 10);
+            if (styleCache[styleIndex] !== undefined) {
+                return styleCache[styleIndex];
+            }
+
+            var baseXf = $('cellXfs xf', styleSheet).eq(styleIndex);
+            var fontId = baseXf.attr('fontId') || '0';
+            var fillId = baseXf.attr('fillId') || '0';
+            var numFmtId = baseXf.attr('numFmtId') || '0';
+            var xfId = baseXf.attr('xfId') || '0';
+            var extraAttrs = '';
+            if (baseXf.attr('applyFont')) extraAttrs += ' applyFont="1"';
+            if (baseXf.attr('applyFill')) extraAttrs += ' applyFill="1"';
+            if (baseXf.attr('applyNumberFormat')) extraAttrs += ' applyNumberFormat="1"';
+            if (baseXf.attr('applyAlignment')) extraAttrs += ' applyAlignment="1"';
+
+            var borderId = $('border', styleSheet).length;
+            $('borders', styleSheet).append(
+                '<border><left style="thin"><color auto="1"/></left>' +
+                '<right style="thin"><color auto="1"/></right>' +
+                '<top style="thin"><color auto="1"/></top>' +
+                '<bottom style="thin"><color auto="1"/></bottom></border>'
+            );
+            $('borders', styleSheet).attr('count', borderId + 1);
+
+            var newIndex = $('cellXfs xf', styleSheet).length;
+            $('cellXfs', styleSheet).append(
+                '<xf numFmtId="' + numFmtId + '" fontId="' + fontId + '" fillId="' + fillId +
+                '" borderId="' + borderId + '" xfId="' + xfId + '"' + extraAttrs + ' applyBorder="1"/>'
+            );
+            $('cellXfs', styleSheet).attr('count', newIndex + 1);
+            styleCache[styleIndex] = newIndex;
+            return newIndex;
+        }
+
+        $('row c', sheet).each(function() {
+            var cell = $(this);
+            cell.attr('s', getBorderedStyle(cell.attr('s')));
+        });
+    }
+
+    function getProjectListExcelButtonConfig() {
+        return {
+            extend: 'excel',
+            className: 'buttons-project-excel-export d-none',
+            title: '',
+            filename: function() {
+                return getProjectListExcelFilename();
+            },
+            exportOptions: getProjectListExcelExportOptions(),
+            customize: function(xlsx) {
+                applyProjectListExcelBorders(xlsx);
+            }
+        };
+    }
+
+    function destroyProjectListExcelButtons() {
+        if (projectListExcelButtons) {
+            try {
+                projectListExcelButtons.destroy();
+            } catch (e) {
+                /* ignore */
+            }
+            projectListExcelButtons = null;
+        }
+    }
+
+    function ensureProjectListExcelButtons(dt) {
+        if (!dt || !isProjectListExcelExportAvailable()) {
+            return false;
+        }
+        destroyProjectListExcelButtons();
+        projectListExcelButtons = new $.fn.dataTable.Buttons(dt, {
+            buttons: [getProjectListExcelButtonConfig()]
+        });
+        return true;
+    }
+
+    function stripHtmlForExport(inner) {
+        if (inner === null || inner === undefined) return '';
+        inner = String(inner);
+        if (!inner.length) return inner;
+        if (inner.indexOf('<') === -1) return inner.trim();
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(inner, 'text/html');
+        doc.querySelectorAll('.' + REMOVE_FOR_EXCEL_CLASS).forEach(function(el) {
+            el.remove();
+        });
+        return (doc.body.textContent || doc.body.innerText || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function getProjectListExcelFilename() {
+        var depName = (app && app.selectedDepartment && app.selectedDepartment.name)
+            ? String(app.selectedDepartment.name).replace(/[\\/:*?"<>|]/g, '_')
+            : 'project_list';
+        var stamp = (typeof moment !== 'undefined') ? moment().format('YYYYMMDD_HHmmss') : String(Date.now());
+        return depName + '_' + stamp;
+    }
+
+    function exportProjectListToExcel() {
+        if (isProjectListExporting) return;
+        if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
+            if (typeof showMessage === 'function') {
+                showMessage('テーブルが読み込まれていません。', true);
+            }
+            return;
+        }
+        if (!isProjectListExcelExportAvailable()) {
+            if (typeof showMessage === 'function') {
+                showMessage('Excel出力機能が利用できません。', true);
+            }
+            return;
+        }
+
+        var dt = projectTable;
+        if (!ensureProjectListExcelButtons(dt)) {
+            if (typeof showMessage === 'function') {
+                showMessage('Excel出力機能が利用できません。', true);
+            }
+            return;
+        }
+
+        isProjectListExporting = true;
+        if (app) app.loading = true;
+
+        var pageInfo = dt.page.info();
+        var oldStart = pageInfo.start;
+        var oldLength = dt.page.len();
+        var exportLength = pageInfo.recordsDisplay || pageInfo.recordsTotal || oldLength;
+        if (!exportLength || exportLength < 1) {
+            isProjectListExporting = false;
+            if (app) app.loading = false;
+            if (typeof showMessage === 'function') {
+                showMessage('出力するデータがありません。', true);
+            }
+            return;
+        }
+        var restored = false;
+
+        function restorePagination() {
+            if (restored) return;
+            restored = true;
+            dt.one('preXhr', function(e, settings, data) {
+                data.start = oldStart;
+                data.length = oldLength;
+            });
+            dt.one('draw', function() {
+                isProjectListExporting = false;
+                if (app) app.loading = false;
+            });
+            dt.ajax.reload(null, false);
+        }
+
+        dt.one('preXhr', function(e, settings, data) {
+            data.start = 0;
+            data.length = exportLength;
+        });
+
+        dt.one('error.dt', function() {
+            if (!restored) {
+                isProjectListExporting = false;
+                if (app) app.loading = false;
+                if (typeof showMessage === 'function') {
+                    showMessage('Excel出力に失敗しました。', true);
+                }
+            }
+        });
+
+        dt.one('draw', function() {
+            try {
+                dt.button(0).trigger();
+            } catch (err) {
+                console.error('Excel export failed:', err);
+                if (typeof showMessage === 'function') {
+                    showMessage('Excel出力に失敗しました。', true);
+                }
+                isProjectListExporting = false;
+                if (app) app.loading = false;
+                restored = true;
+                return;
+            }
+            restorePagination();
+        });
+
+        dt.ajax.reload();
+    }
 
     function isBackForwardNavigation(event) {
         if (event && event.persisted) {
@@ -287,9 +579,12 @@ var projectTable;
         if (!window.app) {
             return;
         }
+        projectListBackNavigationHandled = true;
         if (!window.app.departments || window.app.departments.length === 0) {
-            projectListBackNavigationHandled = true;
-            window.app.loadDepartments();
+            await window.app.loadDepartments();
+            if (window.app.selectedDepartment && window.app.selectedDepartment.id) {
+                await ensureProjectTableLoadedAfterBack();
+            }
             return;
         }
         var savedDepartment = window.app.loadSelectedDepartmentFromLocalStorage();
@@ -298,18 +593,15 @@ var projectTable;
                 return d && d.id == savedDepartment.id && d.can_project == 1;
             });
             if (department) {
-                projectListBackNavigationHandled = true;
                 window.app.viewProjects(department);
                 return;
             }
         }
         if (window.app.selectedDepartment && window.app.selectedDepartment.id) {
-            projectListBackNavigationHandled = true;
             await ensureProjectTableLoadedAfterBack();
             return;
         }
-        projectListBackNavigationHandled = true;
-        window.app.loadDepartments();
+        await window.app.loadDepartments();
     }
 
     function getProjectColumnOrderStorageKey(departmentId) {
@@ -371,6 +663,42 @@ var projectTable;
     }
 
     var CAILY_HIDDEN_COLUMN_KEYS = { guis_nouki: true, end_date: true };
+    var PROJECT_DIRECTOR_COLUMN_KEYS = {
+        amount: true,
+        estimate_date: true,
+        estimate_status: true,
+        invoice_date: true,
+        invoice_status: true,
+        invoice_amount: true,
+        payment_note: true
+    };
+    var BUSINESS_ESTIMATE_STATUSES = [
+        { value: '未発行', label: '未発行', color: 'secondary' },
+        { value: '発行済', label: '発行済', color: 'success' }
+    ];
+    var BUSINESS_INVOICE_STATUSES = [
+        { value: '未発行', label: '未発行', color: 'secondary' },
+        { value: '発行済', label: '発行済', color: 'success' }
+    ];
+
+    function isProjectDirectorColumn(columnKey) {
+        return !!PROJECT_DIRECTOR_COLUMN_KEYS[columnKey];
+    }
+
+    function canViewProjectDirectorColumns() {
+        if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
+        if (typeof window === 'undefined' || !window.app || !window.app.userPermissions) return false;
+        var p = window.app.userPermissions;
+        return p.project_director == 1
+            || p.project_director_stat == 1
+            || p.project_director_view == 1
+            || p.project_director_edit == 1;
+    }
+
+    function filterColumnKeysForProjectDirector(keys) {
+        if (canViewProjectDirectorColumns()) return keys || [];
+        return (keys || []).filter(function(k) { return !isProjectDirectorColumn(k); });
+    }
 
     function isColumnHiddenForCailyBranch(columnKey) {
         return isCailyBranchUser() && !!CAILY_HIDDEN_COLUMN_KEYS[columnKey];
@@ -381,6 +709,37 @@ var projectTable;
         return (keys || []).filter(function(k) { return !CAILY_HIDDEN_COLUMN_KEYS[k]; });
     }
 
+    function normalizeBusinessDocumentStatusValue(status) {
+        if (status === '発行済み') return '発行済';
+        return status || '未発行';
+    }
+
+    function renderBusinessDocumentStatusBadge(status, statusList) {
+        var normalized = normalizeBusinessDocumentStatusValue(status);
+        var statusObj = (statusList || []).find(function(s) { return s.value === normalized; });
+        var label = statusObj ? statusObj.label : '未発行';
+        var color = statusObj ? statusObj.color : 'secondary';
+        return '<span class="badge bg-' + color + '">' + escapeHtmlForNote(label) + '</span>';
+    }
+
+    function renderProjectListMoneyCell(data, type) {
+        if (type === 'sort' || type === 'type') {
+            return parseFloat(data) || 0;
+        }
+        var val = parseFloat(data);
+        if (isNaN(val) || val === 0) return '<span class="text-muted">-</span>';
+        return '<span class="text-nowrap">¥' + parseInt(val, 10).toLocaleString() + '</span>';
+    }
+
+    function renderProjectListDateCell(data, type) {
+        if (type === 'sort' || type === 'type') {
+            return data || '';
+        }
+        if (!data) return '<span class="text-muted">-</span>';
+        var dateStr = formatDateTimeWithLineBreak(data);
+        return dateStr ? '<span class="text-muted small text-nowrap">' + dateStr + '</span>' : '<span class="text-muted">-</span>';
+    }
+
     /** Default DataTable sort column index when end_date is hidden (e.g. CAILY branch). */
     function getDefaultProjectListSortIndex(mergedColumnKeys) {
         var preferred = ['end_date', 'caily_nouki', 'start_date', 'created_at', 'id'];
@@ -389,6 +748,34 @@ var projectTable;
             if (idx >= 0) return idx;
         }
         return 0;
+    }
+
+    function isProjectListCompletedStatusFilter() {
+        return !!(app && app.selectedStatus && app.selectedStatus.key === 'completed');
+    }
+
+    function getProjectTableColumnKeys(dt) {
+        var table = dt || projectTable;
+        if (!table || !table.settings || !table.settings()[0]) return [];
+        return table.settings()[0].aoColumns.map(function(col) {
+            return col.name || (typeof col.mData === 'string' ? col.mData : '') || '';
+        });
+    }
+
+    /** Default DataTable sort: completed → end_date desc; otherwise preferred date column asc. */
+    function getProjectListDefaultOrder(mergedColumnKeys) {
+        var keys = mergedColumnKeys || [];
+        if (isProjectListCompletedStatusFilter()) {
+            var endIdx = keys.indexOf('end_date');
+            if (endIdx >= 0) return [[endIdx, 'desc']];
+        }
+        return [[getDefaultProjectListSortIndex(keys), 'asc']];
+    }
+
+    function applyProjectListDefaultSort(dt) {
+        var table = dt || projectTable;
+        if (!table || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        table.order(getProjectListDefaultOrder(getProjectTableColumnKeys(table)));
     }
 
     /** Merge saved column key order with current table keys (append missing keys in default order). */
@@ -446,13 +833,13 @@ var projectTable;
             else after.push(ck);
         }
         var keys = before.concat(customDefs.map(function(c) { return c.key; })).concat(after);
-        return filterColumnKeysForCailyBranch(keys);
+        return filterColumnKeysForProjectDirector(filterColumnKeysForCailyBranch(keys));
     }
 
     function getMergedProjectColumnKeys(customColDefs, departmentId) {
-        return filterColumnKeysForCailyBranch(
+        return filterColumnKeysForProjectDirector(filterColumnKeysForCailyBranch(
             mergeColumnKeyOrder(loadProjectColumnOrder(departmentId), getDefaultProjectColumnKeys(customColDefs))
-        );
+        ));
     }
 
     /** Dropdown 列の表示 — cùng thứ tự với cột bảng (sau merge localStorage). */
@@ -465,7 +852,9 @@ var projectTable;
         return keys.map(function(k) {
             return { key: k, label: labelMap[k] || k, visible: vis[k] !== false };
         }).filter(function(col) {
-            return !isColumnHiddenForCailyBranch(col.key);
+            if (isColumnHiddenForCailyBranch(col.key)) return false;
+            if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return false;
+            return true;
         });
     }
 
@@ -487,9 +876,15 @@ var projectTable;
         { key: 'start_date', label: '開始日' },
         { key: 'caily_nouki', label: 'CAILY納期' },
         { key: 'guis_nouki', label: 'GUIS納期' },
-        { key: 'end_date', label: '終了日' },
+        { key: 'end_date', label: '期限日' },
         { key: 'priority', label: '優先度' },
-        { key: 'amount', label: '総額' },
+        { key: 'estimate_date', label: '見積日' },
+        { key: 'amount', label: '見積金額' },
+        { key: 'estimate_status', label: '見積状況' },
+        { key: 'invoice_date', label: '請求日' },
+        { key: 'invoice_status', label: '請求状況' },
+        { key: 'invoice_amount', label: '請求金額' },
+        { key: 'payment_note', label: '決済備考' },
         { key: 'customer_info', label: '顧客情報' },
         { key: 'parent_guis_receiver', label: 'GUIS 受付者' }
     ];
@@ -516,11 +911,17 @@ var projectTable;
         { key: 'start_date', label: '開始日', index: 17, defaultVisible: true },
         { key: 'caily_nouki', label: 'CAILY納期', index: 18, defaultVisible: true },
         { key: 'guis_nouki', label: 'GUIS納期', index: 19, defaultVisible: true },
-        { key: 'end_date', label: '終了日', index: 20, defaultVisible: true },
+        { key: 'end_date', label: '期限日', index: 20, defaultVisible: true },
         { key: 'priority', label: '優先度', index: 21, defaultVisible: true },
-        { key: 'amount', label: '総額', index: 22, defaultVisible: false },
-        { key: 'customer_info', label: '顧客情報', index: 23, defaultVisible: true },
-        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 24, defaultVisible: false }
+        { key: 'estimate_date', label: '見積日', index: 22, defaultVisible: false },
+        { key: 'amount', label: '見積金額', index: 23, defaultVisible: false },
+        { key: 'estimate_status', label: '見積状況', index: 24, defaultVisible: false },
+        { key: 'invoice_date', label: '請求日', index: 25, defaultVisible: false },
+        { key: 'invoice_status', label: '請求状況', index: 26, defaultVisible: false },
+        { key: 'invoice_amount', label: '請求金額', index: 27, defaultVisible: false },
+        { key: 'payment_note', label: '決済備考', index: 28, defaultVisible: false },
+        { key: 'customer_info', label: '顧客情報', index: 29, defaultVisible: true },
+        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 30, defaultVisible: false }
     ];
     // Số cột base trước khi chèn các cột custom (bắt đầu từ CAILY納期)
     const BASE_CUSTOM_START_INDEX = COLUMN_DEFINITIONS.find(col => col.key === 'caily_nouki').index;
@@ -774,6 +1175,7 @@ var projectTable;
         const visibility = {};
         COLUMN_DEFINITIONS.forEach(col => {
             if (isColumnHiddenForCailyBranch(col.key)) return;
+            if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return;
             visibility[col.key] = saved[col.key] !== undefined ? saved[col.key] : col.defaultVisible;
         });
         (customColDefs || []).forEach(col => {
@@ -804,6 +1206,7 @@ var projectTable;
         const customDefs = customColDefs || customFieldColumnDefinitions || [];
         COLUMN_DEFINITIONS.forEach(col => {
             if (isColumnHiddenForCailyBranch(col.key)) return;
+            if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return;
             const isVisible = visibility[col.key] !== false;
             const dtIndex = getDataTableColumnIndexByKey(col.key, customDefs);
             if (dtIndex !== null) {
@@ -886,11 +1289,11 @@ var projectTable;
                 var badgeHtml = '';
                 if (isToday) {
                     var todayText = (typeof translateText === 'function' ? translateText('本日') : '本日');
-                    badgeHtml = '<span class="badge bg-label-primary mt-1" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + todayText + '</span>';
+                    badgeHtml = '<span class="badge bg-label-primary mt-1 ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + todayText + '</span>';
                 }
                 if (isOverdue && !hasSentStatus) {
                     var lateText = (typeof translateText === 'function' ? translateText('遅れ') : '遅れ');
-                    badgeHtml += '<span class="badge bg-label-danger mt-1" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + lateText + '</span>';
+                    badgeHtml += '<span class="badge bg-label-danger mt-1 ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + lateText + '</span>';
                 }
                 
                 if (badgeHtml) {
@@ -913,7 +1316,9 @@ var projectTable;
                 // Nếu chứa '済み' → xanh
                 badgeClass = 'bg-label-success';
             }
-            return '<span class="badge ' + badgeClass + ' small">' + (typeof translateText === 'function' ? translateText(escapeHtmlForNote(v)) : escapeHtmlForNote(v)) + '</span>';
+            var isStatusCompanionField = label && String(label).trim().endsWith('状況');
+            var excelSkipClass = isStatusCompanionField ? (' ' + REMOVE_FOR_EXCEL_CLASS) : '';
+            return '<span class="badge ' + badgeClass + ' small' + excelSkipClass + '">' + (typeof translateText === 'function' ? translateText(escapeHtmlForNote(v)) : escapeHtmlForNote(v)) + '</span>';
         }
         if (type === 'textarea' || type === 'text') {
             var short = v.length > 40 ? v.substring(0, 40) + '...' : v;
@@ -1332,7 +1737,7 @@ var projectTable;
                         labelKey = 'GUIS納期=本日';
                         break;
                     case 'end_today':
-                        labelKey = '終了日=本日';
+                        labelKey = '期限日=本日';
                         break;
                 }
                 if (labelKey) {
@@ -1413,7 +1818,7 @@ var projectTable;
                 badges.push(`<span class="badge bg-label-info me-1" >担当: ${label}</span>`);
             }
             if (filters.noDates) {
-                badges.push(`<span class="badge bg-label-info me-1" >開始日・終了日未設定</span>`);
+                badges.push(`<span class="badge bg-label-info me-1" >開始日・期限日未設定</span>`);
             }
             if (filters.myProjects) {
                 badges.push(`<span class="badge bg-label-info me-1">私の案件</span>`);
@@ -1532,6 +1937,7 @@ var projectTable;
         } catch (e) {
             console.warn('DataTable destroy error:', e);
         }
+        destroyProjectListExcelButtons();
         projectTable = null;
         isInitializingTable = false;
         if ($tbl.length) {
@@ -1665,7 +2071,7 @@ var projectTable;
                             var sv = getCustomFieldValueFromRow(row, sf.label);
                             if (sv !== undefined && String(sv).trim() !== '') {
                                 var statusHtml = formatCustomFieldForList(sv, sf.type, sf.options || '', row, sf.label);
-                                parts.push('<div class="mt-1">' + statusHtml + '</div>');
+                                parts.push('<div class="mt-1 ' + REMOVE_FOR_EXCEL_CLASS + '">' + statusHtml + '</div>');
                             }
                         });
                         return parts.join('');
@@ -1709,7 +2115,7 @@ var projectTable;
                             return data || 0;
                         }
                         const isFavorite = row.is_favorite == 1;
-                        const starHtml = `<div class="d-flex flex-column align-items-center gap-1"><i class="fa fa-star ${isFavorite ? 'text-warning' : 'text-muted'}" 
+                        const starHtml = `<div class="d-flex flex-column align-items-center gap-1 ${REMOVE_FOR_EXCEL_CLASS}"><i class="fa fa-star ${isFavorite ? 'text-warning' : 'text-muted'}" 
                                    style="cursor: pointer; font-size: 1.2em;"
                                    onclick="window.toggleProjectFavorite(${row.id}, this)"
                                    title="${isFavorite ? 'お気に入りから削除' : 'お気に入りに追加'}"></i></div>`;
@@ -1725,19 +2131,19 @@ var projectTable;
                                 startText = (typeof translateText === 'function' ? translateText(startLabel.text === '開始今日' ? 'start_today' : 'start_tomorrow') : startLabel.text);
                                 if (startText === 'start_today' || startText === 'start_tomorrow') startText = startLabel.text;
                             }
-                            badges.push('<span class="badge ' + startLabel.class + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + startText + '</span>');
+                            badges.push('<span class="badge ' + startLabel.class + ' ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + startText + '</span>');
                         }
                         
                         // Overdue label — i18n
                         if (isProjectOverdue(row)) {
                             var overdueText = (typeof translateText === 'function' ? translateText('期限超過') : '期限超過');
-                            badges.push('<span class="badge bg-danger" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + overdueText + '</span>');
+                            badges.push('<span class="badge bg-danger ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + overdueText + '</span>');
                         }
                         
                         // Period undecided label — i18n
                         if (isPeriodUndecided(row)) {
                             var undecidedText = (typeof translateText === 'function' ? translateText('期間未定') : '期間未定');
-                            badges.push('<span class="badge bg-label-warning" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + undecidedText + '</span>');
+                            badges.push('<span class="badge bg-label-warning ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + undecidedText + '</span>');
                         }
 
                         // NEW badge: 作成から6時間未満 (Japan timezone)
@@ -1746,7 +2152,7 @@ var projectTable;
                             var created = moment.tz ? moment.tz(row.created_at, 'Asia/Tokyo') : moment(row.created_at);
                             if (created.isValid() && nowJst.diff(created, 'hours', true) < 6) {
                                 var newText = (typeof translateText === 'function' ? translateText('NEW') : 'NEW');
-                                badges.push('<span class="badge bg-success" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + newText + '</span>');
+                                badges.push('<span class="badge bg-success ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + newText + '</span>');
                             }
                         }
 
@@ -1944,7 +2350,7 @@ var projectTable;
                         const completed = parseInt(row.completed_task_count, 10) || 0;
                         const total = parseInt(row.task_count, 10) || 0;
                         const taskCountHtml = total > 0
-                            ? `<small class="text-muted d-flex align-items-center gap-1 project-hover-tasks-trigger" data-project-id="${row.id}" style="font-size:0.75rem; cursor: default;">` +
+                            ? `<small class="text-muted d-flex align-items-center gap-1 project-hover-tasks-trigger ${REMOVE_FOR_EXCEL_CLASS}" data-project-id="${row.id}" style="font-size:0.75rem; cursor: default;">` +
                               `<i class="fas fa-tasks" style="font-size:0.7rem;"></i>` +
                               `<span>${completed}/${total}</span></small>`
                             : '';
@@ -2260,7 +2666,7 @@ var projectTable;
                         var statusVal = row && (row.caily_nouki_status !== undefined && row.caily_nouki_status !== null ? row.caily_nouki_status : '');
                         if (statusVal !== '' && String(statusVal).trim() !== '') {
                             var statusEsc = String(statusVal).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-                            statusBadge = '<span class="badge bg-label-success mt-1" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + (typeof translateText === 'function' ? translateText(statusEsc) : statusEsc) + '</span>';
+                            statusBadge = '<span class="badge bg-label-success mt-1 ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + (typeof translateText === 'function' ? translateText(statusEsc) : statusEsc) + '</span>';
                             if (String(statusVal).indexOf('納品済み') !== -1) {
                                 isDelivered = true;
                             }
@@ -2292,7 +2698,7 @@ var projectTable;
                                 : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
                             return '<div class="d-flex flex-column">' +
                                         '<span class="text-muted small"' + attrs + '>' + dateStr + '</span>' +
-                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1 time-remaining-badge" ' +
+                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1 time-remaining-badge ' + REMOVE_FOR_EXCEL_CLASS + '" ' +
                                              'title="' + (timeRemaining.fullText ? timeRemaining.fullText.replace(/"/g, '&quot;') : titleText.replace(/"/g, '&quot;')) + '" ' +
                                              'style="font-size: 0.7rem; padding: 0.2rem 0.4rem; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
                                              timeRemaining.text +
@@ -2321,7 +2727,7 @@ var projectTable;
                         var statusVal = row && (row.guis_nouki_status !== undefined && row.guis_nouki_status !== null ? row.guis_nouki_status : '');
                         if (statusVal !== '' && String(statusVal).trim() !== '') {
                             var statusEsc = String(statusVal).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-                            statusBadge = '<span class="badge bg-label-success mt-1" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + statusEsc + '</span>';
+                            statusBadge = '<span class="badge bg-label-success mt-1 ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + statusEsc + '</span>';
                             if (String(statusVal).indexOf('納品済み') !== -1) {
                                 isDelivered = true;
                             }
@@ -2352,7 +2758,7 @@ var projectTable;
                                 : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
                             return '<div class="d-flex flex-column">' +
                                         '<span class="text-muted small"' + attrs + '>' + dateStr + '</span>' +
-                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1 time-remaining-badge" ' +
+                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1 time-remaining-badge ' + REMOVE_FOR_EXCEL_CLASS + '" ' +
                                              'title="' + (timeRemaining.fullText ? timeRemaining.fullText.replace(/"/g, '&quot;') : titleText.replace(/"/g, '&quot;')) + '" ' +
                                              'style="font-size: 0.7rem; padding: 0.2rem 0.4rem; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
                                              timeRemaining.text +
@@ -2371,11 +2777,11 @@ var projectTable;
                     width: '80px',
                     visible: false
                 },
-                { name: 'end_date', data: 'end_date', title: buildI18nHeaderTitle('終了日'), render: function(data, type, row) {
+                { name: 'end_date', data: 'end_date', title: buildI18nHeaderTitle('期限日'), render: function(data, type, row) {
                     if(data) {
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-                        var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, '終了日') : '');
+                        var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, '期限日') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
                         const timeRemaining = getTimeRemaining(data, row.status);
                         const dateStr = formatDateTimeWithLineBreak(data);
@@ -2387,7 +2793,7 @@ var projectTable;
                                 : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('残り時間') : '残り時間');
                             return '<div class="d-flex flex-column">' +
                                         '<span class="text-muted small"' + attrs + '>' + dateStr + '</span>' +
-                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1 time-remaining-badge" ' +
+                                        '<span class="badge ' + timeRemaining.class + ' ' + pulseClass + ' mt-1 time-remaining-badge ' + REMOVE_FOR_EXCEL_CLASS + '" ' +
                                              'title="' + (timeRemaining.fullText ? timeRemaining.fullText.replace(/"/g, '&quot;') : titleText.replace(/"/g, '&quot;')) + '" ' +
                                              'style="font-size: 0.7rem; padding: 0.2rem 0.4rem; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
                                              timeRemaining.text +
@@ -2417,17 +2823,76 @@ var projectTable;
                     width: '80px'
                 },
                 {
+                    name: 'estimate_date',
+                    data: 'estimate_date',
+                    render: renderProjectListDateCell,
+                    title: '<span data-i18n="見積日">見積日</span>',
+                    visible: false,
+                    className: 'estimate-date-column'
+                },
+                {
                     name: 'amount',
                     data: 'amount',
-                    render: function(data, type, row) {
+                    render: renderProjectListMoneyCell,
+                    title: '<span data-i18n="見積金額">見積金額</span>',
+                    visible: false
+                },
+                {
+                    name: 'estimate_status',
+                    data: 'estimate_status',
+                    render: function(data, type) {
                         if (type === 'sort' || type === 'type') {
-                            return parseFloat(data) || 0;
+                            return normalizeBusinessDocumentStatusValue(data);
                         }
-                        const val = parseFloat(data);
-                        if (isNaN(val) || val === 0) return '<span class="text-muted">-</span>';
-                        return '<span class="text-nowrap">¥' + parseInt(val).toLocaleString() + '</span>';
+                        return renderBusinessDocumentStatusBadge(data, BUSINESS_ESTIMATE_STATUSES);
                     },
-                    title: '<span data-i18n="総額">総額</span>'
+                    title: '<span data-i18n="見積状況">見積状況</span>',
+                    visible: false,
+                    className: 'estimate-status-column'
+                },
+                {
+                    name: 'invoice_date',
+                    data: 'invoice_date',
+                    render: renderProjectListDateCell,
+                    title: '<span data-i18n="請求日">請求日</span>',
+                    visible: false,
+                    className: 'invoice-date-column'
+                },
+                {
+                    name: 'invoice_status',
+                    data: 'invoice_status',
+                    render: function(data, type) {
+                        if (type === 'sort' || type === 'type') {
+                            return normalizeBusinessDocumentStatusValue(data);
+                        }
+                        return renderBusinessDocumentStatusBadge(data, BUSINESS_INVOICE_STATUSES);
+                    },
+                    title: '<span data-i18n="請求状況">請求状況</span>',
+                    visible: false,
+                    className: 'invoice-status-column'
+                },
+                {
+                    name: 'invoice_amount',
+                    data: 'invoice_amount',
+                    render: renderProjectListMoneyCell,
+                    title: '<span data-i18n="請求金額">請求金額</span>',
+                    visible: false,
+                    className: 'invoice-amount-column'
+                },
+                {
+                    name: 'payment_note',
+                    data: 'payment_note',
+                    render: function(data, type) {
+                        if (type === 'sort' || type === 'type') {
+                            return data || '';
+                        }
+                        var text = String(data || '').trim();
+                        if (!text) return '<span class="text-muted">-</span>';
+                        return '<span class="small" title="' + escapeHtmlForNote(text) + '">' + escapeHtmlForNote(text) + '</span>';
+                    },
+                    title: '<span data-i18n="決済備考">決済備考</span>',
+                    visible: false,
+                    className: 'payment-note-column'
                 },
                 { 
                     name: 'customer_info',
@@ -2464,7 +2929,15 @@ var projectTable;
         ];
         var tailForTable = tailColumnConfigs;
         if (isCailyBranchUser()) {
-            tailForTable = tailColumnConfigs.filter(function(c) { return !CAILY_HIDDEN_COLUMN_KEYS[c.name]; });
+            tailForTable = tailColumnConfigs.filter(function(c) {
+                if (c.name === 'end_date') return true;
+                return !CAILY_HIDDEN_COLUMN_KEYS[c.name];
+            });
+        }
+        if (!canViewProjectDirectorColumns()) {
+            tailForTable = tailForTable.filter(function(c) {
+                return !isProjectDirectorColumn(c.name);
+            });
         }
         var defaultColumnKeys = fixedColumnConfigs.map(function(c) { return c.name; }).concat(customColumnConfigs.map(function(c) { return c.name; })).concat(tailForTable.map(function(c) { return c.name; }));
         var depIdForColumnOrder = app.selectedDepartment && app.selectedDepartment.id;
@@ -2473,8 +2946,15 @@ var projectTable;
         fixedColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
         customColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
         tailColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
-        var orderedColumns = mergedColumnKeys.map(function(k) { return projectColumnRegistry[k]; }).filter(Boolean);
-        var defaultSortIndex = getDefaultProjectListSortIndex(mergedColumnKeys);
+        var orderedColumns = mergedColumnKeys.map(function(k) {
+            var col = projectColumnRegistry[k];
+            if (!col) return null;
+            if (isCailyBranchUser() && k === 'end_date') {
+                return Object.assign({}, col, { visible: false });
+            }
+            return col;
+        }).filter(Boolean);
+        var defaultOrder = getProjectListDefaultOrder(mergedColumnKeys);
 
         projectTable = $('#projectTable').DataTable({
             serverSide: true,
@@ -2543,7 +3023,7 @@ var projectTable;
             //scrollY: Math.round(window.innerHeight * 0.8) + 'px',
             columns: orderedColumns,
             colReorder: true,
-            order: [[defaultSortIndex, 'asc']],
+            order: defaultOrder,
            
             pageLength: 50,
             ordering: true,
@@ -2569,6 +3049,7 @@ var projectTable;
                 }
             },
             initComplete: function() {
+                ensureProjectListExcelButtons(projectTable);
                 var tableEl = document.getElementById('projectTable');
                 if (tableEl && typeof applyStickyScrollHead === 'function') {
                     applyStickyScrollHead(tableEl);
@@ -2604,6 +3085,7 @@ var projectTable;
             var noteColumnConfigs = []; // { colIndex, displayColumnKey }
             (NOTE_DISPLAY_COLUMNS || []).forEach(function(c) {
                 if (isColumnHiddenForCailyBranch(c.key)) return;
+                if (isProjectDirectorColumn(c.key) && !canViewProjectDirectorColumns()) return;
                 var idx = getDataTableColumnIndexByKey(c.key, customDefs);
                 if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: c.key });
             });
@@ -4423,6 +4905,7 @@ var projectTable;
                 app.selectedStatus = null;
             }
             renderActiveFilters();
+            applyProjectListDefaultSort();
             reloadProjectTable(true);
         });
         
@@ -4735,8 +5218,13 @@ var projectTable;
             noteDisplayColumnOptions() {
                 function normLabel(t) { return (t || '').replace(/状況$/, ''); }
                 const hiddenForCaily = this.isCailyBranchUser ? { guis_nouki: true, end_date: true } : {};
+                const hiddenForDirector = this.canViewProjectDirectorColumns()
+                    ? {}
+                    : (typeof PROJECT_DIRECTOR_COLUMN_KEYS !== 'undefined' ? PROJECT_DIRECTOR_COLUMN_KEYS : {});
                 const list = (typeof NOTE_DISPLAY_COLUMNS !== 'undefined' ? NOTE_DISPLAY_COLUMNS : [])
-                    .filter(function(c) { return !hiddenForCaily[c.key]; })
+                    .filter(function(c) {
+                        return !hiddenForCaily[c.key] && !hiddenForDirector[c.key];
+                    })
                     .map(function(c) {
                     return { value: c.key, text: c.label };
                 });
@@ -5055,7 +5543,7 @@ var projectTable;
                         end_date: {
                             validators: {
                                 notEmpty: {
-                                    message: '終了日を選択してください'
+                                    message: '期限日を選択してください'
                                 }
                             }
                         },
@@ -5144,32 +5632,52 @@ var projectTable;
                 try {
                     const response = await axios.get('/api/index.php?model=department&method=listByUser');
                     this.departments = response.data || [];
-                    // Try to restore saved department from localStorage
-                    if (!this.selectedDepartment && this.departments.length > 0) {
-                        const savedDepartment = this.loadSelectedDepartmentFromLocalStorage();
-                        if (savedDepartment) {
-                            // Check if saved department still exists and user has access
-                            const department = this.departments.find(d => d && d.id == savedDepartment.id && d.can_project == 1);
-                            if (department) {
-                                this.viewProjects(department);
-                                return;
-                            }
-                        }
-                        
-                        // If no saved department or it's no longer accessible, use first available
-                        const firstDepartment = this.departments.find(d => d && d.can_project == 1);
-                        if (firstDepartment) {
-                            this.viewProjects(firstDepartment);
-                        } else {
+
+                    if (this.departments.length === 0) {
+                        this.selectedDepartment = null;
+                        this.loading = false;
+                        showMessage('どの部署にも所属していません。管理者に問い合わせてください。', true);
+                        return;
+                    }
+
+                    if (this.selectedDepartment && this.selectedDepartment.id) {
+                        const matched = this.departments.find(
+                            (d) => d && d.id == this.selectedDepartment.id && d.can_project == 1
+                        );
+                        if (matched) {
+                            this.selectedDepartment = matched;
+                            this.saveSelectedDepartmentToLocalStorage(matched);
                             this.loading = false;
+                            return;
                         }
+                        this.selectedDepartment = null;
+                    }
+
+                    const savedDepartment = this.loadSelectedDepartmentFromLocalStorage();
+                    if (savedDepartment) {
+                        const department = this.departments.find(
+                            (d) => d && d.id == savedDepartment.id && d.can_project == 1
+                        );
+                        if (department) {
+                            this.viewProjects(department);
+                            return;
+                        }
+                    }
+
+                    const firstDepartment = this.departments.find((d) => d && d.can_project == 1);
+                    if (firstDepartment) {
+                        this.viewProjects(firstDepartment);
                     } else {
-                        throw new Error('No department found');
+                        this.loading = false;
+                        showMessage('どの部署にも所属していません。管理者に問い合わせてください。', true);
                     }
                 } catch (error) {
                     console.error('Error loading departments:', error);
-                    this.departments = [];
                     this.loading = false;
+                    if (this.selectedDepartment && this.selectedDepartment.id) {
+                        return;
+                    }
+                    this.departments = [];
                     showMessage('どの部署にも所属していません。管理者に問い合わせてください。', true);
                 }
             },
@@ -5202,6 +5710,14 @@ var projectTable;
             },
             canManageProject() {
                 return this.hasPermission('project_manager');
+            },
+            canViewProjectDirectorColumns() {
+                if (USER_ROLE == 'administrator') return true;
+                if (!this.userPermissions) return false;
+                return this.userPermissions.project_director == 1
+                    || this.userPermissions.project_director_stat == 1
+                    || this.userPermissions.project_director_view == 1
+                    || this.userPermissions.project_director_edit == 1;
             },
             canCommentProject() {
                 return this.hasPermission('project_comment');
@@ -5480,6 +5996,9 @@ var projectTable;
                         return 'bg-info'; // Gray for unknown types
                 }
             },
+            exportProjectListExcel() {
+                exportProjectListToExcel();
+            },
             viewProjects(department) {
                 if (!department || !department.id) {
                     console.error('Invalid department object:', department);
@@ -5510,6 +6029,7 @@ var projectTable;
                 // Đợi Vue cập nhật DOM rồi init lại DataTable, xong mới reload (tránh init chưa xong đã gọi loadProjects)
                 this.$nextTick(async () => {
                     try {
+                        await this.getUserPermissions(department.id);
                         await initializeProjectTable();
                         if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
                             reloadProjectTable(true);
@@ -5519,9 +6039,6 @@ var projectTable;
                     }
                 });
 
-                
-                // Load user permissions for the selected department
-                this.getUserPermissions(department.id);
                 
                 // Reset teams and members when department changes
                 if (this.teamTagifyInstance) {
@@ -5565,12 +6082,14 @@ var projectTable;
             },
             filterProjectByStatus(status) {
                 this.selectedStatus = status;
-                this.loadProjects();
-                // Lưu trạng thái status + các filter khác vào localStorage và cập nhật URL / badge
                 if (typeof saveFiltersToLocalStorage === 'function') {
                     saveFiltersToLocalStorage();
                 }
                 renderActiveFilters();
+                if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+                    applyProjectListDefaultSort(projectTable);
+                }
+                this.loadProjects();
             },
             onFavoritesFilterChange() {
                 const isChecked = $('#filterFavoritesOnly').is(':checked');

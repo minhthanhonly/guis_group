@@ -159,7 +159,8 @@ class Project extends ApplicationModel {
         $projectColumns = array(
             'id', 'name', 'description', 'priority', 'status', 'start_date', 'end_date',
             'actual_start_date', 'actual_end_date', 'tantou', 'caily_nouki', 'caily_nouki_status',
-            'guis_nouki', 'guis_nouki_status', 'progress', 'amount', 'project_order_type',
+            'guis_nouki', 'guis_nouki_status', 'progress', 'amount', 'estimate_date', 'estimate_status',
+            'invoice_date', 'invoice_status', 'invoice_amount', 'payment_note', 'project_order_type',
             'project_number', 'created_at', 'updated_at', 'teams', 'building_size', 'is_kadai',
         );
         if (in_array($order_column, $projectColumns, true)) {
@@ -310,13 +311,23 @@ class Project extends ApplicationModel {
         $start = isset($_GET['start']) ? intval($_GET['start']) : 0;
         $length = isset($_GET['length']) ? intval($_GET['length']) : 10;
         $search = isset($_GET['search']) ? $_GET['search'] : '';
+        $user_id = $_SESSION['id'];
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+        $canViewDirectorColumns = $department_id > 0
+            ? $this->canUserViewProjectDirectorListColumns($department_id)
+            : false;
+        $directorColumnFields = array(
+            'amount', 'estimate_date', 'estimate_status', 'invoice_date',
+            'invoice_status', 'invoice_amount', 'payment_note',
+        );
         $order_column = isset($_GET['order_column']) ? $_GET['order_column'] : 'end_date';
+        if (!$canViewDirectorColumns && in_array($order_column, $directorColumnFields, true)) {
+            $order_column = 'end_date';
+        }
         $order_dir = isset($_GET['order_dir']) ? $_GET['order_dir'] : 'ASC';
         $status = isset($_GET['status']) ? $_GET['status'] : 'all';
         
         $whereArr = [];
-        
-        $user_id = $_SESSION['id'];
         
         // Filter "My Projects" - show only projects where user is member or manager
         if (isset($_GET['my_projects']) && $_GET['my_projects'] == '1') {
@@ -627,6 +638,11 @@ class Project extends ApplicationModel {
         }
         foreach ($data as &$project) {
             $project['notes_by_display_column'] = isset($notesByProject[$project['id']]) ? $notesByProject[$project['id']] : [];
+            if (!$canViewDirectorColumns) {
+                foreach ($directorColumnFields as $field) {
+                    unset($project[$field]);
+                }
+            }
         }
         unset($project);
 
@@ -3710,6 +3726,38 @@ class Project extends ApplicationModel {
         
         mysqli_stmt_close($stmt);
         return $data;
+    }
+
+    /**
+     * Project list director columns: project_director* permissions only.
+     */
+    public function canUserViewProjectDirectorListColumns($department_id) {
+        $department_id = intval($department_id);
+        if ($department_id <= 0) {
+            return false;
+        }
+        if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
+            return true;
+        }
+        $current_userid = isset($_SESSION['userid']) ? $this->escape($_SESSION['userid']) : '';
+        if (!$current_userid) {
+            return false;
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT project_director, project_director_stat, project_director_view, project_director_edit
+            FROM %suser_department
+            WHERE department_id = %d AND userid = '%s'",
+            DB_PREFIX,
+            $department_id,
+            $current_userid
+        ));
+        if (!$row) {
+            return false;
+        }
+        return (int)($row['project_director_stat'] ?? 0) === 1
+            || (int)($row['project_director_view'] ?? 0) === 1
+            || (int)($row['project_director_edit'] ?? 0) === 1
+            || (int)($row['project_director'] ?? 0) === 1;
     }
 
     /**

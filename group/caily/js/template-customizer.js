@@ -1295,6 +1295,11 @@ export { TemplateCustomizer }
  * Caches DOM elements and handles color picker setup
  */
 const initializeColorPicker = () => {
+  if (typeof Pickr === 'undefined') {
+    console.warn('Pickr is not loaded; template color picker disabled')
+    return
+  }
+
   // Cache DOM elements
   const elements = {
     pickerWrapper: document.querySelector('.template-customizer-colors-options input[value="picker"]'),
