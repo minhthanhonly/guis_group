@@ -426,6 +426,7 @@ var projectTable;
         cardBody.querySelectorAll('.dataTables_wrapper, .dt-container, #projectTable_wrapper').forEach(function(el) {
             el.remove();
         });
+        var toolsRow = document.getElementById('projectListColumnToolsRow');
         var hint = document.getElementById('projectTableScrollHint');
         var table = document.getElementById('projectTable');
         if (table) {
@@ -434,8 +435,9 @@ var projectTable;
         table = document.createElement('table');
         table.id = 'projectTable';
         table.className = 'table table-striped';
-        if (hint) {
-            hint.insertAdjacentElement('afterend', table);
+        var insertAfter = toolsRow || hint;
+        if (insertAfter) {
+            insertAfter.insertAdjacentElement('afterend', table);
         } else {
             cardBody.appendChild(table);
         }
@@ -705,8 +707,84 @@ var projectTable;
         }
     }
 
-    function setProjectTableColumnWidthPx(table, colIndex, widthPx) {
+    function applyProjectListColElementWidth(colEl, wStr) {
+        if (!colEl) return;
+        colEl.style.width = wStr;
+        colEl.style.minWidth = wStr;
+        colEl.style.removeProperty('max-width');
+    }
+
+    function applyProjectListCellWidthStyle(cell, wStr) {
+        if (!cell) return;
+        cell.style.width = wStr;
+        cell.style.minWidth = wStr;
+        cell.style.removeProperty('max-width');
+        var firstChild = cell.firstElementChild;
+        if (firstChild && firstChild.classList && firstChild.classList.contains('dt-scroll-sizing')) {
+            firstChild.style.width = wStr;
+            firstChild.style.minWidth = wStr;
+            firstChild.style.removeProperty('max-width');
+        }
+    }
+
+    function getProjectListTableTotalWidthPx(table) {
+        var bodyTable = document.getElementById('projectTable');
+        if (bodyTable && bodyTable.style.width) {
+            var parsed = parseInt(bodyTable.style.width, 10);
+            if (!isNaN(parsed) && parsed > 0) return parsed;
+        }
+        if (bodyTable) {
+            return Math.round(bodyTable.getBoundingClientRect().width) || 0;
+        }
+        return 0;
+    }
+
+    function setProjectListTableTotalWidthPx(table, totalPx) {
+        var total = parseInt(totalPx, 10);
+        if (isNaN(total) || total < 1) return;
+        var wStr = total + 'px';
+        var $wrapper = getProjectListTableWrapper();
+        $wrapper.find('.dt-scroll-headInner, .dataTables_scrollHeadInner').css('width', wStr);
+        $wrapper.find('.dt-scroll-head table, .dataTables_scrollHead table').first().css('width', wStr);
+        var bodyTable = document.getElementById('projectTable');
+        if (bodyTable) bodyTable.style.width = wStr;
+    }
+
+    function getProjectListColumnWidthFromState(table, colIndex) {
+        if (!table || colIndex == null || colIndex < 0) return 0;
+        try {
+            var settings = table.settings()[0];
+            var ao = settings && settings.aoColumns ? settings.aoColumns[colIndex] : null;
+            if (ao && ao.sWidth) {
+                var fromState = parseInt(String(ao.sWidth), 10);
+                if (!isNaN(fromState) && fromState > 0) return fromState;
+            }
+            if (ao && ao.colEl && ao.colEl[0] && ao.colEl[0].style.width) {
+                var fromCol = parseInt(ao.colEl[0].style.width, 10);
+                if (!isNaN(fromCol) && fromCol > 0) return fromCol;
+            }
+        } catch (e) { /* ignore */ }
+        return getProjectTableColumnWidthPx(table, colIndex) || 0;
+    }
+
+    function syncProjectListScrollTableWidth(table) {
+        if (!table) return;
+        var settings = table.settings()[0];
+        if (!settings) return;
+        var total = 0;
+        for (var i = 0; i < settings.aoColumns.length; i++) {
+            var ao = settings.aoColumns[i];
+            if (!ao.bVisible) continue;
+            var w = getProjectListColumnWidthFromState(table, i);
+            if (w > 0) total += w;
+        }
+        if (total <= 0) return;
+        setProjectListTableTotalWidthPx(table, total);
+    }
+
+    function setProjectTableColumnWidthPx(table, colIndex, widthPx, options) {
         if (!table || colIndex == null || colIndex < 0) return null;
+        var opts = options || {};
         var w = parseInt(widthPx, 10);
         if (isNaN(w)) return null;
         w = Math.max(PROJECT_LIST_COL_MIN_WIDTH, Math.min(PROJECT_LIST_COL_MAX_WIDTH, w));
@@ -715,18 +793,37 @@ var projectTable;
             var col = table.column(colIndex);
             var header = col.header();
             if (!header) return w;
-            header.style.width = wStr;
-            var visualIdx = getVisualHeaderPosition(header);
-            if (visualIdx >= 0) {
+            applyProjectListCellWidthStyle(header, wStr);
+
+            var settings = table.settings()[0];
+            if (settings && settings.aoColumns && settings.aoColumns[colIndex]) {
+                settings.aoColumns[colIndex].sWidth = wStr;
+                var masterCol = settings.aoColumns[colIndex].colEl;
+                if (masterCol && masterCol[0]) {
+                    applyProjectListColElementWidth(masterCol[0], wStr);
+                }
+            }
+
+            // <colgroup> only contains visible columns — use visible index, not DOM child index
+            var visibleIdx = col.index('visible');
+            if (visibleIdx === null || visibleIdx === undefined || visibleIdx < 0) {
+                visibleIdx = getVisualHeaderPosition(header);
+            }
+            if (visibleIdx >= 0) {
                 getProjectListScrollColGroups().forEach(function(colgroup) {
-                    var colEl = colgroup.children[visualIdx];
-                    if (colEl) colEl.style.width = wStr;
+                    applyProjectListColElementWidth(colgroup.children[visibleIdx], wStr);
                 });
             }
-            // Keep body <td> in sync too (no scrollX colgroup case / extra safety)
+
             col.nodes().each(function() {
-                this.style.width = wStr;
+                applyProjectListCellWidthStyle(this, wStr);
             });
+
+            if (opts.tableWidthPx != null) {
+                setProjectListTableTotalWidthPx(table, opts.tableWidthPx);
+            } else if (opts.skipTableWidthSync !== true) {
+                syncProjectListScrollTableWidth(table);
+            }
         } catch (e) { /* ignore */ }
         return w;
     }
@@ -750,8 +847,21 @@ var projectTable;
             getProjectListScrollColGroups().forEach(function(colgroup) {
                 Array.prototype.forEach.call(colgroup.children, function(colEl) {
                     colEl.style.removeProperty('width');
+                    colEl.style.removeProperty('min-width');
+                    colEl.style.removeProperty('max-width');
                 });
             });
+            var settings = table.settings()[0];
+            if (settings && settings.aoColumns) {
+                settings.aoColumns.forEach(function(ao) {
+                    if (ao.colEl && ao.colEl[0]) {
+                        ao.colEl[0].style.removeProperty('width');
+                        ao.colEl[0].style.removeProperty('min-width');
+                        ao.colEl[0].style.removeProperty('max-width');
+                    }
+                    ao.sWidth = null;
+                });
+            }
         } catch (e) { /* ignore */ }
     }
 
@@ -761,9 +871,24 @@ var projectTable;
         Object.keys(saved).forEach(function(colName) {
             var idx = getDataTableColumnIndexByKey(colName, customFieldColumnDefinitions);
             if (idx !== null) {
-                setProjectTableColumnWidthPx(table, idx, saved[colName]);
+                setProjectTableColumnWidthPx(table, idx, saved[colName], { skipTableWidthSync: true });
             }
         });
+        syncProjectListScrollTableWidth(table);
+    }
+
+    function snapshotProjectListVisibleColumnWidths(table) {
+        if (!table) return;
+        try {
+            table.columns(':visible').every(function() {
+                var idx = this.index();
+                var w = getProjectTableColumnWidthPx(table, idx);
+                if (w) {
+                    setProjectTableColumnWidthPx(table, idx, w, { skipTableWidthSync: true });
+                }
+            });
+            syncProjectListScrollTableWidth(table);
+        } catch (e) { /* ignore */ }
     }
 
     function _plStartResizeDrag(table, handleEl, pageX) {
@@ -775,6 +900,8 @@ var projectTable;
         // getBoundingClientRect gives the real rendered width, unaffected by min-width style
         var startWidth = header ? Math.round(header.getBoundingClientRect().width) : 80;
         if (!startWidth || startWidth < 1) startWidth = $(header).outerWidth() || 80;
+        snapshotProjectListVisibleColumnWidths(table);
+        startWidth = getProjectTableColumnWidthPx(table, colIdx) || startWidth;
         $('body').addClass('pl-col-resizing');
         projectListColumnResizeDrag = {
             table: table,
@@ -782,6 +909,7 @@ var projectTable;
             colName: colName,
             startX: pageX,
             startWidth: startWidth,
+            startTableWidth: getProjectListTableTotalWidthPx(table),
             departmentId: projectListResizeDepartmentId,
             currentWidth: null
         };
@@ -833,7 +961,13 @@ var projectTable;
             var drag = projectListColumnResizeDrag;
             if (!drag || !drag.table) return;
             e.preventDefault();
-            var newW = setProjectTableColumnWidthPx(drag.table, drag.colIdx, drag.startWidth + (e.pageX - drag.startX));
+            var rawW = drag.startWidth + (e.pageX - drag.startX);
+            var clampedW = Math.max(PROJECT_LIST_COL_MIN_WIDTH, Math.min(PROJECT_LIST_COL_MAX_WIDTH, parseInt(rawW, 10)));
+            if (isNaN(clampedW)) return;
+            var tableWidthPx = Math.max(1, (drag.startTableWidth || 0) + (clampedW - drag.startWidth));
+            var newW = setProjectTableColumnWidthPx(drag.table, drag.colIdx, clampedW, {
+                tableWidthPx: tableWidthPx
+            });
             if (newW) drag.currentWidth = newW;
         }, { passive: false });
         document.addEventListener('mouseup', function() {
@@ -848,6 +982,13 @@ var projectTable;
         });
     }
 
+    function reapplyProjectListColumnWidthsAfterLayout(table, departmentId) {
+        if (!table || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        forceProjectListFixedTableLayout();
+        applySavedProjectColumnWidths(table, departmentId);
+        injectProjectListColumnResizeHandles(table);
+    }
+
     function initProjectListColumnResize(table, departmentId) {
         if (!table) return;
         projectListResizeDepartmentId = departmentId;
@@ -859,13 +1000,41 @@ var projectTable;
         injectProjectListColumnResizeHandles(table);
     }
 
+    function getShowAllProjectColumnVisibility(customColDefs) {
+        const visibility = {};
+        COLUMN_DEFINITIONS.forEach(col => {
+            if (isColumnHiddenForCailyBranch(col.key)) return;
+            if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return;
+            visibility[col.key] = true;
+        });
+        (customColDefs || []).forEach(col => {
+            visibility[col.key] = true;
+        });
+        if (isCailyBranchUser()) {
+            visibility.end_date = false;
+        }
+        return visibility;
+    }
+
+    function showAllProjectColumns(table, customColDefs, departmentId) {
+        var visibility = getShowAllProjectColumnVisibility(customColDefs);
+        saveColumnVisibilityToLocalStorage(visibility);
+        if (table && $.fn.DataTable.isDataTable('#projectTable')) {
+            applyColumnVisibility(table, visibility, customColDefs);
+            reapplyProjectListColumnWidthsAfterLayout(table, departmentId);
+        }
+        if (window.app) {
+            window.app.availableColumns = buildAvailableColumnsList(customColDefs, departmentId, visibility);
+            scheduleColumnVisibilityMenuI18n();
+        }
+    }
+
     function resetProjectColumnVisibilityToDefault(table, customColDefs, departmentId) {
         var visibility = getDefaultColumnVisibility(customColDefs);
         saveColumnVisibilityToLocalStorage(visibility);
         if (table && $.fn.DataTable.isDataTable('#projectTable')) {
             applyColumnVisibility(table, visibility, customColDefs);
-            applySavedProjectColumnWidths(table, departmentId);
-            injectProjectListColumnResizeHandles(table);
+            reapplyProjectListColumnWidthsAfterLayout(table, departmentId);
         }
         if (window.app) {
             window.app.availableColumns = buildAvailableColumnsList(customColDefs, departmentId, visibility);
@@ -913,28 +1082,38 @@ var projectTable;
             window.app.availableColumns = buildAvailableColumnsList(customColDefs, departmentId, vis);
             scheduleColumnVisibilityMenuI18n();
         }
-        applySavedProjectColumnWidths(table, departmentId);
-        injectProjectListColumnResizeHandles(table);
+        reapplyProjectListColumnWidthsAfterLayout(table, departmentId);
     }
 
-    function injectProjectListColumnResetMenu() {
-        var $wrapper = getProjectListTableWrapper();
-        var $right = $wrapper.find('.project-list-dt-top-right').first();
-        if (!$right.length || $right.find('.project-list-column-reset-tools').length) return;
+    function ensureProjectListColumnToolsRowBeforeTable() {
+        var toolsRow = document.getElementById('projectListColumnToolsRow');
+        var table = document.getElementById('projectTable');
+        if (!toolsRow || !table) return;
+        var tableBlock = table.closest('.dt-container, .dataTables_wrapper, #projectTable_wrapper') || table;
+        if (toolsRow.nextElementSibling !== tableBlock) {
+            tableBlock.parentNode.insertBefore(toolsRow, tableBlock);
+        }
+    }
+
+    function injectProjectListColumnToolsBar() {
+        var $mount = $('#projectListColumnResetMount');
+        if (!$mount.length || $mount.find('.project-list-column-reset-tools').length) return;
         var html = '' +
-            '<div class="project-list-column-reset-tools mb-1">' +
+            '<div class="project-list-column-reset-tools">' +
                 '<div class="dropdown d-inline-block">' +
                     '<button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="projectListColumnResetDropdown" data-bs-toggle="dropdown" aria-expanded="false">' +
                         '<i class="fa fa-sliders-h me-1"></i><span data-i18n="列設定">列設定</span>' +
                     '</button>' +
                     '<ul class="dropdown-menu dropdown-menu-end" aria-labelledby="projectListColumnResetDropdown">' +
+                        '<li><button type="button" class="dropdown-item" data-pl-reset="show-all-columns"><span data-i18n="すべての列を表示">すべての列を表示</span></button></li>' +
+                        '<li><hr class="dropdown-divider"></li>' +
                         '<li><button type="button" class="dropdown-item" data-pl-reset="visibility"><span data-i18n="列の表示を初期値に戻す">列の表示を初期値に戻す</span></button></li>' +
                         '<li><button type="button" class="dropdown-item" data-pl-reset="width"><span data-i18n="列の幅を初期値に戻す">列の幅を初期値に戻す</span></button></li>' +
                         '<li><button type="button" class="dropdown-item" data-pl-reset="order"><span data-i18n="列の順序を初期値に戻す">列の順序を初期値に戻す</span></button></li>' +
                     '</ul>' +
                 '</div>' +
             '</div>';
-        $right.prepend(html);
+        $mount.html(html);
         if (!window.__projectListColumnResetBound) {
             window.__projectListColumnResetBound = true;
             document.addEventListener('click', function(e) {
@@ -945,7 +1124,9 @@ var projectTable;
                 var action = btn.getAttribute('data-pl-reset');
                 var depId = window.app && window.app.selectedDepartment && window.app.selectedDepartment.id;
                 var defs = customFieldColumnDefinitions || [];
-                if (action === 'visibility') {
+                if (action === 'show-all-columns') {
+                    showAllProjectColumns(projectTable, defs, depId);
+                } else if (action === 'visibility') {
                     resetProjectColumnVisibilityToDefault(projectTable, defs, depId);
                 } else if (action === 'width') {
                     resetProjectColumnWidthsToDefault(projectTable, depId);
@@ -2312,6 +2493,7 @@ var projectTable;
         }
         resetProjectTableDom();
         customFieldColumnDefinitions = [];
+        $('#projectListColumnResetMount').empty();
         // Refresh dropdown 列の表示: chỉ còn cột cơ bản, bỏ hết custom field của department cũ
         if (typeof app !== 'undefined' && app) {
             var baseVis = loadColumnVisibilityFromLocalStorage([]);
@@ -2546,7 +2728,7 @@ var projectTable;
                                 </div>`;
                     },
                     title: '<span data-i18n="ID">ID</span>',
-                    width: '40px'
+                    width: '45px'
                 },
                 { 
                     name: 'confirmation_notes_caily',
@@ -2701,7 +2883,7 @@ var projectTable;
                     },
                     title: '<span data-i18n="案件状況">案件状況</span>',
                     orderable: false,
-                    width: '60px',
+                    width: '70px',
                 },
                 {
                     name: 'progress',
@@ -2750,13 +2932,14 @@ var projectTable;
                     },
                     title: '<span data-i18n="担当">担当</span>',
                     className: 'tantou-column',
-                    width: '80px',
+                    width: '60px',
                     visible: false
                 },
                 {
                     name: 'manager',
                     data: 'manager_id',
                     orderable: false,
+                    width: '60px',
                     render: function(data) {
                         if (!data) return '-';
                         const members = data.split('|').filter(member => member.trim() !== '');
@@ -2797,7 +2980,7 @@ var projectTable;
                 {
                     name: 'teams',
                     data: 'teams',
-                    width: '60px',
+                    width: '80px',
                     orderable: false,
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -2851,11 +3034,12 @@ var projectTable;
                         html += '</div>';
                         return html;
                     },
+                    width: '80px',
                     title: '<span data-i18n="メンバー">メンバー</span>'
                 },
                 { 
                     name: 'parent_construction_number',
-                    width: '60px',
+                    width: '90px',
                     data: 'parent_construction_number',
                     render: function(data, type, row) {
                         if (!data || data === '') {
@@ -2914,7 +3098,8 @@ var projectTable;
                         return `<span class="text-nowrap small">${data}</span>`;
                     },
                     title: '<span data-i18n="規模">規模</span>',
-                    visible: false
+                    visible: false,
+                    width: '60px'
                 },
                 { 
                     name: 'parent_type1',
@@ -2931,7 +3116,8 @@ var projectTable;
                         return `<span class="badge bg-info small">${data}</span>`;
                     },
                     title: '<span data-i18n="種類1">種類1</span>',
-                    visible: false
+                    visible: false,
+                    width: '60px'
                 },
                 { 
                     name: 'project_order_type',
@@ -3004,7 +3190,9 @@ var projectTable;
                         return `<span class="badge bg-info small">${data}</span>`;
                     },
                     title: '<span data-i18n="種類2">種類2</span>',
-                    visible: false
+                    visible: false,
+                    width: '60px'
+
                 },
                 { 
                     name: 'start_date',
@@ -3144,7 +3332,11 @@ var projectTable;
                     width: '80px',
                     visible: false
                 },
-                { name: 'end_date', data: 'end_date', title: buildI18nHeaderTitle('期限日'), render: function(data, type, row) {
+                { name: 'end_date', 
+                data: 'end_date',
+                width: '80px',
+                title: buildI18nHeaderTitle('期限日'),
+                render: function(data, type, row) {
                     if(data) {
                         var vnTip = (typeof window.formatVietnamTimeTooltip === 'function') ? window.formatVietnamTimeTooltip(data) : '';
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -3195,14 +3387,16 @@ var projectTable;
                     render: renderProjectListDateCell,
                     title: '<span data-i18n="見積日">見積日</span>',
                     visible: false,
-                    className: 'estimate-date-column'
+                    className: 'estimate-date-column',
+                    width: '80px'
                 },
                 {
                     name: 'amount',
                     data: 'amount',
                     render: renderProjectListMoneyCell,
                     title: '<span data-i18n="見積金額">見積金額</span>',
-                    visible: false
+                    visible: false,
+                    width: '80px'
                 },
                 {
                     name: 'estimate_status',
@@ -3215,7 +3409,8 @@ var projectTable;
                     },
                     title: '<span data-i18n="見積状況">見積状況</span>',
                     visible: false,
-                    className: 'estimate-status-column'
+                    className: 'estimate-status-column',
+                    width: '80px'
                 },
                 {
                     name: 'invoice_date',
@@ -3223,7 +3418,8 @@ var projectTable;
                     render: renderProjectListDateCell,
                     title: '<span data-i18n="請求日">請求日</span>',
                     visible: false,
-                    className: 'invoice-date-column'
+                    className: 'invoice-date-column',
+                    width: '80px'
                 },
                 {
                     name: 'invoice_status',
@@ -3236,7 +3432,8 @@ var projectTable;
                     },
                     title: '<span data-i18n="請求状況">請求状況</span>',
                     visible: false,
-                    className: 'invoice-status-column'
+                    className: 'invoice-status-column',
+                    width: '80px'
                 },
                 {
                     name: 'invoice_amount',
@@ -3244,7 +3441,8 @@ var projectTable;
                     render: renderProjectListMoneyCell,
                     title: '<span data-i18n="請求金額">請求金額</span>',
                     visible: false,
-                    className: 'invoice-amount-column'
+                    className: 'invoice-amount-column',
+                    width: '80px'
                 },
                 {
                     name: 'payment_note',
@@ -3259,7 +3457,8 @@ var projectTable;
                     },
                     title: '<span data-i18n="決済備考">決済備考</span>',
                     visible: false,
-                    className: 'payment-note-column'
+                    className: 'payment-note-column',
+                    width: '80px'
                 },
                 { 
                     name: 'customer_info',
@@ -3291,6 +3490,7 @@ var projectTable;
                         return `<span class="text-nowrap small">${data}</span>`;
                     },
                     title: '<span data-i18n="GUIS 受付者">GUIS 受付者</span>',
+                    width: '80px',
                     visible: false
                 }
         ];
@@ -3391,7 +3591,7 @@ var projectTable;
             info: true,
             searching: false,
             
-            dom: '<"row"<"col"l><"col text-end project-list-dt-top-right"p>>rti',
+            dom: '<"row"<"col"l><"col text-end"p>>rti',
             scrollX: true,
             autoWidth: false,
             //scrollY: Math.round(window.innerHeight * 0.8) + 'px',
@@ -3429,7 +3629,8 @@ var projectTable;
                     applyStickyScrollHead(tableEl);
                 }
                 initProjectListColumnResize(projectTable, app.selectedDepartment && app.selectedDepartment.id);
-                injectProjectListColumnResetMenu();
+                ensureProjectListColumnToolsRowBeforeTable();
+                injectProjectListColumnToolsBar();
                 applyI18nToProjectTableUI();
             }
             
@@ -3453,12 +3654,11 @@ var projectTable;
             projectTable.columns.adjust();
             // columns.adjust() may rebuild the scroll-head/scroll-body colgroups, so
             // custom widths must be reapplied afterwards.
-            applySavedProjectColumnWidths(projectTable, app.selectedDepartment && app.selectedDepartment.id);
+            reapplyProjectListColumnWidthsAfterLayout(projectTable, app.selectedDepartment && app.selectedDepartment.id);
             // Reset _plResizeBound so handles are re-attached with correct column name after reorder
             document.querySelectorAll('#projectTable .pl-col-resize-handle').forEach(function(el) {
                 el._plResizeBound = false;
             });
-            injectProjectListColumnResizeHandles(projectTable);
         });
 
         bindProjectListScrollRestoreOnTableLoad();
@@ -3508,14 +3708,16 @@ var projectTable;
                 });
             });
             applyI18nToProjectTableUI();
-            injectProjectListColumnResizeHandles(projectTable);
+            reapplyProjectListColumnWidthsAfterLayout(
+                projectTable,
+                app && app.selectedDepartment && app.selectedDepartment.id
+            );
         });
         
         // Apply column visibility after table initialization (base + custom columns; custom default hidden)
         var columnVisibility = loadColumnVisibilityFromLocalStorage(customFieldColumnDefinitions);
         applyColumnVisibility(projectTable, columnVisibility, customFieldColumnDefinitions);
-        applySavedProjectColumnWidths(projectTable, depIdForColumnOrder);
-        injectProjectListColumnResizeHandles(projectTable);
+        reapplyProjectListColumnWidthsAfterLayout(projectTable, depIdForColumnOrder);
         if (app) {
             var depIdAc = app.selectedDepartment && app.selectedDepartment.id;
             app.availableColumns = buildAvailableColumnsList(customFieldColumnDefinitions, depIdAc, columnVisibility);
@@ -5369,6 +5571,8 @@ var projectTable;
         if (tableEl) window.applyDataI18n(tableEl);
         var colVisMenu = document.getElementById('columnVisibilityMenu');
         if (colVisMenu) window.applyDataI18n(colVisMenu);
+        var toolsRow = document.getElementById('projectListColumnToolsRow');
+        if (toolsRow) window.applyDataI18n(toolsRow);
         var resetMenu = document.getElementById('projectListColumnResetDropdown');
         if (resetMenu) {
             var resetWrap = resetMenu.closest('.project-list-column-reset-tools');
@@ -6991,8 +7195,7 @@ var projectTable;
                     if (dtIndex !== null) {
                         projectTable.column(dtIndex).visible(isVisible, false);
                         projectTable.columns.adjust().draw(false);
-                        applySavedProjectColumnWidths(projectTable, this.selectedDepartment && this.selectedDepartment.id);
-                        injectProjectListColumnResizeHandles(projectTable);
+                        reapplyProjectListColumnWidthsAfterLayout(projectTable, this.selectedDepartment && this.selectedDepartment.id);
                     }
                 }
             },

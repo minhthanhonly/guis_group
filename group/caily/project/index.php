@@ -188,26 +188,6 @@ if($_SESSION['show_project'] == 0){
                         <input class="form-check-input" type="checkbox" id="filterKeepCompanyOnReset">
                         <label class="form-check-label text-nowrap" for="filterKeepCompanyOnReset" data-i18n="リセット時に会社を保持">リセット時に会社を保持</label>
                     </div>
-                    <div class="dropdown" v-if="availableColumns && availableColumns.length > 0">
-                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="columnVisibilityDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fa fa-columns me-1"></i><span data-i18n="列の表示">列の表示</span>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="columnVisibilityDropdown" id="columnVisibilityMenu" style="max-height: 400px; overflow-y: auto; min-width: 200px;">
-                            <li v-for="column in visibleColumnOptions" :key="column.key" class="dropdown-item-text px-3 py-2">
-                                <div class="form-check">
-                                    <input class="form-check-input column-visibility-checkbox" 
-                                        type="checkbox" 
-                                        :value="column.key" 
-                                        :id="'col-' + column.key"
-                                        :checked="column.visible"
-                                        @change="toggleColumnVisibility(column.key, $event)">
-                                    <label class="form-check-label" :for="'col-' + column.key" style="cursor: pointer;">
-                                        <span :data-i18n="column.label">{{ column.label }}</span>
-                                    </label>
-                                </div>
-                            </li>
-                        </ul>
-                    </div>
                     <button type="button" class="btn btn-sm btn-success" :disabled="!selectedDepartment || loading" @click="exportProjectListExcel" title="Excel出力">
                         <i class="fa fa-file-excel me-1"></i><span data-i18n="Excel出力">Excel出力</span>
                     </button>
@@ -244,6 +224,29 @@ if($_SESSION['show_project'] == 0){
                 <i class="fa fa-info-circle me-1 text-info"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
                 <i class="ms-4 fa fa-info-circle me-1 text-info"></i><span data-i18n="列見出しをドラッグして表示順を変更できます。">列見出しをドラッグして表示順を変更できます。</span>
             </p>
+            <div id="projectListColumnToolsRow" class="d-flex justify-content-end align-items-center gap-2 mb-1 flex-wrap" v-show="selectedDepartment">
+                <div class="dropdown" v-if="availableColumns && availableColumns.length > 0">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="columnVisibilityDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fa fa-columns me-1"></i><span data-i18n="列の表示">列の表示</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="columnVisibilityDropdown" id="columnVisibilityMenu" style="max-height: 400px; overflow-y: auto; min-width: 200px;">
+                        <li v-for="column in visibleColumnOptions" :key="column.key" class="dropdown-item-text px-3 py-2">
+                            <div class="form-check">
+                                <input class="form-check-input column-visibility-checkbox"
+                                    type="checkbox"
+                                    :value="column.key"
+                                    :id="'col-' + column.key"
+                                    :checked="column.visible"
+                                    @change="toggleColumnVisibility(column.key, $event)">
+                                <label class="form-check-label" :for="'col-' + column.key" style="cursor: pointer;">
+                                    <span :data-i18n="column.label">{{ column.label }}</span>
+                                </label>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div id="projectListColumnResetMount"></div>
+            </div>
             <table id="projectTable" class="table table-striped">
                 
             </table>
@@ -1114,12 +1117,12 @@ body.pl-col-resizing * {
 .pagination{
     justify-content: flex-end;
 }
-.project-list-dt-top-right .project-list-column-reset-tools {
-    line-height: 1;
-}
 .project-list-dt-top-right .dataTables_paginate,
 .project-list-dt-top-right .dt-paging {
     margin-top: 0;
+}
+#projectListColumnToolsRow {
+    min-height: 2rem;
 }
 /* Quick edit: manager-only mode chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー */
 #quickEditProjectForm.quick-edit-manager-only-mode .quick-edit-full-only {
