@@ -707,6 +707,31 @@ var projectTable;
         }
     }
 
+    function clearProjectListCellWidthStyles(cell) {
+        if (!cell) return;
+        cell.style.removeProperty('width');
+        cell.style.removeProperty('min-width');
+        cell.style.removeProperty('max-width');
+        var firstChild = cell.firstElementChild;
+        if (firstChild && firstChild.classList && firstChild.classList.contains('dt-scroll-sizing')) {
+            firstChild.style.removeProperty('width');
+            firstChild.style.removeProperty('min-width');
+            firstChild.style.removeProperty('max-width');
+        }
+    }
+
+    function clearProjectListTableLayoutOverrides() {
+        var bodyTable = document.getElementById('projectTable');
+        if (bodyTable) {
+            bodyTable.style.removeProperty('width');
+        }
+        var $wrapper = getProjectListTableWrapper();
+        $wrapper.find('.dt-scroll-headInner, .dataTables_scrollHeadInner').css('width', '');
+        $wrapper.find('.dt-scroll-head table, .dataTables_scrollHead table').each(function() {
+            this.style.removeProperty('width');
+        });
+    }
+
     function applyProjectListColElementWidth(colEl, wStr) {
         if (!colEl) return;
         colEl.style.width = wStr;
@@ -833,15 +858,9 @@ var projectTable;
         try {
             table.columns().every(function() {
                 var header = this.header();
-                if (header) {
-                    header.style.removeProperty('width');
-                    header.style.removeProperty('min-width');
-                    header.style.removeProperty('max-width');
-                }
+                if (header) clearProjectListCellWidthStyles(header);
                 this.nodes().each(function() {
-                    this.style.removeProperty('width');
-                    this.style.removeProperty('min-width');
-                    this.style.removeProperty('max-width');
+                    clearProjectListCellWidthStyles(this);
                 });
             });
             getProjectListScrollColGroups().forEach(function(colgroup) {
@@ -860,8 +879,16 @@ var projectTable;
                         ao.colEl[0].style.removeProperty('max-width');
                     }
                     ao.sWidth = null;
+                    ao.sWidthOrig = null;
                 });
             }
+            var $wrapper = getProjectListTableWrapper();
+            $wrapper.find('.dt-scroll-head .dt-scroll-sizing, .dt-scroll-body .dt-scroll-sizing').each(function() {
+                this.style.removeProperty('width');
+                this.style.removeProperty('min-width');
+                this.style.removeProperty('max-width');
+            });
+            clearProjectListTableLayoutOverrides();
         } catch (e) { /* ignore */ }
     }
 
@@ -1042,16 +1069,60 @@ var projectTable;
         }
     }
 
+    function measureProjectListNaturalColumnWidth(table, colIndex) {
+        if (!table || colIndex == null || colIndex < 0) return null;
+        try {
+            var col = table.column(colIndex);
+            var header = col.header();
+            var maxWidth = 0;
+            if (header) {
+                maxWidth = Math.max(maxWidth, header.getBoundingClientRect().width);
+            }
+            col.nodes().each(function() {
+                var w = this.getBoundingClientRect().width;
+                if (w > maxWidth) maxWidth = w;
+            });
+            return maxWidth > 0 ? Math.round(maxWidth) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
     function resetProjectColumnWidthsToDefault(table, departmentId) {
         try {
             localStorage.removeItem(getProjectColumnWidthStorageKey(departmentId));
         } catch (e) { /* ignore */ }
         if (!table || !$.fn.DataTable.isDataTable('#projectTable')) return;
+
         clearProjectTableColumnInlineWidths(table);
+
+        // Measure each column's natural width directly from the DOM (header +
+        // current rows) instead of relying on DataTables' own columns.adjust(),
+        // which — with autoWidth disabled — only samples the first visible row,
+        // and which for a serverSide table also triggers an async AJAX reload
+        // via draw(), so any styling applied right after it returns runs on the
+        // stale DOM and only "settles" once that reload finishes (i.e. looks
+        // like it only works after a page reload). Measuring/applying widths
+        // ourselves is synchronous and matches what manual resize already does.
+        var bodyTable = document.getElementById('projectTable');
+        var $wrapper = getProjectListTableWrapper();
+        var headTables = $wrapper.find('.dt-scroll-head table, .dataTables_scrollHead table');
+        if (bodyTable) bodyTable.style.tableLayout = 'auto';
+        headTables.each(function() { this.style.tableLayout = 'auto'; });
+        if (bodyTable) { void bodyTable.offsetWidth; } // force reflow before measuring
+
+        var naturalWidths = {};
+        table.columns(':visible').every(function() {
+            var idx = this.index();
+            var w = measureProjectListNaturalColumnWidth(table, idx);
+            if (w) naturalWidths[idx] = w;
+        });
+
         forceProjectListFixedTableLayout();
-        try {
-            table.columns.adjust().draw(false);
-        } catch (e) { /* ignore */ }
+        Object.keys(naturalWidths).forEach(function(idx) {
+            setProjectTableColumnWidthPx(table, parseInt(idx, 10), naturalWidths[idx], { skipTableWidthSync: true });
+        });
+        syncProjectListScrollTableWidth(table);
         injectProjectListColumnResizeHandles(table);
     }
 
@@ -1478,6 +1549,23 @@ var projectTable;
         { value: '未発行', label: '未発行', color: 'secondary' },
         { value: '発行済', label: '発行済', color: 'success' }
     ];
+
+    function normalizeBusinessDocumentStatusFilterValue(value) {
+        if (!value || typeof value !== 'string') return '';
+        var legacyMap = {
+            'estimate:未発行': '未見積',
+            'estimate:発行済': '見積済',
+            'invoice:未発行': '未請求',
+            'invoice:発行済': '請求済'
+        };
+        return legacyMap[value] || value;
+    }
+
+    function getBusinessDocumentStatusFilterLabel(value) {
+        var normalized = normalizeBusinessDocumentStatusFilterValue(value);
+        if (!normalized) return '';
+        return typeof translateText === 'function' ? translateText(normalized) : normalized;
+    }
 
     function isProjectDirectorColumn(columnKey) {
         return !!PROJECT_DIRECTOR_COLUMN_KEYS[columnKey];
@@ -2350,6 +2438,9 @@ var projectTable;
         const filters = {
             filterStartMonth: $('#filterStartMonth').val(),
             filterEndMonth: $('#filterEndMonth').val(),
+            filterEstimateMonth: $('#filterEstimateMonth').val(),
+            filterInvoiceMonth: $('#filterInvoiceMonth').val(),
+            filterBusinessDocumentStatus: $('#filterBusinessDocumentStatus').val(),
             filterPriority: $('#filterPriority').val(),
             filterProgress: $('#filterProgress').val(),
             filterTimeLeft: $('#filterTimeLeft').val(),
@@ -2408,6 +2499,11 @@ var projectTable;
 
         if (params.has('filterStartMonth')) merged.filterStartMonth = params.get('filterStartMonth') || '';
         if (params.has('filterEndMonth')) merged.filterEndMonth = params.get('filterEndMonth') || '';
+        if (params.has('filterEstimateMonth')) merged.filterEstimateMonth = params.get('filterEstimateMonth') || '';
+        if (params.has('filterInvoiceMonth')) merged.filterInvoiceMonth = params.get('filterInvoiceMonth') || '';
+        if (params.has('filterBusinessDocumentStatus')) {
+            merged.filterBusinessDocumentStatus = normalizeBusinessDocumentStatusFilterValue(params.get('filterBusinessDocumentStatus') || '');
+        }
         if (params.has('filterPriority')) merged.filterPriority = params.get('filterPriority') || '';
         if (params.has('filterProgress')) merged.filterProgress = params.get('filterProgress') || '';
         if (params.has('filterTimeLeft')) merged.filterTimeLeft = params.get('filterTimeLeft') || '';
@@ -2451,6 +2547,11 @@ var projectTable;
         }
         if (filters.filterStartMonth !== undefined) $('#filterStartMonth').val(filters.filterStartMonth);
         if (filters.filterEndMonth !== undefined) $('#filterEndMonth').val(filters.filterEndMonth);
+        if (filters.filterEstimateMonth !== undefined) $('#filterEstimateMonth').val(filters.filterEstimateMonth);
+        if (filters.filterInvoiceMonth !== undefined) $('#filterInvoiceMonth').val(filters.filterInvoiceMonth);
+        if (filters.filterBusinessDocumentStatus !== undefined) {
+            $('#filterBusinessDocumentStatus').val(normalizeBusinessDocumentStatusFilterValue(filters.filterBusinessDocumentStatus));
+        }
         if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
         if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
         if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
@@ -2490,6 +2591,9 @@ var projectTable;
         return {
             startMonth: filters.filterStartMonth || '',
             endMonth: filters.filterEndMonth || '',
+            estimateMonth: filters.filterEstimateMonth || '',
+            invoiceMonth: filters.filterInvoiceMonth || '',
+            businessDocumentStatus: filters.filterBusinessDocumentStatus || '',
             priority: filters.filterPriority || '',
             progress: filters.filterProgress || '',
             timeLeft: filters.filterTimeLeft || '',
@@ -2515,6 +2619,9 @@ var projectTable;
         if (
             (!filters.startMonth || filters.startMonth.trim() === '') &&
             (!filters.endMonth || filters.endMonth.trim() === '') &&
+            (!filters.estimateMonth || filters.estimateMonth.trim() === '') &&
+            (!filters.invoiceMonth || filters.invoiceMonth.trim() === '') &&
+            (!filters.businessDocumentStatus || filters.businessDocumentStatus.trim() === '') &&
             (!filters.priority || filters.priority.trim() === '') &&
             (!filters.progress || filters.progress.trim() === '') &&
             (!filters.timeLeft || filters.timeLeft.trim() === '') &&
@@ -2580,6 +2687,15 @@ var projectTable;
             }
             if (filters.endMonth && filters.endMonth.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1" >期限月: ${filters.endMonth}</span>`);
+            }
+            if (filters.estimateMonth && filters.estimateMonth.trim() !== '') {
+                badges.push(`<span class="badge bg-label-info me-1" >見積月: ${filters.estimateMonth}</span>`);
+            }
+            if (filters.invoiceMonth && filters.invoiceMonth.trim() !== '') {
+                badges.push(`<span class="badge bg-label-info me-1" >請求月: ${filters.invoiceMonth}</span>`);
+            }
+            if (filters.businessDocumentStatus && filters.businessDocumentStatus.trim() !== '') {
+                badges.push(`<span class="badge bg-label-info me-1" >${getBusinessDocumentStatusFilterLabel(filters.businessDocumentStatus)}</span>`);
             }
             if (filters.priority && filters.priority.trim() !== '') {
                 const label = (window.priorities||[]).find(p=>p.key===filters.priority)?.name || filters.priority;
@@ -2678,6 +2794,9 @@ var projectTable;
         }
         setOrDelete('filterStartMonth', filters.filterStartMonth);
         setOrDelete('filterEndMonth', filters.filterEndMonth);
+        setOrDelete('filterEstimateMonth', filters.filterEstimateMonth);
+        setOrDelete('filterInvoiceMonth', filters.filterInvoiceMonth);
+        setOrDelete('filterBusinessDocumentStatus', filters.filterBusinessDocumentStatus);
         setOrDelete('filterPriority', filters.filterPriority);
         setOrDelete('filterProgress', filters.filterProgress);
         setOrDelete('filterTimeLeft', filters.filterTimeLeft);
@@ -3808,6 +3927,9 @@ var projectTable;
                     // Thu thập filter từ form
                     const filterStartMonth = $('#filterStartMonth').val();
                     const filterEndMonth = $('#filterEndMonth').val();
+                    const filterEstimateMonth = canViewProjectDirectorColumns() ? $('#filterEstimateMonth').val() : '';
+                    const filterInvoiceMonth = canViewProjectDirectorColumns() ? $('#filterInvoiceMonth').val() : '';
+                    const filterBusinessDocumentStatus = canViewProjectDirectorColumns() ? $('#filterBusinessDocumentStatus').val() : '';
                     const filterPriority = $('#filterPriority').val();
                     const filterProgress = $('#filterProgress').val();
                     const filterTimeLeft = $('#filterTimeLeft').val();
@@ -3835,6 +3957,9 @@ var projectTable;
                         order_dir: d.order && d.order[0] ? d.order[0].dir : 'desc',
                         filterStartMonth,
                         filterEndMonth,
+                        filterEstimateMonth,
+                        filterInvoiceMonth,
+                        filterBusinessDocumentStatus,
                         filterPriority,
                         filterProgress,
                         filterTimeLeft,
@@ -5461,6 +5586,18 @@ var projectTable;
                     renderActiveFilters();
                 }
             });
+            $('#filterEstimateMonth, #filterInvoiceMonth').flatpickr({
+                locale: monthPickerLocale,
+                plugins: [new monthSelectPlugin({
+                    shorthand: true,
+                    dateFormat: 'Y-m',
+                    altFormat: monthAltFormat,
+                })],
+                onChange: function(date) {
+                    saveFiltersToLocalStorage();
+                    renderActiveFilters();
+                }
+            });
         }
 
         var category_id = $('#category_id');
@@ -5697,7 +5834,7 @@ var projectTable;
         // Gọi khi filter thay đổi hoặc khi load trang
         renderActiveFilters();
         // Gọi lại renderActiveFilters mỗi khi filter thay đổi
-        $('#filterStartMonth, #filterEndMonth, #filterPriority, #filterProgress, #filterTimeLeft, #filterToday, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
+        $('#filterStartMonth, #filterEndMonth, #filterEstimateMonth, #filterInvoiceMonth, #filterBusinessDocumentStatus, #filterPriority, #filterProgress, #filterTimeLeft, #filterToday, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
            renderActiveFilters();
         });
         let timer = null;
@@ -5722,6 +5859,9 @@ var projectTable;
             $('#projectFilterForm')[0].reset();
             $('#filterStartMonth').val('');
             $('#filterEndMonth').val('');
+            $('#filterEstimateMonth').val('');
+            $('#filterInvoiceMonth').val('');
+            $('#filterBusinessDocumentStatus').val('');
             $('#filterPriority').val('');
             $('#filterProgress').val('');
             $('#filterTimeLeft').val('');

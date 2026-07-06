@@ -64,6 +64,24 @@ if($_SESSION['show_project'] == 0){
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="期限月">期限月</label>
                     <input type="text" class="form-control form-control-sm" id="filterEndMonth" autocomplete="off">
                     </div>
+                    <div class="col-md-3 col-6" v-if="canViewProjectDirectorColumns()">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="見積月">見積月</label>
+                    <input type="text" class="form-control form-control-sm" id="filterEstimateMonth" autocomplete="off">
+                    </div>
+                    <div class="col-md-3 col-6" v-if="canViewProjectDirectorColumns()">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="請求月">請求月</label>
+                    <input type="text" class="form-control form-control-sm" id="filterInvoiceMonth" autocomplete="off">
+                    </div>
+                    <div class="col-md-3 col-6" v-if="canViewProjectDirectorColumns()">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="見積・請求状況">見積・請求状況</label>
+                    <select class="form-select form-select-sm" id="filterBusinessDocumentStatus">
+                        <option value="" data-i18n="すべて">すべて</option>
+                        <option value="未見積" data-i18n="未見積">未見積</option>
+                        <option value="見積済" data-i18n="見積済">見積済</option>
+                        <option value="未請求" data-i18n="未請求">未請求</option>
+                        <option value="請求済" data-i18n="請求済">請求済</option>
+                    </select>
+                    </div>
                     <div class="col-md-3 col-6">
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="優先度">優先度</label>
                     <select class="form-select form-select-sm" id="filterPriority"></select>
