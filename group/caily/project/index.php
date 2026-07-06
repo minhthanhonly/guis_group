@@ -1114,6 +1114,13 @@ body.pl-col-resizing * {
 .pagination{
     justify-content: flex-end;
 }
+.project-list-dt-top-right .project-list-column-reset-tools {
+    line-height: 1;
+}
+.project-list-dt-top-right .dataTables_paginate,
+.project-list-dt-top-right .dt-paging {
+    margin-top: 0;
+}
 /* Quick edit: manager-only mode chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー */
 #quickEditProjectForm.quick-edit-manager-only-mode .quick-edit-full-only {
     display: none !important;

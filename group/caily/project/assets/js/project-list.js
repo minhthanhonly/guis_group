@@ -859,6 +859,104 @@ var projectTable;
         injectProjectListColumnResizeHandles(table);
     }
 
+    function resetProjectColumnVisibilityToDefault(table, customColDefs, departmentId) {
+        var visibility = getDefaultColumnVisibility(customColDefs);
+        saveColumnVisibilityToLocalStorage(visibility);
+        if (table && $.fn.DataTable.isDataTable('#projectTable')) {
+            applyColumnVisibility(table, visibility, customColDefs);
+            applySavedProjectColumnWidths(table, departmentId);
+            injectProjectListColumnResizeHandles(table);
+        }
+        if (window.app) {
+            window.app.availableColumns = buildAvailableColumnsList(customColDefs, departmentId, visibility);
+            scheduleColumnVisibilityMenuI18n();
+        }
+    }
+
+    function resetProjectColumnWidthsToDefault(table, departmentId) {
+        try {
+            localStorage.removeItem(getProjectColumnWidthStorageKey(departmentId));
+        } catch (e) { /* ignore */ }
+        if (!table || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        clearProjectTableColumnInlineWidths(table);
+        forceProjectListFixedTableLayout();
+        try {
+            table.columns.adjust().draw(false);
+        } catch (e) { /* ignore */ }
+        injectProjectListColumnResizeHandles(table);
+    }
+
+    function resetProjectColumnOrderToDefault(table, customColDefs, departmentId) {
+        if (!table || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        try {
+            localStorage.removeItem(getProjectColumnOrderStorageKey(departmentId));
+        } catch (e) { /* ignore */ }
+        var defaultKeys = getDefaultProjectColumnKeys(customColDefs);
+        var newOrder = [];
+        defaultKeys.forEach(function(key) {
+            try {
+                var idx = table.column(key + ':name').index();
+                if (typeof idx === 'number' && idx >= 0) newOrder.push(idx);
+            } catch (e) { /* skip */ }
+        });
+        var cnt = table.columns().count();
+        for (var i = 0; i < cnt; i++) {
+            if (newOrder.indexOf(i) === -1) newOrder.push(i);
+        }
+        if (newOrder.length === cnt && table.colReorder) {
+            try {
+                table.colReorder.order(newOrder);
+            } catch (e) { /* ignore */ }
+        }
+        if (window.app) {
+            var vis = loadColumnVisibilityFromLocalStorage(customColDefs);
+            window.app.availableColumns = buildAvailableColumnsList(customColDefs, departmentId, vis);
+            scheduleColumnVisibilityMenuI18n();
+        }
+        applySavedProjectColumnWidths(table, departmentId);
+        injectProjectListColumnResizeHandles(table);
+    }
+
+    function injectProjectListColumnResetMenu() {
+        var $wrapper = getProjectListTableWrapper();
+        var $right = $wrapper.find('.project-list-dt-top-right').first();
+        if (!$right.length || $right.find('.project-list-column-reset-tools').length) return;
+        var html = '' +
+            '<div class="project-list-column-reset-tools mb-1">' +
+                '<div class="dropdown d-inline-block">' +
+                    '<button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="projectListColumnResetDropdown" data-bs-toggle="dropdown" aria-expanded="false">' +
+                        '<i class="fa fa-sliders-h me-1"></i><span data-i18n="列設定">列設定</span>' +
+                    '</button>' +
+                    '<ul class="dropdown-menu dropdown-menu-end" aria-labelledby="projectListColumnResetDropdown">' +
+                        '<li><button type="button" class="dropdown-item" data-pl-reset="visibility"><span data-i18n="列の表示を初期値に戻す">列の表示を初期値に戻す</span></button></li>' +
+                        '<li><button type="button" class="dropdown-item" data-pl-reset="width"><span data-i18n="列の幅を初期値に戻す">列の幅を初期値に戻す</span></button></li>' +
+                        '<li><button type="button" class="dropdown-item" data-pl-reset="order"><span data-i18n="列の順序を初期値に戻す">列の順序を初期値に戻す</span></button></li>' +
+                    '</ul>' +
+                '</div>' +
+            '</div>';
+        $right.prepend(html);
+        if (!window.__projectListColumnResetBound) {
+            window.__projectListColumnResetBound = true;
+            document.addEventListener('click', function(e) {
+                var btn = e.target && e.target.closest ? e.target.closest('[data-pl-reset]') : null;
+                if (!btn) return;
+                e.preventDefault();
+                if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
+                var action = btn.getAttribute('data-pl-reset');
+                var depId = window.app && window.app.selectedDepartment && window.app.selectedDepartment.id;
+                var defs = customFieldColumnDefinitions || [];
+                if (action === 'visibility') {
+                    resetProjectColumnVisibilityToDefault(projectTable, defs, depId);
+                } else if (action === 'width') {
+                    resetProjectColumnWidthsToDefault(projectTable, depId);
+                } else if (action === 'order') {
+                    resetProjectColumnOrderToDefault(projectTable, defs, depId);
+                }
+            });
+        }
+        applyI18nToProjectTableUI();
+    }
+
     function isCailyBranchUser() {
         return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
     }
@@ -1423,15 +1521,27 @@ var projectTable;
     
     function loadColumnVisibilityFromLocalStorage(customColDefs) {
         const saved = JSON.parse(localStorage.getItem(COLUMN_VISIBILITY_KEY) || '{}');
+        const defaults = getDefaultColumnVisibility(customColDefs);
+        const visibility = {};
+        Object.keys(defaults).forEach(function(key) {
+            visibility[key] = saved[key] !== undefined ? saved[key] : defaults[key];
+        });
+        return visibility;
+    }
+
+    function getDefaultColumnVisibility(customColDefs) {
         const visibility = {};
         COLUMN_DEFINITIONS.forEach(col => {
             if (isColumnHiddenForCailyBranch(col.key)) return;
             if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return;
-            visibility[col.key] = saved[col.key] !== undefined ? saved[col.key] : col.defaultVisible;
+            visibility[col.key] = col.defaultVisible;
         });
         (customColDefs || []).forEach(col => {
-            visibility[col.key] = saved[col.key] !== undefined ? saved[col.key] : (col.defaultVisible !== undefined ? col.defaultVisible : false);
+            visibility[col.key] = col.defaultVisible !== undefined ? col.defaultVisible : false;
         });
+        if (isCailyBranchUser()) {
+            visibility.end_date = false;
+        }
         return visibility;
     }
     
@@ -3281,7 +3391,7 @@ var projectTable;
             info: true,
             searching: false,
             
-            dom: '<"row"<"col"l><"col text-end"p>>rti',
+            dom: '<"row"<"col"l><"col text-end project-list-dt-top-right"p>>rti',
             scrollX: true,
             autoWidth: false,
             //scrollY: Math.round(window.innerHeight * 0.8) + 'px',
@@ -3319,6 +3429,7 @@ var projectTable;
                     applyStickyScrollHead(tableEl);
                 }
                 initProjectListColumnResize(projectTable, app.selectedDepartment && app.selectedDepartment.id);
+                injectProjectListColumnResetMenu();
                 applyI18nToProjectTableUI();
             }
             
@@ -5258,6 +5369,11 @@ var projectTable;
         if (tableEl) window.applyDataI18n(tableEl);
         var colVisMenu = document.getElementById('columnVisibilityMenu');
         if (colVisMenu) window.applyDataI18n(colVisMenu);
+        var resetMenu = document.getElementById('projectListColumnResetDropdown');
+        if (resetMenu) {
+            var resetWrap = resetMenu.closest('.project-list-column-reset-tools');
+            if (resetWrap) window.applyDataI18n(resetWrap);
+        }
     }
 
     /** Sau khi Vue cập nhật danh sách 列の表示 — áp dịch data-i18n cho nhãn cột */
