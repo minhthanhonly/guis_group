@@ -5955,7 +5955,7 @@ createApp({
             } catch (error) {
                 console.error('Error loading business document:', error);
                 if (typeof showMessage === 'function') {
-                    showMessage('業務書類の読み込みに失敗しました。', true);
+                    showMessage('決済情報の読み込みに失敗しました。', true);
                 }
             }
         },

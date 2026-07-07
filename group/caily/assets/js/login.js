@@ -7,6 +7,35 @@ document.addEventListener('DOMContentLoaded', function () {
   (() => {
     const formAuthentication = document.querySelector('#formAuthentication');
 
+    if (window.Helpers) {
+      if (typeof window.Helpers.setTheme === 'function') {
+        window.Helpers.setTheme(window.Helpers.getPreferredTheme());
+      }
+      if (typeof window.Helpers.switchImage === 'function') {
+        const templateName = window.templateName || document.documentElement.getAttribute('data-template');
+        const storedStyle =
+          localStorage.getItem('templateCustomizer-' + templateName + '--Theme') ||
+          (window.templateCustomizer?.settings?.defaultStyle ?? document.documentElement.getAttribute('data-bs-theme'));
+        window.Helpers.switchImage(storedStyle || 'dark');
+      }
+    }
+
+    document.querySelectorAll('.form-password-toggle').forEach(function (wrap) {
+      const toggle = wrap.querySelector('.input-group-text');
+      if (!toggle || toggle._passwordToggleBound) return;
+      toggle._passwordToggleBound = true;
+      toggle.addEventListener('click', function (e) {
+        e.preventDefault();
+        const input = wrap.querySelector('input');
+        const icon = wrap.querySelector('i');
+        if (!input || !icon) return;
+        const showPassword = input.type === 'password';
+        input.type = showPassword ? 'text' : 'password';
+        icon.classList.toggle('tabler-eye', showPassword);
+        icon.classList.toggle('tabler-eye-off', !showPassword);
+      });
+    });
+
     // Form validation for Add new record
     if (formAuthentication && typeof FormValidation !== 'undefined') {
       FormValidation.formValidation(formAuthentication, {

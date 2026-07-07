@@ -17,9 +17,33 @@ var projectTable;
     var isInitializingTable = false;
     var autoRefreshTimer = null;
     var projectTableSilentDraw = false;
+    var businessDocumentModalOpen = false;
+
+    function guardProjectTableNetworkReload(table) {
+        if (!table || table._bdModalReloadGuard) return;
+        table._bdModalReloadGuard = true;
+        var origDraw = table.draw.bind(table);
+        table.draw = function() {
+            if (businessDocumentModalOpen) return table;
+            return origDraw.apply(table, arguments);
+        };
+        if (table.ajax && typeof table.ajax.reload === 'function') {
+            var origReload = table.ajax.reload.bind(table.ajax);
+            table.ajax.reload = function(cb, resetPaging) {
+                if (businessDocumentModalOpen) {
+                    if (typeof cb === 'function') cb(null);
+                    return table;
+                }
+                return origReload(cb, resetPaging);
+            };
+        }
+    }
 
     function reloadProjectTable(resetPaging, options) {
         options = options || {};
+        if (businessDocumentModalOpen && options.allowWhileBdModalOpen !== true) {
+            return;
+        }
         if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
             return;
         }
@@ -170,6 +194,54 @@ var projectTable;
         }).join(', ');
     }
 
+    function parseConfirmationNotesRawForExport(cellData) {
+        if (!cellData || cellData === '') return '';
+        var notes = String(cellData).split('_|_').filter(function(note) {
+            return note.trim() !== '';
+        });
+        if (!notes.length) return '';
+        var texts = notes.map(function(note) {
+            var arr = note.trim().split('_:_');
+            var text = arr.length > 1 ? arr[1] : note.trim();
+            var decoded = decodeHtmlForNote(text);
+            decoded = (decoded || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
+            return decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+        }).filter(function(text) {
+            return text && text !== '-';
+        });
+        return texts.join('\n');
+    }
+
+    function parseConfirmationNotesFromExportHtml(inner) {
+        if (!inner) return '';
+        inner = String(inner);
+        if (inner.indexOf('<') === -1) {
+            var plain = inner.trim();
+            return plain === '-' ? '' : plain;
+        }
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(inner, 'text/html');
+        var texts = [];
+        doc.querySelectorAll('.note-text').forEach(function(el) {
+            var text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+            if (text && text !== '-') texts.push(text);
+        });
+        return texts.join('\n');
+    }
+
+    function formatConfirmationNotesForExcelExport(rowIndex, innerHtml, fieldName) {
+        var data = null;
+        if (projectTable && typeof rowIndex === 'number' && fieldName) {
+            try {
+                var rowData = projectTable.row(rowIndex).data();
+                data = rowData && rowData[fieldName];
+            } catch (e) { /* ignore */ }
+        }
+        var fromRaw = parseConfirmationNotesRawForExport(data);
+        if (fromRaw) return fromRaw;
+        return parseConfirmationNotesFromExportHtml(innerHtml);
+    }
+
     function getProjectListExcelExportOptions() {
         return {
             columns: function(idx) {
@@ -199,6 +271,12 @@ var projectTable;
                     }
                     if (colName === 'teams') {
                         return formatTeamsForExcelExport(row, inner);
+                    }
+                    if (colName === 'confirmation_notes_caily') {
+                        return formatConfirmationNotesForExcelExport(row, inner, 'confirmation_notes_caily');
+                    }
+                    if (colName === 'confirmation_notes_guis') {
+                        return formatConfirmationNotesForExcelExport(row, inner, 'confirmation_notes_guis');
                     }
                     return stripHtmlForExport(inner);
                 }
@@ -3123,6 +3201,9 @@ var projectTable;
                     width: '250px',
                     className: 'confirmation-notes-column',
                     render: function(data, type, row) {
+                        if (type === 'export' || type === 'filter') {
+                            return parseConfirmationNotesRawForExport(data);
+                        }
                         if (type !== 'display') {
                             return data || '';
                         }
@@ -3192,6 +3273,9 @@ var projectTable;
                     width: '250px',
                     className: 'confirmation-notes-column',
                     render: function(data, type, row) {
+                        if (type === 'export' || type === 'filter') {
+                            return parseConfirmationNotesRawForExport(data);
+                        }
                         if (type !== 'display') {
                             return data || '';
                         }
@@ -4029,6 +4113,8 @@ var projectTable;
             
         });
 
+        guardProjectTableNetworkReload(projectTable);
+
         $('#projectTable').off('columns-reordered.dt').on('columns-reordered.dt', function() {
             if (!projectTable) return;
             var keys = [];
@@ -4597,6 +4683,7 @@ var projectTable;
         $rowContextMenu.append('<div class="dropdown-divider project-row-context-divider"></div>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="quickEditProjectRowBtn"><i class="fa fa-pencil-alt me-1"></i><span data-i18n="案件を編集">案件を編集</span></button>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="editParentConstructionNumberRowBtn"><i class="fa fa-hashtag me-1"></i><span data-i18n="工事番号を編集">工事番号を編集</span></button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="editBusinessDocumentRowBtn" style="display:none;"><i class="fa fa-file-invoice me-1"></i><span data-i18n="決済情報">決済情報</span></button>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="addNoteFromRowBtn"><i class="fa fa-sticky-note me-1"></i><span data-i18n="メモを追加">メモを追加</span></button>');
         $rowContextMenu.append('<button class="dropdown-item" type="button" id="addToTodoFromRowBtn" style="display:none;"><i class="fas fa-list-check me-1"></i><span data-i18n="追加Todo">追加Todo</span></button>');
         $('body').append($rowContextMenu);
@@ -4662,9 +4749,11 @@ var projectTable;
             $('#copyProjectInfoRowBtn').show();
             $('#quickEditProjectRowBtn').toggle(canShowEdit);
             $('#editParentConstructionNumberRowBtn').toggle(canEditParentConstruction);
+            var canEditBd = window.app && window.app.canEditBusinessDocuments;
+            $('#editBusinessDocumentRowBtn').toggle(!!canEditBd);
             $('#addNoteFromRowBtn').toggle(hasNoteColumn);
             $('#addToTodoFromRowBtn').toggle(!!contextMenuTodoEl);
-            var hasSecondaryActions = canShowEdit || canEditParentConstruction || hasNoteColumn || !!contextMenuTodoEl;
+            var hasSecondaryActions = canShowEdit || canEditParentConstruction || !!canEditBd || hasNoteColumn || !!contextMenuTodoEl;
             $('.project-row-context-divider').toggle(hasSecondaryActions);
             $rowContextMenu
                 .css({ top: e.pageY + 'px', left: e.pageX + 'px' })
@@ -4714,6 +4803,13 @@ var projectTable;
             contextMenuTodoEl = null;
         });
 
+        $rowContextMenu.on('click', '#editBusinessDocumentRowBtn', function(ev) {
+            ev.stopPropagation();
+            $rowContextMenu.hide();
+            if (contextMenuRowData && window.app && typeof window.app.openBusinessDocumentModal === 'function') {
+                window.app.openBusinessDocumentModal({ id: contextMenuRowData.id });
+            }
+        });
         $rowContextMenu.on('click', '#addNoteFromRowBtn', function(ev) {
             ev.stopPropagation();
             $rowContextMenu.hide();
@@ -5138,6 +5234,22 @@ var projectTable;
         if (quickEditModalEl) {
             quickEditModalEl.addEventListener('hidden.bs.modal', function() {
                 destroyQuickEditQuill();
+            });
+        }
+
+        var businessDocumentModalEl = document.getElementById('businessDocumentModal');
+        if (businessDocumentModalEl) {
+            businessDocumentModalEl.addEventListener('shown.bs.modal', function() {
+                businessDocumentModalOpen = true;
+            });
+            businessDocumentModalEl.addEventListener('hidden.bs.modal', function() {
+                businessDocumentModalOpen = false;
+                if (window.app && typeof window.app.closeBusinessDocumentModal === 'function') {
+                    window.app.closeBusinessDocumentModal();
+                }
+                if (projectTable) {
+                    reloadProjectTable(false, { preserveScroll: true });
+                }
             });
         }
 
@@ -6125,6 +6237,7 @@ var projectTable;
 
     const { createApp } = Vue;
     const app = createApp({
+        mixins: (typeof window.BusinessDocumentModalMixin !== 'undefined') ? [window.BusinessDocumentModalMixin] : [],
         data() {
             return {
                 loading: true,
@@ -6748,11 +6861,6 @@ var projectTable;
                 this.destroyQuillNoteEditor();
                 this.quillNoteContent = '';
                 
-                // Refresh table to show highlight
-                if (projectTable) {
-                    projectTable.draw(false);
-                }
-                
                 // Reset editing note
                 this.editingNote = {
                     id: null,
@@ -6831,11 +6939,6 @@ var projectTable;
                 this.isNoteEditMode = false;
                 this.currentEditingNoteId = null; // Clear editing note tracking
                 this.destroyQuillNoteEditor();
-                
-                // Refresh table to remove highlight
-                if (projectTable) {
-                    projectTable.draw(false);
-                }
                 
                 this.editingNote = {
                     id: null,
@@ -7002,6 +7105,10 @@ var projectTable;
             },
             exportProjectListExcel() {
                 exportProjectListToExcel();
+            },
+            syncBusinessDocumentListRow() {
+                // Không reload/cập nhật DataTable khi modal đang mở — auto-save gọi liên tục;
+                // bảng được refresh một lần khi đóng modal (hidden.bs.modal).
             },
             viewProjects(department) {
                 if (!department || !department.id) {

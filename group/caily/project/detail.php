@@ -717,7 +717,7 @@ if($_SESSION['show_project'] == 0){
                 <div class="card mb-4 project-status-block" v-if="canViewBusinessDocuments">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center gap-2">
-                            <h5 class="card-title mb-0"><span data-i18n="業務書類">業務書類</span></h5>
+                            <h5 class="card-title mb-0"><span data-i18n="決済情報">決済情報</span></h5>
                             <span v-if="businessDocumentSaveStatus === 'loading'" class="text-muted" title="保存中">
                                 <i class="fa fa-spinner fa-spin"></i>
                             </span>
@@ -1069,7 +1069,7 @@ if($_SESSION['show_project'] == 0){
             <div class="modal-dialog modal-lg modal-dialog-scrollable">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">業務書類 履歴</h5>
+                        <h5 class="modal-title">決済情報 履歴</h5>
                         <button type="button" class="btn-close" @click="closeBusinessDocumentLogModal"></button>
                     </div>
                     <div class="modal-body p-0">
@@ -1104,7 +1104,7 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </li>
-                            <li v-if="!sortedBusinessDocumentLogs || sortedBusinessDocumentLogs.length === 0" class="list-group-item text-muted">業務書類の履歴はありません。</li>
+                            <li v-if="!sortedBusinessDocumentLogs || sortedBusinessDocumentLogs.length === 0" class="list-group-item text-muted">決済情報の履歴はありません。</li>
                         </ul>
                     </div>
                     <div class="modal-footer">

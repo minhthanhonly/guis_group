@@ -241,6 +241,7 @@ if($_SESSION['show_project'] == 0){
             <p class="small text-muted mb-2" id="projectTableScrollHint">
                 <i class="fa fa-info-circle me-1 text-info"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
                 <i class="ms-4 fa fa-info-circle me-1 text-info"></i><span data-i18n="列見出しをドラッグして表示順を変更できます。">列見出しをドラッグして表示順を変更できます。</span>
+                <i class="ms-4 fa fa-info-circle me-1 text-info"></i><span data-i18n="列見出しの右端をドラッグして列幅を変更できます。">列見出しの右端をドラッグして列幅を変更できます。</span>
             </p>
             <div id="projectListColumnToolsRow" class="d-flex justify-content-end align-items-center gap-2 mb-1 flex-wrap" v-show="selectedDepartment">
                 <div class="dropdown" v-if="availableColumns && availableColumns.length > 0">
@@ -340,6 +341,211 @@ if($_SESSION['show_project'] == 0){
             </div>
         </div>
     </div>
+
+    <!-- Business Document (決済情報) Modal -->
+    <div class="modal fade" id="businessDocumentModal" tabindex="-1" aria-labelledby="businessDocumentModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content" v-if="businessDocumentProject">
+                <div class="modal-header">
+                    <div class="d-flex align-items-center gap-2">
+                        <h5 class="modal-title mb-0" id="businessDocumentModalLabel">
+                            <span data-i18n="決済情報">決済情報</span>
+                            <span class="text-muted small ms-2">#{{ businessDocumentProjectId }} {{ businessDocumentProject.name }}</span>
+                        </h5>
+                        <span v-if="businessDocumentSaveStatus === 'loading'" class="text-muted" title="保存中">
+                            <i class="fa fa-spinner fa-spin"></i>
+                        </span>
+                        <span v-else-if="businessDocumentSaveStatus === 'saved'" class="text-success" title="保存済み">
+                            <i class="fa fa-check-circle"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 mx-2">
+                        <button type="button" class="btn btn-outline-info btn-sm" @click="openBusinessDocumentLogModal">
+                            <i class="fa fa-history me-1"></i><span data-i18n="履歴">履歴</span>
+                        </button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" @click="closeBusinessDocumentModal"></button>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" v-model.number="businessDocumentProject.version">
+                    <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label mb-0">見積日 <span class="text-danger">*</span></label>
+                                <button v-if="!hasBdDate('estimate_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                        @click="setBdDateToday('estimate_date')">今日</button>
+                            </div>
+                            <input type="text" class="form-control" v-model="businessDocumentProject.estimate_date"
+                                   id="bd_modal_estimate_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">見積金額(税抜き) <span class="text-danger">*</span></label>
+                            <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject.amount"
+                                   @input="scheduleBdUpdate" min="0" step="1">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">消費税（10%）</label>
+                            <input type="text" class="form-control bg-light" readonly tabindex="-1" :value="formatBusinessDocumentTaxAmount(businessDocumentProject.amount)">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">税込合計</label>
+                            <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(businessDocumentProject.amount)">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">見積番号 <span class="text-danger">*</span></label>
+                            <input type="text" autocomplete="off" class="form-control" v-model="businessDocumentProject.estimate_number" @change="scheduleBdUpdate">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">見積状況</label>
+                            <div class="btn-group d-block">
+                                <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
+                                        :class="getBdEstimateStatusButtonClass(businessDocumentProject.estimate_status)"
+                                        id="bdEstimateStatusDropdown"
+                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                    {{ getBdEstimateStatusLabel(businessDocumentProject.estimate_status) }}
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li v-for="status in businessEstimateStatuses" :key="status.value">
+                                        <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                           :class="{ disabled: status.value === '発行済' && !isBdEstimateDocumentFieldsComplete() }"
+                                           @click="selectBdEstimateStatus(status.value)">
+                                            {{ status.label }}
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div v-if="!isBdEstimateDocumentFieldsComplete()" class="form-text text-muted">
+                                発行済にするには見積日・見積金額・見積番号が必要です
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <h6 class="text-muted mb-3"><span data-i18n="請求">請求</span></h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label mb-0">請求日 <span class="text-danger">*</span></label>
+                                <button v-if="!hasBdDate('invoice_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                        @click="setBdDateToday('invoice_date')">今日</button>
+                            </div>
+                            <input type="text" class="form-control" v-model="businessDocumentProject.invoice_date"
+                                   id="bd_modal_invoice_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label mb-0">請求金額(税抜き) <span class="text-danger">*</span></label>
+                                <button v-if="!hasBdAmount(businessDocumentProject.invoice_amount)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                        @click="copyBdEstimateAmountToInvoice">見積と同額</button>
+                            </div>
+                            <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject.invoice_amount"
+                                   @input="scheduleBdUpdate" min="0" step="1">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">消費税（10%）</label>
+                            <input type="text" class="form-control bg-light" readonly tabindex="-1" :value="formatBusinessDocumentTaxAmount(businessDocumentProject.invoice_amount)">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">税込合計</label>
+                            <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(businessDocumentProject.invoice_amount)">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">請求番号 <span class="text-danger">*</span></label>
+                            <input type="text" autocomplete="off" class="form-control" v-model="businessDocumentProject.invoice_number" @change="scheduleBdUpdate">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">請求状況</label>
+                            <div class="btn-group d-block">
+                                <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
+                                        :class="getBdInvoiceStatusButtonClass(businessDocumentProject.invoice_status)"
+                                        id="bdInvoiceStatusDropdown"
+                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                    {{ getBdInvoiceStatusLabel(businessDocumentProject.invoice_status) }}
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li v-for="status in businessInvoiceStatuses" :key="status.value">
+                                        <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                           :class="{ disabled: status.value === '発行済' && !isBdInvoiceDocumentFieldsComplete() }"
+                                           @click="selectBdInvoiceStatus(status.value)">
+                                            {{ status.label }}
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div v-if="!isBdInvoiceDocumentFieldsComplete()" class="form-text text-muted">
+                                発行済にするには請求日・請求金額・請求番号が必要です
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <div class="mb-0">
+                        <label class="form-label" data-i18n="決済備考">決済備考</label>
+                        <textarea class="form-control" rows="3" v-model="businessDocumentProject.payment_note" @change="scheduleBdUpdate"></textarea>
+                    </div>
+
+                    <div v-if="businessDocumentError" class="alert alert-danger mt-3 mb-0">{{ businessDocumentError }}</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" @click="closeBusinessDocumentModal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Business Document History Modal -->
+    <div class="modal fade" tabindex="-1" :class="{show: showBusinessDocumentLogModal}" style="display: block;" v-if="showBusinessDocumentLogModal">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">決済情報 履歴</h5>
+                    <button type="button" class="btn-close" @click="closeBusinessDocumentLogModal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <ul class="list-group list-group-flush">
+                        <li v-for="log in sortedBusinessDocumentLogs" :key="log.id" class="list-group-item">
+                            <div class="d-flex">
+                                <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
+                                    <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
+                                        <span v-if="log.user_image">
+                                            <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
+                                        </span>
+                                        <div class="avatar avatar-sm" v-else>
+                                            <span class="avatar-initial rounded-circle bg-label-primary">
+                                                {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-column align-items-start justify-content-center ms-2">
+                                        <span class="fw-bold small">{{ log.username || log.realname || log.user }}</span>
+                                        <span class="text-muted small">{{ formatShortDateTime(log.time) }}</span>
+                                    </div>
+                                </div>
+                                <div class="flex-grow-1 d-flex align-items-center">
+                                    <span>
+                                        <i :class="bdHistoryIcon(log.action) + ' me-2'"></i>
+                                        <span class="me-2">{{ getLogNote(log) }}</span>
+                                        <br>
+                                        <span v-if="hasBdLogValue(log.value1)" :class="getBdLogBadgeClass(log, 'value1')" class="mx-1">{{ getBusinessDocumentLogValue(log, 'value1') }}</span>
+                                        <span v-if="hasBdLogValue(log.value1) && hasBdLogValue(log.value2)" class="mx-1">→</span>
+                                        <span v-if="hasBdLogValue(log.value2)" :class="getBdLogBadgeClass(log, 'value2')" class="mx-1">{{ getBusinessDocumentLogValue(log, 'value2') }}</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </li>
+                        <li v-if="!sortedBusinessDocumentLogs || sortedBusinessDocumentLogs.length === 0" class="list-group-item text-muted">決済情報の履歴はありません。</li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="closeBusinessDocumentLogModal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show" v-if="showBusinessDocumentLogModal"></div>
 
     <!-- Quick Edit Project Modal (案件を編集) -->
     <div class="modal fade" id="quickEditProjectModal" tabindex="-1" aria-labelledby="quickEditProjectModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
@@ -1191,4 +1397,5 @@ if (window.IS_CAILY_BRANCH_USER) {
 }
 </script>
 <script src="assets/js/project-clipboard.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/business-document-modal-mixin.js?v=<?=CACHE_VERSION?>"></script>
 <script src="assets/js/project-list.js?v=<?=CACHE_VERSION?>"></script>

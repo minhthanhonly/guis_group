@@ -79,7 +79,13 @@
             </li>
             <?php } ?>
 
-            <?php if($_SESSION['show_project'] == 1){ ?>
+            <?php 
+            
+            $_revenuePermModel = new ApplicationModel();
+            $showRevenueStatsMenu = ($_SESSION['authority'] ?? '') === 'administrator'
+                || $_revenuePermModel->hasDepartmentPermission('project_director_stat');
+
+            if($showRevenueStatsMenu){ ?>
               <li class="menu-item <?php if($directory == 'project' || $directory == 'parent_project' || $directory == 'price_list') echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base fa fa-briefcase"></i>
@@ -88,9 +94,7 @@
               <ul class="menu-sub">
                 
                 <?php
-                $_revenuePermModel = new ApplicationModel();
-                $showRevenueStatsMenu = ($_SESSION['authority'] ?? '') === 'administrator'
-                    || $_revenuePermModel->hasDepartmentPermission('project_director_stat');
+               
                 if ($showRevenueStatsMenu) {
                 ?>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'revenue_statistics') echo 'active'; ?>">
@@ -208,6 +212,7 @@
                 if($page == 'department') $active2 = 'active';
                 if($page == 'team') $active6 = 'active';
                 if($page == 'seal') $active7 = 'active';
+                if($page == 'backup') $active8 = 'active';
               }
               if($directory == 'administration'){
                 $active = 'active open';
@@ -250,6 +255,7 @@
                     <div data-i18n="印鑑設定">印鑑設定</div>
                   </a>
                 </li>
+               
                 <li class="menu-item <?php echo $active3; ?>">
                   <a href="<?=$root?>group/" class="menu-link">
                     <div data-i18n="グループ設定">グループ設定</div>
@@ -265,6 +271,13 @@
                     <div data-i18n="タイムカード設定">タイムカード設定</div>
                   </a>
                 </li>
+                <?php if (($_SESSION['userid'] ?? '') === 'admin') { ?>
+                <li class="menu-item <?php echo $active8; ?>">
+                  <a href="<?=$root?>setting/backup.php" class="menu-link">
+                    <div data-i18n="DBバックアップ">DBバックアップ</div>
+                  </a>
+                </li>
+                <?php } ?>
               </ul>
             </li>
             <?php } ?>

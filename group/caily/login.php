@@ -95,4 +95,3 @@ $view->heading('ログイン', 'login');
 <?php
 $view->footing();
 ?>
-<script src="<?=ROOT?>assets/js/login.js?v=<?=CACHE_VERSION?>"></script>

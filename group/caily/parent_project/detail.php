@@ -706,7 +706,7 @@ $view->heading('建物詳細');
                                                     <i class="fa fa-eye"></i>
                                                 </a>
                                                 <button v-if="canEditBusinessDocuments" type="button" class="btn btn-sm btn-outline-success"
-                                                        title="業務書類" @click="openBusinessDocumentModal(project)">
+                                                        title="決済情報" @click="openBusinessDocumentModal(project)">
                                                     <i class="fa fa-money-bill-wave"></i>
                                                 </button>
                                             </div>
@@ -717,7 +717,7 @@ $view->heading('建物詳細');
                                                 <ul class="dropdown-menu dropdown-menu-end">
                                                     <li v-if="canEditBusinessDocuments">
                                                         <a class="dropdown-item" href="javascript:void(0);" @click.prevent="openBusinessDocumentModal(project)">
-                                                            <i class="fa fa-file-invoice me-1"></i> <span data-i18n="業務書類">業務書類</span>
+                                                            <i class="fa fa-file-invoice me-1"></i> <span data-i18n="決済情報">決済情報</span>
                                                         </a>
                                                     </li>
                                                     <li v-if="canEditChildProject(project)">
@@ -1124,7 +1124,7 @@ $view->heading('建物詳細');
                 <div class="modal-header">
                     <div class="d-flex align-items-center gap-2">
                         <h5 class="modal-title mb-0" id="businessDocumentModalLabel">
-                            <span data-i18n="業務書類">業務書類</span>
+                            <span data-i18n="決済情報">決済情報</span>
                             <span class="text-muted small ms-2">#{{ businessDocumentProjectId }} {{ businessDocumentProject.name }}</span>
                         </h5>
                         <span v-if="businessDocumentSaveStatus === 'loading'" class="text-muted" title="保存中">
@@ -1276,7 +1276,7 @@ $view->heading('建物詳細');
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">業務書類 履歴</h5>
+                    <h5 class="modal-title">決済情報 履歴</h5>
                     <button type="button" class="btn-close" @click="closeBusinessDocumentLogModal"></button>
                 </div>
                 <div class="modal-body p-0">
@@ -1311,7 +1311,7 @@ $view->heading('建物詳細');
                                 </div>
                             </div>
                         </li>
-                        <li v-if="!sortedBusinessDocumentLogs || sortedBusinessDocumentLogs.length === 0" class="list-group-item text-muted">業務書類の履歴はありません。</li>
+                        <li v-if="!sortedBusinessDocumentLogs || sortedBusinessDocumentLogs.length === 0" class="list-group-item text-muted">決済情報の履歴はありません。</li>
                     </ul>
                 </div>
                 <div class="modal-footer">
