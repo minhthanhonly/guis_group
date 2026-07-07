@@ -247,13 +247,27 @@
                 return false;
             }
             var msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
-            if (typeof showMessage === 'function') {
+            if (typeof hideHourglass === 'function') {
+                hideHourglass();
+            }
+            if (typeof Swal !== 'undefined' && Swal.fire) {
+                Swal.fire({
+                    title: 'Error!',
+                    text: msg,
+                    icon: 'error',
+                    customClass: {
+                        confirmButton: 'btn btn-primary'
+                    },
+                    buttonsStyling: false
+                }).then(function() {
+                    window.location.reload();
+                });
+            } else if (typeof showMessage === 'function') {
                 showMessage(msg, true);
+                window.location.reload();
             } else if (typeof alert === 'function') {
                 alert(msg);
-            }
-            if (typeof onReload === 'function') {
-                onReload();
+                window.location.reload();
             }
             return true;
         };

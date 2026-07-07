@@ -409,11 +409,11 @@ class Project extends ApplicationModel {
                 if (isset($_GET['filterBusinessDocumentStatus']) && $_GET['filterBusinessDocumentStatus'] !== '') {
                     $bdFilter = (string)$_GET['filterBusinessDocumentStatus'];
                     if ($bdFilter === '未見積') {
-                        $whereArr[] = "p.estimate_status = '未発行'";
+                        $whereArr[] = "COALESCE(NULLIF(TRIM(p.estimate_status), ''), '未発行') = '未発行'";
                     } elseif ($bdFilter === '見積済') {
                         $whereArr[] = "p.estimate_status IN ('発行済', '発行済み')";
                     } elseif ($bdFilter === '未請求') {
-                        $whereArr[] = "p.invoice_status = '未発行'";
+                        $whereArr[] = "COALESCE(NULLIF(TRIM(p.invoice_status), ''), '未発行') = '未発行'";
                     } elseif ($bdFilter === '請求済') {
                         $whereArr[] = "p.invoice_status IN ('発行済', '発行済み')";
                     }

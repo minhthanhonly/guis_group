@@ -116,6 +116,13 @@ const TaskApp = createApp({
                 selected: [],
                 backupData: null
             },
+            workloadModal: {
+                show: false,
+                taskId: null,
+                hours: 0,
+                minutes: 0,
+                saving: false
+            },
             editingInlineId: null,
             // Offcanvas data
             taskComments: [], // Keep for compatibility, but not used
@@ -939,6 +946,74 @@ const TaskApp = createApp({
             const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
             return formatted + 'h';
         },
+        formatWorkloadPickerDisplay(value) {
+            const n = parseFloat(value);
+            if (Number.isNaN(n) || n <= 0) return '';
+            const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+            return formatted + 'h';
+        },
+        parseEstimatedHoursToHoursMinutes(value) {
+            const n = parseFloat(value);
+            if (Number.isNaN(n) || n < 0) {
+                return { hours: 0, minutes: 0 };
+            }
+            const totalMinutes = Math.round(n * 60);
+            return {
+                hours: Math.floor(totalMinutes / 60),
+                minutes: totalMinutes % 60
+            };
+        },
+        convertHoursMinutesToEstimatedHours(hours, minutes) {
+            const h = parseInt(hours, 10);
+            const m = parseInt(minutes, 10);
+            const safeH = Number.isNaN(h) || h < 0 ? 0 : h;
+            const safeM = Number.isNaN(m) || m < 0 ? 0 : m;
+            const totalMinutes = safeH * 60 + safeM;
+            return Math.round((totalMinutes / 60) * 100) / 100;
+        },
+        getWorkloadModalPreview() {
+            const total = this.convertHoursMinutesToEstimatedHours(
+                this.workloadModal.hours,
+                this.workloadModal.minutes
+            );
+            if (total <= 0) return '0h';
+            return this.formatEstimatedHours(total);
+        },
+        openWorkloadModal(task) {
+            if (!task || !task.id || !this.canEditTaskWorkload(task) || this.isEstimatedHoursSaving(task.id)) {
+                return;
+            }
+            const parts = this.parseEstimatedHoursToHoursMinutes(task.estimated_hours);
+            this.workloadModal.taskId = task.id;
+            this.workloadModal.hours = parts.hours;
+            this.workloadModal.minutes = parts.minutes;
+            this.workloadModal.saving = false;
+            this.workloadModal.show = true;
+        },
+        closeWorkloadModal() {
+            this.workloadModal.show = false;
+            this.workloadModal.taskId = null;
+            this.workloadModal.hours = 0;
+            this.workloadModal.minutes = 0;
+            this.workloadModal.saving = false;
+        },
+        async confirmWorkloadModal() {
+            const taskId = this.workloadModal.taskId;
+            if (!taskId) return;
+            const task = this.tasks.find(function(t) { return t.id === taskId; });
+            if (!task || !this.canEditTaskWorkload(task)) return;
+            const hours = this.convertHoursMinutesToEstimatedHours(
+                this.workloadModal.hours,
+                this.workloadModal.minutes
+            );
+            this.workloadModal.saving = true;
+            try {
+                await this.saveTaskEstimatedHours(task, hours);
+                this.closeWorkloadModal();
+            } finally {
+                this.workloadModal.saving = false;
+            }
+        },
         formatTotalWorkload(value) {
             const n = parseFloat(value);
             if (Number.isNaN(n) || n <= 0) return '0h';
@@ -1090,6 +1165,7 @@ const TaskApp = createApp({
                     const result = await window.TaskTimer.start(task.id, this.projectId, {
                         title: task.title,
                         project_name: this.projectInfo && this.projectInfo.name ? this.projectInfo.name : '',
+                        estimated_hours: task.estimated_hours,
                     });
                     if (result && result.stopped_previous_task) {
                         this.applyTaskEstimatedHours(
@@ -2241,6 +2317,23 @@ const TaskApp = createApp({
             this.assigneeModal.backupData = { ...this.inlineTasks[idx] };
             
             this.assigneeModal.show = true;
+        },
+
+        assignInlineTaskToSelf(inlineIndex) {
+            if (inlineIndex === undefined || inlineIndex === null || !this.inlineTasks[inlineIndex]) {
+                return;
+            }
+            const userId = String(this.currentUserId || '').trim();
+            if (!userId) return;
+            const isMember = (this.projectMembers || []).some(function(m) {
+                return String(m.user_id) === userId;
+            });
+            if (!isMember) {
+                this.showMessage('プロジェクトメンバーに登録されていません。', true);
+                return;
+            }
+            this.inlineTasks[inlineIndex].assignees = [userId];
+            this.ensureTaskData(inlineIndex);
         },
         
         closeAssigneeModal() {

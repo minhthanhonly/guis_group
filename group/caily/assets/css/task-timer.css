@@ -81,10 +81,56 @@
     position: relative;
 }
 
+.task-workload-input {
+    width: 5rem;
+    min-width: 3rem;
+    max-width: 6.5rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.form-control.form-control-sm.task-workload-input.task-workload-input--readonly[readonly]:not(:disabled),
+.form-control.task-workload-input.task-workload-input--readonly[readonly]:not(:disabled) {
+    cursor: pointer;
+    opacity: 1;
+    -webkit-text-fill-color: var(--bs-body-color);
+}
+
+.form-control.form-control-sm.task-workload-input.task-workload-input--readonly[readonly]:not(:disabled):hover,
+.form-control.task-workload-input.task-workload-input--readonly[readonly]:not(:disabled):hover {
+    border-color: var(--bs-primary, #696cff);
+    background-color: var(--bs-body-bg);
+}
+
+.form-control.form-control-sm.task-workload-input.task-workload-input--readonly[readonly]:not(:disabled):focus,
+.form-control.task-workload-input.task-workload-input--readonly[readonly]:not(:disabled):focus {
+    box-shadow: none;
+    border-color: var(--bs-primary, #696cff);
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+}
+
+.task-workload-input--loading {
+    animation: task-workload-input-loading 0.9s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes task-workload-input-loading {
+    0%, 100% {
+        border-color: var(--bs-primary, #696cff);
+        box-shadow: 0 0 0 0 rgba(105, 108, 255, 0.45);
+    }
+    50% {
+        border-color: var(--bs-primary, #696cff);
+        box-shadow: 0 0 0 3px rgba(105, 108, 255, 0.25);
+    }
+}
+
 .task-workload-display {
     display: inline-block;
-    min-width: 2.5rem;
-    padding: 0.35rem 0.5rem;
+    min-width: 4.5rem;
+    padding: 0.35rem 0.3rem;
     font-size: 0.875rem;
     text-align: center;
     line-height: 1.5;
@@ -98,7 +144,7 @@
     position: absolute;
     top: 50%;
     right: 0.3rem;
-left: auto;
+    left: auto;
     width: 0.45rem;
     height: 0.45rem;
     margin-top: -0.2rem;

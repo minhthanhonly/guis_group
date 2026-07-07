@@ -560,17 +560,17 @@ $view->heading('建物詳細');
                                     <th><span data-i18n="受注形態">受注形態</span></th>
                                     <th style="width: 120px;"><span data-i18n="案件名">案件名</span></th>
                                     <th style="min-width: 150px;"><span data-i18n="説明">説明</span></th>
-                                    <th style="min-width: 160px;"><span data-i18n="顧客情報">顧客情報</span></th>
-                                    <th style="min-width: 80px;"><span data-i18n="GUIS受付者">GUIS受付者</span></th>
-                                    <th style="min-width: 100px;"><span data-i18n="部署">部署</span></th>
+                                    <th style="min-width: 100px;"><span data-i18n="顧客情報">顧客情報</span></th>
+                                    <th style="width: 60px;"><span data-i18n="GUIS受付者">GUIS受付者</span></th>
+                                    <th style="min-width: 80px;"><span data-i18n="部署">部署</span></th>
                                     <th><span data-i18n="管理">管理</span></th>
                                     <th><span>担当</span></th>
-                                    <th><span data-i18n="開始日">開始日</span></th>
-                                    <th><span>CAILY納期</span></th>
-                                    <th v-if="!isCailyBranchUser"><span>GUIS納期</span></th>
+                                    <th style="width: 60px;"><span data-i18n="開始日">開始日</span></th>
+                                    <th style="width: 60px;"><span>CAILY納期</span></th>
+                                    <th v-if="!isCailyBranchUser" style="width: 60px;"><span>GUIS納期</span></th>
                                     <th v-if="!isCailyBranchUser"><span data-i18n="期限日">期限日</span></th>
-                                    <th><span data-i18n="ステータス">ステータス</span></th>
-                                    <th><span data-i18n="進捗">進捗</span></th>
+                                    <th style="width: 60px;"><span data-i18n="ステータス">ステータス</span></th>
+                                    <th style="width: 60px;"><span data-i18n="進捗">進捗</span></th>
                                     <th v-if="canViewBusinessDocuments" style="width: 140px;"><span data-i18n="決済情報">決済情報</span></th>
                                     <th><span data-i18n="操作">操作</span></th>
                                 </tr>

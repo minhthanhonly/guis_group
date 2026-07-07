@@ -264,14 +264,21 @@ if($_SESSION['show_project'] == 0){
                         </div>
                     </div>
                     <div class="task-col-assignee">
-                        <div class="d-flex align-items-center flex-wrap" style="cursor: pointer;" @click="openAssigneeModal(task._inlineIndex)">
+                        <div class="d-flex align-items-center flex-wrap gap-2 py-2 pe-2 inline-assignee-picker">
                             <template v-if="getPrimaryAssigneeId(task)">
-                                <div class="avatar me-1" data-bs-toggle="tooltip" :title="(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || getPrimaryAssigneeId(task))">
+                                <div class="avatar me-1" style="cursor: pointer;" data-bs-toggle="tooltip" :title="(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || getPrimaryAssigneeId(task))" @click="openAssigneeModal(task._inlineIndex)">
                                     <img v-if="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) && !projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)).avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" width="28" height="28">
                                     <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || '') }}</span>
                                 </div>
                             </template>
-                            <span v-else class="text-muted small">{{ $t('未選択') }}</span>
+                            <template v-else>
+                                <span class="inline-assignee-placeholder small" @click="openAssigneeModal(task._inlineIndex)">{{ $t('未選択') }}</span>
+                                <button type="button" class="btn btn-outline-info btn-sm inline-assignee-self-btn"
+                                    :title="$t('自分を担当者にする')"
+                                    @click.stop="assignInlineTaskToSelf(task._inlineIndex)">
+                                    <span>{{ $t('自分') }}</span>
+                                </button>
+                            </template>
                         </div>
                     </div>
                     <div class="task-col-ack"></div>
@@ -485,15 +492,15 @@ if($_SESSION['show_project'] == 0){
                                     class="task-workload-input-shell"
                                     :class="{ 'task-workload-input-shell--timer-active': hasActiveTaskTimer(task) }">
                                     <input
-                                        type="number"
-                                        class="form-control form-control-sm task-workload-input"
-                                        min="0"
-                                        step="0.1"
-                                        :value="task.estimated_hours != null && task.estimated_hours !== '' ? task.estimated_hours : ''"
-                                        placeholder="0"
+                                        type="text"
+                                        readonly
+                                        tabindex="-1"
+                                        class="form-control form-control-sm task-workload-input task-workload-input--readonly"
+                                        :value="formatWorkloadPickerDisplay(task.estimated_hours)"
+                                        placeholder="0h"
                                         :class="{ 'task-workload-input--loading': isEstimatedHoursSaving(task.id) }"
                                         :disabled="isEstimatedHoursSaving(task.id)"
-                                        @change="saveTaskEstimatedHours(task, $event.target.value)">
+                                        @click="openWorkloadModal(task)">
                                 </span>
                                 <button
                                     v-if="canTrackTaskTime(task)"
@@ -602,6 +609,40 @@ if($_SESSION['show_project'] == 0){
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @click="closeAssigneeModal">キャンセル</button>
                     <button class="btn btn-primary" @click="confirmAssigneeModal">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal chỉnh 工数 (giờ / phút) -->
+    <div class="modal fade" tabindex="-1" :class="{show: workloadModal.show}" style="display: block;" v-if="workloadModal.show">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><span data-i18n="工数を編集">工数を編集</span></h5>
+                    <button type="button" class="btn-close" @click="closeWorkloadModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 align-items-end">
+                        <div class="col">
+                            <label class="form-label small mb-1"><span data-i18n="時間">時間</span></label>
+                            <input type="number" class="form-control" min="0" step="1" v-model.number="workloadModal.hours" @keyup.enter="confirmWorkloadModal">
+                        </div>
+                        <div class="col-auto pb-2 text-muted">:</div>
+                        <div class="col">
+                            <label class="form-label small mb-1"><span data-i18n="分">分</span></label>
+                            <input type="number" class="form-control" min="0" step="1" v-model.number="workloadModal.minutes" @keyup.enter="confirmWorkloadModal">
+                        </div>
+                    </div>
+                    <p class="small text-muted mt-2 mb-0">
+                        <span data-i18n="換算">換算</span>: {{ getWorkloadModalPreview() }}
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="closeWorkloadModal"><span data-i18n="キャンセル">キャンセル</span></button>
+                    <button type="button" class="btn btn-primary" @click="confirmWorkloadModal" :disabled="workloadModal.saving || isEstimatedHoursSaving(workloadModal.taskId)">
+                        <span data-i18n="保存">保存</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -890,22 +931,28 @@ if($_SESSION['show_project'] == 0){
     }
 }
 .task-col-workload { width: 8%; min-width: 4rem; justify-content: flex-start; }
-.task-workload-input {
-    width: 5rem;
-    min-width: 3rem;
-    max-width: 6.5rem;
-    padding: 0.35rem 0.5rem;
-    font-size: 0.875rem;
-    text-align: center;
-}
-.task-workload-input--loading {
-    animation: task-drawing-count-border-pulse 0.9s ease-in-out infinite;
-    pointer-events: none;
-}
 .task-col-note { width: 8%; min-width: 4.5rem; }
 .task-col-priority { width: 5%; min-width: 3.5rem; }
 .task-col-period { width: 7%; min-width: 0; }
 .task-col-assignee { width: 5%; min-width: 0; max-width: 4rem; }
+.task-list .row.g-0.align-items-center .task-col-assignee {
+    min-width: 7rem;
+    max-width: none;
+}
+.inline-assignee-placeholder {
+    color: var(--bs-primary);
+    text-decoration: underline;
+    cursor: pointer;
+}
+.inline-assignee-placeholder:hover {
+    opacity: 0.85;
+}
+.inline-assignee-self-btn {
+    font-size: 0.7rem;
+    line-height: 1.2;
+    padding: 0.1rem 0.35rem;
+    white-space: nowrap;
+}
 .task-col-ack { width: 5%; min-width: 3rem; }
 .task-col-creator { width: 5%; min-width: 0; }
 .task-col-status { width: 8%; min-width: 4rem; }

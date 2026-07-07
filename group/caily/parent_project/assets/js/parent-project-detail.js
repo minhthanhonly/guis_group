@@ -302,14 +302,32 @@ function handleProjectVersionConflict(responseData, onReload) {
         return false;
     }
     const msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
-    if (typeof showMessage === 'function') {
-        showMessage(msg, true);
+    if (typeof hideHourglass === 'function') {
+        hideHourglass();
     }
-    if (typeof onReload === 'function') {
-        onReload();
+    if (typeof Swal !== 'undefined' && Swal.fire) {
+        Swal.fire({
+            title: 'Error!',
+            text: msg,
+            icon: 'error',
+            customClass: {
+                confirmButton: 'btn btn-primary'
+            },
+            buttonsStyling: false
+        }).then(() => {
+            window.location.reload();
+        });
+    } else if (typeof showMessage === 'function') {
+        showMessage(msg, true);
+        window.location.reload();
+    } else {
+        alert(msg);
+        window.location.reload();
     }
     return true;
 }
+
+window.handleProjectVersionConflict = handleProjectVersionConflict;
 
 createApp({
     data() {

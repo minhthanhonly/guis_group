@@ -846,8 +846,25 @@
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center gap-1 task-workload-cell">
+                                                <template v-if="canEditTaskWorkload(task)">
+                                                    <span
+                                                        class="task-workload-input-shell"
+                                                        :class="{ 'task-workload-input-shell--timer-active': hasActiveTaskTimer(task) }">
+                                                        <input
+                                                            type="text"
+                                                            readonly
+                                                            tabindex="-1"
+                                                            class="form-control form-control-sm task-workload-input task-workload-input--readonly my-task-workload-input"
+                                                            :value="formatWorkloadPickerDisplay(task.estimated_hours)"
+                                                            placeholder="0h"
+                                                            :class="{ 'task-workload-input--loading': isEstimatedHoursSaving(task.id) }"
+                                                            :disabled="isEstimatedHoursSaving(task.id)"
+                                                            @click="openWorkloadModal(task)">
+                                                    </span>
+                                                </template>
                                                 <span
-                                                    class="task-workload-input-shell"
+                                                    v-else
+                                                    class="task-workload-input-shell text-nowrap"
                                                     :class="{ 'task-workload-input-shell--timer-active': hasActiveTaskTimer(task) }">
                                                     <span class="small text-nowrap task-workload-display">{{ formatEstimatedHours(task.estimated_hours) }}</span>
                                                 </span>
@@ -995,6 +1012,40 @@
                     </div>
                    </div>
 
+            <!-- Workload Modal (same as project/task.php) -->
+            <div class="modal fade task-workload-modal" tabindex="-1" :class="{ show: workloadModal.show }" style="display: block;" v-if="workloadModal.show">
+                <div class="modal-dialog modal-sm">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><span data-i18n="工数を編集">工数を編集</span></h5>
+                            <button type="button" class="btn-close" @click="closeWorkloadModal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-2 align-items-end">
+                                <div class="col">
+                                    <label class="form-label small mb-1"><span data-i18n="時間">時間</span></label>
+                                    <input type="number" class="form-control" min="0" step="1" v-model.number="workloadModal.hours" @keyup.enter="confirmWorkloadModal">
+                                </div>
+                                <div class="col-auto pb-2 text-muted">:</div>
+                                <div class="col">
+                                    <label class="form-label small mb-1"><span data-i18n="分">分</span></label>
+                                    <input type="number" class="form-control" min="0" step="1" v-model.number="workloadModal.minutes" @keyup.enter="confirmWorkloadModal">
+                                </div>
+                            </div>
+                            <p class="small text-muted mt-2 mb-0">
+                                <span data-i18n="換算">換算</span>: {{ getWorkloadModalPreview() }}
+                            </p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @click="closeWorkloadModal"><span data-i18n="キャンセル">キャンセル</span></button>
+                            <button type="button" class="btn btn-primary" @click="confirmWorkloadModal" :disabled="workloadModal.saving || isEstimatedHoursSaving(workloadModal.taskId)">
+                                <span data-i18n="保存">保存</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Task Note Modal (same as project/task.php) -->
             <div class="modal fade task-note-modal" tabindex="-1" :class="{ show: showTaskNoteModal }" style="display: block;" v-if="showTaskNoteModal">
                 <div class="modal-dialog modal-lg">
@@ -1038,6 +1089,18 @@
             .task-note-modal {
               z-index: 10050;
               background: rgba(0, 0, 0, 0.5);
+            }
+            .task-workload-modal {
+              z-index: 10050;
+              background: rgba(0, 0, 0, 0.5);
+            }
+            .my-task-workload-input {
+              width: 4.5rem;
+              min-width: 3.5rem;
+              max-width: 5.5rem;
+              padding: 0.25rem 0.4rem;
+              font-size: 0.8125rem;
+              text-align: center;
             }
             .my-task-note-cell {
               cursor: pointer;
@@ -1104,7 +1167,7 @@
               min-width: 6.5rem;
             }
             .my-task-col-progress { min-width: 5rem; }
-            .my-task-col-workload { min-width: 5.5rem; }
+            .my-task-col-workload { min-width: 7rem; }
             .my-task-col-note { min-width: 5rem; max-width: 8rem; }
             .my-task-project-name,
             .my-task-title {

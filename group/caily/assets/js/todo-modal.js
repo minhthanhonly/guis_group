@@ -98,6 +98,14 @@ function mountTodoApp() {
                     editingTodoLink: '',
                     editingTodoComment: '',
                     taskTimerTogglingTaskIds: {},
+                    estimatedHoursSavingTaskIds: {},
+                    workloadModal: {
+                        show: false,
+                        taskId: null,
+                        hours: 0,
+                        minutes: 0,
+                        saving: false
+                    },
                     drawingCountSavingTaskIds: {},
                     showTaskNoteModal: false,
                     taskNoteModal: {
@@ -703,6 +711,147 @@ function mountTodoApp() {
                     return `${formatted}h`;
                 },
 
+                formatWorkloadPickerDisplay(value) {
+                    const n = parseFloat(value);
+                    if (Number.isNaN(n) || n <= 0) return '';
+                    const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+                    return `${formatted}h`;
+                },
+
+                parseEstimatedHoursToHoursMinutes(value) {
+                    const n = parseFloat(value);
+                    if (Number.isNaN(n) || n < 0) {
+                        return { hours: 0, minutes: 0 };
+                    }
+                    const totalMinutes = Math.round(n * 60);
+                    return {
+                        hours: Math.floor(totalMinutes / 60),
+                        minutes: totalMinutes % 60
+                    };
+                },
+
+                convertHoursMinutesToEstimatedHours(hours, minutes) {
+                    const h = parseInt(hours, 10);
+                    const m = parseInt(minutes, 10);
+                    const safeH = Number.isNaN(h) || h < 0 ? 0 : h;
+                    const safeM = Number.isNaN(m) || m < 0 ? 0 : m;
+                    const totalMinutes = safeH * 60 + safeM;
+                    return Math.round((totalMinutes / 60) * 100) / 100;
+                },
+
+                getWorkloadModalPreview() {
+                    const total = this.convertHoursMinutesToEstimatedHours(
+                        this.workloadModal.hours,
+                        this.workloadModal.minutes
+                    );
+                    if (total <= 0) return '0h';
+                    return this.formatEstimatedHours(total);
+                },
+
+                canEditTaskWorkload(task) {
+                    if (!task || !task.id) return false;
+                    return this.isAssignedToMe(task);
+                },
+
+                openWorkloadModal(task) {
+                    if (!task || !task.id || !this.canEditTaskWorkload(task) || this.isEstimatedHoursSaving(task.id)) {
+                        return;
+                    }
+                    const parts = this.parseEstimatedHoursToHoursMinutes(task.estimated_hours);
+                    this.workloadModal.taskId = task.id;
+                    this.workloadModal.hours = parts.hours;
+                    this.workloadModal.minutes = parts.minutes;
+                    this.workloadModal.saving = false;
+                    this.workloadModal.show = true;
+                },
+
+                closeWorkloadModal() {
+                    this.workloadModal.show = false;
+                    this.workloadModal.taskId = null;
+                    this.workloadModal.hours = 0;
+                    this.workloadModal.minutes = 0;
+                    this.workloadModal.saving = false;
+                },
+
+                async confirmWorkloadModal() {
+                    const taskId = this.workloadModal.taskId;
+                    if (!taskId) return;
+                    const task = this.tasks.find(function (t) { return parseInt(t.id, 10) === parseInt(taskId, 10); });
+                    if (!task || !this.canEditTaskWorkload(task)) return;
+                    const hours = this.convertHoursMinutesToEstimatedHours(
+                        this.workloadModal.hours,
+                        this.workloadModal.minutes
+                    );
+                    this.workloadModal.saving = true;
+                    try {
+                        await this.saveTaskEstimatedHours(task, hours);
+                        this.closeWorkloadModal();
+                    } finally {
+                        this.workloadModal.saving = false;
+                    }
+                },
+
+                isEstimatedHoursSaving(taskId) {
+                    return !!(taskId && this.estimatedHoursSavingTaskIds[taskId]);
+                },
+
+                setEstimatedHoursSaving(taskId, saving) {
+                    if (!taskId) return;
+                    if (saving) {
+                        this.estimatedHoursSavingTaskIds = Object.assign({}, this.estimatedHoursSavingTaskIds, { [taskId]: true });
+                    } else {
+                        const next = Object.assign({}, this.estimatedHoursSavingTaskIds);
+                        delete next[taskId];
+                        this.estimatedHoursSavingTaskIds = next;
+                    }
+                },
+
+                async saveTaskEstimatedHours(task, value) {
+                    if (!task || !task.id || !this.canEditTaskWorkload(task)) {
+                        return;
+                    }
+                    const n = parseFloat(value);
+                    const hours = Number.isNaN(n) || n < 0 ? 0 : Math.round(n * 100) / 100;
+                    const canonical = this.tasks.find(function (t) { return parseInt(t.id, 10) === parseInt(task.id, 10); });
+                    const current = canonical
+                        ? parseFloat(canonical.estimated_hours)
+                        : parseFloat(task.estimated_hours);
+                    const currentHours = Number.isNaN(current) ? 0 : Math.round(current * 100) / 100;
+                    if (currentHours === hours) {
+                        return;
+                    }
+                    if (this.isEstimatedHoursSaving(task.id)) {
+                        return;
+                    }
+                    this.setEstimatedHoursSaving(task.id, true);
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', task.id);
+                        formData.append('project_id', task.project_id);
+                        formData.append('estimated_hours', hours);
+                        const response = await axios.post('/api/index.php?model=task&method=updateEstimatedHours', formData);
+                        if (response.data && response.data.status === 'success') {
+                            const savedHours = response.data.estimated_hours != null ? response.data.estimated_hours : hours;
+                            this.applyTaskEstimatedHours(task.id, savedHours);
+                            if (window.TaskTimer && window.TaskTimer.active
+                                && parseInt(window.TaskTimer.active.task_id, 10) === parseInt(task.id, 10)) {
+                                window.TaskTimer.active.estimated_hours = savedHours;
+                                if (typeof window.TaskTimer.updateWidget === 'function') {
+                                    window.TaskTimer.updateWidget();
+                                }
+                            }
+                        } else if (typeof showMessage === 'function') {
+                            showMessage(response.data?.message || this.t('工数の更新に失敗しました', '工数の更新に失敗しました'), true);
+                        }
+                    } catch (error) {
+                        if (typeof showMessage === 'function') {
+                            showMessage(this.t('工数の更新に失敗しました', '工数の更新に失敗しました'), true);
+                        }
+                    } finally {
+                        this.setEstimatedHoursSaving(task.id, false);
+                    }
+                },
+
                 decodeHtmlEntities(str) {
                     const txt = document.createElement('textarea');
                     txt.innerHTML = str;
@@ -1008,7 +1157,8 @@ function mountTodoApp() {
                         } else {
                             const result = await window.TaskTimer.start(task.id, task.project_id, {
                                 title: task.title,
-                                project_name: task.project_name || ''
+                                project_name: task.project_name || '',
+                                estimated_hours: task.estimated_hours,
                             });
                             if (result && result.stopped_previous_task) {
                                 this.applyTaskEstimatedHours(

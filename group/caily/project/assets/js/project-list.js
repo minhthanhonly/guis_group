@@ -88,16 +88,31 @@ var projectTable;
             return false;
         }
         var msg = responseData.message || translateText('他のユーザーが先に更新しました。ページを再読み込みしてください。');
-        if (typeof showMessage === 'function') {
+        if (typeof hideHourglass === 'function') {
+            hideHourglass();
+        }
+        if (typeof Swal !== 'undefined' && Swal.fire) {
+            Swal.fire({
+                title: 'Error!',
+                text: msg,
+                icon: 'error',
+                customClass: {
+                    confirmButton: 'btn btn-primary'
+                },
+                buttonsStyling: false
+            }).then(function() {
+                window.location.reload();
+            });
+        } else if (typeof showMessage === 'function') {
             showMessage(msg, true);
+            window.location.reload();
         } else if (typeof alert === 'function') {
             alert(msg);
-        }
-        if (typeof onReload === 'function') {
-            onReload();
+            window.location.reload();
         }
         return true;
     }
+    window.handleProjectVersionConflict = handleProjectVersionConflict;
     var priorities = [
         {
             key: 'low',
@@ -126,6 +141,7 @@ var projectTable;
     const KEEP_COMPANY_ON_RESET_KEY = 'project_list_keep_company_on_reset';
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment';
     const COLUMN_VISIBILITY_KEY = 'projectListColumnVisibility';
+    const COLUMN_VISIBILITY_STORAGE_VERSION = 2;
     const COLUMN_ORDER_STORAGE_KEY = 'projectListColumnOrder';
     const COLUMN_WIDTH_STORAGE_KEY = 'projectListColumnWidths';
     const SCROLL_RESTORE_KEY = 'projectListScrollY';
@@ -1123,7 +1139,7 @@ var projectTable;
 
     function showAllProjectColumns(table, customColDefs, departmentId) {
         var visibility = getShowAllProjectColumnVisibility(customColDefs);
-        saveColumnVisibilityToLocalStorage(visibility);
+        saveColumnVisibilityToLocalStorage(visibility, customColDefs);
         if (table && $.fn.DataTable.isDataTable('#projectTable')) {
             applyColumnVisibility(table, visibility, customColDefs);
             reapplyProjectListColumnWidthsAfterLayout(table, departmentId);
@@ -1136,7 +1152,7 @@ var projectTable;
 
     function resetProjectColumnVisibilityToDefault(table, customColDefs, departmentId) {
         var visibility = getDefaultColumnVisibility(customColDefs);
-        saveColumnVisibilityToLocalStorage(visibility);
+        saveColumnVisibilityToLocalStorage(visibility, customColDefs);
         if (table && $.fn.DataTable.isDataTable('#projectTable')) {
             applyColumnVisibility(table, visibility, customColDefs);
             reapplyProjectListColumnWidthsAfterLayout(table, departmentId);
@@ -1403,14 +1419,11 @@ var projectTable;
         if (Object.keys(config.visibility).length) {
             var visibility = loadColumnVisibilityFromLocalStorage(customColDefs);
             Object.keys(config.visibility).forEach(function(k) {
-                visibility[k] = config.visibility[k];
+                visibility[k] = normalizeColumnVisibilityBool(config.visibility[k], visibility[k]);
             });
-            saveColumnVisibilityToLocalStorage(visibility);
-            applyColumnVisibility(table, visibility, customColDefs);
-            if (window.app) {
-                window.app.availableColumns = buildAvailableColumnsList(customColDefs, departmentId, visibility);
-                scheduleColumnVisibilityMenuI18n();
-            }
+            saveColumnVisibilityToLocalStorage(visibility, customColDefs);
+            var appliedVisibility = applyColumnVisibility(table, visibility, customColDefs);
+            saveColumnVisibilityToLocalStorage(appliedVisibility, customColDefs);
             changed = true;
         }
 
@@ -1814,7 +1827,13 @@ var projectTable;
         (customColDefs || []).forEach(function(c) { labelMap[c.key] = c.label; });
         var keys = getMergedProjectColumnKeys(customColDefs, departmentId);
         return keys.map(function(k) {
-            return { key: k, label: labelMap[k] || k, visible: vis[k] !== false };
+            return {
+                key: k,
+                label: labelMap[k] || k,
+                visible: vis[k] !== undefined
+                    ? normalizeColumnVisibilityBool(vis[k], true)
+                    : true
+            };
         }).filter(function(col) {
             if (isColumnHiddenForCailyBranch(col.key)) return false;
             if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return false;
@@ -2130,18 +2149,119 @@ var projectTable;
         return { short: short, full: full };
     }
 
-    function saveColumnVisibilityToLocalStorage(visibility) {
-        localStorage.setItem(COLUMN_VISIBILITY_KEY, JSON.stringify(visibility));
+    function normalizeColumnVisibilityBool(value, fallback) {
+        if (value === true || value === 1 || value === '1' || value === 'true') return true;
+        if (value === false || value === 0 || value === '0' || value === 'false') return false;
+        return !!fallback;
+    }
+
+    function parseColumnVisibilityStorage(raw) {
+        if (!raw) return {};
+        try {
+            var parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+            if (parsed.visibility && typeof parsed.visibility === 'object' && !Array.isArray(parsed.visibility)) {
+                return parsed.visibility;
+            }
+            return parsed;
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function sanitizeColumnVisibilityForStorage(visibility, customColDefs) {
+        var defaults = getDefaultColumnVisibility(customColDefs);
+        var out = {};
+        Object.keys(defaults).forEach(function(key) {
+            out[key] = normalizeColumnVisibilityBool(
+                visibility && visibility[key] !== undefined ? visibility[key] : defaults[key],
+                defaults[key]
+            );
+        });
+        return out;
+    }
+
+    function saveColumnVisibilityToLocalStorage(visibility, customColDefs) {
+        var customDefs = customColDefs || customFieldColumnDefinitions || [];
+        var sanitized = sanitizeColumnVisibilityForStorage(visibility, customDefs);
+        localStorage.setItem(COLUMN_VISIBILITY_KEY, JSON.stringify({
+            version: COLUMN_VISIBILITY_STORAGE_VERSION,
+            visibility: sanitized
+        }));
     }
     
     function loadColumnVisibilityFromLocalStorage(customColDefs) {
-        const saved = JSON.parse(localStorage.getItem(COLUMN_VISIBILITY_KEY) || '{}');
+        const saved = parseColumnVisibilityStorage(localStorage.getItem(COLUMN_VISIBILITY_KEY));
         const defaults = getDefaultColumnVisibility(customColDefs);
         const visibility = {};
         Object.keys(defaults).forEach(function(key) {
-            visibility[key] = saved[key] !== undefined ? saved[key] : defaults[key];
+            visibility[key] = saved[key] !== undefined
+                ? normalizeColumnVisibilityBool(saved[key], defaults[key])
+                : defaults[key];
         });
         return visibility;
+    }
+
+    function reconcileColumnVisibilityWithTable(table, visibility, customColDefs) {
+        if (!table || !$.fn.DataTable.isDataTable('#projectTable')) {
+            return visibility || {};
+        }
+        var customDefs = customColDefs || customFieldColumnDefinitions || [];
+        var defaults = getDefaultColumnVisibility(customDefs);
+        var out = Object.assign({}, visibility || {});
+        Object.keys(defaults).forEach(function(key) {
+            if (isColumnHiddenForCailyBranch(key)) {
+                out[key] = false;
+                return;
+            }
+            if (isProjectDirectorColumn(key) && !canViewProjectDirectorColumns()) {
+                out[key] = false;
+                return;
+            }
+            var dtIndex = getDataTableColumnIndexByKey(key, customDefs);
+            if (dtIndex === null) {
+                out[key] = false;
+                return;
+            }
+            try {
+                out[key] = !!table.column(dtIndex).visible();
+            } catch (e) {
+                out[key] = false;
+            }
+        });
+        return out;
+    }
+
+    function syncAvailableColumnsFromVisibility(customColDefs, departmentId, visibility) {
+        if (!window.app) return;
+        window.app.availableColumns = buildAvailableColumnsList(customColDefs, departmentId, visibility);
+        scheduleColumnVisibilityMenuI18n();
+    }
+
+    function migrateColumnVisibilityStorageIfNeeded(customColDefs) {
+        try {
+            var raw = localStorage.getItem(COLUMN_VISIBILITY_KEY);
+            if (!raw) return;
+            var parsed = JSON.parse(raw);
+            var needsMigration = !parsed
+                || typeof parsed !== 'object'
+                || Array.isArray(parsed)
+                || !parsed.version
+                || parsed.version < COLUMN_VISIBILITY_STORAGE_VERSION;
+            if (!needsMigration) return;
+            var saved = parseColumnVisibilityStorage(raw);
+            var defaults = getDefaultColumnVisibility(customColDefs);
+            var visibility = {};
+            Object.keys(saved).forEach(function(key) {
+                visibility[key] = normalizeColumnVisibilityBool(saved[key], defaults[key]);
+            });
+            Object.keys(defaults).forEach(function(key) {
+                if (visibility[key] === undefined) {
+                    visibility[key] = defaults[key];
+                }
+            });
+            saveColumnVisibilityToLocalStorage(visibility, customColDefs);
+        } catch (e) { /* ignore */ }
     }
 
     function getDefaultColumnVisibility(customColDefs) {
@@ -2177,26 +2297,30 @@ var projectTable;
 
     function applyColumnVisibility(table, visibility, customColDefs) {
         if (!table || !$.fn.DataTable.isDataTable('#projectTable')) {
-            return;
+            return visibility || {};
         }
         const customDefs = customColDefs || customFieldColumnDefinitions || [];
         COLUMN_DEFINITIONS.forEach(col => {
             if (isColumnHiddenForCailyBranch(col.key)) return;
             if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return;
-            const isVisible = visibility[col.key] !== false;
+            const isVisible = normalizeColumnVisibilityBool(visibility[col.key], col.defaultVisible !== false);
             const dtIndex = getDataTableColumnIndexByKey(col.key, customDefs);
             if (dtIndex !== null) {
                 table.column(dtIndex).visible(isVisible, false);
             }
         });
-        customDefs.forEach((col, idx) => {
-            const isVisible = visibility[col.key] !== false;
+        customDefs.forEach((col) => {
+            const isVisible = normalizeColumnVisibilityBool(visibility[col.key], col.defaultVisible !== false);
             const dtIndex = getDataTableColumnIndexByKey(col.key, customDefs);
             if (dtIndex !== null) {
                 table.column(dtIndex).visible(isVisible, false);
             }
         });
         table.columns.adjust().draw(false);
+        var reconciled = reconcileColumnVisibilityWithTable(table, visibility, customDefs);
+        var depId = window.app && window.app.selectedDepartment && window.app.selectedDepartment.id;
+        syncAvailableColumnsFromVisibility(customDefs, depId, reconciled);
+        return reconciled;
     }
 
     // Custom field columns (built when table is initialized for selected department)
@@ -3118,6 +3242,9 @@ var projectTable;
         } catch (e) {
             console.warn('Failed to load custom fields for list', e);
         }
+
+        // Migrate legacy column visibility (flat JSON / string booleans / stale keys)
+        migrateColumnVisibilityStorageIfNeeded(customFieldColumnDefinitions);
 
         var fixedColumnConfigs = [
                 { 
@@ -4195,11 +4322,11 @@ var projectTable;
         
         // Apply column visibility after table initialization (base + custom columns; custom default hidden)
         var columnVisibility = loadColumnVisibilityFromLocalStorage(customFieldColumnDefinitions);
-        applyColumnVisibility(projectTable, columnVisibility, customFieldColumnDefinitions);
+        var appliedVisibility = applyColumnVisibility(projectTable, columnVisibility, customFieldColumnDefinitions);
+        saveColumnVisibilityToLocalStorage(appliedVisibility, customFieldColumnDefinitions);
         reapplyProjectListColumnWidthsAfterLayout(projectTable, depIdForColumnOrder);
         if (app) {
             var depIdAc = app.selectedDepartment && app.selectedDepartment.id;
-            app.availableColumns = buildAvailableColumnsList(customFieldColumnDefinitions, depIdAc, columnVisibility);
             scheduleColumnVisibilityMenuI18n();
         }
         if (typeof i18next !== 'undefined' && typeof i18next.on === 'function' && !window.__projectListLanguageBound) {
@@ -6384,7 +6511,8 @@ var projectTable;
             }
             
             // Load column visibility (thứ tự giống bảng khi đã chọn department / có save order)
-            const columnVisibility = loadColumnVisibilityFromLocalStorage();
+            migrateColumnVisibilityStorageIfNeeded(customFieldColumnDefinitions || []);
+            const columnVisibility = loadColumnVisibilityFromLocalStorage(customFieldColumnDefinitions || []);
             const depIdMount = this.selectedDepartment && this.selectedDepartment.id;
             this.availableColumns = buildAvailableColumnsList([], depIdMount, columnVisibility);
             this.$nextTick(() => {
@@ -7691,27 +7819,28 @@ var projectTable;
             },
             
             toggleColumnVisibility(columnKey, event) {
-                const isVisible = event.target.checked;
-                const column = this.availableColumns.find(col => col.key === columnKey);
-                if (column) {
-                    column.visible = isVisible;
+                const isVisible = !!event.target.checked;
+                const customDefs = customFieldColumnDefinitions || [];
+                const visibility = loadColumnVisibilityFromLocalStorage(customDefs);
+                if (Object.prototype.hasOwnProperty.call(visibility, columnKey)) {
+                    visibility[columnKey] = isVisible;
                 }
-                
-                // Save to localStorage
-                const visibility = {};
-                this.availableColumns.forEach(col => {
-                    visibility[col.key] = col.visible;
-                });
-                saveColumnVisibilityToLocalStorage(visibility);
-                
-                // Apply to DataTable if it exists (base or custom column)
+                saveColumnVisibilityToLocalStorage(visibility, customDefs);
+
                 if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-                    const dtIndex = getDataTableColumnIndexByKey(columnKey, customFieldColumnDefinitions);
-                    if (dtIndex !== null) {
-                        projectTable.column(dtIndex).visible(isVisible, false);
-                        projectTable.columns.adjust().draw(false);
-                        reapplyProjectListColumnWidthsAfterLayout(projectTable, this.selectedDepartment && this.selectedDepartment.id);
-                    }
+                    const appliedVisibility = applyColumnVisibility(projectTable, visibility, customDefs);
+                    saveColumnVisibilityToLocalStorage(appliedVisibility, customDefs);
+                    reapplyProjectListColumnWidthsAfterLayout(
+                        projectTable,
+                        this.selectedDepartment && this.selectedDepartment.id
+                    );
+                } else {
+                    this.availableColumns = buildAvailableColumnsList(
+                        customDefs,
+                        this.selectedDepartment && this.selectedDepartment.id,
+                        visibility
+                    );
+                    scheduleColumnVisibilityMenuI18n();
                 }
             },
             

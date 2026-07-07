@@ -40,6 +40,14 @@
         return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
     }
 
+    function hoursToSeconds(hours) {
+        const n = parseFloat(hours);
+        if (Number.isNaN(n) || n < 0) {
+            return 0;
+        }
+        return Math.round(n * 3600);
+    }
+
     function parseServerWallClockAsDate(raw) {
         if (!raw) return null;
         const text = String(raw).trim();
@@ -245,6 +253,17 @@
             return Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
         },
 
+        getBaseSeconds() {
+            if (!this.active) {
+                return 0;
+            }
+            return hoursToSeconds(this.active.estimated_hours);
+        },
+
+        getDisplaySeconds() {
+            return this.getBaseSeconds() + this.getElapsedSeconds();
+        },
+
         startTick() {
             this.stopTick();
             this.updateWidget();
@@ -285,7 +304,7 @@
 
             this.els.nav.style.display = '';
             if (this.els.display) {
-                this.els.display.textContent = formatElapsed(this.getElapsedSeconds());
+                this.els.display.textContent = formatElapsed(this.getDisplaySeconds());
             }
             if (this.els.taskLink) {
                 const title = this.active.task_title || t('タスク');
@@ -366,6 +385,9 @@
                         if (meta) {
                             if (meta.title && !active.task_title) active.task_title = meta.title;
                             if (meta.project_name && !active.project_name) active.project_name = meta.project_name;
+                            if (meta.estimated_hours != null && (active.estimated_hours == null || active.estimated_hours === '')) {
+                                active.estimated_hours = meta.estimated_hours;
+                            }
                         }
                     }
                     if (data.stopped_previous_task) {

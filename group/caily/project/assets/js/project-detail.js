@@ -103,14 +103,32 @@ function handleProjectVersionConflict(responseData, onReload) {
         return false;
     }
     const msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
-    if (typeof showMessage === 'function') {
-        showMessage(msg, true);
+    if (typeof hideHourglass === 'function') {
+        hideHourglass();
     }
-    if (typeof onReload === 'function') {
-        onReload();
+    if (typeof Swal !== 'undefined' && Swal.fire) {
+        Swal.fire({
+            title: 'Error!',
+            text: msg,
+            icon: 'error',
+            customClass: {
+                confirmButton: 'btn btn-primary'
+            },
+            buttonsStyling: false
+        }).then(() => {
+            window.location.reload();
+        });
+    } else if (typeof showMessage === 'function') {
+        showMessage(msg, true);
+        window.location.reload();
+    } else {
+        alert(msg);
+        window.location.reload();
     }
     return true;
 }
+
+window.handleProjectVersionConflict = handleProjectVersionConflict;
 
 function isProjectDetailVietnameseLocale() {
     return typeof i18next !== 'undefined'
@@ -406,6 +424,7 @@ const vueApp = createApp({
             // Debounce timer for amount updates
             amountUpdateTimer: null,
             businessDocumentUpdateTimer: null,
+            _bdSuppressAutoSave: false,
             tagsUpdateTimer: null,
             projectTagsTagify: null,
             // Quill editor content storage (separate from Vue reactivity)
@@ -1501,6 +1520,7 @@ const vueApp = createApp({
                     applyProjectVersionFromResponse(this.project, response.data);
                     this.businessDocumentDirty = false;
                     this.businessDocumentError = '';
+                    this._bdSuppressAutoSave = true;
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBusinessDocumentDateForApi(key);
                         this.setBusinessDocumentServerDate(key, apiVal || '');
@@ -1518,6 +1538,11 @@ const vueApp = createApp({
                                 el._flatpickr.clear();
                             }
                         }
+                    });
+                    this.$nextTick(() => {
+                        setTimeout(() => {
+                            this._bdSuppressAutoSave = false;
+                        }, 200);
                     });
                     this.businessDocumentSaveStatus = 'saved';
                     this.loadLogs();
@@ -1699,7 +1724,8 @@ const vueApp = createApp({
             }
         },
         scheduleBusinessDocumentUpdate() {
-            if (!this.canEditBusinessDocuments) return;
+            if (this._bdSuppressAutoSave) return;
+            if (!this.canEditBusinessDocuments || this.isUpdatingStatus) return;
             this.businessDocumentDirty = true;
             clearTimeout(this.businessDocumentUpdateTimer);
             this.businessDocumentUpdateTimer = setTimeout(() => {
@@ -1777,8 +1803,10 @@ const vueApp = createApp({
                 const el = document.getElementById(fieldIds[key]);
                 if (!el) return;
                 const displayVal = this.getBusinessDocumentPickerDisplayValue(el);
-                this.project[key] = displayVal;
-                this.setBusinessDocumentServerDate(key, displayVal);
+                if (String(this.project[key] || '').trim() !== String(displayVal || '').trim()) {
+                    this.project[key] = displayVal;
+                    this.setBusinessDocumentServerDate(key, displayVal);
+                }
             });
         },
         initBusinessDocumentDatePicker(elId, key, force) {
@@ -1796,13 +1824,16 @@ const vueApp = createApp({
                     return;
                 }
             }
+            this._bdSuppressAutoSave = true;
             initProjectDetailFlatpickr(el, {
                 onChange: (selectedDates, dateStr) => {
+                    if (this._bdSuppressAutoSave) return;
                     this.project[key] = dateStr || '';
                     this.setBusinessDocumentServerDate(key, dateStr || '');
                     this.scheduleBusinessDocumentUpdate();
                 },
                 onClose: () => {
+                    if (this._bdSuppressAutoSave) return;
                     const displayVal = this.getBusinessDocumentPickerDisplayValue(el);
                     if (!displayVal) {
                         if (el._flatpickr) {
@@ -1820,6 +1851,9 @@ const vueApp = createApp({
             if (serverValue) {
                 this.setBusinessDocumentServerDate(key, serverValue);
             }
+            setTimeout(() => {
+                this._bdSuppressAutoSave = false;
+            }, 200);
         },
         initBusinessDocumentDatePickers(force) {
             if (!this.project || !this.canEditBusinessDocuments) return;
