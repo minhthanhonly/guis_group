@@ -70,27 +70,27 @@ if (!$canAccessRevenueStats) {
     <template v-if="selectedDepartment">
         <ul class="nav nav-tabs mb-3" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link" :class="{ active: activeSubTab === 'summary' }" type="button" @click="activeSubTab = 'summary'">
+                <button class="nav-link" :class="{ active: activeSubTab === 'summary' }" type="button" @click="setActiveSubTab('summary')">
                     <i class="fa fa-table me-1"></i><span data-i18n="まとめ">まとめ</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" :class="{ active: activeSubTab === 'detail' }" type="button" @click="activeSubTab = 'detail'">
+                <button class="nav-link" :class="{ active: activeSubTab === 'detail' }" type="button" @click="setActiveSubTab('detail')">
                     <i class="fa fa-list me-1"></i><span data-i18n="請求済み案件">請求済み案件</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" :class="{ active: activeSubTab === 'backlog' }" type="button" @click="activeSubTab = 'backlog'">
+                <button class="nav-link" :class="{ active: activeSubTab === 'backlog' }" type="button" @click="setActiveSubTab('backlog')">
                     <i class="fa fa-clock-o me-1"></i><span data-i18n="未請求案件(完了・見積済)">未請求案件(完了・見積済)</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" :class="{ active: activeSubTab === 'estimated' }" type="button" @click="activeSubTab = 'estimated'">
+                <button class="nav-link" :class="{ active: activeSubTab === 'estimated' }" type="button" @click="setActiveSubTab('estimated')">
                     <i class="fa fa-file-text me-1"></i><span data-i18n="見積済案件(未完了案件)">見積済案件(未完了案件)</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" :class="{ active: activeSubTab === 'cancelled' }" type="button" @click="activeSubTab = 'cancelled'">
+                <button class="nav-link" :class="{ active: activeSubTab === 'cancelled' }" type="button" @click="setActiveSubTab('cancelled')">
                     <i class="fa fa-ban me-1"></i><span data-i18n="キャンセル案件">キャンセル案件</span>
                 </button>
             </li>
@@ -310,9 +310,14 @@ if (!$canAccessRevenueStats) {
                             <label class="form-check-label small" for="tantouGuisInvoicedToggle">GUIS</label>
                         </span>
                     </h5>
-                    <div v-if="invoicedGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-invoiced">
-                        <span class="revenue-stats-header-total-label" data-i18n="請求金額合計">請求金額合計</span>
-                        <span class="revenue-stats-header-total-value">{{ formatCurrency(invoicedInvoiceAmountTotal) }}</span>
+                    <div class="revenue-stats-card-header-actions">
+                        <div v-if="invoicedGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-invoiced">
+                            <span class="revenue-stats-header-total-label" data-i18n="請求金額合計">請求金額合計</span>
+                            <span class="revenue-stats-header-total-value">{{ formatCurrency(invoicedInvoiceAmountTotal) }}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-success" :disabled="loading || !invoicedGroups.length" @click="exportTabToExcel('detail')" title="Excel出力">
+                            <i class="fa fa-file-excel me-1"></i><span data-i18n="Excel出力">Excel出力</span>
+                        </button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -401,9 +406,14 @@ if (!$canAccessRevenueStats) {
                             <label class="form-check-label small" for="tantouGuisBacklogToggle">GUIS</label>
                         </span>
                     </h5>
-                    <div v-if="backlogGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-backlog">
-                        <span class="revenue-stats-header-total-label" data-i18n="見積金額合計">見積金額合計</span>
-                        <span class="revenue-stats-header-total-value">{{ formatCurrency(backlogAmountTotal) }}</span>
+                    <div class="revenue-stats-card-header-actions">
+                        <div v-if="backlogGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-backlog">
+                            <span class="revenue-stats-header-total-label" data-i18n="見積金額合計">見積金額合計</span>
+                            <span class="revenue-stats-header-total-value">{{ formatCurrency(backlogAmountTotal) }}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-success" :disabled="loading || !backlogGroups.length" @click="exportTabToExcel('backlog')" title="Excel出力">
+                            <i class="fa fa-file-excel me-1"></i><span data-i18n="Excel出力">Excel出力</span>
+                        </button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -496,9 +506,14 @@ if (!$canAccessRevenueStats) {
                             <label class="form-check-label small" for="estimatedAllTimeToggle" data-i18n="すべての期間">すべての期間</label>
                         </span>
                     </h5>
-                    <div v-if="estimatedGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-estimated">
-                        <span class="revenue-stats-header-total-label" data-i18n="見積金額合計">見積金額合計</span>
-                        <span class="revenue-stats-header-total-value">{{ formatCurrency(estimatedAmountTotal) }}</span>
+                    <div class="revenue-stats-card-header-actions">
+                        <div v-if="estimatedGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-estimated">
+                            <span class="revenue-stats-header-total-label" data-i18n="見積金額合計">見積金額合計</span>
+                            <span class="revenue-stats-header-total-value">{{ formatCurrency(estimatedAmountTotal) }}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-success" :disabled="loading || !estimatedGroups.length" @click="exportTabToExcel('estimated')" title="Excel出力">
+                            <i class="fa fa-file-excel me-1"></i><span data-i18n="Excel出力">Excel出力</span>
+                        </button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -598,9 +613,14 @@ if (!$canAccessRevenueStats) {
                             <label class="form-check-label small" for="cancelledEstimatedOnlyToggle" data-i18n="見積済みのみ">見積済みのみ</label>
                         </span>
                     </h5>
-                    <div v-if="cancelledGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-cancelled">
-                        <span class="revenue-stats-header-total-label" data-i18n="見積金額合計">見積金額合計</span>
-                        <span class="revenue-stats-header-total-value">{{ formatCurrency(cancelledAmountTotal) }}</span>
+                    <div class="revenue-stats-card-header-actions">
+                        <div v-if="cancelledGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-cancelled">
+                            <span class="revenue-stats-header-total-label" data-i18n="見積金額合計">見積金額合計</span>
+                            <span class="revenue-stats-header-total-value">{{ formatCurrency(cancelledAmountTotal) }}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-success" :disabled="loading || !cancelledGroups.length" @click="exportTabToExcel('cancelled')" title="Excel出力">
+                            <i class="fa fa-file-excel me-1"></i><span data-i18n="Excel出力">Excel出力</span>
+                        </button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -740,6 +760,13 @@ body.dark-style .revenue-dept-nav-month .revenue-nav-btn {
     justify-content: space-between;
     align-items: flex-start;
     gap: 1rem;
+}
+.revenue-stats-card-header-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+    flex-shrink: 0;
 }
 .revenue-stats-card-header-totals {
     flex-shrink: 0;
@@ -1007,4 +1034,6 @@ body.dark-style .revenue-stats-table tfoot.table-secondary td {
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
+<script src="../assets/vendor/libs/jszip/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous"></script>
 <script src="assets/js/revenue-statistics.js?v=<?=CACHE_VERSION?>"></script>

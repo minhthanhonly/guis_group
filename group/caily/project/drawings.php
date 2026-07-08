@@ -65,7 +65,13 @@ if (!$isAdministrator && !$projectModel->canUserViewBusinessDocuments($project_i
             </div>
 
             <!-- Main Content -->
-            <div class="col-12" v-if="canViewDrawings">
+            <div v-if="!permissionLoaded" class="text-center py-5">
+                <div class="spinner-border text-primary mb-2" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="text-muted" data-i18n="データを読み込み中...">データを読み込み中...</div>
+            </div>
+            <div class="col-12" v-else-if="canViewDrawings">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">

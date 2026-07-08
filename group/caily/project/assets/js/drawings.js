@@ -106,6 +106,7 @@ createApp({
             isCtrlPressed: false,
             isShiftPressed: false,
             permission: {},
+            permissionLoaded: false,
             
             // Project members for assignment
             projectMembers: [],
@@ -490,6 +491,8 @@ createApp({
             } catch (error) {
                 console.error('Error loading permission:', error);
                 this.permission = {};
+            } finally {
+                this.permissionLoaded = true;
             }
         },
         // Project loading

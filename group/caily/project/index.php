@@ -77,8 +77,10 @@ if($_SESSION['show_project'] == 0){
                     <select class="form-select form-select-sm" id="filterBusinessDocumentStatus">
                         <option value="" data-i18n="すべて">すべて</option>
                         <option value="未見積" data-i18n="未見積">未見積</option>
+                        <option value="見積作成中" data-i18n="見積作成中">見積作成中</option>
                         <option value="見積済" data-i18n="見積済">見積済</option>
                         <option value="未請求" data-i18n="未請求">未請求</option>
+                        <option value="請求準備" data-i18n="請求準備">請求準備</option>
                         <option value="請求済" data-i18n="請求済">請求済</option>
                     </select>
                     </div>
@@ -177,21 +179,21 @@ if($_SESSION['show_project'] == 0){
                 </form>
 
                 <div class="d-flex align-items-center gap-2 mb-2 mt-4">
-                    <div class="btn-group">
+                    <div class="btn-group flex-wrap">
                         <button 
                             v-for="status in statuses" 
                             :key="status.key"
                             class="btn btn-sm status-filter-btn"
                             :data-i18n="status.name"
                             :class="{
-                                [`btn-label-${status.color}`]: !selectedStatus || selectedStatus?.key !== status.key,
-                                [`btn-${status.color}`]: selectedStatus?.key === status.key,
-                                'active': selectedStatus?.key === status.key
+                                [`btn-label-${status.color}`]: !isStatusFilterSelected(status),
+                                [`btn-${status.color}`]: isStatusFilterSelected(status),
+                                'active': isStatusFilterSelected(status)
                             }"
-                            @click="filterProjectByStatus(status)"
+                            @click="toggleProjectStatusFilter(status)"
                         >
                             {{ status.name }}
-                            <span v-show="selectedStatus && selectedStatus.key === status.key" class="active-indicator"></span>
+                            <span v-show="isStatusFilterSelected(status)" class="active-indicator"></span>
                         </button>
                     </div>
                    
@@ -367,7 +369,7 @@ if($_SESSION['show_project'] == 0){
                     </div>
                 </div>
                 <div class="modal-body">
-                    <input type="hidden" v-model.number="businessDocumentProject.version">
+                    <input type="hidden" v-model.number="businessDocumentProject.payment_version">
                     <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">

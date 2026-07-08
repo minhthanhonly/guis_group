@@ -302,6 +302,8 @@
     "案件詳細": "Chi tiết dự án",
     "建物情報": "Thông tin công trình",
     "決済情報": "Thông tin thanh toán",
+    "決済情報を編集": "Sửa thông tin thanh toán",
+    "詳細ページへ": "Đi đến trang chi tiết",
     "請求書": "Hóa đơn",
     "円": "JPY",
     "メモを追加": "Thêm ghi chú",
@@ -399,8 +401,10 @@
     "見積月": "Tháng báo giá",
     "見積・請求状況": "Tình trạng báo giá / HĐ",
     "未見積": "Chưa báo giá",
+    "見積作成中": "Đang lập báo giá",
     "見積済": "Đã báo giá",
     "未請求": "Chưa xuất HĐ",
+    "請求準備": "Chuẩn bị xuất HĐ",
     "請求済": "Đã xuất HĐ",
     "見積状況": "Tình trạng báo giá",
     "決済備考": "Ghi chú thanh toán",
@@ -551,6 +555,7 @@
     "その他の理由・メモ（任意）": "Lý do khác / Ghi chú (tùy chọn)",
     "追加の理由やメモを入力してください...": "Nhập lý do hoặc ghi chú bổ sung...",
     "解除": "Hủy",
+    
     "コミュニケーションが良好": "Giao tiếp tốt",
     "早く完了した": "Hoàn thành sớm",
     "品質が良い": "Chất lượng tốt",
@@ -786,5 +791,6 @@
     "既定タスク追加": "Thêm công việc mặc định",
     "リセット時に会社を保持": "Giữ lại công ty khi Reset",
     "会社": "Công ty",
+    "請求": "Hóa đơn",
     "他のユーザーが先に更新しました。ページを再読み込みしてください。": "Người dùng khác đã cập nhật trước đó. Vui lòng tải lại trang."
 }

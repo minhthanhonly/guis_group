@@ -164,6 +164,20 @@
         return Number.isFinite(n) && n > 0 ? n : 1;
     }
 
+    function appendPaymentVersionToFormData(formData, projectOrVersion) {
+        if (!formData) return;
+        const paymentVersion = typeof projectOrVersion === 'object'
+            ? projectOrVersion?.payment_version
+            : projectOrVersion;
+        formData.append('payment_version', normalizeProjectVersion(paymentVersion));
+    }
+
+    function applyPaymentVersionFromResponse(project, responseData) {
+        if (project && responseData && responseData.payment_version != null) {
+            project.payment_version = normalizeProjectVersion(responseData.payment_version);
+        }
+    }
+
     function appendProjectVersionToFormData(formData, projectOrVersion) {
         if (!formData) return;
         const version = typeof projectOrVersion === 'object'
@@ -1135,6 +1149,7 @@
             normalizePaymentEditProject(project) {
                 if (!project) return;
                 project.version = normalizeProjectVersion(project.version);
+                project.payment_version = normalizeProjectVersion(project.payment_version);
                 project.payment_status = project.payment_status || '未入金';
                 project.payment_amount = project.payment_amount != null ? Number(project.payment_amount) : 0;
                 project.invoice_amount = project.invoice_amount != null ? Number(project.invoice_amount) : 0;
@@ -1269,11 +1284,11 @@
                     formData.append('payment_amount', p.payment_amount != null ? p.payment_amount : 0);
                     formData.append('receipt_number', p.receipt_number || '');
                     formData.append('payment_note', p.payment_note || '');
-                    appendProjectVersionToFormData(formData, p);
+                    appendPaymentVersionToFormData(formData, p);
                     const response = await axios.post('/api/index.php?model=project&method=updateProjectStatus', formData);
                     const data = response.data || {};
                     if (data.status === 'success') {
-                        applyProjectVersionFromResponse(this.paymentEditProject, data);
+                        applyPaymentVersionFromResponse(this.paymentEditProject, data);
                         const apiDate = this.getPaymentEditDateForApi();
                         if (apiDate) {
                             this.setPaymentEditServerDate(apiDate);

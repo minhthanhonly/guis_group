@@ -577,7 +577,8 @@ $view->heading('建物詳細');
                             </thead>
                             <tbody>
                                 <tr v-for="project in childProjects" :key="project.id"
-                                    :class="{ 'table-active': selectedChildProjectIds.includes(project.id) }">
+                                    :class="{ 'table-active': selectedChildProjectIds.includes(project.id) }"
+                                    @contextmenu.prevent="onChildProjectContextMenu($event, project)">
                                     <td class="text-center">
                                         <i class="fa fa-star" 
                                            :class="project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
@@ -1142,7 +1143,7 @@ $view->heading('建物詳細');
                     </div>
                 </div>
                 <div class="modal-body">
-                    <input type="hidden" v-model.number="businessDocumentProject.version">
+                    <input type="hidden" v-model.number="businessDocumentProject.payment_version">
                     <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
@@ -3697,6 +3698,19 @@ $view->heading('建物詳細');
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Context menu: child project list -->
+    <div v-if="childProjectContextMenuVisible"
+         class="dropdown-menu show child-project-context-menu"
+         :style="{ position: 'absolute', zIndex: 9999, left: childProjectContextMenuX + 'px', top: childProjectContextMenuY + 'px' }"
+         @click.stop>
+        <button class="dropdown-item" type="button" @click.stop="goToChildProjectDetailFromContextMenu">
+            <i class="fa fa-external-link-alt me-1"></i><span data-i18n="詳細ページへ">詳細ページへ</span>
+        </button>
+        <button v-if="canEditBusinessDocuments" class="dropdown-item" type="button" @click.stop="openChildProjectPaymentFromContextMenu">
+            <i class="fa fa-file-invoice me-1"></i><span data-i18n="決済情報を編集">決済情報を編集</span>
+        </button>
     </div>
 </div>
 

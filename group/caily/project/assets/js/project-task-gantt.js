@@ -66,6 +66,7 @@ $(document).ready(function() {
         data() {
             return {
                 permission: {},
+                permissionLoaded: false,
                 projectId: PROJECT_ID,
                 projectInfo: {},
                 tasks: [],
@@ -160,6 +161,8 @@ $(document).ready(function() {
                     this.permission = response.data || [];
                 } catch (error) {
                     console.error('Error loading permission:', error);
+                } finally {
+                    this.permissionLoaded = true;
                 }
             },
             async loadProjectInfo() {

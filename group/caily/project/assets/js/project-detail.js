@@ -92,9 +92,23 @@ function appendProjectVersionToFormData(formData, projectOrVersion) {
     formData.append('version', normalizeProjectVersion(version));
 }
 
+function appendPaymentVersionToFormData(formData, projectOrVersion) {
+    if (!formData) return;
+    const paymentVersion = typeof projectOrVersion === 'object'
+        ? projectOrVersion?.payment_version
+        : projectOrVersion;
+    formData.append('payment_version', normalizeProjectVersion(paymentVersion));
+}
+
 function applyProjectVersionFromResponse(project, responseData) {
     if (project && responseData && responseData.version != null) {
         project.version = normalizeProjectVersion(responseData.version);
+    }
+}
+
+function applyPaymentVersionFromResponse(project, responseData) {
+    if (project && responseData && responseData.payment_version != null) {
+        project.payment_version = normalizeProjectVersion(responseData.payment_version);
     }
 }
 
@@ -129,6 +143,8 @@ function handleProjectVersionConflict(responseData, onReload) {
 }
 
 window.handleProjectVersionConflict = handleProjectVersionConflict;
+window.appendPaymentVersionToFormData = appendPaymentVersionToFormData;
+window.applyPaymentVersionFromResponse = applyPaymentVersionFromResponse;
 
 function isProjectDetailVietnameseLocale() {
     return typeof i18next !== 'undefined'
@@ -351,10 +367,12 @@ const vueApp = createApp({
             ],
             businessEstimateStatuses: [
                 { value: '未発行', label: '未発行', color: 'secondary' },
+                { value: '見積作成中', label: '見積作成中', color: 'primary' },
                 { value: '発行済', label: '発行済', color: 'success' },
             ],
             businessInvoiceStatuses: [
                 { value: '未発行', label: '未発行', color: 'secondary' },
+                { value: '請求準備', label: '請求準備', color: 'warning' },
                 { value: '発行済', label: '発行済', color: 'success' },
             ],
             paymentStatuses: [
@@ -684,6 +702,7 @@ const vueApp = createApp({
                 this.project = response.data;
                 if (this.project) {
                     this.project.version = normalizeProjectVersion(this.project.version);
+                    this.project.payment_version = normalizeProjectVersion(this.project.payment_version);
                 }
                 // Cho phép AI lấy dữ liệu dự án hiện tại đang xem
                 if (typeof window !== 'undefined' && this.project) {
@@ -1514,10 +1533,10 @@ const vueApp = createApp({
                 formData.append('invoice_amount', this.project.invoice_amount != null ? this.project.invoice_amount : 0);
                 formData.append('invoice_number', this.project.invoice_number || '');
                 formData.append('payment_note', this.project.payment_note || '');
-                appendProjectVersionToFormData(formData, this.project);
+                appendPaymentVersionToFormData(formData, this.project);
                 const response = await axios.post('/api/index.php?model=project&method=updateProjectStatus', formData);
                 if (response.data && response.data.status === 'success') {
-                    applyProjectVersionFromResponse(this.project, response.data);
+                    applyPaymentVersionFromResponse(this.project, response.data);
                     this.businessDocumentDirty = false;
                     this.businessDocumentError = '';
                     this._bdSuppressAutoSave = true;

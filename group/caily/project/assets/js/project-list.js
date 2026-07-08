@@ -73,15 +73,74 @@ var projectTable;
         { key: 'cancelled', name: '中止', color: 'danger' }
     ];
 
+    var PROJECT_STATUS_KEYS = statuses.map(function(s) { return s.key; });
+
+    function isValidProjectStatusKey(key) {
+        return PROJECT_STATUS_KEYS.indexOf(String(key || '').trim()) !== -1;
+    }
+
+    function normalizeProjectStatusKeys(value) {
+        if (!value) return [];
+        var raw = Array.isArray(value) ? value : String(value).split(',');
+        var seen = {};
+        var result = [];
+        raw.forEach(function(item) {
+            var key = String(item || '').trim();
+            if (!isValidProjectStatusKey(key) || seen[key]) return;
+            seen[key] = true;
+            result.push(key);
+        });
+        return result;
+    }
+
+    function getSelectedStatusKeysFromApp() {
+        if (!app) return [];
+        if (Array.isArray(app.selectedStatusKeys)) {
+            return normalizeProjectStatusKeys(app.selectedStatusKeys);
+        }
+        if (app.selectedStatus && app.selectedStatus.key) {
+            return normalizeProjectStatusKeys(app.selectedStatus.key);
+        }
+        return [];
+    }
+
+    function getProjectStatusLabel(key) {
+        var status = statuses.find(function(s) { return s.key === key; });
+        return status ? status.name : key;
+    }
+
     function normalizeProjectVersion(version) {
         var n = Number(version);
         return Number.isFinite(n) && n > 0 ? n : 1;
+    }
+
+    function appendPaymentVersionToFormData(formData, projectOrVersion) {
+        if (!formData) return;
+        var paymentVersion = typeof projectOrVersion === 'object'
+            ? projectOrVersion.payment_version
+            : projectOrVersion;
+        formData.append('payment_version', normalizeProjectVersion(paymentVersion));
+    }
+
+    function applyPaymentVersionFromResponse(project, responseData) {
+        if (project && responseData && responseData.payment_version != null) {
+            project.payment_version = normalizeProjectVersion(responseData.payment_version);
+        }
     }
 
     function appendProjectVersionToFormData(formData, version) {
         if (!formData) return;
         formData.append('version', normalizeProjectVersion(version));
     }
+
+    function applyProjectVersionFromResponse(project, responseData) {
+        if (project && responseData && responseData.version != null) {
+            project.version = normalizeProjectVersion(responseData.version);
+        }
+    }
+
+    window.appendPaymentVersionToFormData = appendPaymentVersionToFormData;
+    window.applyPaymentVersionFromResponse = applyPaymentVersionFromResponse;
 
     function handleProjectVersionConflict(responseData, onReload) {
         if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
@@ -1315,7 +1374,8 @@ var projectTable;
             exportedAt: new Date().toISOString(),
             visibility: visibility,
             order: order,
-            widths: getCurrentProjectColumnWidths(projectTable, departmentId)
+            widths: getCurrentProjectColumnWidths(projectTable, departmentId),
+            filters: collectProjectListFiltersFromUi()
         };
     }
 
@@ -1384,9 +1444,101 @@ var projectTable;
             });
         }
         if (!Object.keys(out.visibility).length && !out.order.length && !Object.keys(out.widths).length) {
+            out._emptyColumns = true;
+        }
+        out.filters = normalizeProjectListFiltersImport(data.filters);
+        if (out._emptyColumns && !out.filters) {
             return null;
         }
+        delete out._emptyColumns;
         return out;
+    }
+
+    function normalizeProjectListFiltersImport(raw) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+        var out = {};
+        var stringFields = [
+            'filterStartMonth', 'filterEndMonth', 'filterEstimateMonth', 'filterInvoiceMonth',
+            'filterPriority', 'filterProgress', 'filterTimeLeft', 'filterToday',
+            'filterProjectOrderType', 'filterTantou', 'filterProjectId'
+        ];
+        stringFields.forEach(function(key) {
+            if (raw[key] !== undefined && raw[key] !== null) {
+                out[key] = String(raw[key]);
+            }
+        });
+        if (raw.filterBusinessDocumentStatus !== undefined) {
+            out.filterBusinessDocumentStatus = normalizeBusinessDocumentStatusFilterValue(
+                String(raw.filterBusinessDocumentStatus || '')
+            );
+        }
+        if (raw.filterTeam !== undefined) {
+            out.filterTeam = parseFilterTeamValue(raw.filterTeam);
+        }
+        if (raw.filterCompany !== undefined) {
+            out.filterCompany = parseFilterCompanyValue(raw.filterCompany);
+        }
+        if (raw.filterKeyword !== undefined) {
+            out.filterKeyword = normalizeFilterKeyword(raw.filterKeyword);
+        }
+        if (raw.filterNoDates !== undefined) {
+            out.filterNoDates = raw.filterNoDates == 1 ? 1 : 0;
+        }
+        if (raw.showInactive !== undefined) {
+            out.showInactive = raw.showInactive == 1 ? 1 : 0;
+        }
+        if (raw.myProjects !== undefined) {
+            out.myProjects = raw.myProjects == 1 ? 1 : 0;
+        }
+        if (raw.favorites_only !== undefined) {
+            out.favorites_only = raw.favorites_only == 1 ? 1 : 0;
+        }
+        if (raw.statusKeys !== undefined || raw.statusKey !== undefined) {
+            out.statusKeys = normalizeProjectStatusKeys(raw.statusKeys || raw.statusKey || '');
+        }
+        return Object.keys(out).length ? out : null;
+    }
+
+    function applyProjectListFiltersImport(filters) {
+        if (!filters || typeof filters !== 'object') return false;
+
+        var existing = {};
+        try {
+            existing = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        } catch (e) {
+            existing = {};
+        }
+
+        var merged = Object.assign({}, existing, filters);
+        if (app && app.selectedDepartment && app.selectedDepartment.id) {
+            merged.department_id = app.selectedDepartment.id;
+        }
+        merged.statusKeys = normalizeProjectStatusKeys(merged.statusKeys || merged.statusKey || '');
+        delete merged.statusKey;
+
+        try {
+            localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(merged));
+        } catch (e) {
+            return false;
+        }
+
+        loadFiltersFromLocalStorage();
+
+        if (app) {
+            app.selectedStatusKeys = merged.statusKeys.slice();
+            if (merged.myProjects !== undefined) {
+                app.filterMyProjects = merged.myProjects == 1;
+            }
+            app.showClearAllFavoritesBtn = merged.favorites_only == 1;
+        }
+
+        if (app && Array.isArray(app.teams)) {
+            refreshFilterTeamSelect(app.teams);
+        }
+
+        updateUrlFromFilters(merged);
+        renderActiveFilters();
+        return true;
     }
 
     function applyProjectColumnOrderFromKeys(table, customColDefs, departmentId, orderKeys) {
@@ -1413,10 +1565,23 @@ var projectTable;
     }
 
     function applyProjectColumnConfigImport(config, table, customColDefs, departmentId) {
-        if (!config || !table || !$.fn.DataTable.isDataTable('#projectTable')) return false;
+        if (!config) return false;
         var changed = false;
+        var filtersChanged = false;
 
-        if (Object.keys(config.visibility).length) {
+        if (config.filters && applyProjectListFiltersImport(config.filters)) {
+            changed = true;
+            filtersChanged = true;
+        }
+
+        if (!table || !$.fn.DataTable.isDataTable('#projectTable')) {
+            if (filtersChanged && app && typeof app.loadProjects === 'function') {
+                app.loadProjects();
+            }
+            return changed;
+        }
+
+        if (Object.keys(config.visibility || {}).length) {
             var visibility = loadColumnVisibilityFromLocalStorage(customColDefs);
             Object.keys(config.visibility).forEach(function(k) {
                 visibility[k] = normalizeColumnVisibilityBool(config.visibility[k], visibility[k]);
@@ -1427,7 +1592,7 @@ var projectTable;
             changed = true;
         }
 
-        if (config.order.length) {
+        if (config.order && config.order.length) {
             applyProjectColumnOrderFromKeys(table, customColDefs, departmentId, config.order);
             if (window.app) {
                 var vis = loadColumnVisibilityFromLocalStorage(customColDefs);
@@ -1437,7 +1602,7 @@ var projectTable;
             changed = true;
         }
 
-        if (Object.keys(config.widths).length) {
+        if (config.widths && Object.keys(config.widths).length) {
             var widths = loadProjectColumnWidths(departmentId);
             Object.keys(config.widths).forEach(function(k) {
                 widths[k] = config.widths[k];
@@ -1448,7 +1613,10 @@ var projectTable;
             changed = true;
         }
 
-        if (changed) {
+        if (filtersChanged) {
+            applyProjectListDefaultSort(table);
+            reloadProjectTable(true);
+        } else if (changed) {
             table.columns.adjust().draw(false);
             reapplyProjectListColumnWidthsAfterLayout(table, departmentId);
         }
@@ -1634,10 +1802,12 @@ var projectTable;
     };
     var BUSINESS_ESTIMATE_STATUSES = [
         { value: '未発行', label: '未発行', color: 'secondary' },
+        { value: '見積作成中', label: '見積作成中', color: 'primary' },
         { value: '発行済', label: '発行済', color: 'success' }
     ];
     var BUSINESS_INVOICE_STATUSES = [
         { value: '未発行', label: '未発行', color: 'secondary' },
+        { value: '請求準備', label: '請求準備', color: 'warning' },
         { value: '発行済', label: '発行済', color: 'success' }
     ];
 
@@ -1728,7 +1898,8 @@ var projectTable;
     }
 
     function isProjectListCompletedStatusFilter() {
-        return !!(app && app.selectedStatus && app.selectedStatus.key === 'completed');
+        var keys = getSelectedStatusKeysFromApp();
+        return keys.length === 1 && keys[0] === 'completed';
     }
 
     function getProjectTableColumnKeys(dt) {
@@ -2636,28 +2807,33 @@ var projectTable;
         syncFilterTeamSelect2Value($el, saved);
     }
 
-    function saveFiltersToLocalStorage() {
-        const filters = {
-            filterStartMonth: $('#filterStartMonth').val(),
-            filterEndMonth: $('#filterEndMonth').val(),
-            filterEstimateMonth: $('#filterEstimateMonth').val(),
-            filterInvoiceMonth: $('#filterInvoiceMonth').val(),
-            filterBusinessDocumentStatus: $('#filterBusinessDocumentStatus').val(),
-            filterPriority: $('#filterPriority').val(),
-            filterProgress: $('#filterProgress').val(),
-            filterTimeLeft: $('#filterTimeLeft').val(),
-            filterToday: $('#filterToday').val(),
-            filterProjectOrderType: $('#filterProjectOrderType').val(),
+    function collectProjectListFiltersFromUi() {
+        return {
+            filterStartMonth: $('#filterStartMonth').val() || '',
+            filterEndMonth: $('#filterEndMonth').val() || '',
+            filterEstimateMonth: $('#filterEstimateMonth').val() || '',
+            filterInvoiceMonth: $('#filterInvoiceMonth').val() || '',
+            filterBusinessDocumentStatus: $('#filterBusinessDocumentStatus').val() || '',
+            filterPriority: $('#filterPriority').val() || '',
+            filterProgress: $('#filterProgress').val() || '',
+            filterTimeLeft: $('#filterTimeLeft').val() || '',
+            filterToday: $('#filterToday').val() || '',
+            filterProjectOrderType: $('#filterProjectOrderType').val() || '',
             filterTeam: getFilterTeamValue(),
             filterCompany: getFilterCompanyValue(),
-            filterTantou: $('#filterTantou').val(),
+            filterTantou: $('#filterTantou').val() || '',
             filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
             filterKeyword: normalizeFilterKeyword($('#filterKeyword').val()),
-            filterProjectId: $('#filterProjectId').val(),
+            filterProjectId: $('#filterProjectId').val() || '',
             showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
             myProjects: app && app.filterMyProjects ? 1 : 0,
-            favorites_only: $('#filterFavoritesOnly').is(':checked') ? 1 : 0
+            favorites_only: $('#filterFavoritesOnly').is(':checked') ? 1 : 0,
+            statusKeys: getSelectedStatusKeysFromApp()
         };
+    }
+
+    function saveFiltersToLocalStorage() {
+        const filters = collectProjectListFiltersFromUi();
         // Lưu thêm department hiện tại và status hiện tại để đồng bộ với URL
         try {
             if (app && app.selectedDepartment && app.selectedDepartment.id) {
@@ -2667,19 +2843,14 @@ var projectTable;
             console.warn('Failed to read selectedDepartment when saving list filters', e);
         }
         try {
-            if (app && app.selectedStatus && app.selectedStatus.key) {
-                filters.statusKey = app.selectedStatus.key;
-            } else {
-                filters.statusKey = '';
-            }
+            filters.statusKeys = getSelectedStatusKeysFromApp();
+            delete filters.statusKey;
         } catch (e) {
-            console.warn('Failed to read selectedStatus when saving list filters', e);
+            console.warn('Failed to read selectedStatusKeys when saving list filters', e);
         }
         localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
         updateUrlFromFilters(filters);
     }
-
-    // Đọc filter từ URL (nếu có) và merge vào localStorage để share link
     function applyFiltersFromUrlIfAny() {
         if (typeof window === 'undefined') return;
         const search = window.location.search || '';
@@ -2720,7 +2891,10 @@ var projectTable;
         if (params.has('showInactive')) merged.showInactive = getBool('showInactive');
         if (params.has('my_projects')) merged.myProjects = getBool('my_projects');
         if (params.has('favorites_only')) merged.favorites_only = getBool('favorites_only');
-        if (params.has('status')) merged.statusKey = params.get('status') || '';
+        if (params.has('status')) {
+            merged.statusKeys = normalizeProjectStatusKeys(params.get('status') || '');
+            delete merged.statusKey;
+        }
 
         // Department id để auto chọn đúng 部署 khi mở link
         if (params.has('department_id')) {
@@ -2808,7 +2982,7 @@ var projectTable;
             keyword: normalizeFilterKeyword(filters.filterKeyword),
             showInactive: filters.showInactive == 1,
             myProjects: filters.myProjects == 1,
-            statusKey: filters.statusKey || '',
+            statusKeys: normalizeProjectStatusKeys(filters.statusKeys || filters.statusKey || ''),
             department_id: filters.department_id || null
         };
     }
@@ -2835,6 +3009,7 @@ var projectTable;
             !filters.noDates &&
             !filters.myProjects &&
             !filters.showInactive &&
+            (filters.statusKeys || []).length === 0 &&
             (!filters.keyword || filters.keyword.trim() === '')
         ) {
             $('#activeFilters').html('');
@@ -2880,9 +3055,10 @@ var projectTable;
         if (filters.keyword && filters.keyword.trim() !== '') {
             badges.push(`<span class="badge bg-label-info me-1" >キーワード: ${filters.keyword}</span>`);
         } else {
-            // Nếu có status hiện tại (từ Vue), hiển thị đầu tiên
-            if (app && app.selectedStatus && app.selectedStatus.name) {
-                badges.push(`<span class="badge bg-label-info me-1">案件状況: ${app.selectedStatus.name}</span>`);
+            const statusKeys = filters.statusKeys || getSelectedStatusKeysFromApp();
+            if (statusKeys.length) {
+                const statusLabel = statusKeys.map(getProjectStatusLabel).join('、');
+                badges.push(`<span class="badge bg-label-info me-1">案件状況: ${statusLabel}</span>`);
             }
             if (filters.startMonth && filters.startMonth.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1" >開始月: ${filters.startMonth}</span>`);
@@ -3013,7 +3189,7 @@ var projectTable;
         setOrDelete('showInactive', filters.showInactive ? 1 : '');
         setOrDelete('my_projects', filters.myProjects ? 1 : '');
         setOrDelete('favorites_only', filters.favorites_only ? 1 : '');
-        setOrDelete('status', filters.statusKey);
+        setOrDelete('status', filters.statusKeys && filters.statusKeys.length ? filters.statusKeys.join(',') : '');
         setOrDelete('department_id', filters.department_id);
 
         const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
@@ -4159,7 +4335,7 @@ var projectTable;
                         model: 'project',
                         method: 'list',
                         department_id: app.selectedDepartment?.id,
-                        status: app.selectedStatus?.key,
+                        status: getSelectedStatusKeysFromApp().join(',') || undefined,
                         draw: d.draw,
                         start: d.start,
                         length: d.length,
@@ -6119,9 +6295,9 @@ var projectTable;
             $('#showInactiveSwitch').prop('checked', false);
             // Reset favorites filter
             $('#filterFavoritesOnly').prop('checked', false);
-            $('#filterMyProjects').prop('checked', false);
             if (app) {
                 app.showClearAllFavoritesBtn = false;
+                app.filterMyProjects = false;
             }
             localStorage.removeItem(FILTER_STORAGE_KEY);
             const preservedFilterState = {};
@@ -6137,8 +6313,8 @@ var projectTable;
                 } catch (e) {}
             }
             // Reset status filter
-            if (app && app.selectedStatus) {
-                app.selectedStatus = null;
+            if (app && app.selectedStatusKeys && app.selectedStatusKeys.length) {
+                app.selectedStatusKeys = [];
             }
             renderActiveFilters();
             applyProjectListDefaultSort();
@@ -6373,7 +6549,7 @@ var projectTable;
                 projects: [],
                 departments: [],
                 branches: [],
-                selectedStatus: null,
+                selectedStatusKeys: [],
                 statuses: statuses,
                 userPermissions: null,
                 newProject: {
@@ -6439,7 +6615,8 @@ var projectTable;
                 kadaiProjects: [],
                 isKadaiQueueExpanded: false,
                 // Column visibility (thứ tự đồng bộ với bảng sau khi merge COLUMN_ORDER)
-                availableColumns: buildAvailableColumnsList([], null, loadColumnVisibilityFromLocalStorage([]))
+                availableColumns: buildAvailableColumnsList([], null, loadColumnVisibilityFromLocalStorage([])),
+                filterMyProjects: false
             }
         },
         computed: {
@@ -6503,12 +6680,7 @@ var projectTable;
                 this.filterMyProjects = filters.myProjects == 1;
             }
             // Khôi phục status đã lưu (nếu có) để hiển thị trong 適用中のフィルター
-            if (filters.statusKey) {
-                const st = statuses.find(s => s.key === filters.statusKey);
-                if (st) {
-                    this.selectedStatus = st;
-                }
-            }
+            this.selectedStatusKeys = normalizeProjectStatusKeys(filters.statusKeys || filters.statusKey || '');
             
             // Load column visibility (thứ tự giống bảng khi đã chọn department / có save order)
             migrateColumnVisibilityStorageIfNeeded(customFieldColumnDefinitions || []);
@@ -7319,8 +7491,18 @@ var projectTable;
                 // Reload kadai projects for the new department
                // this.loadKadaiProjects();
             },
-            filterProjectByStatus(status) {
-                this.selectedStatus = status;
+            isStatusFilterSelected(status) {
+                return this.selectedStatusKeys.indexOf(status.key) !== -1;
+            },
+            toggleProjectStatusFilter(status) {
+                const key = status && status.key;
+                if (!isValidProjectStatusKey(key)) return;
+                const idx = this.selectedStatusKeys.indexOf(key);
+                if (idx >= 0) {
+                    this.selectedStatusKeys.splice(idx, 1);
+                } else {
+                    this.selectedStatusKeys.push(key);
+                }
                 if (typeof saveFiltersToLocalStorage === 'function') {
                     saveFiltersToLocalStorage();
                 }
@@ -7329,6 +7511,9 @@ var projectTable;
                     applyProjectListDefaultSort(projectTable);
                 }
                 this.loadProjects();
+            },
+            filterProjectByStatus(status) {
+                this.toggleProjectStatusFilter(status);
             },
             onFavoritesFilterChange() {
                 const isChecked = $('#filterFavoritesOnly').is(':checked');

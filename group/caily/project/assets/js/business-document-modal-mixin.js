@@ -25,12 +25,14 @@
 
     var BUSINESS_ESTIMATE_STATUSES = [
         { value: '未発行', label: '未発行', color: 'secondary' },
+        { value: '見積作成中', label: '見積作成中', color: 'primary' },
         { value: '発行済', label: '発行済', color: 'success' },
         { value: '発行済み', label: '発行済', color: 'success' }
     ];
 
     var BUSINESS_INVOICE_STATUSES = [
         { value: '未発行', label: '未発行', color: 'secondary' },
+        { value: '請求準備', label: '請求準備', color: 'warning' },
         { value: '発行済', label: '発行済', color: 'success' },
         { value: '発行済み', label: '発行済', color: 'success' }
     ];
@@ -238,6 +240,20 @@
         }
     }
 
+    function appendPaymentVersionToFormData(formData, projectOrVersion) {
+        if (!formData) return;
+        var paymentVersion = typeof projectOrVersion === 'object'
+            ? projectOrVersion.payment_version
+            : projectOrVersion;
+        formData.append('payment_version', normalizeProjectVersion(paymentVersion));
+    }
+
+    function applyPaymentVersionFromResponse(project, responseData) {
+        if (project && responseData && responseData.payment_version != null) {
+            project.payment_version = normalizeProjectVersion(responseData.payment_version);
+        }
+    }
+
     function resolveHandleProjectVersionConflict() {
         if (typeof window.handleProjectVersionConflict === 'function') {
             return window.handleProjectVersionConflict;
@@ -320,6 +336,7 @@
                         self.businessDocumentProject = response.data;
                         if (self.businessDocumentProject) {
                             self.businessDocumentProject.version = normalizeProjectVersion(self.businessDocumentProject.version);
+                            self.businessDocumentProject.payment_version = normalizeProjectVersion(self.businessDocumentProject.payment_version);
                         }
                         self.businessDocumentProjectId = project.id;
                         self.normalizeBdFields();
@@ -531,7 +548,7 @@
             scheduleBdUpdate: function() {
                 var self = this;
                 if (this._bdSuppressAutoSave) return;
-                if (!this.canEditBusinessDocuments || !this.businessDocumentProject) return;
+                if (!this.canEditBusinessDocuments || !this.businessDocumentProject || this.isUpdatingBusinessDocument) return;
                 this.businessDocumentDirty = true;
                 clearTimeout(this.businessDocumentUpdateTimer);
                 this.businessDocumentUpdateTimer = setTimeout(function() {
@@ -576,19 +593,22 @@
                 formData.append('invoice_amount', p.invoice_amount != null ? p.invoice_amount : 0);
                 formData.append('invoice_number', p.invoice_number || '');
                 formData.append('payment_note', p.payment_note || '');
-                formData.append('version', normalizeProjectVersion(p.version));
+                appendPaymentVersionToFormData(formData, p);
 
                 axios.post('/api/index.php?model=project&method=updateProjectStatus', formData)
                     .then(function(response) {
                         if (response.data && response.data.status === 'success') {
-                            applyProjectVersionFromResponse(self.businessDocumentProject, response.data);
+                            applyPaymentVersionFromResponse(self.businessDocumentProject, response.data);
                             self.businessDocumentDirty = false;
                             self.businessDocumentError = '';
                             self._bdSuppressAutoSave = true;
                             BUSINESS_DOCUMENT_DATE_FIELDS.forEach(function(key) {
                                 var apiVal = self.getBdDateForApi(key);
                                 self.setBdServerDate(key, apiVal || '');
-                                self.businessDocumentProject[key] = apiVal ? toProjectDateTimeInputValue(apiVal) : '';
+                                var nextVal = apiVal ? toProjectDateTimeInputValue(apiVal) : '';
+                                if (String(self.businessDocumentProject[key] || '').trim() !== String(nextVal || '').trim()) {
+                                    self.businessDocumentProject[key] = nextVal;
+                                }
                                 var el = document.getElementById(BD_MODAL_PICKER_IDS[key]);
                                 if (el && el._flatpickr) {
                                     if (apiVal) {
@@ -602,14 +622,14 @@
                             self.$nextTick(function() {
                                 setTimeout(function() {
                                     self._bdSuppressAutoSave = false;
-                                }, 200);
+                                }, 300);
                             });
-                            if (response.data.version != null && self.childProjects) {
+                            if (response.data.payment_version != null && self.childProjects) {
                                 var idx = self.childProjects.findIndex(function(item) {
                                     return String(item.id) === String(self.businessDocumentProjectId);
                                 });
                                 if (idx >= 0) {
-                                    self.childProjects[idx].version = normalizeProjectVersion(response.data.version);
+                                    self.childProjects[idx].payment_version = normalizeProjectVersion(response.data.payment_version);
                                 }
                             }
                             self.businessDocumentSaveStatus = 'saved';
@@ -660,8 +680,10 @@
                     var el = document.getElementById(BD_MODAL_PICKER_IDS[key]);
                     if (!el) return;
                     var displayVal = self.getBdPickerDisplayValue(el);
-                    self.businessDocumentProject[key] = displayVal;
-                    self.setBdServerDate(key, displayVal);
+                    if (String(self.businessDocumentProject[key] || '').trim() !== String(displayVal || '').trim()) {
+                        self.businessDocumentProject[key] = displayVal;
+                        self.setBdServerDate(key, displayVal);
+                    }
                 });
             },
             initBdDatePickers: function() {

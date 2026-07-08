@@ -41,8 +41,10 @@ const TaskApp = createApp({
             currentUserId: USER_AUTH_ID,
             projectId: null,
             permission: {},
+            permissionLoaded: false,
             projectInfo: {},
             tasks: [],
+            tasksLoaded: false,
             taskTable: null,
             selectedTask: null,
             taskForm: {
@@ -667,6 +669,8 @@ const TaskApp = createApp({
             } catch (error) {
                 console.error('Error loading tasks:', error);
                 this.showMessage('タスクの読み込みに失敗しました。', true);
+            } finally {
+                this.tasksLoaded = true;
             }
         },
         
@@ -677,6 +681,8 @@ const TaskApp = createApp({
                 this.permission = response.data || [];
             } catch (error) {
                 console.error('Error loading permission:', error);
+            } finally {
+                this.permissionLoaded = true;
             }
         },
         
@@ -2012,6 +2018,9 @@ const TaskApp = createApp({
         
         async saveTaskInline(idx) {
             const inlineTask = this.inlineTasks[idx];
+            if (!inlineTask || inlineTask._saving) {
+                return;
+            }
             // Validate required fields
             if (!inlineTask.title || !inlineTask.title.trim()) {
                 this.showMessage('タスク名は必須です。', true);
@@ -2026,6 +2035,7 @@ const TaskApp = createApp({
                 return;
             }
             this.applyDefaultTaskKindForTitle(inlineTask);
+            inlineTask._saving = true;
             try {
                 const formData = new FormData();
                 const method = inlineTask.id ? 'edit' : 'add';
@@ -2056,25 +2066,46 @@ const TaskApp = createApp({
 
                 const response = await axios.post('/api/index.php?model=task&method=' + method, formData);
                 if (response.data.status == 'success') {
-                    this.showMessage(inlineTask.id ? 'タスクを更新しました。' : 'タスクを追加しました。');
-                    await this.loadTasks();
                     const savedTaskId = inlineTask.id || (response.data && response.data.id);
-                    if (savedTaskId) {
-                        const task = this.tasks.find(t => t.id == savedTaskId);
-                        if (task && this.isAssignedToMe(task) && !this.isAcknowledged(task, this.currentUserId)) {
-                            await this.acknowledgeTask(task, { silent: true });
-                            await this.loadTasks();
-                        }
-                    }
+                    const editingId = inlineTask.id || null;
+                    const isNewTask = !inlineTask.id;
+
+                    // Hide inline row immediately so slow reload does not leave the form visible
                     this.inlineTasks.splice(idx, 1);
-                    this.editingInlineId = null;
+                    if (editingId && this.editingInlineId === editingId) {
+                        this.editingInlineId = null;
+                    }
+
+                    this.showMessage(isNewTask ? 'タスクを追加しました。' : 'タスクを更新しました。');
+
+                    try {
+                        await this.loadTasks();
+                        if (savedTaskId) {
+                            const task = this.tasks.find(t => t.id == savedTaskId);
+                            if (task && this.isAssignedToMe(task) && !this.isAcknowledged(task, this.currentUserId)) {
+                                await this.acknowledgeTask(task, { silent: true });
+                                await this.loadTasks();
+                            }
+                        }
+                    } catch (reloadError) {
+                        console.error('Error reloading tasks after inline save:', reloadError);
+                    }
                 } else {
                     this.showMessage(response.data.message || 'エラーが発生しました。', true);
                 }
             } catch (error) {
                 console.error('Error saving task:', error);
                 this.showMessage('エラーが発生しました。', true);
+            } finally {
+                if (this.inlineTasks[idx] === inlineTask) {
+                    inlineTask._saving = false;
+                }
             }
+        },
+
+        isInlineTaskSaving(inlineIndex) {
+            const task = this.inlineTasks[inlineIndex];
+            return !!(task && task._saving);
         },
         
         cancelTaskInline(idx) {
@@ -2319,7 +2350,7 @@ const TaskApp = createApp({
             this.assigneeModal.show = true;
         },
 
-        assignInlineTaskToSelf(inlineIndex) {
+        async assignInlineTaskToSelf(inlineIndex) {
             if (inlineIndex === undefined || inlineIndex === null || !this.inlineTasks[inlineIndex]) {
                 return;
             }
@@ -2329,8 +2360,25 @@ const TaskApp = createApp({
                 return String(m.user_id) === userId;
             });
             if (!isMember) {
-                this.showMessage('プロジェクトメンバーに登録されていません。', true);
-                return;
+                try {
+                    const formData = new FormData();
+                    formData.append('project_id', this.projectId);
+                    formData.append('user_id', userId);
+                    formData.append('role', 'member');
+                    const response = await axios.post('/api/index.php?model=project&method=addMemberApi', formData);
+                    if (!response.data || response.data.status !== 'success') {
+                        this.showMessage(response.data?.message || 'プロジェクトメンバーの追加に失敗しました。', true);
+                        return;
+                    }
+                    await this.loadProjectMembers();
+                    if (this.permission) {
+                        this.permission.is_member = true;
+                    }
+                } catch (error) {
+                    console.error('Error adding self as project member:', error);
+                    this.showMessage('プロジェクトメンバーの追加に失敗しました。', true);
+                    return;
+                }
             }
             this.inlineTasks[inlineIndex].assignees = [userId];
             this.ensureTaskData(inlineIndex);

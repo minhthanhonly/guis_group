@@ -57,7 +57,13 @@ if($_SESSION['show_project'] == 0){
         </div>
     </div>
 
-    <div v-if="canViewTaskList">
+    <div v-if="!permissionLoaded" class="text-center py-5">
+        <div class="spinner-border text-primary mb-2" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="text-muted" data-i18n="データを読み込み中...">データを読み込み中...</div>
+    </div>
+    <div v-else-if="canViewTaskList">
         <!-- ボー lọc -->
         <div class="row mb-4">
            
@@ -204,6 +210,13 @@ if($_SESSION['show_project'] == 0){
         </div>
         <!-- Danh sách task dạng div card/list -->
         <div class="task-list">
+            <div v-if="!tasksLoaded" class="text-center py-5">
+                <div class="spinner-border text-primary mb-2" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="text-muted" data-i18n="データを読み込み中...">データを読み込み中...</div>
+            </div>
+            <template v-else>
             <div v-if="displayTasks.length === 0" class="text-center text-muted py-4">
                 <i class="bi bi-inbox fs-1 mb-2"></i>
                 <div class="card mb-2 p-2"><span data-i18n="タスクがありません">タスクがありません</span></div>
@@ -340,8 +353,8 @@ if($_SESSION['show_project'] == 0){
                     </div>
                     <div class="task-col-actions">
                         <div class="d-flex align-items-center gap-1 pe-2">
-                            <button class="btn btn-sm btn-success me-1" @click="saveTaskInline(task._inlineIndex)"><i class="fas fa-check"></i></button>
-                            <button class="btn btn-sm btn-secondary" @click="cancelTaskInline(task._inlineIndex)"><i class="fas fa-times"></i></button>
+                            <button class="btn btn-sm btn-success me-1" :disabled="isInlineTaskSaving(task._inlineIndex)" @click="saveTaskInline(task._inlineIndex)"><i class="fas fa-check"></i></button>
+                            <button class="btn btn-sm btn-secondary" :disabled="isInlineTaskSaving(task._inlineIndex)" @click="cancelTaskInline(task._inlineIndex)"><i class="fas fa-times"></i></button>
                         </div>
                     </div>
                 </div>
@@ -574,6 +587,7 @@ if($_SESSION['show_project'] == 0){
                     
                 </div>
             </div>
+            </template>
         </div>
     </div>
     <div class="col-12" v-else>
@@ -936,7 +950,6 @@ if($_SESSION['show_project'] == 0){
 .task-col-period { width: 7%; min-width: 0; }
 .task-col-assignee { width: 5%; min-width: 0; max-width: 4rem; }
 .task-list .row.g-0.align-items-center .task-col-assignee {
-    min-width: 7rem;
     max-width: none;
 }
 .inline-assignee-placeholder {

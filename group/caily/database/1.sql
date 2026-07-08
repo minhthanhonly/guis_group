@@ -31,3 +31,15 @@ ALTER TABLE `groupware_projects`
 
 ALTER TABLE groupware_projects
     ADD COLUMN version INT UNSIGNED NOT NULL DEFAULT 1 AFTER updated_at;
+
+ALTER TABLE groupware_projects
+    ADD COLUMN payment_version INT UNSIGNED NOT NULL DEFAULT 1 AFTER version;
+
+
+ALTER TABLE `groupware_projects`
+  MODIFY COLUMN `estimate_status`
+    ENUM('未発行','見積作成中','発行済','発行済み','承認済み','却下','調整')
+    DEFAULT '未発行',
+  MODIFY COLUMN `invoice_status`
+    ENUM('未発行','請求準備','発行済','発行済み','承認済み','却下','調整')
+    DEFAULT '未発行';

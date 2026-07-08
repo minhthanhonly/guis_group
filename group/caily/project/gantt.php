@@ -56,7 +56,13 @@ if($_SESSION['show_project'] == 0){
             </div>
         </div>
 
-    <div class="card" v-show="canViewTaskList">
+    <div v-if="!permissionLoaded" class="text-center py-5">
+        <div class="spinner-border text-primary mb-2" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="text-muted" data-i18n="データを読み込み中...">データを読み込み中...</div>
+    </div>
+    <div class="card" v-else-if="canViewTaskList">
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">ガントチャート - {{ projectInfo.name || 'プロジェクト' }}</h5>
@@ -138,7 +144,7 @@ if($_SESSION['show_project'] == 0){
             </div>
         </div>
     </div>
-    <div class="col-12" v-show="!canViewTaskList">
+    <div class="col-12" v-else>
         <div class="text-center py-5">
             <div class="text-muted">
                 <i class="fa fa-lock fa-3x mb-2"></i>

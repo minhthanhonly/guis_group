@@ -6,7 +6,7 @@ class Project extends ApplicationModel {
         // Add integer fields that should not be quoted
         $this->donotquote = array_merge($this->donotquote, array(
             'parent_folder_id', 'folder_id', 'project_id', 'file_size', 'amount',
-            'invoice_amount', 'payment_amount', 'version'
+            'invoice_amount', 'payment_amount', 'version', 'payment_version'
         ));
         $this->schema = array(
             'id' => array('except' => array('search')),
@@ -29,6 +29,7 @@ class Project extends ApplicationModel {
             'created_by' => array(), //userid
             'updated_by' => array(), //userid
             'version' => array(),
+            'payment_version' => array(),
             'created_at' => array('except' => array('search')), //timestamp
             'updated_at' => array('except' => array('search')), //timestamp
             'department_id' => array(), //
@@ -325,7 +326,15 @@ class Project extends ApplicationModel {
             $order_column = 'end_date';
         }
         $order_dir = isset($_GET['order_dir']) ? $_GET['order_dir'] : 'ASC';
-        $status = isset($_GET['status']) ? $_GET['status'] : 'all';
+        $statusParam = isset($_GET['status']) ? trim((string)$_GET['status']) : '';
+        $statusKeys = ($statusParam !== '' && $statusParam !== 'all')
+            ? array_values(array_filter(array_map('trim', explode(',', $statusParam))))
+            : [];
+        $allowedStatusKeys = array(
+            'draft', 'open', 'confirming', 'quotation', 'contract',
+            'in_progress', 'completed', 'paused', 'cancelled'
+        );
+        $statusKeys = array_values(array_intersect($statusKeys, $allowedStatusKeys));
         
         $whereArr = [];
         
@@ -357,7 +366,7 @@ class Project extends ApplicationModel {
         $hasKeyword = isset($_GET['filterKeyword']) && trim($_GET['filterKeyword']) !== '';
         $hasProjectId = !empty($_GET['filterProjectId']) && intval($_GET['filterProjectId']) > 0;
         $filterByIdOrKeyword = $hasKeyword || $hasProjectId;
-        $hasStatus = isset($_GET['status']) && $_GET['status'] !== '' && $_GET['status'] !== 'all';
+        $hasStatus = !empty($statusKeys);
         $showInactive = isset($_GET['showInactive']) && $_GET['showInactive'] == '1';
         
         // Filter by project ID (案件ID)
@@ -374,8 +383,11 @@ class Project extends ApplicationModel {
             $whereArr[] = "p.status != 'deleted'";
         } else {
             // Status filter (chỉ áp dụng khi không có filterByIdOrKeyword)
-            if (isset($_GET['status']) && $_GET['status'] != 'all') {
-                $whereArr[] = sprintf("p.status = '%s'", $_GET['status']);
+            if ($hasStatus) {
+                $escapedStatuses = array_map(function($statusKey) {
+                    return "'" . $this->escape($statusKey) . "'";
+                }, $statusKeys);
+                $whereArr[] = 'p.status IN (' . implode(',', $escapedStatuses) . ')';
             } else {
                 $whereArr[] = "p.status != 'deleted'";
             }
@@ -410,10 +422,14 @@ class Project extends ApplicationModel {
                     $bdFilter = (string)$_GET['filterBusinessDocumentStatus'];
                     if ($bdFilter === '未見積') {
                         $whereArr[] = "COALESCE(NULLIF(TRIM(p.estimate_status), ''), '未発行') = '未発行'";
+                    } elseif ($bdFilter === '見積作成中') {
+                        $whereArr[] = "p.estimate_status = '見積作成中'";
                     } elseif ($bdFilter === '見積済') {
                         $whereArr[] = "p.estimate_status IN ('発行済', '発行済み')";
                     } elseif ($bdFilter === '未請求') {
                         $whereArr[] = "COALESCE(NULLIF(TRIM(p.invoice_status), ''), '未発行') = '未発行'";
+                    } elseif ($bdFilter === '請求準備') {
+                        $whereArr[] = "p.invoice_status = '請求準備'";
                     } elseif ($bdFilter === '請求済') {
                         $whereArr[] = "p.invoice_status IN ('発行済', '発行済み')";
                     }
@@ -1865,6 +1881,60 @@ class Project extends ApplicationModel {
     }
 
     /**
+     * Validate client payment_version against DB for 決済情報 optimistic locking.
+     */
+    private function assertPaymentVersionMatches(array $old) {
+        if (!array_key_exists('payment_version', $_POST)) {
+            return [
+                'ok' => false,
+                'response' => [
+                    'status' => 'error',
+                    'error' => 'version_required',
+                    'message' => '決済情報のバージョン情報がありません。ページを再読み込みしてください。',
+                ],
+            ];
+        }
+        $clientVersion = intval($_POST['payment_version']);
+        $dbVersion = intval($old['payment_version'] ?? 1);
+        if ($clientVersion !== $dbVersion) {
+            return [
+                'ok' => false,
+                'response' => [
+                    'status' => 'error',
+                    'error' => 'version_conflict',
+                    'message' => '他のユーザーが先に決済情報を更新しました。ページを再読み込みしてください。',
+                    'current_payment_version' => $dbVersion,
+                ],
+            ];
+        }
+        return ['ok' => true, 'expected_version' => $dbVersion];
+    }
+
+    /**
+     * UPDATE payment_version only; does not bump project version.
+     */
+    private function performVersionedPaymentUpdate($id, array $data, $expectedVersion) {
+        $newVersion = intval($expectedVersion) + 1;
+        $data['payment_version'] = $newVersion;
+        $result = $this->query_update($data, [
+            'id' => intval($id),
+            'payment_version' => intval($expectedVersion),
+        ]);
+        if (!$result) {
+            return [
+                'ok' => false,
+                'response' => [
+                    'status' => 'error',
+                    'error' => 'version_conflict',
+                    'message' => '他のユーザーが先に決済情報を更新しました。ページを再読み込みしてください。',
+                    'current_payment_version' => $newVersion,
+                ],
+            ];
+        }
+        return ['ok' => true, 'payment_version' => $newVersion];
+    }
+
+    /**
      * UPDATE with version increment; fails when row version changed concurrently.
      */
     private function performVersionedProjectUpdate($id, array $data, $expectedVersion) {
@@ -2782,6 +2852,7 @@ class Project extends ApplicationModel {
             $this->attachProjectDetailAggregates($project, $user_id);
             $project['quotation_status'] = $this->getQuotationStatus($id);
             $project['version'] = isset($project['version']) ? intval($project['version']) : 1;
+            $project['payment_version'] = isset($project['payment_version']) ? intval($project['payment_version']) : 1;
         }
         
         return $project;
@@ -4816,11 +4887,11 @@ class Project extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Project not found'];
         }
 
-        $versionCheck = $this->assertProjectVersionMatches($old);
+        $versionCheck = $this->assertPaymentVersionMatches($old);
         if (!$versionCheck['ok']) {
             return $versionCheck['response'];
         }
-        $expectedVersion = $versionCheck['expected_version'];
+        $expectedPaymentVersion = $versionCheck['expected_version'];
         
         $data = array(
             'updated_at' => date('Y-m-d H:i:s'),
@@ -4882,12 +4953,12 @@ class Project extends ApplicationModel {
             }
         }
         
-        $versionedUpdate = $this->performVersionedProjectUpdate($id, $data, $expectedVersion);
+        $versionedUpdate = $this->performVersionedPaymentUpdate($id, $data, $expectedPaymentVersion);
         if (!$versionedUpdate['ok']) {
             return $versionedUpdate['response'];
         }
         $result = true;
-        $newProjectVersion = $versionedUpdate['version'];
+        $newPaymentVersion = $versionedUpdate['payment_version'];
 
         if ($result && !empty($nullDatetimeFields)) {
             $setParts = [];
@@ -4901,7 +4972,7 @@ class Project extends ApplicationModel {
         if ($result) {
             $this->logBusinessDocumentChanges($id, $old, $data, $nullDatetimeFields);
 
-            return ['status' => 'success', 'version' => $newProjectVersion];
+            return ['status' => 'success', 'payment_version' => $newPaymentVersion];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
         }

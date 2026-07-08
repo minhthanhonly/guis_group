@@ -730,7 +730,7 @@ if($_SESSION['show_project'] == 0){
                         </button>
                     </div>
                     <div class="card-body" v-if="project">
-                        <input type="hidden" v-model.number="project.version">
+                        <input type="hidden" v-model.number="project.payment_version">
                         <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">

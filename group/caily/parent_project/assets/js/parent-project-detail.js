@@ -218,12 +218,14 @@ const TASK_KINDS = [
 
 const BUSINESS_ESTIMATE_STATUSES = [
     { value: '未発行', label: '未発行', color: 'secondary' },
+    { value: '見積作成中', label: '見積作成中', color: 'primary' },
     { value: '発行済', label: '発行済', color: 'success' },
     { value: '発行済み', label: '発行済', color: 'success' },
 ];
 
 const BUSINESS_INVOICE_STATUSES = [
     { value: '未発行', label: '未発行', color: 'secondary' },
+    { value: '請求準備', label: '請求準備', color: 'warning' },
     { value: '発行済', label: '発行済', color: 'success' },
     { value: '発行済み', label: '発行済', color: 'success' },
 ];
@@ -281,6 +283,20 @@ function isProjectServerDateTimeFormat(value) {
 function normalizeProjectVersion(version) {
     const n = Number(version);
     return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+function appendPaymentVersionToFormData(formData, projectOrVersion) {
+    if (!formData) return;
+    const paymentVersion = typeof projectOrVersion === 'object'
+        ? projectOrVersion?.payment_version
+        : projectOrVersion;
+    formData.append('payment_version', normalizeProjectVersion(paymentVersion));
+}
+
+function applyPaymentVersionFromResponse(project, responseData) {
+    if (project && responseData && responseData.payment_version != null) {
+        project.payment_version = normalizeProjectVersion(responseData.payment_version);
+    }
 }
 
 function appendProjectVersionToFormData(formData, projectOrVersion) {
@@ -544,6 +560,10 @@ createApp({
             childProjectLogs: [],
             loadingChildProjectLogs: false,
             selectedChildProject: null,
+            childProjectContextMenuVisible: false,
+            childProjectContextMenuX: 0,
+            childProjectContextMenuY: 0,
+            childProjectContextMenuProject: null,
             showBusinessDocumentLogModal: false,
             businessDocumentProject: null,
             businessDocumentProjectId: null,
@@ -555,6 +575,7 @@ createApp({
             businessDocumentError: '',
             businessDocumentUpdateTimer: null,
             isUpdatingBusinessDocument: false,
+            _bdSuppressAutoSave: false,
             businessEstimateStatuses: BUSINESS_ESTIMATE_STATUSES.filter((s) => s.value !== '発行済み'),
             businessInvoiceStatuses: BUSINESS_INVOICE_STATUSES.filter((s) => s.value !== '発行済み'),
             businessPaymentStatuses: BUSINESS_PAYMENT_STATUSES,
@@ -5948,6 +5969,30 @@ createApp({
             ];
         },
 
+        onChildProjectContextMenu(event, project) {
+            if (!project || !project.id) return;
+            this.childProjectContextMenuProject = project;
+            this.childProjectContextMenuX = event.pageX;
+            this.childProjectContextMenuY = event.pageY;
+            this.childProjectContextMenuVisible = true;
+        },
+        closeChildProjectContextMenu() {
+            this.childProjectContextMenuVisible = false;
+            this.childProjectContextMenuProject = null;
+        },
+        goToChildProjectDetailFromContextMenu() {
+            const project = this.childProjectContextMenuProject;
+            this.closeChildProjectContextMenu();
+            if (!project || !project.id) return;
+            window.location.href = '../project/detail.php?id=' + encodeURIComponent(project.id);
+        },
+        openChildProjectPaymentFromContextMenu() {
+            const project = this.childProjectContextMenuProject;
+            this.closeChildProjectContextMenu();
+            if (!project || !project.id || !this.canEditBusinessDocuments) return;
+            this.openBusinessDocumentModal(project);
+        },
+
         async openBusinessDocumentModal(project) {
             if (!this.canEditBusinessDocuments || !project?.id) return;
             try {
@@ -5955,6 +6000,7 @@ createApp({
                 this.businessDocumentProject = response.data;
                 if (this.businessDocumentProject) {
                     this.businessDocumentProject.version = normalizeProjectVersion(this.businessDocumentProject.version);
+                    this.businessDocumentProject.payment_version = normalizeProjectVersion(this.businessDocumentProject.payment_version);
                 }
                 this.businessDocumentProjectId = project.id;
                 this.normalizeBdFields();
@@ -6155,7 +6201,8 @@ createApp({
             }
         },
         scheduleBdUpdate() {
-            if (!this.canEditBusinessDocuments || !this.businessDocumentProject) return;
+            if (this._bdSuppressAutoSave) return;
+            if (!this.canEditBusinessDocuments || !this.businessDocumentProject || this.isUpdatingBusinessDocument) return;
             this.businessDocumentDirty = true;
             clearTimeout(this.businessDocumentUpdateTimer);
             this.businessDocumentUpdateTimer = setTimeout(() => {
@@ -6196,16 +6243,20 @@ createApp({
                 formData.append('invoice_amount', p.invoice_amount != null ? p.invoice_amount : 0);
                 formData.append('invoice_number', p.invoice_number || '');
                 formData.append('payment_note', p.payment_note || '');
-                appendProjectVersionToFormData(formData, this.businessDocumentProject);
+                appendPaymentVersionToFormData(formData, this.businessDocumentProject);
                 const response = await axios.post('/api/index.php?model=project&method=updateProjectStatus', formData);
                 if (response.data && response.data.status === 'success') {
-                    applyProjectVersionFromResponse(this.businessDocumentProject, response.data);
+                    applyPaymentVersionFromResponse(this.businessDocumentProject, response.data);
                     this.businessDocumentDirty = false;
                     this.businessDocumentError = '';
+                    this._bdSuppressAutoSave = true;
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBdDateForApi(key);
                         this.setBdServerDate(key, apiVal || '');
-                        this.businessDocumentProject[key] = apiVal ? toProjectDateTimeInputValue(apiVal) : '';
+                        const nextVal = apiVal ? toProjectDateTimeInputValue(apiVal) : '';
+                        if (String(this.businessDocumentProject[key] || '').trim() !== String(nextVal || '').trim()) {
+                            this.businessDocumentProject[key] = nextVal;
+                        }
                         const el = document.getElementById(BD_MODAL_PICKER_IDS[key]);
                         if (el && el._flatpickr) {
                             if (apiVal) {
@@ -6216,12 +6267,17 @@ createApp({
                         }
                     });
                     this.syncChildProjectFromBd();
-                    if (response.data.version != null) {
+                    if (response.data.payment_version != null) {
                         const idx = this.childProjects.findIndex((item) => String(item.id) === String(this.businessDocumentProjectId));
                         if (idx >= 0) {
-                            this.childProjects[idx].version = normalizeProjectVersion(response.data.version);
+                            this.childProjects[idx].payment_version = normalizeProjectVersion(response.data.payment_version);
                         }
                     }
+                    this.$nextTick(() => {
+                        setTimeout(() => {
+                            this._bdSuppressAutoSave = false;
+                        }, 300);
+                    });
                     this.businessDocumentSaveStatus = 'saved';
                     this.businessDocumentSaveHideTimer = setTimeout(() => {
                         this.businessDocumentSaveStatus = null;
@@ -6256,8 +6312,10 @@ createApp({
                 const el = document.getElementById(BD_MODAL_PICKER_IDS[key]);
                 if (!el) return;
                 const displayVal = this.getBdPickerDisplayValue(el);
-                this.businessDocumentProject[key] = displayVal;
-                this.setBdServerDate(key, displayVal);
+                if (String(this.businessDocumentProject[key] || '').trim() !== String(displayVal || '').trim()) {
+                    this.businessDocumentProject[key] = displayVal;
+                    this.setBdServerDate(key, displayVal);
+                }
             });
         },
         initBdDatePickers() {
@@ -6272,13 +6330,16 @@ createApp({
             if (!el) return;
             const serverValue = this.getBdServerDate(key);
             const inputVal = toProjectDateTimeInputValue(serverValue);
+            this._bdSuppressAutoSave = true;
             initChildProjectFlatpickr(el, {
                 onChange: (selectedDates, dateStr) => {
+                    if (this._bdSuppressAutoSave) return;
                     this.businessDocumentProject[key] = dateStr || '';
                     this.setBdServerDate(key, dateStr || '');
                     this.scheduleBdUpdate();
                 },
                 onClose: () => {
+                    if (this._bdSuppressAutoSave) return;
                     const displayVal = this.getBdPickerDisplayValue(el);
                     if (!displayVal) {
                         if (el._flatpickr) {
@@ -6296,6 +6357,9 @@ createApp({
             if (serverValue) {
                 this.setBdServerDate(key, serverValue);
             }
+            setTimeout(() => {
+                this._bdSuppressAutoSave = false;
+            }, 200);
         },
         setBdDateToday(field) {
             if (!this.businessDocumentProject) return;
@@ -9773,6 +9837,11 @@ createApp({
                 });
             }
 
+            this._childProjectContextMenuDocClickBound = () => {
+                this.closeChildProjectContextMenu();
+            };
+            document.addEventListener('click', this._childProjectContextMenuDocClickBound);
+
             this._onWorkloadChartThemeChange = () => {
                 if (!this.loadingWorkloadStats && this.activeWorkloadDept) {
                     this.renderActiveWorkloadChart();
@@ -9797,6 +9866,10 @@ createApp({
     },
     
     beforeUnmount() {
+        if (this._childProjectContextMenuDocClickBound) {
+            document.removeEventListener('click', this._childProjectContextMenuDocClickBound);
+            this._childProjectContextMenuDocClickBound = null;
+        }
         // Clean up sortable instances
         this.destroySortable();
         this.destroyAllWorkloadCharts();
