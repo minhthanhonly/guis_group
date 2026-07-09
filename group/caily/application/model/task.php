@@ -3696,6 +3696,7 @@ class Task extends ApplicationModel {
                 t.progress,
                 p.id AS project_id,
                 p.name AS project_name,
+                pp.construction_number AS project_construction_number,
                 p.department_id,
                 p.end_date AS project_end_date,
                 d.name AS department_name,
@@ -3703,6 +3704,7 @@ class Task extends ApplicationModel {
                 u_creator.user_image AS created_by_user_image
              FROM " . DB_PREFIX . "tasks t
              LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
              LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
              LEFT JOIN " . DB_PREFIX . "user u_creator ON t.created_by = u_creator.id
              $taskWhere
@@ -3754,6 +3756,7 @@ class Task extends ApplicationModel {
                 'project_id' => $row['project_id'],
                 'project_number' => isset($row['project_number']) ? $row['project_number'] : null,
                 'project_name' => $row['project_name'],
+                'project_construction_number' => isset($row['project_construction_number']) ? $row['project_construction_number'] : '',
                 'title' => $row['title'],
                 'status' => $row['status'],
                 'priority' => $row['priority'],

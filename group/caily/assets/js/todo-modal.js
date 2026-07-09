@@ -854,14 +854,25 @@ function mountTodoApp() {
 
                 decodeHtmlEntities(str) {
                     const txt = document.createElement('textarea');
-                    txt.innerHTML = str;
-                    return txt.value;
+                    let decoded = String(str || '');
+                    // Decode repeatedly to handle double-encoded entities like &amp;nbsp;
+                    for (let i = 0; i < 3; i++) {
+                        txt.innerHTML = decoded;
+                        const next = txt.value;
+                        if (next === decoded) break;
+                        decoded = next;
+                    }
+                    return decoded;
                 },
 
                 getTaskNoteSnippet(note, maxLen) {
                     if (!note) return '';
                     const decoded = this.decodeHtmlEntities(String(note));
-                    const text = decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+                    const text = decoded
+                        .replace(/<[^>]*>/g, '')
+                        .replace(/\u00A0/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
                     if (!text) return '';
                     const limit = maxLen || 28;
                     return text.length <= limit ? text : `${text.substring(0, limit)}…`;

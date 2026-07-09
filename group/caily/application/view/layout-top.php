@@ -733,6 +733,7 @@
                                 <thead class="table-light">
                                     <tr>
                                         <th class="my-task-col-project"><span data-i18n="案件">案件</span></th>
+                                        <th class="my-task-col-construction"><span data-i18n="工事番号">工事番号</span></th>
                                         <th class="my-task-col-title"><span data-i18n="タスク">タスク</span></th>
                                         <th class="my-task-col-kind"><span data-i18n="種別">種別</span></th>
                                         <th class="my-task-col-drawing"><span data-i18n="図面">図面</span></th>
@@ -753,6 +754,11 @@
                                             <a :href="'/project/detail.php?id=' + task.project_id" class="text-decoration-none small">
                                                 <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
                                                 <span class="text-truncate d-inline-block my-task-project-name">{{ task.project_name }}</span>
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <a :href="'/project/detail.php?id=' + task.project_id" class="text-decoration-none small">
+                                                <span class="text-nowrap">{{ task.project_construction_number || '-' }}</span>
                                             </a>
                                         </td>
                                         <td>
@@ -1129,6 +1135,7 @@
               vertical-align: middle;
             }
             .my-task-col-project { min-width: 8rem; }
+            .my-task-col-construction { min-width: 7rem; }
             .my-task-col-title { min-width: 10rem; }
             .my-task-col-kind { min-width: 5.5rem; }
             .my-task-col-drawing { min-width: 8rem; }
