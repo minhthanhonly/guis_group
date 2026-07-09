@@ -343,6 +343,7 @@ $(document).ready(function() {
             showTaskTree: $('#toggleTaskTree').is(':checked') ? 1 : 0,
             useCailyEndDate: $('#useCailyEndDate').is(':checked') ? 1 : 0,
             useGuisEndDate: isCailyBranchUser() ? 0 : ($('#useGuisEndDate').is(':checked') ? 1 : 0),
+            useEndDate: isCailyBranchUser() ? 0 : ($('#useEndDate').is(':checked') ? 1 : 0),
             useShowCailyStruct: $('#useShowCailyStruct').is(':checked') ? 1 : 0,
             useShowGuisStruct: $('#useShowGuisStruct').is(':checked') ? 1 : 0,
             useShowEquipmentNouki: $('#useShowEquipmentNouki').is(':checked') ? 1 : 0,
@@ -399,6 +400,7 @@ $(document).ready(function() {
         if (filters.showTaskTree !== undefined) $('#toggleTaskTree').prop('checked', filters.showTaskTree == 1);
         if (filters.useCailyEndDate !== undefined) $('#useCailyEndDate').prop('checked', filters.useCailyEndDate == 1);
         if (!isCailyBranchUser() && filters.useGuisEndDate !== undefined) $('#useGuisEndDate').prop('checked', filters.useGuisEndDate == 1);
+        if (!isCailyBranchUser() && filters.useEndDate !== undefined) $('#useEndDate').prop('checked', filters.useEndDate == 1);
         if (filters.useShowCailyStruct !== undefined) $('#useShowCailyStruct').prop('checked', filters.useShowCailyStruct == 1);
         if (filters.useShowGuisStruct !== undefined) $('#useShowGuisStruct').prop('checked', filters.useShowGuisStruct == 1);
         if (filters.useShowEquipmentNouki !== undefined) $('#useShowEquipmentNouki').prop('checked', filters.useShowEquipmentNouki == 1);
@@ -466,6 +468,7 @@ $(document).ready(function() {
         setOrDelete('showTaskTree', filters.showTaskTree ? 1 : '');
         setOrDelete('useCailyEndDate', filters.useCailyEndDate ? 1 : '');
         setOrDelete('useGuisEndDate', filters.useGuisEndDate ? 1 : '');
+        setOrDelete('useEndDate', filters.useEndDate ? 1 : '');
         setOrDelete('useShowCailyStruct', filters.useShowCailyStruct ? 1 : '');
         setOrDelete('useShowGuisStruct', filters.useShowGuisStruct ? 1 : '');
         setOrDelete('useShowEquipmentNouki', filters.useShowEquipmentNouki ? 1 : '');
@@ -622,6 +625,7 @@ $(document).ready(function() {
         if (params.has('showTaskTree')) merged.showTaskTree = getBool('showTaskTree');
         if (params.has('useCailyEndDate')) merged.useCailyEndDate = getBool('useCailyEndDate');
         if (params.has('useGuisEndDate')) merged.useGuisEndDate = getBool('useGuisEndDate');
+        if (params.has('useEndDate')) merged.useEndDate = getBool('useEndDate');
         if (params.has('useShowCailyStruct')) merged.useShowCailyStruct = getBool('useShowCailyStruct');
         if (params.has('useShowGuisStruct')) merged.useShowGuisStruct = getBool('useShowGuisStruct');
         if (params.has('useShowEquipmentNouki')) merged.useShowEquipmentNouki = getBool('useShowEquipmentNouki');
@@ -691,7 +695,7 @@ $(document).ready(function() {
         renderActiveFilters();
     });
     // Checkbox ẩn/hiện milestone CAILY納期・GUIS納期・構造データ送付 (độc lập)
-    $(document).on('change', '#useCailyEndDate, #useGuisEndDate, #useShowCailyStruct, #useShowGuisStruct, #useShowEquipmentNouki', function() {
+    $(document).on('change', '#useCailyEndDate, #useGuisEndDate, #useEndDate, #useShowCailyStruct, #useShowGuisStruct, #useShowEquipmentNouki', function() {
         saveFiltersToLocalStorage();
         if (window.ganttApp && typeof window.ganttApp.loadProjects === 'function') {
             window.ganttApp.loadProjects();
@@ -1163,11 +1167,19 @@ $(document).ready(function() {
                         endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
                     }
 
-                    // CAILY branch: thanh dự án kết thúc tại CAILY納期 nếu có giá trị
+                    // Task chính: CAILY user → CAILY納期; user khác → GUIS納期 (tantou=CAILY thì CAILY納期)
                     if (isCailyBranchUser()) {
                         const cailyNoukiEnd = parseNoukiToDate(project.caily_nouki);
                         if (cailyNoukiEnd) {
                             endDate = new Date(cailyNoukiEnd.getTime());
+                        }
+                    } else {
+                        const cailyNoukiEnd = parseNoukiToDate(project.caily_nouki);
+                        const guisNoukiEnd = parseNoukiToDate(project.guis_nouki);
+                        if (project.tantou === 'CAILY' && cailyNoukiEnd) {
+                            endDate = new Date(cailyNoukiEnd.getTime());
+                        } else if (guisNoukiEnd) {
+                            endDate = new Date(guisNoukiEnd.getTime());
                         }
                     }
 
@@ -1249,7 +1261,7 @@ $(document).ready(function() {
                     
                     tasks.push(task);
 
-                    // Subtask/link ID: một công thức duy nhất để tránh trùng. pid là số nguyên, slot 0-4 cố định.
+                    // Subtask/link ID: một công thức duy nhất để tránh trùng. pid là số nguyên, slot 0-5 cố định.
                     const SUBTASK_ID_BASE = 900000000;
                     const LINK_ID_BASE = 800000000;
                     const pid = parseInt(project.id, 10) || 0;
@@ -1260,6 +1272,7 @@ $(document).ready(function() {
                     const SLOT_CAILY_STRUCT = 2;
                     const SLOT_GUIS_STRUCT = 3;
                     const SLOT_EQUIPMENT = 4;
+                    const SLOT_END_DATE = 5;
 
                     // Milestone CAILY納期: tantou=CAILY thì hiển thị thêm team name
                     const showCailyNouki = $('#useCailyEndDate').length && $('#useCailyEndDate').is(':checked');
@@ -1294,6 +1307,22 @@ $(document).ready(function() {
                             duration: 0
                         });
                         links.push({ id: linkId(SLOT_GUIS_NOUKI), source: project.id, target: subId(SLOT_GUIS_NOUKI), type: 0 });
+                    }
+                    // Milestone 期限日 (project.end_date)
+                    const showEndDate = !isCailyBranchUser() && $('#useEndDate').length && $('#useEndDate').is(':checked');
+                    const endDateMilestone = parseNoukiToDate(project.end_date);
+                    if (showEndDate && endDateMilestone) {
+                        tasks.push({
+                            id: subId(SLOT_END_DATE),
+                            text: '期限日',
+                            start_date: new Date(endDateMilestone.getTime()),
+                            end_date: new Date(endDateMilestone.getTime()),
+                            type: 'milestone',
+                            parent: project.id,
+                            open: !!window.ganttTreeOpen,
+                            duration: 0
+                        });
+                        links.push({ id: linkId(SLOT_END_DATE), source: project.id, target: subId(SLOT_END_DATE), type: 0 });
                     }
 
                     // Helper: decode custom_fields (API có thể trả về &quot; thay vì ") rồi lấy giá trị theo label
@@ -1805,6 +1834,7 @@ $(document).ready(function() {
                     const isSubtaskByText = task.text && (
                         task.text.startsWith('CAILY納期') || 
                         task.text.startsWith('GUIS納期') || 
+                        task.text === '期限日' ||
                         task.text.startsWith('構造データ送付 (CAILY)') || 
                         task.text.startsWith('構造データ送付 (GUIS)') || 
                         task.text.startsWith('設備 納期')
@@ -1906,6 +1936,25 @@ $(document).ready(function() {
                             ? moment.tz(raw, 'Asia/Tokyo')
                             : (typeof moment !== 'undefined' ? moment(raw) : null);
                         return m && m.isValid() ? m : null;
+                    }
+
+                    if (obj.tantou === 'CAILY') {
+                        const cailyRaw = obj.caily_nouki;
+                        if (cailyRaw && String(cailyRaw).trim() !== '' && String(cailyRaw).trim() !== '-') {
+                            if (obj.caily_nouki_status && String(obj.caily_nouki_status).indexOf('納品済み') !== -1) return null;
+                            const m = typeof moment !== 'undefined' && moment.tz
+                                ? moment.tz(cailyRaw, 'Asia/Tokyo')
+                                : (typeof moment !== 'undefined' ? moment(cailyRaw) : null);
+                            if (m && m.isValid()) return m;
+                        }
+                    }
+
+                    const guisRaw = obj.guis_nouki;
+                    if (guisRaw && String(guisRaw).trim() !== '' && String(guisRaw).trim() !== '-') {
+                        const m = typeof moment !== 'undefined' && moment.tz
+                            ? moment.tz(guisRaw, 'Asia/Tokyo')
+                            : (typeof moment !== 'undefined' ? moment(guisRaw) : null);
+                        if (m && m.isValid()) return m;
                     }
 
                     if (!obj.end_date) return null;
@@ -2030,6 +2079,8 @@ $(document).ready(function() {
                         classes.push('gantt-task-caily-nouki');
                     } else if (task.text && task.text.startsWith('GUIS納期')) {
                         classes.push('gantt-task-guis-nouki');
+                    } else if (task.text && (task.text === '期限日' || task.text.startsWith('期限日'))) {
+                        classes.push('gantt-task-end-date');
                     } else if (task.text && task.text.startsWith('構造データ送付 (CAILY)')) {
                         classes.push('gantt-task-caily-struct');
                     } else if (task.text && task.text.startsWith('構造データ送付 (GUIS)')) {
@@ -2071,6 +2122,7 @@ $(document).ready(function() {
                     const isSubtask = task.text && (
                         task.text.startsWith('CAILY納期') || 
                         task.text.startsWith('GUIS納期') || 
+                        task.text === '期限日' ||
                         task.text.startsWith('構造データ送付 (CAILY)') || 
                         task.text.startsWith('構造データ送付 (GUIS)') || 
                         task.text.startsWith('設備 納期')
@@ -2113,6 +2165,7 @@ $(document).ready(function() {
                         const isSubtask = task.text && (
                             task.text.startsWith('CAILY納期') || 
                             task.text.startsWith('GUIS納期') || 
+                            task.text === '期限日' ||
                             task.text.startsWith('構造データ送付 (CAILY)') || 
                             task.text.startsWith('構造データ送付 (GUIS)') || 
                             task.text.startsWith('設備 納期')
@@ -2204,6 +2257,7 @@ $(document).ready(function() {
                     // Subtask (CAILY納期 / GUIS納期 / 構造データ送付 / 設備 納期): có thể kèm team name
                     const isSubtask = task.text && (
                         task.text.startsWith('CAILY納期') || task.text.startsWith('GUIS納期') ||
+                        task.text === '期限日' ||
                         task.text.startsWith('構造データ送付 (CAILY)') || task.text.startsWith('構造データ送付 (GUIS)') ||
                         task.text.startsWith('設備 納期')
                     );
@@ -2590,6 +2644,11 @@ $(document).ready(function() {
                     }
                     .gantt_task_line.gantt-task-guis-nouki {
                         background-color: #000;
+                        color: #fff;
+                        width: 4px !important;
+                    }
+                    .gantt_task_line.gantt-task-end-date {
+                        background-color: #dc3545;
                         color: #fff;
                         width: 4px !important;
                     }

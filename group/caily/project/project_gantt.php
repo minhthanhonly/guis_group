@@ -247,6 +247,10 @@ if($_SESSION['show_project'] == 0){
                       <input class="form-check-input" type="checkbox" id="useGuisEndDate" checked>
                       <label class="form-check-label small" for="useGuisEndDate">GUIS納期を表示</label>
                   </div>
+                  <div class="form-check ms-2">
+                      <input class="form-check-input" type="checkbox" id="useEndDate" checked>
+                      <label class="form-check-label small" for="useEndDate">期限日を表示</label>
+                  </div>
                   <?php endif; ?>
                   <div class="form-check ms-2">
                       <input class="form-check-input" type="checkbox" id="useShowCailyStruct" checked>
