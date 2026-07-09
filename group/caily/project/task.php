@@ -32,9 +32,9 @@ if($_SESSION['show_project'] == 0){
                 <li class="nav-item">
                 <a class="nav-link" href="gantt.php?project_id=<?php echo $project_id; ?>"><span data-i18n="ガントチャート">ガントチャート</span></a>
                 </li>
-                <li class="nav-item" v-if="canViewBusinessDocuments">
+                <!--<li class="nav-item" v-if="canViewBusinessDocuments">
                 <a class="nav-link" href="drawings.php?project_id=<?php echo $project_id; ?>"><span data-i18n="図面">図面</span><span class="badge badge-sm bg-info ms-1 rounded-pill">{{ projectInfo?.drawing_count }}</span></a>
-                </li>
+                </li>-->
                 <li class="nav-item">
                 <a class="nav-link" href="attachment.php?project_id=<?php echo $project_id; ?>"><span data-i18n="添付ファイル">添付ファイル</span></a>
                 </li>
