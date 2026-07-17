@@ -24,14 +24,14 @@ if($_SESSION['show_project'] == 0){
 ?>
 
 <div id="app" class="container-fluid mt-4 mb-5" v-cloak>
-    <nav class="navbar navbar-expand-lg bg-dark mb-4">
+    <nav class="navbar navbar-expand-lg bg-dark mb-4" id="projectDepartmentNav">
         <div class="container-fluid">
             <span class="navbar-brand" href="javascript:void(0)"></span>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse justify-content-start" id="navbarSupportedContent">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="projectDepartmentNavList">
                     <li class="nav-item" v-for="department in departments" :key="department.id" :class="{ 'active bg-primary text-white rounded-3': selectedDepartment && selectedDepartment.id === department.id, 'd-none': department.can_project == 0 }">
                         <a href="#" class="nav-link" @click="viewProjects(department)" >{{ department.name }}</a>
                     </li>
@@ -47,8 +47,9 @@ if($_SESSION['show_project'] == 0){
             </div>
         </div>
     </nav>
+    <div id="projectFilterTourTarget">
     <div class="mb-2">
-        <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#projectFilterBox" aria-expanded="false">
+        <button class="btn btn-outline-primary btn-sm" type="button" id="projectFilterToggleBtn" data-bs-toggle="collapse" data-bs-target="#projectFilterBox" aria-expanded="false">
             <i class="fa fa-filter me-1"></i> <span data-i18n="高度なフィルター">高度なフィルター</span>
         </button>
     </div>
@@ -200,15 +201,17 @@ if($_SESSION['show_project'] == 0){
                     <button class="btn btn-sm btn-outline-primary" id="filterReset" type="button">
                         <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
                     </button>
-                    <div class="form-check mb-0 form-switch">
-                        <input class="form-check-input" type="checkbox" id="filterKeepTeamOnReset">
-                        <label class="form-check-label text-nowrap" for="filterKeepTeamOnReset" data-i18n="リセット時にチームを保持">リセット時にチームを保持</label>
+                    <div class="d-inline-flex align-items-center gap-3 flex-wrap" id="projectFilterKeepOnResetTourTarget">
+                        <div class="form-check mb-0 form-switch">
+                            <input class="form-check-input" type="checkbox" id="filterKeepTeamOnReset">
+                            <label class="form-check-label text-nowrap" for="filterKeepTeamOnReset" data-i18n="リセット時にチームを保持">リセット時にチームを保持</label>
+                        </div>
+                        <div class="form-check mb-0 form-switch">
+                            <input class="form-check-input" type="checkbox" id="filterKeepCompanyOnReset">
+                            <label class="form-check-label text-nowrap" for="filterKeepCompanyOnReset" data-i18n="リセット時に会社を保持">リセット時に会社を保持</label>
+                        </div>
                     </div>
-                    <div class="form-check mb-0 form-switch">
-                        <input class="form-check-input" type="checkbox" id="filterKeepCompanyOnReset">
-                        <label class="form-check-label text-nowrap" for="filterKeepCompanyOnReset" data-i18n="リセット時に会社を保持">リセット時に会社を保持</label>
-                    </div>
-                    <button type="button" class="btn btn-sm btn-success" :disabled="!selectedDepartment || loading" @click="exportProjectListExcel" title="Excel出力">
+                    <button type="button" class="btn btn-sm btn-success" id="projectExportExcelBtn" :disabled="!selectedDepartment || loading" @click="exportProjectListExcel" title="Excel出力">
                         <i class="fa fa-file-excel me-1"></i><span data-i18n="Excel出力">Excel出力</span>
                     </button>
                 </div>
@@ -226,6 +229,7 @@ if($_SESSION['show_project'] == 0){
             </div>
         </div>
     </div>
+    </div>
     <div class="card" id="projectTableCard">
         <div class="card-body position-relative">
             <!-- Loading overlay -->
@@ -241,12 +245,18 @@ if($_SESSION['show_project'] == 0){
             <!-- Active Filters Display -->
             <div id="activeFilters" class="mb-2"></div>
             <p class="small text-muted mb-2" id="projectTableScrollHint">
-                <i class="fa fa-info-circle me-1 text-info"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
-                <i class="ms-4 fa fa-info-circle me-1 text-info"></i><span data-i18n="列見出しをドラッグして表示順を変更できます。">列見出しをドラッグして表示順を変更できます。</span>
-                <i class="ms-4 fa fa-info-circle me-1 text-info"></i><span data-i18n="列見出しの右端をドラッグして列幅を変更できます。">列見出しの右端をドラッグして列幅を変更できます。</span>
+                <span id="projectTableTourHintSpaceScroll">
+                    <i class="fa fa-info-circle me-1 text-info"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
+                </span>
+                <span id="projectTableTourHintReorder" class="ms-4 d-inline-block">
+                    <i class="fa fa-info-circle me-1 text-info"></i><span data-i18n="列見出しをドラッグして表示順を変更できます。">列見出しをドラッグして表示順を変更できます。</span>
+                </span>
+                <span id="projectTableTourHintResize" class="ms-4 d-inline-block">
+                    <i class="fa fa-info-circle me-1 text-info"></i><span data-i18n="列見出しの右端をドラッグして列幅を変更できます。">列見出しの右端をドラッグして列幅を変更できます。</span>
+                </span>
             </p>
             <div id="projectListColumnToolsRow" class="d-flex justify-content-end align-items-center gap-2 mb-1 flex-wrap" v-show="selectedDepartment">
-                <div class="dropdown" v-if="availableColumns && availableColumns.length > 0">
+                <div class="dropdown" id="projectColumnVisibilityTourTarget" v-if="availableColumns && availableColumns.length > 0">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="columnVisibilityDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fa fa-columns me-1"></i><span data-i18n="列の表示">列の表示</span>
                     </button>
@@ -266,7 +276,7 @@ if($_SESSION['show_project'] == 0){
                         </li>
                     </ul>
                 </div>
-                <div id="projectListColumnResetMount"></div>
+                <div id="projectListColumnResetMount" class="project-list-column-reset-tour-target"></div>
             </div>
             <table id="projectTable" class="table table-striped">
                 
@@ -283,6 +293,11 @@ if($_SESSION['show_project'] == 0){
             <i class="fa fa-refresh me-1"></i> <span data-i18n="更新">更新</span>
         </button>
     </div>
+
+    <!-- Shepherd Tour reopen button -->
+    <button type="button" id="projectListTourBtn" class="btn btn-warning rounded-circle position-fixed shadow-lg" title="UIガイド / Hướng dẫn UI" aria-label="UIガイド">
+        <i class="fas fa-map-signs"></i>
+    </button>
 
     <!-- Offcanvas: nội dung = #projectFilterBox (mở từ bottom giống Todo List) -->
     <div class="offcanvas offcanvas-bottom" tabindex="-1" id="offcanvasProjectFilter" aria-labelledby="offcanvasProjectFilterLabel" style="height: 30rem;">
@@ -1380,15 +1395,39 @@ body > .select2-container--default,
 .select2-dropdown{
     width: 300px!important;
 }
+
+/* Shepherd Tour floating button — left of command palette (right:150) */
+#projectListTourBtn {
+    width: 36px;
+    height: 36px;
+    bottom: 10px;
+    right: 198px;
+    z-index: 9998;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#projectListTourBtn .fas {
+    font-size: 0.95rem;
+}
+.shepherd-modal-overlay-container {
+    z-index: 10040 !important;
+}
+.shepherd-element {
+    z-index: 10050 !important;
+}
 </style>
 
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/tagify/tagify.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css?v=<?=CACHE_VERSION?>" />
+<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/shepherd/shepherd.css" />
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/datatables-colreorder/dataTables.colReorder.min.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/shepherd.js@10.0.1/dist/js/shepherd.min.js"></script>
 <!-- Chat page context: AI can use current project list data -->
 <script>
 window.__chatPageContext = window.__chatPageContext || {};
@@ -1401,3 +1440,4 @@ if (window.IS_CAILY_BRANCH_USER) {
 <script src="assets/js/project-clipboard.js?v=<?=CACHE_VERSION?>"></script>
 <script src="assets/js/business-document-modal-mixin.js?v=<?=CACHE_VERSION?>"></script>
 <script src="assets/js/project-list.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/project-list-tour.js?v=<?=CACHE_VERSION?>"></script>
