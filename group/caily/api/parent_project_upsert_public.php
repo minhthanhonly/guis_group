@@ -19,6 +19,7 @@ $params = array(
     'scale'               => isset($_REQUEST['scale']) ? $_REQUEST['scale'] : '',
     'type1'               => isset($_REQUEST['type1']) ? $_REQUEST['type1'] : '',
     'request_type'        => isset($_REQUEST['request_type']) ? $_REQUEST['request_type'] : '',
+    'requests'            => isset($_REQUEST['requests']) ? $_REQUEST['requests'] : '',
     //'status'              => isset($_REQUEST['status']) ? $_REQUEST['status'] : '',
     'department_id'       => isset($_REQUEST['department_id']) ? $_REQUEST['department_id'] : '',
     'key' => isset($_REQUEST['key']) ? $_REQUEST['key'] : '',

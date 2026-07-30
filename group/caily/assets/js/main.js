@@ -1349,27 +1349,28 @@ if (typeof window !== 'undefined') {
       return true
     }
 
-    // Floating speech button (fixed at bottom-right, chứa luôn nội dung thanh speech)
+    // Floating speech button — inject vào #fab-bar nếu có, không thì fallback body
     function createSpeechFab() {
       if (fabEl) return fabEl
       fabEl = document.createElement('button')
       fabEl.id = 'global-speech-fab'
       fabEl.type = 'button'
-      fabEl.className = 'btn btn-primary d-flex align-items-center justify-content-center'
+      fabEl.className = 'btn btn-primary rounded-circle d-flex align-items-center justify-content-center'
       fabEl.innerHTML = '<i class="fa fa-microphone"></i>'
-      Object.assign(fabEl.style, {
-        position: 'fixed',
-        bottom: '10px',
-        right: '56px',
-        zIndex: '9998',
-        borderRadius: '50%',
-        width: '36px',
-        height: '36px',
-        padding: '0',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-        transition: 'all 0.2s ease'
-      })
-      document.body.appendChild(fabEl)
+      fabEl.style.cssText = 'width:36px;height:36px;padding:0;box-shadow:0 2px 8px rgba(0,0,0,0.2);transition:all 0.2s ease;'
+
+      const fabBar = document.getElementById('fab-bar')
+      if (fabBar) {
+        const slot = document.createElement('div')
+        slot.className = 'fab-with-label'
+        slot.id = 'speech-fab-slot'
+        slot.appendChild(fabEl)
+        // Chèn trước AI button (phần tử cuối)
+        fabBar.insertBefore(slot, fabBar.lastElementChild)
+      } else {
+        Object.assign(fabEl.style, { position: 'fixed', bottom: '10px', right: '56px', zIndex: '9998' })
+        document.body.appendChild(fabEl)
+      }
 
       fabEl.addEventListener('click', () => {
         const isOpen = fabEl.classList.contains('is-open')

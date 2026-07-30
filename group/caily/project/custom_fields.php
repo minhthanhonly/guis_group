@@ -26,13 +26,13 @@ if($_SESSION['show_project'] == 0){
                     <tr v-for="(set, setIdx) in customFieldSets" :key="set.id">
                         <td>{{ set.name }}</td>
                         <td>{{ getDepartmentName(set.department_id) }}</td>
-                        <td>{{ set.fields.length }}</td>
+                        <td>{{ getFieldsCount(set) }}</td>
                         <td>
                             <button class="btn btn-outline-primary btn-sm me-1" @click="openModalForEdit(set, setIdx)"><i class="fa fa-edit"></i> 編集</button>
                             <button class="btn btn-outline-danger btn-sm" @click="removeFieldSet(set)"><i class="fa fa-trash"></i> 削除</button>
                         </td>
                     </tr>
-                    <tr v-if="!customFieldSets.length">
+                    <tr v-if="!customFieldSets || !customFieldSets.length">
                         <td colspan="4" class="text-center text-muted">データがありません</td>
                     </tr>
                 </tbody>
@@ -72,7 +72,7 @@ if($_SESSION['show_project'] == 0){
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="(field, idx) in modalSet.fields" :key="idx"
+                                <tr v-for="(field, idx) in (modalSet.fields || [])" :key="idx"
                                     @dragover.prevent
                                     @drop="onDrop(idx)"
                                     :class="{ 'table-active': dragIndex === idx }"
@@ -112,7 +112,7 @@ if($_SESSION['show_project'] == 0){
                                         <button class="btn btn-outline-danger btn-sm" @click="removeFieldFromModal(idx)"><i class="fa fa-times"></i></button>
                                     </td>
                                 </tr>
-                                <tr v-if="!modalSet.fields.length">
+                                <tr v-if="!(modalSet.fields && modalSet.fields.length)">
                                     <td colspan="6" class="text-center text-muted">項目がありません</td>
                                 </tr>
                             </tbody>
@@ -146,24 +146,31 @@ const app = Vue.createApp({
         }
     },
     methods: {
+        ensureArray(value) {
+            return Array.isArray(value) ? value : [];
+        },
+        getFieldsCount(set) {
+            return this.ensureArray(set && set.fields).length;
+        },
         getDepartmentName(id) {
-            const dept = this.departments.find(d => d.id == id);
+            const dept = this.ensureArray(this.departments).find(d => d.id == id);
             return dept ? dept.name : '';
         },
         openModalForNew() {
             this.editingSetIdx = null;
-            this.modalSet = { name: '', department_id: this.departments.length ? this.departments[0].id : '', fields: [] };
+            const depts = this.ensureArray(this.departments);
+            this.modalSet = { name: '', department_id: depts.length ? depts[0].id : '', fields: [] };
             this.showModal = true;
         },
         openModalForEdit(set, idx) {
             this.editingSetIdx = idx;
             // Deep copy và chuẩn hóa từng field (đảm bảo có type để binding タイプ hoạt động)
-            this.modalSet = JSON.parse(JSON.stringify(set));
-            this.modalSet.fields = (this.modalSet.fields || []).map(f => ({
+            this.modalSet = JSON.parse(JSON.stringify(set || {}));
+            this.modalSet.fields = this.ensureArray(this.modalSet.fields).map(f => ({
                 label: f.label || '',
                 type: f.type || 'text',
                 // options có thể là string hoặc array từ DB → luôn ép về string để .trim() an toàn
-                options: f.options != null ? String(f.options) : '',
+                options: Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : ''),
                 // one_row có thể là 0/1, '0'/'1', boolean → chuẩn hóa về boolean đúng
                 one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
             }));
@@ -173,14 +180,18 @@ const app = Vue.createApp({
             this.showModal = false;
         },
         addFieldToModal() {
+            if (!Array.isArray(this.modalSet.fields)) {
+                this.modalSet.fields = [];
+            }
             this.modalSet.fields.push({ label: '', type: 'text', options: '', one_row: false });
         },
         removeFieldFromModal(idx) {
+            if (!Array.isArray(this.modalSet.fields)) return;
             this.modalSet.fields.splice(idx, 1);
         },
         saveModalSet() {
             // Validate
-            if (!this.modalSet.name.trim()) {
+            if (!this.modalSet.name || !String(this.modalSet.name).trim()) {
                 showMessage('セット名を入力してください', true);
                 return;
             }
@@ -188,17 +199,20 @@ const app = Vue.createApp({
                 showMessage('部署を選択してください', true);
                 return;
             }
+            if (!Array.isArray(this.modalSet.fields)) {
+                this.modalSet.fields = [];
+            }
             const labels = new Set();
             for (const [idx, field] of this.modalSet.fields.entries()) {
-                if (!field.label.trim()) {
+                if (!field.label || !String(field.label).trim()) {
                     alert(`項目${idx + 1}：ラベルを入力してください`);
                     return;
                 }
-                if (labels.has(field.label.trim())) {
+                if (labels.has(String(field.label).trim())) {
                     alert(`項目${idx + 1}：ラベルが重複しています`);
                     return;
                 }
-                labels.add(field.label.trim());
+                labels.add(String(field.label).trim());
                 const optsStr = field.options != null ? String(field.options) : '';
                 if (['select', 'radio', 'checkbox'].includes(field.type) && !optsStr.trim()) {
                     alert(`項目${idx + 1}：選択肢を入力してください`);
@@ -219,28 +233,64 @@ const app = Vue.createApp({
                 }))
             };
             axios.post('/api/index.php?model=department&method=' + method, payload)
-                .then(() => {
+                .then((res) => {
+                    const data = res && res.data ? res.data : {};
+                    if (data.success === false || data.error) {
+                        showMessage(data.message || data.error || '保存に失敗しました', true);
+                        return;
+                    }
                     this.showModal = false;
                     this.loadCustomFieldSets();
                     showMessage('保存しました');
+                })
+                .catch((err) => {
+                    const msg = (err && err.response && err.response.data && (err.response.data.message || err.response.data.error))
+                        || (err && err.message)
+                        || '保存に失敗しました';
+                    showMessage(msg, true);
                 });
         },
         removeFieldSet(set) {
             if (confirm('本当に削除しますか？')) {
                 axios.post('/api/index.php?model=department&method=removeCustomFields', { id: set.id })
-                    .then(() => {
+                    .then((res) => {
+                        const data = res && res.data ? res.data : {};
+                        if (data.success === false || data.error) {
+                            showMessage(data.message || data.error || '削除に失敗しました', true);
+                            return;
+                        }
                         this.loadCustomFieldSets();
                         showMessage('削除しました');
+                    })
+                    .catch((err) => {
+                        const msg = (err && err.response && err.response.data && (err.response.data.message || err.response.data.error))
+                            || (err && err.message)
+                            || '削除に失敗しました';
+                        showMessage(msg, true);
                     });
             }
         },
         async loadDepartments() {
-            const res = await axios.get('/api/index.php?model=department&method=list');
-            this.departments = res.data;
+            try {
+                const res = await axios.get('/api/index.php?model=department&method=list');
+                this.departments = this.ensureArray(res.data);
+            } catch (e) {
+                this.departments = [];
+                console.error('Failed to load departments', e);
+            }
         },
         async loadCustomFieldSets() {
-            const res = await axios.get('/api/index.php?model=department&method=getCustomFields');
-            this.customFieldSets = res.data || [];
+            try {
+                const res = await axios.get('/api/index.php?model=department&method=getCustomFields');
+                const rows = this.ensureArray(res.data);
+                this.customFieldSets = rows.map(set => ({
+                    ...set,
+                    fields: this.ensureArray(set && set.fields)
+                }));
+            } catch (e) {
+                this.customFieldSets = [];
+                console.error('Failed to load custom field sets', e);
+            }
         },
         onDragStart(idx) {
             this.dragIndex = idx;
@@ -252,6 +302,7 @@ const app = Vue.createApp({
         },
         onDrop(idx) {
             if (!this.dragging || this.dragIndex === null || this.dragIndex === idx) return;
+            if (!Array.isArray(this.modalSet.fields)) return;
             const moved = this.modalSet.fields.splice(this.dragIndex, 1)[0];
             this.modalSet.fields.splice(idx, 0, moved);
             this.dragIndex = null;

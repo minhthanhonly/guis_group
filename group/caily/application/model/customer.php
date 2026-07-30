@@ -175,7 +175,7 @@ class Customer extends ApplicationModel {
      */
     function get_customer_by_name_contains_and_branch($name, $branch, $company_name = '') {
         $name = trim($name ?? '');
-        $branch = trim($branch ?? '');
+        $branch = trim($branch ?? '本社');
         if ($name === '') {
             return null;
         }
@@ -211,10 +211,7 @@ class Customer extends ApplicationModel {
             $hash['message_code'] = 'name is required';
             return $hash;
         }
-        if ($branch_name === '') {
-            $hash['message_code'] = 'branch_name is required';
-            return $hash;
-        }
+        $branch_name = $branch_name === '' ? '本社' : $branch_name;
         $company = $company_name !== '' ? $company_name : '大東建託株式会社';
         $existing = $this->get_customer_by_name_contains_and_branch($name, $branch_name, $company);
         if ($existing && !empty($existing['id'])) {

@@ -542,10 +542,10 @@ class ParentProject extends ApplicationModel {
             $hash['message_code'] = 'customer_id is required';
             return $hash;
         }
-        if ($construction_number === '') {
-            $hash['message_code'] = 'construction_number is required';
-            return $hash;
-        }
+        // if ($construction_number === '') {
+        //     $hash['message_code'] = 'construction_number is required';
+        //     return $hash;
+        // }
         require_once dirname(__FILE__) . '/customer.php';
         $customerModel = new Customer();
         $customerModel->connect();
@@ -565,6 +565,8 @@ class ParentProject extends ApplicationModel {
         $scale = isset($params['scale']) ? trim($params['scale']) : '';
         $type1 = isset($params['type1']) ? trim($params['type1']) : '';
         $request_type = isset($params['request_type']) ? trim($params['request_type']) : '';
+        
+        $requests = isset($params['requests']) ? trim($params['requests']) : '';
         $status = isset($params['status']) && trim($params['status'] ?? '') !== '' ? trim($params['status']) : 'completed';
         $department_id = isset($params['department_id']) && $params['department_id'] !== '' && $params['department_id'] !== null
             ? intval($params['department_id']) : 5;
@@ -582,6 +584,7 @@ class ParentProject extends ApplicationModel {
                 'scale' => $scale,
                 'type1' => $type1,
                 'request_type' => $request_type,
+                'requests' => $requests,
                 //'status' => $status,
                 //'department_id' => $department_id,
                 'updated_by' => 'admin',
@@ -618,7 +621,7 @@ class ParentProject extends ApplicationModel {
             'construction_branch' => '',
             'type2' => '',
             'type3' => '',
-            'requests' => '',
+            'requests' => $requests,
             'materials' => '',
             'structural_office' => '',
             'notes' => '',

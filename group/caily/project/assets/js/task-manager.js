@@ -995,6 +995,10 @@ const TaskApp = createApp({
             this.workloadModal.minutes = parts.minutes;
             this.workloadModal.saving = false;
             this.workloadModal.show = true;
+            // Modal is v-if; re-apply translations after DOM mount
+            this.$nextTick(() => {
+                this.applyAppDataI18n();
+            });
         },
         closeWorkloadModal() {
             this.workloadModal.show = false;

@@ -1,4 +1,35 @@
+function applyTodayI18n() {
+    var lang = (typeof i18next !== 'undefined' && i18next.language) ? i18next.language : 'ja';
+    document.querySelectorAll('[data-i18n-today]').forEach(function(el) {
+        var date = el.getAttribute('data-date') || '';
+        var tpl = lang === 'vi' ? el.getAttribute('data-vi') : el.getAttribute('data-ja');
+        if (tpl) el.textContent = tpl.replace('{date}', date);
+    });
+}
+
+function applyTimecardI18n() {
+    var lang = (typeof i18next !== 'undefined' && i18next.language) ? i18next.language : 'ja';
+    document.querySelectorAll('[data-i18n-timecard-time]').forEach(function(el) {
+        var time = el.getAttribute('data-time') || '';
+        var tpl = lang === 'vi' ? el.getAttribute('data-vi') : el.getAttribute('data-ja');
+        if (tpl) el.textContent = tpl.replace('{time}', time);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    if (typeof i18next !== 'undefined') {
+        if (i18next.isInitialized) {
+            applyTimecardI18n();
+            applyTodayI18n();
+        } else {
+            i18next.on('initialized', function() { applyTimecardI18n(); applyTodayI18n(); });
+        }
+        i18next.on('languageChanged', function() { applyTimecardI18n(); applyTodayI18n(); });
+    } else {
+        applyTimecardI18n();
+        applyTodayI18n();
+    }
+
     const checkin = document.getElementById('checkin');
     const checkout = document.getElementById('checkout');
 

@@ -11,20 +11,24 @@ $today = $hash['year'].'年'.$hash['month'].'月'.$hash['day'].'日('.$week[$has
 
 $current_hour = date('H');
 if(strlen($_SESSION['firstname']) == 0) {
-  $welcome_message = $_SESSION['realname'].'さん、';
+  $welcome_name = $_SESSION['realname'];
+  $welcome_suffix = 'さん、';
 } else if(str_contains($_SESSION['firstname'], '社長') || str_contains($_SESSION['lastname'], '社長')) {
-  $welcome_message = $_SESSION['lastname'].'社長、';
+  $welcome_name = $_SESSION['lastname'];
+  $welcome_suffix = '社長、';
 } else {
-  $welcome_message = $_SESSION['lastname'].'さん、';
+  $welcome_name = $_SESSION['lastname'];
+  $welcome_suffix = 'さん、';
 }
 $today_message = '今日は'.$today.'です。';
+$welcome_greeting = '';
 if(!isset($hash['timecard']['timecard_close']) || $hash['timecard']['timecard_close'] == '') { 
-if ($current_hour >= 6 && $current_hour < 12) {
-    $welcome_message .= 'ようこそ！';
-} elseif ($current_hour >= 12 && $current_hour < 18) {
-    $welcome_message .= 'こんにちは！';
+if ($current_hour >= 6 && $current_hour < 11) {
+    $welcome_greeting = 'おはようございます！';
+} elseif ($current_hour >= 11 && $current_hour < 17) {
+    $welcome_greeting = 'こんにちは！';
 } else {
-    $welcome_message .= 'こんばんは！';
+    $welcome_greeting = 'こんばんは！';
 }
 }
 
@@ -58,18 +62,28 @@ if (!empty($_SESSION['userid'])) {
         <div class="d-flex align-items-center row">
           <div class="col-7">
             <div class="card-body text-nowrap">
-              <h5 class="card-title mb-0"><?=$welcome_message?></h5>
-              <p class="mb-4"><?=$today_message?></p>
+              <h5 class="card-title mb-0">
+                <?=$welcome_name?><span data-i18n="<?=$welcome_suffix?>"><?=$welcome_suffix?></span><?php if($welcome_greeting): ?><span data-i18n="<?=$welcome_greeting?>"><?=$welcome_greeting?></span><?php endif; ?>
+              </h5>
+              <p class="mb-4" data-i18n-today data-date="<?=$today?>" data-ja="今日は{date}です。" data-vi="Hôm nay là {date}."><?=$today_message?></p>
               <?php if($_SESSION['group'] != '6'){ ?>
-              <button <?php if(isset($hash['timecard']['timecard_open']) && $hash['timecard']['timecard_open']!= ''){ echo 'disabled'; }?> class="me-2 btn btn-primary waves-effect waves-light" id="checkin">出社</button>
-              <button <?php if(isset($hash['timecard']['timecard_close']) && $hash['timecard']['timecard_close'] != '') { echo 'disabled'; }?> class="btn btn-warning waves-effect waves-light" id="checkout" data-id="<?=$hash['timecard']['id']?>" data-open="<?=$hash['timecard']['timecard_open']?>">退社</button>
+              <button <?php if(isset($hash['timecard']['timecard_open']) && $hash['timecard']['timecard_open']!= ''){ echo 'disabled'; }?> class="me-2 btn btn-primary waves-effect waves-light" id="checkin" data-i18n="出社">出社</button>
+              <button <?php if(isset($hash['timecard']['timecard_close']) && $hash['timecard']['timecard_close'] != '') { echo 'disabled'; }?> class="btn btn-warning waves-effect waves-light" id="checkout" data-id="<?=$hash['timecard']['id']?>" data-open="<?=$hash['timecard']['timecard_open']?>" data-i18n="退社">退社</button>
               <div id="timecard-result" class="mt-3">
                 <?php if(isset($hash['timecard']['timecard_close']) && $hash['timecard']['timecard_close'] != '') { ?>
-                  <p class="text-success mb-0">お疲れ様でした！<br>勤務時間は<?=$hash['timecard']['timecard_time']?>です。
+                  <p class="text-success mb-0">
+                    <span data-i18n="お疲れ様でした！">お疲れ様でした！</span><br>
+                    <span data-i18n-timecard-time
+                      data-time="<?=$hash['timecard']['timecard_time']?>"
+                      data-ja="勤務時間は{time}です。"
+                      data-vi="Giờ làm việc: {time}">勤務時間は<?=$hash['timecard']['timecard_time']?>です。</span>
                   <?php if(isset($hash['timecard']['timecard_timeover']) && $hash['timecard']['timecard_timeover'] != '0:00') { ?>
-                    時間外は<?=$hash['timecard']['timecard_timeover']?>です。
+                    <br><span data-i18n-timecard-time
+                      data-time="<?=$hash['timecard']['timecard_timeover']?>"
+                      data-ja="時間外は{time}です。"
+                      data-vi="Ngoài giờ: {time}">時間外は<?=$hash['timecard']['timecard_timeover']?>です。</span>
                   <?php } ?>
-                </p> 
+                  </p>
                 <?php } ?>
               </div>
               <?php } ?>
@@ -106,7 +120,7 @@ if (!empty($_SESSION['userid'])) {
       <div class="col-12">
         <div class="card">
           <div class="card-body text-center text-muted py-5">
-            <span class="spinner-border spinner-border-sm me-2" role="status"></span>読み込み中...
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span><span data-i18n="読み込み中...">読み込み中...</span>
           </div>
         </div>
       </div>
@@ -115,24 +129,24 @@ if (!empty($_SESSION['userid'])) {
     <div v-if="recentRequests.length > 0" class="col-md-12" :class="{'col-lg-6 col-xl-6': canApprove}">
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between align-items-center py-3">
-          <h5 class="card-title mb-0">最近の申請</h5>
-          <a class="btn btn-sm btn-primary" href="<?=$root?>form/index.php">もっと見る</a>
+          <h5 class="card-title mb-0" data-i18n="最近の申請">最近の申請</h5>
+          <a class="btn btn-sm btn-primary" href="<?=$root?>form/index.php" data-i18n="もっと見る">もっと見る</a>
         </div>
         <div class="card-body pt-0">
           <div v-if="recentLoading" class="text-center text-muted py-4">
-            <span class="spinner-border spinner-border-sm me-2" role="status"></span>読み込み中...
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span><span data-i18n="読み込み中...">読み込み中...</span>
           </div>
-          <div v-else-if="recentRequests.length === 0" class="text-muted text-center py-4">まだ申請がありません。</div>
+          <div v-else-if="recentRequests.length === 0" class="text-muted text-center py-4" data-i18n="まだ申請がありません。">まだ申請がありません。</div>
           <div v-else class="table-responsive">
             <table class="table table-bordered table-sm mb-0">
               <thead>
                 <tr>
-                  <th>申請種別</th>
-                  <th class="text-nowrap">申請日</th>
-                  <th>コメント</th>
-                  <th>状態</th>
-                  <th>承認者</th>
-                  <th class="text-nowrap">操作</th>
+                  <th data-i18n="申請種別">申請種別</th>
+                  <th class="text-nowrap" data-i18n="申請日">申請日</th>
+                  <th data-i18n="コメント">コメント</th>
+                  <th data-i18n="状態">状態</th>
+                  <th data-i18n="承認者">承認者</th>
+                  <th class="text-nowrap" data-i18n="操作">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -141,7 +155,7 @@ if (!empty($_SESSION['userid'])) {
                   <td class="text-nowrap">{{ formatDateTime(req.created_at) }}</td>
                   <td class="text-nowrap">
                     {{ Number(req.comment_count || 0) }}
-                    <span v-if="Number(req.comment_count || 0) > 0 && Number(req.unread_comment || 0) > 0" class="badge bg-danger ms-1">未読</span>
+                    <span v-if="Number(req.comment_count || 0) > 0 && Number(req.unread_comment || 0) > 0" class="badge bg-danger ms-1" data-i18n="未読">未読</span>
                   </td>
                   <td>
                     <span :class="['badge', statusBadgeClass(req.status)]">
@@ -150,7 +164,7 @@ if (!empty($_SESSION['userid'])) {
                   </td>
                   <td>{{ (req.status === 'approved' || req.status === 'completed') && req.approver_realname ? req.approver_realname : '-' }}</td>
                   <td>
-                    <a :href="detailUrl(req.id)" class="btn btn-sm btn-outline-info">詳細</a>
+                    <a :href="detailUrl(req.id)" class="btn btn-sm btn-outline-info" data-i18n="詳細">詳細</a>
                   </td>
                 </tr>
               </tbody>
@@ -164,25 +178,24 @@ if (!empty($_SESSION['userid'])) {
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between align-items-center py-3">
           <div>
-            <h5 class="card-title mb-0">承認待ち <span v-if="!pendingLoading" class="text-muted small mb-0 mt-1" v-html="pendingCountMessage"></span></h5>
-            
+            <h5 class="card-title mb-0"><span data-i18n="承認待ち">承認待ち</span> <span v-if="!pendingLoading" class="text-muted small mb-0 mt-1" v-html="pendingCountMessage"></span></h5>
           </div>
-          <a class="btn btn-sm btn-primary flex-shrink-0" :href="formIndexPendingUrl">もっと見る</a>
+          <a class="btn btn-sm btn-primary flex-shrink-0" :href="formIndexPendingUrl" data-i18n="もっと見る">もっと見る</a>
         </div>
         <div class="card-body pt-0">
           <div v-if="pendingLoading" class="text-center text-muted py-4">
-            <span class="spinner-border spinner-border-sm me-2" role="status"></span>読み込み中...
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span><span data-i18n="読み込み中...">読み込み中...</span>
           </div>
-          <div v-else-if="pendingRequests.length === 0" class="text-muted text-center py-4">承認待ちの申請はありません。</div>
+          <div v-else-if="pendingRequests.length === 0" class="text-muted text-center py-4" data-i18n="承認待ちの申請はありません。">承認待ちの申請はありません。</div>
           <div v-else class="table-responsive">
             <table class="table table-bordered table-sm mb-0">
               <thead>
                 <tr>
-                  <th>申請者</th>
-                  <th>申請種別</th>
-                  <th class="text-nowrap">申請日</th>
-                  <th>状態</th>
-                  <th class="text-nowrap">操作</th>
+                  <th data-i18n="申請者">申請者</th>
+                  <th data-i18n="申請種別">申請種別</th>
+                  <th class="text-nowrap" data-i18n="申請日">申請日</th>
+                  <th data-i18n="状態">状態</th>
+                  <th class="text-nowrap" data-i18n="操作">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,7 +209,7 @@ if (!empty($_SESSION['userid'])) {
                     </span>
                   </td>
                   <td>
-                    <a :href="detailUrl(req.id)" class="btn btn-sm btn-outline-info">詳細</a>
+                    <a :href="detailUrl(req.id)" class="btn btn-sm btn-outline-info" data-i18n="詳細">詳細</a>
                   </td>
                 </tr>
               </tbody>
@@ -230,9 +243,9 @@ if (!empty($_SESSION['userid'])) {
     <div class="col-xl-12 col-md-12">
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between">
-          <h5 class="card-title mb-0">お知らせ</h5>
+          <h5 class="card-title mb-0" data-i18n="お知らせ">お知らせ</h5>
           <div class="d-flex justify-content-end">
-            <a class="btn btn-sm btn-primary" href="<?=$root?>forum/index.php">もっと見る</a>
+            <a class="btn btn-sm btn-primary" href="<?=$root?>forum/index.php" data-i18n="もっと見る">もっと見る</a>
           </div>
         </div>
         <div class="card-body">
@@ -264,7 +277,7 @@ if (!empty($_SESSION['userid'])) {
     <div class="col-md-12 col-lg-12 col-xl-12">
       <div class="card">
         <div class="card-header d-flex justify-content-between">
-          <h5 class="card-title mb-0">勤怠統計</h5>
+          <h5 class="card-title mb-0" data-i18n="勤怠統計">勤怠統計</h5>
           <div class="d-flex justify-content-end align-items-center gap-2">
             <select class="form-select select2" id="timecard-statistic-select" data-placeholder="メンバーを選択">
               <option value="">すべて</option>
@@ -275,7 +288,7 @@ if (!empty($_SESSION['userid'])) {
               ?>
             </select>
             <?php if($_SESSION['authority'] == 'administrator' || $is_soumu_user) { ?>
-              <button class="btn btn-primary text-nowrap flex-shrink-0" id="generate-statistic">更新</button>
+              <button class="btn btn-primary text-nowrap flex-shrink-0" id="generate-statistic" data-i18n="更新">更新</button>
             <?php } ?>
           </div>
         </div>

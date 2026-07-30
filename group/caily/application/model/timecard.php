@@ -602,6 +602,20 @@ class Timecard extends ApplicationModel {
 		return $hash;
 	}
 
+	/* Public — no auth required, only returns upcoming holidays */
+	function get_holiday_upcoming(){
+		$days = isset($_GET['days']) ? max(1, min(365, intval($_GET['days']))) : 90;
+		$limit = isset($_GET['limit']) ? max(1, min(365, intval($_GET['limit']))) : 30;
+		$today = date('Y-m-d');
+		$future = date('Y-m-d', strtotime("+{$days} days"));
+		$query = sprintf(
+			"SELECT id, date, name FROM groupware_holiday WHERE date >= '%s' AND date <= '%s' ORDER BY date ASC LIMIT %d",
+			$today, $future, $limit
+		);
+		$hash['list'] = $this->fetchAll($query);
+		return $hash;
+	}
+
 	/*API*/
 	function get_lastest_holiday(){
 		$this->authorizeTimecardManageApi();

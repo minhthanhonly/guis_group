@@ -33,7 +33,10 @@ $params = array(
     'department_id'      => isset($_REQUEST['department_id']) ? $_REQUEST['department_id'] : '',
     'customer_id'        => isset($_REQUEST['customer_id']) ? $_REQUEST['customer_id'] : '',
     'amount'             => isset($_REQUEST['amount']) ? $_REQUEST['amount'] : '',
+    'invoice_amount'     => isset($_REQUEST['invoice_amount']) ? $_REQUEST['invoice_amount'] : '',
     'description'        => isset($_REQUEST['description']) ? $_REQUEST['description'] : '',
+    'teams'              => isset($_REQUEST['teams']) ? $_REQUEST['teams'] : '',
+    'custom_fields'      => isset($_REQUEST['custom_fields']) ? $_REQUEST['custom_fields'] : '',
     'key'                => isset($_REQUEST['key']) ? $_REQUEST['key'] : '',
 );
 

@@ -1,7 +1,9 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('従業員統計');
-if(!$_SESSION['isProjectManager']){
+$canAccessEmployeeStats = !empty($_SESSION['isProjectManager'])
+    || (($_SESSION['userid'] ?? '') === 'hayashida');
+if(!$canAccessEmployeeStats){
     echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
     exit;
 }

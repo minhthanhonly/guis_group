@@ -82,8 +82,16 @@
             <?php 
             
             $_revenuePermModel = new ApplicationModel();
+            $isHayashidaUser = (($_SESSION['userid'] ?? '') === 'hayashida');
+            $showEmployeeStatsMenu = (
+                (($_SESSION['authority'] ?? '') === 'administrator'
+                    && ($_SESSION['group'] ?? '') != '7'
+                    && ($_SESSION['group'] ?? '') != '6')
+                || $isHayashidaUser
+            );
             $showRevenueStatsMenu = ($_SESSION['authority'] ?? '') === 'administrator'
-                || $_revenuePermModel->hasDepartmentPermission('project_director_stat');
+                || $_revenuePermModel->hasDepartmentPermission('project_director_stat')
+                || $showEmployeeStatsMenu;
 
             if($showRevenueStatsMenu){ ?>
               <li class="menu-item <?php if($directory == 'project' || $directory == 'parent_project' || $directory == 'price_list') echo 'active open'; ?>">
@@ -95,7 +103,8 @@
                 
                 <?php
                
-                if ($showRevenueStatsMenu) {
+                if ((($_SESSION['authority'] ?? '') === 'administrator')
+                    || $_revenuePermModel->hasDepartmentPermission('project_director_stat')) {
                 ?>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'revenue_statistics') echo 'active'; ?>">
                   <a href="<?=$root?>project/revenue_statistics.php" class="menu-link">
@@ -109,7 +118,7 @@
                 </li> -->
                 <?php } ?>
                 
-                <?php if($_SESSION['authority'] == 'administrator' && $_SESSION['group'] != '7'  && $_SESSION['group'] != '6'){?>
+                <?php if($showEmployeeStatsMenu){?>
                   <li class="menu-item <?php if($directory == 'project' && $page == 'employee_statistics') echo 'active'; ?>">
                     <a href="<?=$root?>project/employee_statistics.php" class="menu-link">
                       <div data-i18n="従業員統計">従業員統計</div>
@@ -1255,17 +1264,6 @@
           <?php require_once DIR_VIEW . 'customer-global-modal.php'; ?>
           <?php endif; ?>
 
-          <button type="button" id="command-palette-toggle" class="btn btn-primary rounded-circle position-fixed waves-effect waves-light"
-            title="コマンドパレット (F1 / Ctrl+K)" data-bs-toggle="tooltip" data-bs-placement="left">
-            <i class="fas fa-keyboard"></i>
-          </button>
-
-          <!-- Todo Toggle Button (same style as AI Chat button) -->
-          <button data-bs-toggle="offcanvas" data-bs-target="#offcanvasTodo" id="todo-toggle" class="btn btn-primary rounded-circle position-fixed waves-effect waves-light">
-            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="todo-badge"></span>
-            <i class="fas fa-list-check"></i>
-          </button>
-
           <!-- AI Chat Widget -->
           <div class="modal fade" id="modalAI" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-simple modal-dialog-centered modal-chat-w">
@@ -1279,7 +1277,29 @@
             </div>
           </div>
 
-          <button data-bs-toggle="modal" data-bs-target="#modalAI" id="ai-chat-toggle" class="btn btn-primary rounded-circle position-fixed"><i class="icon-base ti tabler-message-circle-2 icon-md"></i></button>
+          <!-- FAB bar: tất cả button fixed gom chung 1 hàng -->
+          <div id="fab-bar">
+            <div class="fab-with-label">
+              <span class="fab-shortcut-label">F1</span>
+              <button type="button" id="command-palette-toggle" class="btn btn-primary rounded-circle waves-effect waves-light"
+                title="コマンドパレット (F1 / Ctrl+K)" data-bs-toggle="tooltip" data-bs-placement="left">
+                <i class="fas fa-keyboard"></i>
+              </button>
+            </div>
+            <div class="fab-with-label">
+              <span class="fab-shortcut-label">F3</span>
+              <button data-bs-toggle="offcanvas" data-bs-target="#offcanvasTodo" id="todo-toggle" class="btn btn-primary rounded-circle waves-effect waves-light">
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="todo-badge"></span>
+                <i class="fas fa-list-check"></i>
+              </button>
+            </div>
+            <div class="fab-with-label" id="holiday-fab-slot">
+              <!-- holiday-offcanvas.js sẽ inject button vào đây -->
+            </div>
+            <div class="fab-with-label">
+              <button data-bs-toggle="modal" data-bs-target="#modalAI" id="ai-chat-toggle" class="btn btn-primary rounded-circle"><i class="icon-base ti tabler-message-circle-2 icon-md"></i></button>
+            </div>
+          </div>
           <?php if (!empty($__showProjectDisplayTimezone)): ?>
           <script>
           (function () {
@@ -1313,5 +1333,8 @@
           })();
           </script>
           <?php endif; ?>
+          <!-- Holiday Offcanvas (global) -->
+          <script src="<?=$root?>assets/js/holiday-offcanvas.js?v=<?=CACHE_VERSION?>"></script>
+
           <!-- Content wrapper -->
           <div class="content-wrapper">

@@ -299,6 +299,7 @@ if($_SESSION['show_project'] == 0){
         <i class="fas fa-map-signs"></i>
     </button>
 
+
     <!-- Offcanvas: nội dung = #projectFilterBox (mở từ bottom giống Todo List) -->
     <div class="offcanvas offcanvas-bottom" tabindex="-1" id="offcanvasProjectFilter" aria-labelledby="offcanvasProjectFilterLabel" style="height: 30rem;">
         <div class="offcanvas-header border-bottom">
@@ -872,7 +873,6 @@ if($_SESSION['show_project'] == 0){
 </div>
 
 
- 
 
 <?php
 $view->footing();
@@ -1396,13 +1396,13 @@ body > .select2-container--default,
     width: 300px!important;
 }
 
-/* Shepherd Tour floating button — left of command palette (right:150) */
+/* Shepherd Tour floating button — left of holiday button (right:198) */
 #projectListTourBtn {
     width: 36px;
     height: 36px;
     bottom: 10px;
-    right: 198px;
-    z-index: 9998;
+    right: 230px;
+    z-index: 1000;
     padding: 0;
     display: flex;
     align-items: center;

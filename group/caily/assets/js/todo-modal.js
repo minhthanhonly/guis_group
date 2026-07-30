@@ -763,6 +763,13 @@ function mountTodoApp() {
                     this.workloadModal.minutes = parts.minutes;
                     this.workloadModal.saving = false;
                     this.workloadModal.show = true;
+                    // Modal is v-if; re-apply translations after DOM mount
+                    this.$nextTick(() => {
+                        if (typeof window.applyDataI18n === 'function') {
+                            const root = document.getElementById('todoApp') || document.getElementById('offcanvasTodo');
+                            window.applyDataI18n(root || document);
+                        }
+                    });
                 },
 
                 closeWorkloadModal() {

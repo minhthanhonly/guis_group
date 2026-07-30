@@ -3410,19 +3410,29 @@ const vueApp = createApp({
             try {
                 saved = typeof raw === 'string' ? JSON.parse(raw || '[]') : (Array.isArray(raw) ? raw : []);
             } catch (e) { saved = []; }
-            const updated = saved.filter(f => f && f.label && String(f.label).trim() !== String(label).trim());
-            updated.push({ label: label, value: newValue });
+            const updated = saved.map(f => {
+                if (!f || String(f.label || '').trim() !== String(label).trim()) return f;
+                return Object.assign({}, f, { value: newValue });
+            });
+            if (!updated.some(f => f && String(f.label || '').trim() === String(label).trim())) {
+                updated.push({ label: label, value: newValue });
+            }
             if (this.savingCustomFieldLabel === label) return;
             this.savingCustomFieldLabel = label;
             try {
                 const formData = new FormData();
                 formData.append('id', this.project.id);
                 formData.append('custom_fields', JSON.stringify(updated));
+                appendProjectVersionToFormData(formData, this.project);
                 const res = await axios.post('/api/index.php?model=project&method=update', formData);
                 if (res.data && res.data.status === 'success') {
+                    applyProjectVersionFromResponse(this.project, res.data);
                     this.project.custom_fields = JSON.stringify(updated);
                     if (typeof showMessage === 'function') showMessage('保存しました');
                 } else {
+                    if (handleProjectVersionConflict(res.data, () => this.loadProject())) {
+                        return;
+                    }
                     showMessage(res.data?.message || res.data?.error || '更新に失敗しました。', true);
                 }
             } catch (err) {

@@ -6960,7 +6960,19 @@ class Project extends ApplicationModel {
         $created_by = 'admin';
         $amount = (isset($params['amount']) && $params['amount'] !== '' && $params['amount'] !== null)
             ? floatval($params['amount']) : 0;
+        $invoice_amount = (isset($params['invoice_amount']) && $params['invoice_amount'] !== '' && $params['invoice_amount'] !== null)
+            ? floatval($params['invoice_amount']) : 0;
         $description = isset($params['description']) ? trim($params['description']) : '';
+        $teams = isset($params['teams']) ? trim($params['teams']) : '';
+        $custom_fields = isset($params['custom_fields']) ? trim($params['custom_fields']) : '';
+        if ($custom_fields !== '') {
+            $decoded = json_decode($custom_fields, true);
+            if (!is_array($decoded)) {
+                $custom_fields = '';
+            } else {
+                $custom_fields = json_encode($decoded, JSON_UNESCAPED_UNICODE);
+            }
+        }
         $year = date('Y');
 
        
@@ -6979,13 +6991,19 @@ class Project extends ApplicationModel {
                 'description' => $description,
                 'status' => $status,
                 'tantou' => $tantou,
-                'progress' => $progress,
+                'progress' => $status == 'completed' ? 100 : $progress,
                 'project_order_type' => $project_order_type,
                 'department_id' => $department_id,
                 'amount' => $amount,
                 'updated_by' => $created_by,
+                'teams' => $teams,
+                'custom_fields' => $custom_fields,
+                'invoice_amount' => $invoice_amount,
                 'updated_at' => date('Y-m-d H:i:s'),
             );
+            if ($custom_fields !== '') {
+                $data['custom_fields'] = $custom_fields;
+            }
             if ($parent_project_id > 0) {
                 $data['parent_project_id'] = $parent_project_id;
             }
@@ -7022,7 +7040,7 @@ class Project extends ApplicationModel {
             'status' => $status,
             'priority' => 'medium',
             'department_id' => $department_id,
-            'progress' => $progress,
+            'progress' => $status == 'completed' ? 100 : $progress,
             'project_order_type' => $project_order_type,
             'tantou' => $tantou,
             'created_by' => $created_by,
@@ -7032,7 +7050,12 @@ class Project extends ApplicationModel {
             'estimate_status' => '未発行',
             'invoice_status' => '未発行',
             'payment_status' => '未入金',
+            'teams' => $teams,
+            'invoice_amount' => $invoice_amount,
         );
+        if ($custom_fields !== '') {
+            $data['custom_fields'] = $custom_fields;
+        }
         if ($parent_project_id > 0) {
             $data['parent_project_id'] = $parent_project_id;
         }
@@ -7053,7 +7076,6 @@ class Project extends ApplicationModel {
         }
         $new_id = $this->query_insert($data);
         if ($new_id) {
-            $this->createChildProjectDefaultTasks($new_id, $data);
             $hash['status'] = 'success';
             $hash['message_code'] = 'created';
             $hash['id'] = (int) $new_id;

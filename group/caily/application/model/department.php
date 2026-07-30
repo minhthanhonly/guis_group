@@ -360,6 +360,10 @@ class Department extends ApplicationModel {
     }
 
     // --- Custom Fields Management ---
+    private function customFieldsTable() {
+        return 'department_custom_fields';
+    }
+
     private function _normalizeCustomFields($fields) {
         if (!isset($fields) || !is_array($fields)) {
             return [];
@@ -371,7 +375,16 @@ class Department extends ApplicationModel {
                 if (is_array($f['options'])) {
                     $opts = $f['options'];
                 } else {
-                    $opts = array_values(array_filter(array_map('trim', explode("\n", (string)$f['options']))));
+                    // UI nhập カンマ区切り; cũng hỗ trợ xuống dòng
+                    $raw = str_replace(["\r\n", "\r"], "\n", (string)$f['options']);
+                    if (strpos($raw, "\n") !== false) {
+                        $parts = explode("\n", $raw);
+                    } else {
+                        $parts = explode(',', $raw);
+                    }
+                    $opts = array_values(array_filter(array_map('trim', $parts), function ($v) {
+                        return $v !== '';
+                    }));
                 }
             }
             $normalized[] = [
@@ -385,37 +398,65 @@ class Department extends ApplicationModel {
         return $normalized;
     }
 
+    private function invalidateCustomFieldsCache() {
+        $userId = isset($_SESSION['userid']) ? (string)$_SESSION['userid'] : '';
+        if ($userId === '') {
+            return;
+        }
+        if (!class_exists('ApiCache', false)) {
+            require_once dirname(__DIR__) . '/library/ApiCache.php';
+        }
+        // getCustomFields từng được cache theo user — xóa cache user hiện tại sau khi ghi
+        ApiCache::invalidateUser($userId);
+    }
+
     function saveCustomFields() {
         $json = file_get_contents('php://input');
         $data = json_decode($json, true);
         if (!is_array($data)) {
             return ['success' => false, 'message' => 'Invalid JSON'];
         }
-        // Lưu vào 1 bảng riêng: department_custom_fields (id, department_id, fields)
+        $table = $this->customFieldsTable();
         $department_id = isset($data['department_id']) ? intval($data['department_id']) : 0;
         $id = intval($data['id']);
         $name = isset($data['name']) ? $data['name'] : '';
         $fieldsRaw = isset($data['fields']) ? $data['fields'] : [];
         $fields = json_encode($this->_normalizeCustomFields($fieldsRaw), JSON_UNESCAPED_UNICODE);
 
-        $affected = $this->query_update(['department_id' => $department_id, 'fields' => $fields, 'name' => $name], ['id' => $id], 'department_custom_fields');
+        try {
+            $affected = $this->query_update(
+                ['department_id' => $department_id, 'fields' => $fields, 'name' => $name],
+                ['id' => $id],
+                $table
+            );
+        } catch (Exception $e) {
+            return ['success' => false, 'message' => '更新に失敗しました。', 'error' => $e->getMessage()];
+        }
         if ($affected === false || $affected < 0) {
             return ['success' => false, 'message' => '更新に失敗しました。'];
         }
         if ($affected === 0) {
-            return ['success' => false, 'message' => '該当するレコードが見つかりません。'];
+            return ['success' => false, 'message' => '対象レコードが見つかりません。'];
         }
+        $this->invalidateCustomFieldsCache();
         return ['success' => true];
     }
 
     function removeCustomFields() {
         $json = file_get_contents('php://input');
         $data = json_decode($json, true);
+        if (!is_array($data) || !isset($data['id'])) {
+            return ['success' => false, 'message' => 'Invalid JSON'];
+        }
         $id = intval($data['id']);
-        $this->query_delete(['id' => $id], 'department_custom_fields');
+        try {
+            $this->query_delete(['id' => $id], $this->customFieldsTable());
+        } catch (Exception $e) {
+            return ['success' => false, 'message' => '削除に失敗しました。', 'error' => $e->getMessage()];
+        }
+        $this->invalidateCustomFieldsCache();
         return ['success' => true];
     }
-
 
     function addCustomFields() {
         $json = file_get_contents('php://input');
@@ -423,26 +464,48 @@ class Department extends ApplicationModel {
         if (!is_array($data)) {
             return ['success' => false, 'message' => 'Invalid JSON'];
         }
-        // Lưu vào 1 bảng riêng: department_custom_fields (id, department_id, fields)
+        $table = $this->customFieldsTable();
         $department_id = intval($data['department_id']);
         $name = isset($data['name']) ? $data['name'] : '';
         $fieldsRaw = isset($data['fields']) ? $data['fields'] : [];
         $fields = json_encode($this->_normalizeCustomFields($fieldsRaw), JSON_UNESCAPED_UNICODE);
-        $this->query_insert(['department_id' => $department_id, 'fields' => $fields, 'name' => $name], 'department_custom_fields');
-        return ['success' => true];
+        try {
+            $insertId = $this->query_insert(
+                ['department_id' => $department_id, 'fields' => $fields, 'name' => $name],
+                $table
+            );
+        } catch (Exception $e) {
+            return ['success' => false, 'message' => '登録に失敗しました。', 'error' => $e->getMessage()];
+        }
+        if (!$insertId) {
+            return ['success' => false, 'message' => '登録に失敗しました。'];
+        }
+        $this->invalidateCustomFieldsCache();
+        return ['success' => true, 'id' => $insertId];
     }
 
-
-
     function getCustomFields() {
-        $rows = $this->fetchAll("SELECT * FROM " . "department_custom_fields");
+        $rows = $this->fetchAll("SELECT * FROM " . $this->customFieldsTable() . " ORDER BY id ASC");
         $result = [];
         foreach ($rows as $row) {
+            $fields = json_decode($row['fields'], true);
+            if (!is_array($fields)) {
+                $fields = [];
+            }
+            // Chuẩn hóa options về string (カンマ区切り) cho UI
+            foreach ($fields as &$field) {
+                if (isset($field['options']) && is_array($field['options'])) {
+                    $field['options'] = implode(',', $field['options']);
+                } elseif (!isset($field['options'])) {
+                    $field['options'] = '';
+                }
+            }
+            unset($field);
             $result[] = [
                 'id' => $row['id'],
                 'name' => $row['name'],
                 'department_id' => $row['department_id'],
-                'fields' => json_decode($row['fields'], true)
+                'fields' => $fields
             ];
         }
         return $result;

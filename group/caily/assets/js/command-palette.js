@@ -143,20 +143,32 @@
             action: function () { navigate(ROOT + 'project/'); }
         },
         {
-            id: 'parent-list',
-            labelKey: '建物一覧へ',
-            labelDefault: '建物一覧へ',
+            id: 'todo-offcanvas',
+            labelKey: 'Todoを開く',
+            labelDefault: 'Todoを開く',
             keys: ['F3'],
-            when: canShowProject,
-            action: function () { navigate(ROOT + 'parent_project/'); }
+            when: function () { return true; },
+            action: function () {
+                var el = document.getElementById('offcanvasTodo');
+                if (el) {
+                    var instance = bootstrap.Offcanvas.getOrCreateInstance(el);
+                    instance.toggle();
+                }
+            }
         },
         {
-            id: 'customer',
-            labelKey: '顧客情報へ',
-            labelDefault: '顧客情報へ',
+            id: 'holiday-offcanvas',
+            labelKey: '祝日一覧を開く',
+            labelDefault: '祝日一覧を開く',
             keys: ['F4'],
-            when: function () { return canShowProject() && canShowExtended(); },
-            action: function () { navigate(ROOT + 'customer/'); }
+            when: function () { return true; },
+            action: function () {
+                var el = document.getElementById('offcanvasHolidays');
+                if (el) {
+                    var instance = bootstrap.Offcanvas.getOrCreateInstance(el);
+                    instance.toggle();
+                }
+            }
         },
         {
             id: 'reload',
