@@ -422,8 +422,8 @@ createApp({
             editChildProjectMembersTagify: null,
             request_design: false,
             request_equipment: false,
+            request_3d_equipment: false,
             request_energy_saving: false,
-            request_other: false,
             request_3d: false,
             materials_layout: false,
             materials_rental: false,
@@ -447,6 +447,7 @@ createApp({
                 { value: 'confirming', label: '仮受', color: 'info' },
                 { value: 'quotation', label: '見積', color: 'info' },
                 { value: 'contract', label: '請負', color: 'info' },
+                { value: 'waiting_documents', label: '資料待ち', color: 'warning' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
                 { value: 'completed', label: '完了', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
@@ -847,6 +848,10 @@ createApp({
     computed: {
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+        },
+        parentRequestTypes() {
+            const raw = (this.parentProject && this.parentProject.requests) ? String(this.parentProject.requests) : '';
+            return raw.split(',').map(r => r.trim()).filter(Boolean);
         },
         activeWorkloadDept() {
             if (this.activeWorkloadDeptId == null || this.activeWorkloadDeptId === '') return null;
@@ -1538,15 +1543,52 @@ createApp({
             }
         },
         getOrderTypeBadgeClass(orderType) {
-            const type = orderType.trim().toLowerCase();
+            const type = String(orderType || '').trim();
             switch (type) {
                 case '修正':
                     return 'bg-warning'; // Yellow for edit
                 case '新規':
                     return 'bg-primary'; // Green for new
+                case '新規修正':
+                    return 'bg-success'; // Green for new revision
+                case '変更':
+                    return 'bg-danger'; // Red for change
                 default:
                     return 'bg-info'; // Gray for unknown types
             }
+        },
+        getParentRequestColor(request) {
+            const map = {
+                '意匠': 'primary',
+                '設備': 'info',
+                '3D設備': 'success',
+                '省エネ': 'warning',
+                '3D': 'secondary',
+                'その他': 'dark'
+            };
+            return map[String(request || '').trim()] || 'secondary';
+        },
+        getParentRequestBadgeClass(request) {
+            return `bg-${this.getParentRequestColor(request)}`;
+        },
+        mapDepartmentNameToRequestType(departmentName) {
+            const name = String(departmentName || '').trim();
+            const map = {
+                '設備設計': '設備',
+                '意匠設計': '意匠',
+                '省エネ計算': '省エネ',
+                '技術課設備': '3D設備'
+            };
+            return map[name] || '';
+        },
+        isParentRequestFulfilled(requestType) {
+            const type = String(requestType || '').trim();
+            if (!type || !Array.isArray(this.childProjects)) return false;
+            return this.childProjects.some((p) => {
+                const st = String(p.status || '');
+                if (st === 'cancelled' || st === 'deleted') return false;
+                return this.mapDepartmentNameToRequestType(p.department_name) === type;
+            });
         },
         formatDate(dateString) {
             if (!dateString) return '-';
@@ -2276,16 +2318,16 @@ createApp({
             if (!this.parentProject.requests) {
                 this.request_design = false;
                 this.request_equipment = false;
+                this.request_3d_equipment = false;
                 this.request_energy_saving = false;
-                this.request_other = false;
                 this.request_3d = false;
                 return;
             }
             const requests = this.parentProject.requests.split(',').map(r => r.trim());
             this.request_design = requests.includes('意匠');
             this.request_equipment = requests.includes('設備');
+            this.request_3d_equipment = requests.includes('3D設備');
             this.request_energy_saving = requests.includes('省エネ');
-            this.request_other = requests.includes('その他');
             this.request_3d = requests.includes('3D');
         },
         parseMaterials() {
@@ -2332,8 +2374,8 @@ createApp({
             const requestsArray = [];
             if (this.request_design) requestsArray.push('意匠');
             if (this.request_equipment) requestsArray.push('設備');
+            if (this.request_3d_equipment) requestsArray.push('3D設備');
             if (this.request_energy_saving) requestsArray.push('省エネ');
-            if (this.request_other) requestsArray.push('その他');
             if (this.request_3d) requestsArray.push('3D');
             this.parentProject.requests = requestsArray.join(',');
 
@@ -3209,7 +3251,7 @@ createApp({
                 orderTypeInput.value = '';
                 
                 this.childProjectOrderTypeTagify = new Tagify(orderTypeInput, {
-                    whitelist: ['新規', '修正', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                    whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
                     maxTags: 5,
                     dropdown: {
                         maxItems: 20,
@@ -3706,7 +3748,7 @@ createApp({
                 orderTypeInput.value = '';
                 
                 this.editChildProjectOrderTypeTagify = new Tagify(orderTypeInput, {
-                    whitelist: ['新規', '修正', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                    whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
                     maxTags: 5,
                     dropdown: {
                         maxItems: 20,
@@ -5985,6 +6027,12 @@ createApp({
             this.closeChildProjectContextMenu();
             if (!project || !project.id) return;
             window.location.href = '../project/detail.php?id=' + encodeURIComponent(project.id);
+        },
+        openChildProjectEditFromContextMenu() {
+            const project = this.childProjectContextMenuProject;
+            this.closeChildProjectContextMenu();
+            if (!project || !project.id || !this.canEditChildProject(project)) return;
+            this.showEditChildProjectModal(project);
         },
         openChildProjectPaymentFromContextMenu() {
             const project = this.childProjectContextMenuProject;

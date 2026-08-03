@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS `groupware_projects` (
   `name` varchar(255) NOT NULL,
   `description` text,
   `priority` enum('low','medium','high','urgent') DEFAULT 'medium',
-  `status` enum('draft','open','in_progress','completed','paused','cancelled') DEFAULT 'draft',
+  `status` enum('draft','open','confirming','quotation','contract','waiting_documents','in_progress','completed','paused','cancelled','deleted') DEFAULT 'draft',
   `start_date` date DEFAULT NULL,
   `end_date` date DEFAULT NULL,
   `actual_start_date` date DEFAULT NULL,

@@ -338,6 +338,15 @@ $view->heading('建物詳細');
                                         </div>
                                         <div class="col-md-3">
                                             <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="request_3d_equipment"
+                                                    v-model="request_3d_equipment">
+                                                <label class="form-check-label" for="request_3d_equipment">
+                                                    3D設備
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" id="request_energy_saving"
                                                     v-model="request_energy_saving">
                                                 <label class="form-check-label" for="request_energy_saving">
@@ -354,42 +363,21 @@ $view->heading('建物詳細');
                                                 </label>
                                             </div>
                                         </div> -->
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="request_other"
-                                                    v-model="request_other">
-                                                <label class="form-check-label" for="request_other">
-                                                    その他
-                                                </label>
-                                            </div>
-                                        </div>
                                     </div>
                                 </template>
                                 <template v-else>
                                     <div class="form-control-plaintext">
-                                        <div class="row">
-                                            <div class="col-md-3"
-                                                v-if="parentProject.requests && parentProject.requests.includes('意匠')">
-                                                <i class="fa fa-check text-success me-2"></i>意匠
-                                            </div>
-                                            <div class="col-md-3"
-                                                v-if="parentProject.requests && parentProject.requests.includes('設備')">
-                                                <i class="fa fa-check text-success me-2"></i>設備
-                                            </div>
-                                            <div class="col-md-3"
-                                                v-if="parentProject.requests && parentProject.requests.includes('省エネ')">
-                                                <i class="fa fa-check text-success me-2"></i>省エネ
-                                            </div>
-                                            <div class="col-md-3"
-                                                v-if="parentProject.requests && parentProject.requests.includes('3D')">
-                                                <i class="fa fa-check text-success me-2"></i>3D
-                                            </div>
-                                            <div class="col-md-3"
-                                                v-if="parentProject.requests && parentProject.requests.includes('その他')">
-                                                <i class="fa fa-check text-success me-2"></i>その他
-                                            </div>
-                                            
+                                        <div class="d-flex flex-wrap gap-1 align-items-center" v-if="parentRequestTypes.length">
+                                            <span v-for="item in parentRequestTypes" :key="item"
+                                                  class="badge me-1"
+                                                  :class="isParentRequestFulfilled(item) ? getParentRequestBadgeClass(item) : 'bg-warning text-dark'"
+                                                  :title="isParentRequestFulfilled(item) ? '' : '未作成'">
+                                                <i v-if="!isParentRequestFulfilled(item)" class="fa fa-exclamation-triangle me-1"></i>
+                                                <i v-else class="fa fa-check me-1"></i>
+                                                {{ item }}
+                                            </span>
                                         </div>
+                                        <span v-else class="text-muted">-</span>
                                     </div>
                                 </template>
                             </div>
@@ -594,6 +582,11 @@ $view->heading('建物詳細');
                                                 :key="item.trim()" class="badge me-1" :class="getOrderTypeBadgeClass(item.trim())">{{ item.trim() }}</span>
                                         </span>
                                         <span v-else>-</span>
+                                        <div v-if="mapDepartmentNameToRequestType(project.department_name)" class="mt-1">
+                                            <span class="badge" :class="getParentRequestBadgeClass(mapDepartmentNameToRequestType(project.department_name))">
+                                                {{ mapDepartmentNameToRequestType(project.department_name) }}
+                                            </span>
+                                        </div>
                                     </td>
                                     <td style="min-width: 150px;">
                                         <a :href="'../project/detail.php?id=' + project.id"
@@ -3705,6 +3698,10 @@ $view->heading('建物詳細');
          class="dropdown-menu show child-project-context-menu"
          :style="{ position: 'absolute', zIndex: 9999, left: childProjectContextMenuX + 'px', top: childProjectContextMenuY + 'px' }"
          @click.stop>
+        <button v-if="childProjectContextMenuProject && canEditChildProject(childProjectContextMenuProject)"
+                class="dropdown-item" type="button" @click.stop="openChildProjectEditFromContextMenu">
+            <i class="fa fa-edit me-1"></i><span data-i18n="案件編集">案件編集</span>
+        </button>
         <button class="dropdown-item" type="button" @click.stop="goToChildProjectDetailFromContextMenu">
             <i class="fa fa-external-link-alt me-1"></i><span data-i18n="詳細ページへ">詳細ページへ</span>
         </button>

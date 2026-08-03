@@ -619,6 +619,7 @@ if($_SESSION['show_project'] == 0){
                                     <option value="confirming" data-i18n="仮受">仮受</option>
                                     <option value="quotation" data-i18n="見積">見積</option>
                                     <option value="contract" data-i18n="請負">請負</option>
+                                    <option value="waiting_documents" data-i18n="資料待ち">資料待ち</option>
                                     <option value="in_progress" data-i18n="進行中">進行中</option>
                                     <option value="completed" data-i18n="完了">完了</option>
                                     <option value="paused" data-i18n="一時停止">一時停止</option>
@@ -627,7 +628,10 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <div class="col-md-6 quick-edit-full-only">
                                 <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
-                                <input type="text" class="form-control" name="project_order_type" id="quickEditProjectOrderType" placeholder="新規, 修正">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control tagify" name="project_order_type" id="quickEditProjectOrderType" placeholder="">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditProjectOrderTypeClear" title="すべて削除"><i class="fa fa-times"></i></button>
+                                </div>
                                 <div class="invalid-feedback" id="quickEditProjectOrderTypeError"></div>
                             </div>
                             <div class="col-md-4 quick-edit-full-only">
@@ -1384,6 +1388,31 @@ body.is-caily-branch-user #quickEditProjectForm #quickEditTantouDisplayText {
 }
 body.is-caily-branch-user #quickEditStatus option[value="completed"] {
     display: none;
+}
+
+/* Tagify 受注形態 (quick edit) — giống parent_project 案件依頼編集 */
+.tags-look-project-order-type .tagify__dropdown__item {
+    display: inline-block;
+    border-radius: 3px;
+    padding: 0.3em 0.5em;
+    border: 1px solid #CCC;
+    background: #F3F3F3;
+    margin: 0.2em;
+    font-size: 0.85em;
+    color: black;
+}
+.tags-look-project-order-type .tagify__dropdown__item--active {
+    color: black;
+}
+.tags-look-project-order-type .tagify__dropdown__item:hover {
+    background: lightyellow;
+    border-color: gold;
+}
+#quickEditProjectModal .tagify__dropdown {
+    z-index: 1090;
+}
+#quickEditProjectForm .tagify.is-invalid {
+    border-color: #ff3e1d;
 }
 
 /* Keep Select2 multiple filter boxes compact */

@@ -45,6 +45,7 @@ createApp({
                 { value: 'confirming', label: '仮受', color: 'warning' },
                 { value: 'quotation', label: '見積', color: 'warning' },
                 { value: 'contract', label: '請負', color: 'warning' },
+                { value: 'waiting_documents', label: '資料待ち', color: 'warning' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
                 { value: 'completed', label: '納品', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
@@ -841,7 +842,7 @@ createApp({
                             }
                         }
                         this.projectOrderTypeTagify = new Tagify(orderTypeInput, {
-                            whitelist: ['新規', '修正', '免震', '耐震', '計画変更'],
+                            whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更'],
                             maxTags: 5,
                             dropdown: {
                                 maxItems: 20,

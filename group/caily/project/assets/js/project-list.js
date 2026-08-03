@@ -67,6 +67,7 @@ var projectTable;
         { key: 'confirming', name: '仮受', color: 'info' },
         { key: 'quotation', name: '見積', color: 'info' },
         { key: 'contract', name: '請負', color: 'info' },
+        { key: 'waiting_documents', name: '資料待ち', color: 'warning' },
         { key: 'in_progress', name: '進行中', color: 'primary' },
         { key: 'completed', name: '完了', color: 'success' },
         { key: 'paused', name: '一時停止', color: 'warning' },
@@ -1875,7 +1876,7 @@ var projectTable;
         }
         var val = parseFloat(data);
         if (isNaN(val) || val === 0) return '<span class="text-muted">-</span>';
-        return '<span class="text-nowrap">¥' + parseInt(val, 10).toLocaleString() + '</span>';
+        return '<span class="text-nowrap">' + parseInt(val, 10).toLocaleString() + '</span>';
     }
 
     function renderProjectListDateCell(data, type) {
@@ -2500,7 +2501,11 @@ var projectTable;
     var customFieldStatusMap = {};
 
     function customFieldKey(label) {
-        return 'custom_' + String(label).replace(/\s+/g, '_').replace(/[^\w\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g, '_');
+        // Fullwidth ASCII (Ｐ/Ｅ…) → halfwidth để tránh trùng key (vd: Ｐ担当 vs Ｅ担当)
+        var normalized = String(label).replace(/[\uFF01-\uFF5E]/g, function(ch) {
+            return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+        });
+        return 'custom_' + normalized.replace(/\s+/g, '_').replace(/[^\w\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g, '_');
     }
 
     function getCustomFieldValueFromRow(row, label) {
@@ -3898,12 +3903,16 @@ var projectTable;
                     data: 'project_order_type',
                     render: function(data, type, row) {
                         const getOrderTypeBadgeClass = function(orderType) {
-                            const t = String(orderType).trim().toLowerCase();
+                            const t = String(orderType).trim();
                             switch (t) {
                                 case '修正':
                                     return 'bg-warning';
                                 case '新規':
                                     return 'bg-primary';
+                                case '新規修正':
+                                    return 'bg-success';
+                                case '変更':
+                                    return 'bg-danger';
                                 default:
                                     return 'bg-info';
                             }
@@ -5203,7 +5212,7 @@ var projectTable;
         }
 
         // Quick Edit Tagify instances (destroy on each open, re-init after load)
-        let quickEditTeamTagify = null, quickEditManagerTagify = null, quickEditMembersTagify = null;
+        let quickEditOrderTypeTagify = null, quickEditTeamTagify = null, quickEditManagerTagify = null, quickEditMembersTagify = null;
         let quickEditQuillInstance = null;
         let quickEditIsManagerOnly = false;
         let quickEditOriginalStatus = '';
@@ -5235,12 +5244,27 @@ var projectTable;
             }
         }
         function destroyQuickEditTagify() {
-            [quickEditTeamTagify, quickEditManagerTagify, quickEditMembersTagify].forEach(function(t) {
+            [quickEditOrderTypeTagify, quickEditTeamTagify, quickEditManagerTagify, quickEditMembersTagify].forEach(function(t) {
                 if (t && typeof t.destroy === 'function') { try { t.destroy(); } catch (e) {} }
             });
-            quickEditTeamTagify = quickEditManagerTagify = quickEditMembersTagify = null;
+            quickEditOrderTypeTagify = quickEditTeamTagify = quickEditManagerTagify = quickEditMembersTagify = null;
             // Clear value các input Tagify trước khi load dự án mới
-            $('#quickEditTeamTags, #quickEditManagerTags, #quickEditMembersTags').val('');
+            $('#quickEditProjectOrderType, #quickEditTeamTags, #quickEditManagerTags, #quickEditMembersTags').val('');
+        }
+
+        function getQuickEditOrderTypeValue() {
+            if (quickEditOrderTypeTagify && Array.isArray(quickEditOrderTypeTagify.value)) {
+                return quickEditOrderTypeTagify.value.map(function(t) { return t.value; }).join(',');
+            }
+            return ($('#quickEditProjectOrderType').val() || '').toString().trim();
+        }
+
+        function setQuickEditOrderTypeInvalid(isInvalid) {
+            var $input = $('#quickEditProjectOrderType');
+            var $tagify = $input.next('.tagify');
+            if (!$tagify.length) $tagify = $input.parent().find('.tagify').first();
+            $input.toggleClass('is-invalid', !!isInvalid);
+            if ($tagify.length) $tagify.toggleClass('is-invalid', !!isInvalid);
         }
 
         // Quick Edit Project Modal: open and save (isManagerOnly = true: chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー)
@@ -5269,7 +5293,11 @@ var projectTable;
                 quickEditOriginalStatus = p.status || 'draft';
                 syncQuickEditStatusOptions(quickEditOriginalStatus);
                 $('#quickEditStatus').val(quickEditOriginalStatus);
-                $('#quickEditProjectOrderType').val(typeof p.project_order_type === 'string' ? p.project_order_type : (Array.isArray(p.project_order_type) ? (p.project_order_type || []).join(', ') : ''));
+                var orderTypeVal = typeof p.project_order_type === 'string'
+                    ? p.project_order_type
+                    : (Array.isArray(p.project_order_type) ? (p.project_order_type || []).join(',') : '');
+                // Clear trước khi init Tagify (tránh parse value cũ → trùng tag)
+                $('#quickEditProjectOrderType').val('');
                 $('input[name="tantou"]').prop('checked', false);
                 if (p.tantou === 'CAILY') $('#quickEditTantouCaily').prop('checked', true);
                 else if (p.tantou === 'GUIS') $('#quickEditTantouGuis').prop('checked', true);
@@ -5441,12 +5469,35 @@ var projectTable;
                     const departmentTeams = depId ? allTeams.filter(function(t) { return String(t.department_id) === String(depId); }) : allTeams;
 
                     if (!window.Tagify) {
+                        $('#quickEditProjectOrderType').val(orderTypeVal || '');
                         $('#quickEditModalLoading').addClass('d-none');
                         return;
                     }
 
                     // Clear trước khi gán tag mới, tránh giữ tag của dự án cũ
-                    $('#quickEditTeamTags, #quickEditManagerTags, #quickEditMembersTags').val('');
+                    $('#quickEditProjectOrderType, #quickEditTeamTags, #quickEditManagerTags, #quickEditMembersTags').val('');
+
+                    // 受注形態 Tagify (giống parent_project 案件依頼編集)
+                    const orderTypeInput = document.getElementById('quickEditProjectOrderType');
+                    if (orderTypeInput) {
+                        if (orderTypeInput.tagify) {
+                            try { orderTypeInput.tagify.destroy(); } catch (e) {}
+                        }
+                        orderTypeInput.value = '';
+                        quickEditOrderTypeTagify = new window.Tagify(orderTypeInput, {
+                            whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                            maxTags: 5,
+                            dropdown: {
+                                maxItems: 20,
+                                classname: 'tags-look-project-order-type',
+                                enabled: 0,
+                                closeOnSelect: true
+                            }
+                        });
+                        if (orderTypeVal && String(orderTypeVal).trim() !== '') {
+                            quickEditOrderTypeTagify.addTags(String(orderTypeVal).trim());
+                        }
+                    }
 
                     const teamInput = document.getElementById('quickEditTeamTags');
                     if (teamInput) {
@@ -5529,6 +5580,7 @@ var projectTable;
             });
         };
 
+        $('#quickEditProjectOrderTypeClear').on('click', function() { if (quickEditOrderTypeTagify) quickEditOrderTypeTagify.removeAllTags(); });
         $('#quickEditTeamTagsClear').on('click', function() { if (quickEditTeamTagify) quickEditTeamTagify.removeAllTags(); });
         $('#quickEditManagerTagsClear').on('click', function() { if (quickEditManagerTagify) quickEditManagerTagify.removeAllTags(); });
         $('#quickEditMembersTagsClear').on('click', function() { if (quickEditMembersTagify) quickEditMembersTagify.removeAllTags(); });
@@ -5676,7 +5728,7 @@ var projectTable;
             var errorIds = ['quickEditNameError', 'quickEditProjectOrderTypeError', 'quickEditTantouError', 'quickEditStartDateError', 'quickEditEndDateError', 'quickEditCailyNoukiError', 'quickEditGuisNoukiError', 'quickEditProgressError'];
             errorIds.forEach(function(id) { $('#' + id).text(''); });
             $name.removeClass('is-invalid');
-            $orderType.removeClass('is-invalid');
+            setQuickEditOrderTypeInvalid(false);
             $progress.removeClass('is-invalid');
             $startDate.removeClass('is-invalid');
             $endDate.removeClass('is-invalid');
@@ -5690,8 +5742,8 @@ var projectTable;
                     $('#quickEditNameError').text(translateText('案件名は必須です。'));
                     hasError = true;
                 }
-                if (!$orderType.val() || $orderType.val().toString().trim() === '') {
-                    $orderType.addClass('is-invalid');
+                if (!getQuickEditOrderTypeValue()) {
+                    setQuickEditOrderTypeInvalid(true);
                     $('#quickEditProjectOrderTypeError').text(translateText('受注形態は必須です。'));
                     hasError = true;
                 }
@@ -5781,7 +5833,7 @@ var projectTable;
             formData.append('caily_nouki_status', $('#quickEditCailyNoukiStatus').is(':checked') ? '納品済み' : '');
             formData.append('guis_nouki_status', $('#quickEditGuisNoukiStatus').is(':checked') ? '納品済み' : '');
             formData.append('progress', $('#quickEditProgress').val() !== '' ? parseInt($('#quickEditProgress').val(), 10) : 0);
-            formData.append('project_order_type', $('#quickEditProjectOrderType').val() || '');
+            formData.append('project_order_type', getQuickEditOrderTypeValue());
             formData.append('teams', (quickEditTeamTagify && quickEditTeamTagify.value) ? quickEditTeamTagify.value.map(function(t) { return t.id; }).join(',') : '');
             formData.append('managers', (quickEditManagerTagify && quickEditManagerTagify.value) ? quickEditManagerTagify.value.map(function(t) { return t.id; }).join(',') : '');
             formData.append('members', (quickEditMembersTagify && quickEditMembersTagify.value) ? quickEditMembersTagify.value.map(function(t) { return t.id; }).join(',') : '');
@@ -6713,7 +6765,7 @@ var projectTable;
                 const input = document.querySelector('#project_order_type');
                 if (input && window.Tagify) {
                     this.tagifyInstance = new Tagify(input, {
-                        whitelist: ['新規', '修正', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                        whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
                         maxTags: 5,
                         dropdown: {
                             maxItems: 20,
@@ -7393,12 +7445,16 @@ var projectTable;
                 }
             },
             getOrderTypeBadgeClass(orderType) {
-                const type = orderType.trim().toLowerCase();
+                const type = String(orderType || '').trim();
                 switch (type) {
                     case '修正':
                         return 'bg-warning'; // Yellow for edit
                     case '新規':
                         return 'bg-primary'; // Blue for new
+                    case '新規修正':
+                        return 'bg-success'; // Green for new revision
+                    case '変更':
+                        return 'bg-danger'; // Red for change
                     default:
                         return 'bg-info'; // Gray for unknown types
                 }

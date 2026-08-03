@@ -36,7 +36,7 @@ $view->heading('建物一覧');
                                 <!-- <a v-if="canManagePriceList" href="../price_list/index.php" class="btn btn-outline-info btn-sm me-2">
                                     <i class="fa fa-list me-1"></i> <span data-i18n="価格表管理">価格表管理</span>
                                 </a> -->
-                                <a v-if="canCreateParentProject" href="create.php" class="btn btn-primary btn-sm">
+                                <a v-if="canCreateParentProject" href="create.php" class="btn btn-primary btn-sm" @click="clearParentProjectHighlight">
                                     <i class="fa fa-plus me-1"></i> <span data-i18n="建物登録">建物登録</span>
                                 </a>
                             </div>
@@ -53,15 +53,24 @@ $view->heading('建物一覧');
                                 </button>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <select class="form-select" v-model="requestFilter" @change="onRequestFilterChange">
-                                <option value="" data-i18n="依頼（すべて）">依頼（すべて）</option>
-                                <option value="意匠" data-i18n="意匠">意匠</option>
-                                <option value="設備" data-i18n="設備">設備</option>
-                                <option value="省エネ" data-i18n="省エネ">省エネ</option>
-                                <!-- <option value="3D">3D</option> -->
-                                <option value="その他" data-i18n="その他">その他</option>
-                            </select>
+                        <div class="col-md-auto">
+                            <div class="btn-group flex-wrap request-filter-btn-group" role="group" aria-label="依頼フィルタ">
+                                <button
+                                    v-for="opt in requestFilterOptions"
+                                    :key="opt.value === '' ? 'all' : opt.value"
+                                    type="button"
+                                    class="btn btn-sm request-filter-btn"
+                                    :data-i18n="opt.label"
+                                    :class="{
+                                        [`btn-label-${opt.color}`]: requestFilter !== opt.value,
+                                        [`btn-${opt.color}`]: requestFilter === opt.value,
+                                        'active': requestFilter === opt.value
+                                    }"
+                                    @click="selectRequestFilter(opt.value)"
+                                >
+                                    {{ opt.label }}
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-2 d-flex align-items-center">
                             <div class="form-check">
@@ -156,7 +165,9 @@ $view->heading('建物一覧');
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="project in filteredParentProjects" :key="project.id">
+                                <tr v-for="project in filteredParentProjects" :key="project.id"
+                                    :class="{ 'parent-project-row-saved': isHighlightedParentProject(project) }"
+                                    @contextmenu.prevent="onParentProjectContextMenu($event, project)">
                                         <td class="text-center">
                                             <div class="d-flex flex-column align-items-center gap-1">
                                                 <i class="fa fa-star" 
@@ -210,7 +221,10 @@ $view->heading('建物一覧');
                                             <span v-if="project.requests">
                                                 <span v-for="item in project.requests.split(',').map(v => v.trim()).filter(v => v)"
                                                       :key="item"
-                                                      class="badge bg-secondary me-1">
+                                                      class="badge me-1 mb-1"
+                                                      :class="isParentRequestFulfilled(project, item) ? getRequestBadgeClass(item) : 'bg-warning text-dark'"
+                                                      :title="isParentRequestFulfilled(project, item) ? '' : '未作成'">
+                                                    <i v-if="!isParentRequestFulfilled(project, item)" class="fa fa-exclamation-triangle me-1"></i>
                                                     {{ item }}
                                                 </span>
                                             </span>
@@ -231,7 +245,7 @@ $view->heading('建物一覧');
                                             <span v-else class="text-muted">0</span>
                                         </td>
                                         <td v-if="isColumnVisible('created_by_name')">{{ project.created_by_name || '-' }}</td>
-                                        <td v-if="isColumnVisible('notes')" class="confirmation-notes-column" @contextmenu.prevent="onNotesContextMenu($event, project)">
+                                        <td v-if="isColumnVisible('notes')" class="confirmation-notes-column">
                                             <div class="confirmation-notes-wrapper" style="max-width: 300px; max-height: 200px; overflow-y: auto;">
                                                 <template v-if="parseNotesDisplay(project.notes_display || '').length > 0">
                                                     <div v-for="note in parseNotesDisplay(project.notes_display)" :key="note.id" class="confirmation-note-item mb-1" :data-note-id="note.id">
@@ -440,6 +454,210 @@ $view->heading('建物一覧');
         </div>
     </div>
 
+    <!-- Edit Parent Project Modal (cấu trúc giống parent_project/detail.php edit mode) -->
+    <div class="modal fade" id="editParentProjectModal" tabindex="-1" aria-labelledby="editParentProjectModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editParentProjectModalLabel">
+                        <span data-i18n="建物編集">建物編集</span>
+                        <span v-if="editingParentProject.id" class="badge bg-label-primary ms-2">#{{ editingParentProject.id }}</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div v-if="editParentProjectLoading" class="text-center text-muted py-5">
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        <span data-i18n="読み込み中...">読み込み中...</span>
+                    </div>
+                    <div v-else class="row g-3">
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="会社名">会社名</span> <span class="text-danger">*</span></label>
+                                <select id="edit_pp_company_name" class="form-select select2" name="edit_pp_company_name">
+                                    <option value="">選択してください</option>
+                                </select>
+                                <div class="invalid-feedback d-block" v-if="editParentProjectErrors.company_name">{{ editParentProjectErrors.company_name }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="支店名">支店名</span></label>
+                                <select id="edit_pp_branch_name" class="form-select select2" name="edit_pp_branch_name">
+                                    <option value="">選択してください</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="担当様">担当様</span></label>
+                                <select id="edit_pp_contact_name" class="form-select select2" name="edit_pp_contact_name">
+                                    <option value="">選択してください</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span></label>
+                                <select id="edit_pp_guis_receiver" class="form-select select2" name="edit_pp_guis_receiver">
+                                    <option value="">選択してください</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="お施主様名">お施主様名</span> <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" v-model="editingParentProject.project_name"
+                                       placeholder="案件名を入力" :class="{ 'is-invalid': !!editParentProjectErrors.project_name }">
+                                <div class="invalid-feedback d-block" v-if="editParentProjectErrors.project_name">{{ editParentProjectErrors.project_name }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="依頼日">依頼日</span></label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" v-model="editingParentProject.request_date"
+                                           id="edit_pp_request_date" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
+                                    <button class="btn btn-outline-secondary" type="button" @click="setEditParentCurrentDateTime" title="現在時刻">
+                                        現在時刻
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="管理番号">管理番号</span></label>
+                                <input type="text" class="form-control" :value="editingParentProject.project_number || '-'" readonly>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
+                                <input type="text" class="form-control" v-model="editingParentProject.construction_number" placeholder="工事番号を入力">
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
+                                <input type="text" class="form-control" v-model="editingParentProject.scale" placeholder="規模を入力">
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
+                                <input type="text" class="form-control" v-model="editingParentProject.structural_office" placeholder="構造事務所を入力">
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="種類1">種類1</span></label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control tagify" id="edit_pp_type1_tags" name="edit_pp_type1_tags">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEditParentTagifyTags('type1')" title="すべて削除">
+                                        <i class="fa fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="種類2">種類2</span></label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control tagify" id="edit_pp_type2_tags" name="edit_pp_type2_tags">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEditParentTagifyTags('type2')" title="すべて削除">
+                                        <i class="fa fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="依頼">依頼</span></label>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="edit_pp_request_design" v-model="editParentRequestFlags.design">
+                                            <label class="form-check-label" for="edit_pp_request_design">意匠</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="edit_pp_request_equipment" v-model="editParentRequestFlags.equipment">
+                                            <label class="form-check-label" for="edit_pp_request_equipment">設備</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="edit_pp_request_3d_equipment" v-model="editParentRequestFlags.equipment3d">
+                                            <label class="form-check-label" for="edit_pp_request_3d_equipment">3D設備</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="edit_pp_request_energy_saving" v-model="editParentRequestFlags.energy">
+                                            <label class="form-check-label" for="edit_pp_request_energy_saving">省エネ</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="edit_pp_request_other" v-model="editParentRequestFlags.other">
+                                            <label class="form-check-label" for="edit_pp_request_other">その他</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="資料">資料</span></label>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="edit_pp_materials_layout" v-model="editParentMaterialFlags.layout">
+                                            <label class="form-check-label" for="edit_pp_materials_layout">配置図</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="edit_pp_materials_rental" v-model="editParentMaterialFlags.rental">
+                                            <label class="form-check-label" for="edit_pp_materials_rental">家賃審査書</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="edit_pp_materials_contract" v-model="editParentMaterialFlags.contract">
+                                            <label class="form-check-label" for="edit_pp_materials_contract">契約図</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="edit_pp_materials_tac" v-model="editParentMaterialFlags.tac">
+                                            <label class="form-check-label" for="edit_pp_materials_tac">TAC図</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="edit_pp_materials_other" v-model="editParentMaterialFlags.other">
+                                            <label class="form-check-label" for="edit_pp_materials_other">その他</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="キャンセル">キャンセル</button>
+                    <button type="button" class="btn btn-primary" @click="saveParentProjectFromModal"
+                            :disabled="editParentProjectLoading || editParentProjectSaving">
+                        <span v-if="editParentProjectSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        <span data-i18n="保存">保存</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Note Modal (for parent_project メモ) - inside #app -->
     <div class="modal fade" tabindex="-1" :class="{show: showNoteModal}" style="display: block;" v-if="showNoteModal">
         <div class="modal-dialog modal-lg">
@@ -495,12 +713,20 @@ $view->heading('建物一覧');
         </div>
     </div>
 
-    <!-- Context menu for notes - inside #app -->
-    <div v-if="noteContextMenuVisible"
-         class="dropdown-menu show"
-         :style="{ position: 'absolute', zIndex: 9999, left: noteContextMenuX + 'px', top: noteContextMenuY + 'px' }">
+    <!-- Context menu: parent project row -->
+    <div v-if="parentProjectContextMenuVisible"
+         class="dropdown-menu show parent-project-context-menu"
+         :style="{ position: 'absolute', zIndex: 9999, left: parentProjectContextMenuX + 'px', top: parentProjectContextMenuY + 'px' }"
+         @click.stop>
+        <button v-if="isProjectManager" class="dropdown-item" type="button" @click.stop="openParentProjectEditFromContextMenu">
+            <i class="fa fa-edit me-1"></i><span data-i18n="建物編集">建物編集</span>
+        </button>
+        <button class="dropdown-item" type="button" @click.stop="goToParentProjectDetailFromContextMenu">
+            <i class="fa fa-external-link-alt me-1"></i><span data-i18n="詳細ページへ">詳細ページへ</span>
+        </button>
+        <div class="dropdown-divider"></div>
         <button class="dropdown-item" type="button" @click.stop="addNoteFromContextMenu">
-            <i class="fa fa-plus me-1"></i>メモを追加
+            <i class="fa fa-plus me-1"></i><span data-i18n="メモを追加">メモを追加</span>
         </button>
     </div>
 </div>
@@ -542,6 +768,11 @@ $view->footing();
 
 .table-hover tbody tr:hover {
     background-color: rgba(0, 123, 255, 0.05);
+}
+
+.table-hover tbody tr.parent-project-row-saved,
+.table-hover tbody tr.parent-project-row-saved:hover {
+    background-color: #d4edda;
 }
 
 /* Responsive improvements */
@@ -629,6 +860,57 @@ $view->footing();
     padding: 0.1rem 0.35rem;
     font-size: 0.7rem;
     line-height: 1.1;
+}
+
+/* 依頼 filter button group */
+.request-filter-btn-group {
+    overflow: visible !important;
+}
+.request-filter-btn {
+    position: relative;
+    overflow: visible;
+}
+.request-filter-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -0.55rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+    pointer-events: none;
+}
+.request-filter-btn.btn-secondary.active::after,
+.request-filter-btn.btn-label-secondary.active::after { background-color: #6c757d; }
+.request-filter-btn.btn-primary.active::after,
+.request-filter-btn.btn-label-primary.active::after { background-color: #7650b0; }
+.request-filter-btn.btn-info.active::after,
+.request-filter-btn.btn-label-info.active::after { background-color: #0dcaf0; }
+.request-filter-btn.btn-success.active::after,
+.request-filter-btn.btn-label-success.active::after { background-color: #198754; }
+.request-filter-btn.btn-warning.active::after,
+.request-filter-btn.btn-label-warning.active::after { background-color: #ffc107; }
+.request-filter-btn.btn-dark.active::after,
+.request-filter-btn.btn-label-dark.active::after { background-color: #212529; }
+
+/* Edit parent modal: Select2 / Tagify / Flatpickr above modal */
+#editParentProjectModal .select2-container {
+    width: 100% !important;
+}
+#editParentProjectModal .select2-container--open {
+    z-index: 1065;
+}
+body > .select2-container--open {
+    z-index: 1065 !important;
+}
+#editParentProjectModal .tagify {
+    width: 100%;
+}
+#editParentProjectModal .flatpickr-calendar,
+.flatpickr-calendar.open {
+    z-index: 1065 !important;
 }
 </style>
 

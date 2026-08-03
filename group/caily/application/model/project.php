@@ -11,11 +11,12 @@ class Project extends ApplicationModel {
         $this->schema = array(
             'id' => array('except' => array('search')),
             'parent_project_id' => array(),
+            'parent_request_type' => array(),
             'project_number' => array(),
             'name' => array(),
             'description' => array(),
             'priority' => array(), //low, medium, high, urgent
-            'status' => array(), //draft, open, in_progress, completed, paused, cancelled, deleted
+            'status' => array(), //draft, open, confirming, quotation, contract, waiting_documents, in_progress, completed, paused, cancelled, deleted
             'previous_status' => array(), //stores the previous status before being cancelled
             'start_date' => array(), //timestamp
             'end_date' => array(), //timestamp
@@ -332,7 +333,7 @@ class Project extends ApplicationModel {
             : [];
         $allowedStatusKeys = array(
             'draft', 'open', 'confirming', 'quotation', 'contract',
-            'in_progress', 'completed', 'paused', 'cancelled'
+            'waiting_documents', 'in_progress', 'completed', 'paused', 'cancelled'
         );
         $statusKeys = array_values(array_intersect($statusKeys, $allowedStatusKeys));
         
@@ -575,18 +576,19 @@ class Project extends ApplicationModel {
         // Sắp xếp ưu tiên nếu showInactive=1
         $orderBy = '';
         
-        // Sắp xếp status theo thứ tự giống JS: draft, open, confirming, quotation, contract, in_progress, completed, paused, cancelled
+        // Sắp xếp status theo thứ tự giống JS: draft, open, confirming, quotation, contract, waiting_documents, in_progress, completed, paused, cancelled
         $statusOrder = "CASE p.status 
             WHEN 'draft' THEN 1 
             WHEN 'open' THEN 2 
             WHEN 'confirming' THEN 3 
             WHEN 'quotation' THEN 4 
             WHEN 'contract' THEN 5 
-            WHEN 'in_progress' THEN 6 
-            WHEN 'completed' THEN 9 
-            WHEN 'paused' THEN 7 
-            WHEN 'cancelled' THEN 8 
-            ELSE 10 
+            WHEN 'waiting_documents' THEN 6 
+            WHEN 'in_progress' THEN 7 
+            WHEN 'completed' THEN 10 
+            WHEN 'paused' THEN 8 
+            WHEN 'cancelled' THEN 9 
+            ELSE 11 
         END";
         
         $order_dir = strtoupper($order_dir) === 'DESC' ? 'DESC' : 'ASC';
@@ -1083,7 +1085,7 @@ class Project extends ApplicationModel {
         }
         if ($status !== null && $status !== '') {
             if ($status === 'not_started') {
-                $whereArr[] = "p.status IN ('quotation','draft','contract','open','confirming')";
+                $whereArr[] = "p.status IN ('quotation','draft','contract','waiting_documents','open','confirming')";
             } else {
                 $whereArr[] = "p.status = '" . $this->quote($status) . "'";
             }
@@ -1441,8 +1443,8 @@ class Project extends ApplicationModel {
         $statusWhere = "";
         if ($statusFilter !== null && $statusFilter !== '') {
             if ($statusFilter === 'not_started') {
-                // "Chưa tiến hành" = chưa bắt đầu: quotation, draft, contract, open, confirming
-                $statusWhere = " AND p.status IN ('quotation','draft','contract','open','confirming')";
+                // "Chưa tiến hành" = chưa bắt đầu: quotation, draft, contract, waiting_documents, open, confirming
+                $statusWhere = " AND p.status IN ('quotation','draft','contract','waiting_documents','open','confirming')";
             } else {
                 $statusWhere = " AND p.status = '" . $this->quote($statusFilter) . "'";
             }
@@ -1696,6 +1698,15 @@ class Project extends ApplicationModel {
             'created_by' => $_SESSION['userid'],
             'created_at' => date('Y-m-d H:i:s'),
         );
+
+        if (array_key_exists('parent_request_type', $_POST)) {
+            $prt = trim((string)$_POST['parent_request_type']);
+            $data['parent_request_type'] = ($prt !== '') ? $this->validateUTF8MB4($prt) : null;
+        } else {
+            $data['parent_request_type'] = $this->resolveParentRequestTypeFromDepartment(
+                isset($data['department_id']) ? $data['department_id'] : null
+            );
+        }
 
         // Save custom field set id and custom fields JSON if provided
         if (isset($_POST['department_custom_fields_set_id']) && $_POST['department_custom_fields_set_id'] != '') {
@@ -2058,6 +2069,15 @@ class Project extends ApplicationModel {
         }
         if (array_key_exists('parent_project_id', $_POST)) {
             $data['parent_project_id'] = intval($_POST['parent_project_id']);
+        }
+        if (array_key_exists('parent_request_type', $_POST)) {
+            $prt = trim((string)$_POST['parent_request_type']);
+            $data['parent_request_type'] = ($prt !== '') ? $this->validateUTF8MB4($prt) : null;
+        } elseif (array_key_exists('department_id', $_POST) || array_key_exists('department_id', $data)) {
+            $deptId = array_key_exists('department_id', $data)
+                ? $data['department_id']
+                : (isset($_POST['department_id']) ? intval($_POST['department_id']) : null);
+            $data['parent_request_type'] = $this->resolveParentRequestTypeFromDepartment($deptId);
         }
         if (array_key_exists('is_kadai', $_POST)) {
             $data['is_kadai'] = intval($_POST['is_kadai']);
@@ -2983,13 +3003,13 @@ class Project extends ApplicationModel {
     /**
      * Update project status from AI/API (checks canUserEditProject).
      * @param int $project_id
-     * @param string $status draft|open|confirming|quotation|contract|in_progress|completed|paused|cancelled
+     * @param string $status draft|open|confirming|quotation|contract|waiting_documents|in_progress|completed|paused|cancelled
      * @return array ['status'=>'success'|'error', 'message'|'error'=>...]
      */
     public function updateStatusForAi($project_id, $status) {
         $project_id = intval($project_id);
         $status = trim((string) $status);
-        $allowed = ['draft', 'open', 'confirming', 'quotation', 'contract', 'in_progress', 'completed', 'paused', 'cancelled'];
+        $allowed = ['draft', 'open', 'confirming', 'quotation', 'contract', 'waiting_documents', 'in_progress', 'completed', 'paused', 'cancelled'];
         if ($project_id <= 0 || !in_array($status, $allowed, true)) {
             return ['status' => 'error', 'error' => 'Invalid project_id or status'];
         }
@@ -5402,6 +5422,7 @@ class Project extends ApplicationModel {
             'confirming' => '仮受',
             'quotation' => '見積',
             'contract' => '請負',
+            'waiting_documents' => '資料待ち',
             'in_progress' => '進行中',
             'completed' => '完了',
             'paused' => '一時停止',
@@ -5429,6 +5450,7 @@ class Project extends ApplicationModel {
             'confirming' => 'Tạm nhận',
             'quotation' => 'Báo giá',
             'contract' => 'Hợp đồng',
+            'waiting_documents' => 'Chờ tài liệu',
             'in_progress' => 'Đang tiến hành',
             'completed' => 'Hoàn thành',
             'paused' => 'Tạm dừng',
@@ -6915,7 +6937,7 @@ class Project extends ApplicationModel {
             return null;
         }
         $query = sprintf(
-            "SELECT id FROM %s WHERE TRIM(name) = '%s' AND customer_id = %d AND TRIM(COALESCE(project_order_type,'')) = '%s'",
+            "SELECT id FROM %s WHERE TRIM(name) = '%s'",
             $this->table,
             $this->quote($name),
             $customer_id,
@@ -6982,56 +7004,56 @@ class Project extends ApplicationModel {
         $guis_nouki = $this->parse_date_to_datetime(isset($params['guis_nouki']) ? $params['guis_nouki'] : '', $year, '18:00:00');
        
        
-        $existing = $this->get_by_name_customer_order_type($name, $customer_id, $project_order_type, $end_date);
+        //$existing = $this->get_by_name_customer_order_type($name, $customer_id, $project_order_type, $end_date);
         
         
-        if ($existing && !empty($existing['id'])) {
-            $data = array(
-                'name' => $name,
-                'description' => $description,
-                'status' => $status,
-                'tantou' => $tantou,
-                'progress' => $status == 'completed' ? 100 : $progress,
-                'project_order_type' => $project_order_type,
-                'department_id' => $department_id,
-                'amount' => $amount,
-                'updated_by' => $created_by,
-                'teams' => $teams,
-                'custom_fields' => $custom_fields,
-                'invoice_amount' => $invoice_amount,
-                'updated_at' => date('Y-m-d H:i:s'),
-            );
-            if ($custom_fields !== '') {
-                $data['custom_fields'] = $custom_fields;
-            }
-            if ($parent_project_id > 0) {
-                $data['parent_project_id'] = $parent_project_id;
-            }
-            if ($customer_id > 0) {
-                $data['customer_id'] = $customer_id;
-            }
-            if ($start_date !== null) {
-                $data['start_date'] = $start_date;
-            }
-            if ($end_date !== null) {
-                $data['end_date'] = $end_date;
-            }
-            if ($caily_nouki !== null) {
-                $data['caily_nouki'] = $caily_nouki;
-            }
-            if ($guis_nouki !== null) {
-                $data['guis_nouki'] = $guis_nouki;
-            }
-            $result = $this->query_update($data, array('id' => $existing['id']));
-            if ($result) {
-                $hash['status'] = 'success';
-                $hash['message_code'] = 'updated';
-                $hash['id'] = (int) $existing['id'];
-            } else {
-                $hash['message_code'] = 'update failed';
-            }
-            return $hash;
-        }
+        // if ($existing && !empty($existing['id'])) {
+        //     $data = array(
+        //         'name' => $name,
+        //         'description' => $description,
+        //         'status' => $status,
+        //         'tantou' => $tantou,
+        //         'progress' => $status == 'completed' ? 100 : $progress,
+        //         'project_order_type' => $project_order_type,
+        //         'department_id' => $department_id,
+        //         'amount' => $amount,
+        //         'updated_by' => $created_by,
+        //         'teams' => $teams,
+        //         'custom_fields' => $custom_fields,
+        //         'invoice_amount' => $invoice_amount,
+        //         'updated_at' => date('Y-m-d H:i:s'),
+        //     );
+        //     if ($custom_fields !== '') {
+        //         $data['custom_fields'] = $custom_fields;
+        //     }
+        //     if ($parent_project_id > 0) {
+        //         $data['parent_project_id'] = $parent_project_id;
+        //     }
+        //     if ($customer_id > 0) {
+        //         $data['customer_id'] = $customer_id;
+        //     }
+        //     if ($start_date !== null) {
+        //         $data['start_date'] = $start_date;
+        //     }
+        //     if ($end_date !== null) {
+        //         $data['end_date'] = $end_date;
+        //     }
+        //     if ($caily_nouki !== null) {
+        //         $data['caily_nouki'] = $caily_nouki;
+        //     }
+        //     if ($guis_nouki !== null) {
+        //         $data['guis_nouki'] = $guis_nouki;
+        //     }
+        //     $result = $this->query_update($data, array('id' => $existing['id']));
+        //     if ($result) {
+        //         $hash['status'] = 'success';
+        //         $hash['message_code'] = 'updated';
+        //         $hash['id'] = (int) $existing['id'];
+        //     } else {
+        //         $hash['message_code'] = 'update failed';
+        //     }
+        //     return $hash;
+        // }
         $project_number = $this->generateProjectNumberForParent($parent_project_id);
         $data = array(
             'project_number' => $project_number,
@@ -7574,6 +7596,111 @@ class Project extends ApplicationModel {
         );
         return $this->fetchAll($query);
     }
+
+    /**
+     * Map department name to parent 依頼 type.
+     * 設備設計→設備, 意匠設計→意匠, 省エネ計算→省エネ, 技術課設備→3D設備
+     */
+    function resolveParentRequestTypeFromDepartment($department_id) {
+        $department_id = intval($department_id);
+        if ($department_id <= 0) {
+            return null;
+        }
+        $row = $this->fetchOne(
+            'SELECT name FROM ' . DB_PREFIX . 'departments WHERE id = ' . $department_id . ' LIMIT 1'
+        );
+        if (!$row || !isset($row['name'])) {
+            return null;
+        }
+        $map = array(
+            '設備設計' => '設備',
+            '意匠設計' => '意匠',
+            '省エネ計算' => '省エネ',
+            '技術課設備' => '3D設備',
+        );
+        $name = trim((string)$row['name']);
+        return isset($map[$name]) ? $map[$name] : null;
+    }
+
+    /**
+     * Public API: insert a row into groupware_project_notes (no login).
+     * Content may be HTML (from Apps Script rich text) or plain text (auto nl2br).
+     */
+    function add_note_public($params) {
+        $hash = array('status' => 'error', 'message_code' => '', 'id' => null);
+
+        $project_id = isset($params['project_id']) ? intval($params['project_id']) : 0;
+        if ($project_id <= 0) {
+            $hash['message_code'] = 'project_id is required';
+            return $hash;
+        }
+
+        $content = isset($params['content']) ? trim((string)$params['content']) : '';
+        if ($content === '') {
+            $hash['message_code'] = 'content is required';
+            return $hash;
+        }
+
+        $existing = $this->fetchOne(
+            'SELECT id FROM ' . DB_PREFIX . 'projects WHERE id = ' . $project_id . ' LIMIT 1'
+        );
+        if (!$existing || empty($existing['id'])) {
+            $hash['message_code'] = 'project not found';
+            return $hash;
+        }
+
+        // Plain text: escape + keep line breaks as <br>. HTML (rich text) is stored as-is for Quill/v-html.
+        $plainOnly = (strip_tags($content) === $content);
+        if ($plainOnly) {
+            $content = nl2br(htmlspecialchars($content, ENT_QUOTES, 'UTF-8'), false);
+        }
+
+        $title = isset($params['title']) ? trim((string)$params['title']) : '';
+        if ($title === '') {
+            $plain = trim(preg_replace('/\s+/u', ' ', strip_tags($content)));
+            $title = $plain !== '' ? mb_substr($plain, 0, 50) : 'メモ';
+        }
+
+        $user_id = isset($params['user_id']) ? trim((string)$params['user_id']) : '';
+        if ($user_id === '') {
+            $user_id = 'admin';
+        }
+
+        $is_important = isset($params['is_important']) && $params['is_important'] !== ''
+            ? intval($params['is_important']) : 0;
+        $needs_confirmation = isset($params['needs_confirmation']) && $params['needs_confirmation'] !== ''
+            ? intval($params['needs_confirmation']) : 0;
+        $display_column = isset($params['display_column']) ? trim((string)$params['display_column']) : '';
+        $now = date('Y-m-d H:i:s');
+
+        require_once('projectnote.php');
+        $noteModel = new ProjectNote();
+        $noteModel->connect();
+        $new_id = $noteModel->query_insert(array(
+            'project_id' => $project_id,
+            'user_id' => $user_id,
+            'title' => $title,
+            'content' => $content,
+            'is_important' => $is_important ? 1 : 0,
+            'needs_confirmation' => 2,
+            'display_column' => $display_column,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ));
+        $noteModel->close();
+
+        if ($new_id) {
+            $hash['status'] = 'success';
+            $hash['message_code'] = 'created';
+            $hash['id'] = (int)$new_id;
+            return $hash;
+        }
+
+        $hash['message_code'] = 'failed to create note';
+        return $hash;
+    }
+
+
 }
 
 ?>

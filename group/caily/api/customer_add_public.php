@@ -17,12 +17,11 @@ $params = array(
     'branch_name'  => isset($_REQUEST['branch_name']) ? $_REQUEST['branch_name'] : '',
     'company_name' => isset($_REQUEST['company_name']) ? $_REQUEST['company_name'] : '',
     'category_id'  => isset($_REQUEST['category_id']) ? $_REQUEST['category_id'] : '',
-    'key' => isset($_REQUEST['key']) ? $_REQUEST['key'] : '',
+    'department_id'  => isset($_REQUEST['department_id']) ? $_REQUEST['department_id'] : '',
+    'key' => isset($_REQUEST['key']) ? $_REQUEST['key'] : ''
 );
 if($params['key'] != 'caily@123'){
-    $hash['status'] = 'error';
-    $hash['message_code'] = 'invalid key';
-    echo json_encode($hash);
+    echo json_encode(array('status' => 'error', 'message_code' => 'invalid key', 'id' => null));
     exit;
 }
 $customer = new Customer();

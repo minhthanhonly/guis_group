@@ -89,7 +89,7 @@ class ParentProject extends ApplicationModel {
         }
 
         $requestFilter = isset($_GET['request_filter']) ? trim((string)$_GET['request_filter']) : '';
-        $allowedRequestFilters = ['意匠', '設備', '省エネ', 'その他', '3D'];
+        $allowedRequestFilters = ['意匠', '設備', '3D設備', '省エネ', 'その他', '3D'];
         if ($requestFilter !== '' && in_array($requestFilter, $allowedRequestFilters, true)) {
             $whereArr[] = sprintf(
                 "FIND_IN_SET('%s', REPLACE(p.requests, ' ', ''))",
@@ -214,11 +214,44 @@ class ParentProject extends ApplicationModel {
             $notesMap[$pid][] = $row['id'] . '::' . ($row['content'] ?? '');
         }
 
+        $fulfilledMap = [];
+        $fulfilledRows = $this->fetchAll(sprintf(
+            "SELECT p.parent_project_id, d.name AS department_name
+             FROM %sprojects p
+             LEFT JOIN %sdepartments d ON d.id = p.department_id
+             WHERE p.parent_project_id IN (%s)
+               AND p.status NOT IN ('cancelled', 'deleted')",
+            DB_PREFIX,
+            DB_PREFIX,
+            $idsList
+        ));
+        $deptToRequest = array(
+            '設備設計' => '設備',
+            '意匠設計' => '意匠',
+            '省エネ計算' => '省エネ',
+            '技術課設備' => '3D設備',
+        );
+        foreach ($fulfilledRows as $row) {
+            $pid = (int)$row['parent_project_id'];
+            $deptName = trim((string)($row['department_name'] ?? ''));
+            $type = isset($deptToRequest[$deptName]) ? $deptToRequest[$deptName] : '';
+            if ($type === '') {
+                continue;
+            }
+            if (!isset($fulfilledMap[$pid])) {
+                $fulfilledMap[$pid] = [];
+            }
+            if (!in_array($type, $fulfilledMap[$pid], true)) {
+                $fulfilledMap[$pid][] = $type;
+            }
+        }
+
         foreach ($data as &$row) {
             $pid = (int)$row['id'];
             $row['child_project_count'] = $childMap[$pid] ?? 0;
             $row['is_favorite'] = isset($favoriteSet[$pid]) ? 1 : 0;
             $row['notes_display'] = isset($notesMap[$pid]) ? implode(' | ', $notesMap[$pid]) : '';
+            $row['fulfilled_request_types'] = isset($fulfilledMap[$pid]) ? array_values($fulfilledMap[$pid]) : [];
         }
         unset($row);
     }
@@ -508,16 +541,16 @@ class ParentProject extends ApplicationModel {
     /**
      * Find parent_project by construction_number and customer_id. Returns row with id or null.
      */
-    function get_by_construction_number_and_customer_id($construction_number, $customer_id) {
-        $construction_number = trim($construction_number ?? '');
+    function get_by_construction_number_and_customer_id($project_name, $customer_id) {
+        $project_name = trim($project_name ?? '');
         $customer_id = intval($customer_id);
-        if ($construction_number === '' || $customer_id <= 0) {
+        if ($project_name === '' || $customer_id <= 0) {
             return null;
         }
         $query = sprintf(
-            "SELECT id FROM %s WHERE TRIM(COALESCE(construction_number,'')) = '%s' AND customer_id = %d LIMIT 1",
+            "SELECT id FROM %s WHERE TRIM(COALESCE(project_name,'')) = '%s' AND customer_id = %d LIMIT 1",
             $this->table,
-            $this->quote($construction_number),
+            $this->quote($project_name),
             $customer_id
         );
         return $this->fetchOne($query);
@@ -570,7 +603,7 @@ class ParentProject extends ApplicationModel {
         $status = isset($params['status']) && trim($params['status'] ?? '') !== '' ? trim($params['status']) : 'completed';
         $department_id = isset($params['department_id']) && $params['department_id'] !== '' && $params['department_id'] !== null
             ? intval($params['department_id']) : 5;
-        $existing = $this->get_by_construction_number_and_customer_id($construction_number, $customer_id);
+        $existing = $this->get_by_construction_number_and_customer_id($project_name, $customer_id);
        
         if ($existing && !empty($existing['id'])) {
             $data = array(

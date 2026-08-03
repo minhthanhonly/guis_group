@@ -21,6 +21,14 @@ createApp({
             parentProjects: [],
             searchKeyword: '',
             requestFilter: '',
+            requestFilterOptions: [
+                { value: '', label: 'すべて', color: 'secondary' },
+                { value: '意匠', label: '意匠', color: 'primary' },
+                { value: '設備', label: '設備', color: 'info' },
+                { value: '3D設備', label: '3D設備', color: 'success' },
+                { value: '省エネ', label: '省エネ', color: 'warning' },
+                { value: 'その他', label: 'その他', color: 'dark' }
+            ],
             statusFilter: 'all',
             favoritesOnly: false,
             currentPage: 1,
@@ -64,11 +72,55 @@ createApp({
                 user_id: null
             },
             currentNoteParentProjectId: null,
-            noteContextMenuVisible: false,
-            noteContextMenuX: 0,
-            noteContextMenuY: 0,
             contextMenuParentProjectId: null,
+            parentProjectContextMenuVisible: false,
+            parentProjectContextMenuX: 0,
+            parentProjectContextMenuY: 0,
+            parentProjectContextMenuProject: null,
+            highlightedParentProjectId: null,
+            editParentProjectLoading: false,
+            editParentProjectSaving: false,
+            editParentProjectErrors: {
+                company_name: '',
+                project_name: ''
+            },
+            editingParentProject: {
+                id: null,
+                project_name: '',
+                project_number: '',
+                construction_number: '',
+                company_name: '',
+                branch_name: '',
+                contact_name: '',
+                customer_id: '',
+                guis_receiver: '',
+                request_date: '',
+                scale: '',
+                structural_office: '',
+                type1: '',
+                type2: '',
+                status: 'draft',
+                requests: '',
+                materials: ''
+            },
+            editParentRequestFlags: {
+                design: false,
+                equipment: false,
+                equipment3d: false,
+                energy: false,
+                other: false
+            },
+            editParentMaterialFlags: {
+                layout: false,
+                rental: false,
+                contract: false,
+                tac: false,
+                other: false
+            },
+            editParentType1Tagify: null,
+            editParentType2Tagify: null,
             columnVisibilityStorageKey: 'parent_project_column_visibility',
+            filterStorageKey: 'parent_project_list_filters',
             searchTimer: null,
             // Auto refresh
             autoRefreshTimer: null,
@@ -79,6 +131,18 @@ createApp({
                 { value: 'in_progress', label: '進行中', color: 'primary' },
                 { value: 'completed', label: '完了', color: 'success' },
                 { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+            ],
+            childProjectStatuses: [
+                { value: 'draft', label: '受付', color: 'secondary' },
+                { value: 'open', label: '納期検討', color: 'info' },
+                { value: 'confirming', label: '仮受', color: 'info' },
+                { value: 'quotation', label: '見積', color: 'info' },
+                { value: 'contract', label: '請負', color: 'info' },
+                { value: 'waiting_documents', label: '資料待ち', color: 'warning' },
+                { value: 'in_progress', label: '進行中', color: 'primary' },
+                { value: 'completed', label: '完了', color: 'success' },
+                { value: 'paused', label: '一時停止', color: 'warning' },
+                { value: 'cancelled', label: '中止', color: 'danger' }
             ]
         }
     },
@@ -205,6 +269,40 @@ createApp({
         onColumnVisibilityChange() {
             this.saveColumnVisibilityToStorage();
         },
+        loadFiltersFromStorage() {
+            try {
+                const raw = localStorage.getItem(this.filterStorageKey);
+                if (!raw) return;
+                const stored = JSON.parse(raw);
+                if (!stored || typeof stored !== 'object') return;
+
+                if (typeof stored.searchKeyword === 'string') {
+                    this.searchKeyword = stored.searchKeyword;
+                }
+
+                const allowedRequests = this.requestFilterOptions.map((o) => o.value);
+                if (typeof stored.requestFilter === 'string' && allowedRequests.includes(stored.requestFilter)) {
+                    this.requestFilter = stored.requestFilter;
+                }
+
+                if (typeof stored.favoritesOnly === 'boolean') {
+                    this.favoritesOnly = stored.favoritesOnly;
+                }
+            } catch (e) {
+                console.error('Error loading parent project filters:', e);
+            }
+        },
+        saveFiltersToStorage() {
+            try {
+                localStorage.setItem(this.filterStorageKey, JSON.stringify({
+                    searchKeyword: this.searchKeyword || '',
+                    requestFilter: this.requestFilter || '',
+                    favoritesOnly: !!this.favoritesOnly
+                }));
+            } catch (e) {
+                console.error('Error saving parent project filters:', e);
+            }
+        },
         // ----- Notes (メモ) helpers & actions -----
         parseNotesDisplay(notesDisplay) {
             if (!notesDisplay || typeof notesDisplay !== 'string') return [];
@@ -220,16 +318,506 @@ createApp({
                     return { id, content };
                 });
         },
-        onNotesContextMenu(event, project) {
+        onParentProjectContextMenu(event, project) {
+            if (!project || !project.id) return;
             this.contextMenuParentProjectId = project.id;
-            this.noteContextMenuX = event.pageX;
-            this.noteContextMenuY = event.pageY;
-            this.noteContextMenuVisible = true;
+            this.parentProjectContextMenuProject = project;
+            this.parentProjectContextMenuX = event.pageX;
+            this.parentProjectContextMenuY = event.pageY;
+            this.parentProjectContextMenuVisible = true;
+        },
+        closeParentProjectContextMenu() {
+            this.parentProjectContextMenuVisible = false;
+            this.parentProjectContextMenuProject = null;
+            this.contextMenuParentProjectId = null;
+        },
+        isHighlightedParentProject(project) {
+            if (!project || this.highlightedParentProjectId == null) return false;
+            return String(project.id) === String(this.highlightedParentProjectId);
+        },
+        clearParentProjectHighlight() {
+            this.highlightedParentProjectId = null;
+        },
+        goToParentProjectDetailFromContextMenu() {
+            const project = this.parentProjectContextMenuProject;
+            this.closeParentProjectContextMenu();
+            if (!project || !project.id) return;
+            window.location.href = 'detail.php?id=' + encodeURIComponent(project.id);
+        },
+        async openParentProjectEditFromContextMenu() {
+            const project = this.parentProjectContextMenuProject;
+            this.closeParentProjectContextMenu();
+            if (!project || !project.id || !this.isProjectManager) return;
+            await this.openEditParentProjectModal(project.id);
+        },
+        parseEditParentRequests(requestsStr) {
+            const requests = String(requestsStr || '').split(',').map(r => r.trim()).filter(Boolean);
+            this.editParentRequestFlags = {
+                design: requests.includes('意匠'),
+                equipment: requests.includes('設備'),
+                equipment3d: requests.includes('3D設備'),
+                energy: requests.includes('省エネ'),
+                other: requests.includes('その他')
+            };
+        },
+        parseEditParentMaterials(materialsStr) {
+            const materials = String(materialsStr || '').split(',').map(m => m.trim()).filter(Boolean);
+            this.editParentMaterialFlags = {
+                layout: materials.includes('配置図'),
+                rental: materials.includes('家賃審査書'),
+                contract: materials.includes('契約図'),
+                tac: materials.includes('TAC図'),
+                other: materials.includes('その他')
+            };
+        },
+        buildEditParentRequestsString() {
+            const arr = [];
+            if (this.editParentRequestFlags.design) arr.push('意匠');
+            if (this.editParentRequestFlags.equipment) arr.push('設備');
+            if (this.editParentRequestFlags.equipment3d) arr.push('3D設備');
+            if (this.editParentRequestFlags.energy) arr.push('省エネ');
+            if (this.editParentRequestFlags.other) arr.push('その他');
+            return arr.join(',');
+        },
+        buildEditParentMaterialsString() {
+            const arr = [];
+            if (this.editParentMaterialFlags.layout) arr.push('配置図');
+            if (this.editParentMaterialFlags.rental) arr.push('家賃審査書');
+            if (this.editParentMaterialFlags.contract) arr.push('契約図');
+            if (this.editParentMaterialFlags.tac) arr.push('TAC図');
+            if (this.editParentMaterialFlags.other) arr.push('その他');
+            return arr.join(',');
+        },
+        destroyEditParentWidgets() {
+            ['#edit_pp_company_name', '#edit_pp_branch_name', '#edit_pp_contact_name', '#edit_pp_guis_receiver'].forEach((sel) => {
+                const $el = $(sel);
+                if ($el.length && $el.data('select2')) {
+                    try { $el.select2('destroy'); } catch (e) {}
+                }
+                $el.empty().append('<option value="">選択してください</option>');
+            });
+            const dateEl = document.getElementById('edit_pp_request_date');
+            if (dateEl && dateEl._flatpickr) {
+                try { dateEl._flatpickr.destroy(); } catch (e) {}
+            }
+            [this.editParentType1Tagify, this.editParentType2Tagify].forEach((t) => {
+                if (t && typeof t.destroy === 'function') {
+                    try { t.destroy(); } catch (e) {}
+                }
+            });
+            this.editParentType1Tagify = null;
+            this.editParentType2Tagify = null;
+            ['#edit_pp_type1_tags', '#edit_pp_type2_tags'].forEach((sel) => {
+                const el = document.querySelector(sel);
+                if (el) el.value = '';
+            });
+        },
+        setEditParentCurrentDateTime() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const dateStr = `${y}/${m}/${d} ${hh}:${mm}`;
+            this.editingParentProject.request_date = dateStr;
+            const dateEl = document.getElementById('edit_pp_request_date');
+            if (dateEl && dateEl._flatpickr) {
+                dateEl._flatpickr.setDate(dateStr, true);
+            } else if (dateEl) {
+                dateEl.value = dateStr;
+            }
+        },
+        clearEditParentTagifyTags(fieldName) {
+            if (fieldName === 'type1' && this.editParentType1Tagify) this.editParentType1Tagify.removeAllTags();
+            if (fieldName === 'type2' && this.editParentType2Tagify) this.editParentType2Tagify.removeAllTags();
+        },
+        initEditParentDatePicker() {
+            const dateEl = document.getElementById('edit_pp_request_date');
+            if (!dateEl || typeof flatpickr === 'undefined') return;
+            if (dateEl._flatpickr) dateEl._flatpickr.destroy();
+            flatpickr(dateEl, {
+                enableTime: true,
+                dateFormat: 'Y/m/d H:i',
+                time_24hr: true,
+                allowInput: true,
+                locale: 'ja',
+                defaultHour: 9,
+                defaultMinute: 0,
+                onChange: (selectedDates, dateStr) => {
+                    this.editingParentProject.request_date = dateStr;
+                }
+            });
+            if (this.editingParentProject.request_date) {
+                dateEl._flatpickr.setDate(this.editingParentProject.request_date, false);
+            }
+        },
+        initEditParentTagify() {
+            const type1Input = document.querySelector('#edit_pp_type1_tags');
+            if (type1Input && window.Tagify) {
+                if (type1Input.tagify) { try { type1Input.tagify.destroy(); } catch (e) {} }
+                type1Input.value = '';
+                this.editParentType1Tagify = new Tagify(type1Input, {
+                    whitelist: ['TAC', '特注'],
+                    maxTags: 5,
+                    dropdown: { maxItems: 20, classname: 'tags-look-type1', enabled: 0, closeOnSelect: true }
+                });
+                const updateType1 = () => {
+                    this.editingParentProject.type1 = this.editParentType1Tagify.value.map(t => t.value).join(',');
+                };
+                this.editParentType1Tagify.on('add', updateType1);
+                this.editParentType1Tagify.on('remove', updateType1);
+                const type1Val = String(this.editingParentProject.type1 || '').trim();
+                if (type1Val) this.editParentType1Tagify.addTags(type1Val);
+            }
+            const type2Input = document.querySelector('#edit_pp_type2_tags');
+            if (type2Input && window.Tagify) {
+                if (type2Input.tagify) { try { type2Input.tagify.destroy(); } catch (e) {} }
+                type2Input.value = '';
+                this.editParentType2Tagify = new Tagify(type2Input, {
+                    whitelist: ['共同', '集合'],
+                    maxTags: 5,
+                    dropdown: { maxItems: 20, classname: 'tags-look-type2', enabled: 0, closeOnSelect: true }
+                });
+                const updateType2 = () => {
+                    this.editingParentProject.type2 = this.editParentType2Tagify.value.map(t => t.value).join(',');
+                };
+                this.editParentType2Tagify.on('add', updateType2);
+                this.editParentType2Tagify.on('remove', updateType2);
+                const type2Val = String(this.editingParentProject.type2 || '').trim();
+                if (type2Val) this.editParentType2Tagify.addTags(type2Val);
+            }
+        },
+        initEditParentSelect2() {
+            const modalEl = document.getElementById('editParentProjectModal');
+            const dropdownParent = modalEl ? $(modalEl) : $(document.body);
+            const $company = $('#edit_pp_company_name');
+            const $branch = $('#edit_pp_branch_name');
+            const $contact = $('#edit_pp_contact_name');
+            const $guis = $('#edit_pp_guis_receiver');
+
+            if ($company.length) {
+                if ($company.data('select2')) $company.select2('destroy');
+                $company.empty().append('<option value="">選択してください</option>');
+                $company.select2({
+                    placeholder: '選択してください',
+                    dropdownParent,
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    ajax: {
+                        url: '/api/index.php?model=customer&method=list_companies',
+                        dataType: 'json',
+                        delay: 250,
+                        data: (params) => ({ search: params.term, page: params.page || 1 }),
+                        processResults: (data) => {
+                            const list = (data.data || []).slice().sort((a, b) => {
+                                const nameA = (a.company_name || '').toString();
+                                const nameB = (b.company_name || '').toString();
+                                const hasA = nameA.includes('大東');
+                                const hasB = nameB.includes('大東');
+                                if (hasA && !hasB) return -1;
+                                if (!hasA && hasB) return 1;
+                                return nameA.localeCompare(nameB);
+                            });
+                            return {
+                                results: list.map((item) => ({ id: item.company_name, text: item.company_name }))
+                            };
+                        }
+                    }
+                }).on('select2:select', (e) => {
+                    this.editingParentProject.company_name = e.params.data.id;
+                    this.onEditParentCompanyChange();
+                }).on('select2:clear', () => {
+                    this.editingParentProject.company_name = '';
+                    this.onEditParentCompanyChange();
+                });
+                if (this.editingParentProject.company_name) {
+                    const opt = new Option(this.editingParentProject.company_name, this.editingParentProject.company_name, true, true);
+                    $company.append(opt).trigger('change');
+                }
+            }
+
+            if ($branch.length) {
+                if ($branch.data('select2')) $branch.select2('destroy');
+                $branch.empty().append('<option value="">選択してください</option>');
+                $branch.select2({
+                    placeholder: '選択してください',
+                    dropdownParent,
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    ajax: {
+                        url: '/api/index.php?model=customer&method=list_branches_by_company',
+                        dataType: 'json',
+                        delay: 250,
+                        data: (params) => ({
+                            search: params.term,
+                            page: params.page || 1,
+                            company_name: this.editingParentProject.company_name
+                        }),
+                        processResults: (data) => ({
+                            results: (data.data || []).map((item) => ({ id: item.branch, text: item.branch }))
+                        })
+                    }
+                }).on('select2:select', (e) => {
+                    this.editingParentProject.branch_name = e.params.data.id;
+                    this.onEditParentBranchChange();
+                }).on('select2:clear', () => {
+                    this.editingParentProject.branch_name = '';
+                    this.onEditParentBranchChange();
+                });
+                if (this.editingParentProject.branch_name) {
+                    const opt = new Option(this.editingParentProject.branch_name, this.editingParentProject.branch_name, true, true);
+                    $branch.append(opt).trigger('change');
+                }
+            }
+
+            if ($contact.length) {
+                if ($contact.data('select2')) $contact.select2('destroy');
+                $contact.empty().append('<option value="">選択してください</option>');
+                $contact.select2({
+                    placeholder: '選択してください',
+                    dropdownParent,
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    ajax: {
+                        url: '/api/index.php?model=customer&method=list_contacts_by_company_branch',
+                        dataType: 'json',
+                        delay: 250,
+                        data: (params) => ({
+                            search: params.term,
+                            page: params.page || 1,
+                            company_name: this.editingParentProject.company_name,
+                            branch_name: this.editingParentProject.branch_name
+                        }),
+                        processResults: (data) => ({
+                            results: (data.data || []).map((item) => ({
+                                id: item.name,
+                                text: item.name,
+                                customer_id: item.id
+                            }))
+                        })
+                    }
+                }).on('select2:select', (e) => {
+                    this.editingParentProject.contact_name = e.params.data.id;
+                    if (e.params.data.customer_id) {
+                        this.editingParentProject.customer_id = e.params.data.customer_id;
+                    }
+                }).on('select2:clear', () => {
+                    this.editingParentProject.contact_name = '';
+                });
+                if (this.editingParentProject.contact_name) {
+                    const opt = new Option(this.editingParentProject.contact_name, this.editingParentProject.contact_name, true, true);
+                    $contact.append(opt).trigger('change');
+                }
+            }
+
+            if ($guis.length) {
+                if ($guis.data('select2')) $guis.select2('destroy');
+                $guis.empty().append('<option value="">選択してください</option>');
+                $guis.select2({
+                    placeholder: '選択してください',
+                    dropdownParent,
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    ajax: {
+                        url: '/api/index.php?model=user&method=searchMembers',
+                        dataType: 'json',
+                        delay: 250,
+                        data: (params) => ({ search: params.term, page: params.page || 1 }),
+                        processResults: (data) => ({
+                            results: (data.data || []).map((item) => ({
+                                id: item.userid,
+                                text: item.realname
+                            }))
+                        })
+                    }
+                }).on('select2:select', (e) => {
+                    this.editingParentProject.guis_receiver = e.params.data.id;
+                }).on('select2:clear', () => {
+                    this.editingParentProject.guis_receiver = '';
+                });
+                if (this.editingParentProject.guis_receiver) {
+                    this.loadEditParentGuisReceiverDisplay();
+                }
+            }
+        },
+        async loadEditParentGuisReceiverDisplay() {
+            try {
+                const response = await axios.get('/api/index.php?model=user&method=searchMembers');
+                const list = (response.data && response.data.data) ? response.data.data : [];
+                const userid = String(this.editingParentProject.guis_receiver || '');
+                const user = list.find((u) => String(u.userid) === userid);
+                const $guis = $('#edit_pp_guis_receiver');
+                if ($guis.length && $guis.data('select2') && user) {
+                    $guis.empty();
+                    const option = new Option(user.realname, userid, true, true);
+                    $guis.append(option).trigger('change');
+                }
+            } catch (error) {
+                console.error('Error loading GUIS receiver display name:', error);
+            }
+        },
+        onEditParentCompanyChange() {
+            this.editingParentProject.branch_name = '';
+            this.editingParentProject.contact_name = '';
+            const $branch = $('#edit_pp_branch_name');
+            const $contact = $('#edit_pp_contact_name');
+            if ($branch.length && $branch.data('select2')) {
+                $branch.val(null).trigger('change');
+            }
+            if ($contact.length && $contact.data('select2')) {
+                $contact.val(null).trigger('change');
+            }
+        },
+        onEditParentBranchChange() {
+            this.editingParentProject.contact_name = '';
+            const $contact = $('#edit_pp_contact_name');
+            if ($contact.length && $contact.data('select2')) {
+                $contact.val(null).trigger('change');
+            }
+        },
+        async openEditParentProjectModal(parentProjectId) {
+            this.editParentProjectErrors = { company_name: '', project_name: '' };
+            this.editParentProjectLoading = true;
+            this.destroyEditParentWidgets();
+            this.editingParentProject = {
+                id: parentProjectId,
+                project_name: '',
+                project_number: '',
+                construction_number: '',
+                company_name: '',
+                branch_name: '',
+                contact_name: '',
+                customer_id: '',
+                guis_receiver: '',
+                request_date: '',
+                scale: '',
+                structural_office: '',
+                type1: '',
+                type2: '',
+                status: 'draft',
+                requests: '',
+                materials: ''
+            };
+            this.parseEditParentRequests('');
+            this.parseEditParentMaterials('');
+            const modalEl = document.getElementById('editParentProjectModal');
+            if (modalEl) {
+                bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            }
+            try {
+                const response = await axios.get('/api/index.php?model=parentproject&method=getById&id=' + encodeURIComponent(parentProjectId));
+                const data = response.data || {};
+                this.editingParentProject = {
+                    id: data.id || parentProjectId,
+                    project_name: data.project_name || '',
+                    project_number: data.project_number || '',
+                    construction_number: data.construction_number || '',
+                    company_name: data.company_name || '',
+                    branch_name: data.branch_name || '',
+                    contact_name: data.contact_name || '',
+                    customer_id: data.customer_id || '',
+                    guis_receiver: data.guis_receiver || '',
+                    request_date: data.request_date || '',
+                    scale: data.scale || '',
+                    structural_office: data.structural_office || '',
+                    type1: data.type1 || '',
+                    type2: data.type2 || '',
+                    status: data.status || 'draft',
+                    requests: data.requests || '',
+                    materials: data.materials || ''
+                };
+                this.parseEditParentRequests(this.editingParentProject.requests);
+                this.parseEditParentMaterials(this.editingParentProject.materials);
+                this.editParentProjectLoading = false;
+                await this.$nextTick();
+                this.initEditParentSelect2();
+                this.initEditParentDatePicker();
+                this.initEditParentTagify();
+                if (typeof window.applyDataI18n === 'function') {
+                    window.applyDataI18n(modalEl);
+                } else if (typeof this.translateI18n === 'function') {
+                    this.translateI18n();
+                }
+            } catch (error) {
+                console.error('Error loading parent project for edit:', error);
+                if (typeof showMessage === 'function') {
+                    showMessage('建物情報の読み込みに失敗しました。', true);
+                }
+                if (modalEl) {
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                }
+                this.editParentProjectLoading = false;
+            }
+        },
+        async saveParentProjectFromModal() {
+            this.editParentProjectErrors = { company_name: '', project_name: '' };
+            const company = String(this.editingParentProject.company_name || '').trim();
+            const name = String(this.editingParentProject.project_name || '').trim();
+            let hasError = false;
+            if (!company) {
+                this.editParentProjectErrors.company_name = '会社名は必須です';
+                hasError = true;
+            }
+            if (!name) {
+                this.editParentProjectErrors.project_name = 'お施主様名は必須です';
+                hasError = true;
+            }
+            if (hasError) return;
+
+            this.editParentProjectSaving = true;
+            try {
+                const formData = new FormData();
+                formData.append('id', this.editingParentProject.id);
+                formData.append('company_name', company);
+                formData.append('branch_name', this.editingParentProject.branch_name || '');
+                formData.append('contact_name', this.editingParentProject.contact_name || '');
+                formData.append('customer_id', this.editingParentProject.customer_id || '');
+                formData.append('guis_receiver', this.editingParentProject.guis_receiver || '');
+                formData.append('request_date', this.editingParentProject.request_date || '');
+                formData.append('project_name', name);
+                formData.append('project_number', this.editingParentProject.project_number || '');
+                formData.append('construction_number', this.editingParentProject.construction_number || '');
+                formData.append('scale', this.editingParentProject.scale || '');
+                formData.append('structural_office', this.editingParentProject.structural_office || '');
+                formData.append('type1', this.editingParentProject.type1 || '');
+                formData.append('type2', this.editingParentProject.type2 || '');
+                formData.append('status', this.editingParentProject.status || 'draft');
+                formData.append('requests', this.buildEditParentRequestsString());
+                formData.append('materials', this.buildEditParentMaterialsString());
+                const response = await axios.post('/api/index.php?model=parentproject&method=update', formData);
+                if (response.data && response.data.status === 'success') {
+                    const savedId = this.editingParentProject.id;
+                    this.highlightedParentProjectId = savedId != null ? Number(savedId) || savedId : null;
+                    if (typeof showMessage === 'function') {
+                        showMessage(response.data.message || '建物情報を更新しました。', false);
+                    }
+                    const modalEl = document.getElementById('editParentProjectModal');
+                    if (modalEl) {
+                        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                    }
+                    this.destroyEditParentWidgets();
+                    await this.loadParentProjects();
+                } else {
+                    if (typeof showMessage === 'function') {
+                        showMessage((response.data && (response.data.error || response.data.message)) || '更新に失敗しました。', true);
+                    }
+                }
+            } catch (error) {
+                console.error('Error saving parent project:', error);
+                if (typeof showMessage === 'function') {
+                    showMessage('更新に失敗しました。', true);
+                }
+            } finally {
+                this.editParentProjectSaving = false;
+            }
         },
         addNoteFromContextMenu() {
-            if (!this.contextMenuParentProjectId) return;
-            this.openNoteModalFromList(this.contextMenuParentProjectId, null);
-            this.noteContextMenuVisible = false;
+            const parentId = this.contextMenuParentProjectId
+                || (this.parentProjectContextMenuProject && this.parentProjectContextMenuProject.id);
+            this.closeParentProjectContextMenu();
+            if (!parentId) return;
+            this.openNoteModalFromList(parentId, null);
         },
         async loadNotesForParentProject(parentProjectId) {
             try {
@@ -427,6 +1015,7 @@ createApp({
             clearTimeout(this.searchTimer);
             this.searchTimer = setTimeout(() => {
                 this.currentPage = 1;
+                this.saveFiltersToStorage();
                 this.loadParentProjects();
             }, 500);
         },
@@ -441,8 +1030,27 @@ createApp({
             this.searchKeyword = '';
             this.onSearch();
         },
+        selectRequestFilter(value) {
+            this.requestFilter = value;
+            this.onRequestFilterChange();
+        },
+        getRequestColor(request) {
+            const opt = this.requestFilterOptions.find((o) => o.value && o.value === request);
+            return opt ? opt.color : 'secondary';
+        },
+        getRequestBadgeClass(request) {
+            return `bg-${this.getRequestColor(request)}`;
+        },
+        isParentRequestFulfilled(project, requestType) {
+            const type = String(requestType || '').trim();
+            if (!type || !project) return false;
+            const fulfilled = project.fulfilled_request_types;
+            if (!Array.isArray(fulfilled)) return false;
+            return fulfilled.some((t) => String(t).trim() === type);
+        },
         onRequestFilterChange() {
             this.currentPage = 1;
+            this.saveFiltersToStorage();
             this.loadParentProjects();
         },
         onStatusFilterChange() {
@@ -451,6 +1059,7 @@ createApp({
         },
         onFavoritesFilterChange() {
             this.currentPage = 1;
+            this.saveFiltersToStorage();
             this.loadParentProjects();
         },
         async openChildProjectsWindow(project) {
@@ -511,6 +1120,7 @@ createApp({
                     if (response.data && response.data.status === 'success') {
                         // Uncheck the favorites filter
                         this.favoritesOnly = false;
+                        this.saveFiltersToStorage();
                         // Reload the list to refresh favorite status
                         this.loadParentProjects();
                     } else {
@@ -529,20 +1139,26 @@ createApp({
             }
         },
         getStatusLabel(status) {
-            const s = this.statuses.find(s => s.value === status);
+            const s = this.statuses.find(s => s.value === status)
+                || this.childProjectStatuses.find(s => s.value === status);
             return s ? s.label : status;
         },
         getStatusBadgeClass(status) {
-            const s = this.statuses.find(s => s.value === status);
+            const s = this.statuses.find(s => s.value === status)
+                || this.childProjectStatuses.find(s => s.value === status);
             return `bg-${s?.color || 'secondary'}`;
         },
         getOrderTypeBadgeClass(orderType) {
-            const type = (orderType || '').trim().toLowerCase();
+            const type = String(orderType || '').trim();
             switch (type) {
                 case '修正':
                     return 'bg-warning';
                 case '新規':
                     return 'bg-primary';
+                case '新規修正':
+                    return 'bg-success';
+                case '変更':
+                    return 'bg-danger';
                 default:
                     return 'bg-info';
             }
@@ -747,11 +1363,18 @@ createApp({
     },
     mounted() {
         this.loadColumnVisibilityFromStorage();
+        this.loadFiltersFromStorage();
         this.loadPermission();
         this.loadParentProjects();
         document.addEventListener('click', () => {
-            this.noteContextMenuVisible = false;
+            this.closeParentProjectContextMenu();
         });
+        const editParentModalEl = document.getElementById('editParentProjectModal');
+        if (editParentModalEl) {
+            editParentModalEl.addEventListener('hidden.bs.modal', () => {
+                this.destroyEditParentWidgets();
+            });
+        }
         // Auto refresh danh sách parent project (giống project/index.php)
         if (!this.autoRefreshTimer) {
             this.autoRefreshTimer = setInterval(() => {

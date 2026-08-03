@@ -205,6 +205,7 @@ class Customer extends ApplicationModel {
         $name = isset($params['name']) ? trim($params['name']) : '';
         $branch_name = isset($params['branch_name']) ? trim($params['branch_name'] ?? '') : trim($params['branch'] ?? '');
         $company_name = isset($params['company_name']) ? trim($params['company_name']) : '';
+        $department_id = isset($params['department_id']) ? trim($params['department_id']) : '';
         $category_id = isset($params['category_id']) && $params['category_id'] !== '' && $params['category_id'] !== null
             ? intval($params['category_id']) : 2;
         if ($name === '') {
@@ -236,7 +237,7 @@ class Customer extends ApplicationModel {
             'title' => '様',
             'company_name_kana' => '',
             'category_id' => $category_id,
-            'guis_department' => '',
+            'guis_department' => $department_id,
             'status' => 1,
             'created_at' => date('Y-m-d H:i:s'),
             'created_by' => 0,

@@ -319,6 +319,7 @@ const vueApp = createApp({
             permission: {},
             projectId: typeof PROJECT_ID !== 'undefined' ? PROJECT_ID : this.getProjectIdFromUrl(),
             project: null,
+            parentSiblingProjects: [],
             department: null,
             managers: [],
             members: [],
@@ -340,6 +341,7 @@ const vueApp = createApp({
                 { value: 'confirming', label: '仮受', color: 'info' },
                 { value: 'quotation', label: '見積', color: 'info' },
                 { value: 'contract', label: '請負', color: 'info' },
+                { value: 'waiting_documents', label: '資料待ち', color: 'warning' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
                 { value: 'completed', label: '完了', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
@@ -475,6 +477,10 @@ const vueApp = createApp({
     computed: {
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+        },
+        parentRequestTypes() {
+            const raw = (this.project && this.project.parent_requests) ? String(this.project.parent_requests) : '';
+            return raw.split(',').map(r => r.trim()).filter(Boolean);
         },
         editableStatuses() {
             if (!this.isCailyBranchUser) {
@@ -847,7 +853,21 @@ const vueApp = createApp({
                 this.project.guis_receiver = parentProject.guis_receiver; // GUIS　受付者
                 this.project.structural_office = parentProject.structural_office; // 構造事務所
                 this.project.materials = parentProject.materials; // 資料
-                this.project.notes = parentProject.notes; // 備考
+                this.project.parent_requests = parentProject.requests || ''; // 依頼
+
+                // Sibling children for 依頼 fulfillment badges (未作成)
+                this.parentSiblingProjects = [];
+                try {
+                    const childrenRes = await axios.get(
+                        `/api/index.php?model=parentproject&method=getChildProjects&parent_project_id=${this.project.parent_project_id}`
+                    );
+                    if (Array.isArray(childrenRes.data)) {
+                        this.parentSiblingProjects = childrenRes.data;
+                    }
+                } catch (childrenErr) {
+                    console.error('Error loading sibling projects for request fulfillment:', childrenErr);
+                    this.parentSiblingProjects = [];
+                }
                 
                 // Load GUIS receiver display name if exists
                 if (this.project.guis_receiver) {
@@ -1319,6 +1339,50 @@ const vueApp = createApp({
         getStatusBadgeClass(status) {
             const s = this.statuses.find(s => s.value === status);
             return `bg-${s?.color || 'secondary'}`;
+        },
+        getOrderTypeBadgeClass(orderType) {
+            const type = String(orderType || '').trim();
+            switch (type) {
+                case '修正':
+                    return 'bg-warning';
+                case '新規':
+                    return 'bg-primary';
+                case '新規修正':
+                    return 'bg-success';
+                case '変更':
+                    return 'bg-danger';
+                default:
+                    return 'bg-info';
+            }
+        },
+        getRequestBadgeClass(request) {
+            const map = {
+                '意匠': 'bg-primary',
+                '設備': 'bg-info',
+                '3D設備': 'bg-success',
+                '省エネ': 'bg-warning',
+                '3D': 'bg-secondary',
+                'その他': 'bg-dark'
+            };
+            return map[String(request || '').trim()] || 'bg-secondary';
+        },
+        mapDepartmentNameToRequestType(departmentName) {
+            const map = {
+                '設備設計': '設備',
+                '意匠設計': '意匠',
+                '省エネ計算': '省エネ',
+                '技術課設備': '3D設備'
+            };
+            return map[String(departmentName || '').trim()] || '';
+        },
+        isParentRequestFulfilled(requestType) {
+            const type = String(requestType || '').trim();
+            if (!type || !Array.isArray(this.parentSiblingProjects)) return false;
+            return this.parentSiblingProjects.some((p) => {
+                const st = String(p.status || '');
+                if (st === 'cancelled' || st === 'deleted') return false;
+                return this.mapDepartmentNameToRequestType(p.department_name) === type;
+            });
         },
         getPriorityLabel(priority) {
             const p = this.priorities.find(p => p.value === priority);
@@ -2080,7 +2144,7 @@ const vueApp = createApp({
                             }
                         }
                         this.projectOrderTypeTagify = new Tagify(orderTypeInput, {
-                            whitelist: ['新規', '修正', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                            whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
                             maxTags: 5,
                             dropdown: {
                                 maxItems: 20,
@@ -4056,7 +4120,7 @@ const vueApp = createApp({
                                 }
                             }
                             this.projectOrderTypeTagify = new Tagify(input, {
-                                whitelist: ['新規', '修正', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                                whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
                                 maxTags: 5,
                                 dropdown: {
                                     maxItems: 20,

@@ -221,8 +221,20 @@ if($_SESSION['show_project'] == 0){
                                                         </div>
                                                     </div>
                                                     <div class="col-12 mb-3">
-                                                        <label class="form-label"><span data-i18n="備考">備考</span></label>
-                                                        <div class="form-control-plaintext" style="white-space: pre-wrap;">{{ project.notes || '-' }}</div>
+                                                        <label class="form-label"><span data-i18n="依頼">依頼</span></label>
+                                                        <div class="form-control-plaintext">
+                                                            <div class="d-flex flex-wrap gap-1 align-items-center" v-if="parentRequestTypes.length">
+                                                                <span v-for="item in parentRequestTypes" :key="item"
+                                                                      class="badge me-1 mb-1"
+                                                                      :class="isParentRequestFulfilled(item) ? getRequestBadgeClass(item) : 'bg-warning text-dark'"
+                                                                      :title="isParentRequestFulfilled(item) ? '' : '未作成'">
+                                                                    <i v-if="!isParentRequestFulfilled(item)" class="fa fa-exclamation-triangle me-1"></i>
+                                                                    <i v-else class="fa fa-check me-1"></i>
+                                                                    {{ item }}
+                                                                </span>
+                                                            </div>
+                                                            <span v-else class="text-muted">-</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -285,7 +297,7 @@ if($_SESSION['show_project'] == 0){
                                 <template v-else>
                                     <div style="min-height:38px;">
                                         <span v-if="project.project_order_type && project.project_order_type.split(',').length > 0">
-                                            <span v-for="item in project.project_order_type.split(',')" :key="item.trim()" class="badge bg-primary me-1">{{ item.trim() }}</span>
+                                            <span v-for="item in project.project_order_type.split(',')" :key="item.trim()" class="badge me-1" :class="getOrderTypeBadgeClass(item)">{{ item.trim() }}</span>
                                         </span>
                                         <span v-else>-</span>
                                     </div>

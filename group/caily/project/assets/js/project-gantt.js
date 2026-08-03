@@ -37,6 +37,11 @@ var statuses = [
         color: 'info'
     },
     {
+        key: 'waiting_documents',
+        name: '資料待ち',
+        color: 'warning'
+    },
+    {
         key: 'in_progress',
         name: '進行中',
         color: 'primary'
@@ -2109,9 +2114,11 @@ $(document).ready(function() {
                 
                 // Badge class for 受注形態 (order type) in task bar
                 const getOrderTypeBadgeClass = function(orderType) {
-                    const t = String(orderType).trim().toLowerCase();
+                    const t = String(orderType).trim();
                     if (t === '修正') return 'bg-warning small';
                     if (t === '新規') return 'bg-primary small';
+                    if (t === '新規修正') return 'bg-success small';
+                    if (t === '変更') return 'bg-danger small';
                     return 'bg-info small';
                 };
                 // Customize task text: badge before project_order_type (e.g. 期間未定), then orderType badges, team name, project name

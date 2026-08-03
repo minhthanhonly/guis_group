@@ -21,8 +21,8 @@ createApp({
                 desired_delivery_date: '',
                 request_design: false,
                 request_equipment: false,
+                request_3d_equipment: false,
                 request_energy_saving: false,
-                request_other: false,
                 request_3d: false,
                 materials_layout: false,
                 materials_rental: false,
@@ -181,8 +181,9 @@ createApp({
             return !!(
                 this.parentProject.request_design
                 || this.parentProject.request_equipment
+                || this.parentProject.request_3d_equipment
                 || this.parentProject.request_energy_saving
-                || this.parentProject.request_other
+                || this.parentProject.request_3d
             );
         },
         clearRequestsValidation() {
@@ -216,8 +217,8 @@ createApp({
                 const requestsArray = [];
                 if (this.parentProject.request_design) requestsArray.push('意匠');
                 if (this.parentProject.request_equipment) requestsArray.push('設備');
+                if (this.parentProject.request_3d_equipment) requestsArray.push('3D設備');
                 if (this.parentProject.request_energy_saving) requestsArray.push('省エネ');
-                if (this.parentProject.request_other) requestsArray.push('その他');
                 if (this.parentProject.request_3d) requestsArray.push('3D');
                 formData.append('requests', requestsArray.join(','));
                 // Convert checkbox materials to comma-separated string

@@ -239,6 +239,14 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                                     </div>
                                     <div class="col-md-3">
                                         <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="request_3d_equipment" v-model="parentProject.request_3d_equipment" @change="clearRequestsValidation">
+                                            <label class="form-check-label" for="request_3d_equipment">
+                                                3D設備
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
                                             <input class="form-check-input" type="checkbox" id="request_energy_saving" v-model="parentProject.request_energy_saving" @change="clearRequestsValidation">
                                             <label class="form-check-label" for="request_energy_saving">
                                                 省エネ
@@ -253,14 +261,6 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                                             </label>
                                         </div>
                                     </div> -->
-                                    <div class="col-md-3">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="request_other" v-model="parentProject.request_other" @change="clearRequestsValidation">
-                                            <label class="form-check-label" for="request_other">
-                                                その他
-                                            </label>
-                                        </div>
-                                    </div>
                                    
                                 </div>
                                 <div v-if="validationErrors.requests" class="invalid-feedback d-block">

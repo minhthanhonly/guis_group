@@ -2636,6 +2636,7 @@ EOT;
                         'completed' => '完了',
                         'quotation' => '見積',
                         'contract' => '請負/契約',
+                        'waiting_documents' => '資料待ち',
                         'draft' => '受付',
                         'open' => '納期検討/開始',
                         'paused' => '一時停止',
@@ -2721,7 +2722,7 @@ EOT;
         
         // Chỉ gửi status values khi có context projects/task (tiết kiệm token)
         if (in_array('projects', $contextKeys, true)) {
-            $parts[] = "[Project status values] Use these exact value in params.status or ACTION. draft=受付, open=納期検討/開始, confirming=仮受, quotation=見積, contract=請負/契約( hợp đồng), in_progress=進行中, completed=納品/完了, paused=一時停止, cancelled=中止.";
+            $parts[] = "[Project status values] Use these exact value in params.status or ACTION. draft=受付, open=納期検討/開始, confirming=仮受, quotation=見積, contract=請負/契約( hợp đồng), waiting_documents=資料待ち( chờ tài liệu), in_progress=進行中, completed=納品/完了, paused=一時停止, cancelled=中止.";
         }
         if (in_array('projects', $contextKeys, true)) {
             $parts[] = "[Task status values] Use these exact value in params.status. new=新規, todo=未開始, in_progress=進行中, confirming=確認中, paused=一時停止, completed=完了, cancelled=キャンセル.";
@@ -2831,6 +2832,7 @@ EOT;
                         'completed' => '完了',
                         'quotation' => '見積',
                         'contract' => '請負/契約',
+                        'waiting_documents' => '資料待ち',
                         'draft' => '受付',
                         'open' => '納期検討/開始',
                         'paused' => '一時停止',
@@ -2839,7 +2841,7 @@ EOT;
                     $statusLabel = isset($statusMap[$statusFilter]) ? $statusMap[$statusFilter] : $statusFilter;
                     if ($statusFilter === 'not_started') {
                         // "Chưa tiến hành" → total = số案件 chưa bắt đầu
-                        $parts[] = "[Status filter applied] **IMPORTANT: The statistics above have been filtered by status group: not_started (" . $statusLabel . "). Here, overview.total is the number of projects that have NOT started yet (status IN ['quotation','draft','contract','open','confirming']). Do NOT compute \"not started\" as total-active; use overview.total directly.**";
+                        $parts[] = "[Status filter applied] **IMPORTANT: The statistics above have been filtered by status group: not_started (" . $statusLabel . "). Here, overview.total is the number of projects that have NOT started yet (status IN ['quotation','draft','contract','waiting_documents','open','confirming']). Do NOT compute \"not started\" as total-active; use overview.total directly.**";
                     } else {
                         $parts[] = "[Status filter applied] **IMPORTANT: The statistics above have been filtered by status: " . $statusFilter . " (" . $statusLabel . "). The counts (overview.total, overview.active, overview.completed, by_department[].count) only include projects with status=\"" . $statusFilter . "\". Use these filtered statistics to answer the user's question.**";
                     }
@@ -2859,6 +2861,7 @@ EOT;
                         'completed' => '完了',
                         'quotation' => '見積',
                         'contract' => '請負/契約',
+                        'waiting_documents' => '資料待ち',
                         'draft' => '受付',
                         'open' => '納期検討/開始',
                         'paused' => '一時停止',
@@ -2972,6 +2975,7 @@ EOT;
                         'completed' => '完了',
                         'quotation' => '見積',
                         'contract' => '請負/契約',
+                        'waiting_documents' => '資料待ち',
                         'draft' => '受付',
                         'open' => '納期検討/開始',
                         'paused' => '一時停止',
@@ -3072,6 +3076,7 @@ EOT;
                     'completed' => '完了',
                     'quotation' => '見積',
                     'contract' => '請負/契約',
+                        'waiting_documents' => '資料待ち',
                     'draft' => '受付',
                     'open' => '納期検討/開始',
                     'paused' => '一時停止',
@@ -3132,6 +3137,7 @@ EOT;
                         'completed' => '完了',
                         'quotation' => '見積',
                         'contract' => '請負/契約',
+                        'waiting_documents' => '資料待ち',
                         'draft' => '受付',
                         'open' => '納期検討/開始',
                         'paused' => '一時停止',
@@ -3152,6 +3158,7 @@ EOT;
                     'completed' => '完了',
                     'quotation' => '見積',
                     'contract' => '請負/契約',
+                        'waiting_documents' => '資料待ち',
                     'draft' => '受付',
                     'open' => '納期検討/開始',
                     'paused' => '一時停止',
