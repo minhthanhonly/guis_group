@@ -2295,7 +2295,7 @@ var projectTable;
         var company = String(companyName || '').trim();
         if (!company) return '';
 
-        var text = '他社';
+        var text = Array.from(company).slice(0, 4).join('');
         var style = 'font-size: 0.65rem; vertical-align: middle;';
         if (company.indexOf('大東建託') !== -1) {
             text = '大東';
@@ -2307,7 +2307,7 @@ var projectTable;
             style += ' background-color: #0d6efd; color: #fff;';
         }
 
-        return '<span class="badge me-1" style="' + style + '">' + escapeHtmlForNote(text) + '</span>';
+        return '<span class="badge me-1" style="' + style + '" title="' + escapeHtmlForNote(company) + '">' + escapeHtmlForNote(text) + '</span>';
     }
 
     /** Giải mã HTML (giống cột CAILYメモ), strip thẻ, rồi cắt còn maxLen ký tự cho snippet note. */

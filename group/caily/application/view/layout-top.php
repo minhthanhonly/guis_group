@@ -94,7 +94,7 @@
                 || $showEmployeeStatsMenu;
 
             if($showRevenueStatsMenu){ ?>
-              <li class="menu-item <?php if($directory == 'project' || $directory == 'parent_project' || $directory == 'price_list') echo 'active open'; ?>">
+              <li class="menu-item <?php if($directory == 'project' && ($page == 'revenue_statistics' || $page == 'employee_statistics' || $page == 'team_revenue_targets')) echo 'active open'; ?>">
               <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base fa fa-chart-bar"></i>
                 <div><span data-i18n="統計情報">統計情報</span></div>

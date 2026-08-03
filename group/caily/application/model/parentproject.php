@@ -220,7 +220,7 @@ class ParentProject extends ApplicationModel {
              FROM %sprojects p
              LEFT JOIN %sdepartments d ON d.id = p.department_id
              WHERE p.parent_project_id IN (%s)
-               AND p.status NOT IN ('cancelled', 'deleted')",
+               AND p.status NOT IN ('deleted')",
             DB_PREFIX,
             DB_PREFIX,
             $idsList

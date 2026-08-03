@@ -1984,7 +1984,7 @@ $(document).ready(function() {
                     const company = String(companyName || '').trim();
                     if (!company || company === '-') return '';
 
-                    let text = '他社';
+                    let text = Array.from(company).slice(0, 4).join('');
                     let style = 'font-size:0.65rem;line-height:1;vertical-align:middle;';
                     if (company.indexOf('大東建託') !== -1) {
                         text = '大東';
@@ -1995,7 +1995,17 @@ $(document).ready(function() {
                     } else {
                         style += 'background-color:#0d6efd;color:#fff;';
                     }
-                    return '<span class="badge me-1 px-1" style="' + style + '">' + text + '</span>';
+                    const safeCompany = String(company)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;');
+                    const safeText = String(text)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;');
+                    return '<span class="badge me-1 px-1" style="' + style + '" title="' + safeCompany + '">' + safeText + '</span>';
                 }
                 
                 // // Customize columns

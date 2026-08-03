@@ -1585,8 +1585,7 @@ createApp({
             const type = String(requestType || '').trim();
             if (!type || !Array.isArray(this.childProjects)) return false;
             return this.childProjects.some((p) => {
-                const st = String(p.status || '');
-                if (st === 'cancelled' || st === 'deleted') return false;
+                if (String(p.status || '') === 'deleted') return false;
                 return this.mapDepartmentNameToRequestType(p.department_name) === type;
             });
         },
