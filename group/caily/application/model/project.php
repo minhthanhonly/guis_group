@@ -11,7 +11,6 @@ class Project extends ApplicationModel {
         $this->schema = array(
             'id' => array('except' => array('search')),
             'parent_project_id' => array(),
-            'parent_request_type' => array(),
             'project_number' => array(),
             'name' => array(),
             'description' => array(),
@@ -1699,15 +1698,6 @@ class Project extends ApplicationModel {
             'created_at' => date('Y-m-d H:i:s'),
         );
 
-        if (array_key_exists('parent_request_type', $_POST)) {
-            $prt = trim((string)$_POST['parent_request_type']);
-            $data['parent_request_type'] = ($prt !== '') ? $this->validateUTF8MB4($prt) : null;
-        } else {
-            $data['parent_request_type'] = $this->resolveParentRequestTypeFromDepartment(
-                isset($data['department_id']) ? $data['department_id'] : null
-            );
-        }
-
         // Save custom field set id and custom fields JSON if provided
         if (isset($_POST['department_custom_fields_set_id']) && $_POST['department_custom_fields_set_id'] != '') {
             $data['department_custom_fields_set_id'] = $_POST['department_custom_fields_set_id'];
@@ -2069,15 +2059,6 @@ class Project extends ApplicationModel {
         }
         if (array_key_exists('parent_project_id', $_POST)) {
             $data['parent_project_id'] = intval($_POST['parent_project_id']);
-        }
-        if (array_key_exists('parent_request_type', $_POST)) {
-            $prt = trim((string)$_POST['parent_request_type']);
-            $data['parent_request_type'] = ($prt !== '') ? $this->validateUTF8MB4($prt) : null;
-        } elseif (array_key_exists('department_id', $_POST) || array_key_exists('department_id', $data)) {
-            $deptId = array_key_exists('department_id', $data)
-                ? $data['department_id']
-                : (isset($_POST['department_id']) ? intval($_POST['department_id']) : null);
-            $data['parent_request_type'] = $this->resolveParentRequestTypeFromDepartment($deptId);
         }
         if (array_key_exists('is_kadai', $_POST)) {
             $data['is_kadai'] = intval($_POST['is_kadai']);
@@ -7595,31 +7576,6 @@ class Project extends ApplicationModel {
             $where
         );
         return $this->fetchAll($query);
-    }
-
-    /**
-     * Map department name to parent 依頼 type.
-     * 設備設計→設備, 意匠設計→意匠, 省エネ計算→省エネ, 技術課設備→3D設備
-     */
-    function resolveParentRequestTypeFromDepartment($department_id) {
-        $department_id = intval($department_id);
-        if ($department_id <= 0) {
-            return null;
-        }
-        $row = $this->fetchOne(
-            'SELECT name FROM ' . DB_PREFIX . 'departments WHERE id = ' . $department_id . ' LIMIT 1'
-        );
-        if (!$row || !isset($row['name'])) {
-            return null;
-        }
-        $map = array(
-            '設備設計' => '設備',
-            '意匠設計' => '意匠',
-            '省エネ計算' => '省エネ',
-            '技術課設備' => '3D設備',
-        );
-        $name = trim((string)$row['name']);
-        return isset($map[$name]) ? $map[$name] : null;
     }
 
     /**
