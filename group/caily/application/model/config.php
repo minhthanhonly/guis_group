@@ -39,6 +39,81 @@ class Config extends ApplicationModel {
 		$result = $this->configure($type);
 		return $result;
 	}
+
+	/**
+	 * Public API: working hours for userid via member_type → config_type.
+	 */
+	function get_work_hours_public($params) {
+		$hash = array(
+			'status' => 'error',
+			'message_code' => '',
+			'data' => null,
+		);
+		$userid = isset($params['userid']) ? trim((string)$params['userid']) : '';
+		if ($userid === '') {
+			$hash['message_code'] = 'userid is required';
+			return $hash;
+		}
+
+		$user = $this->fetchOne(sprintf(
+			"SELECT userid, realname, member_type FROM %suser WHERE userid = '%s' LIMIT 1",
+			DB_PREFIX,
+			$this->quote($userid)
+		));
+		if (!$user || empty($user['userid'])) {
+			$hash['message_code'] = 'user not found';
+			return $hash;
+		}
+
+		$member_type = isset($user['member_type']) ? trim((string)$user['member_type']) : '';
+		$config_type = ($member_type !== '') ? $member_type : 'timecard';
+
+		$query = sprintf(
+			"SELECT config_key, config_value, config_name, config_type FROM %sconfig WHERE config_type = '%s'",
+			DB_PREFIX,
+			$this->quote($config_type)
+		);
+		$rows = $this->fetchAll($query);
+		$config = array();
+		$config_name = '';
+		if (is_array($rows) && count($rows) > 0) {
+			foreach ($rows as $row) {
+				$config[$row['config_key']] = $row['config_value'];
+				if ($config_name === '' && isset($row['config_name'])) {
+					$config_name = $row['config_name'];
+				}
+			}
+		}
+
+		$openhour = isset($config['openhour']) ? intval($config['openhour']) : null;
+		$openminute = isset($config['openminute']) ? intval($config['openminute']) : null;
+		$closehour = isset($config['closehour']) ? intval($config['closehour']) : null;
+		$closeminute = isset($config['closeminute']) ? intval($config['closeminute']) : null;
+		$lunchopenhour = isset($config['lunchopenhour']) ? intval($config['lunchopenhour']) : null;
+		$lunchopenminute = isset($config['lunchopenminute']) ? intval($config['lunchopenminute']) : null;
+		$lunchclosehour = isset($config['lunchclosehour']) ? intval($config['lunchclosehour']) : null;
+		$lunchcloseminute = isset($config['lunchcloseminute']) ? intval($config['lunchcloseminute']) : null;
+
+		$hash['status'] = 'success';
+		$hash['message_code'] = '';
+		$hash['data'] = array(
+			'userid' => $user['userid'],
+			'realname' => isset($user['realname']) ? $user['realname'] : '',
+			'member_type' => $member_type,
+			'config_type' => $config_type,
+			'config_name' => $config_name,
+			'config' => $config,
+			'work_start' => ($openhour !== null && $openminute !== null)
+				? sprintf('%02d:%02d', $openhour, $openminute) : null,
+			'work_end' => ($closehour !== null && $closeminute !== null)
+				? sprintf('%02d:%02d', $closehour, $closeminute) : null,
+			'lunch_start' => ($lunchopenhour !== null && $lunchopenminute !== null)
+				? sprintf('%02d:%02d', $lunchopenhour, $lunchopenminute) : null,
+			'lunch_end' => ($lunchclosehour !== null && $lunchcloseminute !== null)
+				? sprintf('%02d:%02d', $lunchclosehour, $lunchcloseminute) : null,
+		);
+		return $hash;
+	}
 	
 	function edit($type) {
 		$data = $this->configure($type);

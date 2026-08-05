@@ -190,10 +190,16 @@
             </li>
             <?php } ?>
 
-            <li class="menu-item <?php if($directory == 'member') echo 'active'; ?>">
+            <li class="menu-item <?php if($directory == 'member' && $page != 'online') echo 'active'; ?>">
               <a href="<?=$root?>member/" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-users"></i>
                 <div data-i18n="ユーザー一覧">ユーザー一覧</div>
+              </a>
+            </li>
+            <li class="menu-item <?php if($directory == 'member' && $page == 'online') echo 'active'; ?>">
+              <a href="<?=$root?>member/online.php" class="menu-link">
+                <i class="menu-icon icon-base ti tabler-wifi"></i>
+                <div data-i18n="オンライン状況">オンライン状況</div>
               </a>
             </li>
             <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
@@ -1264,19 +1270,6 @@
           <?php require_once DIR_VIEW . 'customer-global-modal.php'; ?>
           <?php endif; ?>
 
-          <!-- AI Chat Widget -->
-          <div class="modal fade" id="modalAI" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-simple modal-dialog-centered modal-chat-w">
-              <div class="modal-content p-0">
-                <div class="modal-body1">
-                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
-                  <?php $view = new View(); ?>
-                  <?php $view->chat(); ?>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <!-- FAB bar: tất cả button fixed gom chung 1 hàng -->
           <div id="fab-bar">
             <div class="fab-with-label">
@@ -1295,9 +1288,6 @@
             </div>
             <div class="fab-with-label" id="holiday-fab-slot">
               <!-- holiday-offcanvas.js sẽ inject button vào đây -->
-            </div>
-            <div class="fab-with-label">
-              <button data-bs-toggle="modal" data-bs-target="#modalAI" id="ai-chat-toggle" class="btn btn-primary rounded-circle"><i class="icon-base ti tabler-message-circle-2 icon-md"></i></button>
             </div>
           </div>
           <?php if (!empty($__showProjectDisplayTimezone)): ?>

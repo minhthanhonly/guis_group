@@ -228,6 +228,53 @@ class Member extends ApplicationModel {
 	
 	}
 
+	/**
+	 * Online/offline presence from Firebase connected_users (web / app).
+	 */
+	function get_presence() {
+		$hash = array(
+			'status' => 'success',
+			'presence' => array(),
+			'updated_at' => date('Y-m-d H:i:s'),
+		);
+		try {
+			require_once dirname(__DIR__) . '/library/firebase_helper.php';
+			$firebase = new FirebaseHelper();
+			$hash['presence'] = $firebase->getConnectedUsersPresence();
+		} catch (Exception $e) {
+			$hash['status'] = 'error';
+			$hash['message'] = $e->getMessage();
+			$hash['presence'] = array();
+		}
+		return $hash;
+	}
+
+	/**
+	 * Today's leave / outing / trip / holiday_work / overtime forms (all users).
+	 */
+	function get_today_forms() {
+		$hash = array(
+			'status' => 'success',
+			'date' => date('Y-m-d'),
+			'by_user' => array(),
+		);
+		try {
+			require_once dirname(__FILE__) . '/request.php';
+			$request = new Request();
+			$date = isset($_GET['date']) ? trim((string)$_GET['date']) : '';
+			$bundle = $request->get_forms_for_date_bulk($date);
+			$hash['date'] = $bundle['date'];
+			$hash['by_user'] = $bundle['by_user'];
+			if (method_exists($request, 'close')) {
+				$request->close();
+			}
+		} catch (Exception $e) {
+			$hash['status'] = 'error';
+			$hash['message'] = $e->getMessage();
+		}
+		return $hash;
+	}
+
 	function list_request_approvers() {
 		// Danh sách user có quyền duyệt đơn (can_approve_request = 1, không bị suspend)
 		$query = "SELECT userid, realname, lastname, firstname, lastname_after_married FROM ".DB_PREFIX."user WHERE (is_suspend IS NULL OR is_suspend = 0) AND can_approve_request = 1 ORDER BY id ASC";

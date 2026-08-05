@@ -8,9 +8,14 @@ $view->heading('メンバー一覧');
 
 <div class="container-xxl flex-grow-1 container-p-y">
 	<div class="card" id="option-block">
-		<div class="card-header bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
+		<div class="card-header bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row gap-2">
 			<div class="col-md-3">
 				<h4 class="card-title mb-0"><span>メンバー一覧</span></h4>
+			</div>
+			<div>
+				<a href="online.php" class="btn btn-outline-primary btn-sm">
+					<i class="fa fa-circle me-1"></i><span data-i18n="オンライン状況">オンライン状況</span>
+				</a>
 			</div>
 		</div>
 		<div class="card-header border-bottom">

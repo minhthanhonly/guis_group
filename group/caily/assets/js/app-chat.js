@@ -287,21 +287,21 @@ document.addEventListener('DOMContentLoaded', () => {
     debounce(e => {
       const searchValue = e.target.value.toLowerCase();
       filterChatContacts('#chat-list li', searchValue, '.chat-list-item-0');
-      filterChatContacts('#contact-list li', searchValue, '.contact-list-item-0', true);
+      // Online-only filter disabled (AI contact list presence updates off)
+      filterChatContacts('#contact-list li', searchValue, '.contact-list-item-0', false);
     }, 300)
   );
 
-  // Contact list: show online users only
-  updateOnlineContactVisibility();
-  observeContactOnlineStatus();
-  window.addEventListener('storage', e => {
-    if (e.key === 'connected_users') {
-      updateOnlineContactVisibility();
-    }
-  });
-  // Firebase may set avatar classes after notification.js loads
-  setTimeout(updateOnlineContactVisibility, 500);
-  setTimeout(updateOnlineContactVisibility, 2000);
+  // Contact list online visibility / presence sync — disabled
+  // updateOnlineContactVisibility();
+  // observeContactOnlineStatus();
+  // window.addEventListener('storage', e => {
+  //   if (e.key === 'connected_users') {
+  //     updateOnlineContactVisibility();
+  //   }
+  // });
+  // setTimeout(updateOnlineContactVisibility, 500);
+  // setTimeout(updateOnlineContactVisibility, 2000);
 
   // Attach message send event
   elements.formSendMessage?.addEventListener('submit', e => {

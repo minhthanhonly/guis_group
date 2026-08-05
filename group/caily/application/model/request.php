@@ -3049,4 +3049,296 @@ class Request extends ApplicationModel {
         }
     }
 
-} 
+    /**
+     * Public helper: forms for userid on a given date (default today Asia/Tokyo).
+     * Types: leave, outing, trip, holiday_work, overtime.
+     * Status: pending, approved, completed (excludes draft, rejected).
+     */
+    function get_forms_for_date_public($userid, $date = '') {
+        $result = array(
+            'date' => '',
+            'forms' => array(),
+            'forms_by_type' => array(
+                'leave' => array(),
+                'outing' => array(),
+                'trip' => array(),
+                'holiday_work' => array(),
+                'overtime' => array(),
+            ),
+        );
+        $userid = trim((string)$userid);
+        if ($userid === '') {
+            return $result;
+        }
+
+        $date = trim((string)$date);
+        if ($date === '') {
+            $date = date('Y-m-d');
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $date === '0000-00-00') {
+            return $result;
+        }
+        $result['date'] = $date;
+
+        $types = array('leave', 'outing', 'trip', 'holiday_work', 'overtime');
+        $statuses = array('pending', 'approved', 'completed');
+        $typeIn = "'" . implode("','", array_map(array($this, 'quote'), $types)) . "'";
+        $statusIn = "'" . implode("','", array_map(array($this, 'quote'), $statuses)) . "'";
+
+        $query = sprintf(
+            "SELECT id, user_id, type, status, start_date, end_date, data,
+                    approver_id, approver_user_id, approved_at,
+                    completed_userid, completed_at, created_at, updated_at
+             FROM %s
+             WHERE user_id = '%s'
+               AND type IN (%s)
+               AND status IN (%s)
+             ORDER BY id ASC",
+            $this->table,
+            $this->quote($userid),
+            $typeIn,
+            $statusIn
+        );
+        $rows = $this->fetchAll($query);
+        if (!is_array($rows)) {
+            return $result;
+        }
+
+        $typeLabels = array(
+            'leave' => '休暇届',
+            'outing' => '外出申請書',
+            'trip' => '出張申請書',
+            'holiday_work' => '休日勤務申請書',
+            'overtime' => '遅刻・早退・時間外勤務',
+        );
+        $statusLabels = array(
+            'pending' => '申請中',
+            'approved' => '承認済',
+            'completed' => '処理完了',
+        );
+
+        foreach ($rows as $row) {
+            list($start, $end) = $this->resolveFormPeriodDatesPublic($row);
+            if ($start === null) {
+                continue;
+            }
+            if ($end === null) {
+                $end = $start;
+            }
+            if ($start > $date || $end < $date) {
+                continue;
+            }
+
+            $data = array();
+            if (!empty($row['data'])) {
+                if (is_string($row['data'])) {
+                    $decoded = json_decode($row['data'], true);
+                    $data = is_array($decoded) ? $decoded : array();
+                } elseif (is_array($row['data'])) {
+                    $data = $row['data'];
+                }
+            }
+
+            $type = isset($row['type']) ? (string)$row['type'] : '';
+            $status = isset($row['status']) ? (string)$row['status'] : '';
+            $item = array(
+                'id' => intval($row['id']),
+                'type' => $type,
+                'type_label' => isset($typeLabels[$type]) ? $typeLabels[$type] : $type,
+                'status' => $status,
+                'status_label' => isset($statusLabels[$status]) ? $statusLabels[$status] : $status,
+                'start_date' => $start,
+                'end_date' => $end,
+                'data' => $data,
+                'approver_user_id' => isset($row['approver_user_id']) ? $row['approver_user_id'] : '',
+                'approved_at' => isset($row['approved_at']) ? $row['approved_at'] : null,
+                'completed_userid' => isset($row['completed_userid']) ? $row['completed_userid'] : '',
+                'completed_at' => isset($row['completed_at']) ? $row['completed_at'] : null,
+                'created_at' => isset($row['created_at']) ? $row['created_at'] : null,
+                'updated_at' => isset($row['updated_at']) ? $row['updated_at'] : null,
+            );
+
+            $result['forms'][] = $item;
+            if (isset($result['forms_by_type'][$type])) {
+                $result['forms_by_type'][$type][] = $item;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Bulk: forms overlapping a date for all users.
+     * Types: leave, outing, trip, holiday_work, overtime.
+     * Status: approved, completed (excludes draft, pending, rejected).
+     *
+     * @return array{date:string,by_user:array<string,array<string,array>>}
+     */
+    function get_forms_for_date_bulk($date = '') {
+        $emptyByType = array(
+            'leave' => array(),
+            'outing' => array(),
+            'trip' => array(),
+            'holiday_work' => array(),
+            'overtime' => array(),
+        );
+        $result = array(
+            'date' => '',
+            'by_user' => array(),
+        );
+
+        $date = trim((string)$date);
+        if ($date === '') {
+            $date = date('Y-m-d');
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $date === '0000-00-00') {
+            return $result;
+        }
+        $result['date'] = $date;
+
+        $types = array('leave', 'outing', 'trip', 'holiday_work', 'overtime');
+        $statuses = array('approved', 'completed');
+        $typeIn = "'" . implode("','", array_map(array($this, 'quote'), $types)) . "'";
+        $statusIn = "'" . implode("','", array_map(array($this, 'quote'), $statuses)) . "'";
+        $dateQ = $this->quote($date);
+
+        // Prefer rows whose period overlaps the date; also keep rows without start_date (resolved from JSON).
+        $query = sprintf(
+            "SELECT id, user_id, type, status, start_date, end_date, data,
+                    approver_user_id, approved_at, completed_userid, completed_at, created_at, updated_at
+             FROM %s
+             WHERE type IN (%s)
+               AND status IN (%s)
+               AND (
+                    (start_date IS NOT NULL AND start_date != '' AND start_date != '0000-00-00'
+                     AND start_date <= '%s'
+                     AND (end_date IS NULL OR end_date = '' OR end_date = '0000-00-00' OR end_date >= '%s'))
+                    OR start_date IS NULL OR start_date = '' OR start_date = '0000-00-00'
+               )
+             ORDER BY id ASC",
+            $this->table,
+            $typeIn,
+            $statusIn,
+            $dateQ,
+            $dateQ
+        );
+        $rows = $this->fetchAll($query);
+        if (!is_array($rows)) {
+            return $result;
+        }
+
+        $typeLabels = array(
+            'leave' => '休暇届',
+            'outing' => '外出申請書',
+            'trip' => '出張申請書',
+            'holiday_work' => '休日勤務申請書',
+            'overtime' => '遅刻・早退・時間外勤務',
+        );
+        $statusLabels = array(
+            'pending' => '申請中',
+            'approved' => '承認済',
+            'completed' => '処理完了',
+        );
+        $shortLabels = array(
+            'leave' => '休暇',
+            'outing' => '外出',
+            'trip' => '出張',
+            'holiday_work' => '休出',
+            'overtime' => '時間外',
+        );
+
+        foreach ($rows as $row) {
+            list($start, $end) = $this->resolveFormPeriodDatesPublic($row);
+            if ($start === null) {
+                continue;
+            }
+            if ($end === null) {
+                $end = $start;
+            }
+            if ($start > $date || $end < $date) {
+                continue;
+            }
+
+            $userid = isset($row['user_id']) ? trim((string)$row['user_id']) : '';
+            if ($userid === '') {
+                continue;
+            }
+
+            $data = array();
+            if (!empty($row['data'])) {
+                if (is_string($row['data'])) {
+                    $decoded = json_decode($row['data'], true);
+                    $data = is_array($decoded) ? $decoded : array();
+                } elseif (is_array($row['data'])) {
+                    $data = $row['data'];
+                }
+            }
+
+            $type = isset($row['type']) ? (string)$row['type'] : '';
+            $status = isset($row['status']) ? (string)$row['status'] : '';
+            $item = array(
+                'id' => intval($row['id']),
+                'type' => $type,
+                'type_label' => isset($typeLabels[$type]) ? $typeLabels[$type] : $type,
+                'short_label' => isset($shortLabels[$type]) ? $shortLabels[$type] : $type,
+                'status' => $status,
+                'status_label' => isset($statusLabels[$status]) ? $statusLabels[$status] : $status,
+                'start_date' => $start,
+                'end_date' => $end,
+                'data' => $data,
+            );
+
+            if (!isset($result['by_user'][$userid])) {
+                $result['by_user'][$userid] = $emptyByType;
+            }
+            if (isset($result['by_user'][$userid][$type])) {
+                $result['by_user'][$userid][$type][] = $item;
+            }
+        }
+
+        return $result;
+    }
+
+    private function isValidFormDatePublic($value) {
+        if ($value === null || $value === '') {
+            return false;
+        }
+        $str = substr((string)$value, 0, 10);
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $str) === 1 && $str !== '0000-00-00';
+    }
+
+    private function resolveFormPeriodDatesPublic($row) {
+        $start = $this->isValidFormDatePublic($row['start_date'] ?? null)
+            ? substr($row['start_date'], 0, 10) : null;
+        $end = $this->isValidFormDatePublic($row['end_date'] ?? null)
+            ? substr($row['end_date'], 0, 10) : null;
+
+        if ($start === null && !empty($row['data'])) {
+            $data = is_string($row['data']) ? json_decode($row['data'], true) : $row['data'];
+            if (is_array($data)) {
+                $type = isset($row['type']) ? $row['type'] : '';
+                if ($type === 'leave' || $type === 'trip') {
+                    if (!empty($data['start_datetime'])) {
+                        $start = substr($data['start_datetime'], 0, 10);
+                    }
+                    if (!empty($data['end_datetime'])) {
+                        $end = substr($data['end_datetime'], 0, 10);
+                    }
+                } elseif (in_array($type, array('outing', 'holiday_work', 'overtime'), true) && !empty($data['date'])) {
+                    $start = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date'])
+                        ? substr($data['date'], 0, 10) : null;
+                    $end = $start;
+                }
+            }
+        }
+        if ($start === null && !empty($row['created_at']) && $this->isValidFormDatePublic($row['created_at'])) {
+            $start = substr($row['created_at'], 0, 10);
+        }
+        if ($end === null) {
+            $end = $start;
+        }
+        return array($start, $end);
+    }
+
+}
+ 
