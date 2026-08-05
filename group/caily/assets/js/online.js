@@ -202,12 +202,17 @@ createApp({
         async loadTodayForms() {
             try {
                 const response = await axios.get('/api/index.php?model=member&method=get_today_forms');
-                if (response.data && response.data.status === 'success') {
-                    this.formsDate = response.data.date || '';
-                    this.formsByUser = response.data.by_user || {};
+                const data = response && response.data ? response.data : null;
+                if (data && data.status === 'success') {
+                    this.formsDate = data.date || '';
+                    this.formsByUser = data.by_user || {};
+                    return;
                 }
+                console.warn('get_today_forms failed:', data);
+                this.formsByUser = {};
             } catch (error) {
                 console.error('Error loading today forms:', error);
+                this.formsByUser = {};
             }
         },
         async refreshAll() {

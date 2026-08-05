@@ -231,7 +231,7 @@ class Member extends ApplicationModel {
 	/**
 	 * Online/offline presence from Firebase connected_users (web / app).
 	 */
-	function get_presence() {
+	function get_presence($params = array()) {
 		$hash = array(
 			'status' => 'success',
 			'presence' => array(),
@@ -252,7 +252,7 @@ class Member extends ApplicationModel {
 	/**
 	 * Today's leave / outing / trip / holiday_work / overtime forms (all users).
 	 */
-	function get_today_forms() {
+	function get_today_forms($params = array()) {
 		$hash = array(
 			'status' => 'success',
 			'date' => date('Y-m-d'),
@@ -261,14 +261,22 @@ class Member extends ApplicationModel {
 		try {
 			require_once dirname(__FILE__) . '/request.php';
 			$request = new Request();
-			$date = isset($_GET['date']) ? trim((string)$_GET['date']) : '';
+			$date = '';
+			if (is_array($params) && isset($params['date'])) {
+				$date = trim((string)$params['date']);
+			} elseif (isset($_GET['date'])) {
+				$date = trim((string)$_GET['date']);
+			}
 			$bundle = $request->get_forms_for_date_bulk($date);
-			$hash['date'] = $bundle['date'];
-			$hash['by_user'] = $bundle['by_user'];
+			$hash['date'] = !empty($bundle['date']) ? $bundle['date'] : date('Y-m-d');
+			$hash['by_user'] = isset($bundle['by_user']) && is_array($bundle['by_user']) ? $bundle['by_user'] : array();
 			if (method_exists($request, 'close')) {
 				$request->close();
 			}
 		} catch (Exception $e) {
+			$hash['status'] = 'error';
+			$hash['message'] = $e->getMessage();
+		} catch (Error $e) {
 			$hash['status'] = 'error';
 			$hash['message'] = $e->getMessage();
 		}

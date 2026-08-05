@@ -3171,6 +3171,8 @@ class Request extends ApplicationModel {
      * Bulk: forms overlapping a date for all users.
      * Types: leave, outing, trip, holiday_work, overtime.
      * Status: approved, completed (excludes draft, pending, rejected).
+     * Note: date filtering is done in PHP (same as timecard) because
+     * DATE columns with 0000-00-00 can break SQL comparisons in strict mode.
      *
      * @return array{date:string,by_user:array<string,array<string,array>>}
      */
@@ -3200,27 +3202,17 @@ class Request extends ApplicationModel {
         $statuses = array('approved', 'completed');
         $typeIn = "'" . implode("','", array_map(array($this, 'quote'), $types)) . "'";
         $statusIn = "'" . implode("','", array_map(array($this, 'quote'), $statuses)) . "'";
-        $dateQ = $this->quote($date);
 
-        // Prefer rows whose period overlaps the date; also keep rows without start_date (resolved from JSON).
         $query = sprintf(
             "SELECT id, user_id, type, status, start_date, end_date, data,
                     approver_user_id, approved_at, completed_userid, completed_at, created_at, updated_at
              FROM %s
              WHERE type IN (%s)
                AND status IN (%s)
-               AND (
-                    (start_date IS NOT NULL AND start_date != '' AND start_date != '0000-00-00'
-                     AND start_date <= '%s'
-                     AND (end_date IS NULL OR end_date = '' OR end_date = '0000-00-00' OR end_date >= '%s'))
-                    OR start_date IS NULL OR start_date = '' OR start_date = '0000-00-00'
-               )
              ORDER BY id ASC",
             $this->table,
             $typeIn,
-            $statusIn,
-            $dateQ,
-            $dateQ
+            $statusIn
         );
         $rows = $this->fetchAll($query);
         if (!is_array($rows)) {
@@ -3313,21 +3305,28 @@ class Request extends ApplicationModel {
         $end = $this->isValidFormDatePublic($row['end_date'] ?? null)
             ? substr($row['end_date'], 0, 10) : null;
 
-        if ($start === null && !empty($row['data'])) {
+        $data = null;
+        if (!empty($row['data'])) {
             $data = is_string($row['data']) ? json_decode($row['data'], true) : $row['data'];
-            if (is_array($data)) {
-                $type = isset($row['type']) ? $row['type'] : '';
-                if ($type === 'leave' || $type === 'trip') {
-                    if (!empty($data['start_datetime'])) {
-                        $start = substr($data['start_datetime'], 0, 10);
-                    }
-                    if (!empty($data['end_datetime'])) {
-                        $end = substr($data['end_datetime'], 0, 10);
-                    }
-                } elseif (in_array($type, array('outing', 'holiday_work', 'overtime'), true) && !empty($data['date'])) {
-                    $start = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date'])
-                        ? substr($data['date'], 0, 10) : null;
+            if (!is_array($data)) {
+                $data = null;
+            }
+        }
+
+        if (is_array($data)) {
+            $type = isset($row['type']) ? $row['type'] : '';
+            // Prefer JSON dates for single-day form types (start_date may be empty / 0000-00-00)
+            if (in_array($type, array('outing', 'holiday_work', 'overtime'), true) && !empty($data['date'])) {
+                if (preg_match('/^\d{4}-\d{2}-\d{2}/', (string)$data['date'])) {
+                    $start = substr((string)$data['date'], 0, 10);
                     $end = $start;
+                }
+            } elseif ($type === 'leave' || $type === 'trip') {
+                if ($start === null && !empty($data['start_datetime'])) {
+                    $start = substr($data['start_datetime'], 0, 10);
+                }
+                if ($end === null && !empty($data['end_datetime'])) {
+                    $end = substr($data['end_datetime'], 0, 10);
                 }
             }
         }
