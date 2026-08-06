@@ -256,6 +256,37 @@ if($_SESSION['show_project'] == 0){
                 </span>
             </p>
             <div id="projectListColumnToolsRow" class="d-flex justify-content-end align-items-center gap-2 mb-1 flex-wrap" v-show="selectedDepartment">
+                <div class="dropdown" id="projectListSortTourTarget">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="projectListSortDropdown"
+                            data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                        <i class="fa fa-sort me-1"></i><span data-i18n="並べ替え">並べ替え</span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end p-3" aria-labelledby="projectListSortDropdown" style="min-width: 260px;">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="sortByStatusSwitch" checked>
+                            <label class="form-check-label" for="sortByStatusSwitch" data-i18n="ステータス順で並べ替え">ステータス順で並べ替え</label>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label form-label-sm mb-1" for="projectListSortColumn" data-i18n="並べ替え項目">並べ替え項目</label>
+                            <select class="form-select form-select-sm" id="projectListSortColumn">
+                                <option value="" data-i18n="デフォルト">デフォルト</option>
+                                <option value="start_date" data-i18n="開始日">開始日</option>
+                                <option value="caily_nouki" data-i18n="CAILY納期">CAILY納期</option>
+                                <option value="guis_nouki" data-sort-field="guis_nouki" data-i18n="GUIS納期">GUIS納期</option>
+                                <option value="end_date" data-sort-field="end_date" data-i18n="期限日">期限日</option>
+                                <option value="estimate_date" data-sort-field="estimate_date" data-director-only="1" data-i18n="見積日">見積日</option>
+                                <option value="invoice_date" data-sort-field="invoice_date" data-director-only="1" data-i18n="請求日">請求日</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label form-label-sm mb-1" for="projectListSortDir" data-i18n="並び順">並び順</label>
+                            <select class="form-select form-select-sm" id="projectListSortDir">
+                                <option value="asc" data-i18n="昇順">昇順</option>
+                                <option value="desc" data-i18n="降順">降順</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
                 <div class="dropdown" id="projectColumnVisibilityTourTarget" v-if="availableColumns && availableColumns.length > 0">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="columnVisibilityDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fa fa-columns me-1"></i><span data-i18n="列の表示">列の表示</span>

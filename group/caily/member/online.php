@@ -3,7 +3,7 @@ require_once('../application/loader.php');
 $view->heading('オンライン状況');
 ?>
 
-<div id="memberOnlineApp" class="container-xxl flex-grow-1 container-p-y">
+<div id="memberOnlineApp" class="container-xxl flex-grow-1 container-p-y" v-cloak>
     <div class="card">
         <div class="card-header bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row gap-2">
             <div>
@@ -35,19 +35,32 @@ $view->heading('オンライン状況');
                            :placeholder="searchPlaceholder">
                 </div>
                 <div class="col-md-8">
-                    <div class="btn-group flex-wrap" role="group" aria-label="online filter">
-                        <button type="button" class="btn btn-sm"
-                                :class="statusFilter === 'all' ? 'btn-primary' : 'btn-outline-primary'"
-                                @click="statusFilter = 'all'" data-i18n="すべて">すべて</button>
-                        <button type="button" class="btn btn-sm"
-                                :class="statusFilter === 'online' ? 'btn-success' : 'btn-outline-success'"
-                                @click="statusFilter = 'online'" data-i18n="オンライン">オンライン</button>
-                        <button type="button" class="btn btn-sm"
-                                :class="statusFilter === 'offline' ? 'btn-secondary' : 'btn-outline-secondary'"
-                                @click="statusFilter = 'offline'" data-i18n="オフライン">オフライン</button>
-                        <button type="button" class="btn btn-sm"
-                                :class="statusFilter === 'app' ? 'btn-info' : 'btn-outline-info'"
-                                @click="statusFilter = 'app'" data-i18n="アプリでオンライン">アプリでオンライン</button>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <div class="btn-group flex-wrap" role="group" aria-label="company filter">
+                            <button type="button" class="btn btn-sm"
+                                    :class="companyFilter === 'GUIS' ? 'btn-primary' : 'btn-outline-primary'"
+                                    @click="companyFilter = 'GUIS'">GUIS</button>
+                            <button type="button" class="btn btn-sm"
+                                    :class="companyFilter === 'CAILY' ? 'btn-primary' : 'btn-outline-primary'"
+                                    @click="companyFilter = 'CAILY'">CAILY</button>
+                            <button type="button" class="btn btn-sm"
+                                    :class="companyFilter === 'all' ? 'btn-primary' : 'btn-outline-primary'"
+                                    @click="companyFilter = 'all'" data-i18n="すべて">すべて</button>
+                        </div>
+                        <div class="btn-group flex-wrap" role="group" aria-label="online filter">
+                            <button type="button" class="btn btn-sm"
+                                    :class="statusFilter === 'all' ? 'btn-primary' : 'btn-outline-primary'"
+                                    @click="statusFilter = 'all'" data-i18n="すべて">すべて</button>
+                            <button type="button" class="btn btn-sm"
+                                    :class="statusFilter === 'online' ? 'btn-success' : 'btn-outline-success'"
+                                    @click="statusFilter = 'online'" data-i18n="オンライン">オンライン</button>
+                            <button type="button" class="btn btn-sm"
+                                    :class="statusFilter === 'offline' ? 'btn-secondary' : 'btn-outline-secondary'"
+                                    @click="statusFilter = 'offline'" data-i18n="オフライン">オフライン</button>
+                            <button type="button" class="btn btn-sm"
+                                    :class="statusFilter === 'app' ? 'btn-info' : 'btn-outline-info'"
+                                    @click="statusFilter = 'app'" data-i18n="アプリでオンライン">アプリでオンライン</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -63,6 +76,8 @@ $view->heading('オンライン状況');
                             <th style="width: 64px;"></th>
                             <th data-i18n="ユーザー">ユーザー</th>
                             <th data-i18n="グループ">グループ</th>
+                            <th data-i18n="勤務種別">勤務種別</th>
+                            <th data-i18n="勤務時間">勤務時間</th>
                             <th data-i18n="ステータス">ステータス</th>
                             <th data-i18n="接続">接続</th>
                             <th data-i18n="申請">申請</th>
@@ -95,6 +110,17 @@ $view->heading('オンライン状況');
                             </td>
                             <td>{{ m.group_name || '-' }}</td>
                             <td>
+                                <span v-if="(m.member_type_name || m.member_type)" class="badge bg-label-secondary">{{ m.member_type_name || m.member_type }}</span>
+                                <span v-else class="text-muted">-</span>
+                            </td>
+                            <td>
+                                <div v-if="m.work_start && m.work_end">{{ m.work_start }}〜{{ m.work_end }}</div>
+                                <div v-if="m.lunch_label" class="small text-muted">{{ m.lunch_label }}</div>
+                                <div v-else-if="m.lunch_start === '00:00' && m.lunch_end === '00:00'" class="small text-muted">休憩無し</div>
+                                <div v-else-if="m.lunch_start && m.lunch_end" class="small text-muted">昼 {{ m.lunch_start }}〜{{ m.lunch_end }}</div>
+                                <span v-if="!(m.work_start && m.work_end) && !m.lunch_label && !(m.lunch_start && m.lunch_end)" class="text-muted">-</span>
+                            </td>
+                            <td>
                                 <span v-if="isOnline(m.userid)" class="badge bg-success" data-i18n="オンライン">オンライン</span>
                                 <span v-else class="badge bg-secondary" data-i18n="オフライン">オフライン</span>
                             </td>
@@ -105,15 +131,24 @@ $view->heading('オンライン状況');
                             </td>
                             <td>
                                 <template v-if="formsOf(m.userid).length">
-                                    <a v-for="f in formsOf(m.userid)" :key="f.id"
-                                       :href="formDetailUrl(f.id)"
-                                       class="badge me-1 mb-1 text-decoration-none"
-                                       :class="formBadgeClass(f)"
-                                       :title="formTooltip(f)"
-                                       target="_blank" rel="noopener">
-                                        {{ f.short_label || f.type_label || f.type }}
-                                        <span class="opacity-75">({{ f.status_label || f.status }})</span>
-                                    </a>
+                                    <div v-for="f in formsOf(m.userid)" :key="f.id" class="mb-1">
+                                        <a :href="formDetailUrl(f.id)"
+                                           class="badge me-1 text-decoration-none"
+                                           :class="formBadgeClass(f)"
+                                           :title="formTooltip(f)"
+                                           target="_blank" rel="noopener">
+                                            {{ f.short_label || f.type_label || f.type }}
+                                            <span class="opacity-75">({{ f.status_label || f.status }})</span>
+                                        </a>
+                                        <div v-if="f.time_label || f.start_time || f.end_time || (f.data && (f.data.start_time || f.data.end_time))"
+                                             class="small text-muted ms-1">
+                                            <template v-if="f.time_label">{{ f.time_label }}</template>
+                                            <template v-else-if="f.start_time && f.end_time">{{ f.start_time }}〜{{ f.end_time }}</template>
+                                            <template v-else-if="f.start_time">{{ f.start_time }}</template>
+                                            <template v-else-if="f.end_time">{{ f.end_time }}</template>
+                                            <template v-else-if="f.data && f.data.start_time && f.data.end_time">{{ f.data.start_time }}〜{{ f.data.end_time }}</template>
+                                        </div>
+                                    </div>
                                 </template>
                                 <span v-else class="text-muted">-</span>
                             </td>
@@ -163,7 +198,7 @@ $view->heading('オンライン状況');
                             </td>
                         </tr>
                         <tr v-if="filteredMembers.length === 0">
-                            <td :colspan="isAdministrator ? 8 : 7" class="text-center text-muted py-4" data-i18n="対象がいません">対象がいません</td>
+                            <td :colspan="isAdministrator ? 10 : 9" class="text-center text-muted py-4" data-i18n="対象がいません">対象がいません</td>
                         </tr>
                     </tbody>
                 </table>

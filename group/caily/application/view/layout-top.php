@@ -198,7 +198,7 @@
             </li>
             <li class="menu-item <?php if($directory == 'member' && $page == 'online') echo 'active'; ?>">
               <a href="<?=$root?>member/online.php" class="menu-link">
-                <i class="menu-icon icon-base ti tabler-wifi"></i>
+                <i class="menu-icon icon-base fa fa-signal"></i>
                 <div data-i18n="オンライン状況">オンライン状況</div>
               </a>
             </li>

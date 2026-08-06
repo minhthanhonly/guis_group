@@ -15,6 +15,7 @@ createApp({
             formsByUser: {},
             formsDate: '',
             statusFilter: 'online',
+            companyFilter: 'GUIS',
             searchKeyword: '',
             loading: false,
             updatedAt: '',
@@ -39,12 +40,23 @@ createApp({
         filteredMembers() {
             const kw = String(this.searchKeyword || '').trim().toLowerCase();
             return this.members.filter((m) => {
+                if (!this.matchesCompanyFilter(m)) return false;
                 if (!this.matchesStatusFilter(m.userid)) return false;
                 if (!kw) return true;
                 const name = this.displayName(m).toLowerCase();
                 const userid = String(m.userid || '').toLowerCase();
                 const group = String(m.group_name || '').toLowerCase();
-                return name.indexOf(kw) !== -1 || userid.indexOf(kw) !== -1 || group.indexOf(kw) !== -1;
+                const memberType = String(m.member_type_name || m.member_type || '').toLowerCase();
+                const workHours = String(m.work_hours_label || this.workHoursLabel(m) || '').toLowerCase();
+                const company = String(m.company || this.memberCompany(m) || '').toLowerCase();
+                const branch = String(m.branch_name || '').toLowerCase();
+                return name.indexOf(kw) !== -1
+                    || userid.indexOf(kw) !== -1
+                    || group.indexOf(kw) !== -1
+                    || memberType.indexOf(kw) !== -1
+                    || workHours.indexOf(kw) !== -1
+                    || company.indexOf(kw) !== -1
+                    || branch.indexOf(kw) !== -1;
             });
         },
         onlineCount() {
@@ -54,6 +66,51 @@ createApp({
     methods: {
         isTruthyFlag(value) {
             return value === true || value === 1 || value === '1' || value === 'true';
+        },
+        memberTypeLabel(member) {
+            if (!member) return '';
+            const name = String(member.member_type_name || '').trim();
+            if (name) return name;
+            return String(member.member_type || '').trim();
+        },
+        workHoursLabel(member) {
+            if (!member) return '';
+            if (member.work_hours_label) {
+                return String(member.work_hours_label);
+            }
+            const parts = [];
+            const work = this.workHoursPart(member);
+            const lunch = this.lunchHoursLabel(member);
+            if (work) parts.push(work);
+            if (lunch) parts.push(lunch);
+            return parts.join(' / ');
+        },
+        workHoursPart(member) {
+            if (!member) return '';
+            const start = member.work_start ? String(member.work_start) : '';
+            const end = member.work_end ? String(member.work_end) : '';
+            if (start && end) {
+                return start + '〜' + end;
+            }
+            return start || end || '';
+        },
+        lunchHoursLabel(member) {
+            if (!member) return '';
+            if (member.lunch_label) {
+                return String(member.lunch_label);
+            }
+            const start = member.lunch_start ? String(member.lunch_start) : '';
+            const end = member.lunch_end ? String(member.lunch_end) : '';
+            if (start === '00:00' && end === '00:00') {
+                return '休憩無し';
+            }
+            if (Number(member.lunch_none) === 1) {
+                return '休憩無し';
+            }
+            if (start && end) {
+                return '昼 ' + start + '〜' + end;
+            }
+            return '';
         },
         hasUnlockRequest(userid) {
             const req = this.unlockRequests[userid];
@@ -215,6 +272,18 @@ createApp({
             if (this.statusFilter === 'app') return !!p.app;
             return true;
         },
+        memberCompany(member) {
+            if (!member) return 'GUIS';
+            if (member.company === 'CAILY' || member.company === 'GUIS') {
+                return member.company;
+            }
+            const branch = String(member.branch_name || '').trim();
+            return (branch.toUpperCase() === 'CAILY') ? 'CAILY' : 'GUIS';
+        },
+        matchesCompanyFilter(member) {
+            if (this.companyFilter === 'all') return true;
+            return this.memberCompany(member) === this.companyFilter;
+        },
         formsOf(userid) {
             const byType = this.formsByUser[userid];
             if (!byType || typeof byType !== 'object') return [];
@@ -259,10 +328,33 @@ createApp({
             if (f.end_date && f.end_date !== f.start_date) {
                 parts.push('〜 ' + f.end_date);
             }
+            const timeLabel = this.formTimeLabel(f);
+            if (timeLabel) {
+                parts.push(timeLabel);
+            }
             if (f.data && f.data.reason) {
                 parts.push(f.data.reason);
             }
             return parts.filter(Boolean).join(' / ');
+        },
+        formTimeLabel(f) {
+            if (!f) return '';
+            if (f.time_label) {
+                return String(f.time_label);
+            }
+            const start = this.normalizeFormTime(f.start_time || (f.data && f.data.start_time));
+            const end = this.normalizeFormTime(f.end_time || (f.data && f.data.end_time));
+            if (start && end) {
+                return start + '〜' + end;
+            }
+            return start || end || '';
+        },
+        normalizeFormTime(value) {
+            if (value == null || value === '') return '';
+            const raw = String(value).trim();
+            const match = raw.match(/^(\d{1,2}):(\d{2})/);
+            if (!match) return raw.slice(0, 5);
+            return String(match[1]).padStart(2, '0') + ':' + match[2];
         },
         formDetailUrl(id) {
             return '/form/detail.php?id=' + encodeURIComponent(id);

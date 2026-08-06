@@ -1488,6 +1488,15 @@ var projectTable;
         if (raw.showInactive !== undefined) {
             out.showInactive = raw.showInactive == 1 ? 1 : 0;
         }
+        if (raw.sortByStatus !== undefined) {
+            out.sortByStatus = raw.sortByStatus == 0 ? 0 : 1;
+        }
+        if (raw.listSortColumn !== undefined) {
+            out.listSortColumn = normalizeProjectListSortColumn(raw.listSortColumn);
+        }
+        if (raw.listSortDir !== undefined) {
+            out.listSortDir = normalizeProjectListSortDir(raw.listSortDir);
+        }
         if (raw.myProjects !== undefined) {
             out.myProjects = raw.myProjects == 1 ? 1 : 0;
         }
@@ -1921,9 +1930,82 @@ var projectTable;
         return [[getDefaultProjectListSortIndex(keys), 'asc']];
     }
 
+    var PROJECT_LIST_SORT_FIELDS = [
+        'start_date',
+        'caily_nouki',
+        'guis_nouki',
+        'end_date',
+        'estimate_date',
+        'invoice_date'
+    ];
+
+    function normalizeProjectListSortColumn(value) {
+        var key = String(value || '').trim();
+        return PROJECT_LIST_SORT_FIELDS.indexOf(key) >= 0 ? key : '';
+    }
+
+    function normalizeProjectListSortDir(value) {
+        return String(value || '').toLowerCase() === 'desc' ? 'desc' : 'asc';
+    }
+
+    function getProjectListSortColumnFromUi() {
+        return normalizeProjectListSortColumn($('#projectListSortColumn').val());
+    }
+
+    function getProjectListSortDirFromUi() {
+        return normalizeProjectListSortDir($('#projectListSortDir').val());
+    }
+
+    function refreshProjectListSortFieldOptions() {
+        var $sel = $('#projectListSortColumn');
+        if (!$sel.length) return;
+        var showDirector = canViewProjectDirectorColumns();
+        $sel.find('option[data-director-only="1"]').each(function() {
+            var $opt = $(this);
+            if (showDirector) {
+                $opt.prop('disabled', false).show();
+            } else {
+                if ($sel.val() === $opt.attr('value')) {
+                    $sel.val('');
+                }
+                $opt.prop('disabled', true).hide();
+            }
+        });
+    }
+
+    function resolveProjectListOrderPayload(d) {
+        var sortColumn = getProjectListSortColumnFromUi();
+        var sortDir = getProjectListSortDirFromUi();
+        if (sortColumn) {
+            return { order_column: sortColumn, order_dir: sortDir };
+        }
+        return {
+            order_column: (d.order && d.order[0] && d.columns[d.order[0].column] && d.columns[d.order[0].column].data) || 'created_at',
+            order_dir: d.order && d.order[0] ? d.order[0].dir : 'desc'
+        };
+    }
+
+    function syncProjectTableOrderFromSortUi(draw) {
+        if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        var sortColumn = getProjectListSortColumnFromUi();
+        if (!sortColumn) return;
+        var keys = getProjectTableColumnKeys(projectTable);
+        var idx = keys.indexOf(sortColumn);
+        if (idx < 0) return;
+        var dir = getProjectListSortDirFromUi();
+        projectTable.order([[idx, dir]]);
+        if (draw) {
+            projectTable.draw();
+        }
+    }
+
     function applyProjectListDefaultSort(dt) {
         var table = dt || projectTable;
         if (!table || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        if (getProjectListSortColumnFromUi()) {
+            syncProjectTableOrderFromSortUi(false);
+            return;
+        }
         table.order(getProjectListDefaultOrder(getProjectTableColumnKeys(table)));
     }
 
@@ -2154,7 +2236,16 @@ var projectTable;
         }
     }
 
+    function getFlatpickrVisibleValue(fp, el) {
+        if (fp) {
+            var visibleInput = fp.altInput || fp._input || el;
+            return String((visibleInput && visibleInput.value) || '').trim();
+        }
+        return String((el && el.value) || '').trim();
+    }
+
     function getProjectFlatpickrOptions(extra) {
+        var userOnClose = extra && typeof extra.onClose === 'function' ? extra.onClose : null;
         var options = {
             enableTime: true,
             time_24hr: true,
@@ -2170,9 +2261,20 @@ var projectTable;
         }
         if (extra) {
             Object.keys(extra).forEach(function(key) {
+                if (key === 'onClose') return;
                 options[key] = extra[key];
             });
         }
+        // allowInput: clearing the visible field must clear selectedDates, or Save restores the old value
+        options.onClose = function(selectedDates, dateStr, instance) {
+            var displayVal = getFlatpickrVisibleValue(instance, instance && instance.input);
+            if (!displayVal && instance && instance.selectedDates && instance.selectedDates.length) {
+                instance.clear();
+            }
+            if (userOnClose) {
+                userOnClose(selectedDates, dateStr, instance);
+            }
+        };
         return options;
     }
 
@@ -2831,6 +2933,9 @@ var projectTable;
             filterKeyword: normalizeFilterKeyword($('#filterKeyword').val()),
             filterProjectId: $('#filterProjectId').val() || '',
             showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
+            sortByStatus: $('#sortByStatusSwitch').is(':checked') ? 1 : 0,
+            listSortColumn: getProjectListSortColumnFromUi(),
+            listSortDir: getProjectListSortDirFromUi(),
             myProjects: app && app.filterMyProjects ? 1 : 0,
             favorites_only: $('#filterFavoritesOnly').is(':checked') ? 1 : 0,
             statusKeys: getSelectedStatusKeysFromApp()
@@ -2894,6 +2999,9 @@ var projectTable;
         if (params.has('filterKeyword')) merged.filterKeyword = normalizeFilterKeyword(params.get('filterKeyword') || '');
         if (params.has('filterProjectId')) merged.filterProjectId = params.get('filterProjectId') || '';
         if (params.has('showInactive')) merged.showInactive = getBool('showInactive');
+        if (params.has('sortByStatus')) merged.sortByStatus = getBool('sortByStatus');
+        if (params.has('listSortColumn')) merged.listSortColumn = normalizeProjectListSortColumn(params.get('listSortColumn') || '');
+        if (params.has('listSortDir')) merged.listSortDir = normalizeProjectListSortDir(params.get('listSortDir') || '');
         if (params.has('my_projects')) merged.myProjects = getBool('my_projects');
         if (params.has('favorites_only')) merged.favorites_only = getBool('favorites_only');
         if (params.has('status')) {
@@ -2948,6 +3056,22 @@ var projectTable;
         if (filters.filterKeyword !== undefined) $('#filterKeyword').val(normalizeFilterKeyword(filters.filterKeyword));
         if (filters.filterProjectId !== undefined) $('#filterProjectId').val(filters.filterProjectId);
         if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
+        if (filters.sortByStatus !== undefined) {
+            $('#sortByStatusSwitch').prop('checked', filters.sortByStatus != 0);
+        } else {
+            $('#sortByStatusSwitch').prop('checked', true);
+        }
+        refreshProjectListSortFieldOptions();
+        if (filters.listSortColumn !== undefined) {
+            $('#projectListSortColumn').val(normalizeProjectListSortColumn(filters.listSortColumn));
+        } else {
+            $('#projectListSortColumn').val('');
+        }
+        if (filters.listSortDir !== undefined) {
+            $('#projectListSortDir').val(normalizeProjectListSortDir(filters.listSortDir));
+        } else {
+            $('#projectListSortDir').val('asc');
+        }
         if (filters.myProjects !== undefined && app) app.filterMyProjects = filters.myProjects == 1;
         // Only restore favorites_only if it's explicitly set in filters (not undefined)
         if (filters.favorites_only !== undefined) {
@@ -2986,6 +3110,7 @@ var projectTable;
             noDates: filters.filterNoDates == 1,
             keyword: normalizeFilterKeyword(filters.filterKeyword),
             showInactive: filters.showInactive == 1,
+            sortByStatus: filters.sortByStatus === undefined ? true : filters.sortByStatus != 0,
             myProjects: filters.myProjects == 1,
             statusKeys: normalizeProjectStatusKeys(filters.statusKeys || filters.statusKey || ''),
             department_id: filters.department_id || null
@@ -3014,6 +3139,7 @@ var projectTable;
             !filters.noDates &&
             !filters.myProjects &&
             !filters.showInactive &&
+            filters.sortByStatus !== false &&
             (filters.statusKeys || []).length === 0 &&
             (!filters.keyword || filters.keyword.trim() === '')
         ) {
@@ -3135,6 +3261,9 @@ var projectTable;
             if (filters.showInactive) {
                 badges.push(`<span class="badge bg-label-info me-1">完了・中止案件等も表示</span>`);
             }
+            if (filters.sortByStatus === false) {
+                badges.push(`<span class="badge bg-label-warning me-1">ステータス順オフ</span>`);
+            }
             if (filters.progress && filters.progress.trim() !== '') {
                 let label = '';
                 if (filters.progress === '0-50') label = '0-50%';
@@ -3192,6 +3321,18 @@ var projectTable;
         setOrDelete('filterKeyword', normalizeFilterKeyword(filters.filterKeyword));
         setOrDelete('filterProjectId', filters.filterProjectId);
         setOrDelete('showInactive', filters.showInactive ? 1 : '');
+        // Default ON: only put in URL when turned off
+        if (filters.sortByStatus === 0 || filters.sortByStatus === false) {
+            params.set('sortByStatus', '0');
+        } else {
+            params.delete('sortByStatus');
+        }
+        setOrDelete('listSortColumn', normalizeProjectListSortColumn(filters.listSortColumn));
+        if (normalizeProjectListSortColumn(filters.listSortColumn)) {
+            params.set('listSortDir', normalizeProjectListSortDir(filters.listSortDir));
+        } else {
+            params.delete('listSortDir');
+        }
         setOrDelete('my_projects', filters.myProjects ? 1 : '');
         setOrDelete('favorites_only', filters.favorites_only ? 1 : '');
         setOrDelete('status', filters.statusKeys && filters.statusKeys.length ? filters.statusKeys.join(',') : '');
@@ -4338,6 +4479,10 @@ var projectTable;
                     const filterKeyword = normalizeFilterKeyword($('#filterKeyword').val());
                     const filterProjectId = $('#filterProjectId').val();
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
+                    const sortByStatus = $('#sortByStatusSwitch').length
+                        ? ($('#sortByStatusSwitch').is(':checked') ? 1 : 0)
+                        : 1;
+                    const orderPayload = resolveProjectListOrderPayload(d);
                     const myProjects = $('#filterMyProjects').is(':checked') ? 1 : 0;
                     const favoritesOnly = $('#filterFavoritesOnly').is(':checked') ? 1 : 0;
                     return {
@@ -4349,8 +4494,8 @@ var projectTable;
                         start: d.start,
                         length: d.length,
                         search: d.search.value,
-                        order_column: d.order && d.order[0] && d.columns[d.order[0].column]?.data || 'created_at',
-                        order_dir: d.order && d.order[0] ? d.order[0].dir : 'desc',
+                        order_column: orderPayload.order_column,
+                        order_dir: orderPayload.order_dir,
                         filterStartMonth,
                         filterEndMonth,
                         filterEstimateMonth,
@@ -4369,6 +4514,7 @@ var projectTable;
                         filterKeyword,
                         filterProjectId,
                         showInactive,
+                        sortByStatus,
                         favorites_only: favoritesOnly
                     };
                 },
@@ -4951,6 +5097,20 @@ var projectTable;
             saveFiltersToLocalStorage();
             renderActiveFilters();
             if (projectTable) reloadProjectTable(true);
+        });
+        $('#sortByStatusSwitch').on('change', function() {
+            saveFiltersToLocalStorage();
+            renderActiveFilters();
+            if (projectTable) reloadProjectTable(true);
+        });
+        $('#projectListSortColumn, #projectListSortDir').on('change', function() {
+            refreshProjectListSortFieldOptions();
+            saveFiltersToLocalStorage();
+            renderActiveFilters();
+            if (projectTable) {
+                syncProjectTableOrderFromSortUi(false);
+                reloadProjectTable(true);
+            }
         });
         
 
@@ -5633,12 +5793,21 @@ var projectTable;
             ['#quickEditStartDate', '#quickEditEndDate', '#quickEditCailyNouki', '#quickEditGuisNouki'].forEach(function(sel) {
                 var $el = $(sel);
                 if (!$el.length) return;
-                var fp = $el.data('flatpickr');
-                if (!fp) return;
-                if (fp.selectedDates && fp.selectedDates.length > 0) {
+                var el = $el[0];
+                var fp = $el.data('flatpickr') || (el && el._flatpickr);
+                var displayVal = getFlatpickrVisibleValue(fp, el);
+                if (!displayVal) {
+                    if (fp && fp.selectedDates && fp.selectedDates.length) {
+                        try { fp.clear(); } catch (e) {}
+                    }
+                    $el.val('');
+                    if (el) el.value = '';
+                    return;
+                }
+                if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
                     $el.val(fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT));
-                } else if (fp._input && fp._input.value) {
-                    $el.val(String(fp._input.value).trim());
+                } else {
+                    $el.val(displayVal);
                 }
             });
         }
@@ -5856,7 +6025,21 @@ var projectTable;
                     var input = $field.find('.quickEditCustomInput');
                     value = input.length ? (input.val() || '').trim() : '';
                     if (type === 'datetime') {
-                        value = fromProjectDateTimeInputValue(value);
+                        var dtEl = input[0];
+                        var dtFp = dtEl && (dtEl._flatpickr || $(dtEl).data('flatpickr'));
+                        var dtDisplay = getFlatpickrVisibleValue(dtFp, dtEl);
+                        if (!dtDisplay) {
+                            if (dtFp && dtFp.selectedDates && dtFp.selectedDates.length) {
+                                try { dtFp.clear(); } catch (e) {}
+                            }
+                            value = '';
+                        } else if (dtFp && dtFp.selectedDates && dtFp.selectedDates.length > 0) {
+                            value = fromProjectDateTimeInputValue(
+                                dtFp.formatDate(dtFp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT)
+                            );
+                        } else {
+                            value = fromProjectDateTimeInputValue(dtDisplay);
+                        }
                     }
                 }
                 customFieldsData.push({ label: label, value: value });
@@ -6345,25 +6528,27 @@ var projectTable;
             $('#filterKeyword').val('');
             $('#filterProjectId').val('');
             $('#showInactiveSwitch').prop('checked', false);
+            // 並べ替え設定（ステータス順 / 項目 / 並び順）はリセットしない
             // Reset favorites filter
             $('#filterFavoritesOnly').prop('checked', false);
             if (app) {
                 app.showClearAllFavoritesBtn = false;
                 app.filterMyProjects = false;
             }
-            localStorage.removeItem(FILTER_STORAGE_KEY);
-            const preservedFilterState = {};
+            const preservedFilterState = {
+                sortByStatus: $('#sortByStatusSwitch').is(':checked') ? 1 : 0,
+                listSortColumn: getProjectListSortColumnFromUi(),
+                listSortDir: getProjectListSortDirFromUi()
+            };
             if (keepTeam && preservedTeams.length) {
                 preservedFilterState.filterTeam = preservedTeams;
             }
             if (keepCompany && preservedCompany.length) {
                 preservedFilterState.filterCompany = preservedCompany;
             }
-            if (Object.keys(preservedFilterState).length > 0) {
-                try {
-                    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(preservedFilterState));
-                } catch (e) {}
-            }
+            try {
+                localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(preservedFilterState));
+            } catch (e) {}
             // Reset status filter
             if (app && app.selectedStatusKeys && app.selectedStatusKeys.length) {
                 app.selectedStatusKeys = [];

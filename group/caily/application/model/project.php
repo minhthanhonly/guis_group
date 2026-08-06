@@ -576,6 +576,12 @@ class Project extends ApplicationModel {
         $orderBy = '';
         
         // Sắp xếp status theo thứ tự giống JS: draft, open, confirming, quotation, contract, waiting_documents, in_progress, completed, paused, cancelled
+        // sortByStatus mặc định bật; truyền sortByStatus=0 để tắt
+        $sortByStatus = !(isset($_GET['sortByStatus']) && (
+            $_GET['sortByStatus'] === '0'
+            || $_GET['sortByStatus'] === 'false'
+            || $_GET['sortByStatus'] === false
+        ));
         $statusOrder = "CASE p.status 
             WHEN 'draft' THEN 1 
             WHEN 'open' THEN 2 
@@ -594,8 +600,10 @@ class Project extends ApplicationModel {
         $orderExpr = $this->resolveProjectListOrderExpression($order_column, $user_id);
         if ($order_column === 'status') {
             $orderBy = sprintf('ORDER BY %s %s', $statusOrder, $order_dir);
-        } else {
+        } elseif ($sortByStatus) {
             $orderBy = sprintf('ORDER BY %s ASC, %s %s', $statusOrder, $orderExpr, $order_dir);
+        } else {
+            $orderBy = sprintf('ORDER BY %s %s', $orderExpr, $order_dir);
         }
         
         if (isset($_GET['showInactive']) && $_GET['showInactive'] == '1') {
@@ -2069,17 +2077,38 @@ class Project extends ApplicationModel {
         if (array_key_exists('custom_fields', $_POST) && $_POST['custom_fields'] != '') {
             $data['custom_fields'] = $_POST['custom_fields'];
         }
-        if (array_key_exists('start_date', $_POST) && $_POST['start_date'] != '') {
-            $data['start_date'] = $this->normalize_datetime_with_default($_POST['start_date'], '09:00');
+        // Handle datetime fields - empty string clears to NULL
+        $nullDatetimeFields = [];
+        if (array_key_exists('start_date', $_POST)) {
+            $val = isset($_POST['start_date']) ? trim($_POST['start_date']) : '';
+            if ($val !== '') {
+                $parsed = $this->normalize_datetime_with_default($val, '09:00');
+                if ($parsed !== null) {
+                    $data['start_date'] = $parsed;
+                } else {
+                    $nullDatetimeFields[] = 'start_date';
+                }
+            } else {
+                $nullDatetimeFields[] = 'start_date';
+            }
         }
-        if (array_key_exists('end_date', $_POST) && $_POST['end_date'] != '') {
-            $data['end_date'] = $this->normalize_datetime_with_default($_POST['end_date'], '18:00');
+        if (array_key_exists('end_date', $_POST)) {
+            $val = isset($_POST['end_date']) ? trim($_POST['end_date']) : '';
+            if ($val !== '') {
+                $parsed = $this->normalize_datetime_with_default($val, '18:00');
+                if ($parsed !== null) {
+                    $data['end_date'] = $parsed;
+                } else {
+                    $nullDatetimeFields[] = 'end_date';
+                }
+            } else {
+                $nullDatetimeFields[] = 'end_date';
+            }
         }
         if (array_key_exists('tantou', $_POST)) {
             $data['tantou'] = (isset($_POST['tantou']) && $_POST['tantou'] !== '' && in_array($_POST['tantou'], ['CAILY', 'GUIS'], true)) ? $_POST['tantou'] : null;
         }
-        // Handle datetime fields - start_date 9:00, end/nouki/actual_end 18:00 when date-only
-        $nullDatetimeFields = [];
+        // nouki / actual_end: date-only → 18:00
         if (array_key_exists('caily_nouki', $_POST)) {
             $val = isset($_POST['caily_nouki']) ? trim($_POST['caily_nouki']) : '';
             if ($val !== '') {

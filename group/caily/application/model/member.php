@@ -141,14 +141,114 @@ class Member extends ApplicationModel {
 		foreach ($hash['list_config'] as $key => $value) {
 			$arr_config[$value["config_type"]] = $value["config_name"];
 		}
-		foreach ($hash['list'] as $key => $value) {
-			if($value["member_type"] == null){
-				$hash['list'][$key]["member_type_name"] = $arr_config['timecard'];
-			} else{
-				$hash['list'][$key]["member_type_name"] = $arr_config[$value["member_type"]];
+
+		// Load shift hours once per config_type (member_type → open/close)
+		$hoursRows = $this->fetchAll(
+			"SELECT config_type, config_key, config_value FROM " . DB_PREFIX . "config "
+			. "WHERE config_key IN ("
+			. "'openhour','openminute','closehour','closeminute',"
+			. "'lunchopenhour','lunchopenminute','lunchclosehour','lunchcloseminute'"
+			. ")"
+		);
+		$hoursByType = array();
+		if (is_array($hoursRows)) {
+			foreach ($hoursRows as $row) {
+				$type = isset($row['config_type']) ? (string)$row['config_type'] : '';
+				$key = isset($row['config_key']) ? (string)$row['config_key'] : '';
+				if ($type === '' || $key === '') {
+					continue;
+				}
+				if (!isset($hoursByType[$type])) {
+					$hoursByType[$type] = array();
+				}
+				$hoursByType[$type][$key] = $row['config_value'];
 			}
-			$hash['list'][$key]["department_id"] = $this->getDepartment($value["userid"]);
-			$hash['list'][$key]["work_hours_warning"] = !empty($value['work_hours_warning']) ? 1 : 0;
+		}
+
+		// 支店 (branch) → company: CAILY if branch name is CAILY, else GUIS
+		$branchNameById = array();
+		$branchRows = $this->fetchAll("SELECT id, name FROM " . DB_PREFIX . "branches");
+		if (is_array($branchRows)) {
+			foreach ($branchRows as $branchRow) {
+				$bid = isset($branchRow['id']) ? intval($branchRow['id']) : 0;
+				if ($bid > 0) {
+					$branchNameById[$bid] = isset($branchRow['name']) ? trim((string)$branchRow['name']) : '';
+				}
+			}
+		}
+
+		foreach ($hash['list'] as $key => $value) {
+			$memberType = isset($value['member_type']) ? trim((string)$value['member_type']) : '';
+			$configType = ($memberType !== '') ? $memberType : 'timecard';
+			if ($memberType === '' || $value['member_type'] == null) {
+				$hash['list'][$key]['member_type_name'] = isset($arr_config['timecard']) ? $arr_config['timecard'] : 'timecard';
+			} else {
+				$hash['list'][$key]['member_type_name'] = isset($arr_config[$memberType])
+					? $arr_config[$memberType]
+					: $memberType;
+			}
+			$hash['list'][$key]['member_type'] = $memberType;
+			$hash['list'][$key]['department_id'] = $this->getDepartment($value['userid']);
+			$hash['list'][$key]['work_hours_warning'] = !empty($value['work_hours_warning']) ? 1 : 0;
+
+			$branchId = isset($value['branch_id']) ? intval($value['branch_id']) : 0;
+			$branchName = ($branchId > 0 && isset($branchNameById[$branchId]))
+				? $branchNameById[$branchId]
+				: '';
+			$hash['list'][$key]['branch_id'] = $branchId > 0 ? $branchId : null;
+			$hash['list'][$key]['branch_name'] = $branchName;
+			$hash['list'][$key]['company'] = (strcasecmp($branchName, 'CAILY') === 0) ? 'CAILY' : 'GUIS';
+
+			$cfg = isset($hoursByType[$configType]) ? $hoursByType[$configType] : array();
+			if (empty($cfg) && $configType !== 'timecard' && isset($hoursByType['timecard'])) {
+				$cfg = $hoursByType['timecard'];
+			}
+			$openHour = isset($cfg['openhour']) && $cfg['openhour'] !== '' ? intval($cfg['openhour']) : null;
+			$openMinute = isset($cfg['openminute']) && $cfg['openminute'] !== '' ? intval($cfg['openminute']) : null;
+			$closeHour = isset($cfg['closehour']) && $cfg['closehour'] !== '' ? intval($cfg['closehour']) : null;
+			$closeMinute = isset($cfg['closeminute']) && $cfg['closeminute'] !== '' ? intval($cfg['closeminute']) : null;
+			$lunchOpenHour = isset($cfg['lunchopenhour']) && $cfg['lunchopenhour'] !== '' ? intval($cfg['lunchopenhour']) : null;
+			$lunchOpenMinute = isset($cfg['lunchopenminute']) && $cfg['lunchopenminute'] !== '' ? intval($cfg['lunchopenminute']) : null;
+			$lunchCloseHour = isset($cfg['lunchclosehour']) && $cfg['lunchclosehour'] !== '' ? intval($cfg['lunchclosehour']) : null;
+			$lunchCloseMinute = isset($cfg['lunchcloseminute']) && $cfg['lunchcloseminute'] !== '' ? intval($cfg['lunchcloseminute']) : null;
+
+			$workStart = ($openHour !== null && $openMinute !== null)
+				? sprintf('%02d:%02d', $openHour, $openMinute)
+				: null;
+			$workEnd = ($closeHour !== null && $closeMinute !== null)
+				? sprintf('%02d:%02d', $closeHour, $closeMinute)
+				: null;
+			$lunchStart = ($lunchOpenHour !== null && $lunchOpenMinute !== null)
+				? sprintf('%02d:%02d', $lunchOpenHour, $lunchOpenMinute)
+				: null;
+			$lunchEnd = ($lunchCloseHour !== null && $lunchCloseMinute !== null)
+				? sprintf('%02d:%02d', $lunchCloseHour, $lunchCloseMinute)
+				: null;
+
+			// 00:00〜00:00 means no lunch break
+			$lunchNone = ($lunchStart === '00:00' && $lunchEnd === '00:00');
+			if ($lunchNone) {
+				$lunchStart = null;
+				$lunchEnd = null;
+			}
+
+			$hash['list'][$key]['work_start'] = $workStart;
+			$hash['list'][$key]['work_end'] = $workEnd;
+			$hash['list'][$key]['lunch_start'] = $lunchStart;
+			$hash['list'][$key]['lunch_end'] = $lunchEnd;
+			$hash['list'][$key]['lunch_none'] = $lunchNone ? 1 : 0;
+			$hash['list'][$key]['lunch_label'] = $lunchNone
+				? '休憩無し'
+				: (($lunchStart && $lunchEnd) ? ('昼 ' . $lunchStart . '〜' . $lunchEnd) : '');
+
+			$label = '';
+			if ($workStart && $workEnd) {
+				$label = $workStart . '〜' . $workEnd;
+			}
+			if (!empty($hash['list'][$key]['lunch_label'])) {
+				$label .= ($label !== '' ? ' / ' : '') . $hash['list'][$key]['lunch_label'];
+			}
+			$hash['list'][$key]['work_hours_label'] = $label;
 		}
 		return $hash;
 	

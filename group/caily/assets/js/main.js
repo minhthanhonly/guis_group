@@ -1103,6 +1103,7 @@ if (typeof window !== 'undefined') {
       const labelSpeech = t('音声入力')
       const labelJa = t('日本語')
       const labelVi = t('ベトナム語')
+      const titleClose = t('閉じる') || '閉じる'
       barEl = document.createElement('div')
       barEl.id = 'global-speech-bar'
       barEl.innerHTML = `
@@ -1127,12 +1128,20 @@ if (typeof window !== 'undefined') {
               <i class="fa fa-microphone"></i><span class="ms-1">${labelVi}</span>
             </button>
           </div>
+          <button type="button"
+                  class="btn btn-sm btn-link p-0 m-0 text-white js-global-speech-close"
+                  title="${titleClose}"
+                  aria-label="${titleClose}"
+                  style="text-decoration:none;line-height:1;">
+            <i class="fa fa-times"></i>
+          </button>
         </div>
       `
 
       const jaBtn = barEl.querySelector('.js-global-speech-ja')
       const viBtn = barEl.querySelector('.js-global-speech-vi')
       const helpBtn = barEl.querySelector('.js-global-speech-help')
+      const closeBtn = barEl.querySelector('.js-global-speech-close')
 
       if (jaBtn) {
         jaBtn.addEventListener('click', e => {
@@ -1146,6 +1155,13 @@ if (typeof window !== 'undefined') {
           e.preventDefault()
           e.stopPropagation()
           toggleSpeech('vi-VN')
+        })
+      }
+      if (closeBtn) {
+        closeBtn.addEventListener('click', e => {
+          e.preventDefault()
+          e.stopPropagation()
+          hideBar()
         })
       }
       if (helpBtn) {
@@ -1191,8 +1207,9 @@ if (typeof window !== 'undefined') {
       // Đảm bảo FAB tồn tại
       const fab = createSpeechFab()
       fab.classList.add('is-open')
-      fab.style.width = '400px'
-      fab.style.borderRadius = '999px'
+      fab.classList.remove('rounded-circle')
+      fab.style.width = ''
+      fab.style.borderRadius = ''
 
       const bar = createBar()
       // Gắn bar vào trong FAB
@@ -1214,8 +1231,9 @@ if (typeof window !== 'undefined') {
       updateBarState(null)
       if (fabEl) {
         fabEl.classList.remove('is-open')
-        fabEl.style.width = '36px'
-        fabEl.style.borderRadius = '50%'
+        fabEl.classList.add('rounded-circle')
+        fabEl.style.width = ''
+        fabEl.style.borderRadius = ''
         fabEl.innerHTML = '<i class="fa fa-microphone"></i>'
       }
     }
@@ -1357,7 +1375,7 @@ if (typeof window !== 'undefined') {
       fabEl.type = 'button'
       fabEl.className = 'btn btn-primary rounded-circle d-flex align-items-center justify-content-center'
       fabEl.innerHTML = '<i class="fa fa-microphone"></i>'
-      fabEl.style.cssText = 'width:36px;height:36px;padding:0;box-shadow:0 2px 8px rgba(0,0,0,0.2);transition:all 0.2s ease;'
+      fabEl.style.cssText = 'box-shadow:0 2px 8px rgba(0,0,0,0.2);transition:width 0.2s ease,border-radius 0.2s ease,padding 0.2s ease;'
 
       const fabBar = document.getElementById('fab-bar')
       if (fabBar) {
@@ -1365,8 +1383,8 @@ if (typeof window !== 'undefined') {
         slot.className = 'fab-with-label'
         slot.id = 'speech-fab-slot'
         slot.appendChild(fabEl)
-        // Chèn trước AI button (phần tử cuối)
-        fabBar.insertBefore(slot, fabBar.lastElementChild)
+        // Luôn nằm cuối danh sách FAB (sau F1 / F3 / holiday…)
+        fabBar.appendChild(slot)
       } else {
         Object.assign(fabEl.style, { position: 'fixed', bottom: '10px', right: '56px', zIndex: '9998' })
         document.body.appendChild(fabEl)

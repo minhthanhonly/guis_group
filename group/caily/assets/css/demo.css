@@ -286,6 +286,48 @@
 	gap: 2px;
 }
 
+/* Global speech FAB — closed = circle, open = pill (no stretched 50% oval) */
+#global-speech-fab {
+	width: 36px;
+	height: 36px;
+	min-width: 36px;
+	min-height: 36px;
+	padding: 0;
+	flex-shrink: 0;
+	overflow: hidden;
+	line-height: 1;
+}
+
+#global-speech-fab.is-open {
+	width: auto;
+	min-width: 0;
+	max-width: min(400px, calc(100vw - 24px));
+	height: 36px;
+	min-height: 36px;
+	padding: 0 0.5rem;
+	border-radius: 999px !important;
+	align-items: center;
+	justify-content: flex-start;
+}
+
+#speech-fab-slot:has(#global-speech-fab.is-open) {
+	align-items: flex-end;
+}
+
+#global-speech-bar {
+	width: 100%;
+	overflow: hidden;
+}
+
+#global-speech-bar .js-global-speech-close {
+	margin-left: 2px;
+	opacity: 0.9;
+}
+
+#global-speech-bar .js-global-speech-close:hover {
+	opacity: 1;
+}
+
 /* Holiday Offcanvas Toggle Button */
 #holidayOffcanvasBtn {
 	width: 36px;

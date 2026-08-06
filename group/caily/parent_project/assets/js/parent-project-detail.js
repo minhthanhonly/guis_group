@@ -155,7 +155,16 @@ function makeChildProjectTimeInputsEditable(selectedDates, dateStr, instance) {
     });
 }
 
+function getFlatpickrVisibleValue(fp, el) {
+    if (fp) {
+        const visibleInput = fp.altInput || fp._input || el;
+        return String((visibleInput && visibleInput.value) || '').trim();
+    }
+    return String((el && el.value) || '').trim();
+}
+
 function getProjectFlatpickrOptions(extra) {
+    const userOnClose = extra && typeof extra.onClose === 'function' ? extra.onClose : null;
     const options = {
         enableTime: true,
         time_24hr: true,
@@ -170,8 +179,21 @@ function getProjectFlatpickrOptions(extra) {
         options.altInputClass = 'form-control';
     }
     if (extra) {
-        Object.assign(options, extra);
+        Object.keys(extra).forEach((key) => {
+            if (key === 'onClose') return;
+            options[key] = extra[key];
+        });
     }
+    // allowInput: clearing the visible field must clear selectedDates, or Save restores the old value
+    options.onClose = function(selectedDates, dateStr, instance) {
+        const displayVal = getFlatpickrVisibleValue(instance, instance && instance.input);
+        if (!displayVal && instance && instance.selectedDates && instance.selectedDates.length) {
+            instance.clear();
+        }
+        if (userOnClose) {
+            userOnClose(selectedDates, dateStr, instance);
+        }
+    };
     return options;
 }
 
@@ -4709,12 +4731,19 @@ createApp({
                 const el = document.getElementById(fieldIds[key]);
                 if (!el) return;
                 const fp = el._flatpickr;
+                const displayVal = getFlatpickrVisibleValue(fp, el);
+                if (!displayVal) {
+                    if (fp && fp.selectedDates && fp.selectedDates.length) {
+                        try { fp.clear(); } catch (e) {}
+                    }
+                    project[key] = '';
+                    el.value = '';
+                    return;
+                }
                 if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
                     project[key] = fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
-                } else if (fp && fp._input) {
-                    project[key] = String(fp._input.value || '').trim();
                 } else {
-                    project[key] = String(el.value || '').trim();
+                    project[key] = displayVal;
                 }
             });
         },

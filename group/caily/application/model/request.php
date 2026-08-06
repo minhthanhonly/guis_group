@@ -3268,6 +3268,34 @@ class Request extends ApplicationModel {
 
             $type = isset($row['type']) ? (string)$row['type'] : '';
             $status = isset($row['status']) ? (string)$row['status'] : '';
+
+            $startTime = '';
+            $endTime = '';
+            if (!empty($data['start_time'])) {
+                $startTime = substr(trim((string)$data['start_time']), 0, 5);
+            }
+            if (!empty($data['end_time'])) {
+                $endTime = substr(trim((string)$data['end_time']), 0, 5);
+            }
+            // Normalize "9:00" → "09:00"
+            if ($startTime !== '' && preg_match('/^\d{1,2}:\d{2}/', $startTime)) {
+                $parts = explode(':', $startTime);
+                $startTime = sprintf('%02d:%02d', intval($parts[0]), intval($parts[1]));
+            }
+            if ($endTime !== '' && preg_match('/^\d{1,2}:\d{2}/', $endTime)) {
+                $parts = explode(':', $endTime);
+                $endTime = sprintf('%02d:%02d', intval($parts[0]), intval($parts[1]));
+            }
+
+            $timeLabel = '';
+            if ($startTime !== '' && $endTime !== '') {
+                $timeLabel = $startTime . '〜' . $endTime;
+            } elseif ($startTime !== '') {
+                $timeLabel = $startTime;
+            } elseif ($endTime !== '') {
+                $timeLabel = $endTime;
+            }
+
             $item = array(
                 'id' => intval($row['id']),
                 'type' => $type,
@@ -3277,6 +3305,9 @@ class Request extends ApplicationModel {
                 'status_label' => isset($statusLabels[$status]) ? $statusLabels[$status] : $status,
                 'start_date' => $start,
                 'end_date' => $end,
+                'start_time' => $startTime !== '' ? $startTime : null,
+                'end_time' => $endTime !== '' ? $endTime : null,
+                'time_label' => $timeLabel,
                 'data' => $data,
             );
 
