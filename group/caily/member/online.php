@@ -12,6 +12,9 @@ $view->heading('オンライン状況');
                     <span data-i18n="更新">更新</span>: {{ updatedAt || '-' }}
                     <span class="ms-2">Online {{ onlineCount }} / {{ filteredMembers.length }}</span>
                     <span class="ms-2" data-i18n="申請">申請</span>: {{ formsDate || '-' }}
+                    <span v-if="isAdministrator && unlockRequestCount > 0" class="ms-2 badge bg-warning text-dark">
+                        <span data-i18n="解除申請">解除申請</span>: {{ unlockRequestCount }}
+                    </span>
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2">
@@ -63,10 +66,13 @@ $view->heading('オンライン状況');
                             <th data-i18n="ステータス">ステータス</th>
                             <th data-i18n="接続">接続</th>
                             <th data-i18n="申請">申請</th>
+                            <th v-if="isAdministrator" style="width: 110px;" data-i18n="残業警告">残業警告</th>
+                            <th style="width: 200px;" data-i18n="操作">操作</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="m in filteredMembers" :key="m.userid">
+                        <tr v-for="m in filteredMembers" :key="m.userid"
+                            :class="{ 'table-warning': isAdministrator && hasUnlockRequest(m.userid) }">
                             <td>
                                 <div class="avatar"
                                      :class="avatarClass(m.userid)"
@@ -77,6 +83,15 @@ $view->heading('オンライン状況');
                             <td>
                                 <div class="fw-semibold">{{ displayName(m) }}</div>
                                 <div class="small text-muted">{{ m.userid }}</div>
+                                <div v-if="isAdministrator && hasUnlockRequest(m.userid)" class="mt-1">
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fa fa-unlock-alt me-1"></i>
+                                        <span data-i18n="解除申請あり">解除申請あり</span>
+                                    </span>
+                                    <div class="small text-muted mt-1" v-if="unlockRequestAt(m.userid)">
+                                        {{ unlockRequestAt(m.userid) }}
+                                    </div>
+                                </div>
                             </td>
                             <td>{{ m.group_name || '-' }}</td>
                             <td>
@@ -102,9 +117,53 @@ $view->heading('オンライン状況');
                                 </template>
                                 <span v-else class="text-muted">-</span>
                             </td>
+                            <td v-if="isAdministrator">
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           role="switch"
+                                           :id="'whw-' + m.userid"
+                                           v-model="m.work_hours_warning"
+                                           :true-value="1"
+                                           :false-value="0"
+                                           :disabled="warningSavingUserId === m.userid"
+                                           @change="toggleWorkHoursWarning(m)"
+                                           :title="warningToggleTitle">
+                                    <label class="form-check-label small" :for="'whw-' + m.userid">
+                                        <span v-if="isWorkHoursWarningEnabled(m)">ON</span>
+                                        <span v-else>OFF</span>
+                                    </label>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column gap-1 align-items-start">
+                                    <template v-if="isAdministrator">
+                                        <button v-if="hasUnlockRequest(m.userid)"
+                                                type="button"
+                                                class="btn btn-sm btn-success"
+                                                :disabled="unlockingUserId === m.userid"
+                                                @click="approveUnlockRequest(m)"
+                                                :title="unlockButtonTitle">
+                                            <i class="fa fa-unlock me-1"></i>
+                                            <span data-i18n="解除承認">解除承認</span>
+                                        </button>
+                                        <button v-if="isApp(m.userid)"
+                                                type="button"
+                                                class="btn btn-sm btn-outline-danger"
+                                                :disabled="lockingUserId === m.userid"
+                                                @click="lockUserPc(m)"
+                                                :title="lockButtonTitle">
+                                            <i class="fa fa-lock me-1"></i>
+                                            <span data-i18n="ロック">ロック</span>
+                                        </button>
+                                        <span v-if="!isApp(m.userid) && !hasUnlockRequest(m.userid)" class="text-muted">-</span>
+                                    </template>
+                                    <span v-else class="text-muted">-</span>
+                                </div>
+                            </td>
                         </tr>
                         <tr v-if="filteredMembers.length === 0">
-                            <td colspan="6" class="text-center text-muted py-4" data-i18n="対象がいません">対象がいません</td>
+                            <td :colspan="isAdministrator ? 8 : 7" class="text-center text-muted py-4" data-i18n="対象がいません">対象がいません</td>
                         </tr>
                     </tbody>
                 </table>

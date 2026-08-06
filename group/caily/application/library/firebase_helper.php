@@ -300,5 +300,58 @@ class FirebaseHelper {
             'online' => $web || $app,
         ];
     }
+
+    /**
+     * PUT JSON to an absolute RTDB path (segments joined with /).
+     * Example: setJsonPath(['guis_plus', 'timecard', $userid], $payload)
+     */
+    public function setJsonPath($pathSegments, $payload) {
+        if (!$this->databaseUrl) {
+            error_log('Firebase database URL not configured');
+            return false;
+        }
+
+        $parts = [];
+        foreach ((array) $pathSegments as $segment) {
+            $segment = trim((string) $segment);
+            if ($segment === '') {
+                continue;
+            }
+            $parts[] = rawurlencode($segment);
+        }
+        if (!$parts) {
+            return false;
+        }
+
+        $url = rtrim($this->databaseUrl, '/') . '/' . implode('/', $parts) . '.json';
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Accept: application/json'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($error) {
+            error_log('Firebase setJsonPath cURL error: ' . $error);
+            return false;
+        }
+        if ($httpCode < 200 || $httpCode >= 300) {
+            error_log('Firebase setJsonPath HTTP error: ' . $httpCode . ' - ' . $response);
+            return false;
+        }
+        return true;
+    }
 }
 ?> 

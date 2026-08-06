@@ -828,6 +828,10 @@ class Timecard extends ApplicationModel {
 			}
 		}
 
+		if (($hash['status'] ?? '') === 'success') {
+			$this->publishTimecardSyncEvent('checkin', $userName, $hash);
+		}
+
 		return $hash;
 	}
 
@@ -866,11 +870,43 @@ class Timecard extends ApplicationModel {
 			$hash['timecard_time'] = $result["timecard_time"];
 			$hash['timecard_timeover'] = $result["timecard_timeover"];
 			$hash['timecard_timeinterval'] = $result["timecard_timeinterval"];
+			$this->publishTimecardSyncEvent('checkout', $userName, $hash);
 		} else{
 			$hash['status'] = 'error';
 			$hash['message_code'] = 'エラーが発生しました。';
 		}
 		return $hash;
+	}
+
+	/**
+	 * Notify GUIS Plus / other browsers via Firebase RTDB:
+	 *   guis_plus/timecard/{userid} = { action, open, close, date, nonce, source, ... }
+	 */
+	private function publishTimecardSyncEvent($action, $userid, $hash = array()) {
+		$userid = trim((string) $userid);
+		if ($userid === '') {
+			return;
+		}
+		try {
+			require_once dirname(__DIR__) . '/library/firebase_helper.php';
+			$firebase = new FirebaseHelper();
+			$payload = array(
+				'action' => (string) $action,
+				'at' => date('c'),
+				'by' => $userid,
+				'source' => 'server',
+				'nonce' => uniqid((string) (int) (microtime(true) * 1000), true),
+				'date' => date('Y-m-d'),
+				'open' => (string) ($hash['timecard_open'] ?? ''),
+				'close' => (string) ($hash['timecard_close'] ?? ''),
+				'timecard_id' => (int) ($hash['timecard_id'] ?? 0),
+				'timecard_time' => (string) ($hash['timecard_time'] ?? ''),
+				'timecard_timeover' => (string) ($hash['timecard_timeover'] ?? ''),
+			);
+			$firebase->setJsonPath(array('guis_plus', 'timecard', $userid), $payload);
+		} catch (Exception $e) {
+			error_log('[TimecardSync] publish failed: ' . $e->getMessage());
+		}
 	}
 
 	function generateStatistic(){

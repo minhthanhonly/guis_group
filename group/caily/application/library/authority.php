@@ -10,16 +10,62 @@ class Authority
 	{
 		session_name(APP_TYPE . 'sid');
 		if (!isset($_SESSION)) {
-			$lifetime = isset($_COOKIE['remember_me']) ? (self::REMEMBER_ME_DAYS * 24 * 60 * 60) : 0;
-			session_set_cookie_params(
-				$lifetime,
-				'/',
-				'',
-				$this->isHttps(),
-				true
-			);
+			// Persist groupsid across Electron restarts / multi-window SSO (was 0 unless remember_me already set)
+			$lifetime = self::REMEMBER_ME_DAYS * 24 * 60 * 60;
+			$this->applySessionCookieParams($lifetime);
 			session_start();
 		}
+	}
+
+	/**
+	 * Cookie params shared by PHP session + remember_me (SameSite=Lax for Electron BrowserWindow).
+	 */
+	private function buildCookieParams($expiresOrLifetime, $isLifetimeLifetime = false)
+	{
+		$secure = $this->isHttps();
+		if ($isLifetimeTime) {
+			$lifetime = (int) $expiresOrLifetime;
+			if (PHP_VERSION_ID >= 70300) {
+				return array(
+					'lifetime' => $lifetime,
+					'path' => '/',
+					'domain' => '',
+					'secure' => $secure,
+					'httponly' => true,
+					'samesite' => 'Lax',
+				);
+			}
+			return null; // use legacy 5-arg API
+		}
+
+		$expires = (int) $expiresOrLifetime;
+		if (PHP_VERSION_ID >= 70300) {
+			return array(
+				'expires' => $expires,
+				'path' => '/',
+				'domain' => '',
+				'secure' => $secure,
+				'httponly' => true,
+				'samesite' => 'Lax',
+			);
+		}
+		return null;
+	}
+
+	private function applySessionCookieParams($lifetime)
+	{
+		$params = $this->buildCookieParams($lifetime, true);
+		if (is_array($params)) {
+			session_set_cookie_params($params);
+			return;
+		}
+		session_set_cookie_params(
+			(int) $lifetime,
+			'/',
+			'',
+			$this->isHttps(),
+			true
+		);
 	}
 
 	/**
@@ -114,7 +160,6 @@ class Authority
 							);
 							$connection->query($query);
 							$connection->close();
-							$this->refreshSessionCookieLifetime(true);
 						}
 					} else {
 						$error[] = 'ユーザー名もしくはパスワードが異なります。';
@@ -134,7 +179,15 @@ class Authority
 		if ($authorized === true && count($error) <= 0) {
 			session_regenerate_id(true);
 			$this->populateSessionFromUser($data);
-			
+			// Persist session cookie (30d) so GUIS Plus ArchLib/Kanri windows share login
+			$this->refreshSessionCookieLifetime(true);
+
+			if ($this->isGuisPlusAppRequest()) {
+				unset($_SESSION['referer']);
+				header('Location: ' . ROOT . 'login-wait.php');
+				exit();
+			}
+
 			if (isset($_SESSION['referer'])) {
 				header('Location: ' . $_SESSION['referer']);
 				unset($_SESSION['referer']);
@@ -146,6 +199,28 @@ class Authority
 			return $error;
 		}
 
+	}
+
+	/**
+	 * Login initiated from GUIS Plus Electron (query/body from=guis_plus, or Electron UA).
+	 */
+	function isGuisPlusAppRequest()
+	{
+		$from = '';
+		if (isset($_POST['from'])) {
+			$from = (string) $_POST['from'];
+		} elseif (isset($_GET['from'])) {
+			$from = (string) $_GET['from'];
+		}
+		$from = strtolower(trim($from));
+		if ($from === 'guis_plus' || $from === 'guis-plus' || $from === 'guisplus' || $from === '1') {
+			return true;
+		}
+		$ua = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
+		if ($ua !== '' && stripos($ua, 'Electron') !== false && stripos($ua, 'GUIS') !== false) {
+			return true;
+		}
+		return false;
 	}
 
 	function checkRememberMe()
@@ -206,7 +281,12 @@ class Authority
 
 		$_SESSION = array();
 		if (isset($_COOKIE[session_name()])) {
-			setcookie(session_name(), '', time() - 42000, '/', '', $this->isHttps(), true);
+			$params = $this->buildCookieParams(time() - 42000, false);
+			if (is_array($params)) {
+				setcookie(session_name(), '', $params);
+			} else {
+				setcookie(session_name(), '', time() - 42000, '/', '', $this->isHttps(), true);
+			}
 		}
 		session_destroy();
 	}
@@ -246,10 +326,16 @@ class Authority
 
 	private function setRememberMeCookie($token)
 	{
+		$expires = time() + (self::REMEMBER_ME_DAYS * 24 * 60 * 60);
+		$params = $this->buildCookieParams($expires, false);
+		if (is_array($params)) {
+			setcookie('remember_me', $token, $params);
+			return;
+		}
 		setcookie(
 			'remember_me',
 			$token,
-			time() + (self::REMEMBER_ME_DAYS * 24 * 60 * 60),
+			$expires,
 			'/',
 			'',
 			$this->isHttps(),
@@ -259,19 +345,28 @@ class Authority
 
 	private function clearRememberMeCookie()
 	{
-		setcookie('remember_me', '', time() - 3600, '/', '', $this->isHttps(), true);
+		$params = $this->buildCookieParams(time() - 3600, false);
+		if (is_array($params)) {
+			setcookie('remember_me', '', $params);
+		} else {
+			setcookie('remember_me', '', time() - 3600, '/', '', $this->isHttps(), true);
+		}
 		unset($_COOKIE['remember_me']);
 	}
 
 	private function refreshSessionCookieLifetime($rememberMe)
 	{
-		if (!$rememberMe) {
+		// Always refresh persistent lifetime so Electron multi-window SSO keeps groupsid
+		$expires = time() + (self::REMEMBER_ME_DAYS * 24 * 60 * 60);
+		$params = $this->buildCookieParams($expires, false);
+		if (is_array($params)) {
+			setcookie(session_name(), session_id(), $params);
 			return;
 		}
 		setcookie(
 			session_name(),
 			session_id(),
-			time() + (self::REMEMBER_ME_DAYS * 24 * 60 * 60),
+			$expires,
 			'/',
 			'',
 			$this->isHttps(),

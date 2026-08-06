@@ -100,7 +100,123 @@ class Member extends ApplicationModel {
 			"ALTER TABLE `{$table}` ADD COLUMN `quite_date` DATETIME NULL DEFAULT NULL COMMENT '退職日'"
 		);
 	}
+
+	/**
+	 * GUIS Plus overtime toast preference (administrator toggles on member/online.php).
+	 * Default 0 = off.
+	 */
+	function ensureWorkHoursWarningColumn() {
+		static $ensured = false;
+		if ($ensured) {
+			return;
+		}
+		$ensured = true;
+		$table = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $this->table);
+		if ($table === '') {
+			$table = 'groupware_user';
+		}
+		$row = $this->fetchOne(
+			"SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+			. "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' AND COLUMN_NAME = 'work_hours_warning'"
+		);
+		if (!empty($row['cnt'])) {
+			return;
+		}
+		$this->query(
+			"ALTER TABLE `{$table}` ADD COLUMN `work_hours_warning` TINYINT(1) NOT NULL DEFAULT 0 "
+			. "COMMENT 'GUIS Plus overtime toast: 1=enabled 0=disabled'"
+		);
+	}
+
+	function get_member() {
+		$this->ensureWorkHoursWarningColumn();
+		$config = new Config($this->handler);
+		$query = "SELECT groupware_user.id as `id`, `userid`, `realname`, `lastname`, `firstname`, `lastname_after_married`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend`, `quite_date`, branch_id, `show_project`, `can_approve_request`, `work_hours_warning`, `is_soumu`, groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
+		$hash['list'] = $this->fetchAll($query);
+		$hash['group'] = $this->findGroup();
+
+		$hash['list_config'] = $config->getListConfigTimecard();
+
+		$arr_config = array();
+		foreach ($hash['list_config'] as $key => $value) {
+			$arr_config[$value["config_type"]] = $value["config_name"];
+		}
+		foreach ($hash['list'] as $key => $value) {
+			if($value["member_type"] == null){
+				$hash['list'][$key]["member_type_name"] = $arr_config['timecard'];
+			} else{
+				$hash['list'][$key]["member_type_name"] = $arr_config[$value["member_type"]];
+			}
+			$hash['list'][$key]["department_id"] = $this->getDepartment($value["userid"]);
+			$hash['list'][$key]["work_hours_warning"] = !empty($value['work_hours_warning']) ? 1 : 0;
+		}
+		return $hash;
 	
+	}
+
+	/**
+	 * Administrator: enable/disable GUIS Plus overtime toast for a user.
+	 * POST/GET: userid, enabled (0|1|true|false)
+	 */
+	function set_work_hours_warning($params = array()) {
+		$this->authorizeApi('administrator');
+		$this->ensureWorkHoursWarningColumn();
+
+		$userid = '';
+		$enabledRaw = null;
+		if (is_array($params)) {
+			$userid = isset($params['userid']) ? trim((string)$params['userid']) : '';
+			$enabledRaw = array_key_exists('enabled', $params) ? $params['enabled'] : null;
+		}
+		if ($userid === '' && isset($_REQUEST['userid'])) {
+			$userid = trim((string)$_REQUEST['userid']);
+		}
+		if ($enabledRaw === null && array_key_exists('enabled', $_REQUEST)) {
+			$enabledRaw = $_REQUEST['enabled'];
+		}
+
+		$hash = array(
+			'status' => 'error',
+			'message' => '',
+			'userid' => $userid,
+			'work_hours_warning' => 0,
+		);
+
+		if ($userid === '') {
+			$hash['message'] = 'userid is required';
+			return $hash;
+		}
+
+		$enabled = 0;
+		if ($enabledRaw === true || $enabledRaw === 1 || $enabledRaw === '1' || $enabledRaw === 'true' || $enabledRaw === 'on') {
+			$enabled = 1;
+		}
+
+		$user = $this->fetchOne(sprintf(
+			"SELECT userid FROM %s WHERE userid = '%s' LIMIT 1",
+			$this->table,
+			$this->quote($userid)
+		));
+		if (!$user || empty($user['userid'])) {
+			$hash['message'] = 'user not found';
+			return $hash;
+		}
+
+		// Do NOT bump `updated` / `editor` — ApplicationModel::checkSuspend()
+		// logs the user out when session user_updated !== DB updated.
+		$query = sprintf(
+			"UPDATE %s SET work_hours_warning = %d WHERE userid = '%s'",
+			$this->table,
+			$enabled,
+			$this->quote($userid)
+		);
+		$this->query($query);
+
+		$hash['status'] = 'success';
+		$hash['work_hours_warning'] = $enabled;
+		return $hash;
+	}
+
 	function validate() {
 		$this->validator('password', 'パスワード', array('alphaNumeric', 'length:4:32'));
 		$this->validator('newpassword', '新しいパスワード', array('alphaNumeric', 'length:4:32'));
@@ -199,30 +315,6 @@ class Member extends ApplicationModel {
 				$hash['list'][$key]["member_type_name"] = $arr_config[$value["member_type"]];
 			}
 			
-		}
-		return $hash;
-	
-	}
-
-	function get_member() {
-		$config = new Config($this->handler);
-		$query = "SELECT groupware_user.id as `id`, `userid`, `realname`, `lastname`, `firstname`, `lastname_after_married`, `authority`, `user_group`, `gender`, `user_email`, `user_skype`, `user_ruby`, `user_postcode`, `user_address`, `user_addressruby`, `user_phone`, `user_mobile`, `user_order`, `status`, `idle_time`, `pc_hashs`, `member_type`, `user_image`, `is_suspend`, `quite_date`, branch_id, `show_project`, `can_approve_request`, `is_soumu`, groupware_group.group_name as group_name FROM groupware_user, groupware_group WHERE groupware_user.user_group = groupware_group.id order by is_suspend asc, groupware_user.id asc";
-		$hash['list'] = $this->fetchAll($query);
-		$hash['group'] = $this->findGroup();
-
-		$hash['list_config'] = $config->getListConfigTimecard();
-
-		$arr_config = array();
-		foreach ($hash['list_config'] as $key => $value) {
-			$arr_config[$value["config_type"]] = $value["config_name"];
-		}
-		foreach ($hash['list'] as $key => $value) {
-			if($value["member_type"] == null){
-				$hash['list'][$key]["member_type_name"] = $arr_config['timecard'];
-			} else{
-				$hash['list'][$key]["member_type_name"] = $arr_config[$value["member_type"]];
-			}
-			$hash['list'][$key]["department_id"] = $this->getDepartment($value["userid"]);
 		}
 		return $hash;
 	

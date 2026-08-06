@@ -302,5 +302,3 @@ $view->heading('タイムカード');
 <?php
 $view->footing();
 ?>
-
-<script src="<?=ROOT?>assets/js/timecard.js?v=<?=CACHE_VERSION?>"></script>

@@ -43,7 +43,24 @@ $view->heading('ログイン', 'login');
 		<h4 class="mb-1"><?=APP_NAME?>へようこそ！ 👋</h4>
 		<p class="mb-6"><span data-i18n="アカウントにサインインしてください。">アカウントにサインインしてください。</span></p>
 
-		<form id="formAuthentication" class="mb-6" action="login.php" name="login" method="POST">
+		<form id="formAuthentication" class="mb-6" action="login.php<?= (isset($_GET['from']) && $_GET['from'] !== '') ? ('?from=' . rawurlencode((string) $_GET['from'])) : '' ?>" name="login" method="POST">
+			<?php
+			$fromApp = '';
+			if (isset($_POST['from'])) {
+				$fromApp = (string) $_POST['from'];
+			} elseif (isset($_GET['from'])) {
+				$fromApp = (string) $_GET['from'];
+			}
+			if ($fromApp === '') {
+				$ua = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
+				if (stripos($ua, 'Electron') !== false) {
+					$fromApp = 'guis_plus';
+				}
+			}
+			if ($fromApp !== '') {
+				echo '<input type="hidden" name="from" value="' . htmlspecialchars($fromApp, ENT_QUOTES, 'UTF-8') . '" />';
+			}
+			?>
 			<?php if($view->error($error) != '') { 
 				echo ''.$view->error($error).'';
 			} ?>

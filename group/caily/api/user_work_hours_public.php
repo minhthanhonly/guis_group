@@ -9,6 +9,9 @@
  * Forms: groupware_requests overlapping the date for types
  *   leave, outing, trip, holiday_work, overtime
  *   (status: pending, approved, completed — excludes draft/rejected)
+ *
+ * Response data includes (Asia/Tokyo, via api/loader.php):
+ *   timezone, server_time (H:i:s), server_now (Y-m-d H:i:s)
  */
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -37,6 +40,11 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $date === '0000-00-00') {
 
 require_once dirname(__DIR__) . '/application/model/config.php';
 require_once dirname(__DIR__) . '/application/model/request.php';
+require_once dirname(__DIR__) . '/application/model/member.php';
+
+$member = new Member();
+$member->connect();
+$member->ensureWorkHoursWarningColumn();
 
 $config = new Config();
 $config->connect();
@@ -49,6 +57,14 @@ if (!empty($hash['status']) && $hash['status'] === 'success' && is_array($hash['
     $hash['data']['date'] = $formsBundle['date'];
     $hash['data']['forms'] = $formsBundle['forms'];
     $hash['data']['forms_by_type'] = $formsBundle['forms_by_type'];
+    // Refresh clock after forms lookup so clients get near-request time (Asia/Tokyo)
+    $hash['data']['timezone'] = date_default_timezone_get();
+    $hash['data']['server_time'] = date('H:i:s');
+    $hash['data']['server_now'] = date('Y-m-d H:i:s');
+    // Also expose at top-level for convenience
+    $hash['timezone'] = $hash['data']['timezone'];
+    $hash['server_time'] = $hash['data']['server_time'];
+    $hash['server_now'] = $hash['data']['server_now'];
     // Request constructor already connects; close if available
     if (method_exists($request, 'close')) {
         $request->close();

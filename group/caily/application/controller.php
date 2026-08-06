@@ -6,13 +6,25 @@ class Controller {
 	function dispatch() {
 		$this->requiring();
 		$authority = new Authority;
+		$script = basename($_SERVER['SCRIPT_NAME']);
+		$fromGuisPlus = $authority->isGuisPlusAppRequest();
+
 		if (!$authority->ensureAuthenticated()) {
-			if (basename($_SERVER['SCRIPT_NAME']) != 'login.php') {
+			if ($script != 'login.php') {
 				$_SESSION['referer'] = $_SERVER['REQUEST_URI'];
-				header('Location:' . ROOT . 'login.php');
+				$loginUrl = ROOT . 'login.php';
+				if ($fromGuisPlus || $script === 'login-wait.php') {
+					$loginUrl .= '?from=guis_plus';
+				}
+				header('Location:' . $loginUrl);
 				exit();
 			}
-		} elseif (basename($_SERVER['SCRIPT_NAME']) == 'login.php') {
+		} elseif ($script == 'login.php') {
+			// Already logged in: GUIS Plus → wait screen; otherwise normal redirect
+			if ($fromGuisPlus) {
+				header('Location: ' . ROOT . 'login-wait.php');
+				exit();
+			}
 			$redirect = isset($_SESSION['referer']) ? $_SESSION['referer'] : 'index.php';
 			unset($_SESSION['referer']);
 			header('Location: ' . $redirect);

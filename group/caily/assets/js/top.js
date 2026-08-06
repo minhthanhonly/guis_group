@@ -16,7 +16,168 @@ function applyTimecardI18n() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+/** Cross-platform punch sync via Firebase RTDB (guis_plus/timecard/{userId}). */
+var timecardSyncLastNonce = '';
+var timecardSyncListening = false;
+var timecardSyncPrimed = false;
+
+function getTimecardLocalDateKey() {
+    var d = new Date();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + day;
+}
+
+function getTimecardFirebaseDb() {
+    if (window.notificationManager && window.notificationManager.database) {
+        return window.notificationManager.database;
+    }
+    if (window.firebase && window.firebase.apps && window.firebase.apps.length) {
+        return window.firebase.database();
+    }
+    return null;
+}
+
+function buildTimecardSyncNonce() {
+    return String(Date.now()) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+async function publishWebTimecardSync(action, details) {
+    var userid = (typeof USER_ID !== 'undefined') ? String(USER_ID || '').trim() : '';
+    if (!userid) return;
+    var db = getTimecardFirebaseDb();
+    if (!db) {
+        console.warn('[TimecardSync] Firebase unavailable — app will sync on next poll after punch from web');
+        return;
+    }
+    var tip = details || {};
+    var nonce = buildTimecardSyncNonce();
+    timecardSyncLastNonce = nonce;
+    try {
+        await db.ref('guis_plus/timecard/' + userid).set({
+            action: String(action || ''),
+            at: new Date().toISOString(),
+            by: userid,
+            source: 'web',
+            nonce: nonce,
+            date: getTimecardLocalDateKey(),
+            open: String(tip.open || tip.timecard_open || ''),
+            close: String(tip.close || tip.timecard_close || ''),
+            timecard_id: Number(tip.timecard_id || tip.id || 0) || 0,
+            timecard_time: String(tip.timecard_time || ''),
+            timecard_timeover: String(tip.timecard_timeover || '')
+        });
+    } catch (error) {
+        console.warn('[TimecardSync] publish failed:', error);
+    }
+}
+
+function applyRemoteTimecardUi(payload) {
+    var checkin = document.getElementById('checkin');
+    var checkout = document.getElementById('checkout');
+    if (!checkin && !checkout) return;
+
+    var action = String((payload && payload.action) || '');
+    var open = String((payload && payload.open) || '');
+    var close = String((payload && payload.close) || '');
+    var timecardId = payload && (payload.timecard_id || payload.id) ? String(payload.timecard_id || payload.id) : '';
+    var time = String((payload && payload.timecard_time) || '');
+    var timeover = String((payload && payload.timecard_timeover) || '');
+    var hasOpen = open !== '' && open !== '00:00' && open !== '00:00:00';
+    var hasClose = close !== '' && close !== '00:00' && close !== '00:00:00';
+
+    if (action === 'checkin' || (hasOpen && !hasClose)) {
+        if (checkin) {
+            checkin.disabled = true;
+            $(checkin).attr('disabled', true);
+        }
+        if (checkout) {
+            checkout.disabled = false;
+            $(checkout).attr('disabled', false);
+            if (timecardId) $(checkout).attr('data-id', timecardId);
+            if (open) $(checkout).attr('data-open', open);
+        }
+        if (!hasClose) {
+            var openHtml = open
+                ? '<p class="text-info mb-0">出社時刻: ' + $('<div>').text(open).html() + '</p>'
+                : '';
+            if (openHtml) $('#timecard-result').html(openHtml);
+        }
+        return;
+    }
+
+    if (action === 'checkout' || hasClose) {
+        if (checkin) {
+            checkin.disabled = true;
+            $(checkin).attr('disabled', true);
+        }
+        if (checkout) {
+            checkout.disabled = true;
+            $(checkout).attr('disabled', true);
+            if (timecardId) $(checkout).attr('data-id', timecardId);
+            if (open) $(checkout).attr('data-open', open);
+        }
+        var result = '';
+        if (time) {
+            result = 'お疲れ様でした！<br>勤務時間は' + $('<div>').text(time).html() + 'です。';
+        }
+        if (timeover && timeover !== '0:00') {
+            result += '<br>時間外は' + $('<div>').text(timeover).html() + 'です。';
+        }
+        if (result) {
+            $('#timecard-result').html('<p class="text-success mb-0">' + result + '</p>');
+        }
+    }
+}
+
+function handleRemoteTimecardSync(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    var nonce = payload.nonce != null ? String(payload.nonce) : '';
+    if (!nonce || nonce === timecardSyncLastNonce) return;
+
+    var payloadDate = payload.date != null ? String(payload.date) : '';
+    if (payloadDate && payloadDate !== getTimecardLocalDateKey()) {
+        timecardSyncLastNonce = nonce;
+        return;
+    }
+
+    timecardSyncLastNonce = nonce;
+    console.log('[TimecardSync] Remote punch from', payload.source, payload.action);
+    applyRemoteTimecardUi(payload);
+}
+
+function startWebTimecardSyncListener() {
+    if (timecardSyncListening) return;
+    var userid = (typeof USER_ID !== 'undefined') ? String(USER_ID || '').trim() : '';
+    if (!userid) return;
+    var db = getTimecardFirebaseDb();
+    if (!db) return;
+    timecardSyncListening = true;
+    db.ref('guis_plus/timecard/' + userid).on('value', function(snapshot) {
+        var val = snapshot && typeof snapshot.val === 'function' ? snapshot.val() : null;
+        // First snapshot only primes — do not apply (page already has PHP state).
+        // Important: null first snapshot must still mark primed, otherwise the
+        // first real punch is incorrectly treated as "prime" and skipped.
+        if (!timecardSyncPrimed) {
+            if (val && typeof val === 'object' && val.nonce != null) {
+                timecardSyncLastNonce = String(val.nonce);
+            }
+            timecardSyncPrimed = true;
+            return;
+        }
+        handleRemoteTimecardSync(val);
+    });
+}
+
+function onTopPageReady(fn) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fn);
+    } else {
+        fn();
+    }
+}
+
+onTopPageReady(function() {
     if (typeof i18next !== 'undefined') {
         if (i18next.isInitialized) {
             applyTimecardI18n();
@@ -44,6 +205,35 @@ document.addEventListener('DOMContentLoaded', function() {
             doCheckout(checkout);
         });
     }
+
+    // Wait for NotificationManager Firebase, then listen for remote punches
+    function tryStartTimecardSync() {
+        if (timecardSyncListening) return;
+        if (window.notificationManager && window.notificationManager.database) {
+            startWebTimecardSyncListener();
+            return;
+        }
+        if (window.firebase && window.firebase.apps && window.firebase.apps.length) {
+            startWebTimecardSyncListener();
+        }
+    }
+
+    if (window.notificationManager && window.notificationManager.database) {
+        tryStartTimecardSync();
+    } else {
+        document.addEventListener('notificationManagerReady', function onReady() {
+            document.removeEventListener('notificationManagerReady', onReady);
+            tryStartTimecardSync();
+        });
+        var tries = 0;
+        var syncWait = setInterval(function() {
+            tries += 1;
+            tryStartTimecardSync();
+            if (timecardSyncListening || tries >= 20) {
+                clearInterval(syncWait);
+            }
+        }, 500);
+    }
 });
 
 function showLoading(button) {
@@ -70,12 +260,15 @@ function doCheckin(button, checkout) {
         .then(function (response) {
             if (response.status === 200 && response.data && response.data.status === 'success') {
                 handleSuccess(response.data.message_code);
-                
+
+                $(button).attr('disabled', true);
                 if(response.data.timecard_id) {
                     $(checkout).attr('data-id', response.data.timecard_id);
                     $(checkout).attr('data-open', response.data.timecard_open);
                     $(checkout).attr('disabled', false);
                 }
+                // Server writes guis_plus/timecard/{userid}; keep client publish as backup
+                publishWebTimecardSync('checkin', response.data);
             } else {
                 handleErrors(response.data.message_code);
                 $(button).prop('disabled', false);
@@ -109,6 +302,7 @@ function doCheckout(button) {
             if (response.status === 200 && response.data && response.data.status === 'success') {
                 handleSuccess(response.data.message_code);
                 $(button).attr('disabled', true);
+                $('#checkin').attr('disabled', true);
 
                 let result = '';
 
@@ -121,6 +315,10 @@ function doCheckout(button) {
                 }
                 const $p = $(`<p class="text-success mb-0">${result}</p>`);
                 $('#timecard-result').html($p);
+                publishWebTimecardSync('checkout', Object.assign({}, response.data, {
+                    open: open,
+                    id: id
+                }));
             } else {
                 handleErrors(response.data.message_code);
                 $(button).prop('disabled', false);

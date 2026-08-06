@@ -14,15 +14,28 @@ createApp({
             presence: {},
             formsByUser: {},
             formsDate: '',
-            statusFilter: 'all',
+            statusFilter: 'online',
             searchKeyword: '',
             loading: false,
             updatedAt: '',
             refreshTimer: null,
-            searchPlaceholder: '検索...'
+            searchPlaceholder: '検索...',
+            lockingUserId: '',
+            unlockingUserId: '',
+            warningSavingUserId: '',
+            lockButtonTitle: 'GUIS Plus アプリをリモートロック',
+            unlockButtonTitle: '解除申請を承認してロック解除',
+            warningToggleTitle: '残業超過トースト（GUIS Plus）',
+            unlockRequests: {}
         };
     },
     computed: {
+        isAdministrator() {
+            return typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator';
+        },
+        unlockRequestCount() {
+            return Object.keys(this.unlockRequests || {}).filter((uid) => this.hasUnlockRequest(uid)).length;
+        },
         filteredMembers() {
             const kw = String(this.searchKeyword || '').trim().toLowerCase();
             return this.members.filter((m) => {
@@ -39,6 +52,115 @@ createApp({
         }
     },
     methods: {
+        isTruthyFlag(value) {
+            return value === true || value === 1 || value === '1' || value === 'true';
+        },
+        hasUnlockRequest(userid) {
+            const req = this.unlockRequests[userid];
+            return !!(req && this.isTruthyFlag(req.pending) && !this.isTruthyFlag(req.approved));
+        },
+        unlockRequestAt(userid) {
+            const req = this.unlockRequests[userid];
+            if (!req || !req.at) return '';
+            try {
+                return new Date(req.at).toLocaleString('ja-JP');
+            } catch (e) {
+                return String(req.at);
+            }
+        },
+        isWorkHoursWarningEnabled(member) {
+            if (!member) return false;
+            return this.isTruthyFlag(member.work_hours_warning);
+        },
+        normalizeWorkHoursWarningFlag(value) {
+            return this.isTruthyFlag(value) ? 1 : 0;
+        },
+        applyWorkHoursWarningLocal(userid, enabled) {
+            const uid = String(userid || '');
+            const value = enabled ? 1 : 0;
+            const idx = this.members.findIndex((m) => String(m.userid) === uid);
+            if (idx >= 0) {
+                this.members[idx] = {
+                    ...this.members[idx],
+                    work_hours_warning: value
+                };
+            }
+        },
+        async toggleWorkHoursWarning(member) {
+            if (!this.isAdministrator || !member || !member.userid) {
+                return;
+            }
+            const userid = String(member.userid).trim();
+            const enabled = this.normalizeWorkHoursWarningFlag(member.work_hours_warning);
+            const previous = enabled ? 0 : 1;
+
+            // Keep UI in sync with numbers (API may return string "0"/"1")
+            this.applyWorkHoursWarningLocal(userid, enabled);
+            this.warningSavingUserId = userid;
+            try {
+                const response = await axios.get('/api/index.php', {
+                    params: {
+                        model: 'member',
+                        method: 'set_work_hours_warning',
+                        userid: userid,
+                        enabled: enabled
+                    },
+                    paramsSerializer: (params) => {
+                        // Ensure enabled=0 is always sent (some serializers drop falsy values)
+                        const parts = [];
+                        Object.keys(params).forEach((key) => {
+                            const val = params[key];
+                            parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(
+                                val === null || typeof val === 'undefined' ? '' : String(val)
+                            ));
+                        });
+                        return parts.join('&');
+                    }
+                });
+                const data = response && response.data ? response.data : null;
+                if (!data || data.status !== 'success') {
+                    throw new Error((data && (data.message || data.error)) || 'update failed');
+                }
+                const saved = this.normalizeWorkHoursWarningFlag(data.work_hours_warning);
+                this.applyWorkHoursWarningLocal(userid, saved);
+                await this.pushWorkHoursWarningSetting(userid, saved);
+                if (window.Notiflix && Notiflix.Notify) {
+                    Notiflix.Notify.success(saved ? '残業警告をONにしました' : '残業警告をOFFにしました');
+                }
+            } catch (error) {
+                console.error('[online] toggle work_hours_warning failed:', error);
+                this.applyWorkHoursWarningLocal(userid, previous);
+                if (window.Notiflix && Notiflix.Notify) {
+                    Notiflix.Notify.failure('残業警告の更新に失敗しました');
+                } else {
+                    alert('残業警告の更新に失敗しました');
+                }
+            } finally {
+                this.warningSavingUserId = '';
+            }
+        },
+        /**
+         * Notify GUIS Plus clients immediately via RTDB:
+         *   guis_plus/work_hours_warning/{userid} = { enabled, at, by, nonce }
+         */
+        async pushWorkHoursWarningSetting(userid, enabled) {
+            const db = this.getFirebaseDatabase();
+            if (!db || !userid) {
+                console.warn('[online] Firebase unavailable — client will pick up warning setting on next poll');
+                return;
+            }
+            try {
+                await db.ref('guis_plus/work_hours_warning/' + userid).set({
+                    enabled: enabled ? 1 : 0,
+                    at: new Date().toISOString(),
+                    by: String(window.currentUserName || window.currentUserId || ''),
+                    reason: 'admin_toggle_warning',
+                    nonce: String(Date.now()) + '_' + Math.random().toString(36).slice(2, 8)
+                });
+            } catch (error) {
+                console.warn('[online] push work_hours_warning to Firebase failed:', error);
+            }
+        },
         assetsBase() {
             if (typeof window.assetsPath !== 'undefined' && window.assetsPath) {
                 return window.assetsPath;
@@ -179,7 +301,10 @@ createApp({
                 if (String(m.is_suspend) === '1') return false;
                 if (String(m.group_name || '') === '退職者') return false;
                 return true;
-            });
+            }).map((m) => ({
+                ...m,
+                work_hours_warning: this.normalizeWorkHoursWarningFlag(m.work_hours_warning)
+            }));
             this.members = list;
         },
         async loadPresence() {
@@ -259,14 +384,206 @@ createApp({
                     clearInterval(timer);
                 }
             }, 500);
+        },
+        getFirebaseDatabase() {
+            const nm = window.notificationManager;
+            if (nm && nm.database) {
+                return nm.database;
+            }
+            if (window.firebase && window.firebase.apps && window.firebase.apps.length) {
+                return window.firebase.database();
+            }
+            return null;
+        },
+        /**
+         * Remote lock GUIS Plus via RTDB:
+         *   guis_plus/locks/{userid} = { active, at, by, nonce, reason }
+         */
+        async lockUserPc(member) {
+            if (!this.isAdministrator) {
+                if (window.Notiflix && Notiflix.Notify) {
+                    Notiflix.Notify.warning('管理者のみロックできます');
+                } else {
+                    alert('管理者のみロックできます');
+                }
+                return;
+            }
+            const userid = member && member.userid ? String(member.userid).trim() : '';
+            if (!userid) return;
+            if (!this.isApp(userid)) {
+                if (window.Notiflix && Notiflix.Notify) {
+                    Notiflix.Notify.warning('アプリでオンラインのユーザーのみロックできます');
+                } else {
+                    alert('アプリでオンラインのユーザーのみロックできます');
+                }
+                return;
+            }
+
+            const name = this.displayName(member);
+            const confirmMsg = (window.i18next && window.i18next.t)
+                ? (window.i18next.t('このユーザーのPCをロックしますか？') || 'このユーザーのPCをロックしますか？')
+                : 'このユーザーのPCをロックしますか？';
+            const ok = window.confirm(`${confirmMsg}\n${name} (${userid})`);
+            if (!ok) return;
+
+            const db = this.getFirebaseDatabase();
+            if (!db) {
+                const msg = 'Firebase に接続できません。ページを再読み込みしてください。';
+                if (window.Notiflix && Notiflix.Notify) {
+                    Notiflix.Notify.failure(msg);
+                } else {
+                    alert(msg);
+                }
+                return;
+            }
+
+            this.lockingUserId = userid;
+            try {
+                const payload = {
+                    active: true,
+                    at: new Date().toISOString(),
+                    by: String(window.currentUserName || window.currentUserId || ''),
+                    reason: 'admin_remote_lock',
+                    nonce: String(Date.now()) + '_' + Math.random().toString(36).slice(2, 8)
+                };
+                await db.ref('guis_plus/locks/' + userid).set(payload);
+                // New lock clears any previous unlock request UI
+                await db.ref('guis_plus/unlock_requests/' + userid).set({
+                    pending: false,
+                    approved: false,
+                    cleared_at: new Date().toISOString(),
+                    cleared_by: String(window.currentUserName || ''),
+                    reason: 'admin_new_lock'
+                });
+                if (window.Notiflix && Notiflix.Notify) {
+                    Notiflix.Notify.success('ロック命令を送信しました');
+                }
+            } catch (error) {
+                console.error('[online] remote lock failed:', error);
+                const msg = 'ロック命令の送信に失敗しました';
+                if (window.Notiflix && Notiflix.Notify) {
+                    Notiflix.Notify.failure(msg);
+                } else {
+                    alert(msg);
+                }
+            } finally {
+                this.lockingUserId = '';
+            }
+        },
+        /**
+         * Approve unlock request from GUIS Plus lock screen:
+         *   guis_plus/unlock_requests/{userid}.approved = true
+         *   guis_plus/locks/{userid}.active = false
+         */
+        async approveUnlockRequest(member) {
+            if (!this.isAdministrator) {
+                if (window.Notiflix && Notiflix.Notify) {
+                    Notiflix.Notify.warning('管理者のみ解除承認できます');
+                } else {
+                    alert('管理者のみ解除承認できます');
+                }
+                return;
+            }
+            const userid = member && member.userid ? String(member.userid).trim() : '';
+            if (!userid || !this.hasUnlockRequest(userid)) return;
+
+            const name = this.displayName(member);
+            const confirmMsg = (window.i18next && window.i18next.t)
+                ? (window.i18next.t('このユーザーのロック解除を承認しますか？') || 'このユーザーのロック解除を承認しますか？')
+                : 'このユーザーのロック解除を承認しますか？';
+            if (!window.confirm(`${confirmMsg}\n${name} (${userid})`)) return;
+
+            const db = this.getFirebaseDatabase();
+            if (!db) {
+                const msg = 'Firebase に接続できません。ページを再読み込みしてください。';
+                if (window.Notiflix && Notiflix.Notify) {
+                    Notiflix.Notify.failure(msg);
+                } else {
+                    alert(msg);
+                }
+                return;
+            }
+
+            this.unlockingUserId = userid;
+            try {
+                const adminId = String(window.currentUserName || window.currentUserId || '');
+                const approveNonce = String(Date.now()) + '_' + Math.random().toString(36).slice(2, 8);
+                const prev = this.unlockRequests[userid] || {};
+                await db.ref('guis_plus/unlock_requests/' + userid).set({
+                    ...prev,
+                    pending: false,
+                    approved: true,
+                    approved_at: new Date().toISOString(),
+                    approved_by: adminId,
+                    approve_nonce: approveNonce,
+                    reason: 'admin_unlock_approve'
+                });
+                await db.ref('guis_plus/locks/' + userid).set({
+                    active: false,
+                    at: new Date().toISOString(),
+                    by: adminId,
+                    reason: 'admin_remote_unlock',
+                    nonce: approveNonce
+                });
+                if (window.Notiflix && Notiflix.Notify) {
+                    Notiflix.Notify.success('ロック解除を承認しました');
+                }
+            } catch (error) {
+                console.error('[online] approve unlock failed:', error);
+                const msg = '解除承認に失敗しました';
+                if (window.Notiflix && Notiflix.Notify) {
+                    Notiflix.Notify.failure(msg);
+                } else {
+                    alert(msg);
+                }
+            } finally {
+                this.unlockingUserId = '';
+            }
+        },
+        listenUnlockRequests() {
+            if (!this.isAdministrator) {
+                this.unlockRequests = {};
+                return;
+            }
+            const tryBind = () => {
+                const db = this.getFirebaseDatabase();
+                if (!db) return false;
+                db.ref('guis_plus/unlock_requests').on('value', (snapshot) => {
+                    const raw = snapshot.val() || {};
+                    const next = {};
+                    Object.keys(raw).forEach((uid) => {
+                        if (raw[uid] && typeof raw[uid] === 'object') {
+                            next[uid] = raw[uid];
+                        }
+                    });
+                    this.unlockRequests = next;
+                    this.updatedAt = new Date().toLocaleString('ja-JP');
+                });
+                return true;
+            };
+            if (tryBind()) return;
+            let attempts = 0;
+            const timer = setInterval(() => {
+                attempts += 1;
+                if (tryBind() || attempts > 20) {
+                    clearInterval(timer);
+                }
+            }, 500);
         }
     },
     mounted() {
         if (window.i18next && typeof window.i18next.t === 'function') {
             this.searchPlaceholder = window.i18next.t('検索...') || '検索...';
+            this.lockButtonTitle = window.i18next.t('GUIS Plus アプリをリモートロック')
+                || 'GUIS Plus アプリをリモートロック';
+            this.unlockButtonTitle = window.i18next.t('解除申請を承認してロック解除')
+                || '解除申請を承認してロック解除';
+            this.warningToggleTitle = window.i18next.t('残業超過トースト（GUIS Plus）')
+                || '残業超過トースト（GUIS Plus）';
         }
         this.refreshAll();
         this.listenFirebasePresence();
+        this.listenUnlockRequests();
         this.refreshTimer = setInterval(() => {
             this.loadPresence();
             this.loadTodayForms();

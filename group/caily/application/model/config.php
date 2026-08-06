@@ -56,7 +56,7 @@ class Config extends ApplicationModel {
 		}
 
 		$user = $this->fetchOne(sprintf(
-			"SELECT userid, realname, member_type FROM %suser WHERE userid = '%s' LIMIT 1",
+			"SELECT userid, realname, member_type, work_hours_warning FROM %suser WHERE userid = '%s' LIMIT 1",
 			DB_PREFIX,
 			$this->quote($userid)
 		));
@@ -111,6 +111,12 @@ class Config extends ApplicationModel {
 				? sprintf('%02d:%02d', $lunchopenhour, $lunchopenminute) : null,
 			'lunch_end' => ($lunchclosehour !== null && $lunchcloseminute !== null)
 				? sprintf('%02d:%02d', $lunchclosehour, $lunchcloseminute) : null,
+			// Asia/Tokyo (set in api/loader.php) — used by GUIS Plus lock / overtime checks
+			'timezone' => date_default_timezone_get(),
+			'server_time' => date('H:i:s'),
+			'server_now' => date('Y-m-d H:i:s'),
+			// Administrator toggles this on member/online.php (default off)
+			'work_hours_warning' => !empty($user['work_hours_warning']) ? 1 : 0,
 		);
 		return $hash;
 	}

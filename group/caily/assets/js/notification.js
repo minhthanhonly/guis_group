@@ -20,7 +20,8 @@ class NotificationManager {
         this.bridgeNotifyUrl = 'http://127.0.0.1:34567/get_notify';
         this.bridgeStatus = {
             ok: false,
-            checkedAt: 0
+            checkedAt: 0,
+            userId: ''
         };
         this.autoRefreshMs = 30000;
         this.autoRefreshTimer = null;
@@ -110,45 +111,71 @@ class NotificationManager {
                 signal: controller.signal
             });
             if (!response.ok) {
-                this.bridgeStatus = { ok: false, checkedAt: now };
+                this.bridgeStatus = { ok: false, checkedAt: now, userId: '' };
                 return false;
             }
             const body = await response.json();
             const isOk = !!(body && body.ok === true);
-            this.bridgeStatus = { ok: isOk, checkedAt: now };
+            const appUserId = body && (body.userId || body.storedUserId)
+                ? String(body.userId || body.storedUserId).trim()
+                : '';
+            this.bridgeStatus = { ok: isOk, checkedAt: now, userId: appUserId };
             return isOk;
         } catch (e) {
-            this.bridgeStatus = { ok: false, checkedAt: now };
+            this.bridgeStatus = { ok: false, checkedAt: now, userId: '' };
             return false;
         } finally {
             clearTimeout(timeout);
         }
     }
 
+    /**
+     * Only restore/focus GUIS Plus when the app session userid matches the web user.
+     */
+    canRestoreAppForCurrentUser() {
+        const webUserId = String(this.userId || (typeof USER_ID !== 'undefined' ? USER_ID : '') || '').trim().toLowerCase();
+        const appUserId = String(this.bridgeStatus.userId || '').trim().toLowerCase();
+        if (!webUserId) return false;
+        // App online but not logged in yet → allow restore (may open login)
+        if (!appUserId) return true;
+        return webUserId === appUserId;
+    }
+
     async callBridgeAction(url, method) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 1200);
+        const webUserId = String(this.userId || (typeof USER_ID !== 'undefined' ? USER_ID : '') || '').trim();
         try {
+            let targetUrl = url;
+            if (webUserId) {
+                const sep = url.indexOf('?') >= 0 ? '&' : '?';
+                targetUrl = url + sep + 'userId=' + encodeURIComponent(webUserId);
+            }
             const options = {
                 method,
                 signal: controller.signal
             };
             if (method === 'POST') {
                 options.headers = { 'Content-Type': 'application/json' };
-                options.body = JSON.stringify({ action: 'show-window' });
+                options.body = JSON.stringify({
+                    action: 'show-window',
+                    userId: webUserId,
+                    user_id: webUserId
+                });
             }
 
-            const response = await fetch(url, options);
-            console.log(response);
+            const response = await fetch(targetUrl, options);
             if (!response.ok) return false;
             if (response.status === 204) return true;
 
             const text = await response.text();
-            console.log(text);
             if (!text) return true;
             try {
                 const body = JSON.parse(text);
-                console.log(body);
+                // Treat userid mismatch as "not shown" so web keeps the dropdown open
+                if (body && body.skipped && body.reason === 'userid-mismatch') {
+                    return false;
+                }
                 return body.ok !== false;
             } catch (e) {
                 return true;
@@ -161,6 +188,15 @@ class NotificationManager {
     }
 
     async requestElectronShowWindow() {
+        // Refresh bridge health (and app userid) if stale
+        await this.isNotificationBridgeOpen();
+        if (!this.canRestoreAppForCurrentUser()) {
+            console.log('[notification] Skip Electron restore — web userid differs from app userid', {
+                web: this.userId,
+                app: this.bridgeStatus.userId
+            });
+            return false;
+        }
         for (const url of this.bridgeShowUrlCandidates) {
             const postOk = await this.callBridgeAction(url, 'POST');
             if (postOk) return true;
@@ -244,7 +280,7 @@ class NotificationManager {
             if (!hasFreshBridgeStatus) {
                 toggleDropdown();
 
-                // Thử show app ở background để lần click sau phản hồi nhanh hơn.
+                // Thử show app ở background chỉ khi cùng userid
                 this.requestElectronShowWindow().then((shown) => {
                     if (shown) {
                         closeDropdown();
@@ -253,7 +289,7 @@ class NotificationManager {
                 return;
             }
 
-            if (!this.bridgeStatus.ok) {
+            if (!this.bridgeStatus.ok || !this.canRestoreAppForCurrentUser()) {
                 toggleDropdown();
                 return;
             }
@@ -262,7 +298,7 @@ class NotificationManager {
             if (shown) {
                 closeDropdown();
             } else {
-                // Bridge có thể đang chạy nhưng chưa hỗ trợ endpoint show/focus -> fallback mở dropdown.
+                // Bridge có thể đang chạy nhưng userid khác / show thất bại -> fallback dropdown web.
                 toggleDropdown();
             }
         });
