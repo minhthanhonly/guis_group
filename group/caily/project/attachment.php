@@ -57,6 +57,21 @@ if($_SESSION['show_project'] == 0){
                 <a href="detail.php?id=<?php echo $project_id; ?>" class="btn btn-outline-primary">
                     <i class="fa fa-arrow-left me-2"></i><span data-i18n="案件概要へ戻る">案件概要へ戻る</span>
                 </a>
+                <a v-if="project && project.parent_project_id" :href="'../parent_project/detail.php?id=' + project.parent_project_id" class="btn btn-outline-primary ms-2">
+                    <i class="fa fa-external-link me-2"></i>
+                    <span data-i18n="建物詳細">建物詳細</span>
+                </a>
+                <span v-if="project && (project.parent_project_name || project.parent_construction_number)"
+                      class="ms-3 d-inline-flex flex-wrap align-items-center gap-3 border rounded px-3 py-2 align-middle">
+                    <span v-if="project.parent_project_name" class="d-inline-flex align-items-center gap-1">
+                        <span class="badge bg-label-primary" data-i18n="お施主様名">お施主様名</span>
+                        <span class="fw-semibold">{{ project.parent_project_name }}</span>
+                    </span>
+                    <span v-if="project.parent_construction_number" class="d-inline-flex align-items-center gap-1">
+                        <span class="badge bg-label-info" data-i18n="工事番号">工事番号</span>
+                        <span class="fw-semibold">{{ project.parent_construction_number }}</span>
+                    </span>
+                </span>
             </div>
 
             <!-- Main Content -->

@@ -172,6 +172,38 @@ class Project extends ApplicationModel {
     }
 
     /**
+     * ORDER BY with NULL/empty string always last (ASC and DESC).
+     * Rows with empty sort values are then ordered by start_date ASC, end_date ASC
+     * (NULL/empty dates last within that group).
+     *
+     * @param string $orderExpr Sort column expression
+     * @param string $order_dir ASC|DESC
+     * @param string $leadingOrder Optional leading clause (e.g. status CASE ... ASC)
+     */
+    function buildProjectListOrderByNullsLast($orderExpr, $order_dir, $leadingOrder = '') {
+        $order_dir = strtoupper($order_dir) === 'DESC' ? 'DESC' : 'ASC';
+        $emptyFlag = sprintf(
+            "(CASE WHEN (%s) IS NULL OR TRIM(CAST((%s) AS CHAR)) = '' THEN 1 ELSE 0 END)",
+            $orderExpr,
+            $orderExpr
+        );
+        $emptyStart = "(p.start_date IS NULL OR TRIM(CAST(p.start_date AS CHAR)) = '' OR CAST(p.start_date AS CHAR) = '0000-00-00')";
+        $emptyEnd = "(p.end_date IS NULL OR TRIM(CAST(p.end_date AS CHAR)) = '' OR CAST(p.end_date AS CHAR) = '0000-00-00')";
+        $parts = array();
+        $leadingOrder = trim((string)$leadingOrder);
+        if ($leadingOrder !== '') {
+            $parts[] = $leadingOrder;
+        }
+        $parts[] = $emptyFlag . ' ASC';
+        $parts[] = $orderExpr . ' ' . $order_dir;
+        $parts[] = $emptyStart . ' ASC';
+        $parts[] = 'p.start_date ASC';
+        $parts[] = $emptyEnd . ' ASC';
+        $parts[] = 'p.end_date ASC';
+        return 'ORDER BY ' . implode(', ', $parts);
+    }
+
+    /**
      * Attach favorites, members, confirmation notes, task counts in batched queries (avoids per-row subqueries).
      */
     private function attachProjectListAggregates(array &$data, $userId) {
@@ -601,9 +633,11 @@ class Project extends ApplicationModel {
         if ($order_column === 'status') {
             $orderBy = sprintf('ORDER BY %s %s', $statusOrder, $order_dir);
         } elseif ($sortByStatus) {
-            $orderBy = sprintf('ORDER BY %s ASC, %s %s', $statusOrder, $orderExpr, $order_dir);
+            // ステータス順 → null/empty cuối → start_date, end_date ASC
+            $orderBy = $this->buildProjectListOrderByNullsLast($orderExpr, $order_dir, $statusOrder . ' ASC');
         } else {
-            $orderBy = sprintf('ORDER BY %s %s', $orderExpr, $order_dir);
+            // ステータス順オフ: giá trị NULL/rỗng của cột đang sort luôn nằm cuối
+            $orderBy = $this->buildProjectListOrderByNullsLast($orderExpr, $order_dir);
         }
         
         if (isset($_GET['showInactive']) && $_GET['showInactive'] == '1') {
@@ -2868,10 +2902,13 @@ class Project extends ApplicationModel {
         $projectId = intval($id);
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
-            c.name as contact_name, c.company_name, c.branch as branch_name, c.category_id as category_id
+            c.name as contact_name, c.company_name, c.branch as branch_name, c.category_id as category_id,
+            pp.construction_number as parent_construction_number,
+            pp.project_name as parent_project_name
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+            LEFT JOIN " . DB_PREFIX . "parent_projects pp ON pp.id = p.parent_project_id
             WHERE p.id = %d",
             $projectId
         );

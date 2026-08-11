@@ -54,6 +54,17 @@ if($_SESSION['show_project'] == 0){
                 <i class="fa fa-external-link me-2"></i>
                 <span>{{ $t('建物詳細') }}</span>
             </a>
+            <span v-if="projectInfo && (projectInfo.parent_project_name || projectInfo.parent_construction_number)"
+                  class="ms-3 d-inline-flex flex-wrap align-items-center gap-3 border rounded px-3 py-2 align-middle">
+                <span v-if="projectInfo.parent_project_name" class="d-inline-flex align-items-center gap-1">
+                    <span class="badge bg-label-primary" data-i18n="お施主様名">お施主様名</span>
+                    <span class="fw-semibold">{{ projectInfo.parent_project_name }}</span>
+                </span>
+                <span v-if="projectInfo.parent_construction_number" class="d-inline-flex align-items-center gap-1">
+                    <span class="badge bg-label-info" data-i18n="工事番号">工事番号</span>
+                    <span class="fw-semibold">{{ projectInfo.parent_construction_number }}</span>
+                </span>
+            </span>
         </div>
     </div>
 
