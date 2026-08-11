@@ -2,6 +2,15 @@
 
 require_once('../application/loader.php');
 $view->heading('ファイル情報');
+$storageFiles = array();
+if (isset($hash['data']['storage_file']) && strlen($hash['data']['storage_file']) > 0) {
+	foreach (explode(',', $hash['data']['storage_file']) as $filename) {
+		$filename = trim($filename);
+		if ($filename !== '') {
+			$storageFiles[] = $filename;
+		}
+	}
+}
 ?>
 
 <div class="container-xxl flex-grow-1 container-p-y">
@@ -15,9 +24,6 @@ $view->heading('ファイル情報');
 			<div class="col-md-6">
 				<div class="d-flex row">
 					<div class="col-md-6">
-						<!-- <form method="post" class="searchform" action="<?=$_SERVER['SCRIPT_NAME']?><?=$view->positive(array('folder'=>$_GET['folder']))?>">
-							<input type="text" name="search" id="search" class="inputsearch" value="<?=$view->escape($_REQUEST['search'])?>" /><input type="submit" value="検索" />
-						</form> -->
 					</div>
 					<div class="col-md-6">
 						<ul class="operate d-flex gap-2 list-unstyled justify-content-end">
@@ -38,8 +44,19 @@ $view->heading('ファイル情報');
 				<table class="table table-bordered table-striped mb-4" cellspacing="0">
 					<tr><th>タイトル</th><td><?=$hash['data']['storage_title']?>&nbsp;</td></tr>
 					<tr><th>ファイル名</th><td>
-						<a href="download.php?id=<?=$hash['data']['id']?>&file=<?=urlencode($hash['data']['storage_file'])?>">
-						<?=$hash['data']['storage_file']?>&nbsp;[ダウンロード]</a>
+						<?php if (count($storageFiles) > 0) { ?>
+						<ul class="list-unstyled mb-0">
+							<?php foreach ($storageFiles as $filename) { ?>
+							<li class="mb-1">
+								<a href="download.php?id=<?=$hash['data']['id']?>&file=<?=urlencode($filename)?>">
+									<?=$view->escape($filename)?>&nbsp;[ダウンロード]
+								</a>
+							</li>
+							<?php } ?>
+						</ul>
+						<?php } else { ?>
+						&nbsp;
+						<?php } ?>
 					</td></tr>
 					<tr><th>ファイルサイズ</th><td><?=$hash['data']['storage_size']?>&nbsp;</td></tr>
 					<tr><th>内容</th><td><?=nl2br($hash['data']['storage_comment'])?>&nbsp;</td></tr>

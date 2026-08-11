@@ -60,15 +60,19 @@ class Storage extends ApplicationModel {
 	
 		$hash['folder'] = $this->permitFolder($_GET['folder']);
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-			if (strlen($_FILES['uploadfile']['name'][0]) <= 0 && strlen($_POST['uploadedfile'][0]) <= 0) {
+			$hasUpload = (is_array($_FILES['uploadfile']['name'] ?? null) && strlen((string)($_FILES['uploadfile']['name'][0] ?? '')) > 0)
+				|| (is_array($_POST['uploadedfile'] ?? null) && strlen((string)($_POST['uploadedfile'][0] ?? '')) > 0);
+			if (!$hasUpload) {
 				$this->error[] = 'アップロードするファイルを選択してください。';
 			}
 			$this->validateSchema('insert');
 			$this->permitValidate();
 			$prefix = $_SESSION['userid'].'_'.strtotime($this->post['storage_date']);
 			$this->post['storage_file'] = $this->uploadfile('storage', $prefix);
-
-			$this->post['storage_size'] = $this->uploadfilesize($prefix.'_'.$this->post['storage_file'], 'storage');
+			if (strlen((string)$this->post['storage_file']) <= 0 && count($this->error) <= 0) {
+				$this->error[] = 'アップロードするファイルを選択してください。';
+			}
+			$this->post['storage_size'] = $this->storageTotalSize($prefix, $this->post['storage_file']);
 			$this->insertPost();
 			$this->redirect('index.php'.$this->parameter(array('folder'=>$_GET['folder'])));
 			$hash['data'] = $this->post;
@@ -84,21 +88,23 @@ class Storage extends ApplicationModel {
 		$this->type($hash['data'], 'file');
 		$hash['folder'] = $this->permitFolder($hash['data']['storage_folder']);
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-			if (strlen($_FILES['uploadfile']['name'][0]) > 0 || strlen($_POST['uploadedfile'][0]) > 0) {
-				$this->schema['storage_file']['except'] = array();
-				$this->schema['storage_size']['except'] = array();
-			}
+			$this->schema['storage_file']['except'] = array();
+			$this->schema['storage_size']['except'] = array();
 			$this->validateSchema('update');
 			$this->permitValidate();
-			if (strlen($_FILES['uploadfile']['name'][0]) > 0 || strlen($_POST['uploadedfile'][0]) > 0) {
-				$prefix = $hash['data']['owner'].'_'.strtotime($hash['data']['storage_date']);
-				$this->post['storage_file'] = $this->uploadfile('storage', $prefix, $hash['data']['storage_file']);
-				$this->post['storage_size'] = $this->uploadfilesize($prefix.'_'.$this->post['storage_file'], 'storage');
+			$prefix = $hash['data']['owner'].'_'.strtotime($hash['data']['storage_date']);
+			$this->post['storage_file'] = $this->uploadfile('storage', $prefix, $hash['data']['storage_file']);
+			if (strlen((string)$this->post['storage_file']) <= 0) {
+				$this->error[] = 'ファイルを選択してください。';
+			} else {
+				$this->post['storage_size'] = $this->storageTotalSize($prefix, $this->post['storage_file']);
 			}
 			$this->updatePost();
 			$this->redirect('index.php'.$this->parameter(array('folder'=>$hash['data']['storage_folder'])));
 			$this->post['storage_date'] = $hash['data']['storage_date'];
-			$this->post['storage_file'] = $hash['data']['storage_file'];
+			if (!isset($this->post['storage_file']) || strlen((string)$this->post['storage_file']) <= 0) {
+				$this->post['storage_file'] = $hash['data']['storage_file'];
+			}
 			$hash['data'] = $this->post;
 		}
 		$hash += $this->findUser($hash['data']);
@@ -230,13 +236,49 @@ class Storage extends ApplicationModel {
 		if ($data['storage_folder'] > 0) {
 			$hash['folder'] = $this->permitFind('public', $data['storage_folder']);
 		}
-		if (stristr($data['storage_file'], $_REQUEST['file'])) {
-			
-			$this->attachment('storage', $data['owner'].'_'.strtotime($data['storage_date']), $_REQUEST['file'], 'attachment');
+		$requestFile = isset($_REQUEST['file']) ? (string)$_REQUEST['file'] : '';
+		$files = $this->storageFileList($data['storage_file'] ?? '');
+		if ($requestFile !== '' && in_array($requestFile, $files, true)) {
+			$this->attachment('storage', $data['owner'].'_'.strtotime($data['storage_date']), $requestFile, 'attachment');
 		} else {
 			$this->died('ファイルが見つかりません。');
 		}
 	
+	}
+
+	/** @return string[] */
+	function storageFileList($filelist) {
+		if ($filelist === null || $filelist === '') {
+			return array();
+		}
+		$list = array();
+		foreach (explode(',', (string)$filelist) as $name) {
+			$name = trim($name);
+			if ($name !== '') {
+				$list[] = $name;
+			}
+		}
+		return $list;
+	}
+
+	function storageTotalSize($prefix, $filelist) {
+		$total = 0;
+		foreach ($this->storageFileList($filelist) as $name) {
+			$file = DIR_UPLOAD.'storage/'.$prefix.'_'.$this->uploadencode($name);
+			if (file_exists($file)) {
+				$size = @filesize($file);
+				if ($size > 0) {
+					$total += $size;
+				}
+			}
+		}
+		if ($total > 1024) {
+			return number_format(floor($total / 1024)).'K';
+		}
+		if ($total <= 0) {
+			return '0K';
+		}
+		return '1K';
 	}
 
 }

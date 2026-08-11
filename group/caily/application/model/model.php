@@ -360,9 +360,17 @@ class Model extends Connection {
 	
 	function uploadfile($directory, $prefix, $filelist = '') {
 	
-		$upload = DIR_UPLOAD.$directory.'/'.$prefix.'_';
-		$temporary = DIR_UPLOAD.'temporary/'.$_SESSION['userid'].'_';
-		if (count($_FILES) > 0 && (!is_writable(DIR_UPLOAD.$directory.'/') || !is_writable(DIR_UPLOAD.'temporary/'))) {
+		$uploadDir = DIR_UPLOAD.$directory.'/';
+		$temporaryDir = DIR_UPLOAD.'temporary/';
+		if (!is_dir($uploadDir)) {
+			@mkdir($uploadDir, 0777, true);
+		}
+		if (!is_dir($temporaryDir)) {
+			@mkdir($temporaryDir, 0777, true);
+		}
+		$upload = $uploadDir.$prefix.'_';
+		$temporary = $temporaryDir.$_SESSION['userid'].'_';
+		if (count($_FILES) > 0 && (!is_dir($uploadDir) || !is_writable($uploadDir) || !is_dir($temporaryDir) || !is_writable($temporaryDir))) {
 			$this->error[] = 'ファイルを保存するディレクトリに書き込み権限がありません。';
 		}
 		if (is_array($_POST['uploadedfile']) && count($_POST['uploadedfile']) > 0) {

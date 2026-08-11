@@ -193,7 +193,7 @@ class View {
 		if (strlen($string) > 0) {
 			$array = explode(',', $string);
 			if (is_array($array) && count($array) > 0) {
-				$element = '<div class="my-2"><input type="checkbox" name="uploadedfile[]" id="uploadedfile%s" value="%s" checked="checked" class="d-none" /><label for="uploadedfile%s">%s</label></div>';
+				$element = '<div class="my-2 form-check"><input type="checkbox" name="uploadedfile[]" id="uploadedfile%s" value="%s" checked="checked" class="form-check-input" /><label class="form-check-label" for="uploadedfile%s">%s</label></div>';
 				foreach ($array as $key => $value) {
 					if (strlen($value) > 0) {
 						$value = $this->escape($value);
@@ -202,7 +202,8 @@ class View {
 				}
 			}
 		}
-		$result .= '<div><a href="javascript:void(0)" class="operator" onclick="App.uploadfile(this)">ファイルを添付</a></div>';
+		$result .= '<div class="mt-2"><a href="javascript:void(0)" class="operator btn btn-sm btn-outline-primary" onclick="App.uploadfile(this)">ファイルを添付</a>';
+		$result .= '<div class="form-text">複数のファイルを同時に選択できます。</div></div>';
 		return $result;
 	
 	}

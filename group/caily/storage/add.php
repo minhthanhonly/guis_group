@@ -19,9 +19,6 @@ if(isset($hash['folder']['storage_title'])){
 			<div class="col-md-6">
 				<div class="d-flex row">
 					<div class="col-md-6">
-						<!-- <form method="post" class="searchform" action="<?=$_SERVER['SCRIPT_NAME']?><?=$view->positive(array('folder'=>$_GET['folder']))?>">
-							<input type="text" name="search" id="search" class="inputsearch" value="<?=$view->escape($_REQUEST['search'])?>" /><input type="submit" value="検索" />
-						</form> -->
 					</div>
 					<div class="col-md-6">
 						<ul class="operate d-flex gap-2 list-unstyled justify-content-end">
@@ -35,18 +32,11 @@ if(isset($hash['folder']['storage_title'])){
 			<div class="container py-12">
 
 				<form class="content" method="post" action="" enctype="multipart/form-data">
-					<input name="MAX_FILE_SIZE" value="<?=APP_FILESIZE?>" type="hidden" />
 					<?=$view->error($hash['error'])?>
 					<table class="form" cellspacing="0">
-						<tr><th>ファイル<span class="badge bg-label-danger mx-1">必須</span></th><td>
-				<?php
-				if (strlen($hash['data']['storage_file']) > 0) {
-					echo '<input type="checkbox" name="uploadedfile[]" id="uploadedfile" value="'.$hash['data']['storage_file'].'" checked="checked" onclick="Storage.uploadfile(this)" /><label for="uploadedfile">'.$hash['data']['storage_file'].'</label>';
-				} else {
-					echo '<input type="file" name="uploadfile[]" class="inputfile" size="70" />';
-				}
-				?>
-						</td></tr>
+						<tr><th>ファイル<span class="badge bg-label-danger mx-1">必須</span></th>
+							<td><?=$view->uploadfile(isset($hash['data']['storage_file']) ? $hash['data']['storage_file'] : '')?></td>
+						</tr>
 						<tr><th>タイトル<span class="badge bg-label-danger mx-1">必須</span></th><td><input type="text" name="storage_title" class="inputtitle form-control" value="<?=$hash['data']['storage_title']?>" /></td></tr>
 						<tr><th>内容</th><td><textarea name="storage_comment" class="inputcomment form-control" rows="5"><?=$hash['data']['storage_comment']?></textarea></td></tr>
 						<tr><th>場所</th><td><?=$title?></td></tr>

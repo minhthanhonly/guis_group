@@ -75,8 +75,19 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 						foreach ($hash['list'] as $row) {
 							$type = 'info';
 							$fileext = '';
+							$file = '';
 							if ($row['storage_type'] == 'file') {
-								$fileext = strtolower(substr(strrchr($row['storage_file'], '.'), 1));
+								$fileNames = array();
+								if (strlen($row['storage_file']) > 0) {
+									foreach (explode(',', $row['storage_file']) as $filename) {
+										$filename = trim($filename);
+										if ($filename !== '') {
+											$fileNames[] = $filename;
+										}
+									}
+								}
+								$firstFile = count($fileNames) > 0 ? $fileNames[0] : '';
+								$fileext = $firstFile !== '' ? strtolower(substr(strrchr($firstFile, '.'), 1)) : '';
 								if ($fileext == 'pdf') {
 									$fileext = 'file-type-pdf';
 								} elseif ($fileext == 'mp4') {
@@ -93,7 +104,14 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 									$fileext = 'file-type-ppt';
 								}
 								$url = 'view.php?id='.$row['id'];
-								$file = '<a href="download.php?id='.$row['id'].'&file='.urlencode($row['storage_file']).'">'.$row['storage_file'].'</a>';
+								$fileLinks = array();
+								foreach ($fileNames as $filename) {
+									$fileLinks[] = '<a href="download.php?id='.$row['id'].'&file='.urlencode($filename).'">'.$view->escape($filename).'</a>';
+								}
+								$file = count($fileLinks) > 0 ? implode('<br>', $fileLinks) : '';
+								if (count($fileNames) > 1) {
+									$file .= '<div class="small text-muted mt-1">'.count($fileNames).'ファイル</div>';
+								}
 								$property = $url;
 							} else {
 								$fileext = 'folder tabler-filled';
@@ -103,7 +121,7 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 							}
 					?>
 							<tr><td><a class="storage<?=$row['storage_type']?> <?=$fileext?>" href="<?=$url?>"><i class="icon-base ti tabler-<?=$fileext?> me-2 text-<?=$type?>"></i><?=$row['storage_title']?></a>&nbsp;</td>
-							<td><?=$file?></a>&nbsp;</td>
+							<td><?=$file?>&nbsp;</td>
 							<td><?=$row['storage_size']?>&nbsp;</td>
 							<td><?=$row['storage_name']?>&nbsp;</td>
 							<td><?=date('Y/m/d H:i:s', strtotime($row['storage_date']))?>&nbsp;</td>
