@@ -70,19 +70,44 @@ if (!empty($_SESSION['userid'])) {
               <button <?php if(isset($hash['timecard']['timecard_open']) && $hash['timecard']['timecard_open']!= ''){ echo 'disabled'; }?> class="me-2 btn btn-primary waves-effect waves-light" id="checkin" data-i18n="出社">出社</button>
               <button <?php if(isset($hash['timecard']['timecard_close']) && $hash['timecard']['timecard_close'] != '') { echo 'disabled'; }?> class="btn btn-warning waves-effect waves-light" id="checkout" data-id="<?=$hash['timecard']['id']?>" data-open="<?=$hash['timecard']['timecard_open']?>" data-i18n="退社">退社</button>
               <div id="timecard-result" class="mt-3">
-                <?php if(isset($hash['timecard']['timecard_close']) && $hash['timecard']['timecard_close'] != '') { ?>
-                  <p class="text-success mb-0">
-                    <span data-i18n="お疲れ様でした！">お疲れ様でした！</span><br>
-                    <span data-i18n-timecard-time
-                      data-time="<?=$hash['timecard']['timecard_time']?>"
-                      data-ja="勤務時間は{time}です。"
-                      data-vi="Giờ làm việc: {time}">勤務時間は<?=$hash['timecard']['timecard_time']?>です。</span>
-                  <?php if(isset($hash['timecard']['timecard_timeover']) && $hash['timecard']['timecard_timeover'] != '0:00') { ?>
-                    <br><span data-i18n-timecard-time
-                      data-time="<?=$hash['timecard']['timecard_timeover']?>"
-                      data-ja="時間外は{time}です。"
-                      data-vi="Ngoài giờ: {time}">時間外は<?=$hash['timecard']['timecard_timeover']?>です。</span>
-                  <?php } ?>
+                <?php
+                  $tcOpen = isset($hash['timecard']['timecard_open']) ? trim((string)$hash['timecard']['timecard_open']) : '';
+                  $tcClose = isset($hash['timecard']['timecard_close']) ? trim((string)$hash['timecard']['timecard_close']) : '';
+                  $tcTime = isset($hash['timecard']['timecard_time']) ? trim((string)$hash['timecard']['timecard_time']) : '';
+                  $tcTimeover = isset($hash['timecard']['timecard_timeover']) ? trim((string)$hash['timecard']['timecard_timeover']) : '';
+                  $hasTcOpen = ($tcOpen !== '' && $tcOpen !== '00:00' && $tcOpen !== '00:00:00');
+                  $hasTcClose = ($tcClose !== '' && $tcClose !== '00:00' && $tcClose !== '00:00:00');
+                ?>
+                <?php if ($hasTcOpen || $hasTcClose) { ?>
+                  <p class="<?= $hasTcClose ? 'text-success' : 'text-info' ?> mb-0">
+                    <?php if ($hasTcOpen) { ?>
+                      <span data-i18n-timecard-stamp
+                        data-kind="open"
+                        data-time="<?= htmlspecialchars($tcOpen, ENT_QUOTES, 'UTF-8') ?>"
+                        data-ja="出社: {time}"
+                        data-vi="Check-in: {time}">出社: <?= htmlspecialchars($tcOpen, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php } ?>
+                    <?php if ($hasTcClose) { ?>
+                      <?php if ($hasTcOpen) { ?><span class="mx-3" aria-hidden="true"></span><?php } ?>
+                      <span data-i18n-timecard-stamp
+                        data-kind="close"
+                        data-time="<?= htmlspecialchars($tcClose, ENT_QUOTES, 'UTF-8') ?>"
+                        data-ja="退社: {time}"
+                        data-vi="Check-out: {time}">退社: <?= htmlspecialchars($tcClose, ENT_QUOTES, 'UTF-8') ?></span>
+                      <?php if ($tcTime !== '') { ?>
+                        <br><span data-i18n="お疲れ様でした！">お疲れ様でした！</span>
+                        <br><span data-i18n-timecard-time
+                          data-time="<?= htmlspecialchars($tcTime, ENT_QUOTES, 'UTF-8') ?>"
+                          data-ja="勤務時間は{time}です。"
+                          data-vi="Giờ làm việc: {time}">勤務時間は<?= htmlspecialchars($tcTime, ENT_QUOTES, 'UTF-8') ?>です。</span>
+                      <?php } ?>
+                      <?php if ($tcTimeover !== '' && $tcTimeover !== '0:00') { ?>
+                        <br><span data-i18n-timecard-time
+                          data-time="<?= htmlspecialchars($tcTimeover, ENT_QUOTES, 'UTF-8') ?>"
+                          data-ja="時間外は{time}です。"
+                          data-vi="Ngoài giờ: {time}">時間外は<?= htmlspecialchars($tcTimeover, ENT_QUOTES, 'UTF-8') ?>です。</span>
+                      <?php } ?>
+                    <?php } ?>
                   </p>
                 <?php } ?>
               </div>

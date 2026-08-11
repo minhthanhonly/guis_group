@@ -271,14 +271,14 @@ $view->heading('建物一覧');
                                                    title="詳細を表示">
                                                     <i class="fa fa-eye"></i>
                                                 </a>
-                                                
-                                                <template v-if="isProjectManager">
-                                                    <button v-if="project.child_project_count == 0" class="btn btn-outline-danger" @click="deleteParentProject(project.id)" 
-                                                             title="削除" 
-                                                             :disabled="project.child_project_count > 0">
-                                                         <i class="fa fa-trash"></i>
-                                                     </button>
-                                                </template>
+                                                <button v-if="isAdministrator"
+                                                        type="button"
+                                                        class="btn btn-outline-danger"
+                                                        @click="deleteParentProject(project)"
+                                                        title="建物を削除（管理者）"
+                                                        :disabled="deletingParentProjectId === project.id">
+                                                    <i class="fa fa-trash"></i>
+                                                </button>
                                             </div>
                                         </td>
                                 </tr>

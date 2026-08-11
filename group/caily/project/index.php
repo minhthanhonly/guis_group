@@ -1461,7 +1461,7 @@ body > .select2-container--default,
     width: 36px;
     height: 36px;
     bottom: 10px;
-    right: 230px;
+    right: 186px;
     z-index: 1000;
     padding: 0;
     display: flex;

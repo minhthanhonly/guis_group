@@ -14,6 +14,80 @@ function applyTimecardI18n() {
         var tpl = lang === 'vi' ? el.getAttribute('data-vi') : el.getAttribute('data-ja');
         if (tpl) el.textContent = tpl.replace('{time}', time);
     });
+    document.querySelectorAll('[data-i18n-timecard-stamp]').forEach(function(el) {
+        var time = el.getAttribute('data-time') || '';
+        var tpl = lang === 'vi' ? el.getAttribute('data-vi') : el.getAttribute('data-ja');
+        if (tpl) el.textContent = tpl.replace('{time}', time);
+    });
+}
+
+function escapeTimecardHtml(value) {
+    return $('<div>').text(String(value == null ? '' : value)).html();
+}
+
+function hasTimecardPunchTime(value) {
+    var v = String(value == null ? '' : value).trim();
+    return v !== '' && v !== '00:00' && v !== '00:00:00';
+}
+
+function renderTimecardResult(details) {
+    var tip = details || {};
+    var open = String(tip.open || tip.timecard_open || '').trim();
+    var close = String(tip.close || tip.timecard_close || '').trim();
+    var time = String(tip.timecard_time || tip.time || '').trim();
+    var timeover = String(tip.timecard_timeover || tip.timeover || '').trim();
+    var hasOpen = hasTimecardPunchTime(open);
+    var hasClose = hasTimecardPunchTime(close);
+    if (!hasOpen && !hasClose) {
+        $('#timecard-result').empty();
+        return;
+    }
+
+    var lang = (typeof i18next !== 'undefined' && i18next.language) ? i18next.language : 'ja';
+    var openTpl = lang === 'vi' ? 'Check-in: {time}' : '出社: {time}';
+    var closeTpl = lang === 'vi' ? 'Check-out: {time}' : '退社: {time}';
+    var workTpl = lang === 'vi' ? 'Giờ làm việc: {time}' : '勤務時間は{time}です。';
+    var overtimeTpl = lang === 'vi' ? 'Ngoài giờ: {time}' : '時間外は{time}です。';
+    var thanksText = lang === 'vi' ? 'Cảm ơn bạn đã làm việc hôm nay!' : 'お疲れ様でした！';
+
+    var stampParts = [];
+    var extraLines = [];
+    if (hasOpen) {
+        stampParts.push(
+            '<span data-i18n-timecard-stamp data-kind="open" data-time="' + escapeTimecardHtml(open) + '"' +
+            ' data-ja="出社: {time}" data-vi="Check-in: {time}">' +
+            escapeTimecardHtml(openTpl.replace('{time}', open)) + '</span>'
+        );
+    }
+    if (hasClose) {
+        stampParts.push(
+            '<span data-i18n-timecard-stamp data-kind="close" data-time="' + escapeTimecardHtml(close) + '"' +
+            ' data-ja="退社: {time}" data-vi="Check-out: {time}">' +
+            escapeTimecardHtml(closeTpl.replace('{time}', close)) + '</span>'
+        );
+        if (time) {
+            extraLines.push('<span data-i18n="お疲れ様でした！">' + escapeTimecardHtml(thanksText) + '</span>');
+            extraLines.push(
+                '<span data-i18n-timecard-time data-time="' + escapeTimecardHtml(time) + '"' +
+                ' data-ja="勤務時間は{time}です。" data-vi="Giờ làm việc: {time}">' +
+                escapeTimecardHtml(workTpl.replace('{time}', time)) + '</span>'
+            );
+        }
+        if (timeover && timeover !== '0:00') {
+            extraLines.push(
+                '<span data-i18n-timecard-time data-time="' + escapeTimecardHtml(timeover) + '"' +
+                ' data-ja="時間外は{time}です。" data-vi="Ngoài giờ: {time}">' +
+                escapeTimecardHtml(overtimeTpl.replace('{time}', timeover)) + '</span>'
+            );
+        }
+    }
+
+    var html = stampParts.join('<span class="mx-3" aria-hidden="true"></span>');
+    if (extraLines.length) {
+        html += '<br>' + extraLines.join('<br>');
+    }
+    var cls = hasClose ? 'text-success' : 'text-info';
+    $('#timecard-result').html('<p class="' + cls + ' mb-0">' + html + '</p>');
 }
 
 /** Cross-platform punch sync via Firebase RTDB (guis_plus/timecard/{userId}). */
@@ -98,10 +172,7 @@ function applyRemoteTimecardUi(payload) {
             if (open) $(checkout).attr('data-open', open);
         }
         if (!hasClose) {
-            var openHtml = open
-                ? '<p class="text-info mb-0">出社時刻: ' + $('<div>').text(open).html() + '</p>'
-                : '';
-            if (openHtml) $('#timecard-result').html(openHtml);
+            renderTimecardResult({ open: open, close: '', timecard_time: '', timecard_timeover: '' });
         }
         return;
     }
@@ -117,16 +188,12 @@ function applyRemoteTimecardUi(payload) {
             if (timecardId) $(checkout).attr('data-id', timecardId);
             if (open) $(checkout).attr('data-open', open);
         }
-        var result = '';
-        if (time) {
-            result = 'お疲れ様でした！<br>勤務時間は' + $('<div>').text(time).html() + 'です。';
-        }
-        if (timeover && timeover !== '0:00') {
-            result += '<br>時間外は' + $('<div>').text(timeover).html() + 'です。';
-        }
-        if (result) {
-            $('#timecard-result').html('<p class="text-success mb-0">' + result + '</p>');
-        }
+        renderTimecardResult({
+            open: open,
+            close: close,
+            timecard_time: time,
+            timecard_timeover: timeover
+        });
     }
 }
 
@@ -267,6 +334,12 @@ function doCheckin(button, checkout) {
                     $(checkout).attr('data-open', response.data.timecard_open);
                     $(checkout).attr('disabled', false);
                 }
+                renderTimecardResult({
+                    open: response.data.timecard_open || '',
+                    close: '',
+                    timecard_time: '',
+                    timecard_timeover: ''
+                });
                 // Server writes guis_plus/timecard/{userid}; keep client publish as backup
                 publishWebTimecardSync('checkin', response.data);
             } else {
@@ -304,17 +377,12 @@ function doCheckout(button) {
                 $(button).attr('disabled', true);
                 $('#checkin').attr('disabled', true);
 
-                let result = '';
-
-                if(response.data.timecard_time) {
-                    result = 'お疲れ様でした！<br>勤務時間は' + response.data.timecard_time + 'です。';
-                }
-
-                if(response.data.timecard_timeover && response.data.timecard_timeover != '0:00') {
-                    result += '<br>時間外は' + response.data.timecard_timeover + 'です。';
-                }
-                const $p = $(`<p class="text-success mb-0">${result}</p>`);
-                $('#timecard-result').html($p);
+                renderTimecardResult({
+                    open: open || response.data.timecard_open || '',
+                    close: response.data.timecard_close || '',
+                    timecard_time: response.data.timecard_time || '',
+                    timecard_timeover: response.data.timecard_timeover || ''
+                });
                 publishWebTimecardSync('checkout', Object.assign({}, response.data, {
                     open: open,
                     id: id

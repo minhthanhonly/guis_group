@@ -36,6 +36,8 @@ createApp({
             totalRecords: 0,
             loading: false,
             isProjectManager: typeof IS_PROJECT_MANAGER !== 'undefined' ? IS_PROJECT_MANAGER : false,
+            isAdministrator: typeof IS_ADMIN !== 'undefined' ? !!IS_ADMIN : false,
+            deletingParentProjectId: null,
             permission: [],
             sortColumn: 'created_at',
             sortDirection: 'DESC', // 'ASC' or 'DESC'
@@ -1303,52 +1305,89 @@ createApp({
                 showMessage('操作に失敗しました。', true);
             }
         },
-        async deleteParentProject(id) {
-            try {
-                // Tìm dự án cha để kiểm tra số lượng dự án con
-                const project = this.parentProjects.find(p => p.id == id);
-                if (project && project.child_project_count > 0) {
-                    Swal.fire({
-                        title: '削除できません',
-                        text: 'この親プロジェクトには子プロジェクトが存在するため削除できません。先に子プロジェクトを削除してください。',
-                        icon: 'warning',
-                        confirmButtonText: 'OK'
-                    });
-                    return;
-                }
+        async deleteParentProject(projectOrId) {
+            if (!this.isAdministrator) {
+                showMessage('管理者のみ削除できます。', true);
+                return;
+            }
+            const project = (projectOrId && typeof projectOrId === 'object')
+                ? projectOrId
+                : this.parentProjects.find(p => p.id == projectOrId);
+            const id = project ? project.id : projectOrId;
+            if (!id) return;
 
+            const childCount = project && project.child_project_count != null
+                ? Number(project.child_project_count)
+                : 0;
+            const name = project && project.project_name ? project.project_name : ('ID ' + id);
+            const escapeHtml = (s) => String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+            const safeName = escapeHtml(name);
+            const warnText = childCount > 0
+                ? `建物「${safeName}」と関連する案件（${childCount}件）およびそのデータがすべて完全削除されます。この操作は取り消せません。`
+                : `建物「${safeName}」を完全削除します。この操作は取り消せません。`;
+
+            try {
                 const result = await Swal.fire({
-                    title: '確認',
-                    text: 'この親プロジェクトを削除しますか？',
+                    title: '建物の完全削除',
+                    html: `<p class="text-start mb-2">${warnText}</p>
+                           <p class="text-start text-danger small mb-2">続行するには <strong>DELETE</strong> と入力してください。</p>`,
                     icon: 'warning',
+                    input: 'text',
+                    inputPlaceholder: 'DELETE',
+                    inputAttributes: {
+                        autocomplete: 'off',
+                        autocapitalize: 'off',
+                        spellcheck: 'false'
+                    },
                     showCancelButton: true,
                     confirmButtonColor: '#d33',
                     cancelButtonColor: '#3085d6',
-                    confirmButtonText: '削除',
-                    cancelButtonText: 'キャンセル'
-                });
-                
-                if (result.isConfirmed) {
-                    const formData = new FormData();
-                    formData.append('id', id);
-                    
-                    const response = await axios.post('/api/index.php?model=parentproject&method=delete', formData);
-                    
-                    if (response.data && response.data.status === 'success') {
-                        Swal.fire({
-                            title: '成功',
-                            text: '親プロジェクトを削除しました。',
-                            icon: 'success',
-                            confirmButtonText: 'OK'
-                        });
-                        this.loadParentProjects();
-                    } else {
-                        showMessage(response.data?.error || '削除に失敗しました。', true);
+                    confirmButtonText: '削除する',
+                    cancelButtonText: 'キャンセル',
+                    focusConfirm: false,
+                    preConfirm: (value) => {
+                        if (String(value || '').trim() !== 'DELETE') {
+                            Swal.showValidationMessage('確認のため DELETE と入力してください');
+                            return false;
+                        }
+                        return 'DELETE';
                     }
+                });
+
+                if (!result.isConfirmed) return;
+
+                this.deletingParentProjectId = id;
+                const formData = new FormData();
+                formData.append('id', id);
+                formData.append('confirm', 'DELETE');
+
+                const response = await axios.post('/api/index.php?model=parentproject&method=delete', formData);
+                if (response.data && response.data.status === 'success') {
+                    const deletedChildren = response.data.deleted_children != null
+                        ? response.data.deleted_children
+                        : childCount;
+                    await Swal.fire({
+                        title: '削除完了',
+                        text: deletedChildren > 0
+                            ? `建物を削除しました（案件 ${deletedChildren} 件も削除）。`
+                            : '建物を削除しました。',
+                        icon: 'success',
+                        confirmButtonText: 'OK'
+                    });
+                    this.loadParentProjects();
+                } else {
+                    showMessage(response.data?.error || response.data?.message || '削除に失敗しました。', true);
                 }
             } catch (error) {
                 console.error('Error deleting parent project:', error);
                 showMessage('削除に失敗しました。', true);
+            } finally {
+                this.deletingParentProjectId = null;
             }
         },
         async loadPermission() {

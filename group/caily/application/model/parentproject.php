@@ -719,31 +719,331 @@ class ParentProject extends ApplicationModel {
     }
 
     function delete($params = null) {
-        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
-        if (!$id) return ['status' => 'error', 'error' => '建物IDが指定されていません'];
-
-        // Check if there are child projects
-        $childProjectsQuery = sprintf(
-            "SELECT COUNT(*) as count FROM " . DB_PREFIX . "projects WHERE parent_project_id = %d",
-            $id
-        );
-        $childCount = $this->fetchOne($childProjectsQuery)['count'];
-        
-        if ($childCount > 0) {
-            return [
-                'status' => 'error', 
-                'error' => 'この建物には案件が存在するため削除できません。先に案件を削除してください。'
-            ];
+        if (empty($_SESSION['authority']) || $_SESSION['authority'] !== 'administrator') {
+            return ['status' => 'error', 'error' => '管理者のみ削除できます。', 'http_status' => 403];
         }
 
-        $result = $this->query_delete(['id' => $id]);
-        
-        if ($result) {
-            // Log the deletion
-            $this->logParentProjectAction($id, 'deleted', '建物を削除', $currentProject['status'] ?? '', 'deleted');
-            return ['status' => 'success', 'message' => '建物を削除しました'];
-        } else {
-            return ['status' => 'error', 'error' => '削除に失敗しました'];
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) {
+            return ['status' => 'error', 'error' => '建物IDが指定されていません'];
+        }
+
+        $confirm = isset($_POST['confirm']) ? trim((string)$_POST['confirm']) : '';
+        if ($confirm !== 'DELETE') {
+            return ['status' => 'error', 'error' => '確認のため DELETE と入力してください'];
+        }
+
+        $currentProject = $this->getById($id);
+        if (!$currentProject) {
+            return ['status' => 'error', 'error' => '建物が見つかりません'];
+        }
+
+        try {
+            $deletedChildren = $this->hardDeleteParentProjectCascade($id);
+            return [
+                'status' => 'success',
+                'message' => '建物を削除しました',
+                'deleted_children' => $deletedChildren
+            ];
+        } catch (Exception $e) {
+            error_log('Parent project hard delete error: ' . $e->getMessage());
+            return ['status' => 'error', 'error' => '削除に失敗しました: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Hard-delete a parent project and all dependent child-project data (DB + attachment files).
+     * @return int number of child projects deleted
+     */
+    private function hardDeleteParentProjectCascade($parentProjectId) {
+        $parentProjectId = intval($parentProjectId);
+        if ($parentProjectId <= 0) {
+            throw new Exception('Invalid parent project id');
+        }
+
+        $childRows = $this->fetchAll(sprintf(
+            "SELECT id FROM %sprojects WHERE parent_project_id = %d",
+            DB_PREFIX,
+            $parentProjectId
+        ));
+        $childIds = [];
+        if (is_array($childRows)) {
+            foreach ($childRows as $row) {
+                if (!empty($row['id'])) {
+                    $childIds[] = intval($row['id']);
+                }
+            }
+        }
+
+        foreach ($childIds as $childId) {
+            $this->hardDeleteChildProjectCascade($childId);
+        }
+
+        $this->hardDeleteParentOnlyData($parentProjectId);
+
+        $result = $this->query_delete(['id' => $parentProjectId]);
+        if (!$result) {
+            throw new Exception('Failed to delete parent project row');
+        }
+
+        return count($childIds);
+    }
+
+    private function tableExists($tableName) {
+        static $cache = [];
+        if (isset($cache[$tableName])) {
+            return $cache[$tableName];
+        }
+        $escaped = $this->quote($tableName);
+        $row = $this->fetchOne("SHOW TABLES LIKE '" . $escaped . "'");
+        $cache[$tableName] = !empty($row);
+        return $cache[$tableName];
+    }
+
+    private function tableHasColumn($tableName, $columnName) {
+        static $cache = [];
+        $key = $tableName . '.' . $columnName;
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+        if (!$this->tableExists($tableName)) {
+            $cache[$key] = false;
+            return false;
+        }
+        $row = $this->fetchOne(sprintf(
+            "SHOW COLUMNS FROM `%s` LIKE '%s'",
+            str_replace('`', '``', $tableName),
+            $this->quote($columnName)
+        ));
+        $cache[$key] = !empty($row);
+        return $cache[$key];
+    }
+
+    private function safeDeleteByIds($table, $column, array $ids) {
+        if (!$ids || !$this->tableExists($table) || !$this->tableHasColumn($table, $column)) {
+            return;
+        }
+        $ids = array_values(array_filter(array_map('intval', $ids)));
+        if (!$ids) {
+            return;
+        }
+        $chunks = array_chunk($ids, 500);
+        foreach ($chunks as $chunk) {
+            $this->query(sprintf(
+                "DELETE FROM %s WHERE `%s` IN (%s)",
+                $table,
+                $column,
+                implode(',', $chunk)
+            ));
+        }
+    }
+
+    private function safeDeleteTaskLinks(array $taskIds) {
+        $table = DB_PREFIX . 'task_links';
+        if (!$taskIds || !$this->tableExists($table)) {
+            return;
+        }
+        $taskIds = array_values(array_filter(array_map('intval', $taskIds)));
+        if (!$taskIds) {
+            return;
+        }
+        $hasSource = $this->tableHasColumn($table, 'source_task_id');
+        $hasTarget = $this->tableHasColumn($table, 'target_task_id');
+        $hasTaskId = $this->tableHasColumn($table, 'task_id');
+        $chunks = array_chunk($taskIds, 500);
+        foreach ($chunks as $chunk) {
+            $idList = implode(',', $chunk);
+            if ($hasSource || $hasTarget) {
+                $parts = [];
+                if ($hasSource) {
+                    $parts[] = "source_task_id IN ($idList)";
+                }
+                if ($hasTarget) {
+                    $parts[] = "target_task_id IN ($idList)";
+                }
+                $this->query(sprintf("DELETE FROM %s WHERE %s", $table, implode(' OR ', $parts)));
+            } elseif ($hasTaskId) {
+                $this->query(sprintf("DELETE FROM %s WHERE task_id IN (%s)", $table, $idList));
+            }
+        }
+    }
+
+    private function hardDeleteChildProjectCascade($projectId) {
+        $projectId = intval($projectId);
+        if ($projectId <= 0) {
+            return;
+        }
+
+        $taskRows = $this->tableExists(DB_PREFIX . 'tasks')
+            ? $this->fetchAll(sprintf("SELECT id FROM %stasks WHERE project_id = %d", DB_PREFIX, $projectId))
+            : [];
+        $taskIds = [];
+        if (is_array($taskRows)) {
+            foreach ($taskRows as $row) {
+                if (!empty($row['id'])) {
+                    $taskIds[] = intval($row['id']);
+                }
+            }
+        }
+
+        if ($taskIds) {
+            $this->safeDeleteByIds(DB_PREFIX . 'time_entries', 'task_id', $taskIds);
+            $this->safeDeleteTaskLinks($taskIds);
+            $this->safeDeleteByIds(DB_PREFIX . 'task_logs', 'task_id', $taskIds);
+            $this->safeDeleteByIds(DB_PREFIX . 'task_reactions', 'task_id', $taskIds);
+            $this->safeDeleteByIds(DB_PREFIX . 'task_assignees', 'task_id', $taskIds);
+            $this->safeDeleteByIds(DB_PREFIX . 'task_acknowledgements', 'task_id', $taskIds);
+            $this->safeDeleteByIds(DB_PREFIX . 'project_drawings', 'task_id', $taskIds);
+
+            // Comments / threads / likes linked to tasks
+            if ($this->tableExists(DB_PREFIX . 'comments') && $this->tableHasColumn(DB_PREFIX . 'comments', 'task_id')) {
+                $commentRows = $this->fetchAll(sprintf(
+                    "SELECT id, thread_id FROM %scomments WHERE task_id IN (%s)",
+                    DB_PREFIX,
+                    implode(',', $taskIds)
+                ));
+                $commentIds = [];
+                $threadIds = [];
+                if (is_array($commentRows)) {
+                    foreach ($commentRows as $c) {
+                        if (!empty($c['id'])) {
+                            $commentIds[] = intval($c['id']);
+                        }
+                        if (!empty($c['thread_id'])) {
+                            $threadIds[] = intval($c['thread_id']);
+                        }
+                    }
+                }
+                if ($commentIds) {
+                    $this->safeDeleteByIds(DB_PREFIX . 'comment_likes', 'comment_id', $commentIds);
+                    $this->safeDeleteByIds(DB_PREFIX . 'comments', 'id', $commentIds);
+                }
+                if ($threadIds) {
+                    $threadIds = array_values(array_unique($threadIds));
+                    $this->safeDeleteByIds(DB_PREFIX . 'comment_thread_reads', 'thread_id', $threadIds);
+                    $this->safeDeleteByIds(DB_PREFIX . 'comment_threads', 'id', $threadIds);
+                }
+            }
+
+            $this->safeDeleteByIds(DB_PREFIX . 'tasks', 'id', $taskIds);
+        }
+
+        $this->safeDeleteByIds(DB_PREFIX . 'project_drawings', 'project_id', [$projectId]);
+        $this->safeDeleteByIds(DB_PREFIX . 'project_members', 'project_id', [$projectId]);
+        $this->safeDeleteByIds(DB_PREFIX . 'project_favorites', 'project_id', [$projectId]);
+        $this->safeDeleteByIds(DB_PREFIX . 'project_notes', 'project_id', [$projectId]);
+        $this->safeDeleteByIds(DB_PREFIX . 'project_logs', 'project_id', [$projectId]);
+
+        // Attachments / folders by project_id
+        if ($this->tableExists(DB_PREFIX . 'project_attachments')) {
+            $attRows = $this->fetchAll(sprintf(
+                "SELECT id, file_path FROM %sproject_attachments WHERE project_id = %d",
+                DB_PREFIX,
+                $projectId
+            ));
+            if (is_array($attRows)) {
+                foreach ($attRows as $att) {
+                    $this->unlinkAttachmentFile(isset($att['file_path']) ? $att['file_path'] : '');
+                }
+            }
+            $this->safeDeleteByIds(DB_PREFIX . 'project_attachments', 'project_id', [$projectId]);
+        }
+        $this->safeDeleteByIds(DB_PREFIX . 'project_folders', 'project_id', [$projectId]);
+
+        $this->deleteProjectAttachmentDirectory($projectId);
+
+        if ($this->tableExists(DB_PREFIX . 'projects')) {
+            $this->query(sprintf("DELETE FROM %sprojects WHERE id = %d", DB_PREFIX, $projectId));
+        }
+    }
+
+    private function hardDeleteParentOnlyData($parentProjectId) {
+        $parentProjectId = intval($parentProjectId);
+
+        // Quotations under this parent
+        if ($this->tableExists(DB_PREFIX . 'quotations')) {
+            $qRows = $this->fetchAll(sprintf(
+                "SELECT id FROM %squotations WHERE parent_project_id = %d",
+                DB_PREFIX,
+                $parentProjectId
+            ));
+            $qIds = [];
+            if (is_array($qRows)) {
+                foreach ($qRows as $q) {
+                    if (!empty($q['id'])) {
+                        $qIds[] = intval($q['id']);
+                    }
+                }
+            }
+            if ($qIds) {
+                $this->safeDeleteByIds(DB_PREFIX . 'quotation_items', 'quotation_id', $qIds);
+                $this->safeDeleteByIds(DB_PREFIX . 'quotation_history', 'quotation_id', $qIds);
+                $this->safeDeleteByIds(DB_PREFIX . 'quotations', 'id', $qIds);
+            }
+        }
+
+        $this->safeDeleteByIds(DB_PREFIX . 'parent_project_favorites', 'parent_project_id', [$parentProjectId]);
+        $this->safeDeleteByIds(DB_PREFIX . 'parent_project_notes', 'parent_project_id', [$parentProjectId]);
+        $this->safeDeleteByIds(DB_PREFIX . 'parent_projects_logs', 'parent_project_id', [$parentProjectId]);
+        $this->safeDeleteByIds(DB_PREFIX . 'parent_project_logs', 'parent_project_id', [$parentProjectId]);
+
+        if ($this->tableExists(DB_PREFIX . 'project_attachments')) {
+            $attRows = $this->fetchAll(sprintf(
+                "SELECT id, file_path FROM %sproject_attachments WHERE parent_project_id = %d",
+                DB_PREFIX,
+                $parentProjectId
+            ));
+            if (is_array($attRows)) {
+                foreach ($attRows as $att) {
+                    $this->unlinkAttachmentFile(isset($att['file_path']) ? $att['file_path'] : '');
+                }
+            }
+            $this->safeDeleteByIds(DB_PREFIX . 'project_attachments', 'parent_project_id', [$parentProjectId]);
+        }
+        $this->safeDeleteByIds(DB_PREFIX . 'project_folders', 'parent_project_id', [$parentProjectId]);
+
+        $this->deleteParentAttachmentDirectory($parentProjectId);
+    }
+
+    private function unlinkAttachmentFile($filePath) {
+        $filePath = trim((string)$filePath);
+        if ($filePath === '') {
+            return;
+        }
+        $candidates = [
+            $filePath,
+            dirname(__DIR__, 2) . '/' . ltrim(str_replace('\\', '/', $filePath), '/'),
+            dirname(__DIR__) . '/../' . ltrim(str_replace('\\', '/', $filePath), '/')
+        ];
+        foreach ($candidates as $path) {
+            if ($path && is_file($path)) {
+                @unlink($path);
+                return;
+            }
+        }
+    }
+
+    private function deleteProjectAttachmentDirectory($projectId) {
+        $bases = [
+            dirname(__DIR__, 2) . '/assets/upload/project-attachments/' . intval($projectId),
+            dirname(__DIR__) . '/../assets/upload/project-attachments/' . intval($projectId),
+        ];
+        foreach ($bases as $dir) {
+            if (is_dir($dir)) {
+                $this->deleteDirectory($dir);
+            }
+        }
+    }
+
+    private function deleteParentAttachmentDirectory($parentProjectId) {
+        $bases = [
+            dirname(__DIR__, 2) . '/assets/upload/parent-project-attachments/' . intval($parentProjectId),
+            dirname(__DIR__) . '/../assets/upload/parent-project-attachments/' . intval($parentProjectId),
+        ];
+        foreach ($bases as $dir) {
+            if (is_dir($dir)) {
+                $this->deleteDirectory($dir);
+            }
         }
     }
 
