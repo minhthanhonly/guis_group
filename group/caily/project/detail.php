@@ -441,6 +441,32 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
+                            <div class="col-12">
+                                <label class="form-label"><span data-i18n="予定工程">予定工程</span></label>
+                                <div v-if="isEditMode" class="d-flex flex-wrap align-items-center gap-2">
+                                    <div>
+                                        <div class="d-flex gap-1">
+                                            <input type="text" class="form-control yotei-month-input" style="min-width: 9rem;" id="yotei_from_month_picker" :value="yoteiDraft.from_month" autocomplete="off" placeholder="YYYY-MM">
+                                            <select class="form-select" style="width: 6.5rem;" v-model="yoteiDraft.from_part">
+                                                <option v-for="opt in yoteiPartOptions" :key="'from-' + opt.value" :value="opt.value">{{ opt.label }}</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="text-muted">～</div>
+                                    <div>
+                                        <div class="d-flex gap-1">
+                                            <input type="text" class="form-control yotei-month-input" style="min-width: 9rem;" id="yotei_to_month_picker" :value="yoteiDraft.to_month" autocomplete="off" placeholder="YYYY-MM">
+                                            <select class="form-select" style="width: 6.5rem;" v-model="yoteiDraft.to_part" :disabled="!yoteiDraft.to_month">
+                                                <option v-for="opt in yoteiPartOptions" :key="'to-' + opt.value" :value="opt.value">{{ opt.label }}</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" @click="clearYoteiDraft" data-i18n="クリア">クリア</button>
+                                    <div v-if="yoteiPreview" class="ms-2 small text-body-secondary">{{ yoteiPreview }}</div>
+                                    <div v-if="validationErrors.yotei" class="invalid-feedback d-block w-100">{{ validationErrors.yotei }}</div>
+                                </div>
+                                <input v-else type="text" class="form-control" :value="yoteiDisplayText" readonly>
+                            </div>
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="開始日">開始日</span></label>
                                 <div v-if="isEditMode" class="input-group">
@@ -1403,6 +1429,7 @@ window.__chatPageContext = { project_id: PROJECT_ID };
 <script src="<?=ROOT?>assets/js/sw-manager.js?v=<?=CACHE_VERSION?>"></script>
 <script src="/assets/js/mention.js?v=<?=CACHE_VERSION?>"></script>
 <script src="/assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
-<script src="assets/js/project-clipboard.js?v=<?=CACHE_VERSION?>"></script>
-<script src="assets/js/project-detail.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 

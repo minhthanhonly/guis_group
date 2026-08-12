@@ -553,6 +553,7 @@ $view->heading('建物詳細');
                                     <th style="min-width: 80px;"><span data-i18n="部署">部署</span></th>
                                     <th><span data-i18n="管理">管理</span></th>
                                     <th><span>担当</span></th>
+                                    <th style="width: 90px;"><span data-i18n="予定工程">予定工程</span></th>
                                     <th style="width: 60px;"><span data-i18n="開始日">開始日</span></th>
                                     <th style="width: 60px;"><span>CAILY納期</span></th>
                                     <th v-if="!isCailyBranchUser" style="width: 60px;"><span>GUIS納期</span></th>
@@ -646,6 +647,10 @@ $view->heading('建物詳細');
                                     </td>
                                     <td>{{ project.tantou || '-' }}</td>
                                     <td>
+                                        <span v-if="formatYoteiDisplay(project.yotei)">{{ formatYoteiDisplay(project.yotei) }}</span>
+                                        <span v-else class="text-muted">-</span>
+                                    </td>
+                                    <td>
                                         <span v-if="project.start_date" :data-time="project.start_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.start_date)">
                                             <span class="d-block">{{ formatDateTimeDatePart(project.start_date) }}</span>
                                             <span class="d-block">{{ formatDateTimeTimePart(project.start_date) }}</span>
@@ -735,7 +740,7 @@ $view->heading('建物詳細');
                                     </td>
                                 </tr>
                                 <tr v-if="childProjects.length === 0">
-                                    <td colspan="18" class="text-center text-muted py-4">
+                                    <td colspan="19" class="text-center text-muted py-4">
                                         案件依頼がありません
                                     </td>
                                 </tr>
@@ -1482,6 +1487,33 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            <div class="col-12">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="予定工程">予定工程</span></label>
+                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <div>
+                                            <div class="d-flex gap-1">
+                                                <input type="text" class="form-control" style="min-width: 9rem;" id="create_yotei_from_month" :value="newChildProject.yotei.from_month" autocomplete="off" placeholder="YYYY-MM">
+                                                <select class="form-select" style="width: 6.5rem;" v-model="newChildProject.yotei.from_part">
+                                                    <option v-for="opt in yoteiPartOptions" :key="'create-from-' + opt.value" :value="opt.value">{{ opt.label }}</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="text-muted">～</div>
+                                        <div>
+                                            <div class="d-flex gap-1">
+                                                <input type="text" class="form-control" style="min-width: 9rem;" id="create_yotei_to_month" :value="newChildProject.yotei.to_month" autocomplete="off" placeholder="YYYY-MM">
+                                                <select class="form-select" style="width: 6.5rem;" v-model="newChildProject.yotei.to_part" :disabled="!newChildProject.yotei.to_month">
+                                                    <option v-for="opt in yoteiPartOptions" :key="'create-to-' + opt.value" :value="opt.value">{{ opt.label }}</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" @click="clearChildProjectYotei(false)" data-i18n="クリア">クリア</button>
+                                        <div v-if="formatYoteiDisplay(newChildProject.yotei)" class="ms-2 small text-body-secondary">{{ formatYoteiDisplay(newChildProject.yotei) }}</div>
+                                    </div>
+                                    <div v-if="childProjectValidationErrors.yotei" class="invalid-feedback d-block">{{ childProjectValidationErrors.yotei }}</div>
+                                </div>
+                            </div>
                             <div class="col-md-4">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="開始日">開始日</span></label>
@@ -1775,6 +1807,33 @@ $view->heading('建物詳細');
                                     <div v-if="editChildProjectValidationErrors.guis_receiver" class="invalid-feedback d-block">
                                         {{ editChildProjectValidationErrors.guis_receiver }}
                                     </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="予定工程">予定工程</span></label>
+                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <div>
+                                            <div class="d-flex gap-1">
+                                                <input type="text" class="form-control" style="min-width: 9rem;" id="edit_yotei_from_month" :value="editingChildProject.yotei.from_month" autocomplete="off" placeholder="YYYY-MM">
+                                                <select class="form-select" style="width: 6.5rem;" v-model="editingChildProject.yotei.from_part">
+                                                    <option v-for="opt in yoteiPartOptions" :key="'edit-from-' + opt.value" :value="opt.value">{{ opt.label }}</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="text-muted">～</div>
+                                        <div>
+                                            <div class="d-flex gap-1">
+                                                <input type="text" class="form-control" style="min-width: 9rem;" id="edit_yotei_to_month" :value="editingChildProject.yotei.to_month" autocomplete="off" placeholder="YYYY-MM">
+                                                <select class="form-select" style="width: 6.5rem;" v-model="editingChildProject.yotei.to_part" :disabled="!editingChildProject.yotei.to_month">
+                                                    <option v-for="opt in yoteiPartOptions" :key="'edit-to-' + opt.value" :value="opt.value">{{ opt.label }}</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" @click="clearChildProjectYotei(true)" data-i18n="クリア">クリア</button>
+                                        <div v-if="formatYoteiDisplay(editingChildProject.yotei)" class="ms-2 small text-body-secondary">{{ formatYoteiDisplay(editingChildProject.yotei) }}</div>
+                                    </div>
+                                    <div v-if="editChildProjectValidationErrors.yotei" class="invalid-feedback d-block">{{ editChildProjectValidationErrors.yotei }}</div>
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -4339,4 +4398,5 @@ $view->footing();
 <script src="https://unpkg.com/@yaireo/tagify"></script>
 <script src="../assets/vendor/libs/quill/quill.js"></script>
 <script src="../assets/vendor/libs/apex-charts/apexcharts.js"></script>
-<script src="assets/js/parent-project-detail.js?v=<?= CACHE_VERSION ?>"></script>
+<script src="/project/assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/parent-project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

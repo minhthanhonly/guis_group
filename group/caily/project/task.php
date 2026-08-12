@@ -1085,7 +1085,7 @@ const PROJECT_ID = <?php echo $project_id; ?>;
 <link rel="stylesheet" href="<?=ROOT?>assets/css/comment-component.css" />
 <script src="<?=ROOT?>assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
 <script src="<?=ROOT?>assets/js/mention.js?v=<?=CACHE_VERSION?>"></script>
-<?php $taskManagerJsVer = @filemtime(__DIR__ . '/assets/js/task-manager.js') ?: CACHE_VERSION; ?>
+<?php $taskManagerJsVer = @filemtime(__DIR__ . '/assets/js/task-manager.js') ?: PROJECT_CACHE_VERSION; ?>
 <script src="<?=ROOT?>project/assets/js/task-manager.js?v=<?=$taskManagerJsVer?>"></script>
 
 <script>

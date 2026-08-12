@@ -1156,6 +1156,12 @@ class ParentProject extends ApplicationModel {
             $pid = (int)$project['id'];
             $project['manager_id'] = isset($membersByProject[$pid]['manager'])
                 ? implode('|', $membersByProject[$pid]['manager']) : '';
+            if (!empty($project['yotei']) && is_string($project['yotei'])) {
+                $decoded = json_decode($project['yotei'], true);
+                $project['yotei'] = is_array($decoded) ? $decoded : null;
+            } elseif (empty($project['yotei'])) {
+                $project['yotei'] = null;
+            }
         }
         unset($project);
         return $projects;

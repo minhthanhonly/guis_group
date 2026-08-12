@@ -1308,8 +1308,8 @@ createApp({
         async deleteParentProject(projectOrId) {
             if (!this.isAdministrator) {
                 showMessage('管理者のみ削除できます。', true);
-                return;
-            }
+                    return;
+                }
             const project = (projectOrId && typeof projectOrId === 'object')
                 ? projectOrId
                 : this.parentProjects.find(p => p.id == projectOrId);
@@ -1362,12 +1362,12 @@ createApp({
                 if (!result.isConfirmed) return;
 
                 this.deletingParentProjectId = id;
-                const formData = new FormData();
-                formData.append('id', id);
+                    const formData = new FormData();
+                    formData.append('id', id);
                 formData.append('confirm', 'DELETE');
-
-                const response = await axios.post('/api/index.php?model=parentproject&method=delete', formData);
-                if (response.data && response.data.status === 'success') {
+                    
+                    const response = await axios.post('/api/index.php?model=parentproject&method=delete', formData);
+                    if (response.data && response.data.status === 'success') {
                     const deletedChildren = response.data.deleted_children != null
                         ? response.data.deleted_children
                         : childCount;
@@ -1376,11 +1376,11 @@ createApp({
                         text: deletedChildren > 0
                             ? `建物を削除しました（案件 ${deletedChildren} 件も削除）。`
                             : '建物を削除しました。',
-                        icon: 'success',
-                        confirmButtonText: 'OK'
-                    });
-                    this.loadParentProjects();
-                } else {
+                            icon: 'success',
+                            confirmButtonText: 'OK'
+                        });
+                        this.loadParentProjects();
+                    } else {
                     showMessage(response.data?.error || response.data?.message || '削除に失敗しました。', true);
                 }
             } catch (error) {

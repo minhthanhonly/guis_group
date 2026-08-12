@@ -1931,6 +1931,7 @@ var projectTable;
     }
 
     var PROJECT_LIST_SORT_FIELDS = [
+        'yotei',
         'start_date',
         'caily_nouki',
         'guis_nouki',
@@ -2110,6 +2111,7 @@ var projectTable;
         { key: 'parent_type1', label: '種類1' },
         { key: 'project_order_type', label: '受注形態' },
         { key: 'parent_type2', label: '種類2' },
+        { key: 'yotei', label: '予定工程' },
         { key: 'start_date', label: '開始日' },
         { key: 'caily_nouki', label: 'CAILY納期' },
         { key: 'guis_nouki', label: 'GUIS納期' },
@@ -2145,20 +2147,21 @@ var projectTable;
         { key: 'parent_type1', label: '種類1', index: 14, defaultVisible: false },
         { key: 'project_order_type', label: '受注形態', index: 15, defaultVisible: true },
         { key: 'parent_type2', label: '種類2', index: 16, defaultVisible: false },
-        { key: 'start_date', label: '開始日', index: 17, defaultVisible: true },
-        { key: 'caily_nouki', label: 'CAILY納期', index: 18, defaultVisible: true },
-        { key: 'guis_nouki', label: 'GUIS納期', index: 19, defaultVisible: true },
-        { key: 'end_date', label: '期限日', index: 20, defaultVisible: true },
-        { key: 'priority', label: '優先度', index: 21, defaultVisible: true },
-        { key: 'estimate_date', label: '見積日', index: 22, defaultVisible: false },
-        { key: 'amount', label: '見積金額', index: 23, defaultVisible: false },
-        { key: 'estimate_status', label: '見積状況', index: 24, defaultVisible: false },
-        { key: 'invoice_date', label: '請求日', index: 25, defaultVisible: false },
-        { key: 'invoice_status', label: '請求状況', index: 26, defaultVisible: false },
-        { key: 'invoice_amount', label: '請求金額', index: 27, defaultVisible: false },
-        { key: 'payment_note', label: '決済備考', index: 28, defaultVisible: false },
-        { key: 'customer_info', label: '顧客情報', index: 29, defaultVisible: true },
-        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 30, defaultVisible: false }
+        { key: 'yotei', label: '予定工程', index: 17, defaultVisible: true },
+        { key: 'start_date', label: '開始日', index: 18, defaultVisible: true },
+        { key: 'caily_nouki', label: 'CAILY納期', index: 19, defaultVisible: true },
+        { key: 'guis_nouki', label: 'GUIS納期', index: 20, defaultVisible: true },
+        { key: 'end_date', label: '期限日', index: 21, defaultVisible: true },
+        { key: 'priority', label: '優先度', index: 22, defaultVisible: true },
+        { key: 'estimate_date', label: '見積日', index: 23, defaultVisible: false },
+        { key: 'amount', label: '見積金額', index: 24, defaultVisible: false },
+        { key: 'estimate_status', label: '見積状況', index: 25, defaultVisible: false },
+        { key: 'invoice_date', label: '請求日', index: 26, defaultVisible: false },
+        { key: 'invoice_status', label: '請求状況', index: 27, defaultVisible: false },
+        { key: 'invoice_amount', label: '請求金額', index: 28, defaultVisible: false },
+        { key: 'payment_note', label: '決済備考', index: 29, defaultVisible: false },
+        { key: 'customer_info', label: '顧客情報', index: 30, defaultVisible: true },
+        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 31, defaultVisible: false }
     ];
     // Số cột base trước khi chèn các cột custom (bắt đầu từ CAILY納期)
     const BASE_CUSTOM_START_INDEX = COLUMN_DEFINITIONS.find(col => col.key === 'caily_nouki').index;
@@ -3808,7 +3811,7 @@ var projectTable;
                 {
                     name: 'progress',
                     data: 'progress',
-                    width: '56px',
+                    width: '72px',
                     className: 'project-progress-cell',
                     render: function(data, type, row) {
                         if (type === 'sort' || type === 'type') {
@@ -3818,10 +3821,12 @@ var projectTable;
                         const color = progress === 100 ? 'success' : 'primary';
                         const completed = parseInt(row.completed_task_count, 10) || 0;
                         const total = parseInt(row.task_count, 10) || 0;
-                        const taskCountHtml = total > 0
-                            ? `<small class="text-muted d-flex align-items-center gap-1 project-hover-tasks-trigger ${REMOVE_FOR_EXCEL_CLASS}" data-project-id="${row.id}" style="font-size:0.75rem; cursor: default;">` +
-                              `<i class="fas fa-tasks" style="font-size:0.7rem;"></i>` +
-                              `<span>${completed}/${total}</span></small>`
+                        const projectId = row && row.id != null ? String(row.id) : '';
+                        const taskLabel = typeof translateText === 'function' ? translateText('タスク') : 'タスク';
+                        const taskBtn = projectId
+                            ? `<a href="task.php?project_id=${projectId}" class="btn btn-xs btn-outline-primary mt-1 project-hover-tasks-trigger ${REMOVE_FOR_EXCEL_CLASS}" data-project-id="${projectId}" title="${taskLabel}">` +
+                              `<i class="fas fa-tasks me-1"></i>` +
+                              `<span>${completed}/${total}</span></a>`
                             : '';
                         return `<div class="progress" style="width: 50px;">
                                     <div class="progress-bar bg-${color}" role="progressbar" 
@@ -3830,7 +3835,7 @@ var projectTable;
                                     </div>
                                 </div>
                                 <small class="text-muted d-block">${progress}%</small>
-                                ${taskCountHtml}`;
+                                ${taskBtn}`;
                     },
                     title: '<span data-i18n="進捗率">進捗率</span>'
                 },
@@ -4002,8 +4007,13 @@ var projectTable;
                     width: '150px',
                     className: 'project-name-cell',
                     render: function(data, type, row) {
-                        return `<div class="d-flex align-items-start justify-content-start flex-column project-hover-tasks-trigger" data-project-id="${row.id}">
-                                    <a href="detail.php?id=${row.id}" class="text-decoration-none small" style="font-weight: bold;">${escapeHtmlForNote(data || '')}</a>
+                        if (type === 'sort' || type === 'type' || type === 'filter') {
+                            return data || '';
+                        }
+                        var nameText = escapeHtmlForNote(data || '');
+                        var projectId = row && row.id != null ? String(row.id) : '';
+                        return `<div class="d-flex flex-column align-items-start">
+                                    <a href="detail.php?id=${projectId}" class="text-decoration-none small" style="font-weight: bold;">${nameText}</a>
                                 </div>`;
                     },
                     title: '<span data-i18n="お施主様名">お施主様名</span>'
@@ -4117,6 +4127,27 @@ var projectTable;
                     visible: false,
                     width: '60px'
 
+                },
+                {
+                    name: 'yotei',
+                    data: 'yotei',
+                    width: '110px',
+                    title: '<span data-i18n="予定工程">予定工程</span>',
+                    render: function(data, type, row) {
+                        var text = '';
+                        if (typeof window.YoteiField !== 'undefined') {
+                            text = window.YoteiField.displayOf(data);
+                        } else if (data && typeof data === 'object' && data.display) {
+                            text = data.display;
+                        } else if (typeof data === 'string') {
+                            text = data;
+                        }
+                        if (type === 'sort' || type === 'type') {
+                            if (data && typeof data === 'object' && data.sort_start) return data.sort_start;
+                            return text || '';
+                        }
+                        return text ? '<span class="text-muted small">' + String(text).replace(/</g, '&lt;') + '</span>' : '<span class="text-muted">-</span>';
+                    }
                 },
                 { 
                     name: 'start_date',
@@ -4553,7 +4584,11 @@ var projectTable;
                 if (data.status) {
                     const status = statuses.find(s => s.key === data.status);
                     if (status) {
-                        $(row).addClass(`table-row-status-${status.color}`);
+                        if (status.key === 'waiting_documents') {
+                            $(row).addClass('table-row-status-waiting-documents');
+                        } else {
+                            $(row).addClass(`table-row-status-${status.color}`);
+                        }
                     }
                 }
             },
@@ -4918,7 +4953,7 @@ var projectTable;
                 cancelHide();
                 showPopup(projectId, e.clientX, e.clientY);
             });
-            $('#projectTable').on('mouseleave', '.project-id-cell, .project-name-cell, .project-progress-cell', function() {
+            $('#projectTable').on('mouseleave', '.project-id-cell, .project-progress-cell', function() {
                 scheduleHide();
             });
 
@@ -5376,6 +5411,94 @@ var projectTable;
         let quickEditQuillInstance = null;
         let quickEditIsManagerOnly = false;
         let quickEditOriginalStatus = '';
+
+        function getQuickEditYoteiDraft() {
+            return {
+                from_month: ($('#quickEditYoteiFromMonth').val() || '').trim(),
+                from_part: ($('#quickEditYoteiFromPart').val() || '').trim(),
+                to_month: ($('#quickEditYoteiToMonth').val() || '').trim(),
+                to_part: ($('#quickEditYoteiToPart').val() || '').trim()
+            };
+        }
+
+        function destroyQuickEditYoteiMonthPickers() {
+            if (typeof window.YoteiField === 'undefined') return;
+            window.YoteiField.destroyMonthPicker(document.getElementById('quickEditYoteiFromMonth'));
+            window.YoteiField.destroyMonthPicker(document.getElementById('quickEditYoteiToMonth'));
+        }
+
+        function initQuickEditYoteiMonthPickers() {
+            if (typeof window.YoteiField === 'undefined') return;
+            window.YoteiField.initMonthPicker(
+                document.getElementById('quickEditYoteiFromMonth'),
+                function() { return ($('#quickEditYoteiFromMonth').val() || '').trim(); },
+                function(ym) { $('#quickEditYoteiFromMonth').val(ym || ''); refreshQuickEditYoteiPreview(); }
+            );
+            window.YoteiField.initMonthPicker(
+                document.getElementById('quickEditYoteiToMonth'),
+                function() { return ($('#quickEditYoteiToMonth').val() || '').trim(); },
+                function(ym) {
+                    $('#quickEditYoteiToMonth').val(ym || '');
+                    if (!ym) $('#quickEditYoteiToPart').val('');
+                    refreshQuickEditYoteiPreview();
+                }
+            );
+        }
+
+        function refreshQuickEditYoteiPreview() {
+            var draft = getQuickEditYoteiDraft();
+            var text = (typeof window.YoteiField !== 'undefined') ? window.YoteiField.buildDisplay(draft) : '';
+            $('#quickEditYoteiPreview').text(text || '');
+            var hasTo = !!draft.to_month;
+            $('#quickEditYoteiToPart').prop('disabled', !hasTo);
+            if (!hasTo) $('#quickEditYoteiToPart').val('');
+        }
+
+        function setQuickEditYoteiFromProject(yotei) {
+            var parsed = (typeof window.YoteiField !== 'undefined')
+                ? window.YoteiField.parse(yotei)
+                : { from_month: '', from_part: '', to_month: '', to_part: '' };
+            $('#quickEditYoteiFromMonth').val(parsed.from_month || '');
+            $('#quickEditYoteiFromPart').val(parsed.from_part || '');
+            $('#quickEditYoteiToMonth').val(parsed.to_month || '');
+            $('#quickEditYoteiToPart').val(parsed.to_part || '');
+            $('#quickEditYoteiError').text('');
+            $('#quickEditYoteiFromMonth, #quickEditYoteiToMonth').removeClass('is-invalid');
+            destroyQuickEditYoteiMonthPickers();
+            initQuickEditYoteiMonthPickers();
+            if (typeof window.YoteiField !== 'undefined') {
+                window.YoteiField.setMonthPickerValue(document.getElementById('quickEditYoteiFromMonth'), parsed.from_month || '');
+                window.YoteiField.setMonthPickerValue(document.getElementById('quickEditYoteiToMonth'), parsed.to_month || '');
+            }
+            refreshQuickEditYoteiPreview();
+            if (typeof window.applyDataI18n === 'function') {
+                var wrap = document.getElementById('quickEditProjectForm');
+                if (wrap) window.applyDataI18n(wrap);
+            }
+        }
+
+        function clearQuickEditYotei() {
+            $('#quickEditYoteiFromMonth').val('');
+            $('#quickEditYoteiFromPart').val('');
+            $('#quickEditYoteiToMonth').val('');
+            $('#quickEditYoteiToPart').val('');
+            $('#quickEditYoteiError').text('');
+            $('#quickEditYoteiFromMonth, #quickEditYoteiToMonth').removeClass('is-invalid');
+            if (typeof window.YoteiField !== 'undefined') {
+                window.YoteiField.setMonthPickerValue(document.getElementById('quickEditYoteiFromMonth'), '');
+                window.YoteiField.setMonthPickerValue(document.getElementById('quickEditYoteiToMonth'), '');
+            }
+            refreshQuickEditYoteiPreview();
+        }
+
+        $(document)
+            .off('click.quickEditYotei', '#quickEditYoteiClear')
+            .on('click.quickEditYotei', '#quickEditYoteiClear', function() { clearQuickEditYotei(); })
+            .off('input.quickEditYotei change.quickEditYotei', '#quickEditYoteiFromMonth, #quickEditYoteiFromPart, #quickEditYoteiToMonth, #quickEditYoteiToPart')
+            .on('input.quickEditYotei change.quickEditYotei', '#quickEditYoteiFromMonth, #quickEditYoteiFromPart, #quickEditYoteiToMonth, #quickEditYoteiToPart', function() {
+                refreshQuickEditYoteiPreview();
+            });
+
         function destroyQuickEditQuill() {
             if (quickEditQuillInstance) {
                 try {
@@ -5450,6 +5573,7 @@ var projectTable;
                     .attr('placeholder', datetimePlaceholder);
                 $('#quickEditStartDate').val(toProjectDateTimeInputValue(p.start_date));
                 $('#quickEditEndDate').val(toProjectDateTimeInputValue(p.end_date));
+                setQuickEditYoteiFromProject(p.yotei);
                 quickEditOriginalStatus = p.status || 'draft';
                 syncQuickEditStatusOptions(quickEditOriginalStatus);
                 $('#quickEditStatus').val(quickEditOriginalStatus);
@@ -5894,7 +6018,7 @@ var projectTable;
             var $cailyNouki = $('#quickEditCailyNouki');
             var $guisNouki = $('#quickEditGuisNouki');
             var $tantouWrap = $('#quickEditTantouWrap');
-            var errorIds = ['quickEditNameError', 'quickEditProjectOrderTypeError', 'quickEditTantouError', 'quickEditStartDateError', 'quickEditEndDateError', 'quickEditCailyNoukiError', 'quickEditGuisNoukiError', 'quickEditProgressError'];
+            var errorIds = ['quickEditNameError', 'quickEditProjectOrderTypeError', 'quickEditTantouError', 'quickEditStartDateError', 'quickEditEndDateError', 'quickEditCailyNoukiError', 'quickEditGuisNoukiError', 'quickEditProgressError', 'quickEditYoteiError'];
             errorIds.forEach(function(id) { $('#' + id).text(''); });
             $name.removeClass('is-invalid');
             setQuickEditOrderTypeInvalid(false);
@@ -5904,6 +6028,7 @@ var projectTable;
             $cailyNouki.removeClass('is-invalid');
             $guisNouki.removeClass('is-invalid');
             $tantouWrap.removeClass('is-invalid');
+            $('#quickEditYoteiFromMonth, #quickEditYoteiToMonth').removeClass('is-invalid');
             var hasError = false;
             if (!quickEditIsManagerOnly) {
                 if (!$name.val() || $name.val().toString().trim() === '') {
@@ -5974,6 +6099,14 @@ var projectTable;
                     hasError = true;
                 }
             }
+            if (typeof window.YoteiField !== 'undefined') {
+                var yoteiDraft = getQuickEditYoteiDraft();
+                if (!window.YoteiField.isValid(yoteiDraft)) {
+                    $('#quickEditYoteiFromMonth, #quickEditYoteiToMonth').addClass('is-invalid');
+                    $('#quickEditYoteiError').text(translateText('予定工程の期間が正しくありません'));
+                    hasError = true;
+                }
+            }
             if (hasError) {
                 return;
             }
@@ -5988,6 +6121,10 @@ var projectTable;
             formData.append('name', $('#quickEditName').val() || '');
             formData.append('start_date', getQuickEditDateFieldValue('#quickEditStartDate'));
             formData.append('end_date', getQuickEditDateFieldValue('#quickEditEndDate'));
+            var yoteiPayload = (typeof window.YoteiField !== 'undefined')
+                ? window.YoteiField.toPayload(getQuickEditYoteiDraft())
+                : null;
+            formData.append('yotei', yoteiPayload ? JSON.stringify(yoteiPayload) : '');
             var quickEditStatus = $('#quickEditStatus').val() || 'draft';
             if (isCailyBranchUser() && quickEditStatus === 'completed' && quickEditOriginalStatus !== 'completed') {
                 if (typeof showMessage === 'function') {

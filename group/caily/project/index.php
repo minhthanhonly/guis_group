@@ -270,6 +270,7 @@ if($_SESSION['show_project'] == 0){
                             <label class="form-label form-label-sm mb-1" for="projectListSortColumn" data-i18n="並べ替え項目">並べ替え項目</label>
                             <select class="form-select form-select-sm" id="projectListSortColumn">
                                 <option value="" data-i18n="デフォルト">デフォルト</option>
+                                <option value="yotei" data-i18n="予定工程">予定工程</option>
                                 <option value="start_date" data-i18n="開始日">開始日</option>
                                 <option value="caily_nouki" data-i18n="CAILY納期">CAILY納期</option>
                                 <option value="guis_nouki" data-sort-field="guis_nouki" data-i18n="GUIS納期">GUIS納期</option>
@@ -596,162 +597,6 @@ if($_SESSION['show_project'] == 0){
     </div>
     <div class="modal-backdrop fade show" v-if="showBusinessDocumentLogModal"></div>
 
-    <!-- Quick Edit Project Modal (案件を編集) -->
-    <div class="modal fade" id="quickEditProjectModal" tabindex="-1" aria-labelledby="quickEditProjectModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="quickEditProjectModalLabel">
-                        <span data-i18n="案件を編集">案件を編集</span>
-                        <span class="badge bg-label-primary ms-2" id="quickEditProjectIdBadge"></span>
-                    </h5>
-                    <div class="d-flex align-items-center gap-2 ms-auto">
-                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
-                        <button type="button" class="btn btn-primary btn-sm" id="quickEditProjectSaveBtnHeader">
-                            <span class="spinner-border spinner-border-sm d-none" id="quickEditSaveSpinnerHeader"></span>
-                            <span data-i18n="更新">更新</span>
-                        </button>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                </div>
-                <div class="modal-body position-relative">
-                    <div id="quickEditModalLoading" class="position-absolute top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center bg-white bg-opacity-90 rounded d-none" style="z-index: 10;">
-                        <div class="text-center">
-                            <div class="spinner-border text-primary mb-2" role="status" style="width: 2.5rem; height: 2.5rem;">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                            <div class="small text-muted" data-i18n="読み込み中...">読み込み中...</div>
-                        </div>
-                    </div>
-                    <form id="quickEditProjectForm">
-                        <input type="hidden" name="id" id="quickEditProjectId">
-                        <input type="hidden" name="version" id="quickEditProjectVersion" value="1">
-                        <div class="row g-3">
-                            <div class="col-md-12 quick-edit-full-only">
-                                <label class="form-label"><span data-i18n="案件名">案件名</span> <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" name="name" id="quickEditName" required>
-                                <div class="invalid-feedback" id="quickEditNameError"></div>
-                            </div>
-                            <div class="col-md-4 quick-edit-full-only">
-                                <label class="form-label"><span data-i18n="開始日">開始日</span></label>
-                                <input type="text" class="form-control" name="start_date" id="quickEditStartDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
-                                <div class="invalid-feedback" id="quickEditStartDateError"></div>
-                            </div>
-                            <div class="col-md-4 quick-edit-full-only quick-edit-guis-field">
-                                <label class="form-label"><span data-i18n="期限日">期限日</span></label>
-                                <input type="text" class="form-control" name="end_date" id="quickEditEndDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
-                                <div class="invalid-feedback" id="quickEditEndDateError"></div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
-                                <select class="form-select" name="status" id="quickEditStatus">
-                                    <option value="draft" data-i18n="受付">受付</option>
-                                    <option value="open" data-i18n="納期検討">納期検討</option>
-                                    <option value="confirming" data-i18n="仮受">仮受</option>
-                                    <option value="quotation" data-i18n="見積">見積</option>
-                                    <option value="contract" data-i18n="請負">請負</option>
-                                    <option value="waiting_documents" data-i18n="資料待ち">資料待ち</option>
-                                    <option value="in_progress" data-i18n="進行中">進行中</option>
-                                    <option value="completed" data-i18n="完了">完了</option>
-                                    <option value="paused" data-i18n="一時停止">一時停止</option>
-                                    <option value="cancelled" data-i18n="中止">中止</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6 quick-edit-full-only">
-                                <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
-                                <div class="d-flex align-items-center gap-2">
-                                    <input type="text" class="form-control tagify" name="project_order_type" id="quickEditProjectOrderType" placeholder="">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditProjectOrderTypeClear" title="すべて削除"><i class="fa fa-times"></i></button>
-                                </div>
-                                <div class="invalid-feedback" id="quickEditProjectOrderTypeError"></div>
-                            </div>
-                            <div class="col-md-4 quick-edit-full-only">
-                                <label class="form-label"><span data-i18n="担当">担当</span></label>
-                                <div class="d-flex gap-3" id="quickEditTantouWrap">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="tantou" id="quickEditTantouCaily" value="CAILY">
-                                        <label class="form-check-label" for="quickEditTantouCaily">CAILY</label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="tantou" id="quickEditTantouGuis" value="GUIS">
-                                        <label class="form-check-label" for="quickEditTantouGuis">GUIS</label>
-                                    </div>
-                                </div>
-                                <div id="quickEditTantouDisplayText" class="fw-semibold d-none"></div>
-                                <div class="invalid-feedback" id="quickEditTantouError"></div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="CAILY納期">CAILY納期</span> <span id="quickEditCailyNoukiRequired" class="text-danger d-none">*</span></label>
-                                <div class="d-flex flex-column">
-                                    <input type="text" class="form-control" name="caily_nouki" id="quickEditCailyNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
-                                    <div class="form-check mt-1">
-                                        <input class="form-check-input" type="checkbox" id="quickEditCailyNoukiStatus" name="caily_nouki_status" value="納品済み">
-                                        <label class="form-check-label" for="quickEditCailyNoukiStatus"><span data-i18n="納品済み">納品済み</span></label>
-                                    </div>
-                                </div>
-                                <div class="invalid-feedback" id="quickEditCailyNoukiError"></div>
-                            </div>
-                            <div class="col-md-4 quick-edit-guis-field">
-                                <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span> <span id="quickEditGuisNoukiRequired" class="text-danger d-none">*</span></label>
-                                <div class="d-flex flex-column">
-                                    <input type="text" class="form-control" name="guis_nouki" id="quickEditGuisNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
-                                    <div class="form-check mt-1">
-                                        <input class="form-check-input" type="checkbox" id="quickEditGuisNoukiStatus" name="guis_nouki_status" value="納品済み">
-                                        <label class="form-check-label" for="quickEditGuisNoukiStatus"><span data-i18n="納品済み">納品済み</span></label>
-                                    </div>
-                                </div>
-                                <div class="invalid-feedback" id="quickEditGuisNoukiError"></div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="進捗率">進捗率</span> (%)</label>
-                                <input type="number" class="form-control" name="progress" id="quickEditProgress" min="0" max="100" step="5" value="0" placeholder="0">
-                                <div class="invalid-feedback" id="quickEditProgressError"></div>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label"><span data-i18n="チーム">チーム</span></label>
-                                <div class="d-flex align-items-center gap-2">
-                                    <input type="text" class="form-control" id="quickEditTeamTags" placeholder="チームを選択">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditTeamTagsClear" title="すべて削除"><i class="fa fa-times"></i></button>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label"><span data-i18n="管理">管理</span></label>
-                                <div class="d-flex align-items-center gap-2">
-                                    <input type="text" class="form-control" id="quickEditManagerTags" placeholder="管理者を選択">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditManagerTagsClear" title="すべて削除"><i class="fa fa-times"></i></button>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label"><span data-i18n="メンバー">メンバー</span></label>
-                                <div class="d-flex align-items-center gap-2">
-                                    <input type="text" class="form-control" id="quickEditMembersTags" placeholder="メンバーを選択">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditMembersTagsClear" title="すべて削除"><i class="fa fa-times"></i></button>
-                                </div>
-                            </div>
-                            <div class="col-12 mt-4 row" id="quickEditCustomFieldsWrap">
-                                <!-- Custom fields rendered by JS -->
-                            </div>
-                            <div class="col-12 quick-edit-full-only">
-                                <label class="form-label"><span data-i18n="説明">説明</span></label>
-                                <div class="custom_editor">
-                                    <div class="custom_editor_content" id="quickEditQuillDescription"></div>
-                                    <textarea class="custom_editor_textarea d-none" id="quickEditQuillDescriptionTextarea"></textarea>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
-                    <button type="button" class="btn btn-primary" id="quickEditProjectSaveBtn">
-                        <span class="spinner-border spinner-border-sm d-none" id="quickEditSaveSpinner"></span>
-                        <span data-i18n="更新">更新</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Note Modal (for 確認必要メモ) -->
     <div class="modal fade" tabindex="-1" :class="{show: showNoteModal}" style="display: block;" v-if="showNoteModal">
         <div class="modal-dialog modal-lg">
@@ -907,7 +752,188 @@ if($_SESSION['show_project'] == 0){
     </div>
 </div>
 
-
+<!-- Quick Edit Project Modal (案件を編集) — outside Vue #app so DOM is not rewritten -->
+<div class="modal fade" id="quickEditProjectModal" tabindex="-1" aria-labelledby="quickEditProjectModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickEditProjectModalLabel">
+                    <span data-i18n="案件を編集">案件を編集</span>
+                    <span class="badge bg-label-primary ms-2" id="quickEditProjectIdBadge"></span>
+                </h5>
+                <div class="d-flex align-items-center gap-2 ms-auto">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
+                    <button type="button" class="btn btn-primary btn-sm" id="quickEditProjectSaveBtnHeader">
+                        <span class="spinner-border spinner-border-sm d-none" id="quickEditSaveSpinnerHeader"></span>
+                        <span data-i18n="更新">更新</span>
+                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body position-relative">
+                <div id="quickEditModalLoading" class="position-absolute top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center bg-white bg-opacity-90 rounded d-none" style="z-index: 10;">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary mb-2" role="status" style="width: 2.5rem; height: 2.5rem;">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <div class="small text-muted" data-i18n="読み込み中...">読み込み中...</div>
+                    </div>
+                </div>
+                <form id="quickEditProjectForm">
+                    <input type="hidden" name="id" id="quickEditProjectId">
+                    <input type="hidden" name="version" id="quickEditProjectVersion" value="1">
+                    <div class="row g-3">
+                        <div class="col-md-12 quick-edit-full-only">
+                            <label class="form-label"><span data-i18n="案件名">案件名</span> <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="name" id="quickEditName" required>
+                            <div class="invalid-feedback" id="quickEditNameError"></div>
+                        </div>
+                        <div class="col-md-4 quick-edit-full-only">
+                            <label class="form-label"><span data-i18n="開始日">開始日</span></label>
+                            <input type="text" class="form-control" name="start_date" id="quickEditStartDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
+                            <div class="invalid-feedback" id="quickEditStartDateError"></div>
+                        </div>
+                        <div class="col-md-4 quick-edit-full-only quick-edit-guis-field">
+                            <label class="form-label"><span data-i18n="期限日">期限日</span></label>
+                            <input type="text" class="form-control" name="end_date" id="quickEditEndDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
+                            <div class="invalid-feedback" id="quickEditEndDateError"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
+                            <select class="form-select" name="status" id="quickEditStatus">
+                                <option value="draft" data-i18n="受付">受付</option>
+                                <option value="open" data-i18n="納期検討">納期検討</option>
+                                <option value="confirming" data-i18n="仮受">仮受</option>
+                                <option value="quotation" data-i18n="見積">見積</option>
+                                <option value="contract" data-i18n="請負">請負</option>
+                                <option value="waiting_documents" data-i18n="資料待ち">資料待ち</option>
+                                <option value="in_progress" data-i18n="進行中">進行中</option>
+                                <option value="completed" data-i18n="完了">完了</option>
+                                <option value="paused" data-i18n="一時停止">一時停止</option>
+                                <option value="cancelled" data-i18n="中止">中止</option>
+                            </select>
+                        </div>
+                        <div class="col-12" id="quickEditYoteiWrap">
+                            <label class="form-label"><span data-i18n="予定工程">予定工程</span></label>
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <div class="d-flex gap-1">
+                                    <input type="text" class="form-control" style="min-width: 9rem;" id="quickEditYoteiFromMonth" autocomplete="off" placeholder="YYYY-MM">
+                                    <select class="form-select" style="width: 6.5rem;" id="quickEditYoteiFromPart">
+                                        <option value="">—</option>
+                                        <option value="early" data-i18n="上旬">上旬</option>
+                                        <option value="mid" data-i18n="中旬">中旬</option>
+                                        <option value="late" data-i18n="下旬">下旬</option>
+                                    </select>
+                                </div>
+                                <div class="text-muted">～</div>
+                                <div class="d-flex gap-1">
+                                    <input type="text" class="form-control" style="min-width: 9rem;" id="quickEditYoteiToMonth" autocomplete="off" placeholder="YYYY-MM">
+                                    <select class="form-select" style="width: 6.5rem;" id="quickEditYoteiToPart">
+                                        <option value="">—</option>
+                                        <option value="early" data-i18n="上旬">上旬</option>
+                                        <option value="mid" data-i18n="中旬">中旬</option>
+                                        <option value="late" data-i18n="下旬">下旬</option>
+                                    </select>
+                                </div>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditYoteiClear" data-i18n="クリア">クリア</button>
+                                <div class="ms-2 small text-body-secondary" id="quickEditYoteiPreview"></div>
+                            </div>
+                            <div class="invalid-feedback" id="quickEditYoteiError"></div>
+                        </div>
+                        <div class="col-md-6 quick-edit-full-only">
+                            <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" class="form-control tagify" name="project_order_type" id="quickEditProjectOrderType" placeholder="">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditProjectOrderTypeClear" title="すべて削除"><i class="fa fa-times"></i></button>
+                            </div>
+                            <div class="invalid-feedback" id="quickEditProjectOrderTypeError"></div>
+                        </div>
+                        <div class="col-md-4 quick-edit-full-only">
+                            <label class="form-label"><span data-i18n="担当">担当</span></label>
+                            <div class="d-flex gap-3" id="quickEditTantouWrap">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="tantou" id="quickEditTantouCaily" value="CAILY">
+                                    <label class="form-check-label" for="quickEditTantouCaily">CAILY</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="tantou" id="quickEditTantouGuis" value="GUIS">
+                                    <label class="form-check-label" for="quickEditTantouGuis">GUIS</label>
+                                </div>
+                            </div>
+                            <div id="quickEditTantouDisplayText" class="fw-semibold d-none"></div>
+                            <div class="invalid-feedback" id="quickEditTantouError"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><span data-i18n="CAILY納期">CAILY納期</span> <span id="quickEditCailyNoukiRequired" class="text-danger d-none">*</span></label>
+                            <div class="d-flex flex-column">
+                                <input type="text" class="form-control" name="caily_nouki" id="quickEditCailyNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input" type="checkbox" id="quickEditCailyNoukiStatus" name="caily_nouki_status" value="納品済み">
+                                    <label class="form-check-label" for="quickEditCailyNoukiStatus"><span data-i18n="納品済み">納品済み</span></label>
+                                </div>
+                            </div>
+                            <div class="invalid-feedback" id="quickEditCailyNoukiError"></div>
+                        </div>
+                        <div class="col-md-4 quick-edit-guis-field">
+                            <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span> <span id="quickEditGuisNoukiRequired" class="text-danger d-none">*</span></label>
+                            <div class="d-flex flex-column">
+                                <input type="text" class="form-control" name="guis_nouki" id="quickEditGuisNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input" type="checkbox" id="quickEditGuisNoukiStatus" name="guis_nouki_status" value="納品済み">
+                                    <label class="form-check-label" for="quickEditGuisNoukiStatus"><span data-i18n="納品済み">納品済み</span></label>
+                                </div>
+                            </div>
+                            <div class="invalid-feedback" id="quickEditGuisNoukiError"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><span data-i18n="進捗率">進捗率</span> (%)</label>
+                            <input type="number" class="form-control" name="progress" id="quickEditProgress" min="0" max="100" step="5" value="0" placeholder="0">
+                            <div class="invalid-feedback" id="quickEditProgressError"></div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label"><span data-i18n="チーム">チーム</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" class="form-control" id="quickEditTeamTags" placeholder="チームを選択">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditTeamTagsClear" title="すべて削除"><i class="fa fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label"><span data-i18n="管理">管理</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" class="form-control" id="quickEditManagerTags" placeholder="管理者を選択">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditManagerTagsClear" title="すべて削除"><i class="fa fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label"><span data-i18n="メンバー">メンバー</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" class="form-control" id="quickEditMembersTags" placeholder="メンバーを選択">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditMembersTagsClear" title="すべて削除"><i class="fa fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-4 row" id="quickEditCustomFieldsWrap">
+                            <!-- Custom fields rendered by JS -->
+                        </div>
+                        <div class="col-12 quick-edit-full-only">
+                            <label class="form-label"><span data-i18n="説明">説明</span></label>
+                            <div class="custom_editor">
+                                <div class="custom_editor_content" id="quickEditQuillDescription"></div>
+                                <textarea class="custom_editor_textarea d-none" id="quickEditQuillDescriptionTextarea"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
+                <button type="button" class="btn btn-primary" id="quickEditProjectSaveBtn">
+                    <span class="spinner-border spinner-border-sm d-none" id="quickEditSaveSpinner"></span>
+                    <span data-i18n="更新">更新</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <?php
 $view->footing();
@@ -1302,6 +1328,10 @@ body.pl-col-resizing * {
     background-color: rgba(255, 193, 7, 0.2) !important;
 }
 
+#projectTable tbody tr.table-row-status-waiting-documents {
+    background-color: rgba(255, 193, 7, 0.08) !important;
+}
+
 #projectTable tbody tr.table-row-status-danger {
     background-color: rgba(220, 53, 69, 0.2) !important;
 }
@@ -1311,6 +1341,7 @@ body.pl-col-resizing * {
 #projectTable tbody tr.table-row-status-primary:hover,
 #projectTable tbody tr.table-row-status-success:hover,
 #projectTable tbody tr.table-row-status-warning:hover,
+#projectTable tbody tr.table-row-status-waiting-documents:hover,
 #projectTable tbody tr.table-row-status-danger:hover {
     background-color: inherit;
     opacity: 0.8;
@@ -1321,7 +1352,7 @@ body.pl-col-resizing * {
     outline: 2px solid var(--bs-primary);
     outline-offset: -2px;
 }
-#projectTable tbody tr.table-row-status-secondary:hover, #projectTable tbody tr.table-row-status-info:hover, #projectTable tbody tr.table-row-status-primary:hover, #projectTable tbody tr.table-row-status-success:hover, #projectTable tbody tr.table-row-status-warning:hover, #projectTable tbody tr.table-row-status-danger:hover{
+#projectTable tbody tr.table-row-status-secondary:hover, #projectTable tbody tr.table-row-status-info:hover, #projectTable tbody tr.table-row-status-primary:hover, #projectTable tbody tr.table-row-status-success:hover, #projectTable tbody tr.table-row-status-warning:hover, #projectTable tbody tr.table-row-status-waiting-documents:hover, #projectTable tbody tr.table-row-status-danger:hover{
     opacity: 1!important;
 }
 #projectFilterBox .card-body{
@@ -1400,9 +1431,12 @@ body.pl-col-resizing * {
 #projectListColumnToolsRow {
     min-height: 2rem;
 }
-/* Quick edit: manager-only mode chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー */
+/* Quick edit: manager-only mode chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー, 予定工程 */
 #quickEditProjectForm.quick-edit-manager-only-mode .quick-edit-full-only {
     display: none !important;
+}
+#quickEditYoteiWrap {
+    display: block !important;
 }
 #quickEditProjectForm .is-invalid + .invalid-feedback,
 #quickEditProjectForm .invalid-feedback:not(:empty) {
@@ -1497,7 +1531,8 @@ if (window.IS_CAILY_BRANCH_USER) {
     document.body.classList.add('is-caily-branch-user');
 }
 </script>
-<script src="assets/js/project-clipboard.js?v=<?=CACHE_VERSION?>"></script>
-<script src="assets/js/business-document-modal-mixin.js?v=<?=CACHE_VERSION?>"></script>
-<script src="assets/js/project-list.js?v=<?=CACHE_VERSION?>"></script>
-<script src="assets/js/project-list-tour.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/business-document-modal-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/project-list.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/project-list-tour.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

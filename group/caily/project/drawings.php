@@ -757,4 +757,4 @@ const CURRENT_USER_ID = '<?php echo $_SESSION['userid']; ?>';
 const IS_ADMINISTRATOR = <?php echo (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') ? 'true' : 'false'; ?>;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="assets/js/drawings.js?v=<?=CACHE_VERSION?>"></script> 
+<script src="assets/js/drawings.js?v=<?=PROJECT_CACHE_VERSION?>"></script> 

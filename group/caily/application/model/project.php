@@ -58,6 +58,7 @@ class Project extends ApplicationModel {
             'payment_note' => array(),
             'tags' => array(), //project tags for search and organization
             'is_kadai' => array(), //boolean field to identify child projects
+            'yotei' => array(), //予定工程 JSON
         );
         $this->connect();
     }
@@ -163,8 +164,12 @@ class Project extends ApplicationModel {
             'guis_nouki', 'guis_nouki_status', 'progress', 'amount', 'estimate_date', 'estimate_status',
             'invoice_date', 'invoice_status', 'invoice_amount', 'payment_note', 'project_order_type',
             'project_number', 'created_at', 'updated_at', 'teams', 'building_size', 'is_kadai',
+            'yotei',
         );
         if (in_array($order_column, $projectColumns, true)) {
+            if ($order_column === 'yotei') {
+                return "CAST(JSON_UNQUOTE(JSON_EXTRACT(p.yotei, '$.sort_start')) AS DATE)";
+            }
             return 'p.' . $order_column;
         }
 
@@ -694,6 +699,7 @@ class Project extends ApplicationModel {
             if (empty($project['quotation_status'])) {
                 $project['quotation_status'] = '未発行';
             }
+            $project['yotei'] = $this->parseYoteiField(isset($project['yotei']) ? $project['yotei'] : null);
         }
         unset($project);
 
@@ -823,20 +829,27 @@ class Project extends ApplicationModel {
             $whereArr[] = "p.status != 'deleted'";
         } else {
             $showInactive = isset($_GET['showInactive']) && $_GET['showInactive'] === '1';
-            if (isset($_GET['status'])) {
-                if ($_GET['status'] == 'all') {
-                    if ($showInactive) {
-                        $whereArr[] = "p.status != 'deleted'";
-                    } else {
-                        $whereArr[] = "p.status NOT IN ('deleted','completed','cancelled')";
-                    }
-                } else if ($_GET['status'] == 'active') {
-                    $whereArr[] = "p.status NOT IN ('deleted', 'draft', 'completed', 'cancelled')";
-                } else {
-                    $whereArr[] = sprintf("p.status = '%s'", $this->escape($_GET['status']));
-                }
-            } else {
+            $statusParam = isset($_GET['status']) ? trim((string)$_GET['status']) : '';
+            $statusKeys = ($statusParam !== '' && $statusParam !== 'all' && $statusParam !== 'active')
+                ? array_values(array_filter(array_map('trim', explode(',', $statusParam))))
+                : [];
+            $allowedStatusKeys = array(
+                'draft', 'open', 'confirming', 'quotation', 'contract',
+                'waiting_documents', 'in_progress', 'completed', 'paused', 'cancelled'
+            );
+            $statusKeys = array_values(array_intersect($statusKeys, $allowedStatusKeys));
+
+            if (!empty($statusKeys)) {
+                $escapedStatuses = array_map(function($statusKey) {
+                    return "'" . $this->escape($statusKey) . "'";
+                }, $statusKeys);
+                $whereArr[] = 'p.status IN (' . implode(',', $escapedStatuses) . ')';
+            } else if ($statusParam === 'active') {
+                $whereArr[] = "p.status NOT IN ('deleted', 'draft', 'completed', 'cancelled')";
+            } else if ($showInactive) {
                 $whereArr[] = "p.status != 'deleted'";
+            } else {
+                $whereArr[] = "p.status NOT IN ('deleted','completed','cancelled')";
             }
         }
         // Filter by project ID (案件ID)
@@ -1710,6 +1723,141 @@ class Project extends ApplicationModel {
     }
 
 
+    /**
+     * Normalize 予定工程 payload into JSON string (or null to clear).
+     * Input: JSON string or array with from_month (YYYY-MM), from_part, optional to_month/to_part.
+     */
+    function normalizeYoteiValue($raw) {
+        if ($raw === null || $raw === '' || $raw === 'null') {
+            return null;
+        }
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            if (!is_array($decoded)) {
+                return null;
+            }
+            $raw = $decoded;
+        }
+        if (!is_array($raw)) {
+            return null;
+        }
+
+        $fromMonth = isset($raw['from_month']) ? trim((string)$raw['from_month']) : '';
+        $toMonth = isset($raw['to_month']) ? trim((string)$raw['to_month']) : '';
+        $fromPart = $this->normalizeYoteiPart(isset($raw['from_part']) ? $raw['from_part'] : '');
+        $toPart = $this->normalizeYoteiPart(isset($raw['to_part']) ? $raw['to_part'] : '');
+
+        if ($fromMonth === '') {
+            return null;
+        }
+        if (!preg_match('/^\d{4}-\d{2}$/', $fromMonth)) {
+            return null;
+        }
+        if ($toMonth !== '' && !preg_match('/^\d{4}-\d{2}$/', $toMonth)) {
+            return null;
+        }
+        if ($toMonth === '') {
+            $toPart = '';
+        }
+
+        $sortStart = $this->yoteiMonthPartToDate($fromMonth, $fromPart, true);
+        $sortEnd = null;
+        if ($toMonth !== '') {
+            $sortEnd = $this->yoteiMonthPartToDate($toMonth, $toPart, false);
+            if ($sortStart && $sortEnd && strcmp($sortStart, $sortEnd) > 0) {
+                // Invalid range — keep order by swapping display intent via rejecting? Prefer null clear of to.
+                // Force end = start month end if inverted
+                $sortEnd = $this->yoteiMonthPartToDate($fromMonth, $fromPart, false);
+                $toMonth = $fromMonth;
+                $toPart = $fromPart;
+            }
+        }
+
+        $payload = array(
+            'from_month' => $fromMonth,
+            'from_part' => $fromPart,
+            'to_month' => $toMonth !== '' ? $toMonth : null,
+            'to_part' => $toMonth !== '' ? $toPart : null,
+            'sort_start' => $sortStart,
+            'sort_end' => $sortEnd,
+            'display' => $this->formatYoteiDisplay($fromMonth, $fromPart, $toMonth, $toPart),
+        );
+        return json_encode($payload, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function normalizeYoteiPart($part) {
+        $part = trim((string)$part);
+        $map = array(
+            'early' => 'early', '上旬' => 'early',
+            'mid' => 'mid', '中旬' => 'mid',
+            'late' => 'late', '下旬' => 'late',
+        );
+        return isset($map[$part]) ? $map[$part] : '';
+    }
+
+    private function yoteiPartDay($part, $isStart) {
+        if ($part === 'early') return 1;
+        if ($part === 'mid') return 11;
+        if ($part === 'late') return 21;
+        return $isStart ? 1 : 0; // 0 = last day of month
+    }
+
+    private function yoteiMonthPartToDate($ym, $part, $isStart) {
+        if (!preg_match('/^(\d{4})-(\d{2})$/', $ym, $m)) {
+            return null;
+        }
+        $y = intval($m[1]);
+        $mo = intval($m[2]);
+        if ($mo < 1 || $mo > 12) {
+            return null;
+        }
+        $day = $this->yoteiPartDay($part, $isStart);
+        if ($day === 0) {
+            $day = intval(date('t', mktime(0, 0, 0, $mo, 1, $y)));
+        }
+        return sprintf('%04d-%02d-%02d', $y, $mo, $day);
+    }
+
+    private function formatYoteiDisplay($fromMonth, $fromPart, $toMonth, $toPart) {
+        $partJa = array('early' => '上旬', 'mid' => '中旬', 'late' => '下旬');
+        $fmt = function ($ym, $part) use ($partJa) {
+            if (!preg_match('/^(\d{4})-(\d{2})$/', $ym, $m)) {
+                return '';
+            }
+            $label = intval($m[2]) . '月';
+            if ($part !== '' && isset($partJa[$part])) {
+                $label .= $partJa[$part];
+            }
+            return $label;
+        };
+        $fromLabel = $fmt($fromMonth, $fromPart);
+        if ($fromLabel === '') {
+            return '';
+        }
+        if ($toMonth === '' || $toMonth === null) {
+            return $fromLabel;
+        }
+        $toLabel = $fmt($toMonth, $toPart);
+        if ($toLabel === '') {
+            return $fromLabel;
+        }
+        return $fromLabel . '～' . $toLabel;
+    }
+
+    function parseYoteiField($value) {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_array($value)) {
+            return $value;
+        }
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : null;
+        }
+        return null;
+    }
+
     function create($params = null) {
     
             // Get data from $_POST if no params provided
@@ -1746,6 +1894,12 @@ class Project extends ApplicationModel {
         }
         if (isset($_POST['custom_fields']) && $_POST['custom_fields'] != '') {
             $data['custom_fields'] = $_POST['custom_fields'];
+        }
+        if (array_key_exists('yotei', $_POST)) {
+            $normalized = $this->normalizeYoteiValue($_POST['yotei']);
+            if ($normalized !== null) {
+                $data['yotei'] = $normalized;
+            }
         }
         if (isset($_POST['start_date']) && $_POST['start_date'] != '') {
             $data['start_date'] = $this->normalize_datetime_with_default($_POST['start_date'], '09:00');
@@ -2211,6 +2365,14 @@ class Project extends ApplicationModel {
                 $nullScalarFields[] = 'guis_receiver';
             }
         }
+        if (array_key_exists('yotei', $_POST)) {
+            $normalized = $this->normalizeYoteiValue($_POST['yotei']);
+            if ($normalized !== null) {
+                $data['yotei'] = $normalized;
+            } else {
+                $nullScalarFields[] = 'yotei';
+            }
+        }
         
         try {
         $versionedUpdate = $this->performVersionedProjectUpdate($id, $data, $expectedVersion);
@@ -2505,6 +2667,7 @@ class Project extends ApplicationModel {
             'actual_end_date' => '実終了日を変更',
             'caily_nouki_status' => 'CAILY納期状況を変更',
             'guis_nouki_status' => 'GUIS納期状況を変更',
+            'yotei' => '予定工程を変更',
         ];
         $skipKeys = ['updated_at', 'updated_by'];
         foreach ($data as $key => $newVal) {
@@ -2514,6 +2677,16 @@ class Project extends ApplicationModel {
             $oldVal = isset($old[$key]) ? $old[$key] : '';
             $oldStr = is_scalar($oldVal) ? (string)$oldVal : json_encode($oldVal);
             $newStr = is_scalar($newVal) ? (string)$newVal : json_encode($newVal);
+
+            if ($key === 'yotei') {
+                $oldObj = $this->parseYoteiField($oldVal);
+                $newObj = $this->parseYoteiField($newVal);
+                $oldStr = ($oldObj && !empty($oldObj['display'])) ? (string)$oldObj['display'] : '';
+                $newStr = ($newObj && !empty($newObj['display'])) ? (string)$newObj['display'] : '';
+                if ($oldStr === $newStr) {
+                    continue;
+                }
+            }
             
             // custom_fields: so sánh theo label ổn định để tránh lệch khi thứ tự mảng thay đổi
             if ($key === 'custom_fields') {
@@ -2920,6 +3093,7 @@ class Project extends ApplicationModel {
             $project['quotation_status'] = $this->getQuotationStatus($id);
             $project['version'] = isset($project['version']) ? intval($project['version']) : 1;
             $project['payment_version'] = isset($project['payment_version']) ? intval($project['payment_version']) : 1;
+            $project['yotei'] = $this->parseYoteiField(isset($project['yotei']) ? $project['yotei'] : null);
         }
         
         return $project;

@@ -7,11 +7,6 @@ function isCailyBranchUser() {
 }
 var statuses = [
     {
-        key: 'all',
-        name: 'すべて',
-        color: 'secondary'
-    },
-    {
         key: 'draft',
         name: '受付',
         color: 'secondary'
@@ -62,6 +57,39 @@ var statuses = [
         color: 'danger'
     }
 ];
+
+var PROJECT_STATUS_KEYS = statuses.map(function(s) { return s.key; });
+
+function isValidProjectStatusKey(key) {
+    return PROJECT_STATUS_KEYS.indexOf(String(key || '').trim()) !== -1;
+}
+
+function normalizeProjectStatusKeys(value) {
+    if (!value) return [];
+    var raw = Array.isArray(value) ? value : String(value).split(',');
+    var seen = {};
+    var result = [];
+    raw.forEach(function(item) {
+        var key = String(item || '').trim();
+        if (!isValidProjectStatusKey(key) || seen[key]) return;
+        seen[key] = true;
+        result.push(key);
+    });
+    return result;
+}
+
+function getSelectedStatusKeysFromApp() {
+    if (!window.ganttApp) return [];
+    if (Array.isArray(window.ganttApp.selectedStatusKeys)) {
+        return normalizeProjectStatusKeys(window.ganttApp.selectedStatusKeys);
+    }
+    return [];
+}
+
+function getProjectStatusLabel(key) {
+    var st = statuses.find(function(s) { return s.key === key; });
+    return st ? st.name : key;
+}
 
 var priorities = [
     {
@@ -356,16 +384,13 @@ $(document).ready(function() {
             filterKeyword: $('#filterKeyword').val(),
             filterProjectId: $('#filterProjectId').val(),
         };
-        // Lưu thêm trạng thái status đang chọn (header buttons)
+        // Lưu thêm trạng thái status đang chọn (header buttons, multi-select)
         try {
-            if (window.ganttApp && window.ganttApp.selectedStatus && window.ganttApp.selectedStatus.key) {
-                filters.statusKey = window.ganttApp.selectedStatus.key;
-            } else {
-                // 'all' hoặc chưa chọn gì -> lưu rỗng
-                filters.statusKey = '';
-            }
+            filters.statusKeys = getSelectedStatusKeysFromApp();
+            // Backward compat for older readers
+            filters.statusKey = filters.statusKeys.length === 1 ? filters.statusKeys[0] : '';
         } catch (e) {
-            console.warn('Failed to read selectedStatus when saving filters', e);
+            console.warn('Failed to read selectedStatusKeys when saving filters', e);
         }
         // Lưu thêm department hiện tại để chia sẻ qua URL
         try {
@@ -438,7 +463,7 @@ $(document).ready(function() {
             myProjects: filters.myProjects == 1,
             showTaskText: filters.showTaskText == 1,
             showTaskTree: filters.showTaskTree == 1,
-            statusKey: filters.statusKey || '',
+            statusKeys: normalizeProjectStatusKeys(filters.statusKeys || filters.statusKey || ''),
             department_id: filters.department_id || null
         };
     }
@@ -468,7 +493,7 @@ $(document).ready(function() {
         setOrDelete('my_projects', filters.myProjects ? 1 : '');
         setOrDelete('filterKeyword', filters.filterKeyword);
         setOrDelete('filterProjectId', filters.filterProjectId);
-        setOrDelete('status', filters.statusKey);
+        setOrDelete('status', filters.statusKeys && filters.statusKeys.length ? filters.statusKeys.join(',') : '');
         setOrDelete('showTaskText', filters.showTaskText ? 1 : '');
         setOrDelete('showTaskTree', filters.showTaskTree ? 1 : '');
         setOrDelete('useCailyEndDate', filters.useCailyEndDate ? 1 : '');
@@ -489,10 +514,13 @@ $(document).ready(function() {
     function renderActiveFilters() {
         const filters = getFiltersFromLocalStorage();
         const badges = [];
-        // Lấy status hiện tại từ Vue (ganttApp)
+        // Lấy status hiện tại từ Vue (ganttApp) — multi-select
         let statusLabel = '';
-        if (window.ganttApp && window.ganttApp.selectedStatus) {
-            statusLabel = window.ganttApp.selectedStatus.name || '';
+        const statusKeys = (window.ganttApp && Array.isArray(window.ganttApp.selectedStatusKeys))
+            ? normalizeProjectStatusKeys(window.ganttApp.selectedStatusKeys)
+            : (filters.statusKeys || []);
+        if (statusKeys.length) {
+            statusLabel = statusKeys.map(getProjectStatusLabel).join('、');
         }
         // Nếu tất cả filter đều rỗng, không hiển thị gì
         if (
@@ -625,7 +653,7 @@ $(document).ready(function() {
         if (params.has('my_projects')) merged.myProjects = getBool('my_projects');
         if (params.has('filterKeyword')) merged.filterKeyword = params.get('filterKeyword') || '';
         if (params.has('filterProjectId')) merged.filterProjectId = params.get('filterProjectId') || '';
-        if (params.has('status')) merged.statusKey = params.get('status') || '';
+        if (params.has('status')) merged.statusKeys = normalizeProjectStatusKeys(params.get('status') || '');
         if (params.has('showTaskText')) merged.showTaskText = getBool('showTaskText');
         if (params.has('showTaskTree')) merged.showTaskTree = getBool('showTaskTree');
         if (params.has('useCailyEndDate')) merged.useCailyEndDate = getBool('useCailyEndDate');
@@ -740,9 +768,9 @@ $(document).ready(function() {
                 localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(preservedState));
             } catch (e) {}
         }
-        // Reset trạng thái status filter về "all"
+        // Reset trạng thái status filter về "all" (không chọn gì)
         if (window.ganttApp) {
-            window.ganttApp.selectedStatus = null;
+            window.ganttApp.selectedStatusKeys = [];
         }
         // Lưu lại trạng thái trống mới và cập nhật badge
         if (typeof saveFiltersToLocalStorage === 'function') {
@@ -760,7 +788,7 @@ $(document).ready(function() {
             return {
                 departments: [],
                 selectedDepartment: null,
-                selectedStatus: null,
+                selectedStatusKeys: [],
                 teams: [],
                 selectedTeam: null,
                 statuses: statuses,
@@ -961,7 +989,6 @@ $(document).ready(function() {
             
             async viewProjects(department) {
                 this.selectedDepartment = department;
-                this.selectedStatus = null;
                 
                 // Save selected department to localStorage
                 this.saveSelectedDepartmentToLocalStorage(department);
@@ -972,14 +999,26 @@ $(document).ready(function() {
                 this.loadProjects();
             },
             
-            filterProjectByStatus(status) {
-                this.selectedStatus = status.key === 'all' ? null : status;
+            isStatusFilterSelected(status) {
+                return this.selectedStatusKeys.indexOf(status.key) !== -1;
+            },
+            toggleProjectStatusFilter(status) {
+                const key = status && status.key;
+                if (!isValidProjectStatusKey(key)) return;
+                const idx = this.selectedStatusKeys.indexOf(key);
+                if (idx >= 0) {
+                    this.selectedStatusKeys.splice(idx, 1);
+                } else {
+                    this.selectedStatusKeys.push(key);
+                }
                 this.loadProjects();
-                // Lưu lại vào localStorage & cập nhật badge 適用中のフィルター khi đổi status
                 if (typeof saveFiltersToLocalStorage === 'function') {
                     saveFiltersToLocalStorage();
                 }
                 renderActiveFilters();
+            },
+            filterProjectByStatus(status) {
+                this.toggleProjectStatusFilter(status);
             },
 
             filterProjectByTeam(team) {
@@ -1031,7 +1070,7 @@ $(document).ready(function() {
                         model: 'project',
                         method: 'listForGantt',
                         department_id: this.selectedDepartment.id,
-                        status: this.selectedStatus?.key || 'all',
+                        status: getSelectedStatusKeysFromApp().join(',') || 'all',
                         team_id: this.selectedTeam?.id || '',
                         filterPriority,
                         filterProgress,
@@ -1503,6 +1542,7 @@ $(document).ready(function() {
                 if (gantt.ext && gantt.ext.zoom && typeof gantt.ext.zoom.setLevel === 'function') {
                     gantt.ext.zoom.setLevel(1);
                 } else {
+                    gantt.config.min_column_width = 36;
                     gantt.config.scales = [
                         { unit: "week", step: 1, format: "%m月" },
                         { unit: "day", step: 1, format: "%d日" }
@@ -1531,6 +1571,7 @@ $(document).ready(function() {
                 if (gantt.ext && gantt.ext.zoom && typeof gantt.ext.zoom.setLevel === 'function') {
                     gantt.ext.zoom.setLevel(1);
                 } else {
+                    gantt.config.min_column_width = 36;
                     gantt.config.scales = [
                         { unit: "week", step: 1, format: "%m月" },
                         { unit: "day", step: 1, format: "%d日" }
@@ -1786,6 +1827,7 @@ $(document).ready(function() {
                     { unit: "week", step: 1, format: "%m月" },
                     { unit: "day", step: 1, format: "%d日" }
                 ];
+                gantt.config.min_column_width = 36;
                 gantt.plugins({
                     tooltip: true,
                     marker: true,
@@ -2133,6 +2175,9 @@ $(document).ready(function() {
                 };
                 // Customize task text: badge before project_order_type (e.g. 期間未定), then orderType badges, team name, project name
                 gantt.templates.task_text = function(start, end, task) {
+                    if (!window.ganttShowTaskText) {
+                        return '';
+                    }
                     const parts = [];
                     
                     // Check if this is a subtask (not a main project task)
@@ -2166,7 +2211,7 @@ $(document).ready(function() {
                         const escaped = teamName.replace(/</g, '&lt;').replace(/>/g, '&gt;');
                         parts.push('<span class="badge bg-label-secondary small me-1">' + escaped + '</span>');
                     }
-                    if (window.ganttShowTaskText && projectName) {
+                    if (projectName) {
                         parts.push(projectName.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
                     }
                     if (!isSubtask && task.progress != null) {
@@ -2557,15 +2602,15 @@ $(document).ready(function() {
                             useKey: "ctrlKey",
                             activeLevelIndex: 1,
                             levels: [
-                                { name: "month", scale_height: 27, min_column_width: 60, scales: [
+                                { name: "month", scale_height: 27, min_column_width: 36, scales: [
                                     { unit: "month", step: 1, format: "%m月" },
                                     { unit: "week", step: 1, format: "%d日" }
                                 ]},
-                                { name: "week", scale_height: 27, min_column_width: 80, scales: [
+                                { name: "week", scale_height: 27, min_column_width: 36, scales: [
                                     { unit: "week", step: 1, format: "%m月" },
                                     { unit: "day", step: 1, format: "%d日" }
                                 ]},
-                                { name: "day", scale_height: 27, min_column_width: 100, scales: [
+                                { name: "day", scale_height: 27, min_column_width: 50, scales: [
                                     { unit: "day", step: 1, format: "%m月%d日" },
                                     { unit: "hour", step: 1, format: "%H:%i" }
                                 ]}
@@ -2739,12 +2784,8 @@ $(document).ready(function() {
     // Khôi phục status filter từ localStorage (nếu có)
     try {
         const saved = getFiltersFromLocalStorage();
-        if (saved.statusKey && window.ganttApp) {
-            const st = statuses.find(s => s.key === saved.statusKey);
-            window.ganttApp.selectedStatus = st || null;
-        } else if (window.ganttApp) {
-            // Mặc định: 'all' (không filter cụ thể)
-            window.ganttApp.selectedStatus = null;
+        if (window.ganttApp) {
+            window.ganttApp.selectedStatusKeys = normalizeProjectStatusKeys(saved.statusKeys || saved.statusKey || '');
         }
     } catch (e) {
         console.warn('Failed to restore status filter from storage', e);

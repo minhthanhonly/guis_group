@@ -939,4 +939,4 @@ function showMessage(message, isError = false) {
 const IS_PROJECT_MANAGER = <?php echo isset($_SESSION['isProjectManager']) && $_SESSION['isProjectManager'] ? 'true' : 'false'; ?>;
 const IS_ADMIN = <?php echo json_encode(($_SESSION['authority'] ?? '') === 'administrator'); ?>;
 </script>
-<script src="assets/js/parent-project-index.js?v=<?=CACHE_VERSION?>"></script> 
+<script src="assets/js/parent-project-index.js?v=<?=PROJECT_CACHE_VERSION?>"></script> 

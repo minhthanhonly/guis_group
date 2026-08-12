@@ -467,8 +467,13 @@ const vueApp = createApp({
                 name: '',
                 end_date: '',
                 caily_nouki: '',
-                guis_nouki: ''
+                guis_nouki: '',
+                yotei: ''
             },
+            yoteiDraft: (typeof window.YoteiField !== 'undefined' && window.YoteiField.emptyModel)
+                ? window.YoteiField.emptyModel()
+                : { from_month: '', from_part: '', to_month: '', to_part: '' },
+            yoteiPartOptionsTick: 0,
             timeRemainingTimer: null,
             autoRefreshTimer: null,
             savingCustomFieldLabel: null,
@@ -477,6 +482,27 @@ const vueApp = createApp({
     computed: {
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+        },
+        yoteiDisplayText() {
+            if (typeof window.YoteiField === 'undefined') return '-';
+            const text = window.YoteiField.displayOf(this.project && this.project.yotei);
+            return text || '-';
+        },
+        yoteiPreview() {
+            if (typeof window.YoteiField === 'undefined') return '';
+            return window.YoteiField.buildDisplay(this.yoteiDraft) || '';
+        },
+        yoteiPartOptions() {
+            this.yoteiPartOptionsTick; // dependency for language refresh
+            if (typeof window.YoteiField !== 'undefined' && window.YoteiField.getPartOptions) {
+                return window.YoteiField.getPartOptions();
+            }
+            return [
+                { value: '', label: '—' },
+                { value: 'early', label: '上旬' },
+                { value: 'mid', label: '中旬' },
+                { value: 'late', label: '下旬' }
+            ];
         },
         parentRequestTypes() {
             const raw = (this.project && this.project.parent_requests) ? String(this.project.parent_requests) : '';
@@ -725,6 +751,7 @@ const vueApp = createApp({
                 // Khởi tạo trạng thái CAILY納期状況 / GUIS納期状況 từ cột riêng trong DB
                 this.project.caily_nouki_status = this.project.caily_nouki_status || '';
                 this.project.guis_nouki_status = this.project.guis_nouki_status || '';
+                this.syncYoteiDraftFromProject();
 
                 if (businessDocSnapshot) {
                     this.applyBusinessDocumentSnapshot(businessDocSnapshot);
@@ -2394,6 +2421,66 @@ const vueApp = createApp({
                 this.membersTagify = tagify;
             }
         },
+        syncYoteiDraftFromProject() {
+            if (typeof window.YoteiField === 'undefined') {
+                this.yoteiDraft = { from_month: '', from_part: '', to_month: '', to_part: '' };
+                return;
+            }
+            const parsed = window.YoteiField.parse(this.project && this.project.yotei);
+            this.yoteiDraft = {
+                from_month: parsed.from_month || '',
+                from_part: parsed.from_part || '',
+                to_month: parsed.to_month || '',
+                to_part: parsed.to_part || ''
+            };
+            this.$nextTick(() => this.syncYoteiMonthPickers());
+        },
+        clearYoteiDraft() {
+            if (typeof window.YoteiField !== 'undefined' && window.YoteiField.emptyModel) {
+                this.yoteiDraft = window.YoteiField.emptyModel();
+            } else {
+                this.yoteiDraft = { from_month: '', from_part: '', to_month: '', to_part: '' };
+            }
+            if (this.validationErrors) this.validationErrors.yotei = '';
+            this.$nextTick(() => this.syncYoteiMonthPickers());
+        },
+        destroyYoteiMonthPickers() {
+            if (typeof window.YoteiField === 'undefined') return;
+            window.YoteiField.destroyMonthPicker(document.getElementById('yotei_from_month_picker'));
+            window.YoteiField.destroyMonthPicker(document.getElementById('yotei_to_month_picker'));
+        },
+        initYoteiMonthPickers() {
+            if (typeof window.YoteiField === 'undefined' || !this.isEditMode) return;
+            const self = this;
+            window.YoteiField.initMonthPicker(
+                document.getElementById('yotei_from_month_picker'),
+                () => self.yoteiDraft.from_month,
+                (ym) => { self.yoteiDraft.from_month = ym || ''; }
+            );
+            window.YoteiField.initMonthPicker(
+                document.getElementById('yotei_to_month_picker'),
+                () => self.yoteiDraft.to_month,
+                (ym) => {
+                    self.yoteiDraft.to_month = ym || '';
+                    if (!ym) self.yoteiDraft.to_part = '';
+                }
+            );
+        },
+        syncYoteiMonthPickers() {
+            if (!this.isEditMode || typeof window.YoteiField === 'undefined') return;
+            const fromEl = document.getElementById('yotei_from_month_picker');
+            const toEl = document.getElementById('yotei_to_month_picker');
+            if (!fromEl || !fromEl._flatpickr || !toEl || !toEl._flatpickr) {
+                this.initYoteiMonthPickers();
+                return;
+            }
+            window.YoteiField.setMonthPickerValue(fromEl, this.yoteiDraft.from_month);
+            window.YoteiField.setMonthPickerValue(toEl, this.yoteiDraft.to_month);
+        },
+        getYoteiPayloadForSave() {
+            if (typeof window.YoteiField === 'undefined') return null;
+            return window.YoteiField.toPayload(this.yoteiDraft);
+        },
         toggleEditMode() {
             if (!this.canEditProject) {
                 showMessage('管理者のみプロジェクトを編集できます。', true);
@@ -2401,6 +2488,7 @@ const vueApp = createApp({
             }
             this.isEditMode = true;
             this.originalProject = { ...this.project };
+            this.syncYoteiDraftFromProject();
             this._serverProjectDates = {
                 start_date: this.project.start_date,
                 end_date: this.project.end_date,
@@ -2514,6 +2602,7 @@ const vueApp = createApp({
                     || this.validationErrors.caily_nouki
                     || this.validationErrors.guis_nouki
                     || this.validationErrors.end_date
+                    || this.validationErrors.yotei
                     || this.validationErrors.project_number
                     || '入力内容を確認してください。';
                 if (typeof showMessage === 'function') showMessage(msg, true);
@@ -2572,6 +2661,8 @@ const vueApp = createApp({
                 formData.append('guis_nouki', this.toAPIDate(this.project.guis_nouki) || '');
                 formData.append('caily_nouki_status', this.project.caily_nouki_status || '');
                 formData.append('guis_nouki_status', this.project.guis_nouki_status || '');
+                const yoteiPayload = this.getYoteiPayloadForSave();
+                formData.append('yotei', yoteiPayload ? JSON.stringify(yoteiPayload) : '');
                 formData.append('project_order_type', this.project.project_order_type);
                 formData.append('customer_id', this.project.customer_id);
                 // formData.append('amount', this.project.amount);
@@ -2616,6 +2707,8 @@ const vueApp = createApp({
             
             this.isEditMode = false;
             this.project = { ...this.originalProject };
+            this.syncYoteiDraftFromProject();
+            this.destroyYoteiMonthPickers();
             this._serverProjectDates = null;
             this.loadMembers(); // Restore managers and members from backend for correct avatars
             this.initVietnamTimeTooltips();
@@ -3835,7 +3928,8 @@ const vueApp = createApp({
                 name: '',
                 end_date: '',
                 caily_nouki: '',
-                guis_nouki: ''
+                guis_nouki: '',
+                yotei: ''
             };
             let valid = true;
             // if (!this.project.category_id) {
@@ -3868,6 +3962,11 @@ const vueApp = createApp({
                 valid = false;
             }
 
+            if (typeof window.YoteiField !== 'undefined' && !window.YoteiField.isValid(this.yoteiDraft)) {
+                this.validationErrors.yotei = '予定工程の期間が正しくありません';
+                valid = false;
+            }
+
             return valid;
         },
     },
@@ -3878,8 +3977,12 @@ const vueApp = createApp({
             }
         },
         isEditMode(newVal) {
+            if (!newVal) {
+                this.destroyYoteiMonthPickers();
+            }
             if (newVal) {
                 this.$nextTick(() => {
+                    this.initYoteiMonthPickers();
                     // Sync customFields from project.custom_fields or set
                     let saved = [];
                     let raw = this.project.custom_fields;
@@ -4364,9 +4467,14 @@ const vueApp = createApp({
         });
 
         this._onI18nLanguageChanged = () => {
+            this.yoteiPartOptionsTick++;
             this.$forceUpdate();
             this.$nextTick(() => {
                 this.reinitBusinessDocumentDatePickersOnLocaleChange();
+                if (this.isEditMode) {
+                    this.destroyYoteiMonthPickers();
+                    this.initYoteiMonthPickers();
+                }
                 this.initVietnamTimeTooltips();
                 if (typeof window.applyDataI18n === 'function') {
                     const appEl = document.getElementById('app');

@@ -395,4 +395,4 @@ const PRESET_PARENT_PROJECT_ID = <?php echo $parent_project_id; ?>;
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
 <script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
-<script src="assets/js/project-create.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/project-create.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

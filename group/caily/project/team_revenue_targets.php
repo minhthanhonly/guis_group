@@ -216,5 +216,5 @@ $view->footing();
 $root = ROOT;
 ?>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="assets/js/team-revenue-targets.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/team-revenue-targets.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 

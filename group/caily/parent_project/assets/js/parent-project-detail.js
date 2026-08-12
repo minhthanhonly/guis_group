@@ -496,6 +496,7 @@ createApp({
                 tantou: '',
                 caily_nouki: '',
                 guis_nouki: '',
+                yotei: { from_month: '', from_part: '', to_month: '', to_part: '' },
                 use_parent_customer: true,
                 company_name: '',
                 branch_name: '',
@@ -525,6 +526,7 @@ createApp({
                 tantou: '',
                 caily_nouki: '',
                 guis_nouki: '',
+                yotei: { from_month: '', from_part: '', to_month: '', to_part: '' },
                 use_parent_customer: true,
                 company_name: '',
                 branch_name: '',
@@ -533,6 +535,7 @@ createApp({
                 use_parent_guis_receiver: true,
                 guis_receiver: ''
             },
+            yoteiPartOptionsTick: 0,
             childProjectValidationErrors: {
                 name: '',
                 department_id: '',
@@ -543,6 +546,7 @@ createApp({
                 tantou: '',
                 caily_nouki: '',
                 guis_nouki: '',
+                yotei: '',
                 company_name: '',
                 branch_name: '',
                 contact_name: '',
@@ -558,6 +562,7 @@ createApp({
                 tantou: '',
                 caily_nouki: '',
                 guis_nouki: '',
+                yotei: '',
                 company_name: '',
                 branch_name: '',
                 contact_name: '',
@@ -868,6 +873,18 @@ createApp({
         }
     },
     computed: {
+        yoteiPartOptions() {
+            this.yoteiPartOptionsTick;
+            if (typeof window.YoteiField !== 'undefined' && window.YoteiField.getPartOptions) {
+                return window.YoteiField.getPartOptions();
+            }
+            return [
+                { value: '', label: '—' },
+                { value: 'early', label: '上旬' },
+                { value: 'mid', label: '中旬' },
+                { value: 'late', label: '下旬' }
+            ];
+        },
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
         },
@@ -1149,6 +1166,83 @@ createApp({
                 return i18next.t(label) || label;
             }
             return label;
+        },
+        emptyYoteiModel() {
+            if (typeof window.YoteiField !== 'undefined' && window.YoteiField.emptyModel) {
+                return window.YoteiField.emptyModel();
+            }
+            return { from_month: '', from_part: '', to_month: '', to_part: '' };
+        },
+        parseYoteiModel(raw) {
+            if (typeof window.YoteiField !== 'undefined' && window.YoteiField.parse) {
+                const parsed = window.YoteiField.parse(raw);
+                return {
+                    from_month: parsed.from_month || '',
+                    from_part: parsed.from_part || '',
+                    to_month: parsed.to_month || '',
+                    to_part: parsed.to_part || ''
+                };
+            }
+            return this.emptyYoteiModel();
+        },
+        formatYoteiDisplay(raw) {
+            if (typeof window.YoteiField === 'undefined') return '';
+            return window.YoteiField.displayOf(raw) || window.YoteiField.buildDisplay(raw) || '';
+        },
+        clearChildProjectYotei(isEdit) {
+            const target = isEdit ? this.editingChildProject : this.newChildProject;
+            target.yotei = this.emptyYoteiModel();
+            if (isEdit && this.editChildProjectValidationErrors) this.editChildProjectValidationErrors.yotei = '';
+            if (!isEdit && this.childProjectValidationErrors) this.childProjectValidationErrors.yotei = '';
+            this.$nextTick(() => this.syncChildProjectYoteiMonthPickers(!!isEdit));
+        },
+        destroyChildProjectYoteiMonthPickers(isEdit) {
+            if (typeof window.YoteiField === 'undefined') return;
+            const fromId = isEdit ? 'edit_yotei_from_month' : 'create_yotei_from_month';
+            const toId = isEdit ? 'edit_yotei_to_month' : 'create_yotei_to_month';
+            window.YoteiField.destroyMonthPicker(document.getElementById(fromId));
+            window.YoteiField.destroyMonthPicker(document.getElementById(toId));
+        },
+        initChildProjectYoteiMonthPickers(isEdit) {
+            if (typeof window.YoteiField === 'undefined') return;
+            const target = isEdit ? this.editingChildProject : this.newChildProject;
+            if (!target.yotei) target.yotei = this.emptyYoteiModel();
+            const fromId = isEdit ? 'edit_yotei_from_month' : 'create_yotei_from_month';
+            const toId = isEdit ? 'edit_yotei_to_month' : 'create_yotei_to_month';
+            window.YoteiField.initMonthPicker(
+                document.getElementById(fromId),
+                () => target.yotei.from_month,
+                (ym) => { target.yotei.from_month = ym || ''; }
+            );
+            window.YoteiField.initMonthPicker(
+                document.getElementById(toId),
+                () => target.yotei.to_month,
+                (ym) => {
+                    target.yotei.to_month = ym || '';
+                    if (!ym) target.yotei.to_part = '';
+                }
+            );
+        },
+        syncChildProjectYoteiMonthPickers(isEdit) {
+            if (typeof window.YoteiField === 'undefined') return;
+            const target = isEdit ? this.editingChildProject : this.newChildProject;
+            const fromId = isEdit ? 'edit_yotei_from_month' : 'create_yotei_from_month';
+            const toId = isEdit ? 'edit_yotei_to_month' : 'create_yotei_to_month';
+            const fromEl = document.getElementById(fromId);
+            const toEl = document.getElementById(toId);
+            if (!fromEl || !fromEl._flatpickr || !toEl || !toEl._flatpickr) {
+                this.initChildProjectYoteiMonthPickers(isEdit);
+                return;
+            }
+            window.YoteiField.setMonthPickerValue(fromEl, target.yotei && target.yotei.from_month);
+            window.YoteiField.setMonthPickerValue(toEl, target.yotei && target.yotei.to_month);
+        },
+        appendYoteiToFormData(formData, draft) {
+            let payload = null;
+            if (typeof window.YoteiField !== 'undefined') {
+                payload = window.YoteiField.toPayload(draft || this.emptyYoteiModel());
+            }
+            formData.append('yotei', payload ? JSON.stringify(payload) : '');
         },
         normalizeTaskKind(value) {
             const v = String(value || '').trim();
@@ -3046,6 +3140,7 @@ createApp({
             
             this.$nextTick(() => {
                 this.initializeChildProjectDatePickers();
+                this.initChildProjectYoteiMonthPickers(false);
                 this.initializeChildProjectTagify();
                 if (this.newChildProject.department_id) {
                     this.loadCreateChildProjectCustomFields(this.newChildProject.department_id);
@@ -3053,6 +3148,10 @@ createApp({
                 setTimeout(() => {
                     this.initializeCreateChildProjectQuill();
                 }, 100);
+                if (typeof window.applyDataI18n === 'function') {
+                    const createModal = document.getElementById('createChildProjectModal');
+                    if (createModal) window.applyDataI18n(createModal);
+                }
             });
         },
 
@@ -3084,6 +3183,7 @@ createApp({
                 tantou: '',
                 caily_nouki: '',
                 guis_nouki: '',
+                yotei: this.emptyYoteiModel(),
                 use_parent_customer: true,
                 company_name: '',
                 branch_name: '',
@@ -3701,6 +3801,7 @@ createApp({
                 tantou: project.tantou || '',
                 caily_nouki: project.caily_nouki || '',
                 guis_nouki: project.guis_nouki || '',
+                yotei: this.parseYoteiModel(project.yotei),
                 custom_fields: project.custom_fields != null ? project.custom_fields : '',
                 use_parent_customer: useParentCustomer,
                 company_name: useParentCustomer ? '' : (project.company_name || ''),
@@ -3730,6 +3831,7 @@ createApp({
                     } catch (e) { /* ignore */ }
                 }
                 this.initializeEditChildProjectDatePickers();
+                this.initChildProjectYoteiMonthPickers(true);
                 await this.initializeEditChildProjectTagify();
                 if (this.editingChildProject.department_id) {
                     await this.loadEditChildProjectCustomFields(this.editingChildProject.department_id, this.editingChildProject.custom_fields);
@@ -3737,6 +3839,10 @@ createApp({
                 setTimeout(() => {
                     this.initializeEditChildProjectQuill();
                 }, 100);
+                if (typeof window.applyDataI18n === 'function') {
+                    const editModal = document.getElementById('editChildProjectModal');
+                    if (editModal) window.applyDataI18n(editModal);
+                }
                 if (!this.editingChildProject.use_parent_customer) {
                     this.$nextTick(() => {
                         this.initChildProjectCustomerSelect2(true);
@@ -4498,6 +4604,7 @@ createApp({
                 tantou: '',
                 caily_nouki: '',
                 guis_nouki: '',
+                yotei: '',
                 company_name: '',
                 branch_name: '',
                 contact_name: '',
@@ -4550,6 +4657,14 @@ createApp({
             if (!this.validateChildProjectGuisReceiver(this.editingChildProject, this.editChildProjectValidationErrors)) {
                 isValid = false;
             }
+
+            if (!this.editingChildProject.yotei) {
+                this.editingChildProject.yotei = this.emptyYoteiModel();
+            }
+            if (typeof window.YoteiField !== 'undefined' && !window.YoteiField.isValid(this.editingChildProject.yotei)) {
+                this.editChildProjectValidationErrors.yotei = '予定工程の期間が正しくありません';
+                isValid = false;
+            }
             
             return isValid;
         },
@@ -4596,6 +4711,7 @@ createApp({
                 formData.append('tantou', this.editingChildProject.tantou || '');
                 formData.append('caily_nouki', this.toChildProjectAPIDate(this.editingChildProject.caily_nouki) || '');
                 formData.append('guis_nouki', this.toChildProjectAPIDate(this.editingChildProject.guis_nouki) || '');
+                this.appendYoteiToFormData(formData, this.editingChildProject.yotei);
 
                 formData.append('is_kadai', '0');
                 formData.append('customer_id', this.resolveChildProjectCustomerId(this.editingChildProject));
@@ -4641,7 +4757,8 @@ createApp({
                         members: [],
                         tantou: '',
                         caily_nouki: '',
-                        guis_nouki: ''
+                        guis_nouki: '',
+                        yotei: this.emptyYoteiModel()
                     };
                     
                     // Reset Quill content
@@ -4804,6 +4921,7 @@ createApp({
                 status: '',
                 caily_nouki: '',
                 guis_nouki: '',
+                yotei: '',
                 company_name: '',
                 branch_name: '',
                 contact_name: '',
@@ -4865,6 +4983,14 @@ createApp({
                 isValid = false;
             }
 
+            if (!this.newChildProject.yotei) {
+                this.newChildProject.yotei = this.emptyYoteiModel();
+            }
+            if (typeof window.YoteiField !== 'undefined' && !window.YoteiField.isValid(this.newChildProject.yotei)) {
+                this.childProjectValidationErrors.yotei = '予定工程の期間が正しくありません';
+                isValid = false;
+            }
+
             return isValid;
         },
 
@@ -4922,6 +5048,7 @@ createApp({
                 formData.append('tantou', this.newChildProject.tantou || '');
                 formData.append('caily_nouki', this.toChildProjectAPIDate(this.newChildProject.caily_nouki) || '');
                 formData.append('guis_nouki', this.toChildProjectAPIDate(this.newChildProject.guis_nouki) || '');
+                this.appendYoteiToFormData(formData, this.newChildProject.yotei);
 
                 formData.append('is_kadai', '0');
                 formData.append('status', this.newChildProject.status || 'draft');

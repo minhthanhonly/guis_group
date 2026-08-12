@@ -725,5 +725,5 @@ $root = ROOT;
 ?>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="<?=$root?>assets/vendor/libs/apex-charts/apexcharts.js"></script>
-<script src="assets/js/employee-statistics.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/employee-statistics.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 

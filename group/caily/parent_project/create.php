@@ -713,4 +713,4 @@ window.currentUser = {
 };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<script src="assets/js/parent-project-create.js?v=<?=CACHE_VERSION?>"></script> 
+<script src="assets/js/parent-project-create.js?v=<?=PROJECT_CACHE_VERSION?>"></script> 

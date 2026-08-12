@@ -291,6 +291,6 @@ window.currentUser = {
 };
 </script>
 
-<script src="assets/js/task-overview.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/task-overview.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 
 

@@ -151,18 +151,18 @@ if($_SESSION['show_project'] == 0){
                
                 <div class="d-flex gap-2 align-items-center">
                     <!-- Status Filter -->
-                    <div class="btn-group">
+                    <div class="btn-group flex-wrap">
                         <button 
                             v-for="status in statuses" 
                             :key="status.key"
-                            class="btn btn-sm"
+                            class="btn btn-sm status-filter-btn"
                             :data-i18n="status.name"
                             :class="{
-                                [`btn-label-${status.color}`]: !selectedStatus || selectedStatus?.key !== status.key,
-                                [`btn-${status.color}`]: selectedStatus?.key === status.key,
-                                'active': selectedStatus?.key === status.key
+                                [`btn-label-${status.color}`]: !isStatusFilterSelected(status),
+                                [`btn-${status.color}`]: isStatusFilterSelected(status),
+                                'active': isStatusFilterSelected(status)
                             }"
-                            @click="filterProjectByStatus(status)"
+                            @click="toggleProjectStatusFilter(status)"
                         >
                             {{ status.name }}
                         </button>
@@ -228,7 +228,7 @@ if($_SESSION['show_project'] == 0){
                 </button>
                 <div class="form-check ms-2">
                     <input class="form-check-input" type="checkbox" id="toggleTaskText" checked>
-                    <label class="form-check-label small" for="toggleTaskText">案件名を表示</label>
+                    <label class="form-check-label small" for="toggleTaskText"><span data-i18n="案件名を表示">案件名を表示</span></label>
                 </div>
                 <div class="form-check ms-2">
                     <input class="form-check-input" type="checkbox" id="toggleTaskTree">
@@ -266,7 +266,7 @@ if($_SESSION['show_project'] == 0){
                   </div>
                 </div>
                 <div class="ms-2 small text-muted self-end">
-                    <div title="Spaceキーを押しながらドラッグでチャートをスクロール">※Space＋ドラッグでスクロール</div>
+                    <div data-i18n="※Spaceキーを押しながらドラッグでチャートをスクロール">※Spaceキーを押しながらドラッグでチャートをスクロール</div>
                     <!-- <div title="Ctrlキーを押しながらホイールでズーム">※Ctrl＋ホイールでズーム</div> -->
                 </div>
             </div>
@@ -306,10 +306,58 @@ $view->footing();
 <script>
 window.IS_CAILY_BRANCH_USER = <?php echo $isCailyBranchUser ? 'true' : 'false'; ?>;
 </script>
-<script src="assets/js/project-gantt.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/project-gantt.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <style>
 body > .select2-container--default,
 .select2-dropdown{
     width: 300px!important;
+}
+.btn-group {
+    overflow: visible !important;
+}
+.status-filter-btn {
+    position: relative;
+    overflow: visible;
+}
+.status-filter-btn::after {
+    content: '';
+    position: absolute;
+    bottom: -0.6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+    z-index: 10;
+    pointer-events: none;
+    display: none;
+}
+.status-filter-btn.active::after{
+    display: block;
+}
+.status-filter-btn.btn-secondary.active::after,
+.status-filter-btn.btn-label-secondary.active::after {
+    background-color: #6c757d !important;
+}
+.status-filter-btn.btn-info.active::after,
+.status-filter-btn.btn-label-info.active::after {
+    background-color: #0dcaf0 !important;
+}
+.status-filter-btn.btn-primary.active::after,
+.status-filter-btn.btn-label-primary.active::after {
+    background-color: #7650b0 !important;
+}
+.status-filter-btn.btn-success.active::after,
+.status-filter-btn.btn-label-success.active::after {
+    background-color: #198754 !important;
+}
+.status-filter-btn.btn-warning.active::after,
+.status-filter-btn.btn-label-warning.active::after {
+    background-color: #ffc107 !important;
+}
+.status-filter-btn.btn-danger.active::after,
+.status-filter-btn.btn-label-danger.active::after {
+    background-color: #dc3545 !important;
 }
 </style>

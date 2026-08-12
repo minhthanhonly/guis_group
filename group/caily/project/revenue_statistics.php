@@ -1036,4 +1036,4 @@ body.dark-style .revenue-stats-table tfoot.table-secondary td {
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="../assets/vendor/libs/jszip/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous"></script>
-<script src="assets/js/revenue-statistics.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/revenue-statistics.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

@@ -827,5 +827,22 @@
     "おはようございます！": "Chào buổi sáng!",
     "ようこそ！": "Xin chào!",
     "こんにちは！": "Xin chào buổi chiều!",
-    "こんばんは！": "Chào buổi tối!"
+    "こんばんは！": "Chào buổi tối!",
+    "予定工程": "Kế hoạch dự kiến",
+    "開始": "Bắt đầu",
+    "終了": "Kết thúc",
+    "任意": "Tùy chọn",
+    "上旬": "Đầu tháng",
+    "中旬": "Giữa tháng",
+    "下旬": "Cuối tháng",
+    "予定工程の期間が正しくありません": "Khoảng thời gian kế hoạch dự kiến không hợp lệ",
+    "並べ替え": "Sắp xếp",
+    "ステータス順で並べ替え": "Sắp xếp theo trạng thái",
+    "並べ替え項目": "Cột sắp xếp",
+    "並び順": "Thứ tự sắp xếp",
+    "昇順": "Tăng dần",
+    "降順": "Giảm dần",
+    "Excel出力": "Xuất Excel",
+    "※Spaceキーを押しながらドラッグでチャートをスクロール": "※Giữ phím Space và kéo để cuộn (Space + kéo)",
+    "案件名を表示": "Hiển thị tên dự án"
 }
