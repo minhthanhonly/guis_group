@@ -553,6 +553,13 @@
     "作業計測中のタスクのみ": "Chỉ công việc đang đếm giờ",
     "完了タスクを除外": "Không hiển thị công việc đã hoàn thành",
     "全タスク一覧": "Tất cả công việc",
+    "週間タスク": "Công việc theo tuần",
+    "今週": "Tuần này",
+    "この週のタスクがありません": "Không có công việc trong tuần này",
+    "今週の工数": "Giờ công tuần này",
+    "週の工数": "Giờ công trong tuần",
+    "作業時間を表示": "Hiện/ẩn thời gian làm việc",
+    "作業時間がありません": "Không có bản ghi thời gian",
     "ユーザー": "Người dùng",
     "更新": "Cập nhật",
     "期限を超過しています": "Đã quá hạn",
@@ -844,5 +851,8 @@
     "降順": "Giảm dần",
     "Excel出力": "Xuất Excel",
     "※Spaceキーを押しながらドラッグでチャートをスクロール": "※Giữ phím Space và kéo để cuộn (Space + kéo)",
-    "案件名を表示": "Hiển thị tên dự án"
+    "案件名を表示": "Hiển thị tên dự án",
+    "良い / 悪いを表示": "Hiển thị Tốt / Xấu",
+    "勤怠時間合計": "Tổng giờ chấm công",
+    "種別別工数を表示": "Hiển thị công số theo loại"
 }

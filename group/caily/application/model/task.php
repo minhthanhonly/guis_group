@@ -49,6 +49,253 @@ class Task extends ApplicationModel {
         return max(0, round(floatval($value), 2));
     }
 
+    private function getCompletedTimeEntryHoursSum($taskId) {
+        $taskId = intval($taskId);
+        if ($taskId <= 0) {
+            return 0;
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT COALESCE(SUM(hours), 0) AS total
+             FROM %stime_entries
+             WHERE task_id = %d AND end_time IS NOT NULL",
+            DB_PREFIX,
+            $taskId
+        ));
+        return round(floatval($row['total'] ?? 0), 2);
+    }
+
+    private function getLastTimeEntryTimesForAdjustment($taskId, $ownerUserId = null) {
+        $taskId = intval($taskId);
+        if ($taskId <= 0) {
+            return null;
+        }
+        $ownerFilter = '';
+        if ($ownerUserId !== null && $ownerUserId !== '') {
+            $ownerFilter = sprintf(
+                " AND user_id COLLATE utf8mb4_general_ci = '%s' COLLATE utf8mb4_general_ci",
+                $this->quote((string) $ownerUserId)
+            );
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT start_time, end_time
+             FROM %stime_entries
+             WHERE task_id = %d
+               AND end_time IS NOT NULL
+               AND (description IS NULL OR description NOT LIKE '工数調整%%')
+               %s
+             ORDER BY end_time DESC, id DESC
+             LIMIT 1",
+            DB_PREFIX,
+            $taskId,
+            $ownerFilter
+        ));
+        if (!$row || empty($row['end_time'])) {
+            return null;
+        }
+        return array(
+            'start_time' => $row['start_time'] ?? $row['end_time'],
+            'end_time' => $row['end_time'],
+        );
+    }
+
+    private function getTaskAssigneeUserids($taskId, $taskRow = null) {
+        $taskId = intval($taskId);
+        if ($taskId <= 0) {
+            return array();
+        }
+
+        $rows = $this->fetchAll(sprintf(
+            "SELECT u.userid
+             FROM %stask_assignees ta
+             INNER JOIN %suser u ON u.id = ta.user_id
+             WHERE ta.task_id = %d
+             ORDER BY ta.user_id ASC",
+            DB_PREFIX,
+            DB_PREFIX,
+            $taskId
+        ));
+        $userids = array();
+        foreach ($rows as $row) {
+            $uid = trim((string) ($row['userid'] ?? ''));
+            if ($uid !== '') {
+                $userids[] = $uid;
+            }
+        }
+        if (!empty($userids)) {
+            return $userids;
+        }
+
+        if ($taskRow === null) {
+            $taskRow = $this->getById($taskId);
+        }
+        if (!$taskRow || empty($taskRow['assigned_to'])) {
+            return array();
+        }
+        return $this->convertIdsToUserIds($taskRow['assigned_to']);
+    }
+
+    /**
+     * Resolve time_entries.user_id for 工数調整: assignee(s), not the editor when different.
+     */
+    private function resolveTimeEntryOwnerUserId($taskId, $taskRow = null) {
+        $sessionUserid = isset($_SESSION['userid']) ? (string) $_SESSION['userid'] : '';
+        $assignees = $this->getTaskAssigneeUserids($taskId, $taskRow);
+        if (empty($assignees)) {
+            if ($sessionUserid !== '') {
+                return $sessionUserid;
+            }
+            return $this->resolveTimerUserId();
+        }
+
+        if ($sessionUserid !== '') {
+            foreach ($assignees as $uid) {
+                if (strcasecmp($uid, $sessionUserid) === 0) {
+                    return $uid;
+                }
+            }
+        }
+
+        $quotedAssignees = array();
+        foreach ($assignees as $uid) {
+            $quotedAssignees[] = sprintf(
+                "'%s'",
+                $this->quote($uid)
+            );
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT te.user_id
+             FROM %stime_entries te
+             WHERE te.task_id = %d
+               AND te.end_time IS NOT NULL
+               AND te.user_id COLLATE utf8mb4_general_ci IN (%s)
+             GROUP BY te.user_id
+             ORDER BY COALESCE(SUM(te.hours), 0) DESC, te.user_id ASC
+             LIMIT 1",
+            DB_PREFIX,
+            $taskId,
+            implode(',', $quotedAssignees)
+        ));
+        if ($row && !empty($row['user_id'])) {
+            return (string) $row['user_id'];
+        }
+
+        return $assignees[0];
+    }
+
+    private function buildHoursAdjustmentDescription() {
+        $editorName = trim((string) ($_SESSION['realname'] ?? ''));
+        if ($editorName === '') {
+            $editorName = trim((string) ($_SESSION['userid'] ?? ''));
+        }
+        if ($editorName === '') {
+            return '工数調整';
+        }
+        return sprintf('工数調整 (編集者: %s)', $editorName);
+    }
+
+    private function insertTimeEntryHoursAdjustment($taskId, $hoursDelta, $taskRow = null) {
+        $taskId = intval($taskId);
+        $hoursDelta = round(floatval($hoursDelta), 2);
+        if ($taskId <= 0 || abs($hoursDelta) < 0.005) {
+            return true;
+        }
+
+        $userId = $this->resolveTimeEntryOwnerUserId($taskId, $taskRow);
+        if ($userId === '') {
+            $userId = isset($_SESSION['userid']) ? (string) $_SESSION['userid'] : '';
+        }
+        if ($userId === '') {
+            return false;
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $lastEntryTimes = $this->getLastTimeEntryTimesForAdjustment($taskId, $userId);
+        if (!$lastEntryTimes) {
+            $lastEntryTimes = $this->getLastTimeEntryTimesForAdjustment($taskId);
+        }
+        $entryStartTime = $lastEntryTimes ? $lastEntryTimes['start_time'] : $now;
+        $entryEndTime = $lastEntryTimes ? $lastEntryTimes['end_time'] : $now;
+        $prevTable = $this->table;
+        $this->table = DB_PREFIX . 'time_entries';
+        $entryId = $this->query_insert(array(
+            'task_id' => $taskId,
+            'user_id' => $userId,
+            'start_time' => $entryStartTime,
+            'end_time' => $entryEndTime,
+            'hours' => $hoursDelta,
+            'description' => $this->buildHoursAdjustmentDescription(),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ));
+        $this->table = $prevTable;
+        return !empty($entryId);
+    }
+
+    private function syncTaskEstimatedHoursFromTimeEntries($taskId) {
+        $taskId = intval($taskId);
+        $sum = $this->normalize_estimated_hours($this->getCompletedTimeEntryHoursSum($taskId));
+        $prevTable = $this->table;
+        $this->table = DB_PREFIX . 'tasks';
+        $this->query_update(
+            array(
+                'estimated_hours' => $sum,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ),
+            array('id' => $taskId)
+        );
+        $this->table = $prevTable;
+        return $sum;
+    }
+
+    /**
+     * Set task 工数 to $targetHours by inserting a time_entries adjustment for the delta.
+     */
+    private function applyTaskHoursTarget($taskId, $targetHours, $taskRow = null) {
+        $taskId = intval($taskId);
+        $targetHours = $this->normalize_estimated_hours($targetHours);
+        if ($taskId <= 0) {
+            return $targetHours;
+        }
+        $currentSum = $this->getCompletedTimeEntryHoursSum($taskId);
+        $this->insertTimeEntryHoursAdjustment($taskId, round($targetHours - $currentSum, 2), $taskRow);
+        return $this->syncTaskEstimatedHoursFromTimeEntries($taskId);
+    }
+
+    private function attachTimeEntryHours(array &$tasks) {
+        if (empty($tasks)) {
+            return;
+        }
+        $ids = array();
+        foreach ($tasks as $task) {
+            $tid = intval($task['id'] ?? 0);
+            if ($tid > 0) {
+                $ids[$tid] = $tid;
+            }
+        }
+        if (empty($ids)) {
+            return;
+        }
+        $rows = $this->fetchAll(sprintf(
+            "SELECT task_id, COALESCE(SUM(hours), 0) AS total
+             FROM %stime_entries
+             WHERE task_id IN (%s) AND end_time IS NOT NULL
+             GROUP BY task_id",
+            DB_PREFIX,
+            implode(',', $ids)
+        ));
+        $map = array();
+        foreach ($rows as $row) {
+            $map[intval($row['task_id'])] = round(floatval($row['total'] ?? 0), 2);
+        }
+        foreach ($tasks as &$task) {
+            $tid = intval($task['id'] ?? 0);
+            if (isset($map[$tid])) {
+                $task['estimated_hours'] = $this->normalize_estimated_hours($map[$tid]);
+            }
+        }
+        unset($task);
+    }
+
     private function getDrawingModel() {
         if (!class_exists('Drawing')) {
             require_once DIR_MODEL . 'drawing.php';
@@ -669,6 +916,7 @@ class Task extends ApplicationModel {
         }
         unset($task);
 
+        $this->attachTimeEntryHours($tasks);
         $this->attachActiveTimerFlags($tasks);
     }
 
@@ -908,6 +1156,10 @@ class Task extends ApplicationModel {
                 $syncOptions['recalc_prices'] = true;
             }
             $this->syncTaskDrawingsForTask($task_id, $data, $syncOptions);
+
+            if ($estimatedHours > 0) {
+                $this->applyTaskHoursTarget($task_id, $estimatedHours, $data);
+            }
             
             return [
                 'status' => 'success',
@@ -1099,6 +1351,10 @@ class Task extends ApplicationModel {
                 }
             }
             $this->syncTaskDrawingsForTask($id, $mergedTask, $syncOptions);
+
+            if (array_key_exists('estimated_hours', $_POST)) {
+                $this->applyTaskHoursTarget($id, $estimatedHours, $mergedTask);
+            }
 
             return [
                 'status' => 'success'
@@ -1613,17 +1869,12 @@ class Task extends ApplicationModel {
         }
 
         $estimatedHours = $this->normalize_estimated_hours(isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0);
-        $data = array(
-            'estimated_hours' => $estimatedHours,
-            'updated_at' => date('Y-m-d H:i:s'),
-        );
-
-        $result = $this->query_update($data, ['id' => $id]);
-        if ($result < 0) {
-            return ['status' => 'error', 'message' => 'Update failed'];
+        $oldHours = $this->getCompletedTimeEntryHoursSum($id);
+        if ($oldHours <= 0) {
+            $oldHours = isset($old['estimated_hours']) ? $this->normalize_estimated_hours($old['estimated_hours']) : 0;
         }
+        $estimatedHours = $this->applyTaskHoursTarget($id, $estimatedHours, $old);
 
-        $oldHours = isset($old['estimated_hours']) ? $this->normalize_estimated_hours($old['estimated_hours']) : 0;
         if ($oldHours != $estimatedHours) {
             $this->logTaskAction($id, 'updated', '工数を変更', $oldHours, $estimatedHours);
         }
@@ -1860,19 +2111,7 @@ class Task extends ApplicationModel {
         }
 
         $oldHours = $this->normalize_estimated_hours(isset($task['estimated_hours']) ? $task['estimated_hours'] : 0);
-        $newHours = $this->normalize_estimated_hours($oldHours + $hours);
-
-        $taskUpdate = $this->query_update(
-            array(
-                'estimated_hours' => $newHours,
-                'updated_at' => $endTime,
-            ),
-            array('id' => $taskId)
-        );
-
-        if ($taskUpdate < 0) {
-            return array('status' => 'error', 'message' => '作業計測の終了に失敗しました');
-        }
+        $newHours = $this->syncTaskEstimatedHoursFromTimeEntries($taskId);
 
         if ($oldHours != $newHours) {
             $this->logTaskAction($taskId, 'updated', '作業時間を計測', $oldHours, $newHours);
@@ -2203,6 +2442,7 @@ class Task extends ApplicationModel {
                 $task['subtask_count'] = $subtaskMap[(int)$task['id']] ?? 0;
             }
             unset($task);
+            $this->attachTimeEntryHours($tasks);
         }
         return $tasks;
     }
@@ -3780,6 +4020,7 @@ class Task extends ApplicationModel {
             ];
         }
 
+        $this->attachTimeEntryHours($tasks);
         $this->attachActiveTimerFlags($tasks);
 
         // 5. Determine unassigned users (no active tasks: exclude completed & cancelled)
@@ -3865,5 +4106,267 @@ class Task extends ApplicationModel {
             'tasks' => $tasks,
             'unassigned_users' => $unassigned_users
         ]);
+    }
+
+    /**
+     * Weekly tasks with time_entries for one user (Mon-Sun, Asia/Tokyo).
+     * Non-PM users are forced to their own userid.
+     */
+    function listWeeklyTasks() {
+        $canSelectUser = !empty($_SESSION['isProjectManager']);
+        $sessionNumericId = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
+        $requestedUserId = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
+        $targetNumericId = $canSelectUser && $requestedUserId > 0 ? $requestedUserId : $sessionNumericId;
+
+        if ($targetNumericId <= 0) {
+            return [
+                'status' => 'error',
+                'message' => 'ユーザーが指定されていません',
+                'can_select_user' => $canSelectUser,
+                'week_start' => null,
+                'week_end' => null,
+                'user' => null,
+                'tasks' => []
+            ];
+        }
+
+        $user = $this->fetchOne(sprintf(
+            "SELECT id, userid, realname FROM %suser WHERE id = %d LIMIT 1",
+            DB_PREFIX,
+            $targetNumericId
+        ));
+        if (!$user || empty($user['userid'])) {
+            return [
+                'status' => 'error',
+                'message' => 'ユーザーが見つかりません',
+                'can_select_user' => $canSelectUser,
+                'week_start' => null,
+                'week_end' => null,
+                'user' => null,
+                'tasks' => []
+            ];
+        }
+
+        $tz = new DateTimeZone('Asia/Tokyo');
+        $weekStartParam = isset($_GET['week_start']) ? trim((string) $_GET['week_start']) : '';
+        try {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $weekStartParam)) {
+                $monday = new DateTime($weekStartParam, $tz);
+            } else {
+                $monday = new DateTime('now', $tz);
+            }
+        } catch (Exception $e) {
+            $monday = new DateTime('now', $tz);
+        }
+        $dow = intval($monday->format('N'));
+        if ($dow !== 1) {
+            $monday->modify('-' . ($dow - 1) . ' days');
+        }
+        $monday->setTime(0, 0, 0);
+        $sunday = clone $monday;
+        $sunday->modify('+6 days');
+        $weekStart = $monday->format('Y-m-d');
+        $weekEnd = $sunday->format('Y-m-d');
+
+        $useridEsc = $this->quote($user['userid']);
+        $userJoin = "u.userid COLLATE utf8mb4_general_ci = te.user_id COLLATE utf8mb4_general_ci";
+        $weekStartQ = "'" . $this->quote($weekStart) . "'";
+        $weekEndQ = "'" . $this->quote($weekEnd) . "'";
+
+        // Tasks that have at least one entry for this user in the selected week.
+        $weekTaskRows = $this->fetchAll(sprintf(
+            "SELECT DISTINCT te.task_id
+             FROM %stime_entries te
+             WHERE te.user_id COLLATE utf8mb4_general_ci = '%s' COLLATE utf8mb4_general_ci
+               AND (
+                    (te.end_time IS NOT NULL AND DATE(te.end_time) BETWEEN %s AND %s)
+                    OR (te.end_time IS NULL AND DATE(te.start_time) BETWEEN %s AND %s)
+               )",
+            DB_PREFIX,
+            $useridEsc,
+            $weekStartQ,
+            $weekEndQ,
+            $weekStartQ,
+            $weekEndQ
+        ));
+
+        // Also include tasks with no time_entries at all if their due_date is in this week.
+        $dueOnlyTaskRows = $this->fetchAll(sprintf(
+            "SELECT DISTINCT t.id AS task_id
+             FROM %stasks t
+             LEFT JOIN %stask_assignees ta ON ta.task_id = t.id
+             WHERE t.due_date IS NOT NULL
+               AND DATE(t.due_date) BETWEEN %s AND %s
+               AND (
+                    ta.user_id = %d
+                    OR FIND_IN_SET('%d', COALESCE(t.assigned_to, '')) > 0
+               )
+               AND NOT EXISTS (
+                    SELECT 1
+                    FROM %stime_entries te2
+                    WHERE te2.task_id = t.id
+               )",
+            DB_PREFIX,
+            DB_PREFIX,
+            $weekStartQ,
+            $weekEndQ,
+            $targetNumericId,
+            $targetNumericId,
+            DB_PREFIX
+        ));
+
+        $taskIds = [];
+        foreach ($weekTaskRows as $row) {
+            $tid = intval($row['task_id'] ?? 0);
+            if ($tid > 0) {
+                $taskIds[$tid] = $tid;
+            }
+        }
+        foreach ($dueOnlyTaskRows as $row) {
+            $tid = intval($row['task_id'] ?? 0);
+            if ($tid > 0) {
+                $taskIds[$tid] = $tid;
+            }
+        }
+        $taskIds = array_values($taskIds);
+
+        if (empty($taskIds)) {
+            return [
+                'status' => 'success',
+                'can_select_user' => $canSelectUser,
+                'week_start' => $weekStart,
+                'week_end' => $weekEnd,
+                'user' => [
+                    'id' => intval($user['id']),
+                    'userid' => $user['userid'],
+                    'realname' => $user['realname']
+                ],
+                'tasks' => []
+            ];
+        }
+
+        $idList = implode(',', array_map('intval', $taskIds));
+
+        $taskRows = $this->fetchAll(sprintf(
+            "SELECT
+                t.id,
+                t.title,
+                t.status,
+                t.priority,
+                t.task_kind,
+                t.estimated_hours,
+                t.assigned_to,
+                t.project_id,
+                t.progress,
+                t.due_date,
+                t.note,
+                p.name AS project_name,
+                p.department_id,
+                p.end_date AS project_end_date
+             FROM %stasks t
+             LEFT JOIN %sprojects p ON t.project_id = p.id
+             WHERE t.id IN (%s)
+             ORDER BY t.id ASC",
+            DB_PREFIX,
+            DB_PREFIX,
+            $idList
+        ));
+
+        $allEntryRows = $this->fetchAll(sprintf(
+            "SELECT
+                te.id AS entry_id,
+                te.task_id,
+                te.user_id,
+                te.start_time,
+                te.end_time,
+                te.hours,
+                te.description,
+                u.realname AS entry_user_name
+             FROM %stime_entries te
+             LEFT JOIN %suser u ON %s
+             WHERE te.task_id IN (%s)
+             ORDER BY te.start_time DESC, te.id DESC",
+            DB_PREFIX,
+            DB_PREFIX,
+            $userJoin,
+            $idList
+        ));
+
+        $tasksById = [];
+        foreach ($taskRows as $row) {
+            $taskId = intval($row['id']);
+            $assignedIds = [];
+            if (!empty($row['assigned_to'])) {
+                foreach (explode(',', $row['assigned_to']) as $part) {
+                    $id = intval(trim($part));
+                    if ($id > 0) {
+                        $assignedIds[] = $id;
+                    }
+                }
+            }
+            $tasksById[$taskId] = [
+                'id' => $taskId,
+                'project_id' => isset($row['project_id']) ? intval($row['project_id']) : 0,
+                'project_name' => $row['project_name'] ?? '',
+                'title' => $row['title'] ?? '',
+                'status' => $row['status'] ?? '',
+                'priority' => $row['priority'] ?? '',
+                'task_kind' => $row['task_kind'] ?? '',
+                'estimated_hours' => $this->normalize_estimated_hours($row['estimated_hours'] ?? 0),
+                'progress' => isset($row['progress']) ? intval($row['progress']) : 0,
+                'due_date' => $row['due_date'] ?? null,
+                'note' => $row['note'] ?? '',
+                'department_id' => $row['department_id'] ?? null,
+                'project_end_date' => $row['project_end_date'] ?? null,
+                'assigned_to_ids' => $assignedIds,
+                'week_hours' => 0,
+                'time_entries' => []
+            ];
+        }
+
+        foreach ($allEntryRows as $row) {
+            $taskId = intval($row['task_id']);
+            if ($taskId <= 0 || !isset($tasksById[$taskId])) {
+                continue;
+            }
+
+            $hours = round(floatval($row['hours'] ?? 0), 2);
+            $endTime = $row['end_time'] ?? null;
+            $entryUserId = (string) ($row['user_id'] ?? '');
+            $inWeek = false;
+            if (!empty($endTime)) {
+                $endDate = substr((string) $endTime, 0, 10);
+                $inWeek = ($endDate >= $weekStart && $endDate <= $weekEnd);
+            }
+
+            $tasksById[$taskId]['time_entries'][] = [
+                'id' => intval($row['entry_id']),
+                'start_time' => $row['start_time'] ?? null,
+                'end_time' => $endTime,
+                'hours' => $hours,
+                'description' => $row['description'] ?? '',
+                'user_name' => $row['entry_user_name'] ?? '',
+                'user_id' => $entryUserId,
+                'running' => empty($endTime),
+                'in_week' => $inWeek
+            ];
+
+            if ($inWeek && strcasecmp($entryUserId, $user['userid']) === 0) {
+                $tasksById[$taskId]['week_hours'] = round($tasksById[$taskId]['week_hours'] + $hours, 2);
+            }
+        }
+
+        return [
+            'status' => 'success',
+            'can_select_user' => $canSelectUser,
+            'week_start' => $weekStart,
+            'week_end' => $weekEnd,
+            'user' => [
+                'id' => intval($user['id']),
+                'userid' => $user['userid'],
+                'realname' => $user['realname']
+            ],
+            'tasks' => array_values($tasksById)
+        ];
     }
 }

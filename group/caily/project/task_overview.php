@@ -32,7 +32,7 @@ if($_SESSION['show_project'] == 0){
                 <option v-for="team in filteredTeams" :key="team.id" :value="team.id">{{ team.name }}</option>
             </select>
         </div>
-        <div class="col-md-3 mb-2">
+        <div class="col-md-3 mb-2" v-if="canSelectUser">
             <label class="form-label"><span data-i18n="ユーザー">ユーザー</span></label>
             <select class="form-select" v-model="filters.user_id" @change="onUserChange">
                 <option value="" data-i18n="すべて">すべて</option>
@@ -78,6 +78,12 @@ if($_SESSION['show_project'] == 0){
                     <button class="nav-link" :class="{ active: activeTab === 'tasks' }"
                             @click="activeTab = 'tasks'" type="button">
                         <i class="fa fa-list me-1"></i><span data-i18n="タスク一覧">タスク一覧</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" :class="{ active: activeTab === 'weekly' }"
+                            @click="selectWeeklyTab" type="button">
+                        <i class="fa fa-calendar-week me-1"></i><span data-i18n="週間タスク">週間タスク</span>
                     </button>
                 </li>
                 <?php if($_SESSION['isProjectManager']): ?>
@@ -214,6 +220,123 @@ if($_SESSION['show_project'] == 0){
                                         </div>
                                     </td>
                                 </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Weekly tasks -->
+    <div class="row" v-show="activeTab === 'weekly'">
+        <div class="col-12">
+            <div class="card mb-3">
+                <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <h5 class="card-title mb-0">
+                        <span data-i18n="週間タスク">週間タスク</span>
+                        <span v-if="weeklyUserName" class="text-muted fw-normal ms-2">{{ weeklyUserName }}</span>
+                    </h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @click="shiftWeeklyWeek(-1)" :disabled="weeklyLoading">
+                            <i class="fa fa-chevron-left"></i>
+                        </button>
+                        <span class="small text-nowrap">{{ weeklyRangeLabel }}</span>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @click="shiftWeeklyWeek(1)" :disabled="weeklyLoading">
+                            <i class="fa fa-chevron-right"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @click="goToCurrentWeek" :disabled="weeklyLoading">
+                            <span data-i18n="今週">今週</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @click="loadWeeklyTasks" :disabled="weeklyLoading">
+                            <i class="fa fa-refresh me-1"></i><span data-i18n="更新">更新</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div v-if="weeklyLoading" class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <div v-else-if="weeklyTasks.length === 0" class="text-center text-muted py-3">
+                        <i class="fa fa-inbox fa-2x mb-2"></i>
+                        <p class="mb-0"><span data-i18n="この週のタスクがありません">この週のタスクがありません</span></p>
+                    </div>
+                    <div v-else class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 2.5rem;"></th>
+                                    <th><span data-i18n="案件">案件</span></th>
+                                    <th><span data-i18n="タスク">タスク</span></th>
+                                    <th><span data-i18n="ステータス">ステータス</span></th>
+                                    <th class="text-center"><span data-i18n="週の工数">週の工数</span></th>
+                                    <th class="text-center"><span data-i18n="工数合計">工数合計</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template v-for="task in weeklyTasks" :key="'weekly-' + task.id">
+                                    <tr>
+                                        <td>
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-secondary"
+                                                @click="toggleWeeklyEntries(task.id)"
+                                                :title="$t('作業時間を表示')">
+                                                <i class="fa" :class="isWeeklyExpanded(task.id) ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                            </button>
+                                        </td>
+                                        <td>
+                                            <a :href="`detail.php?id=${task.project_id}`" class="text-decoration-none">
+                                                <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
+                                                <span>{{ task.project_name }}</span>
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <a :href="`task.php?project_id=${task.project_id}`" class="text-decoration-none fw-bold">
+                                                <span class="badge bg-label-secondary me-1">#{{ task.id }}</span>
+                                                {{ task.title }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <span class="badge" :class="'bg-' + getStatusColor(task.status)">{{ getStatusLabel(task.status) || '-' }}</span>
+                                        </td>
+                                        <td class="text-center fw-semibold">{{ formatEstimatedHours(task.week_hours) || '0h' }}</td>
+                                        <td class="text-center">{{ formatEstimatedHours(task.estimated_hours) || '—' }}</td>
+                                    </tr>
+                                    <tr v-if="isWeeklyExpanded(task.id)">
+                                        <td></td>
+                                        <td colspan="5" class="bg-light">
+                                            <div v-if="!task.time_entries || task.time_entries.length === 0" class="text-muted small py-2">
+                                                <span data-i18n="作業時間がありません">作業時間がありません</span>
+                                            </div>
+                                            <table v-else class="table table-sm mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th><span data-i18n="ユーザー">ユーザー</span></th>
+                                                        <th><span data-i18n="開始">開始</span></th>
+                                                        <th><span data-i18n="終了">終了</span></th>
+                                                        <th class="text-center"><span data-i18n="工数">工数</span></th>
+                                                        <th><span data-i18n="メモ">メモ</span></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr v-for="entry in task.time_entries" :key="entry.id" :class="{ 'table-warning': entry.in_week }">
+                                                        <td class="small">{{ entry.user_name || entry.user_id || '—' }}</td>
+                                                        <td class="small">{{ formatDate(entry.start_time) }}</td>
+                                                        <td class="small">
+                                                            <span v-if="entry.running" class="badge bg-success" data-i18n="作業計測中">作業計測中</span>
+                                                            <span v-else>{{ formatDate(entry.end_time) }}</span>
+                                                        </td>
+                                                        <td class="text-center small" :class="{ 'text-danger': Number(entry.hours) < 0 }">{{ entry.running ? '—' : (formatEstimatedHours(entry.hours) || '0h') }}</td>
+                                                        <td class="small">{{ entry.description || '—' }}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                </template>
                             </tbody>
                         </table>
                     </div>

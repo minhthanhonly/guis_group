@@ -71,6 +71,8 @@ createApp({
             employeeChartLoading: false,
             sortColumn: null, // Column to sort employee stats by
             sortDirection: 'asc', // 'asc' or 'desc'
+            showReactionColumns: false, // 良い / 悪い columns in employee list
+            showWorkloadBreakdownColumns: false, // 種別別工数 columns in employee list
             annualSortColumn: null, // Column to sort annual summary by
             annualSortDirection: 'asc', // 'asc' or 'desc'
             selectedYear: Math.max(getCurrentFiscalEndYear(), STATS_MIN_FISCAL_END_YEAR),
@@ -145,6 +147,7 @@ createApp({
                 total_likes: 0,
                 total_dislikes: 0,
                 total_workload: 0,
+                timecard_total_minutes: 0,
                 workload_new: 0,
                 workload_error_fix: 0,
                 workload_change_fix: 0,
@@ -158,6 +161,9 @@ createApp({
                 totals.total_likes += parseInt(stat.task_likes || 0, 10);
                 totals.total_dislikes += parseInt(stat.task_dislikes || 0, 10);
                 totals.total_workload += parseFloat(stat.total_workload || 0);
+                if (stat.timecard_total_minutes != null) {
+                    totals.timecard_total_minutes += parseInt(stat.timecard_total_minutes || 0, 10);
+                }
                 totals.workload_new += parseFloat(stat.workload_new || 0);
                 totals.workload_error_fix += parseFloat(stat.workload_error_fix || 0);
                 totals.workload_change_fix += parseFloat(stat.workload_change_fix || 0);
@@ -185,7 +191,8 @@ createApp({
         },
         
         filteredStatistics() {
-            let stats = this.statistics.filter((stat) => {
+            const source = Array.isArray(this.statistics) ? this.statistics : [];
+            let stats = source.filter((stat) => {
                 const periodMonth = stat.period_start ? stat.period_start.substring(0, 7) : '';
                 return !periodMonth || periodMonth >= STATS_MIN_MONTH;
             });
@@ -224,10 +231,6 @@ createApp({
                             aVal = parseFloat(a.total_drawings_revenue || 0);
                             bVal = parseFloat(b.total_drawings_revenue || 0);
                             break;
-                        case 'drawing_count':
-                            aVal = parseInt(a.drawing_count || 0);
-                            bVal = parseInt(b.drawing_count || 0);
-                            break;
                         case 'task_count':
                             aVal = parseInt(a.task_count || 0);
                             bVal = parseInt(b.task_count || 0);
@@ -247,6 +250,10 @@ createApp({
                         case 'total_workload':
                             aVal = parseFloat(a.total_workload || 0);
                             bVal = parseFloat(b.total_workload || 0);
+                            break;
+                        case 'timecard_total_minutes':
+                            aVal = a.timecard_total_minutes == null ? -1 : parseInt(a.timecard_total_minutes || 0, 10);
+                            bVal = b.timecard_total_minutes == null ? -1 : parseInt(b.timecard_total_minutes || 0, 10);
                             break;
                         case 'workload_new':
                             aVal = parseFloat(a.workload_new || 0);
@@ -345,10 +352,6 @@ createApp({
                     case 'task_count':
                         aVal = parseInt(a.total_task_count || 0);
                         bVal = parseInt(b.total_task_count || 0);
-                        break;
-                    case 'drawing_count':
-                        aVal = parseInt(a.total_drawing_count || 0);
-                        bVal = parseInt(b.total_drawing_count || 0);
                         break;
                     case 'score':
                         aVal = parseFloat(a.score || 0);
@@ -1064,6 +1067,13 @@ createApp({
             return formatted + 'h';
         },
 
+        formatTimecardTotal(minutes) {
+            if (minutes == null || minutes === '') return '-';
+            const total = parseInt(minutes, 10);
+            if (Number.isNaN(total) || total <= 0) return '0h';
+            return this.formatWorkload(total / 60);
+        },
+
         async loadDepartmentSummary() {
             try {
                 const params = new URLSearchParams({
@@ -1648,7 +1658,24 @@ createApp({
                 }
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
-                this.statistics = response.data || [];
+                const data = response.data;
+                if (!Array.isArray(data)) {
+                    console.error('Statistics API error:', data);
+                    this.showError((data && data.error) ? data.error : '統計データの読み込みに失敗しました');
+                    this.statistics = [];
+                } else {
+                    this.statistics = data;
+                }
+                // const debugParams = new URLSearchParams(params.toString());
+                // debugParams.set('method', 'getCailyTimecardApiUrl');
+                // const debugResponse = await axios.get(`/api/index.php?${debugParams.toString()}`);
+                // const debugData = typeof debugResponse.data === 'string'
+                //     ? JSON.parse(debugResponse.data)
+                //     : debugResponse.data;
+                // if (debugData && debugData.url) {
+                //     console.log('CAILY timecard API URL:', debugData.url);
+                // }
+
             } catch (error) {
                 console.error('Error loading statistics:', error);
                 this.showError('統計データの読み込みに失敗しました');

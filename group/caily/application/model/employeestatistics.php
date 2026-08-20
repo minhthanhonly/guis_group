@@ -389,7 +389,7 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
-     * Get drawings revenue for user (completed drawings on completed projects only)
+     * Get drawings revenue for user (completed drawings on delivered projects only)
      */
     private function getDrawingsRevenue($user_id, $period_start, $period_end) {
         $query = sprintf(
@@ -419,19 +419,21 @@ class Employeestatistics extends ApplicationModel {
 
     /**
      * Get task count for user
-     * Based on task actual_end_date
+     * Based on task actual_end_date; excludes todo and cancelled
      */
     private function getTaskCount($user_id, $period_start, $period_end) {
         $query = sprintf(
             "SELECT COUNT(*) as count
-            FROM " . DB_PREFIX . "tasks
-            WHERE (FIND_IN_SET('%s', assigned_to) > 0 OR assigned_to = '%s')
+            FROM " . DB_PREFIX . "tasks t
+            WHERE (FIND_IN_SET('%s', t.assigned_to) > 0 OR t.assigned_to = '%s')
+            AND %s
             AND (
-                (actual_end_date IS NOT NULL AND DATE(actual_end_date) BETWEEN '%s' AND '%s')
-                OR (actual_end_date IS NULL AND due_date IS NOT NULL AND DATE(due_date) BETWEEN '%s' AND '%s')
+                (t.actual_end_date IS NOT NULL AND DATE(t.actual_end_date) BETWEEN '%s' AND '%s')
+                OR (t.actual_end_date IS NULL AND t.due_date IS NOT NULL AND DATE(t.due_date) BETWEEN '%s' AND '%s')
             )",
             $this->quote($user_id),
             $this->quote($user_id),
+            $this->getTaskCountStatusSql('t'),
             $this->quote($period_start),
             $this->quote($period_end),
             $this->quote($period_start),
@@ -567,6 +569,7 @@ class Employeestatistics extends ApplicationModel {
             "SELECT DISTINCT
                 u.userid,
                 u.realname,
+                u.user_group,
                 tm.team_id,
                 t.name AS team_name,
                 t.department_id,
@@ -616,6 +619,8 @@ class Employeestatistics extends ApplicationModel {
 
         $workloadMap = $this->getWorkloadByUserPeriod($metricStart, $metricEnd, $team_id, $department_id);
         $metricsMap = $this->getProjectMetricsByUserPeriod($metricStart, $metricEnd, $team_id, $department_id);
+        $guiseTimecardMap = $this->getGuiseTimecardMinutesByUserMonthMap($metricStart, $metricEnd);
+        $cailyTimecardMap = $this->getCailyTimecardMinutesByUserMonthMap($metricStart, $metricEnd, $members);
 
         if ($department_id) {
             $deptNameRow = $this->fetchOne(sprintf(
@@ -636,6 +641,16 @@ class Employeestatistics extends ApplicationModel {
                 $key = $this->getUserTeamPeriodKey($member['userid'], $teamId, $ym);
                 $wl = isset($workloadMap[$key]) ? $workloadMap[$key] : $this->emptyWorkloadBreakdown();
                 $metrics = isset($metricsMap[$key]) ? $metricsMap[$key] : $this->emptyProjectMetrics();
+                $isCailyEmployee = $this->isCailyEmployeeUserGroup($member['user_group'] ?? null);
+                $isGuiseEmployee = $this->isGuiseEmployeeUserGroup($member['user_group'] ?? null);
+                $timecardKey = $member['userid'] . '|' . $ym;
+                if ($isCailyEmployee) {
+                    $timecardTotalMinutes = intval($cailyTimecardMap[$timecardKey] ?? 0);
+                } elseif ($isGuiseEmployee) {
+                    $timecardTotalMinutes = intval($guiseTimecardMap[$timecardKey] ?? 0);
+                } else {
+                    $timecardTotalMinutes = null;
+                }
 
                 $rows[] = [
                     'id' => $syntheticId++,
@@ -647,12 +662,14 @@ class Employeestatistics extends ApplicationModel {
                     'user_name' => $member['realname'],
                     'team_name' => $member['team_name'] ?? null,
                     'department_name' => $filteredDeptName ?: ($member['department_name'] ?? null),
+                    'user_group' => $member['user_group'] ?? null,
                     'revenue' => $metrics['revenue'],
                     'task_likes' => $metrics['task_likes'],
                     'task_dislikes' => $metrics['task_dislikes'],
                     'total_drawings_revenue' => $metrics['total_drawings_revenue'],
                     'drawing_count' => $metrics['drawing_count'],
                     'task_count' => $metrics['task_count'],
+                    'timecard_total_minutes' => $timecardTotalMinutes,
                     'total_workload' => $wl['total_workload'],
                     'workload_new' => $wl['workload_new'],
                     'workload_error_fix' => $wl['workload_error_fix'],
@@ -676,6 +693,38 @@ class Employeestatistics extends ApplicationModel {
         });
 
         return $rows;
+    }
+
+    /**
+     * Debug: full CAILY timecard API URL (with userids) for current list filters.
+     */
+    function getCailyTimecardApiUrl() {
+        $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
+        $team_id = isset($_GET['team_id']) ? intval($_GET['team_id']) : null;
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : null;
+        $user_id = isset($_GET['user_id']) ? $this->quote($_GET['user_id']) : null;
+
+        $range = $this->getStatisticsDateRange($months);
+        $start_date = $range['start_date'];
+        $end_date = $range['end_date'];
+
+        $members = $this->getListMembers($team_id, $department_id, $user_id);
+        if (empty($members)) {
+            return ['url' => null];
+        }
+
+        $useFullRange = !empty($user_id);
+        if ($useFullRange) {
+            $metricStart = $this->clampStatisticsStartDate(date('Y-m-01', strtotime("-$months months")));
+            $metricEnd = date('Y-m-t');
+        } else {
+            $metricStart = $start_date;
+            $metricEnd = $end_date;
+        }
+
+        return [
+            'url' => $this->buildCailyTimecardApiRequestUrl($metricStart, $metricEnd, $members)
+        ];
     }
 
     /**
@@ -875,6 +924,20 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
+     * Time entry period filter (completed entries by end_time).
+     */
+    private function getTimeEntryPeriodSql($alias = 'en', $start_date, $end_date) {
+        $a = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'en';
+        return sprintf(
+            "%s.end_time IS NOT NULL AND DATE(%s.end_time) BETWEEN '%s' AND '%s'",
+            $a,
+            $a,
+            $this->quote($start_date),
+            $this->quote($end_date)
+        );
+    }
+
+    /**
      * Task period filter (actual_end_date or due_date).
      */
     private function getTaskPeriodSql($alias = 't', $start_date, $end_date) {
@@ -889,6 +952,14 @@ class Employeestatistics extends ApplicationModel {
             $this->quote($start_date),
             $this->quote($end_date)
         );
+    }
+
+    /**
+     * Task statuses included in タスク数 (exclude todo and cancelled).
+     */
+    private function getTaskCountStatusSql($alias = 't') {
+        $a = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 't';
+        return sprintf("%s.status NOT IN ('todo', 'cancelled')", $a);
     }
 
     /**
@@ -954,16 +1025,20 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
-     * Only completed projects count toward drawing revenue statistics.
+     * Projects that count toward drawing revenue: CAILY or GUIS 納品済み.
      */
     private function getCompletedProjectStatusSql($alias = 'p') {
         $a = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $alias);
-        $col = $a !== '' ? $a . '.status' : 'status';
-        return sprintf("%s = 'completed'", $col);
+        $prefix = $a !== '' ? $a . '.' : '';
+        return sprintf(
+            "(%s LIKE '%%納品済み%%' OR %s LIKE '%%納品済み%%')",
+            $prefix . 'caily_nouki_status',
+            $prefix . 'guis_nouki_status'
+        );
     }
 
     /**
-     * Drawing revenue eligibility: completed drawing on a completed project.
+     * Drawing revenue eligibility: completed drawing on a delivered project.
      */
     private function getDrawingRevenueEligibilitySql($drawingAlias = 'pd', $projectAlias = 'p') {
         return $this->getCompletedDrawingStatusSql($drawingAlias)
@@ -1007,10 +1082,11 @@ class Employeestatistics extends ApplicationModel {
             "SELECT p.department_id, COUNT(*) AS task_count
             FROM " . DB_PREFIX . "tasks t
             INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
-            WHERE %s AND %s
+            WHERE %s AND %s AND %s
             GROUP BY p.department_id",
             $this->getProjectDepartmentWhereSql('p', $department_id),
-            $this->getTaskPeriodSql('t', $start_date, $end_date)
+            $this->getTaskPeriodSql('t', $start_date, $end_date),
+            $this->getTaskCountStatusSql('t')
         );
         $map = [];
         foreach ($this->fetchAll($query) as $row) {
@@ -1121,11 +1197,12 @@ class Employeestatistics extends ApplicationModel {
             INNER JOIN " . DB_PREFIX . "user u ON %s
             INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
             INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
-            WHERE %s AND %s AND %s AND %s
+            WHERE %s AND %s AND %s AND %s AND %s
             GROUP BY tm.team_id",
             $assigneeJoin,
             $projectScope,
             $this->getTaskPeriodSql('t', $start_date, $end_date),
+            $this->getTaskCountStatusSql('t'),
             $teamWhereSql,
             $this->getActiveEmployeeStatsSql('u')
         ));
@@ -1226,6 +1303,7 @@ class Employeestatistics extends ApplicationModel {
         }
         $where = "WHERE " . implode(' AND ', $whereArr);
         $assigneeJoin = $this->getTaskAssigneeJoinSql('t', 'u');
+        $taskWhere = "WHERE " . implode(' AND ', array_merge($whereArr, [$this->getTaskCountStatusSql('t')]));
 
         $taskRows = $this->fetchAll(sprintf(
             "SELECT u.userid, tm.team_id,
@@ -1239,7 +1317,7 @@ class Employeestatistics extends ApplicationModel {
             %s
             GROUP BY u.userid, tm.team_id, ym",
             $assigneeJoin,
-            $where
+            $taskWhere
         ));
 
         $reactionRows = $this->fetchAll(sprintf(
@@ -1349,6 +1427,181 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
+     * GUIS employee: user_group is not CAILY (6, 7).
+     */
+    private function isGuiseEmployeeUserGroup($userGroup) {
+        $groupId = intval($userGroup);
+        return $groupId !== 6 && $groupId !== 7;
+    }
+
+    private function isCailyEmployeeUserGroup($userGroup) {
+        $groupId = intval($userGroup);
+        return $groupId === 6 || $groupId === 7;
+    }
+
+    /**
+     * CAILY API userid => GUIS userid (same mapping as dayoff-events.js).
+     */
+    private function getCailyTimecardUseridGuiAliases() {
+        return [
+            'nguyen' => 'duynguyen',
+        ];
+    }
+
+    private function resolveGuisUseridFromCailyApi($cailyUserid) {
+        $aliases = $this->getCailyTimecardUseridGuiAliases();
+        $key = trim((string) $cailyUserid);
+        return isset($aliases[$key]) ? $aliases[$key] : $key;
+    }
+
+    private function resolveCailyApiUseridFromGuis($guisUserid) {
+        $aliases = $this->getCailyTimecardUseridGuiAliases();
+        $key = trim((string) $guisUserid);
+        foreach ($aliases as $apiUserid => $mappedGuisUserid) {
+            if ($mappedGuisUserid === $key) {
+                return $apiUserid;
+            }
+        }
+        return $key;
+    }
+
+    /**
+     * Parse timecard HH:MM field to minutes.
+     */
+    private function parseTimecardFieldToMinutes($value) {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return 0;
+        }
+        $parts = explode(':', $value);
+        if (count($parts) < 2) {
+            return 0;
+        }
+        $hours = intval($parts[0]);
+        $minutes = intval($parts[1]);
+        if ($hours < 0 || $minutes < 0) {
+            return 0;
+        }
+        return ($hours * 60) + $minutes;
+    }
+
+    /**
+     * Total attendance minutes (timecard_time + timecard_timeover) for GUIS users by month.
+     */
+    private function getGuiseTimecardMinutesByUserMonthMap($start_date, $end_date) {
+        $query = sprintf(
+            "SELECT tc.owner AS userid,
+                DATE_FORMAT(tc.timecard_date, '%%Y-%%m') AS ym,
+                tc.timecard_time,
+                tc.timecard_timeover,
+                tc.timecard_close
+            FROM %stimecard tc
+            INNER JOIN %suser u ON u.userid = tc.owner
+            WHERE tc.timecard_date BETWEEN '%s' AND '%s'
+              AND u.user_group NOT IN (6, 7)
+            ORDER BY tc.owner, tc.timecard_date",
+            DB_PREFIX,
+            DB_PREFIX,
+            $this->quote($start_date),
+            $this->quote($end_date)
+        );
+
+        $map = [];
+        foreach ($this->fetchAll($query) as $row) {
+            if (empty($row['userid']) || empty($row['ym'])) {
+                continue;
+            }
+            if (strlen(trim((string) ($row['timecard_close'] ?? ''))) === 0) {
+                continue;
+            }
+            $key = $row['userid'] . '|' . $row['ym'];
+            if (!isset($map[$key])) {
+                $map[$key] = 0;
+            }
+            $map[$key] += $this->parseTimecardFieldToMinutes($row['timecard_time'] ?? '');
+            $map[$key] += $this->parseTimecardFieldToMinutes($row['timecard_timeover'] ?? '');
+        }
+        return $map;
+    }
+
+    /**
+     * Total attendance minutes for CAILY users (user_group 6/7) via CAILY API.
+     */
+    private function getCailyTimecardMinutesByUserMonthMap($start_date, $end_date, $members) {
+        $userids = $this->getCailyTimecardApiUserids($members);
+        if (empty($userids)) {
+            return [];
+        }
+
+        $apiUrl = getenv('CAILY_API_URL') ?: 'https://group.caily.com.vn/api/index.php';
+        $postFields = http_build_query([
+            'type' => 'get_employee_timecard_stats',
+            'token' => md5('caily2222'),
+            'start_date' => $start_date,
+            'end_date' => $end_date,
+            'userids' => implode(',', $userids),
+        ]);
+
+        $ch = curl_init($apiUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        if ($response === false || $response === '') {
+            return [];
+        }
+
+        $data = json_decode($response, true);
+        if (!is_array($data) || empty($data['success']) || empty($data['list']) || !is_array($data['list'])) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($data['list'] as $row) {
+            if (empty($row['userid']) || empty($row['ym'])) {
+                continue;
+            }
+            $guisUserid = $this->resolveGuisUseridFromCailyApi($row['userid']);
+            $key = $guisUserid . '|' . $row['ym'];
+            $map[$key] = intval($row['total_minutes'] ?? 0);
+        }
+        return $map;
+    }
+
+    private function getCailyTimecardApiUserids($members) {
+        $userids = [];
+        foreach ($members as $member) {
+            if ($this->isCailyEmployeeUserGroup($member['user_group'] ?? null) && !empty($member['userid'])) {
+                $userids[] = $this->resolveCailyApiUseridFromGuis($member['userid']);
+            }
+        }
+        return array_values(array_unique($userids));
+    }
+
+    private function buildCailyTimecardApiRequestUrl($start_date, $end_date, $members) {
+        $userids = $this->getCailyTimecardApiUserids($members);
+        if (empty($userids)) {
+            return null;
+        }
+
+        $apiUrl = rtrim(getenv('CAILY_API_URL') ?: 'https://group.caily.com.vn/api/index.php', '?&');
+        $params = [
+            'type' => 'get_employee_timecard_stats',
+            'token' => md5('caily2222'),
+            'start_date' => $start_date,
+            'end_date' => $end_date,
+            'userids' => implode(',', $userids),
+            'debug' => '1',
+        ];
+        return $apiUrl . '?' . http_build_query($params);
+    }
+
+    /**
      * Default workload breakdown structure.
      */
     private function emptyWorkloadBreakdown() {
@@ -1378,12 +1631,24 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
-     * Workload (estimated_hours) by user and month from assigned tasks.
+     * Match time_entries.user_id to groupware_user.userid.
+     */
+    private function getTimeEntryUserJoinSql($entryAlias = 'en', $userAlias = 'u') {
+        $e = preg_replace('/[^a-zA-Z0-9_]/', '', $entryAlias) ?: 'en';
+        $u = preg_replace('/[^a-zA-Z0-9_]/', '', $userAlias) ?: 'u';
+        return sprintf(
+            "%s.userid COLLATE utf8mb4_general_ci = %s.user_id COLLATE utf8mb4_general_ci",
+            $u,
+            $e
+        );
+    }
+
+    /**
+     * Workload (hours) by user and month from time_entries.end_time.
      */
     private function getWorkloadByUserPeriod($start_date, $end_date, $team_id = null, $department_id = null) {
         $whereArr = [
-            $this->getTaskPeriodSql('t', $start_date, $end_date),
-            $this->getTeamProjectScopeSql('te', 'p', $department_id),
+            $this->getTimeEntryPeriodSql('en', $start_date, $end_date),
             "te.is_active = 1"
         ];
         if ($team_id) {
@@ -1394,34 +1659,39 @@ class Employeestatistics extends ApplicationModel {
         }
         $where = "WHERE " . implode(" AND ", $whereArr);
         $kindCategorySql = $this->getTaskKindCategorySql('t');
-        $assigneeJoin = $this->getTaskAssigneeJoinSql('t', 'u');
+        $userJoin = $this->getTimeEntryUserJoinSql('en', 'u');
 
         $query = sprintf(
             "SELECT 
                 u.userid,
                 tm.team_id,
-                DATE_FORMAT(COALESCE(t.actual_end_date, t.due_date), '%%Y-%%m') AS ym,
-                COALESCE(SUM(CASE WHEN t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS total_workload,
-                COALESCE(SUM(CASE WHEN (%s) = 'new' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_new,
-                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_error_fix,
-                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_change_fix,
-                COALESCE(SUM(CASE WHEN (%s) = 'other' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_other
-            FROM " . DB_PREFIX . "tasks t
-            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+                DATE_FORMAT(en.end_time, '%%Y-%%m') AS ym,
+                COALESCE(SUM(en.`hours`), 0) AS total_workload,
+                COALESCE(SUM(CASE WHEN (%s) = 'new' THEN en.`hours` ELSE 0 END), 0) AS workload_new,
+                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' THEN en.`hours` ELSE 0 END), 0) AS workload_error_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' THEN en.`hours` ELSE 0 END), 0) AS workload_change_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'other' THEN en.`hours` ELSE 0 END), 0) AS workload_other
+            FROM " . DB_PREFIX . "time_entries en
             INNER JOIN " . DB_PREFIX . "user u ON %s
             INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
             INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            LEFT JOIN " . DB_PREFIX . "tasks t ON en.task_id = t.id
             %s
-            GROUP BY u.userid, tm.team_id, ym",
+            GROUP BY u.userid, tm.team_id, DATE_FORMAT(en.end_time, '%%Y-%%m')",
             $kindCategorySql,
             $kindCategorySql,
             $kindCategorySql,
             $kindCategorySql,
-            $assigneeJoin,
+            $userJoin,
             $where
         );
 
-        $rows = $this->fetchAll($query);
+        try {
+            $rows = $this->fetchAll($query);
+        } catch (Exception $e) {
+            error_log('getWorkloadByUserPeriod: ' . $e->getMessage());
+            return [];
+        }
         $map = [];
         foreach ($rows as $row) {
             if (empty($row['userid']) || empty($row['ym'])) {
@@ -1439,14 +1709,13 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
-     * Workload (estimated_hours) by team from tasks assigned to team members.
+     * Workload (hours) by team from members' time_entries.end_time.
      */
     private function getWorkloadByTeam($start_date, $end_date, $team_id = null, $department_id = null) {
         $whereArr = [
-            $this->getTaskPeriodSql('t', $start_date, $end_date),
+            $this->getTimeEntryPeriodSql('en', $start_date, $end_date),
             "tm.team_id IS NOT NULL",
-            "te.is_active = 1",
-            $this->getTeamProjectScopeSql('te', 'p', $department_id)
+            "te.is_active = 1"
         ];
         if ($team_id) {
             $whereArr[] = sprintf("tm.team_id = %d", intval($team_id));
@@ -1456,33 +1725,38 @@ class Employeestatistics extends ApplicationModel {
         }
         $where = "WHERE " . implode(" AND ", $whereArr);
         $kindCategorySql = $this->getTaskKindCategorySql('t');
-        $assigneeJoin = $this->getTaskAssigneeJoinSql('t', 'u');
+        $userJoin = $this->getTimeEntryUserJoinSql('en', 'u');
 
         $query = sprintf(
             "SELECT 
                 tm.team_id,
-                COALESCE(SUM(CASE WHEN t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS total_workload,
+                COALESCE(SUM(en.`hours`), 0) AS total_workload,
                 COUNT(*) AS workload_task_count,
-                COALESCE(SUM(CASE WHEN (%s) = 'new' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_new,
-                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_error_fix,
-                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_change_fix,
-                COALESCE(SUM(CASE WHEN (%s) = 'other' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_other
-            FROM " . DB_PREFIX . "tasks t
-            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+                COALESCE(SUM(CASE WHEN (%s) = 'new' THEN en.`hours` ELSE 0 END), 0) AS workload_new,
+                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' THEN en.`hours` ELSE 0 END), 0) AS workload_error_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' THEN en.`hours` ELSE 0 END), 0) AS workload_change_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'other' THEN en.`hours` ELSE 0 END), 0) AS workload_other
+            FROM " . DB_PREFIX . "time_entries en
             INNER JOIN " . DB_PREFIX . "user u ON %s
             INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
             INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            LEFT JOIN " . DB_PREFIX . "tasks t ON en.task_id = t.id
             %s
             GROUP BY tm.team_id",
             $kindCategorySql,
             $kindCategorySql,
             $kindCategorySql,
             $kindCategorySql,
-            $assigneeJoin,
+            $userJoin,
             $where
         );
 
-        $rows = $this->fetchAll($query);
+        try {
+            $rows = $this->fetchAll($query);
+        } catch (Exception $e) {
+            error_log('getWorkloadByTeam: ' . $e->getMessage());
+            return [];
+        }
         $map = [];
         foreach ($rows as $row) {
             $map[intval($row['team_id'])] = [
@@ -1498,40 +1772,51 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
-     * Workload (estimated_hours) by department from project tasks.
+     * Workload (hours) by department from members' time_entries.end_time.
      */
     private function getWorkloadByDepartment($start_date, $end_date, $department_id = null) {
         $whereArr = [
-            "p.department_id IS NOT NULL",
-            $this->getTaskPeriodSql('t', $start_date, $end_date)
+            "te.department_id IS NOT NULL",
+            "te.is_active = 1",
+            $this->getTimeEntryPeriodSql('en', $start_date, $end_date)
         ];
         if ($department_id) {
-            $whereArr[] = sprintf("p.department_id = %d", intval($department_id));
+            $whereArr[] = sprintf("te.department_id = %d", intval($department_id));
         }
         $where = "WHERE " . implode(" AND ", $whereArr);
         $kindCategorySql = $this->getTaskKindCategorySql('t');
+        $userJoin = $this->getTimeEntryUserJoinSql('en', 'u');
 
         $query = sprintf(
             "SELECT 
-                p.department_id,
-                COALESCE(SUM(CASE WHEN t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS total_workload,
+                te.department_id,
+                COALESCE(SUM(en.`hours`), 0) AS total_workload,
                 COUNT(*) AS workload_task_count,
-                COALESCE(SUM(CASE WHEN (%s) = 'new' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_new,
-                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_error_fix,
-                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_change_fix,
-                COALESCE(SUM(CASE WHEN (%s) = 'other' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_other
-            FROM " . DB_PREFIX . "tasks t
-            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+                COALESCE(SUM(CASE WHEN (%s) = 'new' THEN en.`hours` ELSE 0 END), 0) AS workload_new,
+                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' THEN en.`hours` ELSE 0 END), 0) AS workload_error_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' THEN en.`hours` ELSE 0 END), 0) AS workload_change_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'other' THEN en.`hours` ELSE 0 END), 0) AS workload_other
+            FROM " . DB_PREFIX . "time_entries en
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            LEFT JOIN " . DB_PREFIX . "tasks t ON en.task_id = t.id
             %s
-            GROUP BY p.department_id",
+            GROUP BY te.department_id",
             $kindCategorySql,
             $kindCategorySql,
             $kindCategorySql,
             $kindCategorySql,
+            $userJoin,
             $where
         );
 
-        $rows = $this->fetchAll($query);
+        try {
+            $rows = $this->fetchAll($query);
+        } catch (Exception $e) {
+            error_log('getWorkloadByDepartment: ' . $e->getMessage());
+            return [];
+        }
         $map = [];
         foreach ($rows as $row) {
             $map[intval($row['department_id'])] = [
@@ -1626,11 +1911,12 @@ class Employeestatistics extends ApplicationModel {
                 COUNT(*) AS task_count
             FROM " . DB_PREFIX . "tasks t
             INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
-            WHERE p.department_id = %d AND %s
+            WHERE p.department_id = %d AND %s AND %s
             GROUP BY ym
             ORDER BY ym ASC",
             $department_id,
-            $this->getTaskPeriodSql('t', $start_date, $end_date)
+            $this->getTaskPeriodSql('t', $start_date, $end_date),
+            $this->getTaskCountStatusSql('t')
         ));
 
         $reactionRows = $this->fetchAll(sprintf(
@@ -1694,29 +1980,32 @@ class Employeestatistics extends ApplicationModel {
         }
 
         $kindCategorySql = $this->getTaskKindCategorySql('t');
+        $userJoin = $this->getTimeEntryUserJoinSql('en', 'u');
         $workloadRows = $this->fetchAll(sprintf(
             "SELECT 
-                DATE_FORMAT(
-                    COALESCE(t.actual_end_date, t.due_date),
-                    '%%Y-%%m'
-                ) AS ym,
-                COALESCE(SUM(CASE WHEN t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload,
-                COALESCE(SUM(CASE WHEN (%s) = 'new' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_new,
-                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_error_fix,
-                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_change_fix,
-                COALESCE(SUM(CASE WHEN (%s) = 'other' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_other
-            FROM " . DB_PREFIX . "tasks t
-            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
-            WHERE p.department_id = %d
+                DATE_FORMAT(en.end_time, '%%Y-%%m') AS ym,
+                COALESCE(SUM(en.`hours`), 0) AS workload,
+                COALESCE(SUM(CASE WHEN (%s) = 'new' THEN en.`hours` ELSE 0 END), 0) AS workload_new,
+                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' THEN en.`hours` ELSE 0 END), 0) AS workload_error_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' THEN en.`hours` ELSE 0 END), 0) AS workload_change_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'other' THEN en.`hours` ELSE 0 END), 0) AS workload_other
+            FROM " . DB_PREFIX . "time_entries en
+            INNER JOIN " . DB_PREFIX . "user u ON %s
+            INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
+            LEFT JOIN " . DB_PREFIX . "tasks t ON en.task_id = t.id
+            WHERE te.department_id = %d
+              AND te.is_active = 1
               AND %s
-            GROUP BY ym
+            GROUP BY DATE_FORMAT(en.end_time, '%%Y-%%m')
             ORDER BY ym ASC",
             $kindCategorySql,
             $kindCategorySql,
             $kindCategorySql,
             $kindCategorySql,
+            $userJoin,
             $department_id,
-            $this->getTaskPeriodSql('t', $start_date, $end_date)
+            $this->getTimeEntryPeriodSql('en', $start_date, $end_date)
         ));
 
         $workloadMap = [];
@@ -1786,13 +2075,14 @@ class Employeestatistics extends ApplicationModel {
             INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
             INNER JOIN " . DB_PREFIX . "user u ON %s
             INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
-            WHERE tm.team_id = %d AND %s AND %s AND %s
+            WHERE tm.team_id = %d AND %s AND %s AND %s AND %s
             GROUP BY ym
             ORDER BY ym ASC",
             $assigneeJoin,
             $team_id,
             $projectScope,
             $taskPeriodSql,
+            $this->getTaskCountStatusSql('t'),
             $activeUserSql
         ));
 
@@ -1870,35 +2160,31 @@ class Employeestatistics extends ApplicationModel {
         }
 
         $kindCategorySql = $this->getTaskKindCategorySql('t');
+        $userJoin = $this->getTimeEntryUserJoinSql('en', 'u');
         $workloadRows = $this->fetchAll(sprintf(
             "SELECT 
-                DATE_FORMAT(
-                    COALESCE(t.actual_end_date, t.due_date),
-                    '%%Y-%%m'
-                ) AS ym,
-                COALESCE(SUM(CASE WHEN t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload,
-                COALESCE(SUM(CASE WHEN (%s) = 'new' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_new,
-                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_error_fix,
-                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_change_fix,
-                COALESCE(SUM(CASE WHEN (%s) = 'other' AND t.estimated_hours > 0 THEN t.estimated_hours ELSE 0 END), 0) AS workload_other
-            FROM " . DB_PREFIX . "tasks t
-            INNER JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
+                DATE_FORMAT(en.end_time, '%%Y-%%m') AS ym,
+                COALESCE(SUM(en.`hours`), 0) AS workload,
+                COALESCE(SUM(CASE WHEN (%s) = 'new' THEN en.`hours` ELSE 0 END), 0) AS workload_new,
+                COALESCE(SUM(CASE WHEN (%s) = 'error_fix' THEN en.`hours` ELSE 0 END), 0) AS workload_error_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'change_fix' THEN en.`hours` ELSE 0 END), 0) AS workload_change_fix,
+                COALESCE(SUM(CASE WHEN (%s) = 'other' THEN en.`hours` ELSE 0 END), 0) AS workload_other
+            FROM " . DB_PREFIX . "time_entries en
             INNER JOIN " . DB_PREFIX . "user u ON %s
             INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
+            LEFT JOIN " . DB_PREFIX . "tasks t ON en.task_id = t.id
             WHERE tm.team_id = %d
               AND %s
               AND %s
-              AND %s
-            GROUP BY ym
+            GROUP BY DATE_FORMAT(en.end_time, '%%Y-%%m')
             ORDER BY ym ASC",
             $kindCategorySql,
             $kindCategorySql,
             $kindCategorySql,
             $kindCategorySql,
-            $assigneeJoin,
+            $userJoin,
             $team_id,
-            $projectScope,
-            $taskPeriodSql,
+            $this->getTimeEntryPeriodSql('en', $start_date, $end_date),
             $activeUserSql
         ));
 
@@ -2092,7 +2378,7 @@ class Employeestatistics extends ApplicationModel {
                 INNER JOIN " . DB_PREFIX . "user u ON %s
                 INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
                 INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id AND te.is_active = 1
-                WHERE %s AND %s AND %s%s
+                WHERE %s AND %s AND %s AND %s%s
                 GROUP BY tm.team_id, ym
              ) monthly_stats
              GROUP BY team_id, ym",
@@ -2110,6 +2396,7 @@ class Employeestatistics extends ApplicationModel {
             $assigneeJoin,
             $projectScope,
             $taskPeriodSql,
+            $this->getTaskCountStatusSql('t'),
             $activeUserSql,
             $teamMemberScope
         ));
@@ -2167,7 +2454,7 @@ class Employeestatistics extends ApplicationModel {
                 INNER JOIN " . DB_PREFIX . "user u ON %s
                 INNER JOIN " . DB_PREFIX . "team_members tm ON u.id = tm.user_id
                 INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id AND te.is_active = 1
-                WHERE %s AND %s AND %s%s
+                WHERE %s AND %s AND %s AND %s%s
                 GROUP BY tm.team_id
              ) yearly_stats
              GROUP BY team_id",
@@ -2185,6 +2472,7 @@ class Employeestatistics extends ApplicationModel {
             $assigneeJoin,
             $projectScope,
             $taskPeriodSql,
+            $this->getTaskCountStatusSql('t'),
             $activeUserSql,
             $teamMemberScope
         ));

@@ -153,10 +153,6 @@ if($_SESSION['show_project'] == 0){
                                         <strong class="text-danger">{{ stat.total_dislikes }}</strong>
                                     </div>
                                     <div class="d-flex justify-content-between mb-2">
-                                        <span class="text-muted">図面数:</span>
-                                        <strong>{{ stat.total_drawing_count }}</strong>
-                                    </div>
-                                    <div class="d-flex justify-content-between mb-2">
                                         <span class="text-muted">タスク数:</span>
                                         <strong>{{ stat.total_task_count }}</strong>
                                     </div>
@@ -343,11 +339,21 @@ if($_SESSION['show_project'] == 0){
         <!-- Employee Statistics Tab -->
         <div class="col-12" v-show="activeTab === 'employees'">
             <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h5 class="card-title mb-0">従業員統計一覧</h5>
-                    <button class="btn btn-sm btn-outline-secondary" @click="loadStatistics">
-                        <i class="fa fa-refresh me-1"></i>更新
-                    </button>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="showReactionColumnsSwitch" v-model="showReactionColumns">
+                            <label class="form-check-label small" for="showReactionColumnsSwitch" data-i18n="良い / 悪いを表示">良い / 悪いを表示</label>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="showWorkloadBreakdownColumnsSwitch" v-model="showWorkloadBreakdownColumns">
+                            <label class="form-check-label small" for="showWorkloadBreakdownColumnsSwitch" data-i18n="種別別工数を表示">種別別工数を表示</label>
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary" @click="loadStatistics">
+                            <i class="fa fa-refresh me-1"></i>更新
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <!-- Loading State -->
@@ -370,7 +376,7 @@ if($_SESSION['show_project'] == 0){
                                         <small class="text-muted d-block"><span data-i18n="売上高">売上高</span></small>
                                         <strong>{{ formatCurrency(employeeSummaryTotals.total_revenue) }}</strong>
                                     </div>
-                                    <div class="col-6 col-md-3 col-lg-2">
+                                    <div class="col-6 col-md-3 col-lg-2" v-show="showReactionColumns">
                                         <small class="text-muted d-block"><span data-i18n="良い">良い</span> / <span data-i18n="悪い">悪い</span></small>
                                         <strong><span class="text-success">{{ employeeSummaryTotals.total_likes }}</span> / <span class="text-danger">{{ employeeSummaryTotals.total_dislikes }}</span></strong>
                                     </div>
@@ -382,7 +388,11 @@ if($_SESSION['show_project'] == 0){
                                         <small class="text-muted d-block"><span data-i18n="工数合計">工数合計</span></small>
                                         <strong class="text-primary">{{ formatWorkload(employeeSummaryTotals.total_workload) }}</strong>
                                     </div>
-                                    <div class="col-12 col-lg-4">
+                                    <div class="col-6 col-md-3 col-lg-2">
+                                        <small class="text-muted d-block"><span data-i18n="勤怠時間合計">勤怠時間合計</span></small>
+                                        <strong>{{ formatTimecardTotal(employeeSummaryTotals.timecard_total_minutes) }}</strong>
+                                    </div>
+                                    <div class="col-12 col-lg-4" v-show="showWorkloadBreakdownColumns">
                                         <small class="text-muted d-block mb-1"><span data-i18n="種別別工数">種別別工数</span></small>
                                         <div class="d-flex flex-wrap gap-3 small">
                                             <span><span data-i18n="新規作成">新規作成</span>: {{ formatWorkload(employeeSummaryTotals.workload_new) }}</span>
@@ -419,19 +429,15 @@ if($_SESSION['show_project'] == 0){
                                         図面売上
                                         <i class="fa ms-1" :class="getSortIcon('total_drawings_revenue')"></i>
                                     </th>
-                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('drawing_count')">
-                                        図面数
-                                        <i class="fa ms-1" :class="getSortIcon('drawing_count')"></i>
-                                    </th>
                                     <th class="text-center" style="cursor: pointer;" @click="sortBy('task_count')">
                                         タスク数
                                         <i class="fa ms-1" :class="getSortIcon('task_count')"></i>
                                     </th>
-                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('task_likes')">
+                                    <th class="text-center" style="cursor: pointer;" v-show="showReactionColumns" @click="sortBy('task_likes')">
                                         <i class="fa fa-thumbs-up text-success"></i> 良い
                                         <i class="fa ms-1" :class="getSortIcon('task_likes')"></i>
                                     </th>
-                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('task_dislikes')">
+                                    <th class="text-center" style="cursor: pointer;" v-show="showReactionColumns" @click="sortBy('task_dislikes')">
                                         <i class="fa fa-thumbs-down text-danger"></i> 悪い
                                         <i class="fa ms-1" :class="getSortIcon('task_dislikes')"></i>
                                     </th>
@@ -439,25 +445,25 @@ if($_SESSION['show_project'] == 0){
                                         <span data-i18n="工数合計">工数合計</span>
                                         <i class="fa ms-1" :class="getSortIcon('total_workload')"></i>
                                     </th>
-                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('workload_new')">
+                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('timecard_total_minutes')">
+                                        <span data-i18n="勤怠時間合計">勤怠時間合計</span>
+                                        <i class="fa ms-1" :class="getSortIcon('timecard_total_minutes')"></i>
+                                    </th>
+                                    <th class="text-center" style="cursor: pointer;" v-show="showWorkloadBreakdownColumns" @click="sortBy('workload_new')">
                                         <span data-i18n="新規作成">新規作成</span>
                                         <i class="fa ms-1" :class="getSortIcon('workload_new')"></i>
                                     </th>
-                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('workload_error_fix')">
+                                    <th class="text-center" style="cursor: pointer;" v-show="showWorkloadBreakdownColumns" @click="sortBy('workload_error_fix')">
                                         <span data-i18n="修正(エラー)">修正(エラー)</span>
                                         <i class="fa ms-1" :class="getSortIcon('workload_error_fix')"></i>
                                     </th>
-                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('workload_change_fix')">
+                                    <th class="text-center" style="cursor: pointer;" v-show="showWorkloadBreakdownColumns" @click="sortBy('workload_change_fix')">
                                         <span data-i18n="修正(変更)">修正(変更)</span>
                                         <i class="fa ms-1" :class="getSortIcon('workload_change_fix')"></i>
                                     </th>
-                                    <th class="text-center" style="cursor: pointer;" @click="sortBy('workload_other')">
+                                    <th class="text-center" style="cursor: pointer;" v-show="showWorkloadBreakdownColumns" @click="sortBy('workload_other')">
                                         <span data-i18n="その他工数">その他工数</span>
                                         <i class="fa ms-1" :class="getSortIcon('workload_other')"></i>
-                                    </th>
-                                    <th style="cursor: pointer;" @click="sortBy('updated_at')">
-                                        更新日時
-                                        <i class="fa ms-1" :class="getSortIcon('updated_at')"></i>
                                     </th>
                                 </tr>
                             </thead>
@@ -482,22 +488,19 @@ if($_SESSION['show_project'] == 0){
                                     <td class="text-end">
                                         <span class="text-info">¥{{ formatNumber(stat.total_drawings_revenue) }}</span>
                                     </td>
-                                    <td class="text-center">{{ stat.drawing_count }}</td>
                                     <td class="text-center">{{ stat.task_count }}</td>
-                                    <td class="text-center">
+                                    <td class="text-center" v-show="showReactionColumns">
                                         <span class="badge bg-success">{{ stat.task_likes }}</span>
                                     </td>
-                                    <td class="text-center">
+                                    <td class="text-center" v-show="showReactionColumns">
                                         <span class="badge bg-danger">{{ stat.task_dislikes }}</span>
                                     </td>
                                     <td class="text-center fw-semibold text-primary">{{ formatWorkload(stat.total_workload) }}</td>
-                                    <td class="text-center">{{ formatWorkload(stat.workload_new) }}</td>
-                                    <td class="text-center">{{ formatWorkload(stat.workload_error_fix) }}</td>
-                                    <td class="text-center">{{ formatWorkload(stat.workload_change_fix) }}</td>
-                                    <td class="text-center">{{ formatWorkload(stat.workload_other) }}</td>
-                                    <td>
-                                        <small class="text-muted">{{ formatDateTime(stat.updated_at) }}</small>
-                                    </td>
+                                    <td class="text-center">{{ formatTimecardTotal(stat.timecard_total_minutes) }}</td>
+                                    <td class="text-center" v-show="showWorkloadBreakdownColumns">{{ formatWorkload(stat.workload_new) }}</td>
+                                    <td class="text-center" v-show="showWorkloadBreakdownColumns">{{ formatWorkload(stat.workload_error_fix) }}</td>
+                                    <td class="text-center" v-show="showWorkloadBreakdownColumns">{{ formatWorkload(stat.workload_change_fix) }}</td>
+                                    <td class="text-center" v-show="showWorkloadBreakdownColumns">{{ formatWorkload(stat.workload_other) }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -611,10 +614,6 @@ if($_SESSION['show_project'] == 0){
                                         タスク
                                         <i class="fa ms-1" :class="getAnnualSortIcon('task_count')"></i>
                                     </th>
-                                    <th class="text-center" style="cursor: pointer;" @click="sortAnnualBy('drawing_count')">
-                                        図面
-                                        <i class="fa ms-1" :class="getAnnualSortIcon('drawing_count')"></i>
-                                    </th>
                                     <th class="text-end" style="cursor: pointer;" @click="sortAnnualBy('score')">
                                         スコア
                                         <i class="fa ms-1" :class="getAnnualSortIcon('score')"></i>
@@ -680,7 +679,6 @@ if($_SESSION['show_project'] == 0){
                                         <span class="text-danger ms-1">{{ team.total_dislikes }}</span>
                                     </td>
                                     <td class="text-center">{{ team.total_task_count }}</td>
-                                    <td class="text-center">{{ team.total_drawing_count }}</td>
                                     <td class="text-end fw-bold">{{ team.score }}</td>
                                     <td class="text-center">
                                         <span class="badge"

@@ -44,6 +44,11 @@ createApp({
             tasks: [],
             unassignedUsers: [],
             activeTab: 'tasks',
+            weeklyLoading: false,
+            weeklyTasks: [],
+            weeklyUserName: '',
+            weeklyWeekStart: '',
+            expandedWeeklyTaskIds: {},
             filters: {
                 department_id: isProjectManager ? userDepartmentId : '', // Default to user's department if project manager
                 team_id: '',
@@ -109,6 +114,20 @@ createApp({
         // Danh sách task sau khi áp bộ lọc (department / team / user / excludeCompleted / timer)
         filteredTasks() {
             return this.tasks.filter(task => this.passesTaskFilters(task));
+        },
+        canSelectUser() {
+            return !!(window.currentUser && window.currentUser.isProjectManager);
+        },
+        weeklyRangeLabel() {
+            if (!this.weeklyWeekStart) {
+                return '';
+            }
+            const start = this.parseTaskDateTime(this.weeklyWeekStart + ' 00:00:00') || moment(this.weeklyWeekStart);
+            const end = start.clone().add(6, 'days');
+            if (this.isVietnameseLocale()) {
+                return start.format('YYYY/M/D') + ' - ' + end.format('YYYY/M/D');
+            }
+            return start.format('YYYY年M月D日') + ' 〜 ' + end.format('YYYY年M月D日');
         }
     },
     methods: {
@@ -163,9 +182,10 @@ createApp({
         },
         formatEstimatedHours(value) {
             const n = parseFloat(value);
-            if (Number.isNaN(n) || n <= 0) return '';
-            const formatted = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
-            return formatted + 'h';
+            if (Number.isNaN(n) || n === 0) return '';
+            const abs = Math.abs(n);
+            const formatted = Number.isInteger(abs) ? String(abs) : abs.toFixed(2).replace(/\.?0+$/, '');
+            return (n < 0 ? '-' : '') + formatted + 'h';
         },
         decodeHtmlEntities(str) {
             const txt = document.createElement('textarea');
@@ -412,6 +432,9 @@ createApp({
                 // When unchecked, reload all tasks
                 this.loadOverview();
             }
+            if (this.activeTab === 'weekly') {
+                this.loadWeeklyTasks();
+            }
         },
         onUserChange() {
             // When user is manually selected, uncheck "My Task"
@@ -419,6 +442,86 @@ createApp({
                 this.filters.myTask = false;
             }
             this.loadOverview();
+            if (this.activeTab === 'weekly') {
+                this.loadWeeklyTasks();
+            }
+        },
+        getCurrentWeekMonday() {
+            const now = (typeof moment !== 'undefined' && moment.tz)
+                ? moment.tz('Asia/Tokyo')
+                : moment();
+            return now.clone().startOf('isoWeek').format('YYYY-MM-DD');
+        },
+        ensureWeeklyWeekStart() {
+            if (!this.weeklyWeekStart) {
+                this.weeklyWeekStart = this.getCurrentWeekMonday();
+            }
+        },
+        selectWeeklyTab() {
+            this.activeTab = 'weekly';
+            this.ensureWeeklyWeekStart();
+            this.loadWeeklyTasks();
+        },
+        shiftWeeklyWeek(deltaWeeks) {
+            this.ensureWeeklyWeekStart();
+            const start = moment(this.weeklyWeekStart, 'YYYY-MM-DD').add(deltaWeeks, 'weeks');
+            this.weeklyWeekStart = start.format('YYYY-MM-DD');
+            this.loadWeeklyTasks();
+        },
+        goToCurrentWeek() {
+            this.weeklyWeekStart = this.getCurrentWeekMonday();
+            this.loadWeeklyTasks();
+        },
+        isWeeklyExpanded(taskId) {
+            return !!this.expandedWeeklyTaskIds[taskId];
+        },
+        toggleWeeklyEntries(taskId) {
+            const next = { ...this.expandedWeeklyTaskIds };
+            if (next[taskId]) {
+                delete next[taskId];
+            } else {
+                next[taskId] = true;
+            }
+            this.expandedWeeklyTaskIds = next;
+        },
+        getWeeklyTargetUserId() {
+            if (!this.canSelectUser) {
+                return window.currentUser?.user_id || '';
+            }
+            if (this.filters.myTask && window.currentUser?.user_id) {
+                return window.currentUser.user_id;
+            }
+            return this.filters.user_id || window.currentUser?.user_id || '';
+        },
+        async loadWeeklyTasks() {
+            this.ensureWeeklyWeekStart();
+            const userId = this.getWeeklyTargetUserId();
+            if (!userId) {
+                this.weeklyTasks = [];
+                this.weeklyUserName = '';
+                return;
+            }
+            this.weeklyLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    model: 'task',
+                    method: 'listWeeklyTasks',
+                    week_start: this.weeklyWeekStart,
+                    user_id: userId
+                });
+                const response = await axios.get('/api/index.php?' + params.toString());
+                const data = response.data || {};
+                this.weeklyTasks = Array.isArray(data.tasks) ? data.tasks : [];
+                this.weeklyUserName = data.user && data.user.realname ? data.user.realname : '';
+                if (data.week_start) {
+                    this.weeklyWeekStart = data.week_start;
+                }
+            } catch (e) {
+                console.error('Error loading weekly tasks:', e);
+                this.weeklyTasks = [];
+            } finally {
+                this.weeklyLoading = false;
+            }
         },
         getStatusLabel(status) {
             const s = this.taskStatuses.find(s => s.value === status);
@@ -552,6 +655,7 @@ createApp({
             this.filters.myTask = true;
             this.filters.department_id = '';
         }
+        this.weeklyWeekStart = this.getCurrentWeekMonday();
         this._onI18nLanguageChanged = () => {
             this.$forceUpdate();
             this.$nextTick(() => this.initTooltips());
